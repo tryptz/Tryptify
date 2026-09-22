@@ -2,6 +2,12 @@ package tf.monochrome.android.data.sync
 
 import android.util.Log
 import io.github.jan.supabase.postgrest.postgrest
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -23,6 +29,7 @@ import tf.monochrome.android.data.db.entity.PlayEventEntity
 import tf.monochrome.android.data.db.entity.PlaylistTrackEntity
 import tf.monochrome.android.data.db.entity.UserPlaylistEntity
 import tf.monochrome.android.data.db.dao.PlayEventDao
+import tf.monochrome.android.data.preferences.SettingsSyncCodec
 import tf.monochrome.android.domain.model.EqBand
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -201,6 +208,16 @@ data class SbPlaylistTrack(
     val added_at: String? = null
 )
 
+/** What a settings pull found. */
+enum class SettingsPull {
+    /** The cloud copy was read and applied. */
+    APPLIED,
+    /** The cloud answered and holds no settings for this account yet. */
+    NO_CLOUD_COPY,
+    /** The cloud could not be read. Nothing is known about what it holds. */
+    FAILED,
+}
+
 /** One row per user: a tagged-JSON blob of the user's allow-listed app settings. */
 @Serializable
 data class SbUserSettings(
@@ -221,38 +238,96 @@ class SupabaseSyncRepository @Inject constructor(
     private val playlistDao: PlaylistDao,
     private val playEventDao: PlayEventDao,
     private val preferences: tf.monochrome.android.data.preferences.PreferencesManager,
+    private val outbox: SyncOutbox,
 ) {
     private val supabase get() = authManager.supabase
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+    /** Where queued edits are flushed from, so saving never waits on the network. */
+    private val flushScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /** One flush at a time — two racing would send the same edit twice. */
+    private val flushLock = Mutex()
 
     private fun userId(): String? = authManager.userProfile.value?.id
 
     // ─── App settings (single JSON row per user) ─────────────────────────────
 
-    /** Upload the user's allow-listed settings snapshot (last-write-wins). */
-    suspend fun pushSettings() {
-        val uid = userId() ?: return
-        runCatching {
-            supabase.postgrest["user_settings"].upsert(
-                SbUserSettings(
-                    user_id = uid,
-                    payload = preferences.exportSettingsJson(),
-                    updated_at = java.time.Instant.now().toString(),
-                )
-            ) { onConflict = "user_id" }
-        }.onFailure { Log.e(TAG, "pushSettings failed: ${it.message}") }
+    /**
+     * Upload the settings this device changed, merged into the cloud copy.
+     *
+     * Read-then-write rather than a blind overwrite: see
+     * [SettingsSyncCodec.merge] for the keys a plain overwrite used to delete.
+     * Only keys edited here since the last agreed snapshot go up, so a value
+     * this device merely still holds can't overwrite a newer one set on another
+     * device. With no agreed snapshot yet (seeding a new account) everything
+     * goes up. If the cloud copy can't be read, nothing is written — a push that
+     * can't see what it would replace doesn't replace it.
+     *
+     * @return true when the cloud holds this device's edits afterwards.
+     */
+    suspend fun pushSettings(): Boolean {
+        val uid = userId() ?: return false
+        return runCatching {
+            val cloud = fetchCloudSettings(uid)
+            val local = preferences.exportSettingsJson()
+            val base = outbox.settingsBase(uid)
+            val outgoing = if (base == null || cloud == null) local
+                else SettingsSyncCodec.only(local, SettingsSyncCodec.changedSince(base, local))
+            val merged = SettingsSyncCodec.merge(cloud, outgoing)
+                ?: error("cloud settings are in a format this build can't read; not overwriting them")
+            if (merged != cloud) {
+                supabase.postgrest["user_settings"].upsert(
+                    SbUserSettings(
+                        user_id = uid,
+                        payload = merged,
+                        updated_at = java.time.Instant.now().toString(),
+                    )
+                ) { onConflict = "user_id" }
+            }
+            // The cloud now holds everything this device has: the new base.
+            outbox.setSettingsBase(uid, local)
+        }.onFailure { Log.e(TAG, "pushSettings failed: ${it.message}") }.isSuccess
     }
 
-    /** Fetch the cloud settings row (if any) and apply it to local DataStore. */
-    suspend fun pullSettings() {
-        val uid = userId() ?: return
-        runCatching {
-            supabase.postgrest["user_settings"]
-                .select { filter { eq("user_id", uid) } }
-                .decodeSingleOrNull<SbUserSettings>()
-                ?.payload
-                ?.let { preferences.importSettingsJson(it) }
-        }.onFailure { Log.e(TAG, "pullSettings failed: ${it.message}") }
+    /** The cloud settings payload, null when the account has none. Throws when unreachable. */
+    private suspend fun fetchCloudSettings(uid: String): String? =
+        supabase.postgrest["user_settings"]
+            .select { filter { eq("user_id", uid) } }
+            .decodeSingleOrNull<SbUserSettings>()
+            ?.payload
+
+    /**
+     * Fetch the cloud settings row (if any) and apply it to local DataStore —
+     * except for keys this device changed since the two last agreed, which are
+     * kept and pushed instead. See [SettingsSyncCodec.changedSince]; without
+     * that, settings changed on a device that launched offline were reverted
+     * by the next online launch.
+     *
+     * Reports what it found rather than swallowing it, because the caller has
+     * to tell "the cloud has nothing" (safe to seed from this device) from "the
+     * cloud couldn't be reached" (this device knows nothing, so must not push).
+     */
+    suspend fun pullSettings(): SettingsPull {
+        val uid = userId() ?: return SettingsPull.FAILED
+        return runCatching {
+            val cloud = fetchCloudSettings(uid) ?: return@runCatching SettingsPull.NO_CLOUD_COPY
+            val localEdits = SettingsSyncCodec.changedSince(
+                outbox.settingsBase(uid),
+                preferences.exportSettingsJson(),
+            )
+            preferences.importSettingsJson(SettingsSyncCodec.without(cloud, localEdits))
+            if (localEdits.isEmpty()) {
+                outbox.setSettingsBase(uid, preferences.exportSettingsJson())
+            } else {
+                // Sets the base itself on success. On failure the base stays
+                // put, so these keys still count as local edits next time.
+                pushSettings()
+            }
+            SettingsPull.APPLIED
+        }.getOrElse {
+            Log.e(TAG, "pullSettings failed: ${it.message}")
+            SettingsPull.FAILED
+        }
     }
 
     // ─── EQ Presets ──────────────────────────────────────────────────────────
@@ -263,33 +338,33 @@ class SupabaseSyncRepository @Inject constructor(
      * A no-op when signed out, like every other push here, so callers on a save
      * path do not have to check first.
      */
-    suspend fun pushEqPreset(preset: EqPresetEntity) {
-        val uid = userId() ?: return
-        runCatching {
+    suspend fun pushEqPreset(preset: EqPresetEntity): Boolean {
+        val uid = userId() ?: return false
+        return runCatching {
             supabase.postgrest["eq_presets"].upsert(eqPushPayload(preset, uid)) {
                 onConflict = "user_id,local_id"
             }
-        }.onFailure { Log.e(TAG, "pushEqPreset failed: ${it.message}") }
+        }.onFailure { Log.e(TAG, "pushEqPreset failed: ${it.message}") }.isSuccess
     }
 
-    suspend fun deleteEqPreset(localId: String) {
-        val uid = userId() ?: return
-        runCatching {
+    suspend fun deleteEqPreset(localId: String): Boolean {
+        val uid = userId() ?: return false
+        return runCatching {
             supabase.postgrest["eq_presets"]
                 .delete { filter { eq("user_id", uid); eq("local_id", localId) } }
-        }.onFailure { Log.e(TAG, "deleteEqPreset failed: ${it.message}") }
+        }.onFailure { Log.e(TAG, "deleteEqPreset failed: ${it.message}") }.isSuccess
     }
 
     // ─── Mix Presets ─────────────────────────────────────────────────────────
 
     /** Upload one mixer preset. Keyed on its creation time — see [toCloudRow]. */
-    suspend fun pushMixPreset(preset: MixPresetEntity) {
-        val uid = userId() ?: return
-        runCatching {
+    suspend fun pushMixPreset(preset: MixPresetEntity): Boolean {
+        val uid = userId() ?: return false
+        return runCatching {
             supabase.postgrest["mix_presets"].upsert(mixPushPayload(preset, uid)) {
                 onConflict = "user_id,local_id"
             }
-        }.onFailure { Log.e(TAG, "pushMixPreset failed: ${it.message}") }
+        }.onFailure { Log.e(TAG, "pushMixPreset failed: ${it.message}") }.isSuccess
     }
 
     /**
@@ -299,19 +374,19 @@ class SupabaseSyncRepository @Inject constructor(
      * [createdAt] rather than the row id, because that is the identity the
      * cloud knows this preset by.
      */
-    suspend fun deleteMixPreset(createdAt: Long) {
-        val uid = userId() ?: return
-        runCatching {
+    suspend fun deleteMixPreset(createdAt: Long): Boolean {
+        val uid = userId() ?: return false
+        return runCatching {
             supabase.postgrest["mix_presets"]
                 .delete { filter { eq("user_id", uid); eq("local_id", createdAt.toString()) } }
-        }.onFailure { Log.e(TAG, "deleteMixPreset failed: ${it.message}") }
+        }.onFailure { Log.e(TAG, "deleteMixPreset failed: ${it.message}") }.isSuccess
     }
 
     // ─── Favorites ───────────────────────────────────────────────────────────
 
-    suspend fun pushFavoriteTrack(track: FavoriteTrackEntity) {
-        val uid = userId() ?: return
-        runCatching {
+    suspend fun pushFavoriteTrack(track: FavoriteTrackEntity): Boolean {
+        val uid = userId() ?: return false
+        return runCatching {
             supabase.postgrest["favorite_tracks"].upsert(
                 SbFavoriteTrack(
                     id = track.id,
@@ -328,20 +403,20 @@ class SupabaseSyncRepository @Inject constructor(
                     track_number = track.trackNumber
                 )
             ) { onConflict = "user_id,id" }
-        }.onFailure { Log.e(TAG, "pushFavoriteTrack failed: ${it.message}") }
+        }.onFailure { Log.e(TAG, "pushFavoriteTrack failed: ${it.message}") }.isSuccess
     }
 
-    suspend fun deleteFavoriteTrack(trackId: Long) {
-        val uid = userId() ?: return
-        runCatching {
+    suspend fun deleteFavoriteTrack(trackId: Long): Boolean {
+        val uid = userId() ?: return false
+        return runCatching {
             supabase.postgrest["favorite_tracks"]
                 .delete { filter { eq("user_id", uid); eq("id", trackId) } }
-        }.onFailure { Log.e(TAG, "deleteFavoriteTrack failed: ${it.message}") }
+        }.onFailure { Log.e(TAG, "deleteFavoriteTrack failed: ${it.message}") }.isSuccess
     }
 
-    suspend fun pushFavoriteAlbum(album: FavoriteAlbumEntity) {
-        val uid = userId() ?: return
-        runCatching {
+    suspend fun pushFavoriteAlbum(album: FavoriteAlbumEntity): Boolean {
+        val uid = userId() ?: return false
+        return runCatching {
             supabase.postgrest["favorite_albums"].upsert(
                 SbFavoriteAlbum(
                     id = album.id,
@@ -355,20 +430,20 @@ class SupabaseSyncRepository @Inject constructor(
                     type = album.type
                 )
             ) { onConflict = "user_id,id" }
-        }.onFailure { Log.e(TAG, "pushFavoriteAlbum failed: ${it.message}") }
+        }.onFailure { Log.e(TAG, "pushFavoriteAlbum failed: ${it.message}") }.isSuccess
     }
 
-    suspend fun deleteFavoriteAlbum(albumId: Long) {
-        val uid = userId() ?: return
-        runCatching {
+    suspend fun deleteFavoriteAlbum(albumId: Long): Boolean {
+        val uid = userId() ?: return false
+        return runCatching {
             supabase.postgrest["favorite_albums"]
                 .delete { filter { eq("user_id", uid); eq("id", albumId) } }
-        }.onFailure { Log.e(TAG, "deleteFavoriteAlbum failed: ${it.message}") }
+        }.onFailure { Log.e(TAG, "deleteFavoriteAlbum failed: ${it.message}") }.isSuccess
     }
 
-    suspend fun pushFavoriteArtist(artist: FavoriteArtistEntity) {
-        val uid = userId() ?: return
-        runCatching {
+    suspend fun pushFavoriteArtist(artist: FavoriteArtistEntity): Boolean {
+        val uid = userId() ?: return false
+        return runCatching {
             supabase.postgrest["favorite_artists"].upsert(
                 SbFavoriteArtist(
                     id = artist.id,
@@ -377,15 +452,15 @@ class SupabaseSyncRepository @Inject constructor(
                     picture = artist.picture
                 )
             ) { onConflict = "user_id,id" }
-        }.onFailure { Log.e(TAG, "pushFavoriteArtist failed: ${it.message}") }
+        }.onFailure { Log.e(TAG, "pushFavoriteArtist failed: ${it.message}") }.isSuccess
     }
 
-    suspend fun deleteFavoriteArtist(artistId: Long) {
-        val uid = userId() ?: return
-        runCatching {
+    suspend fun deleteFavoriteArtist(artistId: Long): Boolean {
+        val uid = userId() ?: return false
+        return runCatching {
             supabase.postgrest["favorite_artists"]
                 .delete { filter { eq("user_id", uid); eq("id", artistId) } }
-        }.onFailure { Log.e(TAG, "deleteFavoriteArtist failed: ${it.message}") }
+        }.onFailure { Log.e(TAG, "deleteFavoriteArtist failed: ${it.message}") }.isSuccess
     }
 
     // ─── Play History ────────────────────────────────────────────────────────
@@ -589,9 +664,9 @@ class SupabaseSyncRepository @Inject constructor(
 
     // ─── Playlists ───────────────────────────────────────────────────────────
 
-    suspend fun pushPlaylist(playlist: UserPlaylistEntity) {
-        val uid = userId() ?: return
-        runCatching {
+    suspend fun pushPlaylist(playlist: UserPlaylistEntity): Boolean {
+        val uid = userId() ?: return false
+        return runCatching {
             supabase.postgrest["user_playlists"].upsert(
                 SbPlaylist(
                     id = playlist.id,
@@ -601,12 +676,12 @@ class SupabaseSyncRepository @Inject constructor(
                     is_public = playlist.isPublic
                 )
             ) { onConflict = "id" }
-        }.onFailure { Log.e(TAG, "pushPlaylist failed: ${it.message}") }
+        }.onFailure { Log.e(TAG, "pushPlaylist failed: ${it.message}") }.isSuccess
     }
 
-    suspend fun pushPlaylistTrack(track: PlaylistTrackEntity) {
-        val uid = userId() ?: return
-        runCatching {
+    suspend fun pushPlaylistTrack(track: PlaylistTrackEntity): Boolean {
+        val uid = userId() ?: return false
+        return runCatching {
             supabase.postgrest["playlist_tracks"].upsert(
                 SbPlaylistTrack(
                     playlist_id = track.playlistId,
@@ -620,15 +695,126 @@ class SupabaseSyncRepository @Inject constructor(
                     position = track.position
                 )
             ) { onConflict = "playlist_id,track_id" }
-        }.onFailure { Log.e(TAG, "pushPlaylistTrack failed: ${it.message}") }
+        }.onFailure { Log.e(TAG, "pushPlaylistTrack failed: ${it.message}") }.isSuccess
     }
 
-    suspend fun deletePlaylist(playlistId: String) {
-        val uid = userId() ?: return
-        runCatching {
+    suspend fun deletePlaylist(playlistId: String): Boolean {
+        val uid = userId() ?: return false
+        return runCatching {
             supabase.postgrest["user_playlists"]
                 .delete { filter { eq("id", playlistId); eq("user_id", uid) } }
-        }.onFailure { Log.e(TAG, "deletePlaylist failed: ${it.message}") }
+        }.onFailure { Log.e(TAG, "deletePlaylist failed: ${it.message}") }.isSuccess
+    }
+
+    /** Remove one track from a playlist in the cloud. RLS scopes it to the owner's playlists. */
+    suspend fun deletePlaylistTrack(playlistId: String, trackId: Long): Boolean {
+        userId() ?: return false
+        return runCatching {
+            supabase.postgrest["playlist_tracks"]
+                .delete { filter { eq("playlist_id", playlistId); eq("track_id", trackId) } }
+        }.onFailure { Log.e(TAG, "deletePlaylistTrack failed: ${it.message}") }.isSuccess
+    }
+
+    // ─── Pending local edits (Room → cloud, held until confirmed) ────────────
+
+    /**
+     * Records a library edit already written to Room, then sends it.
+     *
+     * Call it after the local write, from the repository that made it. The edit
+     * stays in [SyncOutbox] until the cloud accepts it, so an edit made offline
+     * or lost to a dropped connection goes out on the next flush instead of
+     * never — and a delete still waiting there is one the pull will not undo.
+     *
+     * Signed out, nothing is recorded. An edit made then belongs to no account,
+     * and replaying it under whichever account signs in next could delete that
+     * account's rows.
+     */
+    suspend fun queueChange(kind: SyncKind, key: String, op: SyncOp) {
+        val uid = userId() ?: return
+        outbox.record(PendingChange(userId = uid, kind = kind, key = key, op = op))
+        flushScope.launch { flushOutbox() }
+    }
+
+    /**
+     * Sends every pending edit for the signed-in account and keeps whatever the
+     * cloud did not accept, for the next flush. Runs after each edit, before
+     * every pull, and at the start of a manual sync.
+     */
+    suspend fun flushOutbox() {
+        val uid = userId() ?: return
+        flushLock.withLock {
+            val playlistsInCloud = HashSet<String>()
+            for (change in outbox.forUser(uid)) {
+                // Signed out or switched account mid-flush: the push helpers
+                // write as whoever is signed in now, so stop rather than send
+                // one account's edits into another's.
+                if (userId() != uid) return
+                val sent = runCatching { send(change, playlistsInCloud) }.getOrElse {
+                    Log.e(TAG, "flush ${change.kind} ${change.key}: ${it.message}")
+                    false
+                }
+                if (sent) outbox.settle(change)
+            }
+        }
+    }
+
+    /**
+     * Sends one pending edit. An upsert re-reads the row from Room so it sends
+     * the latest version; a row that is gone by now has nothing left to send,
+     * which counts as done (its delete, if any, is its own pending edit).
+     */
+    private suspend fun send(change: PendingChange, playlistsInCloud: MutableSet<String>): Boolean {
+        val upsert = change.op == SyncOp.UPSERT
+        return when (change.kind) {
+            SyncKind.FAVORITE_TRACK -> {
+                val id = change.key.toLongOrNull() ?: return true
+                if (upsert) favoritesDao.getFavoriteTrack(id)?.let { pushFavoriteTrack(it) } ?: true
+                else deleteFavoriteTrack(id)
+            }
+            SyncKind.FAVORITE_ALBUM -> {
+                val id = change.key.toLongOrNull() ?: return true
+                if (upsert) favoritesDao.getFavoriteAlbum(id)?.let { pushFavoriteAlbum(it) } ?: true
+                else deleteFavoriteAlbum(id)
+            }
+            SyncKind.FAVORITE_ARTIST -> {
+                val id = change.key.toLongOrNull() ?: return true
+                if (upsert) favoritesDao.getFavoriteArtist(id)?.let { pushFavoriteArtist(it) } ?: true
+                else deleteFavoriteArtist(id)
+            }
+            SyncKind.PLAYLIST ->
+                if (upsert) {
+                    val playlist = playlistDao.getPlaylist(change.key) ?: return true
+                    pushPlaylist(playlist).also { if (it) playlistsInCloud += playlist.id }
+                } else {
+                    // The cloud cascades this to the playlist's tracks.
+                    deletePlaylist(change.key)
+                }
+            SyncKind.PLAYLIST_TRACK -> {
+                val (playlistId, trackId) = parsePlaylistTrackKey(change.key) ?: return true
+                if (upsert) {
+                    val track = playlistDao.getPlaylistTrack(playlistId, trackId) ?: return true
+                    // RLS refuses an entry until its playlist is in the cloud,
+                    // and one created while signed out never was. Upserting it
+                    // first is idempotent, so do it once per playlist per flush.
+                    if (playlistId !in playlistsInCloud) {
+                        val playlist = playlistDao.getPlaylist(playlistId) ?: return true
+                        if (!pushPlaylist(playlist)) return false
+                        playlistsInCloud += playlistId
+                    }
+                    pushPlaylistTrack(track)
+                } else {
+                    deletePlaylistTrack(playlistId, trackId)
+                }
+            }
+            SyncKind.EQ_PRESET ->
+                if (upsert) eqPresetDao.getPresetById(change.key)?.let { pushEqPreset(it) } ?: true
+                else deleteEqPreset(change.key)
+            SyncKind.MIX_PRESET -> {
+                val createdAt = change.key.toLongOrNull() ?: return true
+                if (upsert) mixPresetDao.getByCreatedAt(createdAt)?.takeIf { it.isCustom }?.let { pushMixPreset(it) } ?: true
+                else deleteMixPreset(createdAt)
+            }
+        }
     }
 
     // ─── Full initial sync (pull from cloud → merge into Room) ───────────────
@@ -654,8 +840,8 @@ class SupabaseSyncRepository @Inject constructor(
      * exists is that a device which loses library rows had no way back: app
      * settings have healed themselves on sign-in ever since
      * [SettingsSyncCoordinator] landed, while playlists and favourites were
-     * pushed on every edit and pulled only when somebody found the Sync button
-     * on the profile screen. One half of the same account's data repaired
+     * meant to be pushed on every edit and were pulled only when somebody found
+     * the Sync button on the profile screen. One half of the same account's data repaired
      * itself and the other half did not, which is how a full set of playlists
      * can sit intact in the cloud while the device that owns them shows an
      * empty list.
@@ -669,6 +855,11 @@ class SupabaseSyncRepository @Inject constructor(
      * two sections take the newer edit instead, compared as described on
      * [cloudCopyIsNewer].
      *
+     * Neither policy may undo a local delete. Pending edits are flushed first,
+     * and any row whose delete is still waiting in [SyncOutbox] — the cloud
+     * was unreachable, or refused it — is skipped rather than re-inserted.
+     * Without that, a song unliked offline was liked again on the next launch.
+     *
      * @param includePlayEvents whether to pull the last thousand scrobbles too.
      *   They are the heaviest section by far and the least worth repeating on a
      *   launch — nothing on screen is missing without them — so the automatic
@@ -679,12 +870,20 @@ class SupabaseSyncRepository @Inject constructor(
         Log.d(TAG, "Starting cloud pull for user $uid (playEvents=$includePlayEvents)")
         val failed = mutableListOf<String>()
 
+        // Local edits go up before cloud rows come down, so the cloud copy the
+        // sections below read already includes them wherever it could.
+        runCatching { flushOutbox() }.onFailure { Log.e(TAG, "flush before pull: ${it.message}") }
+        // Read per section, after its fetch, so a delete made while the pull is
+        // running is still honoured.
+        suspend fun deleted(kind: SyncKind) = outbox.pendingDeletes(uid, kind)
+
         // Favorites
         runCatching {
             val tracks = supabase.postgrest["favorite_tracks"]
                 .select { filter { eq("user_id", uid) } }
                 .decodeList<SbFavoriteTrack>()
-            tracks.forEach { t ->
+            val gone = deleted(SyncKind.FAVORITE_TRACK)
+            tracks.filterNot { it.id.toString() in gone }.forEach { t ->
                 favoritesDao.insertTrackIfNotExists(
                     FavoriteTrackEntity(
                         id = t.id,
@@ -707,7 +906,8 @@ class SupabaseSyncRepository @Inject constructor(
             val albums = supabase.postgrest["favorite_albums"]
                 .select { filter { eq("user_id", uid) } }
                 .decodeList<SbFavoriteAlbum>()
-            albums.forEach { a ->
+            val gone = deleted(SyncKind.FAVORITE_ALBUM)
+            albums.filterNot { it.id.toString() in gone }.forEach { a ->
                 favoritesDao.insertAlbumIfNotExists(
                     FavoriteAlbumEntity(
                         id = a.id,
@@ -727,7 +927,8 @@ class SupabaseSyncRepository @Inject constructor(
             val artists = supabase.postgrest["favorite_artists"]
                 .select { filter { eq("user_id", uid) } }
                 .decodeList<SbFavoriteArtist>()
-            artists.forEach { a ->
+            val gone = deleted(SyncKind.FAVORITE_ARTIST)
+            artists.filterNot { it.id.toString() in gone }.forEach { a ->
                 favoritesDao.insertArtistIfNotExists(
                     FavoriteArtistEntity(id = a.id, name = a.name, picture = a.picture)
                 )
@@ -742,7 +943,8 @@ class SupabaseSyncRepository @Inject constructor(
             val presets = supabase.postgrest["eq_presets"]
                 .select { filter { eq("user_id", uid) } }
                 .decodeList<SbEqPreset>()
-            presets.forEach { p ->
+            val gone = deleted(SyncKind.EQ_PRESET)
+            presets.filterNot { it.local_id in gone }.forEach { p ->
                 val local = eqPresetDao.getPresetById(p.local_id)
                 if (cloudCopyIsNewer(local?.updatedAt, p.updated_at_ms)) {
                     eqPresetDao.insertPreset(p.toEntity())
@@ -755,7 +957,8 @@ class SupabaseSyncRepository @Inject constructor(
             val mixPresets = supabase.postgrest["mix_presets"]
                 .select { filter { eq("user_id", uid) } }
                 .decodeList<SbMixPreset>()
-            mixPresets.forEach { p ->
+            val gone = deleted(SyncKind.MIX_PRESET)
+            mixPresets.filterNot { it.local_id in gone }.forEach { p ->
                 // Matched on creation time, which is what local_id holds. The
                 // code here used to assign local_id straight to the primary
                 // key, so every incoming preset landed on row 0 and the last
@@ -773,7 +976,8 @@ class SupabaseSyncRepository @Inject constructor(
             val playlists = supabase.postgrest["user_playlists"]
                 .select { filter { eq("user_id", uid) } }
                 .decodeList<SbPlaylist>()
-            playlists.forEach { p ->
+            val gonePlaylists = deleted(SyncKind.PLAYLIST)
+            playlists.filterNot { it.id in gonePlaylists }.forEach { p ->
                 playlistDao.insertPlaylistIfNotExists(
                     UserPlaylistEntity(
                         id = p.id,
@@ -785,7 +989,8 @@ class SupabaseSyncRepository @Inject constructor(
                 val tracks = supabase.postgrest["playlist_tracks"]
                     .select { filter { eq("playlist_id", p.id) } }
                     .decodeList<SbPlaylistTrack>()
-                tracks.forEach { t ->
+                val goneTracks = deleted(SyncKind.PLAYLIST_TRACK)
+                tracks.filterNot { playlistTrackKey(it.playlist_id, it.track_id) in goneTracks }.forEach { t ->
                     playlistDao.insertTrackIfNotExists(
                         PlaylistTrackEntity(
                             playlistId = t.playlist_id,
@@ -851,11 +1056,7 @@ class SupabaseSyncRepository @Inject constructor(
      * ping-pong it was written to prevent gets back in.
      */
     private suspend fun pullSettingsSection(): List<String> =
-        runCatching { pullSettings() }
-            .fold(onSuccess = { emptyList() }, onFailure = {
-                Log.e(TAG, "pull settings: ${it.message}")
-                listOf("settings")
-            })
+        if (pullSettings() == SettingsPull.FAILED) listOf("settings") else emptyList()
 
     // ─── Full push (local → cloud) after import ─────────────────────────────
 
@@ -872,10 +1073,22 @@ class SupabaseSyncRepository @Inject constructor(
         suspend fun section(name: String, block: suspend () -> Unit) {
             runCatching { block() }.onFailure { failed += name; Log.e(TAG, "push $name: ${it.message}") }
         }
+        // Each push swallows its own error and answers false, so a section has
+        // to count the refusals itself — otherwise a sync that sent nothing
+        // reports success and the user trusts a backup that isn't there.
+        suspend fun <T> List<T>.sendAll(push: suspend (T) -> Boolean) {
+            val refused = count { !push(it) }
+            check(refused == 0) { "$refused of $size rows refused" }
+        }
 
-        section("favorite_tracks") { favoritesDao.getFavoriteTracksSnapshot().forEach { pushFavoriteTrack(it) } }
-        section("favorite_albums") { favoritesDao.getFavoriteAlbumsSnapshot().forEach { pushFavoriteAlbum(it) } }
-        section("favorite_artists") { favoritesDao.getFavoriteArtistsSnapshot().forEach { pushFavoriteArtist(it) } }
+        // Pending deletes first: they are the edits a full push can't express.
+        section("pending_edits") {
+            flushOutbox()
+            check(outbox.forUser(uid).isEmpty()) { "some local edits are still unsent" }
+        }
+        section("favorite_tracks") { favoritesDao.getFavoriteTracksSnapshot().sendAll { pushFavoriteTrack(it) } }
+        section("favorite_albums") { favoritesDao.getFavoriteAlbumsSnapshot().sendAll { pushFavoriteAlbum(it) } }
+        section("favorite_artists") { favoritesDao.getFavoriteArtistsSnapshot().sendAll { pushFavoriteArtist(it) } }
         section("play_history") { historyDao.getHistorySnapshot(500).forEach { pushHistoryTrack(it) } }
         // Play events: only push rows not already in the cloud (cloudRowId IS
         // NULL), and record the assigned cloud id, so repeated syncs don't
@@ -888,8 +1101,8 @@ class SupabaseSyncRepository @Inject constructor(
         }
         section("playlists") {
             playlistDao.getAllPlaylistsSnapshot().forEach { playlist ->
-                pushPlaylist(playlist)
-                playlistDao.getPlaylistTracksSnapshot(playlist.id).forEach { track -> pushPlaylistTrack(track) }
+                check(pushPlaylist(playlist)) { "playlist ${playlist.id} refused" }
+                playlistDao.getPlaylistTracksSnapshot(playlist.id).sendAll { pushPlaylistTrack(it) }
             }
         }
         // Only custom presets: the built-ins ship with the app, are identical
@@ -898,14 +1111,14 @@ class SupabaseSyncRepository @Inject constructor(
         section("eq_presets") {
             eqPresetDao.getAllPresetsSnapshot()
                 .filter { it.isCustom }
-                .forEach { pushEqPreset(it) }
+                .sendAll { pushEqPreset(it) }
         }
         section("mix_presets") {
             mixPresetDao.getAllPresetsSnapshot()
                 .filter { it.isCustom }
-                .forEach { pushMixPreset(it) }
+                .sendAll { pushMixPreset(it) }
         }
-        section("settings") { pushSettings() }
+        section("settings") { check(pushSettings()) { "settings refused" } }
 
         Log.d(TAG, "Cloud push complete (${failed.size} failed sections)")
         return failed

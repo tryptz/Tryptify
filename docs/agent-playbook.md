@@ -35,6 +35,7 @@ Repository conventions in `AGENTS.md` override this file. When opening a pull re
 | Native DSP, Atmos, JNI, buffers, audio callbacks | Realtime Audio | Native tests and realtime-safety audit |
 | Media3 session/service, notification, Cast, Auto | Playback Routing | Intent/security review for exported surfaces |
 | Radio queue, ranking, discovery, recommendations | Radio Ranking | Deterministic tests and observability |
+| Supabase sync, favourites/playlists/presets persistence, settings sync | Cloud Sync | `SyncOutboxTest`, `SettingsSyncCodecTest`, `PresetSyncMappingTest` |
 | AGP/Kotlin/KSP/Hilt upgrade | Engineering Gates | Full clean build and migration review |
 | R8/ProGuard or release-size work | Engineering Gates | Release build plus keep-rule evidence |
 
@@ -181,6 +182,35 @@ Keep candidate generation, feature extraction, scoring, and selection as separab
 Discovery rows carry a stated reason, and the reason is a claim about evidence. "Ranked by plays" means a chart; "its most-played artists" means the artist tier; "by way of X" means the row was borrowed from a neighbouring genre; "matched by name" is reserved for the one curated seed that names no genre at all. A row that silently falls back to a catalogue search for a genre's *name* is the bug this contract exists to prevent — a name search ranks records that *say* the genre above records that *are* it, which is exactly the query machine-generated filler is written to win. If a source cannot fill a row, the honest outcomes are to borrow and say so, or to come up short; never to substitute a weaker source under a stronger row's reason line.
 
 Budgets are part of that contract. A per-shelf timeout only means something if the work it bounds is actually gated, so shared network permits, request coalescing and cache lifetimes belong in the ranking review, not just in the performance one: a shelf that misses its budget does not degrade gracefully, it falls through.
+
+## Playbook: Cloud Sync
+
+Use for anything that writes a favourite, playlist, playlist entry, EQ or mixer preset, or a synced setting, and for anything in `data/sync/`. The device (Room + DataStore) and Supabase each hold a full copy, and a pull runs by itself on every launch, so a write that reaches only one side is undone by the other on the next launch — local deletes resurrected by the pull, or cloud settings wiped by a push.
+
+### Non-negotiable invariants
+
+- **Every library edit is queued, not fired.** Write Room first, then `SupabaseSyncRepository.queueChange(kind, key, op)`. It holds the edit in `SyncOutbox` until Supabase accepts it. A bare `syncScope.launch { push… }` loses the edit whenever the network does, and a lost delete comes back on the next pull.
+- **The pull never re-inserts a pending delete.** `pullLibrary` flushes the outbox first and skips any key still in `SyncOutbox.pendingDeletes`. A new synced table needs both.
+- **Set membership is insert-if-not-exists; documents are newest-edit-wins.** Favourites and playlists never overwrite local rows on pull; presets compare device clocks via `cloudCopyIsNewer`. Don't swap one policy for the other.
+- **A settings push never removes a cloud key and never blind-writes.** `pushSettings` reads the cloud row, sends only keys edited since the last agreed snapshot (`SettingsSyncCodec.changedSince`), merges them in (`merge`), and writes nothing if the cloud can't be read or parsed.
+- **Nothing is pushed until a settings pull has reached the cloud** (`SettingsSyncCoordinator`). A pull that fails retries with backoff; it doesn't fall through to the watcher.
+- **Edits are scoped to the account that made them.** Nothing is recorded while signed out, and a flush stops if the account changes under it.
+- **Push helpers report, they don't pretend.** They return `false` when Supabase refused; `pushAll` counts refusals so the Sync button never reports a backup that isn't there.
+
+### Workflow
+
+1. List every local write the change adds or touches, and for each: which `SyncKind` it is, what its cross-device key is, and what the pull does with the cloud copy of that row.
+2. Queue the write after the Room write. For a new table: a `SyncKind` (ordered before anything RLS makes depend on it), a `send` branch, pending-delete filtering in `pullLibrary`, and a `pushAll` section.
+3. Check the Supabase side read-only first: unique keys, `ON DELETE CASCADE`, and RLS policies decide whether a delete or upsert can succeed at all.
+4. Walk the offline cases: edit offline then launch online; edit on two devices; delete on one device while the other is offline; sign out and in as a different account.
+
+### Completion gates
+
+- An edit made offline reaches the cloud on the next flush, and a delete made offline is not resurrected by any pull.
+- A push can't remove or overwrite a cloud value this device didn't change.
+- The pure rules have JVM tests (`SyncOutboxTest`, `SettingsSyncCodecTest`, `PresetSyncMappingTest`).
+
+Known limitation: a delete made on one device reaches another only if that device hasn't pushed the row since. The manual Sync (`pushAll`) re-uploads every local row, so it can re-create a row deleted elsewhere. Fixing that needs a server-side tombstone (a `deleted_at` column), which is a schema change.
 
 ## Engineering Gates
 

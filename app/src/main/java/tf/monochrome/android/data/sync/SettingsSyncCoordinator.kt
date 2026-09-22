@@ -4,6 +4,7 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
@@ -27,6 +28,15 @@ import javax.inject.Singleton
  *    debounced change-watcher. Pulling first prevents the very first local
  *    emission (device defaults) from clobbering the cloud copy — the sign-in
  *    race the audit flagged.
+ *  - The pull has to actually reach the cloud. It used to swallow its own
+ *    failure, so a sign-in while offline started the watcher anyway, and the
+ *    first setting touched afterwards uploaded this device's near-empty
+ *    snapshot over the account's real one. Now a failed pull is retried with
+ *    backoff and nothing is pushed until one succeeds. (Pushes also merge into
+ *    the cloud copy rather than replacing it — see SettingsSyncCodec.merge —
+ *    so even a push can only add or change keys, never drop them.)
+ *  - An account with no cloud settings yet is seeded from this device straight
+ *    away, instead of waiting for the first change.
  *  - While signed in: every allow-listed pref change, debounced ~2s and
  *    de-duplicated, triggers a push. Applying a remote snapshot is guarded by
  *    [applyingRemote] so the write it causes doesn't immediately echo back as a
@@ -51,13 +61,25 @@ class SettingsSyncCoordinator @Inject constructor(
                         emptyFlow()
                     } else {
                         flow {
-                            // Adopt the cloud settings before watching local changes.
-                            applyingRemote.set(true)
-                            try {
-                                runCatching { syncRepository.pullSettings() }
-                                    .onFailure { Log.e(TAG, "initial pullSettings failed: ${it.message}") }
-                            } finally {
-                                applyingRemote.set(false)
+                            // Adopt the cloud settings before watching local
+                            // changes, and don't watch at all until that has
+                            // worked. The delay is cancellable, so a sign-out
+                            // during the wait ends it via flatMapLatest.
+                            var backoffMs = RETRY_START_MS
+                            while (true) {
+                                applyingRemote.set(true)
+                                val pulled = try {
+                                    syncRepository.pullSettings()
+                                } finally {
+                                    applyingRemote.set(false)
+                                }
+                                if (pulled != SettingsPull.FAILED) {
+                                    if (pulled == SettingsPull.NO_CLOUD_COPY) syncRepository.pushSettings()
+                                    break
+                                }
+                                Log.w(TAG, "initial pullSettings failed; not pushing, retrying in ${backoffMs}ms")
+                                delay(backoffMs)
+                                backoffMs = (backoffMs * 2).coerceAtMost(RETRY_MAX_MS)
                             }
                             // drop(1): skip the current snapshot emitted on
                             // subscribe; only real subsequent changes push.
@@ -82,5 +104,7 @@ class SettingsSyncCoordinator @Inject constructor(
     private companion object {
         const val TAG = "SettingsSync"
         const val DEBOUNCE_MS = 2_000L
+        const val RETRY_START_MS = 5_000L
+        const val RETRY_MAX_MS = 5 * 60_000L
     }
 }

@@ -30,6 +30,9 @@ interface FavoriteDao {
     @Query("DELETE FROM favorite_tracks WHERE id = :trackId")
     suspend fun deleteFavoriteTrack(trackId: Long)
 
+    @Query("SELECT * FROM favorite_tracks WHERE id = :trackId")
+    suspend fun getFavoriteTrack(trackId: Long): FavoriteTrackEntity?
+
     @Query("SELECT EXISTS(SELECT 1 FROM favorite_tracks WHERE id = :trackId)")
     suspend fun isFavoriteTrack(trackId: Long): Boolean
 
@@ -52,6 +55,9 @@ interface FavoriteDao {
     @Query("DELETE FROM favorite_albums WHERE id = :albumId")
     suspend fun deleteFavoriteAlbum(albumId: Long)
 
+    @Query("SELECT * FROM favorite_albums WHERE id = :albumId")
+    suspend fun getFavoriteAlbum(albumId: Long): FavoriteAlbumEntity?
+
     @Query("SELECT EXISTS(SELECT 1 FROM favorite_albums WHERE id = :albumId)")
     suspend fun isFavoriteAlbum(albumId: Long): Boolean
 
@@ -73,6 +79,9 @@ interface FavoriteDao {
 
     @Query("DELETE FROM favorite_artists WHERE id = :artistId")
     suspend fun deleteFavoriteArtist(artistId: Long)
+
+    @Query("SELECT * FROM favorite_artists WHERE id = :artistId")
+    suspend fun getFavoriteArtist(artistId: Long): FavoriteArtistEntity?
 
     @Query("SELECT EXISTS(SELECT 1 FROM favorite_artists WHERE id = :artistId)")
     suspend fun isFavoriteArtist(artistId: Long): Boolean

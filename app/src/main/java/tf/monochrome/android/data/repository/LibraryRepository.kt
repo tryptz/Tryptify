@@ -22,6 +22,9 @@ import tf.monochrome.android.data.db.entity.PlaylistTrackEntity
 import tf.monochrome.android.data.db.entity.UserPlaylistEntity
 import tf.monochrome.android.data.device.DeviceRegistry
 import tf.monochrome.android.data.sync.SupabaseSyncRepository
+import tf.monochrome.android.data.sync.SyncKind
+import tf.monochrome.android.data.sync.SyncOp
+import tf.monochrome.android.data.sync.playlistTrackKey
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import tf.monochrome.android.data.api.QobuzIdRegistry
@@ -71,11 +74,19 @@ class LibraryRepository @Inject constructor(
         entities.map { it.toDomain() }
     }
 
+    // Every library edit below is written to Room first and then queued for
+    // the cloud with supabaseSync.queueChange, which holds it until Supabase
+    // accepts it. Before, none of these reached the cloud except through the
+    // manual Sync button, and deletes never did — so the launch-time pull
+    // brought unliked songs and deleted playlists straight back.
+
     suspend fun toggleFavoriteTrack(track: Track) {
         if (favoriteDao.isFavoriteTrack(track.id)) {
             favoriteDao.deleteFavoriteTrack(track.id)
+            supabaseSync.queueChange(SyncKind.FAVORITE_TRACK, track.id.toString(), SyncOp.DELETE)
         } else {
             favoriteDao.insertFavoriteTrack(track.toFavoriteEntity())
+            supabaseSync.queueChange(SyncKind.FAVORITE_TRACK, track.id.toString(), SyncOp.UPSERT)
             autoDownloadOnLike(track)
         }
     }
@@ -116,22 +127,29 @@ class LibraryRepository @Inject constructor(
 
     /** Explicit bulk unlike (idempotent — no toggle race on already-removed ids). */
     suspend fun removeFavoriteTracks(trackIds: Collection<Long>) {
-        trackIds.forEach { favoriteDao.deleteFavoriteTrack(it) }
+        trackIds.forEach {
+            favoriteDao.deleteFavoriteTrack(it)
+            supabaseSync.queueChange(SyncKind.FAVORITE_TRACK, it.toString(), SyncOp.DELETE)
+        }
     }
 
     suspend fun toggleFavoriteAlbum(album: Album) {
         if (favoriteDao.isFavoriteAlbum(album.id)) {
             favoriteDao.deleteFavoriteAlbum(album.id)
+            supabaseSync.queueChange(SyncKind.FAVORITE_ALBUM, album.id.toString(), SyncOp.DELETE)
         } else {
             favoriteDao.insertFavoriteAlbum(album.toFavoriteEntity())
+            supabaseSync.queueChange(SyncKind.FAVORITE_ALBUM, album.id.toString(), SyncOp.UPSERT)
         }
     }
 
     suspend fun toggleFavoriteArtist(artist: Artist) {
         if (favoriteDao.isFavoriteArtist(artist.id)) {
             favoriteDao.deleteFavoriteArtist(artist.id)
+            supabaseSync.queueChange(SyncKind.FAVORITE_ARTIST, artist.id.toString(), SyncOp.DELETE)
         } else {
             favoriteDao.insertFavoriteArtist(artist.toFavoriteEntity())
+            supabaseSync.queueChange(SyncKind.FAVORITE_ARTIST, artist.id.toString(), SyncOp.UPSERT)
         }
     }
 
@@ -243,6 +261,7 @@ class LibraryRepository @Inject constructor(
                 description = description
             )
         )
+        supabaseSync.queueChange(SyncKind.PLAYLIST, id, SyncOp.UPSERT)
         return id
     }
 
@@ -256,11 +275,13 @@ class LibraryRepository @Inject constructor(
                     updatedAt = System.currentTimeMillis()
                 )
             )
+            supabaseSync.queueChange(SyncKind.PLAYLIST, playlistId, SyncOp.UPSERT)
         }
     }
 
     suspend fun deletePlaylist(playlistId: String) {
         playlistDao.deletePlaylist(playlistId)
+        supabaseSync.queueChange(SyncKind.PLAYLIST, playlistId, SyncOp.DELETE)
     }
 
     fun getPlaylistTracks(playlistId: String): Flow<List<Track>> {
@@ -271,10 +292,12 @@ class LibraryRepository @Inject constructor(
 
     suspend fun addTrackToPlaylist(playlistId: String, track: Track) {
         playlistDao.addTrackToPlaylist(playlistId, track.toPlaylistTrackEntity(playlistId))
+        supabaseSync.queueChange(SyncKind.PLAYLIST_TRACK, playlistTrackKey(playlistId, track.id), SyncOp.UPSERT)
     }
 
     suspend fun removeTrackFromPlaylist(playlistId: String, trackId: Long) {
         playlistDao.removeTrackFromPlaylist(playlistId, trackId)
+        supabaseSync.queueChange(SyncKind.PLAYLIST_TRACK, playlistTrackKey(playlistId, trackId), SyncOp.DELETE)
     }
 
     // --- Downloads ---

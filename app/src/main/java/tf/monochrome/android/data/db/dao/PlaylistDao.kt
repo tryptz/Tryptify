@@ -41,6 +41,9 @@ interface PlaylistDao {
     @Query("SELECT * FROM playlist_tracks WHERE playlistId = :playlistId ORDER BY position ASC")
     suspend fun getPlaylistTracksSnapshot(playlistId: String): List<PlaylistTrackEntity>
 
+    @Query("SELECT * FROM playlist_tracks WHERE playlistId = :playlistId AND trackId = :trackId")
+    suspend fun getPlaylistTrack(playlistId: String, trackId: Long): PlaylistTrackEntity?
+
     @Query("SELECT COUNT(*) FROM playlist_tracks WHERE playlistId = :playlistId")
     suspend fun getPlaylistTrackCount(playlistId: String): Int
 

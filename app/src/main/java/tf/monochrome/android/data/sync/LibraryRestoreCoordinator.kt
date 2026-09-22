@@ -26,7 +26,9 @@ import javax.inject.Singleton
  * adds rows the device is missing, and the one exception is deliberate — EQ and
  * mixer presets take whichever copy was edited most recently, because a preset
  * that can never be overwritten is a preset whose edits never leave the device
- * that made them. It is bounded too: the automatic pass leaves the thousand
+ * that made them. Nor can it undo a local delete: it sends the device's
+ * pending edits first and skips any row whose delete the cloud hasn't
+ * confirmed yet (see [SyncOutbox]). It is bounded too: the automatic pass leaves the thousand
  * scrobbles of play history to the manual sync.
  *
  * Failures are logged and dropped. A restore is a repair, so a device that is
