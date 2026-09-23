@@ -29,6 +29,14 @@ data class DownloadItem(
     val duration: Int = 0,
     val version: String? = null,
     val isThxSpatialAudio: Boolean = false,
+    // Written into the file's own tags so strict players (Auxio, Symfonium,
+    // MediaStore) can order and group the track offline. All defaulted, so a
+    // queue persisted before they existed still decodes.
+    val trackNumber: Int? = null,
+    val discNumber: Int? = null,
+    val albumArtist: String? = null,
+    val releaseDate: String? = null,
+    val genre: String? = null,
 ) {
     companion object {
         fun from(track: Track): DownloadItem = DownloadItem(
@@ -42,6 +50,11 @@ data class DownloadItem(
             duration = track.duration,
             version = track.version,
             isThxSpatialAudio = track.isThxSpatialAudio,
+            trackNumber = track.trackNumber,
+            discNumber = track.volumeNumber,
+            albumArtist = track.album?.displayArtist?.ifBlank { null },
+            releaseDate = track.album?.releaseDate,
+            genre = track.album?.genre,
         )
     }
 }
