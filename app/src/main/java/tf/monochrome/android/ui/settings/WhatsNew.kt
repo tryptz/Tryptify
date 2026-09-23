@@ -62,6 +62,9 @@ data class WhatsNewRelease(
 
 object WhatsNew {
 
+    /** What travels between this device and the signed-in account, and when. */
+    private const val ACCOUNT_SYNC = "Account sync"
+
     /** The one section heading in use — the Discover page and everything under it. */
     private const val DISCOVER = "Discover (Beta)"
 
@@ -97,6 +100,53 @@ object WhatsNew {
 
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
+        WhatsNewRelease(
+            versionCode = 190,
+            versionName = "1.9.0",
+            entries = listOf(
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = ACCOUNT_SYNC,
+                    title = "Deleted things stay deleted",
+                    body = "Unliking a track, deleting a playlist or taking a song out of one " +
+                        "could undo itself on the next launch, because the delete never " +
+                        "reached your account. Each change is now held until your account " +
+                        "confirms it.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = ACCOUNT_SYNC,
+                    title = "Changes made offline catch up",
+                    body = "Favourites, playlists, and EQ and mixer presets edited without a " +
+                        "connection are sent once you are back online. Before, favourites and " +
+                        "playlists only went up when you pressed Sync, and presets got one try.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = ACCOUNT_SYNC,
+                    title = "Devices no longer wipe each other's settings",
+                    body = "Saving settings from one device used to erase every setting it " +
+                        "did not have itself. Each device now only adds or changes what it " +
+                        "touched, and a setting changed offline is not undone at the next launch.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = ACCOUNT_SYNC,
+                    title = "Signing in keeps trying to restore your settings",
+                    body = "If fetching your settings fails, the app retries instead of " +
+                        "carrying on with the device's own, which could then overwrite the " +
+                        "copy saved to your account.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = ACCOUNT_SYNC,
+                    title = "Waiting changes stay with their account",
+                    body = "A change that has not gone through yet is only ever sent to the " +
+                        "account it was made under. Switching accounts before it does will " +
+                        "not hand it to the other one.",
+                ),
+            ),
+        ),
         WhatsNewRelease(
             versionCode = 189,
             versionName = "1.8.9",
