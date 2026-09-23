@@ -68,6 +68,9 @@ object WhatsNew {
     /** The one section heading in use — the Discover page and everything under it. */
     private const val DISCOVER = "Discover (Beta)"
 
+    /** What a downloaded file carries once it is on disk. */
+    private const val DOWNLOADS = "Downloads"
+
     /** The equalizer's master switch and the system-wide correction under it. */
     private const val EQUALIZER = "Equalizer"
 
@@ -144,6 +147,22 @@ object WhatsNew {
                     body = "A change that has not gone through yet is only ever sent to the " +
                         "account it was made under. Switching accounts before it does will " +
                         "not hand it to the other one.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = DOWNLOADS,
+                    title = "Downloaded FLACs carry their own tags",
+                    body = "Title, album, track and disc number, album artist, year and genre " +
+                        "are written into every downloaded FLAC, so players like Auxio or " +
+                        "Symfonium file it under the right album, in order.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = DOWNLOADS,
+                    title = "Cover art is inside the file",
+                    body = "Each downloaded track has its album cover embedded, as well as " +
+                        "saved beside it. TIDAL downloads were getting no cover at all and " +
+                        "get one now.",
                 ),
             ),
         ),
