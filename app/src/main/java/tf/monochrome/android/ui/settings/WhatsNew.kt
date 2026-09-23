@@ -104,6 +104,51 @@ object WhatsNew {
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
         WhatsNewRelease(
+            versionCode = 191,
+            versionName = "1.9.1",
+            entries = listOf(
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = DOWNLOADS,
+                    title = "Downloads are filed by artist and album",
+                    body = "Each download goes into its own Artist / Album folder, numbered in " +
+                        "track order, instead of every song piling up in one folder. A second " +
+                        "disc follows the first in the same album folder.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = DOWNLOADS,
+                    title = "Every album shows its own cover",
+                    body = "Only one cover.jpg was ever saved, so file managers and other " +
+                        "players showed the first album you downloaded on everything after it. " +
+                        "Each album folder now gets its own.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = DOWNLOADS,
+                    title = "Other players find your synced lyrics",
+                    body = "Lyrics files were being saved with .txt on the end, so players " +
+                        "never matched them to the song. They are saved as .lrc next to the " +
+                        "track now.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = DOWNLOADS,
+                    title = "The Downloads page looks inside folders",
+                    body = "Songs inside artist and album folders show up too, such as ones " +
+                        "left from before a reinstall. Songs saved the old way are still found " +
+                        "where they are.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.REMOVED,
+                    section = DOWNLOADS,
+                    title = "No picture file beside every song",
+                    body = "Downloads no longer save a separate image for each track. The " +
+                        "cover is inside FLAC downloads, and each album folder has one cover.jpg.",
+                ),
+            ),
+        ),
+        WhatsNewRelease(
             versionCode = 190,
             versionName = "1.9.0",
             entries = listOf(
