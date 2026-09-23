@@ -9,11 +9,9 @@ import tf.monochrome.android.data.db.dao.EqPresetDao
 import tf.monochrome.android.data.db.entity.EqPresetEntity
 import tf.monochrome.android.domain.model.EqBand
 import tf.monochrome.android.domain.model.EqPreset
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 import tf.monochrome.android.data.sync.SupabaseSyncRepository
+import tf.monochrome.android.data.sync.SyncKind
+import tf.monochrome.android.data.sync.SyncOp
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,12 +24,6 @@ class ParametricEqRepository @Inject constructor(
     private val eqPresetDao: EqPresetDao,
     private val supabaseSync: SupabaseSyncRepository,
 ) {
-    /**
-     * Fire-and-forget cloud sync, a no-op when the user isn't signed in. Saving
-     * a preset must not wait on the network, and must not fail because of it.
-     */
-    private val syncScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
     private val json = Json { ignoreUnknownKeys = true }
 
     fun getAllPresets(): Flow<List<EqPreset>> =
@@ -56,12 +48,12 @@ class ParametricEqRepository @Inject constructor(
     suspend fun savePreset(preset: EqPreset) {
         val entity = preset.toEntity()
         eqPresetDao.insertPreset(entity)
-        syncScope.launch { supabaseSync.pushEqPreset(entity) }
+        supabaseSync.queueChange(SyncKind.EQ_PRESET, entity.id, SyncOp.UPSERT)
     }
 
     suspend fun deletePreset(presetId: String) {
         eqPresetDao.deletePreset(presetId)
-        syncScope.launch { supabaseSync.deleteEqPreset(presetId) }
+        supabaseSync.queueChange(SyncKind.EQ_PRESET, presetId, SyncOp.DELETE)
     }
 
     fun searchPresets(query: String): Flow<List<EqPreset>> =

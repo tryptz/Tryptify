@@ -97,4 +97,62 @@ class SettingsSyncCodecTest {
         assertNull(out["b"])
         assertNull(out["c"])
     }
+
+    // ─── Merging with the cloud copy ─────────────────────────────────────────
+    // These are what keep a push from deleting cloud settings and a pull from
+    // reverting local ones.
+
+    private fun snap(vararg pairs: Pair<String, Any>) = SettingsSyncCodec.encode(mapOf(*pairs))
+
+    @Test
+    fun `a push never removes a key the cloud has`() {
+        val cloud = snap("a" to 1, "b" to true)
+        val merged = SettingsSyncCodec.decode(SettingsSyncCodec.merge(cloud, snap("a" to 2))!!)
+        assertEquals(2, merged["a"])
+        assertEquals(true, merged["b"])
+    }
+
+    @Test
+    fun `a push keeps cloud entries this build cannot decode`() {
+        val cloud = """{"future":{"t":"zz","v":[1,2]},"a":{"t":"i","v":1}}"""
+        val merged = SettingsSyncCodec.merge(cloud, snap("a" to 2))!!
+        assertTrue(merged.contains("\"future\""))
+        assertTrue(merged.contains("\"zz\""))
+    }
+
+    @Test
+    fun `a push refuses to overwrite a cloud copy it cannot read`() {
+        assertNull(SettingsSyncCodec.merge("[\"not an object\"]", snap("a" to 1)))
+    }
+
+    @Test
+    fun `seeding an empty account uploads the local snapshot`() {
+        val merged = SettingsSyncCodec.decode(SettingsSyncCodec.merge(null, snap("a" to 1))!!)
+        assertEquals(mapOf<String, Any>("a" to 1), merged)
+    }
+
+    @Test
+    fun `only keys changed since the agreed snapshot count as local edits`() {
+        val base = snap("a" to 1, "b" to 1)
+        val local = snap("a" to 1, "b" to 2, "c" to 3)
+        assertEquals(setOf("b", "c"), SettingsSyncCodec.changedSince(base, local))
+    }
+
+    @Test
+    fun `without an agreed snapshot the cloud copy wins`() {
+        assertTrue(SettingsSyncCodec.changedSince(null, snap("a" to 1)).isEmpty())
+    }
+
+    @Test
+    fun `a pull applies the cloud copy except for local edits`() {
+        val cloud = snap("a" to 10, "b" to 10)
+        val applied = SettingsSyncCodec.decode(SettingsSyncCodec.without(cloud, setOf("b")))
+        assertEquals(mapOf<String, Any>("a" to 10), applied)
+    }
+
+    @Test
+    fun `a push sends only the local edits`() {
+        val local = snap("a" to 1, "b" to 2)
+        assertEquals(mapOf<String, Any>("b" to 2), SettingsSyncCodec.decode(SettingsSyncCodec.only(local, setOf("b"))))
+    }
 }

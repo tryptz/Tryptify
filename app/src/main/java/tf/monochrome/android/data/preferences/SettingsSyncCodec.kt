@@ -92,6 +92,64 @@ object SettingsSyncCodec {
         return out
     }
 
+    /**
+     * The payload to upload: the cloud's snapshot with this device's values laid
+     * over it.
+     *
+     * The upload used to be this device's snapshot alone, and a snapshot only
+     * holds the keys set on this device, so every push deleted from the cloud
+     * whatever this device happened not to have — every setting a newer build
+     * syncs that this one doesn't know, and, after a sign-in whose pull failed,
+     * nearly everything. Merging means a push can add or change keys but never
+     * remove one.
+     *
+     * Entries are merged as raw JSON, never decoded, so a value whose type tag
+     * this build doesn't understand still survives the round trip.
+     *
+     * Returns null when [cloud] exists but isn't a JSON object: that is a format
+     * this build can't read, and overwriting it would destroy it.
+     */
+    fun merge(cloud: String?, local: String): String? {
+        val cloudRoot = if (cloud.isNullOrBlank()) JsonObject(emptyMap())
+            else runCatching { json.parseToJsonElement(cloud).jsonObject }.getOrNull() ?: return null
+        val localRoot = runCatching { json.parseToJsonElement(local).jsonObject }.getOrNull() ?: return null
+        return json.encodeToString(JsonObject.serializer(), JsonObject(cloudRoot + localRoot))
+    }
+
+    /**
+     * Keys this device changed since [base], the last snapshot it and the cloud
+     * agreed on — the edits a pull must not overwrite.
+     *
+     * A pull used to apply the cloud copy wholesale, so settings changed on a
+     * device that launched offline were silently reverted by the next online
+     * launch. With a base, each side keeps what only it changed: keys edited
+     * here survive the pull, everything else takes the cloud's value.
+     *
+     * No base (this account has never synced on this device) means no local
+     * edits: a device signing in adopts the account's settings, as it always
+     * has.
+     */
+    fun changedSince(base: String?, local: String): Set<String> {
+        if (base.isNullOrBlank()) return emptySet()
+        val baseRoot = runCatching { json.parseToJsonElement(base).jsonObject }.getOrNull() ?: return emptySet()
+        val localRoot = runCatching { json.parseToJsonElement(local).jsonObject }.getOrNull() ?: return emptySet()
+        return localRoot.filter { (name, value) -> baseRoot[name] != value }.keys
+    }
+
+    /** Only the entries of [payload] named in [names]; an empty object if it can't be read. */
+    fun only(payload: String, names: Set<String>): String {
+        val root = runCatching { json.parseToJsonElement(payload).jsonObject }.getOrNull()
+            ?: return "{}"
+        return json.encodeToString(JsonObject.serializer(), JsonObject(root.filterKeys { it in names }))
+    }
+
+    /** [payload] without the entries named in [names], or [payload] itself if it can't be read. */
+    fun without(payload: String, names: Set<String>): String {
+        if (names.isEmpty()) return payload
+        val root = runCatching { json.parseToJsonElement(payload).jsonObject }.getOrNull() ?: return payload
+        return json.encodeToString(JsonObject.serializer(), JsonObject(root - names))
+    }
+
     private fun tagged(type: String, value: kotlinx.serialization.json.JsonElement): JsonObject =
         buildJsonObject {
             put("t", JsonPrimitive(type))
