@@ -517,11 +517,14 @@ class PlayerViewModel @Inject constructor(
                             launch {
                                 // Qobuz tracks must skip the TIDAL /lyrics lookup —
                                 // a Qobuz id on TIDAL resolves to a different song,
-                                // so its (synced) lyrics would never match. The
+                                // so its (synced) lyrics would never match. Spotify
+                                // tracks have no TIDAL id at all. The
                                 // resolved source is the authoritative signal;
                                 // qobuzIdRegistry is a backstop.
-                                val skipTidal = unifiedTrackRegistry[track.id]?.sourceType ==
+                                val resolvedType = unifiedTrackRegistry[track.id]?.sourceType
+                                val skipTidal = resolvedType ==
                                     tf.monochrome.android.domain.model.SourceType.QOBUZ ||
+                                    resolvedType == tf.monochrome.android.domain.model.SourceType.SPOTIFY ||
                                     qobuzIdRegistry.isQobuzTrack(track.id)
                                 // Pass the full Track so the repository can fall
                                 // back to LRCLib (track + artist + album +

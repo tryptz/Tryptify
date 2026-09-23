@@ -9,6 +9,7 @@ import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import tf.monochrome.android.data.auth.SpotifyAuthManager
 import tf.monochrome.android.data.import_.CsvTrack
+import java.net.URLEncoder
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -67,6 +68,19 @@ class SpotifyApiClient @Inject constructor(
             val resp = authedGet("$API_BASE/me/playlists?limit=50&offset=$offset")
             json.decodeFromString<SpotifyPagingObject<SpotifySimplePlaylist>>(resp.bodyAsText())
         }
+    }
+
+    /**
+     * Track search, as the connected user (so market and explicit-content
+     * settings are theirs). One page only — search results feed a merged
+     * list alongside the other catalogues, which already carries paging.
+     */
+    suspend fun searchTracks(query: String, limit: Int = SEARCH_LIMIT): Result<List<SpotifyTrack>> = runCatching {
+        val q = URLEncoder.encode(query, "UTF-8").replace("+", "%20")
+        val resp = authedGet("$API_BASE/search?q=$q&type=track&limit=$limit")
+        json.decodeFromString<SpotifySearchResponse>(resp.bodyAsText())
+            .tracks?.items.orEmpty()
+            .filter { !it.isLocal && it.type == "track" && !it.uri.isNullOrBlank() }
     }
 
     /** The connected user's Liked Songs. */
@@ -169,5 +183,8 @@ class SpotifyApiClient @Inject constructor(
         private const val MAX_RETRIES = 3
         private const val MAX_RETRY_AFTER_SEC = 30L
         private const val MAX_TRACKS = 10_000
+        // Spotify's documented cap is 50; 10 keeps Development-mode apps well
+        // inside their rate limit and is plenty beside the other catalogues.
+        private const val SEARCH_LIMIT = 10
     }
 }

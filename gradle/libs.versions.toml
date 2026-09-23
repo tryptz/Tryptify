@@ -26,6 +26,7 @@ haze = "1.7.1"
 nextlibMedia3ext = "0.8.4"
 profileinstaller = "1.4.1"
 jaudiotagger = "3.0.1"
+gson = "2.11.0"
 junit = "4.13.2"
 baselineprofile = "1.4.0"
 benchmark = "1.4.0"
@@ -70,6 +71,11 @@ nextlib-media3ext = { group = "io.github.anilbeesetti.nextlib", name = "nextlib-
 # designation back from a file on rescan. MediaMetadataRetriever is read-only
 # and can't see custom Vorbis comments, hence a real tag library.
 jaudiotagger = { group = "net.jthink", name = "jaudiotagger", version.ref = "jaudiotagger" }
+
+# Gson — required at runtime by the Spotify App Remote SDK, whose default
+# JsonMapper (com.spotify.protocol.mappers.gson.GsonMapper) is Gson-backed.
+# Nothing in the app itself uses it; kotlinx.serialization stays the app's JSON.
+gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
 
 # Hilt
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }

@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * Minimal Spotify Web API / Accounts service DTOs — only the fields the
- * playlist importer consumes. The shared Json is configured with
+ * playlist importer and track search consume. The shared Json is configured with
  * ignoreUnknownKeys, so everything else in Spotify's responses is dropped.
  */
 
@@ -53,10 +53,29 @@ data class SpotifyUserProfile(
 )
 
 @Serializable
-data class SpotifyArtist(val name: String = "")
+data class SpotifyArtist(
+    val name: String = "",
+    val id: String? = null,
+)
 
 @Serializable
-data class SpotifyAlbum(val name: String = "")
+data class SpotifyImage(
+    val url: String = "",
+    val width: Int? = null,
+    val height: Int? = null,
+)
+
+@Serializable
+data class SpotifyAlbum(
+    val name: String = "",
+    val id: String? = null,
+    val images: List<SpotifyImage> = emptyList(),
+    // "2021", "2021-06" or "2021-06-25" depending on release_date_precision.
+    @SerialName("release_date") val releaseDate: String? = null,
+)
+
+@Serializable
+data class SpotifyExternalIds(val isrc: String? = null)
 
 @Serializable
 data class SpotifyTrack(
@@ -67,6 +86,19 @@ data class SpotifyTrack(
     @SerialName("is_local") val isLocal: Boolean = false,
     // "track" or "episode" — playlists can contain podcast episodes.
     val type: String = "track",
+    // Search-only fields; the playlist importer's `fields=` filter omits them.
+    val id: String? = null,
+    val uri: String? = null,
+    val explicit: Boolean = false,
+    @SerialName("track_number") val trackNumber: Int? = null,
+    @SerialName("disc_number") val discNumber: Int? = null,
+    @SerialName("external_ids") val externalIds: SpotifyExternalIds? = null,
+)
+
+/** GET /v1/search?type=track — only the tracks section is requested. */
+@Serializable
+data class SpotifySearchResponse(
+    val tracks: SpotifyPagingObject<SpotifyTrack>? = null,
 )
 
 /**

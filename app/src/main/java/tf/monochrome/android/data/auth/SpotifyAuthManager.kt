@@ -257,7 +257,11 @@ class SpotifyAuthManager @Inject constructor(
         private const val TAG = "SpotifyAuth"
         private const val AUTHORIZE_URL = "https://accounts.spotify.com/authorize"
         private const val TOKEN_URL = "https://accounts.spotify.com/api/token"
-        private const val SCOPES = "playlist-read-private playlist-read-collaborative user-library-read"
+        // app-remote-control lets SpotifyAppRemoteClient drive the Spotify app
+        // for playback under this same client id. Accounts connected before it
+        // was added get Spotify's own one-time consent on first play instead.
+        private const val SCOPES =
+            "playlist-read-private playlist-read-collaborative user-library-read app-remote-control"
         private const val EXPIRY_MARGIN_MS = 60_000L
         private const val BASE64_URL_FLAGS = Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
         private const val KEY_VERIFIER = "code_verifier"

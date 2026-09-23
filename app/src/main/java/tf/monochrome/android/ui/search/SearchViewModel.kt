@@ -28,6 +28,7 @@ import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.domain.usecase.SearchUnifiedLibraryUseCase
 import tf.monochrome.android.domain.usecase.toQobuzUnifiedTrack
+import tf.monochrome.android.domain.usecase.toSpotifyUnifiedTrack
 import tf.monochrome.android.domain.usecase.toUnifiedTrack
 
 @HiltViewModel
@@ -36,6 +37,8 @@ class SearchViewModel @Inject constructor(
     private val unifiedLibrarySearch: SearchUnifiedLibraryUseCase,
     private val preferences: PreferencesManager,
     private val genreGraph: GenreGraphRepository,
+    private val spotifyApi: tf.monochrome.android.data.api.SpotifyApiClient,
+    private val spotifyAuth: tf.monochrome.android.data.auth.SpotifyAuthManager,
 ) : ViewModel() {
 
     /**
@@ -56,6 +59,9 @@ class SearchViewModel @Inject constructor(
         // search). HiFiApiClient.searchQobuz already times out per
         // sub-request — this is a belt-and-suspenders ceiling.
         private const val QOBUZ_BUDGET_MS = 7_000L
+        // Same reasoning for the Spotify leg, which only runs when an account
+        // is connected. Tighter: it is one small request to a fast API.
+        private const val SPOTIFY_BUDGET_MS = 5_000L
         private const val SCORE_WEIGHT_PRIMARY = 4_000
         private const val SCORE_WEIGHT_SECONDARY = 1_800
         private const val SCORE_WEIGHT_TERTIARY = 1_200
@@ -291,9 +297,11 @@ class SearchViewModel @Inject constructor(
         val genre = genreGraph.graph.resolve(query.trim())
         _resolvedGenre.value = genre
         val trimmedQuery = genre?.queries()?.firstOrNull() ?: query.trim()
-        // TIDAL, Qobuz, and the local/collection library all run in parallel.
-        // Qobuz failures (instance unset, network error, schema mismatch) are
-        // swallowed so the existing TIDAL flow keeps working unchanged.
+        // TIDAL, Qobuz, Spotify and the local/collection library all run in
+        // parallel. Qobuz and Spotify failures (unconfigured, not connected,
+        // network error, schema mismatch) are swallowed so the existing TIDAL
+        // flow keeps working unchanged.
+        var spotifyTracks: List<UnifiedTrack> = emptyList()
         val (searchResult, qobuzResult, unifiedResultsResult) = coroutineScope {
             // Source mode (Settings → Instances → Source) gates which
             // catalogs we fan out to. *_ONLY modes restrict to one catalog;
@@ -320,12 +328,25 @@ class SearchViewModel @Inject constructor(
                 }
             }
             val libraryDeferred = async { runCatching { unifiedLibrarySearch.search(trimmedQuery).first() } }
+            // Tracks only, first page only: Spotify results play through the
+            // Spotify app (see PlaybackSource.SpotifyRemote) and have no album
+            // or artist pages here to page into.
+            val spotifyDeferred = async {
+                if (!spotifyAuth.isConnected.value) {
+                    null
+                } else {
+                    withTimeoutOrNull(SPOTIFY_BUDGET_MS) {
+                        spotifyApi.searchTracks(trimmedQuery).getOrNull()
+                    }
+                }
+            }
+            spotifyTracks = spotifyDeferred.await()?.mapNotNull { it.toSpotifyUnifiedTrack() }.orEmpty()
             Triple(apiDeferred.await(), qobuzDeferred.await(), libraryDeferred.await())
         }
         val unifiedResults = unifiedResultsResult.getOrNull()
 
         val qobuzAvailable = qobuzResult?.isSuccess == true
-        if (searchResult.isFailure && unifiedResults == null && !qobuzAvailable) {
+        if (searchResult.isFailure && unifiedResults == null && !qobuzAvailable && spotifyTracks.isEmpty()) {
             // Every backend failed (offline / all instances down). Distinguish
             // this from a successful-but-empty search so the UI can offer a
             // retry instead of a flat "No results found".
@@ -357,7 +378,8 @@ class SearchViewModel @Inject constructor(
                 query = trimmedQuery,
                 tracks = localAndCollectionTracks +
                     result.tracks.map { it.toUnifiedTrack() } +
-                    qobuzTracks
+                    qobuzTracks +
+                    spotifyTracks
             )
             _allAlbums.value = scoreItems(
                 trimmedQuery,
@@ -379,11 +401,11 @@ class SearchViewModel @Inject constructor(
             seedPageEnd(artistsPage,   result.artists.size,   qobuzArtists.size, qobuzAvailable)
             seedPageEnd(playlistsPage, result.playlists.size, /*qobuz=*/0,       qobuzAvailable)
         } else {
-            // TIDAL is down — still surface Qobuz + local results so search
-            // doesn't feel broken when the public TIDAL pool is unreachable.
+            // TIDAL is down — still surface Qobuz, Spotify + local results so
+            // search doesn't feel broken when the public TIDAL pool is unreachable.
             _allTracks.value = scoreTracks(
                 query = trimmedQuery,
-                tracks = localAndCollectionTracks + qobuzTracks
+                tracks = localAndCollectionTracks + qobuzTracks + spotifyTracks
             )
             _allAlbums.value = scoreItems(trimmedQuery, qobuzAlbums.distinctBy { it.id }) { listOf(it.title, it.displayArtist) }
             _allArtists.value = scoreItems(trimmedQuery, qobuzArtists.distinctBy { it.id }) { listOf(it.name) }
@@ -607,6 +629,9 @@ class SearchViewModel @Inject constructor(
         // Live radio never reaches search — stations are found on the globe, by
         // place rather than by name — so it has no ranking to earn.
         SourceType.LIVE_RADIO -> 0
+        // Plays through the Spotify app, outside this app's DSP chain, so a
+        // lossless copy of the same song from any other source should win.
+        SourceType.SPOTIFY -> SOURCE_BOOST_API - 7
     }
 
     private fun scoreField(query: String, rawValue: String?, baseScore: Int): Int {

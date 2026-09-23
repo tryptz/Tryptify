@@ -30,3 +30,11 @@
 
 # Keep projectM JNI bridge
 -keep class tf.monochrome.android.visualizer.ProjectMNativeBridge { *; }
+
+# Spotify App Remote SDK. The .aar ships consumer rules for its protocol Item
+# types; these additionally pin the Gson-backed mapper and the protocol types it
+# reflects over, since a stripped field there fails at runtime as a silently
+# empty PlayerState rather than as a build error.
+-keep class com.spotify.protocol.mappers.gson.** { *; }
+-keep class com.spotify.protocol.types.** { *; }
+-dontwarn com.spotify.**

@@ -307,6 +307,13 @@ dependencies {
     implementation(libs.ktor.client.logging)
     implementation(libs.ktor.client.websockets)
 
+    // Spotify App Remote SDK — plays Spotify tracks through the Spotify app
+    // (Premium) and reports its PlayerState back. Not published to Maven, so
+    // the release .aar is vendored from github.com/spotify/android-sdk
+    // (Apache-2.0); see app/libs/README.md. Gson is its runtime JSON mapper.
+    implementation(files("libs/spotify-app-remote-release-0.8.0.aar"))
+    implementation(libs.gson)
+
     // Coil
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)

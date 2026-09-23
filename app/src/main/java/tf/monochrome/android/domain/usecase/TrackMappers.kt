@@ -1,6 +1,8 @@
 package tf.monochrome.android.domain.usecase
 
 import tf.monochrome.android.data.api.QobuzIdRegistry
+import tf.monochrome.android.data.api.SpotifyTrack
+import tf.monochrome.android.data.cache.SpotifyShadowUri
 import tf.monochrome.android.domain.model.GenreConfidence
 import tf.monochrome.android.domain.model.PlaybackSource
 import tf.monochrome.android.domain.model.SourceType
@@ -134,4 +136,42 @@ fun Track.toUnifiedTrackAuto(registry: QobuzIdRegistry): UnifiedTrack = when {
     appleId != null || registry.isAppleTrack(id) -> toAppleUnifiedTrack()
     registry.isQobuzTrack(id) -> toQobuzUnifiedTrack()
     else -> toUnifiedTrack()
+}
+
+/**
+ * A Spotify catalog track, played by the Spotify app via App Remote
+ * ([PlaybackSource.SpotifyRemote]). Null for anything that can't be played
+ * that way: local files, episodes, or a missing/malformed track URI.
+ *
+ * Artist and album ids stay null on purpose — they are base62 Spotify ids,
+ * and every artist/album screen here takes a numeric TIDAL/Qobuz id, so a
+ * hashed stand-in would open some unrelated catalogue page.
+ */
+fun SpotifyTrack.toSpotifyUnifiedTrack(): UnifiedTrack? {
+    val trackUri = uri ?: return null
+    if (isLocal || type != "track" || name.isBlank() || durationMs <= 0) return null
+    if (!trackUri.startsWith("spotify:track:") ||
+        !SpotifyShadowUri.isTrackId(SpotifyShadowUri.trackIdOf(trackUri))
+    ) return null
+
+    val names = artists.map { it.name }.filter { it.isNotBlank() }
+    return UnifiedTrack(
+        id = "spotify_${SpotifyShadowUri.trackIdOf(trackUri)}",
+        title = name,
+        durationSeconds = (durationMs / 1000).toInt(),
+        trackNumber = trackNumber,
+        discNumber = discNumber,
+        explicit = explicit,
+        artistName = names.joinToString(", ").ifBlank { DEFAULT_ARTIST_NAME },
+        artistNames = names,
+        albumArtistName = names.firstOrNull(),
+        artists = names.map { UnifiedArtistRef(id = null, name = it) },
+        albumTitle = album?.name?.takeIf { it.isNotBlank() },
+        releaseYear = album?.releaseDate?.take(4)?.toIntOrNull(),
+        // Largest image first is Spotify's documented order.
+        artworkUri = album?.images?.firstOrNull()?.url?.takeIf { it.isNotBlank() },
+        isrc = externalIds?.isrc,
+        source = PlaybackSource.SpotifyRemote(spotifyUri = trackUri, durationMs = durationMs),
+        sourceType = SourceType.SPOTIFY,
+    )
 }

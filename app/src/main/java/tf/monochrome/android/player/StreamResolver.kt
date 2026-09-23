@@ -11,8 +11,10 @@ import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.api.QobuzTrackMatch
 import tf.monochrome.android.data.cache.QobuzStreamUri
 import tf.monochrome.android.data.cache.QobuzStreamCacheManager
+import tf.monochrome.android.data.cache.SpotifyShadowUri
 import tf.monochrome.android.data.local.coil.AudioFileCoverFetcher
 import tf.monochrome.android.data.repository.MusicRepository
+import tf.monochrome.android.data.spotify.SpotifyAppRemoteClient
 import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.CollectionDirectLink
 import tf.monochrome.android.domain.model.PlaybackSource
@@ -45,6 +47,7 @@ class StreamResolver @Inject constructor(
     private val qobuzCache: QobuzStreamCacheManager,
     private val qobuzIdRegistry: QobuzIdRegistry,
     private val localTrackLocator: LocalTrackLocator,
+    private val spotifyRemote: SpotifyAppRemoteClient,
 ) {
     private fun normalizeArtworkUri(raw: String?): Uri? {
         if (raw.isNullOrBlank()) return null
@@ -211,7 +214,53 @@ class StreamResolver @Inject constructor(
             is PlaybackSource.QobuzCached -> resolveQobuzCached(track, source)
             is PlaybackSource.AppleCached -> resolveAppleCached(track, source)
             is PlaybackSource.RadioStream -> resolveRadioStream(track, source)
+            is PlaybackSource.SpotifyRemote -> resolveSpotifyRemote(track, source)
         }
+    }
+
+    /**
+     * A Spotify track = a silent WAV exactly as long as the song, carrying its
+     * Spotify URI (see [SpotifyShadowUri]). ExoPlayer plays the silence and
+     * keeps owning play state, position and end-of-track; SpotifyPlaybackBridge
+     * sees the shadow URI become current and has the Spotify app play the
+     * real thing in step with it.
+     *
+     * Touches no network: whether the account is Premium, or the app is logged
+     * in, is only known once App Remote is asked to play, and the bridge
+     * handles that failure. The one thing knowable here is whether the Spotify
+     * app exists at all — without it the silence would play to nobody, so the
+     * track is reported unplayable and PlaybackService skips it like any other.
+     */
+    @OptIn(UnstableApi::class)
+    private fun resolveSpotifyRemote(
+        track: UnifiedTrack,
+        source: PlaybackSource.SpotifyRemote,
+    ): ResolvedMedia {
+        val playable = source.durationMs > 0 &&
+            SpotifyShadowUri.isTrackId(SpotifyShadowUri.trackIdOf(source.spotifyUri)) &&
+            spotifyRemote.isSpotifyInstalled()
+
+        val metadata = MediaMetadata.Builder()
+            .setTitle(track.title)
+            .setArtist(track.artistName)
+            .setAlbumTitle(track.albumTitle)
+            .setArtworkUri(normalizeArtworkUri(track.artworkUri))
+            .setTrackNumber(track.trackNumber)
+            .setDiscNumber(track.discNumber)
+            .build()
+
+        val mediaItem = MediaItem.Builder()
+            .setMediaId(track.id)
+            .apply {
+                if (playable) {
+                    setUri(SpotifyShadowUri.build(source.spotifyUri, source.durationMs))
+                    setMimeType(MimeTypes.AUDIO_WAV)
+                }
+            }
+            .setMediaMetadata(metadata)
+            .build()
+
+        return ResolvedMedia(mediaItem = mediaItem, isPlayable = playable)
     }
 
     /**

@@ -302,7 +302,7 @@ enum class GenreConfidence {
 // LIVE_RADIO rather than RADIO: `tf.monochrome.android.radio` is already the
 // algorithmic queue-maker that seeds a station from a track, and the two would
 // be read as the same thing by anyone grepping for it.
-enum class SourceType { API, COLLECTION, LOCAL, QOBUZ, APPLE, LIVE_RADIO }
+enum class SourceType { API, COLLECTION, LOCAL, QOBUZ, APPLE, LIVE_RADIO, SPOTIFY }
 
 @Serializable
 enum class AudioCodec(val displayName: String) {
@@ -379,6 +379,25 @@ sealed class PlaybackSource {
     data class AppleCached(
         val appleId: Long,
         val preferredQuality: AudioQuality = AudioQuality.LOSSLESS,
+    ) : PlaybackSource()
+
+    /**
+     * A Spotify track, played by the Spotify app itself over the App Remote
+     * SDK (Spotify Premium, Spotify installed). Its audio never enters this
+     * app, so it bypasses the DSP chain, AutoEQ and the USB path.
+     *
+     * ExoPlayer still gets an item — a silent WAV of [durationMs] (see
+     * `SpotifyShadowUri`) — so it stays the single owner of play state, queue
+     * position, seeking and end-of-track. `SpotifyPlaybackBridge` mirrors that
+     * state onto the Spotify app, and Spotify's own pauses back onto it.
+     *
+     * [spotifyUri] is `spotify:track:<base62 id>`.
+     */
+    @Serializable
+    @SerialName("SpotifyRemote")
+    data class SpotifyRemote(
+        val spotifyUri: String,
+        val durationMs: Long,
     ) : PlaybackSource()
 
     /**
@@ -560,6 +579,11 @@ data class UnifiedTrack(
             // correctly 400'd, and the row sat on "Queued" through four
             // retries before dying.
             is PlaybackSource.AppleCached -> s.appleId
+            // Spotify ids are base62 strings with no numeric form. Forced
+            // negative, because a positive legacy id is read as a TIDAL id
+            // (Track.cloudSourceType, the legacy resolve path) — a hashed
+            // Spotify id landing there would fetch an unrelated TIDAL track.
+            is PlaybackSource.SpotifyRemote -> -(id.hashCode().toLong() and 0x7FFF_FFFFL) - 1
             else -> id.hashCode().toLong()
         }
 
