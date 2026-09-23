@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tf.monochrome.android.data.db.dao.DownloadDao
+import tf.monochrome.android.data.downloads.DownloadPaths
 import tf.monochrome.android.data.db.entity.DownloadedTrackEntity
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.AudioCodec
@@ -107,9 +108,29 @@ class DownloadsViewModel @Inject constructor(
         }.getOrNull() ?: return emptyList()
         if (!tree.canRead()) return emptyList()
 
+        val knownPaths = knownRoomRows.mapTo(HashSet()) { it.filePath }
+        val out = mutableListOf<DownloadedTrackEntity>()
+        scanDirectory(tree, emptyList(), knownPaths, out)
+        return out
+    }
+
+    /**
+     * One folder of the scan. TrackDownloader writes `<Artist>/<Album>/`, and
+     * older versions wrote everything flat into the root, so the walk goes two
+     * levels down and no further — deep enough for both layouts without
+     * crawling an entire music library the user happened to pick. [folders]
+     * is the path of folder names from the root to [dir].
+     */
+    private fun scanDirectory(
+        dir: DocumentFile,
+        folders: List<String>,
+        knownPaths: Set<String>,
+        out: MutableList<DownloadedTrackEntity>,
+    ) {
         // First pass — collect everything once. listFiles() is the expensive
         // call; iterating the local list afterwards is free.
-        val children = tree.listFiles().filter { it.isFile && it.canRead() }
+        val entries = dir.listFiles()
+        val children = entries.filter { it.isFile && it.canRead() }
 
         // Folder-level art (cover.jpg / folder.png / albumart.webp). The
         // TrackDownloader drops one of these alongside the audio so the system
@@ -126,7 +147,8 @@ class DownloadsViewModel @Inject constructor(
             ?.toString()
 
         // Per-track sidecar art (e.g. "Artist - Title.jpg" next to
-        // "Artist - Title.flac"). Index by stem so the audio loop is O(n).
+        // "Artist - Title.flac", from older versions). Index by stem so the
+        // audio loop is O(n).
         val sidecarArtByStem: Map<String, String> = children.asSequence()
             .mapNotNull { f ->
                 val n = f.name ?: return@mapNotNull null
@@ -138,8 +160,6 @@ class DownloadsViewModel @Inject constructor(
             }
             .toMap()
 
-        val knownPaths = knownRoomRows.mapTo(HashSet()) { it.filePath }
-        val out = mutableListOf<DownloadedTrackEntity>()
         for (file in children) {
             val name = file.name ?: continue
             if (!isAudioFile(name, file.type)) continue
@@ -147,9 +167,16 @@ class DownloadsViewModel @Inject constructor(
             if (pathString in knownPaths) continue
             val stem = name.substringBeforeLast('.')
             val cover = sidecarArtByStem[stem] ?: folderArtUri
-            out += syntheticEntityFor(file, pathString, name, cover)
+            out += syntheticEntityFor(file, pathString, name, folders, cover)
         }
-        return out
+
+        if (folders.size < MAX_SCAN_DEPTH) {
+            for (sub in entries) {
+                if (!sub.isDirectory || !sub.canRead()) continue
+                val subName = sub.name ?: continue
+                scanDirectory(sub, folders + subName, knownPaths, out)
+            }
+        }
     }
 
     private fun isAudioFile(name: String, mime: String?): Boolean {
@@ -162,14 +189,21 @@ class DownloadsViewModel @Inject constructor(
         file: DocumentFile,
         path: String,
         name: String,
+        folders: List<String>,
         coverUri: String?,
     ): DownloadedTrackEntity {
-        // Filename convention written by TrackDownloader is
-        // "<artist> - <title>.<ext>" — try to recover the split, fall
-        // back to the bare name.
         val withoutExt = name.substringBeforeLast('.', name)
-        val (artist, title) = withoutExt.split(" - ", limit = 2)
-            .let { if (it.size == 2) it[0] to it[1] else "" to withoutExt }
+        // Inside <Artist>/<Album>/ the folders name the artist and album and
+        // the file is "NN. <title>". A root-level file follows the old flat
+        // convention "<artist> - <title>" — try to recover the split, fall
+        // back to the bare name.
+        val (artist, album, title) = if (folders.size >= 2) {
+            Triple(folders[folders.size - 2], folders.last(), DownloadPaths.titleFromStem(withoutExt))
+        } else {
+            val (artist, title) = withoutExt.split(" - ", limit = 2)
+                .let { if (it.size == 2) it[0] to it[1] else "" to withoutExt }
+            Triple(artist, folders.lastOrNull(), title)
+        }
         // Stable id derived from the URI so successive scans don't drift the
         // LazyColumn keying. Always negative so it can't collide with a real
         // catalog track id (those are positive Longs from TIDAL/Qobuz).
@@ -179,7 +213,7 @@ class DownloadsViewModel @Inject constructor(
             title = title,
             duration = 0,
             artistName = artist,
-            albumTitle = null,
+            albumTitle = album,
             albumCover = coverUri,
             filePath = path,
             quality = AudioQuality.LOSSLESS.name,
@@ -187,7 +221,6 @@ class DownloadsViewModel @Inject constructor(
             downloadedAt = file.lastModified().takeIf { it > 0 } ?: 0L,
         )
     }
-
     // One-shot user messages (e.g. a delete that couldn't remove the file).
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
@@ -236,6 +269,8 @@ class DownloadsViewModel @Inject constructor(
 
     companion object {
         const val SINGLES_LABEL = "Singles"
+        // Root → <Artist> → <Album>: the deepest folder TrackDownloader writes.
+        private const val MAX_SCAN_DEPTH = 2
         // Lower-case extensions TrackDownloader may produce + the formats
         // users typically sideload. Mime-type sniff still wins; this list
         // catches files SAF reports without a type (common on some

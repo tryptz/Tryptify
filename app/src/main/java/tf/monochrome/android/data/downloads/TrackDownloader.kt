@@ -22,6 +22,8 @@ import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.buildCoverUrl
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -59,6 +61,9 @@ class TrackDownloader @Inject constructor(
     private companion object {
         const val TAG = "TrackDownloader"
     }
+
+    /** Guards the find-or-create steps in the user's folder; see [resolveAlbumFolder]. */
+    private val folderLock = Mutex()
 
     /**
      * Runs one download to completion, reporting 0..1 through [onProgress].
@@ -228,33 +233,20 @@ class TrackDownloader @Inject constructor(
 
             val fileExt = if (usedApple) "m4a" else if (isFlac) "flac" else "mp3"
             val audioMime = if (usedApple) "audio/mp4" else if (isFlac) "audio/flac" else "audio/mpeg"
-            val sanitizedTitle = "${artistName} - ${trackTitle}".replace(Regex("[\\\\/:*?\"<>|]"), "_")
-            val fileName = "$sanitizedTitle.$fileExt"
-            val filePath: String
+            val fileStem = DownloadPaths.trackFileStem(item)
 
-            if (customFolderUri != null) {
-                // Save to user-selected folder via SAF
-                val treeUri = customFolderUri.toUri()
-                val docFile = DocumentFile.fromTreeUri(context, treeUri)
-                if (docFile != null && docFile.canWrite()) {
-                    val existing = docFile.findFile(fileName)
-                    existing?.delete()
-                    val newFile = docFile.createFile(audioMime, sanitizedTitle)
-                    if (newFile != null) {
-                        context.contentResolver.openOutputStream(newFile.uri)?.use { out ->
-                            tempAudio.inputStream().use { input -> input.copyTo(out) }
-                        }
-                        filePath = newFile.uri.toString()
-                    } else {
-                        // Fallback to internal
-                        filePath = saveToInternal(trackId, fileExt, tempAudio)
-                    }
-                } else {
-                    filePath = saveToInternal(trackId, fileExt, tempAudio)
-                }
-            } else {
-                filePath = saveToInternal(trackId, fileExt, tempAudio)
-            }
+            // Save to the user-selected folder via SAF, as <Artist>/<Album>/.
+            // If the album folder can't be made the track still lands in the
+            // folder root (the old flat layout) rather than failing.
+            val rootDoc = customFolderUri
+                ?.let { DocumentFile.fromTreeUri(context, it.toUri()) }
+                ?.takeIf { it.canWrite() }
+            val albumDoc = rootDoc?.let { resolveAlbumFolder(it, item) }
+            val targetDoc = albumDoc ?: rootDoc
+
+            val filePath = targetDoc
+                ?.let { writeToFolder(it, "$fileStem.$fileExt", fileStem, audioMime, tempAudio) }
+                ?: saveToInternal(trackId, fileExt, tempAudio)
 
             // Save lyrics if enabled. TIDAL is preferred (best quality
             // synced LRC); LRCLib fills in for anything TIDAL 404s on,
@@ -278,15 +270,14 @@ class TrackDownloader @Inject constructor(
                             lrcContent.append("$timeStr${line.text}\n")
                         }
 
-                        val lrcFileName = "$sanitizedTitle.lrc"
                         if (customFolderUri != null) {
-                            val treeUri = customFolderUri.toUri()
-                            val docFile = DocumentFile.fromTreeUri(context, treeUri)
-                            if (docFile != null && docFile.canWrite()) {
-                                val existing = docFile.findFile(lrcFileName)
-                                existing?.delete()
-                                val lrcFile = docFile.createFile("text/plain", sanitizedTitle)
-                                lrcFile?.let {
+                            // Next to the audio, same stem, so players pair them.
+                            // octet-stream with the full name: under "text/plain"
+                            // the provider appends ".txt" and players never find it.
+                            if (targetDoc != null) {
+                                val lrcFileName = "$fileStem.lrc"
+                                targetDoc.findFile(lrcFileName)?.delete()
+                                targetDoc.createFile("application/octet-stream", lrcFileName)?.let {
                                     context.contentResolver.openOutputStream(it.uri)?.use { out ->
                                         out.write(lrcContent.toString().toByteArray())
                                     }
@@ -302,18 +293,13 @@ class TrackDownloader @Inject constructor(
                 }
             }
 
-            // Save the album art alongside the track. Two reasons:
-            //   1. The system MediaScanner picks up `cover.jpg` /
-            //      `albumart.jpg` in the same folder as audio files and
-            //      attaches them as the album image automatically — that's
-            //      what makes downloaded albums show their cover in the
-            //      Local tab on a fresh install.
-            //   2. Other Android players (and our own DownloadsScreen) can
-            //      load the cover off-line.
-            // Errors here are non-fatal — losing the cover shouldn't fail
-            // the whole download.
-            if (artBytes != null) {
-                runCatching { saveAlbumArt(artBytes, sanitizedTitle, customFolderUri) }
+            // One cover.jpg per album folder. The system MediaScanner and
+            // other players read it as the album image, and it is the only
+            // cover the MP3/M4A downloads get — FLACs carry theirs embedded.
+            // Only in a real album folder: in the shared root it would be
+            // claimed by whichever album came first. Errors are non-fatal.
+            if (artBytes != null && albumDoc != null) {
+                runCatching { saveFolderCover(albumDoc, artBytes) }
             }
 
             // Tell MediaStore about the new audio + cover so the Local tab
@@ -389,44 +375,65 @@ class TrackDownloader @Inject constructor(
     }
 
     /**
-     * Saves the album cover both as `<sanitizedTitle>.jpg` (per-track
-     * sidecar, matched by some MP3-style players) and as `cover.jpg` in the
-     * same folder (the Android MediaScanner convention). Skipped silently on
-     * SAF failure.
+     * `<root>/<Artist>/<Album>`, creating what is missing; null if a folder
+     * can't be made, and the caller writes to the root instead. Serialised by [folderLock]: the queue runs several tracks
+     * of one album at once, and two racing "find, else create" calls would
+     * each create the folder — the provider names the second "Album (1)".
      */
-    private fun saveAlbumArt(
-        bytes: ByteArray,
-        sanitizedTitle: String,
-        customFolderUri: String?,
-    ) {
-        if (customFolderUri != null) {
-            val treeUri = customFolderUri.toUri()
-            val docFile = DocumentFile.fromTreeUri(context, treeUri) ?: return
-            if (!docFile.canWrite()) return
-            // Per-track sidecar.
-            val perTrackName = "$sanitizedTitle.jpg"
-            docFile.findFile(perTrackName)?.delete()
-            docFile.createFile("image/jpeg", sanitizedTitle)?.let { file ->
+    private suspend fun resolveAlbumFolder(root: DocumentFile, item: DownloadItem): DocumentFile? =
+        folderLock.withLock {
+            runCatching {
+                root.childDirectory(DownloadPaths.artistFolder(item))
+                    ?.childDirectory(DownloadPaths.albumFolder(item))
+            }.onFailure { Log.w(TAG, "could not make the album folder for \"${item.title}\"", it) }
+                .getOrNull()
+        }
+
+    /**
+     * An existing sub-folder matched case-insensitively (SD cards and shared
+     * storage fold case, so "ABBA" and "Abba" are one folder), else a new one.
+     */
+    private fun DocumentFile.childDirectory(name: String): DocumentFile? =
+        listFiles().firstOrNull { it.isDirectory && it.name.equals(name, ignoreCase = true) }
+            ?: createDirectory(name)
+
+    /**
+     * Streams [source] into [dir] as [fileName], replacing any earlier copy.
+     * Null when the provider won't create or open the file, so the caller can
+     * fall back to app storage instead of recording an empty file.
+     */
+    private fun writeToFolder(
+        dir: DocumentFile,
+        fileName: String,
+        stem: String,
+        mime: String,
+        source: File,
+    ): String? {
+        dir.findFile(fileName)?.delete()
+        // The provider appends the extension that matches [mime].
+        val file = dir.createFile(mime, stem) ?: return null
+        val written = context.contentResolver.openOutputStream(file.uri)?.use { out ->
+            source.inputStream().use { input -> input.copyTo(out) }
+        } != null
+        if (!written) {
+            file.delete()
+            return null
+        }
+        return file.uri.toString()
+    }
+
+    /**
+     * The album's `cover.jpg`, written by whichever of its tracks gets here
+     * first; the rest find it and leave it be. Under [folderLock] so two
+     * tracks can't both miss it and write `cover.jpg` and `cover (1).jpg`.
+     */
+    private suspend fun saveFolderCover(albumDoc: DocumentFile, bytes: ByteArray) {
+        folderLock.withLock {
+            if (albumDoc.findFile("cover.jpg") != null) return
+            albumDoc.createFile("image/jpeg", "cover")?.let { file ->
                 context.contentResolver.openOutputStream(file.uri)?.use { it.write(bytes) }
                 notifyMediaScanner(file.uri.toString())
             }
-            // Folder-level cover.jpg — MediaScanner reads this for the
-            // album thumbnail, and it covers the MP3/M4A downloads that
-            // don't get an embedded METADATA_BLOCK_PICTURE.
-            if (docFile.findFile("cover.jpg") == null) {
-                docFile.createFile("image/jpeg", "cover")?.let { file ->
-                    context.contentResolver.openOutputStream(file.uri)?.use { it.write(bytes) }
-                    notifyMediaScanner(file.uri.toString())
-                }
-            }
-        } else {
-            val downloadsDir = File(context.getExternalFilesDir(null), "downloads")
-            if (!downloadsDir.exists()) downloadsDir.mkdirs()
-            File(downloadsDir, "$sanitizedTitle.jpg").writeBytes(bytes)
-            // App-private storage isn't MediaStore-visible, so cover.jpg
-            // is purely for the in-app off-line cover lookup.
-            val coverFile = File(downloadsDir, "cover.jpg")
-            if (!coverFile.exists()) coverFile.writeBytes(bytes)
         }
     }
 

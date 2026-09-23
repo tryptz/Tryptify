@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Changed
+
+#### Downloads are filed as Artist / Album
+- **A download folder is now `<Artist>/<Album>/01. Title.flac`**, the layout Auxio, Symfonium, Poweramp and desktop sync tools expect, instead of every track of every album dumped flat into the folder root. The artist is the album artist, so a record with featured guests stays in one folder. A second disc sorts after the first as `2-01. Title` in the same folder rather than in a `Disc 2/` folder, which a download could not create consistently (it cannot know whether disc 1 has siblings) and which would sit out of reach of the album's cover. A single with no album gets a folder named after itself.
+- **Each album gets its own `cover.jpg`.** There used to be one, in the root, claimed by whichever album was downloaded first — so MediaScanner and file managers showed that one cover for every download after it. It is written once per album folder, under a lock, since the queue downloads several tracks of an album at once and two of them racing would leave `cover (1).jpg` (or `Album (1)/`) behind.
+- **No more per-track `.jpg` beside every song.** FLACs carry the cover embedded, and the folder's `cover.jpg` covers MP3/M4A.
+- **Synced `.lrc` files are actually named `.lrc`.** They were created as `text/plain`, and the storage provider appends `.txt` to that — so players never paired them with the track.
+- **The Downloads screen looks inside the new folders** for files it didn't record itself (a reinstall, a manual copy), two levels deep and no further, and reads the artist and album back from the folder names. Files already on disk in the old flat layout are still found where they are.
+
 ### Removed
 
 #### The pane behind the Player tab's preview
