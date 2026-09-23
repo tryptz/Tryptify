@@ -29,9 +29,11 @@ internal object DownloadPaths {
      * fresh "Vol (1)", "Vol (2)"… alongside it.
      */
     fun sanitize(raw: String?, fallback: String): String {
+        // Whitespace first: tabs and newlines are control characters too, and
+        // should become a space, not an underscore.
         val cleaned = raw.orEmpty()
-            .replace(ILLEGAL, "_")
             .replace(Regex("""\s+"""), " ")
+            .replace(ILLEGAL, "_")
             .trim()
             .take(MAX_SEGMENT_LENGTH)
             .trimEnd('.', ' ')
