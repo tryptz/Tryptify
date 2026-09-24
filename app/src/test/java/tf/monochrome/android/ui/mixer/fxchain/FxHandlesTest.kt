@@ -53,10 +53,16 @@ class FxHandlesTest {
     }
 
     @Test
-    fun `the main graphs have handles`() {
-        listOf(SnapinType.EQ_3BAND, SnapinType.EQ_10BAND, SnapinType.FILTER, SnapinType.COMPRESSOR,
-            SnapinType.REVERB, SnapinType.DELAY, SnapinType.STEREO, SnapinType.TRANSIENT_SHAPER)
-            .forEach { assertTrue("$it", FxHandles.forType(it).isNotEmpty()) }
+    fun `every graph has a handle, and every handle moves a real parameter`() {
+        for (type in SnapinType.values()) {
+            val handles = FxHandles.forType(type)
+            assertTrue("$type has no handle", handles.isNotEmpty())
+            val count = getParamDefs(type).size
+            for (h in handles) {
+                assertTrue("$type ${h.label} moves nothing", h.params.isNotEmpty())
+                assertTrue("$type ${h.label} params ${h.params}", h.params.all { it in 0 until count })
+            }
+        }
         assertEquals(10, FxHandles.forType(SnapinType.EQ_10BAND).size)
     }
 
