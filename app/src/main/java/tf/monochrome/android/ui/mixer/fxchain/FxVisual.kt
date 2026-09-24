@@ -28,6 +28,23 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.sp
+import tf.monochrome.android.ui.mixer.formatParamValue
 import tf.monochrome.android.audio.dsp.SnapinType
 import tf.monochrome.android.audio.dsp.model.FxTapFrame
 import tf.monochrome.android.audio.dsp.model.PluginInstance
@@ -106,10 +123,21 @@ internal fun FxVisual(
     modifier: Modifier = Modifier,
     slotIndex: Int = -1,
     live: FxTapFrame? = null,
+    /** Set to make the graph's handles draggable; null draws it read-only. */
+    onParam: ((paramIndex: Int, value: Float) -> Unit)? = null,
 ) {
     val type = plugin.type ?: return
     val defs = getParamDefs(type)
     val raw = plugin.parameters
+    val handles = remember(type) { if (onParam != null) FxHandles.forType(type) else emptyList() }
+    // The handle under the finger, or -1. While one is held the picture
+    // follows the raw values: a spring would leave the curve trailing the dot.
+    var activeHandle by remember { mutableIntStateOf(-1) }
+    val rawP: (Int) -> Float = { i -> raw[i] ?: defs.getOrNull(i)?.default ?: 0f }
+    val latestRawP by rememberUpdatedState(rawP)
+    val latestOnParam by rememberUpdatedState(onParam)
+    val haptic = LocalHapticFeedback.current
+    val measurer = rememberTextMeasurer()
 
     // Spring-smooth continuous parameters so curves morph instead of jumping;
     // stepped/enum parameters snap so e.g. a filter type flips instantly.
@@ -120,8 +148,9 @@ internal fun FxVisual(
     for (i in defs.indices) {
         val def = defs[i]
         val target = raw[i] ?: def.default
-        values += if (def.steps != null) target
-        else animateFloatAsState(target, spec, label = "fxVisualParam$i").value
+        val animated = if (def.steps != null) target
+            else animateFloatAsState(target, spec, label = "fxVisualParam$i").value
+        values += if (activeHandle >= 0) target else animated
     }
 
     val clock = rememberFxClock(running = type in MOTION_TYPES && !plugin.bypassed)
@@ -152,16 +181,98 @@ internal fun FxVisual(
     )
     val panelBg = cs.surfaceContainerLowest.copy(alpha = 0.65f)
 
+    val labelColor = cs.onSurfaceVariant.copy(alpha = 0.55f)
+    val bubbleBg = cs.surfaceContainerHighest.copy(alpha = 0.92f)
+    val bubbleText = cs.onSurface
+
     Canvas(
         modifier = modifier
             .fillMaxWidth()
-            .height(112.dp)
+            .height(148.dp)
             .clip(MonoDimens.shapeSm)
             .background(panelBg)
+            .then(
+                if (handles.isEmpty()) Modifier
+                else Modifier.pointerInput(type) {
+                    var lastTapAt = 0L
+                    var lastTapHandle = -1
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val grab = 30.dp.toPx()
+                        val w = size.width.toFloat()
+                        val h = size.height.toFloat()
+                        val p0 = latestRawP
+                        // The nearest handle within reach; a touch anywhere else
+                        // is left alone, so the FX list still scrolls under it.
+                        val hit = handles.indices
+                            .map { i ->
+                                val (fx, fy) = handles[i].position(p0)
+                                i to hypot(fx * w - down.position.x, fy * h - down.position.y)
+                            }
+                            .filter { it.second <= grab }
+                            .minByOrNull { it.second }?.first
+                            ?: return@awaitEachGesture
+                        val handle = handles[hit]
+                        down.consume()
+                        activeHandle = hit
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+
+                        // Values as this drag has left them, over the live ones.
+                        val moved = HashMap<Int, Float>()
+                        val pNow: (Int) -> Float = { i -> moved[i] ?: latestRawP(i) }
+                        var travelled = 0f
+                        fun step(axis: FxAxis?, deltaFrac: Float) {
+                            if (axis == null || deltaFrac == 0f) return
+                            val def = defs.getOrNull(axis.param) ?: return
+                            val next = axis.fromFrac(axis.toFrac(pNow(axis.param), pNow) + deltaFrac, pNow)
+                            if (!next.isFinite()) return
+                            val clamped = next.coerceIn(def.min, def.max)
+                            if (clamped != pNow(axis.param)) {
+                                moved[axis.param] = clamped
+                                latestOnParam?.invoke(axis.param, clamped)
+                            }
+                        }
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) break
+                            val d = change.position - change.previousPosition
+                            travelled += hypot(d.x, d.y)
+                            step(handle.x, d.x / w)
+                            step(handle.y, d.y / h)
+                            change.consume()
+                        }
+                        activeHandle = -1
+
+                        // A second tap on the same handle, without dragging:
+                        // back to the defaults for what it controls.
+                        val now = System.currentTimeMillis()
+                        if (travelled < viewConfiguration.touchSlop) {
+                            if (hit == lastTapHandle && now - lastTapAt < 320L) {
+                                for (param in handle.params) {
+                                    defs.getOrNull(param)?.let { latestOnParam?.invoke(param, it.default) }
+                                }
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                lastTapHandle = -1
+                            } else {
+                                lastTapHandle = hit
+                                lastTapAt = now
+                            }
+                        } else {
+                            lastTapHandle = -1
+                        }
+                    }
+                }
+            )
     ) {
         val p: (Int) -> Float = { i -> values.getOrElse(i) { 0f } }
         val time = clock.value
         drawPanelGrid(style)
+        when (type) {
+            in RESPONSE_TYPES -> drawFrequencyAxis(measurer, labelColor, style)
+            in TRANSFER_TYPES -> drawTransferAxis(measurer, labelColor, style)
+            else -> Unit
+        }
         // Faint scope of the actual bus audio behind the schematic curve,
         // lit by how hard this effect is currently working.
         if (tapped && type !in NO_SCOPE_UNDERLAY) {
@@ -262,7 +373,115 @@ internal fun FxVisual(
             SnapinType.REVERB -> drawReverb(style, p)
             SnapinType.REVERSER -> drawReverser(style, p, time)
         }
+
+        // The handles, over everything; the held one says what it is set to.
+        handles.forEachIndexed { i, handle ->
+            val (fx, fy) = handle.position(p)
+            val center = Offset(
+                fx.coerceIn(0.02f, 0.98f) * size.width,
+                fy.coerceIn(0.04f, 0.96f) * size.height,
+            )
+            drawHandle(center, style, active = i == activeHandle)
+        }
+        handles.getOrNull(activeHandle)?.let { handle ->
+            val (fx, fy) = handle.position(p)
+            val text = handle.params.joinToString("  ·  ") { param ->
+                val def = defs[param]
+                "${def.name} ${formatParamValue(p(param), def)}"
+            }
+            drawValueBubble(
+                measurer, text,
+                anchor = Offset(fx * size.width, fy * size.height),
+                background = bubbleBg, color = bubbleText, accent = style.curve,
+            )
+        }
     }
+}
+
+/** Graphs drawn over the log frequency axis. */
+private val RESPONSE_TYPES = setOf(
+    SnapinType.FILTER, SnapinType.EQ_3BAND, SnapinType.EQ_10BAND, SnapinType.COMB_FILTER,
+    SnapinType.FORMANT_FILTER, SnapinType.LADDER_FILTER, SnapinType.NONLINEAR_FILTER,
+)
+
+/** Graphs of output level against input level, −60..0 dB each way. */
+private val TRANSFER_TYPES = setOf(
+    SnapinType.COMPRESSOR, SnapinType.LIMITER, SnapinType.GATE,
+    SnapinType.DYNAMICS, SnapinType.COMPACTOR,
+)
+
+private val AXIS_LABEL = TextStyle(fontSize = 8.sp, fontWeight = FontWeight.Medium)
+
+/** 100 Hz, 1 kHz and 10 kHz marks along the bottom of a response graph. */
+private fun DrawScope.drawFrequencyAxis(measurer: TextMeasurer, color: Color, s: FxVisualStyle) {
+    for ((hz, label) in listOf(100f to "100", 1000f to "1k", 10000f to "10k")) {
+        val x = M.freqToT(hz) * size.width
+        drawLine(s.grid, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
+        drawText(measurer, label, Offset(x + 3.dp.toPx(), size.height - 12.dp.toPx()),
+            style = AXIS_LABEL.copy(color = color))
+    }
+    // The dashed 0 dB line through the middle.
+    drawText(measurer, "0 dB", Offset(3.dp.toPx(), size.height / 2f - 12.dp.toPx()),
+        style = AXIS_LABEL.copy(color = color))
+}
+
+/** Input level marks along the bottom of a transfer graph. */
+private fun DrawScope.drawTransferAxis(measurer: TextMeasurer, color: Color, s: FxVisualStyle) {
+    for (db in listOf(-48, -36, -24, -12)) {
+        val x = (db + 60f) / 60f * size.width
+        drawText(measurer, "$db", Offset(x + 2.dp.toPx(), size.height - 12.dp.toPx()),
+            style = AXIS_LABEL.copy(color = color))
+    }
+    drawText(measurer, "out", Offset(3.dp.toPx(), 2.dp.toPx()), style = AXIS_LABEL.copy(color = color))
+    drawText(measurer, "in dB", Offset(size.width - 26.dp.toPx(), size.height - 12.dp.toPx()),
+        style = AXIS_LABEL.copy(color = color))
+}
+
+/** A draggable point: a ring with a lit core, and a halo while it is held. */
+private fun DrawScope.drawHandle(center: Offset, s: FxVisualStyle, active: Boolean) {
+    val ring = (if (active) 8.dp else 6.5.dp).toPx()
+    if (active) {
+        drawCircle(s.curve.copy(alpha = 0.16f * s.dim), radius = 20.dp.toPx(), center = center)
+        drawLine(s.curve.copy(alpha = 0.25f * s.dim), Offset(center.x, 0f), Offset(center.x, size.height),
+            strokeWidth = 1f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f)))
+        drawLine(s.curve.copy(alpha = 0.25f * s.dim), Offset(0f, center.y), Offset(size.width, center.y),
+            strokeWidth = 1f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f)))
+    }
+    drawCircle(s.glow, radius = ring + 3.dp.toPx(), center = center)
+    drawCircle(Color.Black.copy(alpha = 0.35f), radius = ring, center = center)
+    drawCircle(s.curve, radius = ring, center = center, style = Stroke(width = 1.8.dp.toPx()))
+    drawCircle(
+        Brush.radialGradient(
+            listOf(lerp(s.curve, Color.White, 0.55f), s.curve),
+            center = center - Offset(1.dp.toPx(), 1.dp.toPx()),
+            radius = ring * 0.6f,
+        ),
+        radius = ring * (if (active) 0.55f else 0.45f), center = center,
+    )
+}
+
+/** The held handle's values, in a pill kept inside the panel. */
+private fun DrawScope.drawValueBubble(
+    measurer: TextMeasurer,
+    text: String,
+    anchor: Offset,
+    background: Color,
+    color: Color,
+    accent: Color,
+) {
+    val layout = measurer.measure(text, TextStyle(fontSize = 10.sp, fontWeight = FontWeight.Bold, color = color))
+    val padX = 8.dp.toPx()
+    val padY = 4.dp.toPx()
+    val w = layout.size.width + padX * 2
+    val h = layout.size.height + padY * 2
+    val gap = 16.dp.toPx()
+    // Above the handle if there is room, else below it.
+    val top = if (anchor.y - gap - h >= 0f) anchor.y - gap - h else anchor.y + gap
+    val left = (anchor.x - w / 2f).coerceIn(2f, (size.width - w - 2f).coerceAtLeast(2f))
+    drawRoundRect(background, Offset(left, top), Size(w, h), CornerRadius(h / 2f))
+    drawRoundRect(accent.copy(alpha = 0.6f), Offset(left, top), Size(w, h), CornerRadius(h / 2f),
+        style = Stroke(width = 1.dp.toPx()))
+    drawText(layout, topLeft = Offset(left + padX, top + padY))
 }
 
 /**

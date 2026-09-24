@@ -1,6 +1,21 @@
 package tf.monochrome.android.ui.mixer
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -110,6 +125,28 @@ internal fun FLKnobControl(
     val latestOnValueChange by rememberUpdatedState(onValueChange)
     val latestDefault by rememberUpdatedState(default)
 
+    // Sweeps to a new value (a preset, a reset) rather than jumping; follows
+    // the finger exactly while held.
+    val shownFraction by animateFloatAsState(
+        targetValue = fraction,
+        animationSpec = if (isTouching) snap() else tween(durationMillis = 220),
+        label = "knobFraction"
+    )
+    // A parameter that runs either side of zero (pan, a gain in dB) lights its
+    // arc out from zero, so "no change" reads as an empty arc.
+    val bipolar = min < 0f && max > 0f
+    val zeroFraction = if (bipolar) (-min / (max - min)) else 0f
+    val defaultFraction = default?.let { ((it - min) / (max - min)).coerceIn(0f, 1f) }
+    var typing by remember { mutableStateOf(false) }
+
+    val cs = MaterialTheme.colorScheme
+    val bodyLight = lerp(cs.surfaceContainerHighest, Color.White, 0.12f)
+    val bodyDark = lerp(cs.surfaceContainerLowest, Color.Black, 0.35f)
+    val trackColor = cs.onSurface.copy(alpha = 0.10f)
+    val tickColor = cs.onSurface.copy(alpha = 0.18f)
+    val markerColor = cs.onSurface.copy(alpha = 0.45f)
+    val valueColor = cs.onSurface.copy(alpha = 0.85f)
+
     Column(
         modifier = modifier.padding(horizontal = 4.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -119,7 +156,7 @@ internal fun FLKnobControl(
             text = label,
             fontSize = 9.sp,
             fontWeight = if (isTouching) FontWeight.Bold else FontWeight.Medium,
-            color = if (isTouching) color else FLPluginColors.textSecondary,
+            color = if (isTouching) color else cs.onSurfaceVariant,
             textAlign = TextAlign.Center,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -263,86 +300,195 @@ internal fun FLKnobControl(
         ) {
             val cx = size.width / 2f
             val cy = size.height / 2f
-            val radius = size.minDimension / 2f - 6.dp.toPx()
+            val center = Offset(cx, cy)
+            val radius = size.minDimension / 2f - 8.dp.toPx()
             val strokeW = 3.5.dp.toPx()
+            val shown = shownFraction
 
-            // Touch glow ring when active
-            if (isTouching) {
-                drawCircle(
-                    color = color.copy(alpha = 0.12f),
-                    radius = radius + 8.dp.toPx(),
-                    center = Offset(cx, cy)
+            // Ticks around the outside; the ones the value has passed are lit.
+            val ticks = 11
+            for (i in 0 until ticks) {
+                val t = i / (ticks - 1f)
+                val a = Math.toRadians((135.0 + t * 270.0)).toFloat()
+                val lit = if (bipolar) (t - zeroFraction) * (shown - zeroFraction) >= 0f &&
+                    kotlin.math.abs(t - zeroFraction) <= kotlin.math.abs(shown - zeroFraction)
+                    else t <= shown
+                val r0 = radius + 4.dp.toPx()
+                val r1 = radius + (if (i == 0 || i == ticks - 1 || i == ticks / 2) 7.5.dp else 6.dp).toPx()
+                drawLine(
+                    color = if (lit) color.copy(alpha = 0.75f) else tickColor,
+                    start = Offset(cx + r0 * cos(a), cy + r0 * sin(a)),
+                    end = Offset(cx + r1 * cos(a), cy + r1 * sin(a)),
+                    strokeWidth = 1.2.dp.toPx(),
+                    cap = StrokeCap.Round
                 )
             }
 
-            // Background track arc (270 degrees)
+            // Track, then the value arc — from the centre for a ± parameter.
             drawArc(
-                color = FLPluginColors.knobTrack,
+                color = trackColor,
                 startAngle = 135f,
                 sweepAngle = 270f,
                 useCenter = false,
+                topLeft = Offset(cx - radius, cy - radius),
+                size = Size(radius * 2, radius * 2),
                 style = Stroke(width = strokeW, cap = StrokeCap.Round)
             )
+            val from = if (bipolar) zeroFraction else 0f
+            val startDeg = 135f + from * 270f
+            val sweepDeg = (shown - from) * 270f
+            if (kotlin.math.abs(sweepDeg) > 0.5f) {
+                // Glow under the arc, brighter under the finger.
+                drawArc(
+                    color = color.copy(alpha = if (isTouching) 0.35f else 0.16f),
+                    startAngle = startDeg,
+                    sweepAngle = sweepDeg,
+                    useCenter = false,
+                    topLeft = Offset(cx - radius, cy - radius),
+                    size = Size(radius * 2, radius * 2),
+                    style = Stroke(width = strokeW * 2.6f, cap = StrokeCap.Round)
+                )
+                drawArc(
+                    brush = Brush.sweepGradient(
+                        listOf(color.copy(alpha = 0.75f), color, lerp(color, Color.White, 0.25f), color.copy(alpha = 0.75f)),
+                        center = center
+                    ),
+                    startAngle = startDeg,
+                    sweepAngle = sweepDeg,
+                    useCenter = false,
+                    topLeft = Offset(cx - radius, cy - radius),
+                    size = Size(radius * 2, radius * 2),
+                    style = Stroke(width = strokeW, cap = StrokeCap.Round)
+                )
+            }
 
-            // Active arc
-            val sweepDeg = fraction * 270f
-            drawArc(
-                color = color,
-                startAngle = 135f,
-                sweepAngle = sweepDeg,
-                useCenter = false,
-                style = Stroke(width = if (isTouching) strokeW + 1.dp.toPx() else strokeW, cap = StrokeCap.Round)
-            )
+            // Where double-tap takes it.
+            defaultFraction?.let { d ->
+                val a = Math.toRadians((135.0 + d * 270.0)).toFloat()
+                drawCircle(
+                    color = markerColor,
+                    radius = 1.6.dp.toPx(),
+                    center = Offset(cx + radius * cos(a), cy + radius * sin(a))
+                )
+            }
 
-            // Center filled circle (knob body)
-            val innerRadius = radius - 6.dp.toPx()
+            // The body: a drop shadow, a lit dome, and a fine rim.
+            val body = radius - 7.dp.toPx()
             drawCircle(
-                color = FLPluginColors.knobBg,
-                radius = innerRadius,
-                center = Offset(cx, cy)
+                color = Color.Black.copy(alpha = 0.30f),
+                radius = body + 1.5.dp.toPx(),
+                center = Offset(cx, cy + 2.dp.toPx())
             )
             drawCircle(
-                color = color.copy(alpha = if (isTouching) 0.25f else 0.12f),
-                radius = innerRadius,
-                center = Offset(cx, cy)
+                brush = Brush.radialGradient(
+                    listOf(bodyLight, bodyDark),
+                    center = Offset(cx - body * 0.35f, cy - body * 0.45f),
+                    radius = body * 1.6f
+                ),
+                radius = body,
+                center = center
+            )
+            drawCircle(
+                color = color.copy(alpha = if (isTouching) 0.22f else 0.08f),
+                radius = body,
+                center = center
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = 0.10f),
+                radius = body,
+                center = center,
+                style = Stroke(width = 1.dp.toPx())
             )
 
-            // Indicator line
-            val angleRad = Math.toRadians((135.0 + sweepDeg).toDouble()).toFloat()
-            val lineInner = innerRadius * 0.25f
-            val lineOuter = innerRadius * 0.9f
+            // Pointer: a line to a lit dot near the edge.
+            val angleRad = Math.toRadians((135.0 + shown * 270.0)).toFloat()
+            val tip = Offset(cx + body * 0.72f * cos(angleRad), cy + body * 0.72f * sin(angleRad))
             drawLine(
-                color = color,
-                start = Offset(
-                    cx + lineInner * cos(angleRad),
-                    cy + lineInner * sin(angleRad)
-                ),
-                end = Offset(
-                    cx + lineOuter * cos(angleRad),
-                    cy + lineOuter * sin(angleRad)
-                ),
-                strokeWidth = if (isTouching) 3.dp.toPx() else 2.5.dp.toPx(),
+                color = color.copy(alpha = 0.85f),
+                start = Offset(cx + body * 0.22f * cos(angleRad), cy + body * 0.22f * sin(angleRad)),
+                end = tip,
+                strokeWidth = if (isTouching) 3.dp.toPx() else 2.4.dp.toPx(),
                 cap = StrokeCap.Round
             )
-
-            // Center dot
-            drawCircle(
-                color = color.copy(alpha = 0.6f),
-                radius = 2.dp.toPx(),
-                center = Offset(cx, cy)
-            )
+            drawCircle(color = color.copy(alpha = 0.35f), radius = 4.5.dp.toPx(), center = tip)
+            drawCircle(color = lerp(color, Color.White, 0.35f), radius = 2.dp.toPx(), center = tip)
         }
 
         Spacer(modifier = Modifier.height(2.dp))
 
-        // Value readout (highlighted when touching)
+        // Value readout: tap it to type an exact value.
         Text(
             text = formatParamValue(value, ParamDef(label, min, max, value, unit, steps)),
             fontSize = if (isTouching) 11.sp else 10.sp,
             fontWeight = FontWeight.Bold,
-            color = if (isTouching) color else FLPluginColors.textValue,
+            color = if (isTouching) color else valueColor,
             textAlign = TextAlign.Center,
-            maxLines = 1
+            maxLines = 1,
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .clickable(onClickLabel = "Type a value") { typing = true }
+                .padding(horizontal = 4.dp, vertical = 1.dp)
         )
     }
+
+    if (typing) {
+        ValueEntryDialog(
+            label = label,
+            value = value,
+            min = min,
+            max = max,
+            unit = unit,
+            onDismiss = { typing = false },
+            onConfirm = {
+                onValueChange(snapValue(it.coerceIn(min, max), min, max, steps))
+                typing = false
+            }
+        )
+    }
+}
+
+/** Type an exact value for a knob; accepts "1.5k" for 1500. */
+@Composable
+private fun ValueEntryDialog(
+    label: String,
+    value: Float,
+    min: Float,
+    max: Float,
+    unit: String,
+    onDismiss: () -> Unit,
+    onConfirm: (Float) -> Unit,
+) {
+    var text by remember { mutableStateOf(trimFloat(value)) }
+    val parsed = parseEntry(text)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(label) },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                singleLine = true,
+                isError = parsed == null,
+                suffix = if (unit.isNotEmpty()) ({ Text(unit) }) else null,
+                supportingText = { Text("${trimFloat(min)} to ${trimFloat(max)}") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { parsed?.let(onConfirm) }, enabled = parsed != null) { Text("Set") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+private fun trimFloat(v: Float): String =
+    if (v == kotlin.math.floor(v) && kotlin.math.abs(v) < 1e7f) v.toLong().toString() else "%.3f".format(v).trimEnd('0').trimEnd('.')
+
+/** "1.5k" → 1500, "-3" → -3; null if it is not a number. */
+internal fun parseEntry(text: String): Float? {
+    val t = text.trim().replace(',', '.')
+    val k = t.endsWith("k", ignoreCase = true)
+    val n = (if (k) t.dropLast(1) else t).trim().toFloatOrNull() ?: return null
+    val v = if (k) n * 1000f else n
+    return v.takeIf { it.isFinite() }
 }
