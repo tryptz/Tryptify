@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.mixer
 
+import tf.monochrome.android.ui.mixer.fxchain.FxPreset
+import tf.monochrome.android.ui.mixer.fxchain.FxPresetRow
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -72,6 +74,7 @@ fun InsertRack(
     onPluginBypass: (busIndex: Int, slotIndex: Int) -> Unit,
     onPluginRemove: (busIndex: Int, slotIndex: Int) -> Unit,
     onParameterChange: (busIndex: Int, slotIndex: Int, paramIndex: Int, value: Float) -> Unit,
+    onApplyPreset: (busIndex: Int, slotIndex: Int, preset: FxPreset) -> Unit = { _, _, _ -> },
     onPluginDryWet: (busIndex: Int, slotIndex: Int, dryWet: Float) -> Unit = { _, _, _ -> },
     onBusInputToggle: (busIndex: Int, enabled: Boolean) -> Unit = { _, _ -> },
     spreadChannels: Boolean = true,
@@ -164,6 +167,7 @@ fun InsertRack(
                         busIndex         = busIndex,
                         slotIndex        = slotIndex,
                         onParameterChange = onParameterChange,
+                        onApplyPreset    = { preset -> onApplyPreset(busIndex, slotIndex, preset) },
                         onDismiss        = onDismissEditor
                     )
                 }
@@ -472,6 +476,7 @@ private fun InlinePluginEditor(
     busIndex: Int,
     slotIndex: Int,
     onParameterChange: (Int, Int, Int, Float) -> Unit,
+    onApplyPreset: (FxPreset) -> Unit,
     onDismiss: () -> Unit
 ) {
     val paramDefs = getParamDefs(plugin.type)
@@ -510,6 +515,8 @@ private fun InlinePluginEditor(
                 )
             }
         }
+
+        FxPresetRow(plugin = plugin, accent = MaterialTheme.colorScheme.primary, onApply = onApplyPreset)
 
         // Parameter sliders
         paramDefs.forEachIndexed { paramIndex, def ->

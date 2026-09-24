@@ -405,6 +405,33 @@ class DspEngineManager @Inject constructor(
         requestSave()
     }
 
+    /**
+     * A whole preset at once: every parameter and the dry/wet, one update of
+     * the mirror and one save. (Through [setParameter] a 12-parameter preset
+     * would serialise the whole mixer twelve times.)
+     */
+    fun setParameters(busIndex: Int, slotIndex: Int, values: FloatArray, dryWet: Float) {
+        val sanitized = FloatArray(values.size) { sanitizeParam(values[it]) }
+        val dw = (if (dryWet.isFinite()) dryWet else MAX_DRY_WET).coerceIn(MIN_DRY_WET, MAX_DRY_WET)
+        val ptr = processor.getEnginePtr()
+        if (ptr != 0L) {
+            sanitized.forEachIndexed { i, v -> processor.nativeSetParameter(ptr, busIndex, slotIndex, i, v) }
+            processor.nativeSetPluginDryWet(ptr, busIndex, slotIndex, dw)
+        }
+        updateBus(busIndex) { bus ->
+            val plugins = bus.plugins.toMutableList()
+            if (slotIndex in plugins.indices) {
+                val plugin = plugins[slotIndex]
+                plugins[slotIndex] = plugin.copy(
+                    parameters = plugin.parameters + sanitized.withIndex().associate { it.index to it.value },
+                    dryWet = dw,
+                )
+            }
+            bus.copy(plugins = plugins)
+        }
+        requestSave()
+    }
+
     fun setPluginBypassed(busIndex: Int, slotIndex: Int, bypassed: Boolean) {
         val ptr = processor.getEnginePtr()
         if (ptr != 0L) processor.nativeSetPluginBypassed(ptr, busIndex, slotIndex, bypassed)
