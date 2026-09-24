@@ -34,6 +34,16 @@ internal class PcmTrimmingAudioProcessor : BaseAudioProcessor() {
     private var pendingTrimStartBytes = 0
     private var endBuffer = ByteArray(0)
     private var endBufferSize = 0
+    private var endBufferBytesPerFrame = 0
+
+    /**
+     * Frames dropped so far — start trim, and padding discarded at the next
+     * track. Media time that produced no output: the sink's playout-time
+     * mapping adds it back so positions stay on the source's clock.
+     * Monotonic until [reset].
+     */
+    var trimmedFrames = 0L
+        private set
 
     fun setTrimFrameCount(trimStartFrames: Int, trimEndFrames: Int) {
         this.trimStartFrames = trimStartFrames.coerceAtLeast(0)
@@ -56,6 +66,8 @@ internal class PcmTrimmingAudioProcessor : BaseAudioProcessor() {
 
         val trimBytes = minOf(remaining, pendingTrimStartBytes)
         pendingTrimStartBytes -= trimBytes
+        val bytesPerFrame = inputAudioFormat.bytesPerFrame
+        if (bytesPerFrame > 0) trimmedFrames += trimBytes / bytesPerFrame
         inputBuffer.position(position + trimBytes)
         if (pendingTrimStartBytes > 0) return
         remaining -= trimBytes
@@ -87,6 +99,9 @@ internal class PcmTrimmingAudioProcessor : BaseAudioProcessor() {
         val bytesPerFrame = inputAudioFormat.bytesPerFrame.coerceAtLeast(0)
         if (reconfigurationPending) {
             reconfigurationPending = false
+            // The held tail of the previous track is its padding, dropped here.
+            if (endBufferBytesPerFrame > 0) trimmedFrames += endBufferSize / endBufferBytesPerFrame
+            endBufferBytesPerFrame = bytesPerFrame
             endBuffer = ByteArray(trimEndFrames * bytesPerFrame)
             pendingTrimStartBytes = trimStartFrames * bytesPerFrame
         } else {
@@ -99,6 +114,8 @@ internal class PcmTrimmingAudioProcessor : BaseAudioProcessor() {
     override fun onReset() {
         endBuffer = ByteArray(0)
         endBufferSize = 0
+        endBufferBytesPerFrame = 0
+        trimmedFrames = 0
         pendingTrimStartBytes = 0
     }
 }
