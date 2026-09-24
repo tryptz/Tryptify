@@ -34,9 +34,6 @@ class ParametricEqProcessor @Inject constructor() : AudioProcessor {
     private var outputBuffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var inputEnded = false
 
-    private var scratchL = FloatArray(0)
-    private var scratchR = FloatArray(0)
-
     // Group the three UI-thread writes into one immutable snapshot published atomically.
     // The audio thread reads the reference once per block — guaranteed to see a consistent
     // (enabled, preamp, bands) triple, never a half-updated one.
@@ -49,8 +46,9 @@ class ParametricEqProcessor @Inject constructor() : AudioProcessor {
     private val stateRef = AtomicReference(Snapshot(false, 1f, emptyArray()))
     private var appliedSnapshot: Snapshot? = null
 
-    private var filtersL = arrayOf<BiquadFilter>()
-    private var filtersR = arrayOf<BiquadFilter>()
+    // One chain per channel, all tuned to the same curve (audio thread only).
+    private var chains: Array<Array<BiquadFilter>> = emptyArray()
+    private val block = tf.monochrome.android.audio.dsp.PlanarBlock()
     private var sampleRate = 44100.0
 
     fun applyBands(bands: List<EqBand>, preamp: Float, enabled: Boolean) {
@@ -75,16 +73,16 @@ class ParametricEqProcessor @Inject constructor() : AudioProcessor {
             inputAudioFormat.encoding != C.ENCODING_PCM_FLOAT) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }
-        if (inputAudioFormat.channelCount > 2) {
-            // Multichannel passthrough (downmix toggle off): go inactive
-            // instead of failing playback — EQ simply doesn't apply. Clear
-            // both trackers so isActive() reads false immediately (Media3's
-            // pipeline checkState()s active processors against NOT_SET).
+        // Up to 16 channels, every one through the same curve. Wider than
+        // that goes inactive rather than failing playback; clear both
+        // trackers so isActive() reads false at once (Media3's pipeline
+        // checkState()s active processors against NOT_SET).
+        if (inputAudioFormat.channelCount > tf.monochrome.android.audio.dsp.ChannelLayout.MAX_CHANNELS) {
             pendingFormat = AudioFormat.NOT_SET
             inputFormat = AudioFormat.NOT_SET
             return AudioFormat.NOT_SET
         }
-        if (inputAudioFormat.channelCount != 1 && inputAudioFormat.channelCount != 2) {
+        if (inputAudioFormat.channelCount < 1) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }
         pendingFormat = inputAudioFormat
@@ -100,79 +98,25 @@ class ParametricEqProcessor @Inject constructor() : AudioProcessor {
 
     override fun queueInput(inputBuffer: ByteBuffer) {
         val encoding = inputFormat.encoding
-        val inputChannels = inputFormat.channelCount
-        val bytesPerSample = if (encoding == C.ENCODING_PCM_FLOAT) 4 else 2
-        val frameSize = bytesPerSample * inputChannels
-        val numFrames = inputBuffer.remaining() / frameSize
-        if (numFrames <= 0) return
-
-        if (scratchL.size < numFrames) {
-            scratchL = FloatArray(numFrames)
-            scratchR = FloatArray(numFrames)
-        }
-
-        // Deinterleave with index-based reads — no asFloatBuffer / asShortBuffer
-        // view allocations on the audio thread.
-        val startPos = inputBuffer.position()
-        if (inputChannels == 1) {
-            if (encoding == C.ENCODING_PCM_FLOAT) {
-                for (i in 0 until numFrames) {
-                    val s = inputBuffer.getFloat(startPos + i * 4)
-                    scratchL[i] = s; scratchR[i] = s
-                }
-            } else {
-                for (i in 0 until numFrames) {
-                    val s = inputBuffer.getShort(startPos + i * 2).toFloat() / 32768f
-                    scratchL[i] = s; scratchR[i] = s
-                }
-            }
-        } else {
-            if (encoding == C.ENCODING_PCM_FLOAT) {
-                for (i in 0 until numFrames) {
-                    val off = startPos + i * 8
-                    scratchL[i] = inputBuffer.getFloat(off)
-                    scratchR[i] = inputBuffer.getFloat(off + 4)
-                }
-            } else {
-                for (i in 0 until numFrames) {
-                    val off = startPos + i * 4
-                    scratchL[i] = inputBuffer.getShort(off).toFloat() / 32768f
-                    scratchR[i] = inputBuffer.getShort(off + 2).toFloat() / 32768f
-                }
-            }
-        }
-        inputBuffer.position(startPos + numFrames * frameSize)
+        val frames = block.read(inputBuffer, inputFormat.channelCount, encoding)
+        if (frames <= 0) return
 
         val snap = stateRef.get()
         if (snap.enabled) {
-            if (snap !== appliedSnapshot) {
-                rebuildFilters(snap.bands)
+            if (snap !== appliedSnapshot || chains.size != block.channelCount) {
+                rebuildFilters(snap.bands, block.channelCount)
                 appliedSnapshot = snap
             }
-            applyEq(numFrames, snap.preampLinear)
+            applyEq(frames, snap.preampLinear)
         }
 
-        val outFrameSize = bytesPerSample * 2
-        val outBytes = numFrames * outFrameSize
+        val outBytes = block.outputBytes(frames, encoding)
         if (outputBuffer.capacity() < outBytes) {
             outputBuffer = ByteBuffer.allocateDirect(outBytes).order(ByteOrder.nativeOrder())
         } else {
             outputBuffer.clear()
         }
-        // Interleave via positional put* — no view allocations on the hot path.
-        if (encoding == C.ENCODING_PCM_FLOAT) {
-            for (i in 0 until numFrames) {
-                val off = i * 8
-                outputBuffer.putFloat(off, scratchL[i])
-                outputBuffer.putFloat(off + 4, scratchR[i])
-            }
-        } else {
-            for (i in 0 until numFrames) {
-                val off = i * 4
-                outputBuffer.putShort(off, (scratchL[i] * 32768f).toInt().coerceIn(-32768, 32767).toShort())
-                outputBuffer.putShort(off + 2, (scratchR[i] * 32768f).toInt().coerceIn(-32768, 32767).toShort())
-            }
-        }
+        block.write(outputBuffer, frames, encoding)
         outputBuffer.position(0)
         outputBuffer.limit(outBytes)
     }
@@ -208,36 +152,34 @@ class ParametricEqProcessor @Inject constructor() : AudioProcessor {
         flush()
         pendingFormat = AudioFormat.NOT_SET
         inputFormat = AudioFormat.NOT_SET
-        filtersL = emptyArray()
-        filtersR = emptyArray()
+        chains = emptyArray()
         appliedSnapshot = null
     }
 
     private fun applyEq(numFrames: Int, preampLinear: Float) {
-        if (preampLinear != 1f) {
-            for (i in 0 until numFrames) {
-                scratchL[i] *= preampLinear
-                scratchR[i] *= preampLinear
+        val channels = block.channels
+        for (c in 0 until block.channelCount) {
+            val buf = channels[c]
+            if (preampLinear != 1f) {
+                for (i in 0 until numFrames) buf[i] *= preampLinear
             }
-        }
-        for (i in filtersL.indices) {
-            filtersL[i].processBlock(scratchL, numFrames)
-            filtersR[i].processBlock(scratchR, numFrames)
+            val chain = chains[c]
+            for (i in chain.indices) chain[i].processBlock(buf, numFrames)
         }
     }
 
-    private fun rebuildFilters(bands: Array<BandState>) {
+    private fun rebuildFilters(bands: Array<BandState>, channelCount: Int) {
         val active = bands.filter { it.enabled && it.gain != 0f }
-        filtersL = Array(active.size) { BiquadFilter() }
-        filtersR = Array(active.size) { BiquadFilter() }
+        chains = Array(channelCount) { Array(active.size) { BiquadFilter() } }
         for ((i, band) in active.withIndex()) {
             val type = when (band.type) {
                 FilterType.LOWSHELF -> BiquadType.LOW_SHELF
                 FilterType.HIGHSHELF -> BiquadType.HIGH_SHELF
                 else -> BiquadType.PEAKING
             }
-            filtersL[i].configure(type, sampleRate, band.freq.toDouble(), band.q.toDouble(), band.gain.toDouble())
-            filtersR[i].configure(type, sampleRate, band.freq.toDouble(), band.q.toDouble(), band.gain.toDouble())
+            for (chain in chains) {
+                chain[i].configure(type, sampleRate, band.freq.toDouble(), band.q.toDouble(), band.gain.toDouble())
+            }
         }
     }
 
