@@ -72,6 +72,14 @@ class SpectrumAnalyzerTap @Inject constructor(
     private var inputEnded = false
     private var sampleRate = 48000
 
+    /**
+     * Channels reaching this tap, which sits after the Atmos renderer and the
+     * downmix — and nothing after it changes the count — so this is what the
+     * platform receives. 0 before any stream. For the Audio Pipeline panel.
+     */
+    @Volatile var outputChannelCount: Int = 0
+        private set
+
     // Active ring buffer (mono samples)
     @Volatile private var ring: FloatArray = FloatArray(FFT_SIZE_HIGH)
     @Volatile private var ringWrite = 0
@@ -380,6 +388,7 @@ class SpectrumAnalyzerTap @Inject constructor(
             if (formatChanged) {
                 inputFormat = pendingFormat
                 sampleRate = inputFormat.sampleRate
+                outputChannelCount = inputFormat.channelCount
                 _analysisDirty = true
             }
             pendingFormat = AudioFormat.NOT_SET

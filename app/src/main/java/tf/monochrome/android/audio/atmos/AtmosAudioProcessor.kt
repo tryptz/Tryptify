@@ -67,6 +67,36 @@ class AtmosAudioProcessor @Inject constructor(
     private val _sofaStatus = MutableStateFlow<Pair<String, Boolean>?>(null)
     val sofaStatus: StateFlow<Pair<String, Boolean>?> = _sofaStatus.asStateFlow()
 
+    /** What the last frames of a multichannel stream actually got. */
+    enum class Outcome {
+        /** JOC objects reconstructed and rendered to binaural stereo. */
+        OBJECTS_BINAURAL,
+
+        /** No objects to render (plain multichannel, or no raw frame): the bed folded to stereo. */
+        BED_FOLDED,
+    }
+
+    /**
+     * The render outcome, for the Audio Pipeline panel; null while this stage
+     * is out of the chain. Published only when it changes, so the audio
+     * thread does nothing per frame for it but compare.
+     */
+    private val _outcome = MutableStateFlow<Outcome?>(null)
+    val outcome: StateFlow<Outcome?> = _outcome.asStateFlow()
+    private var lastOutcome: Outcome? = null
+
+    /** The user chose "Direct": the bed goes on untouched. */
+    val isPassthrough: Boolean get() = profile.mode == RendererMode.PASSTHROUGH
+
+    /** Whether the native renderer loaded at all. */
+    val isRendererAvailable: Boolean get() = AtmosNative.isAvailable
+
+    private fun noteOutcome(outcome: Outcome?) {
+        if (outcome == lastOutcome) return
+        lastOutcome = outcome
+        _outcome.value = outcome
+    }
+
     init {
         preferences.rendererProfile
             .onEach { updated ->
@@ -233,6 +263,7 @@ class AtmosAudioProcessor @Inject constructor(
             val rc = if (pipeline != 0L) {
                 AtmosNative.nativeProcessFrame(pipeline, raw, frameScratch, channels, FRAME_SAMPLES, stereo)
             } else -1
+            noteOutcome(if (rc == 1) Outcome.OBJECTS_BINAURAL else Outcome.BED_FOLDED)
             if (rc == 1) {
                 if (renderedFrames == 0L) {
                     android.util.Log.i(TAG, "Atmos render ACTIVE — objects binauralized (${channels}ch bed)")
@@ -275,6 +306,9 @@ class AtmosAudioProcessor @Inject constructor(
     override fun queueEndOfStream() { inputEnded = true }
 
     override fun flush() {
+        // Out of the chain for this stream (stereo, Direct mode, no
+        // renderer): nothing to report until frames say otherwise.
+        if (pendingFormat == AudioFormat.NOT_SET && inputFormat == AudioFormat.NOT_SET) noteOutcome(null)
         outputBuffer = AudioProcessor.EMPTY_BUFFER
         inputEnded = false
         bedSamples = 0

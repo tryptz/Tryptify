@@ -366,4 +366,45 @@ class AudioPipelineSnapshotTest {
             bluetooth(OutputKind.BLUETOOTH_CLASSIC, null).field(PipelineStage.OUTPUT, "Spatial Audio").display,
         )
     }
+
+    // ── Atmos and spatial audio ──────────────────────────────────────────
+
+    @Test
+    fun `an Atmos source says what the renderer did and what leaves the chain`() {
+        val snapshot = buildAudioPipelineSnapshot(
+            AudioPipelineInputs(
+                chain = ChainInput(sampleRate = 48000, channelCount = 6, layoutName = "5.1", isFloat = true),
+                atmos = AtmosStage.OBJECTS_BINAURAL,
+                outputChannels = 2,
+            )
+        )
+        assertEquals("Objects rendered to binaural stereo", snapshot.field(PipelineStage.DSP, "Atmos").display)
+        assertEquals("2 (Stereo)", snapshot.field(PipelineStage.OUTPUT, "Channels Out").display)
+    }
+
+    @Test
+    fun `a bed passed on in Direct mode reaches the platform wide`() {
+        val snapshot = buildAudioPipelineSnapshot(
+            AudioPipelineInputs(
+                chain = ChainInput(sampleRate = 48000, channelCount = 12, layoutName = "7.1.4", isFloat = true),
+                atmos = AtmosStage.PASSTHROUGH,
+                outputChannels = 12,
+                spatialAudio = SpatialAudio.APPLIED,
+            )
+        )
+        assertEquals("Direct: bed passed on unrendered", snapshot.field(PipelineStage.DSP, "Atmos").display)
+        assertEquals("12 (7.1.4)", snapshot.field(PipelineStage.OUTPUT, "Channels Out").display)
+        assertEquals("Applied by Android", snapshot.field(PipelineStage.OUTPUT, "Spatial Audio").display)
+    }
+
+    @Test
+    fun `a stereo track has no Atmos row at all`() {
+        val snapshot = buildAudioPipelineSnapshot(
+            AudioPipelineInputs(
+                chain = ChainInput(sampleRate = 44100, channelCount = 2, layoutName = "Stereo", isFloat = true),
+                outputChannels = 2,
+            )
+        )
+        assertTrue(snapshot.stage(PipelineStage.DSP).fields.none { it.label == "Atmos" })
+    }
 }

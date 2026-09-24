@@ -142,6 +142,18 @@ enum class SpatialAudio(val label: String) {
     APPLIED("Applied by Android"),
 }
 
+/** What the Atmos stage did with a multichannel source. */
+enum class AtmosStage(val label: String) {
+    OBJECTS_BINAURAL("Objects rendered to binaural stereo"),
+
+    /** Multichannel without object data (or none arrived): a plain fold. */
+    BED_FOLDED("Bed folded to stereo (no Atmos objects)"),
+
+    /** The renderer's Direct mode: the full bed goes on untouched. */
+    PASSTHROUGH("Direct: bed passed on unrendered"),
+    UNAVAILABLE("Renderer unavailable on this device"),
+}
+
 /** What the exclusive-USB pump negotiated with the DAC. Null unless streaming. */
 data class UsbStream(
     val sampleRateHz: Int,
@@ -185,6 +197,10 @@ data class AudioPipelineInputs(
     val usb: UsbStream? = null,
     /** Null where the platform cannot say (before Android 12L). */
     val spatialAudio: SpatialAudio? = null,
+    /** Null for mono and stereo sources, where there is no Atmos stage. */
+    val atmos: AtmosStage? = null,
+    /** Channels leaving the chain for the platform; null before a stream. */
+    val outputChannels: Int? = null,
 )
 
 // ── Formatting ──────────────────────────────────────────────────────────
@@ -242,6 +258,18 @@ internal fun codecName(mimeType: String?, tagged: String?): String? {
         else -> mime.substringAfterLast('/').uppercase().takeIf { it.isNotBlank() }
     }
     return fromMime ?: tagged?.takeIf { it.isNotBlank() }
+}
+
+/** The usual layout name for a channel count, for the counts that have one. */
+internal fun layoutName(count: Int): String? = when (count) {
+    1 -> "Mono"
+    2 -> "Stereo"
+    4 -> "Quad"
+    6 -> "5.1"
+    8 -> "7.1"
+    10 -> "7.1.2"
+    12 -> "7.1.4"
+    else -> null
 }
 
 /** Analysis or buffering latency: how long [frames] lasts at [sampleRate]. */
@@ -367,7 +395,7 @@ fun buildAudioPipelineSnapshot(input: AudioPipelineInputs): AudioPipelineSnapsho
     val fftLatency = latencyMs(input.visualizerFftSize, inRate)
     val dsp = PipelineSection(
         PipelineStage.DSP,
-        listOf(
+        listOfNotNull(
             PipelineField(
                 "PCM Format",
                 when {
@@ -378,6 +406,9 @@ fun buildAudioPipelineSnapshot(input: AudioPipelineInputs): AudioPipelineSnapsho
             ),
             PipelineField("Sample Rate", hz(inRate)),
             PipelineField("EQ Preset", input.eqPresetName?.takeIf { it.isNotBlank() }),
+            // Only for a multichannel source; a stereo track has no Atmos
+            // stage, and a dash there would read as something missing.
+            input.atmos?.let { PipelineField("Atmos", it.label) },
             PipelineField(
                 "Stereo Expand",
                 input.stereoWidthDb?.let {
@@ -420,6 +451,10 @@ fun buildAudioPipelineSnapshot(input: AudioPipelineInputs): AudioPipelineSnapsho
             ),
             PipelineField("Bit Depth Out", bits(input.usb?.bitsPerSample)),
             PipelineField("Sample Rate", hz(outRate)),
+            PipelineField(
+                "Channels Out",
+                input.outputChannels?.takeIf { it > 0 }?.let { channels(it, layoutName(it)) },
+            ),
             PipelineField("Connection", input.outputKind?.label),
             // Android tells apps none of the link's codec, rate or depth, so
             // for Bluetooth these are asked and answered with a dash rather

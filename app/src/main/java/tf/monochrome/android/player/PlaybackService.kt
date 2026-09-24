@@ -521,8 +521,10 @@ class PlaybackService : MediaSessionService() {
 
         // Multichannel handling: fold 5.1/7.1 down to stereo (default) or,
         // when the user turns the toggle off, pass multichannel PCM through
-        // to AudioTrack untouched (the stereo-only processors deactivate
-        // themselves for >2 ch). Takes effect on the next pipeline
+        // to AudioTrack untouched — where Android's spatializer can take it.
+        // The processors that are still stereo-only (the mixer, AutoEQ and
+        // the parametric EQ) deactivate themselves for >2 ch; speed and transposition
+        // run at any width. Takes effect on the next pipeline
         // reconfigure (track change / seek), like the other DSP toggles.
         serviceScope.launch {
             preferences.multichannelDownmixEnabled.collect { enabled ->
