@@ -25,3 +25,13 @@ $cxx $flags "$here/multilane_engine_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/mul
 echo "== oxford_multichannel_test"
 $cxx $flags "$here/oxford_multichannel_test.cpp" -o "$out/oxford_multichannel_test"
 "$out/oxford_multichannel_test"
+
+echo "== snapin_fixes_test"
+$cxx $flags "$here/snapin_fixes_test.cpp" -o "$out/snapin_fixes_test"
+"$out/snapin_fixes_test"
+
+# Every snapin's defaults against the table ParamDefs.kt is also checked
+# against. After a deliberate default change, regenerate it with --write.
+echo "== snapin_defaults_test"
+$cxx $flags "$here/snapin_defaults_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/snapin_defaults_test"
+"$out/snapin_defaults_test" "$here/../../../../test/resources/snapin_defaults.csv"

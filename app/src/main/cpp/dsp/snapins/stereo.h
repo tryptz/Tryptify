@@ -36,10 +36,13 @@ public:
             float l = mid + side;
             float r = mid - side;
 
-            // Equal-power pan
-            float panNorm = (pan + 1.0f) * 0.5f;
-            left[i]  = l * std::cos(panNorm * 1.5707963f);
-            right[i] = r * std::sin(panNorm * 1.5707963f);
+            // Balance: centre leaves both sides at unity, and panning only
+            // turns the far side down (equal-power, reaching silence at ±1).
+            // An equal-power pan law here cost 3 dB at centre, so the effect
+            // at its defaults was not transparent.
+            const float a = std::fabs(pan) * 1.5707963f;
+            left[i]  = l * (pan > 0.0f ? std::cos(a) : 1.0f);
+            right[i] = r * (pan < 0.0f ? std::cos(a) : 1.0f);
         }
     }
 

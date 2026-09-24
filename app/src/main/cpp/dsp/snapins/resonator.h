@@ -48,9 +48,13 @@ public:
 
             // Square timbre: add inverted comb at half delay (cancels even harmonics)
             if (timbre_ == 1) {
+                // Subtracting the half-period copy cancels even harmonics and
+                // doubles up odd ones: on those the loop gain is 1.5 × fb,
+                // which ran away above ~34 % decay. Scaled back by 1.5 the
+                // odd harmonics loop at fb (< 1) and the tone is unchanged.
                 float halfDelay = delaySamples * 0.5f;
-                fbL -= combL_.readCubic(halfDelay) * 0.5f;
-                fbR -= combR_.readCubic(halfDelay) * 0.5f;
+                fbL = (fbL - combL_.readCubic(halfDelay) * 0.5f) * (1.0f / 1.5f);
+                fbR = (fbR - combR_.readCubic(halfDelay) * 0.5f) * (1.0f / 1.5f);
             }
 
             // Write input + feedback
