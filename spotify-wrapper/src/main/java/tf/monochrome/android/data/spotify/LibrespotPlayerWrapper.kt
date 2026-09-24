@@ -92,12 +92,15 @@ class LibrespotPlayerWrapper @Inject constructor(
 
         val newSession = if (credentialsFile.canRead()) {
             Log.i(TAG, "connect: trying stored librespot credentials")
-            runCatching {
+            try {
                 Session.Builder(conf).setDeviceName(DEVICE_NAME).stored(credentialsFile).create()
-            }.getOrElse {
-                // A stored blob can be revoked server-side; drop it and fall
-                // back to the fresh token.
-                Log.w(TAG, "Stored librespot credentials rejected, using the access token", it)
+            } catch (rejected: Session.SpotifyAuthenticationException) {
+                // Only an authentication failure means the blob is bad (revoked
+                // server-side): drop it and fall back to the fresh token. Any
+                // other failure happened *after* the login was accepted — the
+                // keymaster 403 was one — and deleting good credentials for it
+                // just hides the real error behind a second one.
+                Log.w(TAG, "connect: stored credentials rejected by Spotify, using the access token", rejected)
                 credentialsFile.delete()
                 withToken()
             }

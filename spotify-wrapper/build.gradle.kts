@@ -65,6 +65,11 @@ dependencies {
     // com.spotify protobuf messages, zeroconf); the real dependencies come in
     // via the artifact's normal POM. Regenerate with: unzip, prune, jar cf.
     api(files("libs/librespot-player-stripped-1.6.5.jar"))
+    // The jar also has xyz/gianlu/librespot/core/TokenProvider*.class removed:
+    // 1.6.5's TokenProvider fetches tokens from Spotify's retired keymaster
+    // endpoint (403), which failed every login. The replacement, using login5,
+    // is src/main/java/xyz/gianlu/librespot/core/TokenProvider.java. When
+    // regenerating the jar, delete those three classes again.
 
     // A files() jar carries no POM, so "the real dependencies" above are
     // declared here by hand, at the versions librespot 1.6.5's own POMs pin
