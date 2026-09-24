@@ -267,7 +267,7 @@ internal fun layoutName(count: Int): String? = when (count) {
     4 -> "Quad"
     6 -> "5.1"
     8 -> "7.1"
-    10 -> "7.1.2"
+    10 -> "5.1.4"  // Media3 and ChannelLayout both read 10 channels as 5.1.4
     12 -> "7.1.4"
     else -> null
 }

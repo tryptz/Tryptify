@@ -373,6 +373,20 @@ void spreadCanBeSwitchedOffAndOnMidStream() {
     check(m.primary().mixBusCount() == 7, "spread again: a bus per group again");
 }
 
+void clonedLanesNarrowWithTheFirst() {
+    // 7.1.4 builds lanes 1-6 as clones after the mixer grew to seven buses.
+    // Going to 5.1 keeps lanes 1-3: they must hand back buses 5-7 as lane 0
+    // does, or every later add or remove lands on a different bus per lane.
+    MultiLaneEngine m(kRate, kBlock);
+    m.configureLanes(k714First, k714Second, k714Lanes);
+    const int k51First[] = {0, 2, 3, 4};
+    const int k51Second[] = {1, -1, -1, 5};
+    m.configureLanes(k51First, k51Second, 4);
+    bool same = true;
+    m.forEach([&](DspEngine& e) { same = same && e.mixBusCount() == 4; });
+    check(same, "after 7.1.4 then 5.1 every lane has the same four buses");
+}
+
 int main() {
     stereoIsUnchanged();
     everyPairLaneRunsTheSameChain();
@@ -387,6 +401,7 @@ int main() {
     grownBusesLeaveWithTheStream();
     aSavedMixKeepsItsBusesThroughAnAtmosTrack();
     spreadCanBeSwitchedOffAndOnMidStream();
+    clonedLanesNarrowWithTheFirst();
     std::printf("%s\n", failures == 0 ? "all passed" : "FAILURES");
     return failures == 0 ? 0 : 1;
 }

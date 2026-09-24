@@ -119,7 +119,9 @@ class StreamResolver @Inject constructor(
         // its legacy-Track twin. When neither route is available, returning
         // (null, null) makes callers skip it like any other dead stream.
         spotifyIdRegistry.trackBase62For(track.id)?.let { base62 ->
-            val playbackUri = spotifyPlaybackUri("spotify:track:$base62", track.duration * 1000L)
+            // The exact length where known: the stream is cut at what it declares.
+            val durationMs = spotifyIdRegistry.trackDurationMsFor(track.id) ?: (track.duration * 1000L)
+            val playbackUri = spotifyPlaybackUri("spotify:track:$base62", durationMs)
                 ?: return Pair(null, null)
             val metadata = MediaMetadata.Builder()
                 .setTitle(track.title)

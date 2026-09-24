@@ -1200,7 +1200,6 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    @OptIn(UnstableApi::class)
     /**
      * A native Spotify track failed: have the Spotify app play it instead,
      * from where it stopped. Returns false when that is not the answer — not
@@ -1235,6 +1234,7 @@ class PlaybackService : MediaSessionService() {
         return true
     }
 
+    @OptIn(UnstableApi::class)
     fun playQueue(startPositionMs: Long = 0L) {
         val currentTrack = queueManager.currentTrack.value ?: return
         serviceScope.launch {
@@ -1285,9 +1285,11 @@ class PlaybackService : MediaSessionService() {
                     // These sources are built directly and so bypass the player's
                     // MediaSource.Factory — wrap them with the Atmos tap too, or
                     // streamed E-AC-3 would lose its JOC/OAMD side-data.
-                    player.setMediaSource(atmosTapFactory.wrap(source))
+                    player.setMediaSource(atmosTapFactory.wrap(source), startPositionMs)
                 } else {
-                    player.setMediaItem(mediaItem)
+                    // Spotify album-page tracks come this way, and a native one
+                    // handed to the Spotify app has to resume where it failed.
+                    player.setMediaItem(mediaItem, startPositionMs)
                 }
 
                 player.prepare()

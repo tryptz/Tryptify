@@ -1,6 +1,8 @@
 package tf.monochrome.android.audio.dsp
 
+import androidx.annotation.OptIn
 import androidx.media3.common.C
+import androidx.media3.common.util.UnstableApi
 import java.nio.ByteBuffer
 
 /**
@@ -16,6 +18,8 @@ import java.nio.ByteBuffer
  * to happen. The arrays themselves are reallocated only when the channel
  * count changes or a block is longer than any before it.
  */
+// The PCM encoding constants it reads are marked unstable in Media3.
+@OptIn(UnstableApi::class)
 internal class PlanarBlock {
 
     var channels: Array<FloatArray> = emptyArray()

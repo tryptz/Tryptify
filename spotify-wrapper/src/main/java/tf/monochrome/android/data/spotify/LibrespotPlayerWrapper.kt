@@ -52,6 +52,15 @@ class LibrespotPlayerWrapper @Inject constructor(
     /** The `spotify:track:` URI librespot currently has loaded, if any. */
     private var loadedUri: String? = null
 
+    /**
+     * The pipe generation of the stream librespot is playing into, once
+     * [openStream] has it loaded. librespot's end and failure events carry no
+     * track, so this is how they are tied to one: an event is about the stream
+     * that was current when it was handled, and an event that turns up after
+     * a newer stream opened is dropped by the pipe.
+     */
+    @Volatile private var activeGeneration = -1L
+
     val isConnected: Boolean
         get() = session?.isValid == true && player != null
 
@@ -203,6 +212,7 @@ class LibrespotPlayerWrapper @Inject constructor(
         // Whatever the output thread wrote between the new generation and the
         // seek is from the old position.
         pipe.clear()
+        activeGeneration = generation
         Log.i(TAG, "openStream #$generation: ready in ${elapsedMs(startedAt)} ms")
         return generation
     }
@@ -299,23 +309,37 @@ class LibrespotPlayerWrapper @Inject constructor(
      * must load it again rather than seek a dead session.
      */
     private inner class EndListener : Player.EventsListener {
-        private fun forget(why: String) {
-            Log.i(TAG, "event: $why — forgetting ${loadedUri ?: "nothing"}")
-            synchronized(this@LibrespotPlayerWrapper) { loadedUri = null }
+        /**
+         * The generation this event is about, read the moment it arrives —
+         * before waiting for the wrapper's lock, which [openStream] holds from
+         * the new generation until the new track is loaded. An event from the
+         * previous track that turns up meanwhile so keeps the old generation:
+         * the pipe drops its mark, and it does not forget the track that has
+         * just been loaded, which it would if it read the generation after
+         * waiting.
+         */
+        private fun forget(why: String): Long {
+            val gen = activeGeneration
+            synchronized(this@LibrespotPlayerWrapper) {
+                if (activeGeneration != gen) {
+                    Log.i(TAG, "event: $why for superseded stream #$gen — ignored")
+                    return gen
+                }
+                Log.i(TAG, "event: $why (stream #$gen) — forgetting ${loadedUri ?: "nothing"}")
+                loadedUri = null
+            }
+            return gen
         }
         override fun onPlaybackEnded(player: Player) {
-            forget("playback ended")
-            PcmSinkRegistry.pipe.markEnded()
+            PcmSinkRegistry.pipe.markEnded(forget("playback ended"))
         }
         override fun onPlaybackFailed(player: Player, e: Exception) {
             Log.e(TAG, "event: playback failed", e)
-            forget("playback failed")
-            PcmSinkRegistry.pipe.markFailed(e)
+            PcmSinkRegistry.pipe.markFailed(forget("playback failed"), e)
         }
         override fun onPanicState(player: Player) {
             Log.e(TAG, "event: panic state (librespot gave up on the track)")
-            forget("panic")
-            PcmSinkRegistry.pipe.markFailed(IllegalStateException("librespot entered its panic state"))
+            PcmSinkRegistry.pipe.markFailed(forget("panic"), IllegalStateException("librespot entered its panic state"))
         }
         override fun onContextChanged(player: Player, newUri: String) =
             logEvent("context changed to $newUri")

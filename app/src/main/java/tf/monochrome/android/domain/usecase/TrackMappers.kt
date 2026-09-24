@@ -321,7 +321,7 @@ fun SpotifyTrack.toSpotifyCatalogTrack(
     if (!SpotifyShadowUri.isTrackId(base62)) return null
 
     val numericId = spotifyNumericIdFor(base62)
-    registry.registerTrack(numericId, base62)
+    registry.registerTrack(numericId, base62, durationMs)
     album.id?.let { albumBase62 ->
         registry.registerAlbum(spotifyNumericIdFor(albumBase62), albumBase62)
     }

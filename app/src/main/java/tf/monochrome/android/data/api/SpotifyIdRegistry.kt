@@ -54,6 +54,13 @@ class SpotifyIdRegistry @Inject constructor(
     private val trackBase62ById = ConcurrentHashMap<Long, String>()
     private val artistBase62ById = ConcurrentHashMap<Long, String>()
 
+    // A Track holds its length in whole seconds, but the stream declared for
+    // a Spotify track is cut at the length it is given — so a second-rounded
+    // length drops the song's last fraction of a second. The exact length is
+    // kept here, in memory only: after process death the second-rounded one
+    // is what there is, as before.
+    private val trackDurationMsById = ConcurrentHashMap<Long, Long>()
+
     // Coalesces frequent registrations (a single search registers dozens) into
     // one debounced disk write — same shape as QobuzIdRegistry.
     private val saveSignal = MutableSharedFlow<Unit>(
@@ -78,10 +85,14 @@ class SpotifyIdRegistry @Inject constructor(
 
     fun isSpotifyAlbum(numericId: Long): Boolean = albumBase62ById.containsKey(numericId)
 
-    fun registerTrack(numericId: Long, base62: String) {
+    fun registerTrack(numericId: Long, base62: String, durationMs: Long = 0L) {
         if (base62.isBlank()) return
+        if (durationMs > 0L) trackDurationMsById[numericId] = durationMs
         if (trackBase62ById.put(numericId, base62) != base62) markDirty()
     }
+
+    /** The exact length of a registered track, if this process has seen it. */
+    fun trackDurationMsFor(numericId: Long): Long? = trackDurationMsById[numericId]
 
     fun trackBase62For(numericId: Long): String? = trackBase62ById[numericId]
 

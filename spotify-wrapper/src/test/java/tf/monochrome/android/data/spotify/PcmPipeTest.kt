@@ -100,7 +100,7 @@ class PcmPipeTest {
         val pipe = PcmPipe(capacityBytes = 16, endGraceNanos = 1_000, nanoTime = { now })
         val gen = pipe.newGeneration()
         pipe.write(ramp(3), 0, 3)
-        pipe.markEnded()
+        pipe.markEnded(gen)
         // Buffered audio still comes out first.
         assertArrayEquals(ramp(3), drain(pipe, gen, 3))
         now += 2_000
@@ -111,7 +111,7 @@ class PcmPipeTest {
     fun `late writes after the end event are still delivered within the grace period`() {
         val pipe = PcmPipe(capacityBytes = 16, endGraceNanos = TimeUnit.MILLISECONDS.toNanos(500))
         val gen = pipe.newGeneration()
-        pipe.markEnded()
+        pipe.markEnded(gen)
         val writer = thread { Thread.sleep(50); pipe.write(ramp(4), 0, 4) }
         val out = ByteArray(4)
         assertEquals(4, pipe.read(gen, out, 0, 4, 1_000))
@@ -122,8 +122,8 @@ class PcmPipeTest {
     @Test
     fun `a new generation clears the end flag`() {
         val pipe = PcmPipe(capacityBytes = 8, endGraceNanos = 0)
-        pipe.newGeneration()
-        pipe.markEnded()
+        val old = pipe.newGeneration()
+        pipe.markEnded(old)
         val gen = pipe.newGeneration()
         assertEquals(PcmPipe.TIMED_OUT, pipe.read(gen, ByteArray(4), 0, 4, 20))
     }
@@ -134,7 +134,7 @@ class PcmPipeTest {
         val gen = pipe.newGeneration()
         pipe.write(ramp(3), 0, 3)
         val cause = IllegalStateException("no alternatives found")
-        pipe.markFailed(cause)
+        pipe.markFailed(gen, cause)
         assertArrayEquals(ramp(3), drain(pipe, gen, 3))
         assertEquals(PcmPipe.FAILED, pipe.read(gen, ByteArray(4), 0, 4, 1_000))
         assertSame(cause, pipe.failureOf(gen))
@@ -144,7 +144,7 @@ class PcmPipeTest {
     fun `a failure wakes a waiting reader`() {
         val pipe = PcmPipe(capacityBytes = 8)
         val gen = pipe.newGeneration()
-        val failer = thread { Thread.sleep(50); pipe.markFailed(RuntimeException()) }
+        val failer = thread { Thread.sleep(50); pipe.markFailed(gen, RuntimeException()) }
         assertEquals(PcmPipe.FAILED, pipe.read(gen, ByteArray(4), 0, 4, 5_000))
         failer.join()
     }
@@ -153,9 +153,21 @@ class PcmPipeTest {
     fun `a new generation clears the failure`() {
         val pipe = PcmPipe(capacityBytes = 8)
         val old = pipe.newGeneration()
-        pipe.markFailed(RuntimeException())
+        pipe.markFailed(old, RuntimeException())
         val gen = pipe.newGeneration()
         assertNull(pipe.failureOf(old))
+        assertNull(pipe.failureOf(gen))
+        assertEquals(PcmPipe.TIMED_OUT, pipe.read(gen, ByteArray(4), 0, 4, 20))
+    }
+
+    @Test
+    fun `a late end or failure of the previous stream does not touch the new one`() {
+        val pipe = PcmPipe(capacityBytes = 8, endGraceNanos = 0)
+        val old = pipe.newGeneration()
+        val gen = pipe.newGeneration()
+        // The previous track's events, delivered after the next one opened.
+        pipe.markEnded(old)
+        pipe.markFailed(old, RuntimeException("previous track"))
         assertNull(pipe.failureOf(gen))
         assertEquals(PcmPipe.TIMED_OUT, pipe.read(gen, ByteArray(4), 0, 4, 20))
     }

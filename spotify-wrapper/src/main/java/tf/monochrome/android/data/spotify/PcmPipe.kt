@@ -78,8 +78,16 @@ class PcmPipe(
      * librespot reports the track finished. Its output thread may still be
      * writing the last buffers when it says so, so [read] only reports
      * [ENDED] once the pipe has also stayed empty for the grace period.
+     *
+     * [forGeneration] is the stream the event is about. librespot's events
+     * arrive on their own thread and say nothing of which track they belong
+     * to, so the end of the previous track can land after the next stream has
+     * opened; applied to that stream it would end it at once and pad the rest
+     * with silence. A mark for a generation that is no longer current is
+     * dropped.
      */
-    fun markEnded() = lock.withLock {
+    fun markEnded(forGeneration: Long) = lock.withLock {
+        if (forGeneration != generation) return@withLock
         ended = true
         endedAt = nanoTime()
         notEmpty.signalAll()
@@ -91,8 +99,10 @@ class PcmPipe(
      * end of stream: [read] still hands out what is buffered, then reports
      * [FAILED] instead of [ENDED], so the reader can fail the load rather
      * than pad the rest of the track with silence. [failureOf] has the cause.
+     * Scoped to [forGeneration] for the same reason as [markEnded].
      */
-    fun markFailed(cause: Throwable) = lock.withLock {
+    fun markFailed(forGeneration: Long, cause: Throwable) = lock.withLock {
+        if (forGeneration != generation) return@withLock
         failure = cause
         notEmpty.signalAll()
     }
