@@ -35,3 +35,8 @@ $cxx $flags "$here/snapin_fixes_test.cpp" -o "$out/snapin_fixes_test"
 echo "== snapin_defaults_test"
 $cxx $flags "$here/snapin_defaults_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/snapin_defaults_test"
 "$out/snapin_defaults_test" "$here/../../../../test/resources/snapin_defaults.csv"
+
+# The mix as Kotlin writes it before the engine exists, read by the engine.
+echo "== state_fixture_test"
+$cxx $flags "$here/state_fixture_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/state_fixture_test"
+"$out/state_fixture_test" "$here/../../../../test/resources/mixer_state_fixture.json"

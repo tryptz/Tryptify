@@ -117,9 +117,32 @@ class DspEngineManager @Inject constructor(
      */
     @Volatile private var liveStateJson: String? = null
 
+    // Set by the first edit, so the saved mix loaded at startup (below) never
+    // lands on top of a change the user has already made.
+    @Volatile private var edited = false
+
     private fun requestSave() {
+        edited = true
         getStateJson().takeIf { it != "{}" }?.let { liveStateJson = it }
         saveSignal.tryEmit(Unit)
+    }
+
+    // Placed after the fields it touches: Kotlin runs initialisers and init
+    // blocks in source order, and this coroutine may run at once on another
+    // thread — started any earlier, a field initialiser could reset what it set.
+    init {
+        // The engine is only built when audio first plays, but the mixer can
+        // be opened before that. Show — and edit — the saved mix meanwhile,
+        // not a blank one: a blank mirror saved over the file would lose it.
+        scope.launch {
+            val json = preferences.dspStateJson.first()
+            if (!json.isNullOrEmpty() && json != "{}" &&
+                processor.getEnginePtr() == 0L && !edited
+            ) {
+                _buses.value = labelled(parseBusConfigsFromJson(json))
+                if (liveStateJson == null) liveStateJson = json
+            }
+        }
     }
 
     /**
@@ -255,7 +278,9 @@ class DspEngineManager @Inject constructor(
 
     suspend fun restoreState() {
         val enabled = preferences.dspEnabled.first()
-        val stateJson = preferences.dspStateJson.first()
+        // Edits made before the engine existed are newer than the file, which
+        // is only written half a second after them.
+        val stateJson = liveStateJson ?: preferences.dspStateJson.first()
 
         if (!stateJson.isNullOrEmpty() && stateJson != "{}") {
             loadStateJson(stateJson)
@@ -275,8 +300,14 @@ class DspEngineManager @Inject constructor(
      */
     fun addBus(): Int? {
         val ptr = processor.getEnginePtr()
-        if (ptr == 0L) return null
-        val index = processor.nativeAddBus(ptr)
+        val index = if (ptr != 0L) {
+            processor.nativeAddBus(ptr)
+        } else {
+            // No engine yet: the mirror is the mix. Same rule as the engine:
+            // buses 1–4 and the master are indices 0–4, the next is count + 1.
+            val count = BusConfig.mixBusCount(_buses.value)
+            if (count >= BusConfig.MAX_MIX_BUSES) -1 else count + 1
+        }
         if (index < 0) return null
         _buses.value = labelled(
             (_buses.value + BusConfig(index = index, name = BusConfig.nameFor(index)))
@@ -293,9 +324,20 @@ class DspEngineManager @Inject constructor(
      */
     fun removeBus(busIndex: Int): Boolean {
         val ptr = processor.getEnginePtr()
-        if (ptr == 0L) return false
-        if (!processor.nativeRemoveBus(ptr, busIndex)) return false
-        syncFromEngine()
+        if (ptr != 0L) {
+            if (!processor.nativeRemoveBus(ptr, busIndex)) return false
+            syncFromEngine()
+        } else {
+            // No engine yet: do to the mirror what the engine would do —
+            // drop the bus and move every bus above it down one index.
+            val bus = _buses.value.firstOrNull { it.index == busIndex }
+            if (bus == null || !bus.isRemovable) return false
+            _buses.value = labelled(
+                _buses.value.filter { it.index != busIndex }.map {
+                    if (it.index > busIndex) it.copy(index = it.index - 1) else it
+                }.sortedBy { it.index }
+            )
+        }
         requestSave()
         return true
     }
@@ -344,8 +386,16 @@ class DspEngineManager @Inject constructor(
 
     fun addPlugin(busIndex: Int, slotIndex: Int, type: SnapinType): Int {
         val ptr = processor.getEnginePtr()
-        if (ptr == 0L) return -1
-        val resultSlot = processor.nativeAddPlugin(ptr, busIndex, slotIndex, type.ordinal)
+        val resultSlot = if (ptr != 0L) {
+            processor.nativeAddPlugin(ptr, busIndex, slotIndex, type.ordinal)
+        } else {
+            // No engine yet (nothing has played): add it to the mirror, which
+            // is saved and handed to the engine when it is built. This used to
+            // return -1 and the effect silently never appeared.
+            val bus = _buses.value.firstOrNull { it.index == busIndex }
+            if (bus == null || bus.plugins.size >= MAX_PLUGINS_PER_BUS) -1
+            else slotIndex.coerceIn(0, bus.plugins.size)
+        }
         if (resultSlot >= 0) {
             updateBus(busIndex) { bus ->
                 val plugins = bus.plugins.toMutableList()
@@ -484,9 +534,14 @@ class DspEngineManager @Inject constructor(
 
     // ── State serialization ─────────────────────────────────────────────
 
+    /**
+     * The mix as the engine's state JSON: the engine's own when it exists,
+     * otherwise the mirror written in the same format ([DspStateJson]), so
+     * saving, presets and export all work before anything has played.
+     */
     fun getStateJson(): String {
         val ptr = processor.getEnginePtr()
-        if (ptr == 0L) return "{}"
+        if (ptr == 0L) return DspStateJson.encode(_buses.value)
         return processor.nativeGetStateJson(ptr)
     }
 
