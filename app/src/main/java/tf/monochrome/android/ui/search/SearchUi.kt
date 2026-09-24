@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -58,6 +59,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -100,11 +102,12 @@ fun SearchHistoryContent(
     history: List<String>,
     onSelect: (String) -> Unit,
     onClearHistory: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    topInset: Dp = 0.dp,
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 80.dp)
+        contentPadding = PaddingValues(top = topInset, bottom = 80.dp)
     ) {
         item {
             Text(
@@ -181,7 +184,12 @@ fun SearchResultsContent(
     favoriteTrackIds: Set<Long>,
     libraryPlaylists: List<UserPlaylistEntity>,
     modifier: Modifier = Modifier,
-    emptyContent: @Composable (() -> Unit)? = null,
+    availableSources: List<SearchViewModel.SearchSourceFilter> = SearchViewModel.SearchSourceFilter.entries,
+    // Height of the floating search bar. Goes to the list as contentPadding
+    // (docs/ui-invariants.md, "Search bars"): the filter chips start below the
+    // glass at rest and the rows still travel up behind it on scroll.
+    topInset: Dp = 0.dp,
+    emptyContent: @Composable ((topInset: Dp) -> Unit)? = null,
     onLoadMore: (SearchViewModel.SearchPageType) -> Unit = {},
     isLoadingMore: Boolean = false,
     endReached: Boolean = false,
@@ -265,8 +273,8 @@ fun SearchResultsContent(
     }
 
     when {
-        query.isBlank() && emptyContent != null -> emptyContent()
-        isSearching -> LoadingScreen()
+        query.isBlank() && emptyContent != null -> emptyContent(topInset)
+        isSearching -> Box(Modifier.fillMaxSize().padding(top = topInset)) { LoadingScreen() }
         else -> {
             // One LazyListState per scrollable axis. Each gets its own
             // prefetch trigger so artists / albums / tracks page
@@ -323,7 +331,10 @@ fun SearchResultsContent(
             }
 
             Column(modifier = modifier.fillMaxSize()) {
-            AnimatedVisibility(visible = selection.active) {
+            AnimatedVisibility(
+                visible = selection.active,
+                modifier = Modifier.padding(top = topInset),
+            ) {
                 TrackSelectionBar(
                     selectedCount = selection.count,
                     onClose = { selection.clear() },
@@ -337,7 +348,11 @@ fun SearchResultsContent(
             LazyColumn(
                 state = columnState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 80.dp)
+                // The selection bar, when out, already sits below the glass.
+                contentPadding = PaddingValues(
+                    top = if (selection.active) 0.dp else topInset,
+                    bottom = 80.dp,
+                )
             ) {
                 item(key = "filters", contentType = "filters") {
                     SearchFilterRow(
@@ -345,7 +360,8 @@ fun SearchResultsContent(
                         onTypeSelected = onTypeSelected,
                         selectedSource = selectedSource,
                         onSourceSelected = onSourceSelected,
-                        showSourceFilter = showSourceFilter
+                        showSourceFilter = showSourceFilter,
+                        availableSources = availableSources,
                     )
                 }
 
@@ -536,13 +552,18 @@ private fun PrefetchTrigger(
     }
 }
 
+/**
+ * Catalogue first, then result type: which catalogue you are searching is the
+ * bigger choice, and the type row filters within it.
+ */
 @Composable
 private fun SearchFilterRow(
     selectedType: SearchViewModel.SearchTypeFilter,
     onTypeSelected: (SearchViewModel.SearchTypeFilter) -> Unit,
     selectedSource: SearchViewModel.SearchSourceFilter,
     onSourceSelected: (SearchViewModel.SearchSourceFilter) -> Unit,
-    showSourceFilter: Boolean
+    showSourceFilter: Boolean,
+    availableSources: List<SearchViewModel.SearchSourceFilter>,
 ) {
     Column(
         modifier = Modifier
@@ -550,6 +571,20 @@ private fun SearchFilterRow(
             .padding(top = 4.dp, bottom = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        if (showSourceFilter) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(availableSources) { source ->
+                    FilterChip(
+                        selected = selectedSource == source,
+                        onClick = { onSourceSelected(source) },
+                        label = { Text(source.label) }
+                    )
+                }
+            }
+        }
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -560,20 +595,6 @@ private fun SearchFilterRow(
                     onClick = { onTypeSelected(type) },
                     label = { Text(type.label) }
                 )
-            }
-        }
-        if (showSourceFilter) {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(SearchViewModel.SearchSourceFilter.entries) { source ->
-                    FilterChip(
-                        selected = selectedSource == source,
-                        onClick = { onSourceSelected(source) },
-                        label = { Text(source.label) }
-                    )
-                }
             }
         }
     }

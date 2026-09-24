@@ -1,7 +1,6 @@
 package tf.monochrome.android.ui.search
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,6 +30,7 @@ fun SearchScreen(
     val selectedType by viewModel.selectedType.collectAsStateWithLifecycle()
     val selectedSource by viewModel.selectedSource.collectAsStateWithLifecycle()
     val showSourceFilter by viewModel.showSourceFilter.collectAsStateWithLifecycle()
+    val availableSources by viewModel.availableSources.collectAsStateWithLifecycle()
     val isLoadingMore by viewModel.isLoadingMore.collectAsStateWithLifecycle()
     val endReached by viewModel.endReached.collectAsStateWithLifecycle()
     val searchError by viewModel.searchError.collectAsStateWithLifecycle()
@@ -59,7 +59,6 @@ fun SearchScreen(
             autoFocus = true,
             onSubmit = viewModel::submitSearch,
         ) { searchTopInset ->
-        Column(modifier = Modifier.fillMaxSize().padding(top = searchTopInset)) {
         SearchResultsContent(
             navController = navController,
             playerViewModel = playerViewModel,
@@ -74,6 +73,8 @@ fun SearchScreen(
             selectedSource = selectedSource,
             onSourceSelected = viewModel::setSelectedSource,
             showSourceFilter = showSourceFilter,
+            availableSources = availableSources,
+            topInset = searchTopInset,
             favoriteTrackIds = favoriteTrackIds,
             libraryPlaylists = libraryPlaylists,
             onLoadMore = viewModel::loadMore,
@@ -81,15 +82,15 @@ fun SearchScreen(
             endReached = endReached,
             searchError = searchError,
             onRetry = viewModel::submitSearch,
-            emptyContent = {
+            emptyContent = { inset ->
                 SearchHistoryContent(
                     history = searchHistory,
                     onSelect = viewModel::selectHistoryQuery,
-                    onClearHistory = viewModel::clearSearchHistory
+                    onClearHistory = viewModel::clearSearchHistory,
+                    topInset = inset,
                 )
             }
         )
-        }
         }
     }
 }

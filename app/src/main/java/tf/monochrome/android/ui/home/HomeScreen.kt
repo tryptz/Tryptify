@@ -129,6 +129,7 @@ fun HomeScreen(
     val selectedType by searchViewModel.selectedType.collectAsStateWithLifecycle()
     val selectedSource by searchViewModel.selectedSource.collectAsStateWithLifecycle()
     val showSourceFilter by searchViewModel.showSourceFilter.collectAsStateWithLifecycle()
+    val availableSources by searchViewModel.availableSources.collectAsStateWithLifecycle()
     val isLoadingMore by searchViewModel.isLoadingMore.collectAsStateWithLifecycle()
     val endReached by searchViewModel.endReached.collectAsStateWithLifecycle()
     val searchError by searchViewModel.searchError.collectAsStateWithLifecycle()
@@ -261,6 +262,9 @@ fun HomeScreen(
                 selectedSource = selectedSource,
                 onSourceSelected = searchViewModel::setSelectedSource,
                 showSourceFilter = showSourceFilter,
+                availableSources = availableSources,
+                // Without it the chips were laid out at y=0, under the glass.
+                topInset = searchTopInset,
                 favoriteTrackIds = favoriteTrackIds,
                 libraryPlaylists = libraryPlaylists,
                 onLoadMore = searchViewModel::loadMore,
@@ -271,11 +275,12 @@ fun HomeScreen(
                 // Recent-search history — previously only reachable from the
                 // orphaned standalone SearchScreen; now shown when the Home
                 // search is open with an empty query.
-                emptyContent = {
+                emptyContent = { inset ->
                     SearchHistoryContent(
                         history = searchHistory,
                         onSelect = searchViewModel::selectHistoryQuery,
                         onClearHistory = searchViewModel::clearSearchHistory,
+                        topInset = inset,
                     )
                 },
             )

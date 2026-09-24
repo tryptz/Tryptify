@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.search
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.preferences.PreferencesManager
@@ -90,8 +92,12 @@ class SearchViewModel @Inject constructor(
         ALL("All", null),
         TIDAL("TIDAL", SourceType.API),
         QOBUZ("Qobuz", SourceType.QOBUZ),
+        SPOTIFY("Spotify", SourceType.SPOTIFY),
         LOCAL("Local", SourceType.LOCAL),
-        COLLECTION("Collection", SourceType.COLLECTION)
+        COLLECTION("Collection", SourceType.COLLECTION);
+
+        /** Whether a row from catalogue [origin] shows under this filter. */
+        fun admits(origin: SourceType?): Boolean = sourceType == null || origin == sourceType
     }
 
     /** What the UI prefetch trigger is asking for more of. */
@@ -117,7 +123,9 @@ class SearchViewModel @Inject constructor(
     }
 
     /** Which catalogue a fetched page came from, so tracks map to the right id space. */
-    private enum class PageSource { TIDAL, QOBUZ }
+    private enum class PageSource(val sourceType: SourceType) {
+        TIDAL(SourceType.API), QOBUZ(SourceType.QOBUZ)
+    }
 
     private val tracksPage = PageState()
     private val albumsPage = PageState()
@@ -170,6 +178,14 @@ class SearchViewModel @Inject constructor(
     private val _allArtists = MutableStateFlow<List<Artist>>(emptyList())
     private val _allPlaylists = MutableStateFlow<List<Playlist>>(emptyList())
 
+    // Which catalogue each album / artist row came from. Album and Artist
+    // carry no source of their own, but the merge below knows exactly which
+    // leg produced each one, so it is recorded there and the catalogue filter
+    // can apply to every result type — not only tracks, which is what used to
+    // make the catalogue row appear and vanish as the type changed.
+    private val _albumOrigins = MutableStateFlow<Map<Long, SourceType>>(emptyMap())
+    private val _artistOrigins = MutableStateFlow<Map<Long, SourceType>>(emptyMap())
+
     private val _selectedType = MutableStateFlow(SearchTypeFilter.ALL)
     val selectedType: StateFlow<SearchTypeFilter> = _selectedType.asStateFlow()
 
@@ -202,23 +218,48 @@ class SearchViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val albums: StateFlow<List<Album>> = combine(_allAlbums, _selectedType) { albumResults, type ->
-        if (type == SearchTypeFilter.ALL || type == SearchTypeFilter.ALBUMS) albumResults else emptyList()
+    val albums: StateFlow<List<Album>> = combine(
+        _allAlbums, _selectedType, _selectedSource, _albumOrigins,
+    ) { albumResults, type, source, origins ->
+        if (type != SearchTypeFilter.ALL && type != SearchTypeFilter.ALBUMS) emptyList()
+        else albumResults.filter { source.admits(origins[it.id]) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val artists: StateFlow<List<Artist>> = combine(_allArtists, _selectedType) { artistResults, type ->
-        if (type == SearchTypeFilter.ALL || type == SearchTypeFilter.ARTISTS) artistResults else emptyList()
+    val artists: StateFlow<List<Artist>> = combine(
+        _allArtists, _selectedType, _selectedSource, _artistOrigins,
+    ) { artistResults, type, source, origins ->
+        if (type != SearchTypeFilter.ALL && type != SearchTypeFilter.ARTISTS) emptyList()
+        else artistResults.filter { source.admits(origins[it.id]) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val playlists: StateFlow<List<Playlist>> = combine(_allPlaylists, _selectedType) { playlistResults, type ->
-        if (type == SearchTypeFilter.ALL || type == SearchTypeFilter.PLAYLISTS) playlistResults else emptyList()
+    // Playlists come from TIDAL only.
+    val playlists: StateFlow<List<Playlist>> = combine(
+        _allPlaylists, _selectedType, _selectedSource,
+    ) { playlistResults, type, source ->
+        if (type != SearchTypeFilter.ALL && type != SearchTypeFilter.PLAYLISTS) emptyList()
+        else if (source.admits(SourceType.API)) playlistResults
+        else emptyList()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val showSourceFilter: StateFlow<Boolean> = selectedType
-        .combine(query) { type, currentQuery ->
-            currentQuery.isNotBlank() && (type == SearchTypeFilter.ALL || type == SearchTypeFilter.TRACKS)
-        }
+    /**
+     * The catalogue row is shown for every result type now that it filters
+     * all of them — it sits above the type row, so hiding it for Albums would
+     * pull the type row out from under the finger that just tapped it.
+     */
+    val showSourceFilter: StateFlow<Boolean> = query
+        .map { it.isNotBlank() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    /** Catalogue chips on offer: Spotify only while an account is connected. */
+    val availableSources: StateFlow<List<SearchSourceFilter>> = spotifyAuth.isConnected
+        .map { connected ->
+            SearchSourceFilter.entries.filter { connected || it != SearchSourceFilter.SPOTIFY }
+        }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            SearchSourceFilter.entries.filter { it != SearchSourceFilter.SPOTIFY },
+        )
 
     private var searchJob: Job? = null
 
@@ -341,13 +382,14 @@ class SearchViewModel @Inject constructor(
             // Tracks only, first page only: Spotify results play through the
             // Spotify app (see PlaybackSource.SpotifyRemote) and have no album
             // or artist pages here to page into.
+            if (!spotifyAuth.isConnected.value) {
+                Log.i(SPOTIFY_TAG, "search '$trimmedQuery': Spotify not connected — no Spotify results")
+            }
             val spotifyDeferred = async {
                 if (!spotifyAuth.isConnected.value) {
                     null
                 } else {
-                    withTimeoutOrNull(SPOTIFY_BUDGET_MS) {
-                        spotifyApi.searchTracks(trimmedQuery).getOrNull()
-                    }
+                    spotifyLeg("tracks") { spotifyApi.searchTracks(trimmedQuery) }
                 }
             }
             // Album + artist legs — browse parity with the Qobuz path.
@@ -355,18 +397,14 @@ class SearchViewModel @Inject constructor(
                 if (!spotifyAuth.isConnected.value) {
                     null
                 } else {
-                    withTimeoutOrNull(SPOTIFY_BUDGET_MS) {
-                        spotifyApi.searchAlbums(trimmedQuery).getOrNull()
-                    }
+                    spotifyLeg("albums") { spotifyApi.searchAlbums(trimmedQuery) }
                 }
             }
             val spotifyArtistsDeferred = async {
                 if (!spotifyAuth.isConnected.value) {
                     null
                 } else {
-                    withTimeoutOrNull(SPOTIFY_BUDGET_MS) {
-                        spotifyApi.searchArtists(trimmedQuery).getOrNull()
-                    }
+                    spotifyLeg("artists") { spotifyApi.searchArtists(trimmedQuery) }
                 }
             }
             spotifyTracks = spotifyDeferred.await()?.mapNotNull { it.toSpotifyUnifiedTrack() }.orEmpty()
@@ -412,6 +450,12 @@ class SearchViewModel @Inject constructor(
                     qobuzTracks +
                     spotifyTracks
             )
+            _albumOrigins.value = originsOf(
+                SourceType.API to result.albums, SourceType.QOBUZ to qobuzAlbums, SourceType.SPOTIFY to spotifyAlbums,
+            ) { it.id }
+            _artistOrigins.value = originsOf(
+                SourceType.API to result.artists, SourceType.QOBUZ to qobuzArtists, SourceType.SPOTIFY to spotifyArtists,
+            ) { it.id }
             _allAlbums.value = scoreItems(
                 trimmedQuery,
                 (result.albums + qobuzAlbums + spotifyAlbums).distinctBy { it.id },
@@ -438,6 +482,12 @@ class SearchViewModel @Inject constructor(
                 query = trimmedQuery,
                 tracks = localAndCollectionTracks + qobuzTracks + spotifyTracks
             )
+            _albumOrigins.value = originsOf(
+                SourceType.QOBUZ to qobuzAlbums, SourceType.SPOTIFY to spotifyAlbums,
+            ) { it.id }
+            _artistOrigins.value = originsOf(
+                SourceType.QOBUZ to qobuzArtists, SourceType.SPOTIFY to spotifyArtists,
+            ) { it.id }
             _allAlbums.value = scoreItems(
                 trimmedQuery,
                 (qobuzAlbums + spotifyAlbums).distinctBy { it.id },
@@ -596,6 +646,7 @@ class SearchViewModel @Inject constructor(
                 val fresh = scoreItems(q, (items as List<Album>).distinctBy { it.id }) {
                     listOf(it.title, it.displayArtist)
                 }.filterNot { it.id in seen }
+                _albumOrigins.value = _albumOrigins.value + fresh.associate { it.id to source.sourceType }
                 _allAlbums.value = existing + fresh
             }
             SearchPageType.ARTISTS -> {
@@ -605,6 +656,7 @@ class SearchViewModel @Inject constructor(
                 val fresh = scoreItems(q, (items as List<Artist>).distinctBy { it.id }) {
                     listOf(it.name)
                 }.filterNot { it.id in seen }
+                _artistOrigins.value = _artistOrigins.value + fresh.associate { it.id to source.sourceType }
                 _allArtists.value = existing + fresh
             }
             SearchPageType.PLAYLISTS -> {
@@ -619,7 +671,35 @@ class SearchViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Origin of every row in [legs], first leg winning on a shared id — the
+     * same precedence as the `distinctBy` that merges the rows themselves.
+     */
+    private fun <T> originsOf(vararg legs: Pair<SourceType, List<T>>, id: (T) -> Long): Map<Long, SourceType> {
+        val origins = HashMap<Long, SourceType>()
+        for ((source, rows) in legs) rows.forEach { origins.putIfAbsent(id(it), source) }
+        return origins
+    }
+
+    /**
+     * One Spotify search leg within its time budget. Failures are still
+     * swallowed — the other catalogues' results stand on their own — but they
+     * are logged now, because a silent empty leg is indistinguishable from
+     * "Spotify has nothing".
+     */
+    private suspend fun <T> spotifyLeg(kind: String, call: suspend () -> Result<List<T>>): List<T>? {
+        val result = withTimeoutOrNull(SPOTIFY_BUDGET_MS) { call() }
+        when {
+            result == null -> Log.w(SPOTIFY_TAG, "search $kind: timed out after ${SPOTIFY_BUDGET_MS} ms")
+            result.isFailure -> Log.w(SPOTIFY_TAG, "search $kind failed", result.exceptionOrNull())
+            else -> Log.i(SPOTIFY_TAG, "search $kind: ${result.getOrNull()?.size ?: 0} results")
+        }
+        return result?.getOrNull()
+    }
+
     private fun clearResults() {
+        _albumOrigins.value = emptyMap()
+        _artistOrigins.value = emptyMap()
         _allTracks.value = emptyList()
         _allAlbums.value = emptyList()
         _allArtists.value = emptyList()
@@ -689,3 +769,5 @@ class SearchViewModel @Inject constructor(
     private fun String.tokenStartsWith(query: String): Boolean =
         splitToSequence(' ', '-', '_', '/', '.', '(', ')').any { token -> token.startsWith(query) }
 }
+
+private const val SPOTIFY_TAG = "SpotifySearch"
