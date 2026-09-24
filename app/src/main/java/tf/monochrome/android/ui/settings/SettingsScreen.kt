@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.settings
 
+import tf.monochrome.android.data.spotify.SpotifyNativeSession
 import tf.monochrome.android.ui.theme.goToPage
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -2654,11 +2655,18 @@ private fun ConnectionsTab(viewModel: SettingsViewModel) {
 }
 
 /**
- * Spotify connect / disconnect. Only the account link lives here — the import
- * UI it feeds stays on Library, next to the playlists it creates. Both read the
- * same [SpotifyImportViewModel]: `hiltViewModel()` resolves against the Settings
+ * Spotify: the account link, its access token, and the in-app (librespot)
+ * player's own sign-in. Only the account side lives here — the import UI it
+ * feeds stays on Library, next to the playlists it creates. Both read the same
+ * [SpotifyImportViewModel]: `hiltViewModel()` resolves against the Settings
  * NavBackStackEntry, which is shared by every tab, so connecting here is
  * immediately visible to the importer there.
+ *
+ * The two sign-ins are separate on purpose, because they fail separately. The
+ * account (PKCE) token drives search, browse and import; native playback is
+ * librespot logging in *with* that token and keeping a reusable login of its
+ * own. When that stored login goes stale, signing native playback out and in
+ * again is the fix, and it doesn't cost the account link.
  */
 @Composable
 private fun SpotifyAccountControls() {
@@ -2668,6 +2676,36 @@ private fun SpotifyAccountControls() {
     val userName by spotifyViewModel.userName.collectAsStateWithLifecycle()
     val connecting by spotifyViewModel.isConnecting.collectAsStateWithLifecycle()
     val authError by spotifyViewModel.authError.collectAsStateWithLifecycle()
+    val expiresAt by spotifyViewModel.accessTokenExpiresAt.collectAsStateWithLifecycle()
+    val tokenRefreshing by spotifyViewModel.tokenRefreshing.collectAsStateWithLifecycle()
+    val tokenMessage by spotifyViewModel.tokenMessage.collectAsStateWithLifecycle()
+    val native by spotifyViewModel.nativeStatus.collectAsStateWithLifecycle()
+    var confirmDisconnect by remember { mutableStateOf(false) }
+
+    // The librespot session can drop while Settings is closed.
+    androidx.compose.runtime.LaunchedEffect(Unit) { spotifyViewModel.refreshNativeStatus() }
+
+    if (confirmDisconnect) {
+        AlertDialog(
+            onDismissRequest = { confirmDisconnect = false },
+            title = { Text("Disconnect Spotify?") },
+            text = {
+                Text(
+                    "Search, import and in-app playback stop until you connect again. " +
+                        "The in-app player's saved login is deleted too."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDisconnect = false
+                    spotifyViewModel.disconnect()
+                }) { Text("Disconnect", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDisconnect = false }) { Text("Cancel") }
+            },
+        )
+    }
 
     SettingsGroupHeader("Spotify")
     if (connected) {
@@ -2675,14 +2713,68 @@ private fun SpotifyAccountControls() {
             title = "Spotify",
             subtitle = "Connected as ${userName ?: "…"}",
         )
-        OutlinedButton(onClick = { spotifyViewModel.disconnect() }) {
-            Text("Disconnect Spotify")
+        SettingItem(
+            title = "Spotify access token",
+            subtitle = when {
+                tokenRefreshing -> "Refreshing…"
+                expiresAt > System.currentTimeMillis() -> {
+                    val time = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT)
+                        .format(java.util.Date(expiresAt))
+                    "Valid until $time. Renews itself; tap to renew now"
+                }
+                else -> "Expired. Renews on next use; tap to renew now"
+            },
+            onClick = { spotifyViewModel.refreshAccessToken() },
+        )
+        tokenMessage?.let { SettingsErrorText(it) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Reconnecting re-runs consent, which is how an account linked
+            // before a scope existed (streaming, app-remote-control) gets it.
+            OutlinedButton(onClick = { spotifyViewModel.connect(context) }, enabled = !connecting) {
+                Text(if (connecting) "Connecting…" else "Reconnect")
+            }
+            OutlinedButton(onClick = { confirmDisconnect = true }) {
+                Text("Disconnect Spotify")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+        SettingItem(
+            title = "Native Spotify playback",
+            subtitle = when (native.state) {
+                SpotifyNativeSession.State.SIGNED_IN ->
+                    "Signed in as ${native.username ?: "…"}. Spotify plays through the DSP"
+                SpotifyNativeSession.State.SIGNING_IN -> "Signing in…"
+                SpotifyNativeSession.State.FAILED ->
+                    "Sign-in failed. Playing through the Spotify app instead"
+                SpotifyNativeSession.State.SIGNED_OUT -> if (native.hasStoredCredentials) {
+                    "Signs in when a Spotify track plays (saved login)"
+                } else {
+                    "Signs in with your account when a Spotify track plays"
+                }
+            },
+        )
+        native.error?.let { SettingsErrorText(it) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val busy = native.state == SpotifyNativeSession.State.SIGNING_IN
+            if (native.state != SpotifyNativeSession.State.SIGNED_IN) {
+                Button(onClick = { spotifyViewModel.signInNative() }, enabled = !busy) {
+                    Text(if (native.state == SpotifyNativeSession.State.FAILED) "Try again" else "Sign in")
+                }
+            }
+            // Sign out also deletes the saved login, so it is offered whenever
+            // one exists: a stale one is exactly what makes sign-in fail.
+            if (native.state == SpotifyNativeSession.State.SIGNED_IN || native.hasStoredCredentials) {
+                OutlinedButton(onClick = { spotifyViewModel.signOutNative() }, enabled = !busy) {
+                    Text("Sign out")
+                }
+            }
         }
     } else {
         Text(
-            "Connect your Spotify account to import playlists from Library. "
-                + "Note: only Spotify accounts allowlisted for this app can "
-                + "connect while it is in Development mode.",
+            "Connect your Spotify account to search, import playlists and play "
+                + "Spotify through the DSP. Note: only Spotify accounts allowlisted "
+                + "for this app can connect while it is in Development mode.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)
@@ -2694,14 +2786,17 @@ private fun SpotifyAccountControls() {
             Text(if (connecting) "Connecting…" else "Connect Spotify")
         }
     }
-    authError?.let { error ->
-        Text(
-            error,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.padding(top = 8.dp)
-        )
-    }
+    authError?.let { SettingsErrorText(it) }
+}
+
+@Composable
+private fun SettingsErrorText(message: String) {
+    Text(
+        message,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.error,
+        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+    )
 }
 
 /**

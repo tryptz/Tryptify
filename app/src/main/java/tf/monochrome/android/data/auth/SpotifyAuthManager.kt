@@ -68,6 +68,10 @@ class SpotifyAuthManager @Inject constructor(
     val connectedUserName: StateFlow<String?> = preferences.spotifyUserName
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    /** When the current access token expires (epoch ms); 0 when there is none. */
+    val accessTokenExpiresAt: StateFlow<Long> = preferences.spotifyTokenExpiresAt
+        .stateIn(scope, SharingStarted.Eagerly, 0L)
+
     private val _isConnecting = MutableStateFlow(false)
     val isConnecting: StateFlow<Boolean> = _isConnecting.asStateFlow()
 

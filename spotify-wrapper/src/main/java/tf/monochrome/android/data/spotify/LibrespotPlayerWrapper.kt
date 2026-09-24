@@ -51,8 +51,19 @@ class LibrespotPlayerWrapper @Inject constructor(
     val isConnected: Boolean
         get() = session?.isValid == true && player != null
 
+    /** The account librespot is signed in as, while connected. */
+    val username: String?
+        get() = session?.takeIf { it.isValid }?.let { runCatching { it.username() }.getOrNull() }
+
+    /** Whether a reusable login from an earlier sign-in is on disk. */
+    val hasStoredCredentials: Boolean
+        get() = credentialsFile.canRead()
+
     private val storageDir: File
         get() = context.getDir("spotify_native", Context.MODE_PRIVATE)
+
+    private val credentialsFile: File
+        get() = File(storageDir, "credentials.json")
 
     /**
      * Connects if not already connected. Blocking network I/O — call off the
@@ -65,7 +76,7 @@ class LibrespotPlayerWrapper @Inject constructor(
         if (isConnected) return
         release()
         val startedAt = System.nanoTime()
-        val credentialsFile = File(storageDir, "credentials.json")
+        val credentialsFile = credentialsFile
         // Both paths must be set: librespot's defaults are relative to the
         // working directory, which on Android is "/" and not writable.
         val conf = Session.Configuration.Builder()
@@ -179,6 +190,21 @@ class LibrespotPlayerWrapper @Inject constructor(
         pipe.clear()
         Log.i(TAG, "openStream #$generation: ready in ${elapsedMs(startedAt)} ms")
         return generation
+    }
+
+    /**
+     * Disconnects and forgets the stored login, so the next [connect] signs in
+     * from the app's access token again. What the Spotify settings' "sign out"
+     * means, and what disconnecting the Spotify account has to do too — a blob
+     * left behind would keep signing in as the old account.
+     */
+    @Synchronized
+    fun signOut() {
+        release()
+        if (credentialsFile.exists() && !credentialsFile.delete()) {
+            Log.w(TAG, "signOut: could not delete the stored credentials")
+        }
+        Log.i(TAG, "signed out, stored credentials cleared")
     }
 
     @Synchronized

@@ -2,7 +2,13 @@ package tf.monochrome.android.data.spotify
 
 import android.os.SystemClock
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -20,41 +26,119 @@ import javax.inject.Singleton
  * The token needs the `streaming` scope. Accounts connected before it was
  * requested fail here until they reconnect — and keep playing through the
  * Spotify app meanwhile. A failure is remembered for [RETRY_AFTER_MS] so a
- * queue of Spotify tracks does not retry a doomed login per track.
+ * queue of Spotify tracks does not retry a doomed login per track; [signIn]
+ * (the settings button) skips that wait.
  */
 @Singleton
 class SpotifyNativeSession @Inject constructor(
     private val auth: SpotifyAuthManager,
     private val librespot: LibrespotPlayerWrapper,
 ) {
+    enum class State { SIGNED_OUT, SIGNING_IN, SIGNED_IN, FAILED }
+
+    /**
+     * What the Spotify settings show. [error] is the last sign-in failure, for
+     * [State.FAILED]; [hasStoredCredentials] says whether a reusable login from
+     * an earlier sign-in is on disk.
+     */
+    data class Status(
+        val state: State,
+        val username: String? = null,
+        val error: String? = null,
+        val hasStoredCredentials: Boolean = false,
+    )
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
     private var lastFailureAt = 0L
 
-    suspend fun ensureConnected(): Boolean {
+    private val _status = MutableStateFlow(Status(State.SIGNED_OUT))
+    val status: StateFlow<Status> = _status.asStateFlow()
+
+    init {
+        // Every way the account gets disconnected — the settings button, or a
+        // revoked refresh token — must take librespot's stored login with it,
+        // or the next play signs in as the account that was just removed.
+        scope.launch {
+            var wasConnected = false
+            auth.isConnected.collect { connected ->
+                if (wasConnected && !connected) {
+                    Log.i(TAG, "Spotify account disconnected; signing librespot out")
+                    signOut()
+                }
+                wasConnected = connected
+            }
+        }
+        scope.launch { refreshStatus() }
+    }
+
+    suspend fun ensureConnected(): Boolean = connect(force = false)
+
+    /** Sign in now, ignoring the retry wait after a failure. */
+    suspend fun signIn(): Boolean = connect(force = true)
+
+    /** Disconnect and forget the stored login; the next sign-in uses the app's token. */
+    suspend fun signOut() {
+        mutex.withLock {
+            withContext(Dispatchers.IO) { librespot.signOut() }
+            lastFailureAt = 0L
+            publish(State.SIGNED_OUT)
+        }
+    }
+
+    /** Re-reads librespot's state — the session can drop on its own. */
+    suspend fun refreshStatus() {
+        mutex.withLock {
+            val current = _status.value.state
+            when {
+                librespot.isConnected -> publish(State.SIGNED_IN)
+                current == State.SIGNED_IN -> publish(State.SIGNED_OUT)
+                else -> publish(current, _status.value.error)
+            }
+        }
+    }
+
+    private suspend fun connect(force: Boolean): Boolean {
         if (librespot.isConnected) return true
         return mutex.withLock {
             if (librespot.isConnected) return@withLock true
-            if (lastFailureAt != 0L && SystemClock.elapsedRealtime() - lastFailureAt < RETRY_AFTER_MS) {
+            if (!force && lastFailureAt != 0L && SystemClock.elapsedRealtime() - lastFailureAt < RETRY_AFTER_MS) {
                 val waitS = (RETRY_AFTER_MS - (SystemClock.elapsedRealtime() - lastFailureAt)) / 1000
                 Log.i(TAG, "native sign-in failed recently; not retrying for ${waitS}s (Spotify app fallback)")
                 return@withLock false
             }
+            publish(State.SIGNING_IN)
             Log.i(TAG, "signing librespot in (Spotify account connected=${auth.isConnected.value})")
             val token = auth.getValidAccessToken()
+            var failure: String? = null
             if (token == null) {
                 Log.w(TAG, "no Spotify access token — the account isn't connected or the refresh failed")
+                failure = "No Spotify access token. Connect (or reconnect) the account."
             }
             // Blocking network I/O; librespot applies its own connect timeout.
             val connected = token != null && withContext(Dispatchers.IO) {
                 runCatching { librespot.connect(token) }
-                    .onFailure { Log.w(TAG, "librespot sign-in failed; using the Spotify app instead", it) }
+                    .onFailure {
+                        Log.w(TAG, "librespot sign-in failed; using the Spotify app instead", it)
+                        failure = it.message ?: it.javaClass.simpleName
+                    }
                     .isSuccess
             }
             lastFailureAt = if (connected) 0L else SystemClock.elapsedRealtime()
             Log.i(TAG, if (connected) "librespot signed in — Spotify tracks will play through the DSP"
                 else "librespot not signed in — retrying in ${RETRY_AFTER_MS / 1000}s")
+            publish(if (connected) State.SIGNED_IN else State.FAILED, failure)
             connected
         }
+    }
+
+    private fun publish(state: State, error: String? = null) {
+        _status.value = Status(
+            state = state,
+            username = if (state == State.SIGNED_IN) librespot.username else null,
+            error = if (state == State.FAILED) error else null,
+            hasStoredCredentials = librespot.hasStoredCredentials,
+        )
     }
 
     private companion object {

@@ -18,6 +18,7 @@ import tf.monochrome.android.data.auth.SpotifyAuthManager
 import tf.monochrome.android.data.import_.ImportProgress
 import tf.monochrome.android.data.import_.PlaylistImportService
 import tf.monochrome.android.data.import_.SpotifyImportForegroundService
+import tf.monochrome.android.data.spotify.SpotifyNativeSession
 import javax.inject.Inject
 
 /**
@@ -34,6 +35,7 @@ class SpotifyImportViewModel @Inject constructor(
     private val spotifyAuthManager: SpotifyAuthManager,
     private val spotifyApiClient: SpotifyApiClient,
     private val playlistImportService: PlaylistImportService,
+    private val nativeSession: SpotifyNativeSession,
 ) : ViewModel() {
 
     val isConnected: StateFlow<Boolean> = spotifyAuthManager.isConnected
@@ -41,6 +43,15 @@ class SpotifyImportViewModel @Inject constructor(
     val isConnecting: StateFlow<Boolean> = spotifyAuthManager.isConnecting
     val authError: StateFlow<String?> = spotifyAuthManager.errorMessage
     val importProgress: StateFlow<ImportProgress> = playlistImportService.progress
+    val accessTokenExpiresAt: StateFlow<Long> = spotifyAuthManager.accessTokenExpiresAt
+    val nativeStatus: StateFlow<SpotifyNativeSession.Status> = nativeSession.status
+
+    private val _tokenRefreshing = MutableStateFlow(false)
+    val tokenRefreshing: StateFlow<Boolean> = _tokenRefreshing.asStateFlow()
+
+    /** Outcome of the last manual token refresh, for the settings row. */
+    private val _tokenMessage = MutableStateFlow<String?>(null)
+    val tokenMessage: StateFlow<String?> = _tokenMessage.asStateFlow()
 
     private val _myPlaylists = MutableStateFlow<List<SpotifySimplePlaylist>>(emptyList())
     val myPlaylists: StateFlow<List<SpotifySimplePlaylist>> = _myPlaylists.asStateFlow()
@@ -77,8 +88,33 @@ class SpotifyImportViewModel @Inject constructor(
 
     fun connect(context: Context) = spotifyAuthManager.connect(context)
 
+    /** Mint a fresh access token now, instead of waiting for this one to expire. */
+    fun refreshAccessToken() {
+        if (_tokenRefreshing.value) return
+        viewModelScope.launch {
+            _tokenRefreshing.value = true
+            val token = spotifyAuthManager.getValidAccessToken(forceRefresh = true)
+            _tokenMessage.value = if (token != null) null
+                else "Couldn't refresh the token. If it keeps failing, reconnect Spotify."
+            _tokenRefreshing.value = false
+        }
+    }
+
+    fun signInNative() {
+        viewModelScope.launch { nativeSession.signIn() }
+    }
+
+    fun signOutNative() {
+        viewModelScope.launch { nativeSession.signOut() }
+    }
+
+    fun refreshNativeStatus() {
+        viewModelScope.launch { nativeSession.refreshStatus() }
+    }
+
     fun disconnect() {
         viewModelScope.launch {
+            nativeSession.signOut()
             spotifyAuthManager.disconnect()
             _myPlaylists.value = emptyList()
         }

@@ -182,6 +182,12 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     entry("Source mode", "Connections", listOf("provider", "catalogue", "backend")),
     entry("Show what I'm playing", "Connections", listOf("discord", "presence", "rich", "status", "playing")),
     entry("Spotify", "Connections", listOf("import", "playlist", "account", "transfer")),
+    entry("Spotify access token", "Connections", listOf("refresh", "renew", "expired", "reconnect")),
+    entry(
+        "Native Spotify playback",
+        "Connections",
+        listOf("librespot", "sign in", "sign out", "login", "credentials", "dsp"),
+    ),
 
     // ── Radio ───────────────────────────────────────────────────────────
     entry("AI radio", "Radio", listOf("station", "recommend", "queue", "seed")),
