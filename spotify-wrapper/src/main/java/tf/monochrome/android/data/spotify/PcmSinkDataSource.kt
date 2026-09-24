@@ -147,9 +147,13 @@ class PcmSinkDataSource(
                     ?: java.io.IOException("librespot playback failed")
                 Log.e(TAG, "read #$generation: librespot failed $spotifyUri after " +
                     "${pcmOffsetToMs(pcmBytesServed)} ms of audio — failing the load, not padding with silence", cause)
-                // Like a timeout: a retry reopens here and loads the track again.
+                // librespot has already given up on this track, so ExoPlayer
+                // retrying the load would only repeat that, seconds at a time.
+                // FILE_NOT_FOUND is the one reason its load policy treats as
+                // final: the error reaches the player at once, and
+                // PlaybackService hands the track to the Spotify app.
                 generation = NO_STREAM
-                throw DataSourceException(cause, PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
+                throw DataSourceException(cause, PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND)
             }
             PcmPipe.SUPERSEDED -> {
                 Log.w(TAG, "read #$generation: stream superseded by another open; ending $spotifyUri early " +

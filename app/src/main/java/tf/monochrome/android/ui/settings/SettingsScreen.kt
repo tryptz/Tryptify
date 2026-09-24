@@ -2768,11 +2768,22 @@ private fun SpotifyAccountControls() {
             },
         )
         native.error?.let { SettingsErrorText(it) }
+        native.playbackError?.let {
+            SettingsErrorText("Couldn't play a track ($it). Using the Spotify app for now")
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val busy = native.state == SpotifyNativeSession.State.SIGNING_IN
-            if (native.state != SpotifyNativeSession.State.SIGNED_IN) {
+            // Signed in but failing to play is its own case: signInNative()
+            // clears the playback failure, so native is tried on the next track.
+            if (native.state != SpotifyNativeSession.State.SIGNED_IN || native.playbackError != null) {
                 Button(onClick = { spotifyViewModel.signInNative() }, enabled = !busy) {
-                    Text(if (native.state == SpotifyNativeSession.State.FAILED) "Try again" else "Sign in")
+                    Text(
+                        if (native.state == SpotifyNativeSession.State.FAILED || native.playbackError != null) {
+                            "Try again"
+                        } else {
+                            "Sign in"
+                        }
+                    )
                 }
             }
             // Sign out also deletes the saved login, so it is offered whenever

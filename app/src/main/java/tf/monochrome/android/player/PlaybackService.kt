@@ -92,6 +92,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var qobuzCache: tf.monochrome.android.data.cache.QobuzStreamCacheManager
     @Inject lateinit var spotifyRemote: tf.monochrome.android.data.spotify.SpotifyAppRemoteClient
     @Inject lateinit var librespot: tf.monochrome.android.data.spotify.LibrespotPlayerWrapper
+    @Inject lateinit var spotifyNative: tf.monochrome.android.data.spotify.SpotifyNativeSession
     @Inject lateinit var usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter
     @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
     @Inject lateinit var bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController
@@ -360,13 +361,13 @@ class PlaybackService : MediaSessionService() {
              * needs a moment before it counts as failed.
              */
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                player.currentMediaItem?.localConfiguration?.uri?.toString()
-                    ?.takeIf { it.startsWith("spotify-") }
-                    ?.let { uri ->
-                        android.util.Log.e("SpotifyPlayback",
-                            "player error on $uri: ${error.errorCodeName} (${error.errorCode})", error)
-                    }
+                val failedUri = player.currentMediaItem?.localConfiguration?.uri?.toString()
+                failedUri?.takeIf { it.startsWith("spotify-") }?.let { uri ->
+                    android.util.Log.e("SpotifyPlayback",
+                        "player error on $uri: ${error.errorCodeName} (${error.errorCode})", error)
+                }
                 dropGaplessNext()
+                if (failedUri != null && fallBackToSpotifyApp(failedUri, error)) return
                 val attempt = consecutivePlayerErrors++
                 // A live station gets a far longer rope than a track does. Two
                 // failures is ~3.6 s, which any signal dip on mobile data will
@@ -1198,7 +1199,41 @@ class PlaybackService : MediaSessionService() {
     }
 
     @OptIn(UnstableApi::class)
-    fun playQueue() {
+    /**
+     * A native Spotify track failed: have the Spotify app play it instead,
+     * from where it stopped. Returns false when that is not the answer — not
+     * a native Spotify item, or no Spotify app to hand it to — and the
+     * ordinary error handling runs.
+     *
+     * Recording the failure is what makes the retry take the other route:
+     * [StreamResolver] skips native while it stands, so the same playQueue()
+     * the ordinary retry uses now resolves the track to the App Remote
+     * shadow. No backoff and no error budget spent — this is a different
+     * route, not the same one again.
+     */
+    private fun fallBackToSpotifyApp(
+        failedUri: String,
+        error: androidx.media3.common.PlaybackException,
+    ): Boolean {
+        if (!tf.monochrome.android.data.spotify.SpotifyPcmUri.matches(failedUri)) return false
+        if (!spotifyRemote.isSpotifyInstalled()) return false
+        val reason = generateSequence(error as Throwable) { it.cause }.last().let { root ->
+            root.message?.takeIf { it.isNotBlank() } ?: root.javaClass.simpleName
+        }
+        spotifyNative.reportPlaybackFailure(reason)
+        val resumeAtMs = player.currentPosition.coerceAtLeast(0L)
+        val target = queueManager.currentTrack.value?.id
+        android.util.Log.i("SpotifyPlayback",
+            "native playback failed ($reason) — handing $target to the Spotify app at $resumeAtMs ms")
+        playerErrorRecovery?.cancel()
+        playerErrorRecovery = serviceScope.launch {
+            if (queueManager.currentTrack.value?.id != target) return@launch
+            playQueue(startPositionMs = resumeAtMs)
+        }
+        return true
+    }
+
+    fun playQueue(startPositionMs: Long = 0L) {
         val currentTrack = queueManager.currentTrack.value ?: return
         serviceScope.launch {
             try {
@@ -1214,7 +1249,7 @@ class PlaybackService : MediaSessionService() {
                         onTrackEnded()
                         return@launch
                     }
-                    player.setMediaItem(resolved.mediaItem)
+                    player.setMediaItem(resolved.mediaItem, startPositionMs)
                     player.prepare()
                     startPlayback()
                     if (!isLiveStream(currentTrack)) {

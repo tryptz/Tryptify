@@ -8,8 +8,9 @@ Spotify tracks play through one of two routes, chosen per track by
    ExoPlayer plays that PCM as a WAV — so `monochrome_dsp`, AutoEQ, the mixer,
    the visualizer taps and the USB DAC path all apply, exactly as for any
    other source. Needs Premium and the `streaming` scope.
-2. **App Remote shadow** (fallback). When librespot can't sign in, the song
-   plays **in the Spotify app**, driven by the official
+2. **App Remote shadow** (fallback). When librespot can't sign in — or signs
+   in and then can't play a track — the song plays **in the Spotify app**,
+   driven by the official
    [App Remote SDK](https://github.com/spotify/android-sdk), while ExoPlayer
    plays a silent stand-in. This audio bypasses the DSP.
 
@@ -60,6 +61,15 @@ Behaviour worth knowing before changing it:
   ended: whatever is buffered still plays, then the read throws instead of
   padding the rest of the track with silence. Before this, a track that never
   loaded played as a silent timeline running to its full length.
+- **…and it falls back.** That error is final at the load level
+  (`ERROR_CODE_IO_FILE_NOT_FOUND`, which ExoPlayer does not retry), so it
+  reaches `PlaybackService.onPlayerError` at once. If the Spotify app is
+  installed, the service records the failure in `SpotifyNativeSession` and
+  replays the track from where it stopped; `StreamResolver` skips native while
+  the failure stands, so the replay is the App Remote shadow. Native is tried
+  again after 10 minutes, or straight away from Settings → Spotify → *Try
+  again*, which also shows why it failed. Without the Spotify app, native
+  stays the only route and the ordinary retry-then-skip applies.
 
 Dependencies: `libs/librespot-player-stripped-1.6.5.jar` has no POM, so
 `spotify-wrapper/build.gradle.kts` declares librespot's runtime dependencies

@@ -264,18 +264,28 @@ class StreamResolver @Inject constructor(
      *    the account is Premium or logged in is only known once App Remote is
      *    asked to play, and the bridge handles that failure; the one thing
      *    knowable here is whether the Spotify app exists at all.
+     *
+     * Native is skipped for a while after it signed in and still failed to
+     * play a track ([SpotifyNativeSession.nativePlaybackUsable]) — unless the
+     * Spotify app is missing, in which case native is the only way and is
+     * tried regardless.
      */
     private suspend fun spotifyPlaybackUri(spotifyUri: String, durationMs: Long): String? {
         if (durationMs <= 0 || !SpotifyShadowUri.isTrackId(SpotifyShadowUri.trackIdOf(spotifyUri))) {
             Log.w(SPOTIFY_TAG, "$spotifyUri unplayable: bad id or duration ($durationMs ms)")
             return null
         }
+        val nativeUsable = spotifyNative.nativePlaybackUsable()
         return when {
-            spotifyNative.ensureConnected() -> SpotifyPcmUri.build(spotifyUri, durationMs).also {
+            nativeUsable && spotifyNative.ensureConnected() -> SpotifyPcmUri.build(spotifyUri, durationMs).also {
                 Log.i(SPOTIFY_TAG, "$spotifyUri → native PCM through the DSP ($durationMs ms)")
             }
             spotifyRemote.isSpotifyInstalled() -> SpotifyShadowUri.build(spotifyUri, durationMs).also {
-                Log.i(SPOTIFY_TAG, "$spotifyUri → Spotify app (App Remote shadow); native sign-in unavailable")
+                Log.i(SPOTIFY_TAG, "$spotifyUri → Spotify app (App Remote shadow); " +
+                    if (nativeUsable) "native sign-in unavailable" else "native playback failed recently")
+            }
+            !nativeUsable && spotifyNative.ensureConnected() -> SpotifyPcmUri.build(spotifyUri, durationMs).also {
+                Log.i(SPOTIFY_TAG, "$spotifyUri → native PCM again; it failed recently but the Spotify app isn't installed")
             }
             else -> null.also {
                 Log.w(SPOTIFY_TAG, "$spotifyUri unplayable: librespot not signed in and the Spotify app isn't installed")
