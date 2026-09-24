@@ -86,6 +86,7 @@ import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openAlbum
 import tf.monochrome.android.ui.navigation.openArtist
+import tf.monochrome.android.ui.navigation.isNavigableAlbumId
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.navigation.navigateSafe
@@ -189,7 +190,7 @@ fun SearchResultsContent(
     onRetry: () -> Unit = {},
 ) {
     val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsStateWithLifecycle()
-    var showContextMenuForTrack by remember { mutableStateOf<Track?>(null) }
+    var showContextMenuForTrack by remember { mutableStateOf<UnifiedTrack?>(null) }
     var showAddToPlaylistForTrack by remember { mutableStateOf<Track?>(null) }
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
     var showAddToPlaylistForSelection by remember { mutableStateOf(false) }
@@ -198,7 +199,8 @@ fun SearchResultsContent(
     val selection = rememberTrackSelectionState<String>()
     BackHandler(enabled = selection.active) { selection.clear() }
 
-    showContextMenuForTrack?.let { track ->
+    showContextMenuForTrack?.let { unifiedTrack ->
+        val track = unifiedTrack.toLegacyTrack()
         TrackContextMenu(
             track = track,
             isLiked = favoriteTrackIds.contains(track.id),
@@ -207,15 +209,19 @@ fun SearchResultsContent(
             onAddToQueue = { playerViewModel.addToQueue(listOf(track)) },
             onToggleLike = { playerViewModel.toggleFavorite(track) },
             onAddToPlaylist = { showAddToPlaylistForTrack = track },
-            onDownloadTrack = if (playerViewModel.isLocalTrack(track)) null
+            // Spotify has native playback and private caching, but no supported
+            // API for exporting a permanent audio file. Never silently send a
+            // Spotify id through the Qobuz/TIDAL downloader.
+            onDownloadTrack = if (playerViewModel.isLocalTrack(track) ||
+                unifiedTrack.sourceType == SourceType.SPOTIFY) null
             else ({ playerViewModel.downloadTrack(track) }),
             onShareFile = { playerViewModel.shareTrack(track) },
-            onGoToAlbum = track.album?.id?.let { albumId ->
-                { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
+            onGoToAlbum = if (isNavigableAlbumId(unifiedTrack.albumId)) {
+                { navController.openAlbum(unifiedTrack.albumId) }
+            } else null,
+            onGoToArtist = unifiedTrack.artistId?.let { artistId ->
+                { navController.openArtist(unifiedTrack.sourceType, artistId) }
             },
-            onGoToArtist = track.artist?.id?.let { artistId ->
-                { navController.navigateSafe(Screen.ArtistDetail.createRoute(artistId)) }
-            }
         )
     }
 
@@ -434,8 +440,9 @@ fun SearchResultsContent(
                             onArtistClick = { ref -> ref.id?.let { navController.openArtist(track.sourceType, it) } },
                             onAlbumClick = { navController.openAlbum(track.albumId) },
                             onMoreClick = if (track.sourceType == SourceType.API ||
-                                track.sourceType == SourceType.QOBUZ) {
-                                { showContextMenuForTrack = track.toLegacyTrack() }
+                                track.sourceType == SourceType.QOBUZ ||
+                                track.sourceType == SourceType.SPOTIFY) {
+                                { showContextMenuForTrack = track }
                             } else null,
                             isDownloaded = track.toLegacyTrack().id in downloadedTrackIds,
                             selectionMode = selection.active,

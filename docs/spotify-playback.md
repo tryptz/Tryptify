@@ -1,61 +1,40 @@
 # Spotify playback
 
-Spotify tracks found in search play **in the Spotify app**, driven by the
-official [App Remote SDK](https://github.com/spotify/android-sdk). Tryptify
-never receives, stores or decodes Spotify audio.
+Spotify search, albums and artists stay in Spotify's own catalogue namespace.
+Playback requires the embedded librespot client: decoded 44.1 kHz/16-bit stereo
+PCM is wrapped as a `spotify-pcm://` WAV stream and handed to the same ExoPlayer
+instance as every other source. That puts Spotify through Tryptify's DSP,
+AutoEQ, mixer, visualizer tap and USB route.
 
-## Setup (once, in the Spotify Developer Dashboard)
+There is no App Remote or silent-shadow fallback. If native authentication or
+decoding fails, the item is reported unplayable instead of bypassing the DSP.
 
-App Remote authenticates the calling *app*, not just the user:
+## Setup
 
-1. Open the app whose client id is `BuildConfig.SPOTIFY_CLIENT_ID`
-   (`spotify.clientId` in `local.properties` overrides the default).
-2. Under **Android packages**, add `tf.monotrypt.android` (the `applicationId`,
-   not the Kotlin package) with the SHA-1 of
-   every signing key you install builds with (debug and release differ):
-   `keytool -list -v -keystore <keystore> -alias <alias>`.
-3. The redirect URI `tryptify://spotify-callback` is already registered for the
-   existing sign-in; App Remote reuses it.
-4. In Development mode, the Spotify account must be on the app's allowlist
-   (User Management), as for playlist import.
+1. Connect Spotify in Tryptify with a Premium account. The PKCE request includes
+   the `streaming` scope used for native playback.
+2. Accounts connected by an older build must disconnect and reconnect once to
+   grant that added scope.
 
-On the phone: the Spotify app installed and logged in, on a **Premium**
-account (App Remote refuses to start a specific track otherwise).
-
-## How it fits the player
+## Signal path
 
 | Piece | Role |
 |---|---|
-| `SpotifyApiClient.searchTracks` | Web API search as the connected user; feeds `SearchViewModel`'s Spotify leg. |
-| `toSpotifyUnifiedTrack` | Maps a result to `PlaybackSource.SpotifyRemote(spotifyUri, durationMs)`, `SourceType.SPOTIFY`. |
-| `StreamResolver.resolveSpotifyRemote` | Emits a `spotify-shadow://track/<id>?durationMs=N` MediaItem. Unplayable when the Spotify app is missing. |
-| `SilentWavDataSource` | Serves that URI as a silent 44.1 kHz/16-bit/stereo WAV of the song's length, generated on the fly, seekable. |
-| `SpotifyPlaybackBridge` | Mirrors ExoPlayer ⇄ Spotify (see below). |
-| `SpotifyAppRemoteClient` | Coroutine wrapper over App Remote: connect, play, pause, resume, seek, `PlayerState` flow. |
+| `SpotifyApiClient` | Searches Spotify and opens Spotify album/artist pages. |
+| `SpotifyNativePlayback` | Reuses the app's PKCE token, owns librespot, and mirrors play/pause/seek. |
+| `LibrespotPlayerWrapper` | Authenticates and decodes the selected Spotify URI into `PcmSink`. |
+| `PcmSinkDataSource` | Presents decoded PCM as a finite WAV stream to Media3. |
+| `StreamResolver` | Emits `spotify-pcm://` only after native setup succeeds; otherwise marks the item unplayable. |
 
-**ExoPlayer remains the single state owner** (Playback Routing playbook). The
-silent shadow is what lets the notification, lock screen, scrubber, queue and
-end-of-track advance work with no Spotify-specific code. The bridge:
-
-- starts the song in Spotify when a shadow becomes current and the player wants
-  to play (seeking Spotify to the player's position when resuming mid-track);
-- repeats play/pause and user seeks to Spotify; pauses Spotify when the shadow
-  stops being current, ends, or the player stops;
-- applies Spotify-side pauses/resumes to the player, disengages and pauses when
-  a different song is chosen in Spotify, and corrects drift over 2 s by moving
-  the silent play head — changes made on Spotify's behalf are not echoed back;
-- turns ExoPlayer's audio-focus handling **off** while a shadow is current, so
-  Spotify taking focus doesn't pause the player (which would be mirrored as a
-  pause back to Spotify).
+Spotify's cache remains private implementation storage. Tryptify does not expose
+it as a downloaded audio file: Spotify has no supported API for exporting tracks,
+and a Spotify id is never sent through the Qobuz, TIDAL or Apple downloader.
 
 ## Known limits
 
-- Spotify audio bypasses `monochrome_dsp`, AutoEQ, the mixer and the USB DAC
-  path. With exclusive USB output active, Spotify is heard wherever Android
-  routes it, not through the DAC.
-- Crossfade into or out of a Spotify track is a cut on the Spotify side: the
-  ramp only ever applies to the silent shadow.
-- Search is tracks only, one page (10). Spotify artists/albums have no pages
-  here — their ids are base62 and every catalogue screen takes a numeric id.
-- Mirroring reacts to `PlayerState` events, which Spotify sends on change, not
-  continuously; drift is corrected at those moments.
+- Native playback requires Spotify Premium and a fresh grant containing the
+  `streaming` scope.
+- The first native play opens a librespot session and can take longer than later
+  tracks; its stored credential and read-through cache live in app-private data.
+- Native setup failure stops the Spotify item; it never changes to an external
+  playback path.

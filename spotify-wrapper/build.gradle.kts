@@ -5,12 +5,8 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
-// Wrapper around the Spotify app: the vendored App Remote SDK talks to the
-// installed com.spotify.music package (pulled from this phone), while this
-// module owns the silent-shadow playback trick — ExoPlayer plays a generated
-// silent WAV of the song's length and SpotifyPlaybackBridge mirrors all
-// transport state onto the Spotify app, so the queue, notification, scrubber
-// and end-of-track advance stay in Tryptify's hands.
+// Spotify transport module. Native librespot PCM is the only playback route
+// compiled into the app.
 
 configure<com.android.build.api.dsl.LibraryExtension> {
     namespace = "tf.monochrome.android.data.spotify"
@@ -43,13 +39,6 @@ kotlin {
 }
 
 dependencies {
-    // Full runtime dependency (not compileOnly): the bridge/shadow classes
-    // dereference SDK types (PlayerState etc.) at runtime, so the SDK classes
-    // must ship inside the APK. AGP only forbids local .aar deps when the
-    // consuming module itself produces an .aar; this module is an APK-bound
-    // library, so a plain files() dep is allowed.
-    implementation(files("libs/spotify-app-remote-release-0.8.0.aar"))
-
     // Native Spotify audio: librespot is the open Spotify client. The player
     // module streams decrypted audio into a sink we feed to ExoPlayer, so
     // Spotify tracks play inside Tryptify through the normal DSP chain —
@@ -60,10 +49,29 @@ dependencies {
     // protobuf, okhttp, okio, slf4j/log4j, kotlin-stdlib, plus jcraft/disruptor
     // — and Maven excludes can't strip shaded classes out of the jar itself.
     // libs/librespot-player-stripped-1.6.5.jar is that artifact with every
-    // bundled package removed except librespot's own (xyz.gianlu.librespot,
-    // com.spotify protobuf messages, zeroconf); the real dependencies come in
-    // via the artifact's normal POM. Regenerate with: unzip, prune, jar cf.
+    // bundled package removed except librespot's own (xyz.gianlu.librespot and
+    // com.spotify protobuf messages). A local files() dependency has no POM,
+    // so the upstream 1.6.5 dependencies are declared explicitly below.
+    // Regenerate with: unzip, prune, jar cf.
     api(files("libs/librespot-player-stripped-1.6.5.jar"))
+
+    // The stripped jar keeps librespot and Spotify's generated protobufs but
+    // deliberately removes third-party packages that the app already uses or
+    // can supply once. A files() dependency has no POM, so declare those
+    // runtime pieces explicitly.
+    implementation("com.google.protobuf:protobuf-java:3.25.2")
+    implementation("com.google.code.gson:gson:2.11.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("commons-net:commons-net:3.11.1")
+    implementation("org.jcraft:jorbis:0.0.17")
+    implementation("com.badlogicgames.jlayer:jlayer:1.0.2-gdx")
+    implementation("xyz.gianlu.zeroconf:zeroconf:1.3.2")
+    implementation("org.slf4j:slf4j-api:2.0.16")
+    implementation("com.electronwill.night-config:toml:3.6.7")
+    implementation("org.apache.logging.log4j:log4j-api:2.24.3")
+    implementation("org.apache.logging.log4j:log4j-core:2.24.3")
+    runtimeOnly("com.lmax:disruptor:3.4.4")
+    runtimeOnly("org.slf4j:slf4j-nop:2.0.16")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation(libs.hilt.android)

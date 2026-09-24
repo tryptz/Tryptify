@@ -11,12 +11,12 @@
 
 ### Added
 
-#### Spotify tracks in search, played by the Spotify app
-- **With a Spotify account connected, search gains a Spotify leg** beside TIDAL, Qobuz and the library: one page of tracks, time-boxed so a slow Spotify can never hold up the rest. Tapping one plays the real Spotify song — through the Spotify app, over the official App Remote SDK. Spotify Premium and the Spotify app are required; nothing is downloaded, decrypted or converted.
-- **ExoPlayer stays the one owner of playback.** A Spotify track reaches it as a `spotify-shadow://` item — a silent WAV exactly as long as the song, synthesised on the fly, never stored — so the queue, notification, lock screen, scrubber and auto-advance work unchanged. `SpotifyPlaybackBridge` mirrors play, pause, seek and track changes onto Spotify, and Spotify's own pauses, resumes and drift back onto the player.
-- **Audio focus is handed over, not fought over.** While a shadow track is current ExoPlayer stops handling focus; otherwise Spotify taking focus would pause the player, which the bridge would mirror as a pause back to Spotify, and neither would ever play.
-- **Spotify audio is outside the DSP chain.** It never enters this process, so AutoEQ, the mixer and the bit-perfect USB path do not apply to it, and it ranks below every other source for the same song.
-- **Reuses the existing Spotify connection.** The sign-in now also asks for `app-remote-control`; accounts connected before that get Spotify's own one-time consent on first play. See `docs/spotify-playback.md` for the one dashboard step it needs (package name + SHA-1).
+#### Spotify-native search and DSP playback
+- **Spotify is now a first-class search source** with its own filter, track actions, album links and working artist pages.
+- **Native Spotify PCM enters ExoPlayer.** The embedded librespot client decodes into `spotify-pcm://`; Media3 then runs the same DSP, AutoEQ, mixer, visualizer and USB route as other sources.
+- **Spotify is native-only.** If native authentication or decoding fails, the track is unplayable; Tryptify never falls back to App Remote or a silent-shadow item.
+- **Source identity stays honest.** Spotify ids never fall through to Qobuz/TIDAL/Apple download endpoints. Spotify's internal read-through cache stays private because Spotify exposes no supported permanent-file download API.
+- **The existing PKCE sign-in is reused** with the added `streaming` scope; previously connected accounts need one reconnect.
 
 #### Ambient MilkDrop: the visualizer inside the album atmosphere
 - **A second composition of the engine, not a change to the first.** The hero visualizer replaces the artwork — an opaque black surface at the cover's aspect ratio, or fullscreen. Ambient mode draws the same preset *into* the player's background, over the blurred cover and its scrim, under the glass. Both ship; ambient is off until asked for, because it changes what the player looks like and that should not arrive with an update.

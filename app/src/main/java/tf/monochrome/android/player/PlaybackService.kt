@@ -90,7 +90,7 @@ class PlaybackService : MediaSessionService() {
     // MediaController, which carries neither one nor any decoder identity.
     @Inject lateinit var audioPipelineMonitor: tf.monochrome.android.audio.pipeline.AudioPipelineMonitor
     @Inject lateinit var qobuzCache: tf.monochrome.android.data.cache.QobuzStreamCacheManager
-    @Inject lateinit var spotifyRemote: tf.monochrome.android.data.spotify.SpotifyAppRemoteClient
+    @Inject lateinit var spotifyNative: tf.monochrome.android.data.spotify.SpotifyNativePlayback
     @Inject lateinit var usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter
     @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
     @Inject lateinit var bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController
@@ -113,8 +113,7 @@ class PlaybackService : MediaSessionService() {
 
     /**
      * Everything DefaultDataSource handles (file / content / asset / http),
-     * plus the `qobuz://` scheme, which plays a Qobuz track out of the cache
-     * file while it is still downloading instead of waiting for the last byte.
+     * plus `qobuz://` partial files and `spotify-pcm://` native decoded audio.
      *
      * The HTTP half is built explicitly rather than left to the default, for
      * live radio. Two of its defaults are wrong for a public directory of
@@ -135,23 +134,18 @@ class PlaybackService : MediaSessionService() {
             .setReadTimeoutMs(15_000)
         val default = androidx.media3.datasource.DefaultDataSource.Factory(this, http)
         val qobuz = tf.monochrome.android.data.cache.QobuzPartialDataSource.Factory(qobuzCache)
-        val spotifyShadow = tf.monochrome.android.data.cache.SilentWavDataSource.Factory()
+        val spotifyPcm = tf.monochrome.android.data.spotify.PcmSinkDataSource.Factory()
         return androidx.media3.datasource.DataSource.Factory {
             tf.monochrome.android.data.cache.SchemeRoutingDataSource(
                 default.createDataSource(),
                 qobuz.createDataSource(),
-                spotifyShadow.createDataSource(),
+                spotifyPcm.createDataSource(),
             )
         }
     }
 
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
-    private var spotifyBridge: SpotifyPlaybackBridge? = null
-
-    // Shared with SpotifyPlaybackBridge, which toggles only the focus handling
-    // (off while the Spotify app is the one sounding) and must hand back the
-    // same attributes when it does.
     private val musicAudioAttributes: AudioAttributes = AudioAttributes.Builder()
         .setUsage(C.USAGE_MEDIA)
         .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -236,23 +230,9 @@ class PlaybackService : MediaSessionService() {
 
         player.addAnalyticsListener(audioPipelineAnalytics())
 
-        // Spotify tracks play in the Spotify app while this player runs their
-        // silent stand-in; the bridge keeps the two in step. Built here,
-        // started once the service's own listener is registered below.
-        spotifyBridge = SpotifyPlaybackBridge(
-            player = player,
-            remote = spotifyRemote,
-            scope = serviceScope,
-            audioAttributes = musicAudioAttributes,
-            onPlayFailed = { error ->
-                android.widget.Toast.makeText(
-                    this,
-                    "Spotify couldn't play this track: ${error.message ?: "not connected"}. " +
-                        "It needs the Spotify app, logged in, on Premium.",
-                    android.widget.Toast.LENGTH_LONG,
-                ).show()
-            },
-        )
+        // Spotify is native-only: decoded PCM must traverse this player and its
+        // DSP chain. Authentication failure makes the item unplayable.
+        spotifyNative.attach(player, serviceScope)
 
         player.addListener(object : Player.Listener {
             // Keep the home-screen now-playing widget live: the widget uses
@@ -476,11 +456,6 @@ class PlaybackService : MediaSessionService() {
                 }
             }
         })
-
-        // After the listener above, deliberately: on a shadow track's
-        // STATE_ENDED the service advances the queue first, then the bridge
-        // pauses Spotify's autoplay; the next track's transition re-engages it.
-        spotifyBridge?.start()
 
         // Bit-perfect USB DAC routing — when the user has the toggle on
         // and a USB Audio Class device is attached, pin ExoPlayer's
@@ -1116,8 +1091,7 @@ class PlaybackService : MediaSessionService() {
             }
         }
         crossfade.release()
-        spotifyBridge?.release()
-        spotifyBridge = null
+        spotifyNative.release()
         mediaSession?.run {
             player.release()
             release()
@@ -1808,6 +1782,12 @@ class PlaybackService : MediaSessionService() {
      */
     private suspend fun resolveGaplessItem(track: tf.monochrome.android.domain.model.Track): MediaItem? {
         val unified = unifiedTrackRegistry[track.id]
+        // Resolving Spotify starts librespot decoding immediately. It cannot be
+        // speculatively resolved minutes early merely to discover that its URI
+        // is ineligible for ExoPlayer pre-queueing.
+        if (unified?.source is tf.monochrome.android.domain.model.PlaybackSource.SpotifyRemote ||
+            streamResolver.isSpotifyTrack(track.id)
+        ) return null
         val item = if (unified != null) {
             streamResolver.resolveUnifiedTrack(unified).takeIf { it.isPlayable }?.mediaItem
         } else {

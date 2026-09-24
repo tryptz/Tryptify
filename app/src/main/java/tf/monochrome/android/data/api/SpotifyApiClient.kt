@@ -123,6 +123,20 @@ class SpotifyApiClient @Inject constructor(
         json.decodeFromString<SpotifyAlbumFull>(resp.bodyAsText())
     }
 
+    /** Artist profile plus releases for the source-aware search result route. */
+    suspend fun getArtist(artistId: String): Result<SpotifyArtistFull> = runCatching {
+        val resp = authedGet("${apiBase()}/artists/$artistId")
+        json.decodeFromString<SpotifyArtistFull>(resp.bodyAsText())
+    }
+
+    suspend fun getArtistAlbums(artistId: String): Result<List<SpotifyAlbumFull>> = runCatching {
+        val resp = authedGet(
+            "${apiBase()}/artists/$artistId/albums?include_groups=album,single,compilation&limit=50",
+        )
+        json.decodeFromString<SpotifyPagingObject<SpotifyAlbumFull>>(resp.bodyAsText()).items
+            .filter { !it.id.isNullOrBlank() }
+    }
+
     /** The connected user's Liked Songs. */
     suspend fun getLikedSongs(): Result<List<CsvTrack>> = runCatching {
         paginate { offset ->

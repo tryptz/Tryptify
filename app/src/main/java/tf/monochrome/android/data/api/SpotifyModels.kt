@@ -124,6 +124,7 @@ data class SpotifyAlbumFull(
     // Album-detail only; absent ("" on some shapes) in search results.
     @SerialName("total_tracks") val totalTracks: Int = 0,
     val tracks: SpotifyPagingObject<SpotifyTrack>? = null,
+    @SerialName("album_type") val albumType: String? = null,
 )
 
 @Serializable

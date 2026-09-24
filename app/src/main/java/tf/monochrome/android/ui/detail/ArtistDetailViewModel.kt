@@ -15,10 +15,13 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import tf.monochrome.android.data.api.QobuzIdRegistry
+import tf.monochrome.android.data.api.SpotifyApiClient
+import tf.monochrome.android.data.api.SpotifyIdRegistry
 import tf.monochrome.android.data.downloads.DownloadManager
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.data.api.NoInstancesConfiguredException
 import tf.monochrome.android.domain.model.ArtistDetail
+import tf.monochrome.android.domain.usecase.toSpotifyCatalogDetail
 import javax.inject.Inject
 
 @HiltViewModel
@@ -26,6 +29,8 @@ class ArtistDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: MusicRepository,
     private val qobuzIdRegistry: QobuzIdRegistry,
+    private val spotifyApiClient: SpotifyApiClient,
+    private val spotifyIdRegistry: SpotifyIdRegistry,
     private val downloadManager: DownloadManager,
 ) : ViewModel() {
 
@@ -65,6 +70,24 @@ class ArtistDetailViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
+
+            val spotifyBase62 = spotifyIdRegistry.artistBase62For(artistId)
+            if (spotifyBase62 != null) {
+                val spotifyArtist = spotifyApiClient.getArtist(spotifyBase62)
+                val releases = spotifyApiClient.getArtistAlbums(spotifyBase62)
+                val detail = spotifyArtist.getOrNull()?.toSpotifyCatalogDetail(
+                    releases = releases.getOrDefault(emptyList()),
+                    registry = spotifyIdRegistry,
+                )
+                if (detail != null) {
+                    _artistDetail.value = detail
+                } else {
+                    _error.value = spotifyArtist.exceptionOrNull()?.message
+                        ?: "Spotify artist unavailable"
+                }
+                _isLoading.value = false
+                return@launch
+            }
 
             // A fallback-played TIDAL track links its TIDAL artist id to the
             // matched Qobuz artist id; use that for the Qobuz call when present.

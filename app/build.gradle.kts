@@ -45,6 +45,11 @@ if (!hasCompleteReleaseSigning) {
 }
 
 android {
+    packaging {
+        resources {
+            excludes += "META-INF/DEPENDENCIES"
+        }
+    }
     namespace = "tf.monochrome.android"
     compileSdk = 36
     ndkVersion = "29.0.14206865"
@@ -315,11 +320,8 @@ dependencies {
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.cio)
 
-    // Spotify wrapper module — the App Remote SDK .aar moved there along with
-    // the bridge/shadow classes; the app consumes the whole stack as one
-    // module. Gson remains the SDK's runtime JSON mapper.
+    // Native Spotify decoder and PCM DataSource.
     implementation(project(":spotify-wrapper"))
-    implementation(libs.gson)
 
     // Coil
     implementation(libs.coil.compose)

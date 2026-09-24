@@ -90,6 +90,7 @@ class SearchViewModel @Inject constructor(
         ALL("All", null),
         TIDAL("TIDAL", SourceType.API),
         QOBUZ("Qobuz", SourceType.QOBUZ),
+        SPOTIFY("Spotify", SourceType.SPOTIFY),
         LOCAL("Local", SourceType.LOCAL),
         COLLECTION("Collection", SourceType.COLLECTION)
     }
@@ -338,9 +339,8 @@ class SearchViewModel @Inject constructor(
                 }
             }
             val libraryDeferred = async { runCatching { unifiedLibrarySearch.search(trimmedQuery).first() } }
-            // Tracks only, first page only: Spotify results play through the
-            // Spotify app (see PlaybackSource.SpotifyRemote) and have no album
-            // or artist pages here to page into.
+            // First track page. Spotify keeps its own playback source; album
+            // and artist searches below feed their source-specific routes.
             val spotifyDeferred = async {
                 if (!spotifyAuth.isConnected.value) {
                     null
@@ -369,7 +369,9 @@ class SearchViewModel @Inject constructor(
                     }
                 }
             }
-            spotifyTracks = spotifyDeferred.await()?.mapNotNull { it.toSpotifyUnifiedTrack() }.orEmpty()
+            spotifyTracks = spotifyDeferred.await()
+                ?.mapNotNull { it.toSpotifyUnifiedTrack(spotifyIdRegistry) }
+                .orEmpty()
             spotifyAlbums = spotifyAlbumsDeferred.await()?.mapNotNull { it.toSpotifyCatalogAlbum(spotifyIdRegistry) }.orEmpty()
             spotifyArtists = spotifyArtistsDeferred.await()?.mapNotNull { it.toSpotifyCatalogArtist(spotifyIdRegistry) }.orEmpty()
             Triple(apiDeferred.await(), qobuzDeferred.await(), libraryDeferred.await())
@@ -377,7 +379,9 @@ class SearchViewModel @Inject constructor(
         val unifiedResults = unifiedResultsResult.getOrNull()
 
         val qobuzAvailable = qobuzResult?.isSuccess == true
-        if (searchResult.isFailure && unifiedResults == null && !qobuzAvailable && spotifyTracks.isEmpty()) {
+        if (searchResult.isFailure && unifiedResults == null && !qobuzAvailable &&
+            spotifyTracks.isEmpty() && spotifyAlbums.isEmpty() && spotifyArtists.isEmpty()
+        ) {
             // Every backend failed (offline / all instances down). Distinguish
             // this from a successful-but-empty search so the UI can offer a
             // retry instead of a flat "No results found".
@@ -666,8 +670,8 @@ class SearchViewModel @Inject constructor(
         // Live radio never reaches search — stations are found on the globe, by
         // place rather than by name — so it has no ranking to earn.
         SourceType.LIVE_RADIO -> 0
-        // Plays through the Spotify app, outside this app's DSP chain, so a
-        // lossless copy of the same song from any other source should win.
+        // Native Spotify PCM now enters the same DSP path; keep a tiny source
+        // tie-break below lossless catalog results until its quality is known.
         SourceType.SPOTIFY -> SOURCE_BOOST_API - 7
     }
 

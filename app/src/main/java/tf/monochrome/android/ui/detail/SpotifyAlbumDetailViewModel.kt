@@ -25,6 +25,7 @@ import javax.inject.Singleton
 class SpotifyAlbumDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val spotifyApiClient: tf.monochrome.android.data.api.SpotifyApiClient,
+    private val spotifyIdRegistry: tf.monochrome.android.data.api.SpotifyIdRegistry,
 ) : ViewModel() {
 
     private val albumId: String = savedStateHandle.get<String>("spotifyAlbumId").orEmpty()
@@ -54,7 +55,7 @@ class SpotifyAlbumDetailViewModel @Inject constructor(
                 .onSuccess { full ->
                     _album.value = full
                     _tracks.value = full.tracks?.items.orEmpty()
-                        .mapNotNull { it.toSpotifyAlbumTrack(full) }
+                        .mapNotNull { it.toSpotifyAlbumTrack(full, spotifyIdRegistry) }
                 }
                 .onFailure { _error.value = it.message ?: "Failed to load album" }
             _isLoading.value = false

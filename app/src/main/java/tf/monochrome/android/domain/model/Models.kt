@@ -63,7 +63,10 @@ data class Track(
     // QobuzIdRegistry lookup) breaks whenever [id] is a synthetic fallback
     // (e.g. UnifiedTrack.toLegacyTrack hashing "apple_<id>") and can collide
     // outright. Routing (download + playback) trusts this field first.
-    val appleId: Long? = null
+    val appleId: Long? = null,
+    // Recording identity shared across catalogues. Kept as metadata across
+    // the legacy queue/persistence shape without changing the source route.
+    val isrc: String? = null,
 ) {
     val displayArtist: String
         get() = artist?.name ?: artists.joinToString(", ") { it.name }
@@ -382,14 +385,9 @@ sealed class PlaybackSource {
     ) : PlaybackSource()
 
     /**
-     * A Spotify track, played by the Spotify app itself over the App Remote
-     * SDK (Spotify Premium, Spotify installed). Its audio never enters this
-     * app, so it bypasses the DSP chain, AutoEQ and the USB path.
-     *
-     * ExoPlayer still gets an item — a silent WAV of [durationMs] (see
-     * `SpotifyShadowUri`) — so it stays the single owner of play state, queue
-     * position, seeking and end-of-track. `SpotifyPlaybackBridge` mirrors that
-     * state onto the Spotify app, and Spotify's own pauses back onto it.
+     * A Spotify track with a source identity distinct from every other DSP.
+     * Resolution requires native decoded PCM so audio enters the normal DSP,
+     * AutoEQ and USB path. Authentication failure makes it unplayable.
      *
      * [spotifyUri] is `spotify:track:<base62 id>`.
      */
@@ -620,7 +618,8 @@ data class UnifiedTrack(
             channelCount = channelCount,
             version = version,
             isThxSpatialAudio = isThxSpatialAudio,
-            appleId = (source as? PlaybackSource.AppleCached)?.appleId
+            appleId = (source as? PlaybackSource.AppleCached)?.appleId,
+            isrc = isrc,
         )
     }
 }

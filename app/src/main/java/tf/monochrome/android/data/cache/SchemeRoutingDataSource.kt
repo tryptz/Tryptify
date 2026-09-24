@@ -5,12 +5,12 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.TransferListener
+import tf.monochrome.android.data.spotify.SpotifyPcmUri
 
 /**
  * Picks a [DataSource] by URI scheme at open time: the app's own `qobuz://`
- * URIs go to [qobuz], `spotify-shadow://` URIs (the silent stand-in for a
- * track the Spotify app is playing) go to [spotifyShadow], and everything else
- * (file, content, asset, http) to [default].
+ * URIs go to [qobuz], native `spotify-pcm://` goes to [spotifyPcm], and
+ * everything else (file, content, asset, http) goes to [default].
  *
  * DefaultDataSource has a closed set of schemes and no extension point, so this
  * sits in front of it rather than trying to replace it — the standard schemes
@@ -20,7 +20,7 @@ import androidx.media3.datasource.TransferListener
 class SchemeRoutingDataSource(
     private val default: DataSource,
     private val qobuz: DataSource,
-    private val spotifyShadow: DataSource,
+    private val spotifyPcm: DataSource,
 ) : DataSource {
 
     private var active: DataSource? = null
@@ -30,14 +30,14 @@ class SchemeRoutingDataSource(
         // and the bandwidth meter needs the events either way.
         default.addTransferListener(transferListener)
         qobuz.addTransferListener(transferListener)
-        spotifyShadow.addTransferListener(transferListener)
+        spotifyPcm.addTransferListener(transferListener)
     }
 
     override fun open(dataSpec: DataSpec): Long {
         val uri = dataSpec.uri.toString()
         val source = when {
             QobuzPartialDataSource.isQobuzUri(uri) -> qobuz
-            SpotifyShadowUri.matches(uri) -> spotifyShadow
+            SpotifyPcmUri.matches(uri) -> spotifyPcm
             else -> default
         }
         active = source

@@ -6,10 +6,11 @@ import tf.monochrome.android.data.api.SpotifyArtistFull
 import tf.monochrome.android.data.api.SpotifyIdRegistry
 import tf.monochrome.android.data.api.SpotifyTrack
 import tf.monochrome.android.data.api.spotifyNumericIdFor
-import tf.monochrome.android.data.cache.SpotifyShadowUri
+import tf.monochrome.android.data.spotify.SpotifyPcmUri
 import tf.monochrome.android.domain.model.Album
 import tf.monochrome.android.domain.model.AlbumDetail
 import tf.monochrome.android.domain.model.Artist
+import tf.monochrome.android.domain.model.ArtistDetail
 import tf.monochrome.android.domain.model.GenreConfidence
 import tf.monochrome.android.domain.model.PlaybackSource
 import tf.monochrome.android.domain.model.SourceType
@@ -147,24 +148,30 @@ fun Track.toUnifiedTrackAuto(registry: QobuzIdRegistry): UnifiedTrack = when {
 }
 
 /**
- * A Spotify catalog track, played by the Spotify app via App Remote
- * ([PlaybackSource.SpotifyRemote]). Null for anything that can't be played
- * that way: local files, episodes, or a missing/malformed track URI.
+ * A Spotify catalog track. [PlaybackSource.SpotifyRemote] preserves the
+ * Spotify identity; resolution requires native in-process PCM.
  *
- * Artist and album ids stay null on purpose — they are base62 Spotify ids,
- * and every artist/album screen here takes a numeric TIDAL/Qobuz id, so a
- * hashed stand-in would open some unrelated catalogue page.
+ * Album ids keep their `spotify_` namespace so album taps never fall into a
+ * numeric TIDAL/Qobuz route. Artist ids remain null until the Spotify artist
+ * detail route exists.
  */
-fun SpotifyTrack.toSpotifyUnifiedTrack(): UnifiedTrack? {
+fun SpotifyTrack.toSpotifyUnifiedTrack(registry: SpotifyIdRegistry? = null): UnifiedTrack? {
     val trackUri = uri ?: return null
     if (isLocal || type != "track" || name.isBlank() || durationMs <= 0) return null
     if (!trackUri.startsWith("spotify:track:") ||
-        !SpotifyShadowUri.isTrackId(SpotifyShadowUri.trackIdOf(trackUri))
+        !SpotifyPcmUri.isTrackId(SpotifyPcmUri.trackIdOf(trackUri))
     ) return null
 
     val names = artists.map { it.name }.filter { it.isNotBlank() }
+    val artistRefs = artists.filter { it.name.isNotBlank() }
+        .map { artist -> UnifiedArtistRef(id = null, name = artist.name) }
+    val base62 = SpotifyPcmUri.trackIdOf(trackUri)
+    album?.id?.let { registry?.registerAlbum(spotifyNumericIdFor(it), it) }
+    val unifiedId = "spotify_$base62"
+    val legacyId = -(unifiedId.hashCode().toLong() and 0x7FFF_FFFFL) - 1
+    registry?.registerTrack(legacyId, base62)
     return UnifiedTrack(
-        id = "spotify_${SpotifyShadowUri.trackIdOf(trackUri)}",
+        id = unifiedId,
         title = name,
         durationSeconds = (durationMs / 1000).toInt(),
         trackNumber = trackNumber,
@@ -173,8 +180,9 @@ fun SpotifyTrack.toSpotifyUnifiedTrack(): UnifiedTrack? {
         artistName = names.joinToString(", ").ifBlank { DEFAULT_ARTIST_NAME },
         artistNames = names,
         albumArtistName = names.firstOrNull(),
-        artists = names.map { UnifiedArtistRef(id = null, name = it) },
+        artists = artistRefs,
         albumTitle = album?.name?.takeIf { it.isNotBlank() },
+        albumId = album?.id?.let { "spotify_$it" },
         releaseYear = album?.releaseDate?.take(4)?.toIntOrNull(),
         // Largest image first is Spotify's documented order.
         artworkUri = album?.images?.firstOrNull()?.url?.takeIf { it.isNotBlank() },
@@ -209,16 +217,24 @@ fun SpotifyAlbumFull.toSpotifyUnifiedAlbum(): UnifiedAlbum? {
  * carries the album). Same contract as [toSpotifyUnifiedTrack] but with the
  * album fields filled from the parent album rather than a search fragment.
  */
-fun SpotifyTrack.toSpotifyAlbumTrack(album: SpotifyAlbumFull): UnifiedTrack? {
+fun SpotifyTrack.toSpotifyAlbumTrack(
+    album: SpotifyAlbumFull,
+    registry: SpotifyIdRegistry? = null,
+): UnifiedTrack? {
     val trackUri = uri ?: return null
     if (isLocal || type != "track" || name.isBlank() || durationMs <= 0) return null
     if (!trackUri.startsWith("spotify:track:") ||
-        !SpotifyShadowUri.isTrackId(SpotifyShadowUri.trackIdOf(trackUri))
+        !SpotifyPcmUri.isTrackId(SpotifyPcmUri.trackIdOf(trackUri))
     ) return null
 
     val names = artists.map { it.name }.filter { it.isNotBlank() }
+    val base62 = SpotifyPcmUri.trackIdOf(trackUri)
+    val unifiedId = "spotify_$base62"
+    val legacyId = -(unifiedId.hashCode().toLong() and 0x7FFF_FFFFL) - 1
+    registry?.registerTrack(legacyId, base62)
+    album.id?.let { registry?.registerAlbum(spotifyNumericIdFor(it), it) }
     return UnifiedTrack(
-        id = "spotify_${SpotifyShadowUri.trackIdOf(trackUri)}",
+        id = unifiedId,
         title = name,
         durationSeconds = (durationMs / 1000).toInt(),
         trackNumber = trackNumber,
@@ -263,6 +279,7 @@ fun SpotifyAlbumFull.toSpotifyCatalogAlbum(registry: SpotifyIdRegistry): Album? 
         numberOfTracks = totalTracks.takeIf { it > 0 },
         releaseDate = releaseDate,
         cover = images.firstOrNull()?.url?.takeIf { it.isNotBlank() },
+        type = albumType?.uppercase(),
     )
 }
 
@@ -273,8 +290,8 @@ fun SpotifyTrack.toSpotifyCatalogTrack(
 ): Track? {
     val trackUri = uri ?: return null
     if (isLocal || type != "track" || name.isBlank() || durationMs <= 0) return null
-    val base62 = SpotifyShadowUri.trackIdOf(trackUri)
-    if (!SpotifyShadowUri.isTrackId(base62)) return null
+    val base62 = SpotifyPcmUri.trackIdOf(trackUri)
+    if (!SpotifyPcmUri.isTrackId(base62)) return null
 
     val numericId = spotifyNumericIdFor(base62)
     registry.registerTrack(numericId, base62)
@@ -319,5 +336,24 @@ fun SpotifyArtistFull.toSpotifyCatalogArtist(registry: SpotifyIdRegistry): Artis
         id = numericId,
         name = name,
         picture = images.firstOrNull()?.url?.takeIf { it.isNotBlank() },
+    )
+}
+
+/** Spotify artist page mapped into the shared artist-detail UI. */
+fun SpotifyArtistFull.toSpotifyCatalogDetail(
+    releases: List<SpotifyAlbumFull>,
+    registry: SpotifyIdRegistry,
+): ArtistDetail? {
+    val artist = toSpotifyCatalogArtist(registry) ?: return null
+    val albums = releases.mapNotNull { it.toSpotifyCatalogAlbum(registry) }
+        .distinctBy { it.id }
+    return ArtistDetail(
+        artist = artist,
+        albums = albums.filter {
+            it.type == null || it.type.equals("album", ignoreCase = true) ||
+                it.type.equals("compilation", ignoreCase = true)
+        },
+        singles = albums.filter { it.type?.equals("single", ignoreCase = true) == true },
+        eps = albums.filter { it.type?.equals("ep", ignoreCase = true) == true },
     )
 }

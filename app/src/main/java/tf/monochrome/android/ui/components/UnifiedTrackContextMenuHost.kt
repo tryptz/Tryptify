@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import tf.monochrome.android.domain.model.UnifiedTrack
+import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.ui.navigation.isNavigableAlbumId
 import tf.monochrome.android.ui.navigation.openAlbum
 import tf.monochrome.android.ui.navigation.openArtist
@@ -75,7 +76,8 @@ fun UnifiedTrackContextMenuHost(
             onRemoveFromPlaylist = onRemove,
             removeLabel = removeLabel,
             // Already on disk — nothing to fetch.
-            onDownloadTrack = if (isLocal) null else ({ playerViewModel.downloadTrack(legacy) }),
+            onDownloadTrack = if (isLocal || track.sourceType == SourceType.SPOTIFY) null
+            else ({ playerViewModel.downloadTrack(legacy) }),
             onShareFile = { playerViewModel.shareUnifiedTrack(track) },
             onGoToAlbum = if (isNavigableAlbumId(track.albumId)) {
                 { navController.openAlbum(track.albumId) }

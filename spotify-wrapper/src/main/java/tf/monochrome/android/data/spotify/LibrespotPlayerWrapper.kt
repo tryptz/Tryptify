@@ -1,10 +1,11 @@
 package tf.monochrome.android.data.spotify
 
+import com.google.protobuf.ByteString
+import com.spotify.Authentication
 import xyz.gianlu.librespot.core.Session
 import xyz.gianlu.librespot.player.Player
 import xyz.gianlu.librespot.player.PlayerConfiguration
-import java.io.IOException
-import java.util.concurrent.TimeUnit
+import java.io.File
 
 /**
  * A headless Spotify client embedded in Tryptify (librespot-java): signs in
@@ -13,9 +14,9 @@ import java.util.concurrent.TimeUnit
  * plays inside Tryptify — through the DSP chain, AutoEQ, the mixer and the
  * USB DAC — with no Spotify app on the device and no silent-shadow mirroring.
  *
- * Credentials: the same Spotify account the app signs in with (see
- * SpotifyAuthManager); librespot needs the raw username/password once, then
- * stores its own credentials in its cache.
+ * The first connection accepts the access token from the app's existing PKCE
+ * sign-in, then librespot stores its reusable credential blob in app-private
+ * storage. No second login form and no raw Spotify password are required.
  */
 class LibrespotPlayerWrapper {
 
@@ -24,13 +25,6 @@ class LibrespotPlayerWrapper {
 
     val isConnected: Boolean get() = session?.isValid ?: false
 
-    /** The live sink for the currently loaded track; null between tracks. */
-    private val activeSink = PcmSink()
-
-    init {
-        PcmSinkRegistry.sink = activeSink
-    }
-
     /**
      * Connects (or reconnects). Blocking — call off the main thread. librespot
      * authenticates directly against Spotify's servers, so the device shows up
@@ -38,26 +32,52 @@ class LibrespotPlayerWrapper {
      */
     @Synchronized
     @Throws(Exception::class)
-    fun connect(username: String, password: String) {
+    fun connect(accessToken: String, storageDir: File) {
         if (isConnected) return
+        require(accessToken.isNotBlank()) { "Spotify access token is blank" }
+        storageDir.mkdirs()
+        val credentialsFile = File(storageDir, "credentials.json")
         val conf = Session.Configuration.Builder()
             .setStoreCredentials(true)
+            .setStoredCredentialsFile(credentialsFile)
             .setCacheEnabled(true)
+            .setCacheDir(File(storageDir, "cache").apply { mkdirs() })
             .build()
 
-        session = Session.Builder(conf)
-            .userPass(username, password)
-            .create()
-
-        val s = session!!
-        player = Player(
-            PlayerConfiguration.Builder()
-                .setOutput(PlayerConfiguration.AudioOutput.CUSTOM)
-                .setOutputClass(PcmSink::class.java.name)
-                .setPreloadEnabled(true)
+        fun tokenBuilder() = Session.Builder(conf).credentials(
+            Authentication.LoginCredentials.newBuilder()
+                .setTyp(Authentication.AuthenticationType.AUTHENTICATION_SPOTIFY_TOKEN)
+                .setAuthData(ByteString.copyFromUtf8(accessToken))
                 .build(),
-            s,
         )
+
+        val connected = if (credentialsFile.canRead()) {
+            runCatching { Session.Builder(conf).stored(credentialsFile).create() }
+                .getOrElse {
+                    // Stored blobs can be revoked server-side. Discard one bad
+                    // blob and retry with the app's freshly refreshed token.
+                    credentialsFile.delete()
+                    tokenBuilder().create()
+                }
+        } else {
+            tokenBuilder().create()
+        }
+
+        try {
+            val createdPlayer = Player(
+                PlayerConfiguration.Builder()
+                    .setOutput(PlayerConfiguration.AudioOutput.CUSTOM)
+                    .setOutputClass(PcmSink::class.java.name)
+                    .setPreloadEnabled(true)
+                    .build(),
+                connected,
+            )
+            session = connected
+            player = createdPlayer
+        } catch (error: Throwable) {
+            runCatching { connected.close() }
+            throw error
+        }
     }
 
     /** Streams the given `spotify:track:` URI; audio flows to [PcmSinkRegistry]. */
@@ -68,6 +88,7 @@ class LibrespotPlayerWrapper {
 
     fun pause() = player?.pause()
     fun resume() = player?.play()
+    fun seekTo(positionMs: Long) = player?.seek(positionMs.coerceAtLeast(0L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
 
     fun release() {
         runCatching { player?.close() }
