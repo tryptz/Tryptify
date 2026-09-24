@@ -177,8 +177,20 @@ class AudioPipelineViewModel @Inject constructor(
             visualizerFftSize = poll.fftSize,
             outputPath = path,
             deviceName = routed?.name,
+            outputKind = routed?.kind,
             halSampleRateHz = poll.halSampleRateHz,
             usb = usbStream,
+            // Asked on every tick rather than observed: the spatializer's own
+            // listener says nothing about which format it would take, and the
+            // chain's format is part of the question. The count is the
+            // source's; for mono and stereo that is also what leaves the
+            // chain, since nothing upmixes. A multichannel source leaves as
+            // stereo or not depending on the downmix and Atmos stages, so it
+            // is not guessed at.
+            spatialAudio = outputProbe.spatialAudio(
+                live.third?.sampleRate,
+                live.third?.channelCount?.takeIf { it <= 2 },
+            ),
         )
     }.stateIn(
         viewModelScope,

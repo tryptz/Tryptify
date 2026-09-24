@@ -108,6 +108,40 @@ enum class OutputPath(val api: String) {
     USB_EXCLUSIVE("libusb (UAC exclusive)"),
 }
 
+/**
+ * What kind of output the sound is going to, which decides what the panel can
+ * truthfully say about the last stage.
+ */
+enum class OutputKind(val label: String) {
+    /** A2DP: the phone encodes to SBC, AAC, aptX or LDAC. */
+    BLUETOOTH_CLASSIC("Bluetooth Classic (A2DP)"),
+
+    /** LE Audio: the phone encodes to LC3. */
+    BLUETOOTH_LE("Bluetooth LE Audio"),
+
+    /** The hands-free call link. Carries media only in a call or call mode. */
+    BLUETOOTH_SCO("Bluetooth hands-free (SCO)"),
+    USB("USB audio"),
+    WIRED("Wired"),
+    HDMI("HDMI"),
+    SPEAKER("Phone speaker"),
+    OTHER("Other output");
+
+    val isBluetooth: Boolean
+        get() = this == BLUETOOTH_CLASSIC || this == BLUETOOTH_LE || this == BLUETOOTH_SCO
+}
+
+/** Whether Android's own spatializer is processing this stream on this output. */
+enum class SpatialAudio(val label: String) {
+    /** The phone has no spatializer, or none for this output. */
+    UNAVAILABLE("Not available on this output"),
+    OFF("Off"),
+
+    /** On, but Android declines this stream's format (often plain stereo). */
+    NOT_THIS_STREAM("On, but not applied to this stream"),
+    APPLIED("Applied by Android"),
+}
+
 /** What the exclusive-USB pump negotiated with the DAC. Null unless streaming. */
 data class UsbStream(
     val sampleRateHz: Int,
@@ -140,9 +174,17 @@ data class AudioPipelineInputs(
     val visualizerFftSize: Int? = null,
     val outputPath: OutputPath = OutputPath.AUDIO_TRACK,
     val deviceName: String? = null,
-    /** What the HAL says it runs its output mix at. */
+    /** Which kind of output [deviceName] is; null when nothing was found. */
+    val outputKind: OutputKind? = null,
+    /**
+     * What the HAL says it runs its *primary* output mix at — the speaker's
+     * and wired headphones' path. Not the Bluetooth link's, which runs at
+     * whatever its codec negotiated; the builder ignores it there.
+     */
     val halSampleRateHz: Int? = null,
     val usb: UsbStream? = null,
+    /** Null where the platform cannot say (before Android 12L). */
+    val spatialAudio: SpatialAudio? = null,
 )
 
 // ── Formatting ──────────────────────────────────────────────────────────
@@ -260,7 +302,13 @@ fun buildAudioPipelineSnapshot(input: AudioPipelineInputs): AudioPipelineSnapsho
     // Android's mixer or the DAC, below anything this process can see — so the
     // out-rate is only ever known when the exclusive USB pump negotiated it,
     // or when the HAL will admit to one.
-    val outRate = input.usb?.sampleRateHz ?: input.halSampleRateHz
+    // The primary output's rate says nothing about a Bluetooth link, which
+    // runs at its codec's rate. Printing it there read as "your headphones
+    // get 48 kHz", and the Conversion row then blamed a resample on the HAL
+    // that might not happen at all.
+    val bluetooth = input.outputKind?.isBluetooth == true
+    val halRate = input.halSampleRateHz.takeUnless { bluetooth }
+    val outRate = input.usb?.sampleRateHz ?: halRate
     val conversion = when {
         outRate == null -> null
         inRate == null -> null
@@ -301,6 +349,9 @@ fun buildAudioPipelineSnapshot(input: AudioPipelineInputs): AudioPipelineSnapsho
             ),
         ),
         note = when {
+            outRate == null && bluetooth ->
+                "Tryptify does not resample. Over Bluetooth, Android's mixer " +
+                    "converts to the codec's rate, which Android does not report."
             outRate == null ->
                 "Tryptify does not resample. Any conversion happens in Android's " +
                     "mixer or in the DAC, which do not report a rate here."
@@ -369,13 +420,42 @@ fun buildAudioPipelineSnapshot(input: AudioPipelineInputs): AudioPipelineSnapsho
             ),
             PipelineField("Bit Depth Out", bits(input.usb?.bitsPerSample)),
             PipelineField("Sample Rate", hz(outRate)),
+            PipelineField("Connection", input.outputKind?.label),
+            // Android tells apps none of the link's codec, rate or depth, so
+            // for Bluetooth these are asked and answered with a dash rather
+            // than left out: the gap is the finding.
+            if (bluetooth) PipelineField("Codec", null) else null,
+            if (bluetooth) {
+                PipelineField(
+                    "Encoding",
+                    if (input.outputKind == OutputKind.BLUETOOTH_SCO) {
+                        "Voice codec, mono"
+                    } else {
+                        "Re-encoded on the phone"
+                    },
+                )
+            } else {
+                null
+            },
+            PipelineField("Spatial Audio", input.spatialAudio?.label),
             input.usb?.detail?.let { PipelineField("Link", it) },
         ),
-        note = if (input.outputPath != OutputPath.USB_EXCLUSIVE) {
-            "Android reports what is connected, not what the DAC converts to. " +
-                "The out side is only measurable over exclusive USB."
-        } else {
-            null
+        note = when {
+            input.outputKind == OutputKind.BLUETOOTH_SCO ->
+                "This is the hands-free call link: mono, 8 or 16 kHz (32 kHz on " +
+                    "newer headsets), made for voice. Music sounds like a phone " +
+                    "call until the headset is back on A2DP."
+            bluetooth ->
+                "Bluetooth never carries this PCM. Android mixes it, the phone " +
+                    "compresses it with the link's codec — SBC, AAC, aptX or LDAC " +
+                    "over Classic, LC3 over LE Audio — and the headphones decode " +
+                    "it and do their own conversion. Android does not tell apps " +
+                    "which codec, rate or bit depth that is; Developer options → " +
+                    "Bluetooth audio codec shows it."
+            input.outputPath != OutputPath.USB_EXCLUSIVE ->
+                "Android reports what is connected, not what the DAC converts to. " +
+                    "The out side is only measurable over exclusive USB."
+            else -> null
         },
     )
 
