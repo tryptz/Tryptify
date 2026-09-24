@@ -171,7 +171,7 @@ data class SpotifyPlaylistTracksRef(
     val total: Int = 0,
 )
 
-/** Item of /v1/me/playlists. */
+/** Item of /v1/me/playlists, and of playlist search results. */
 @Serializable
 data class SpotifySimplePlaylist(
     val id: String,
@@ -179,4 +179,18 @@ data class SpotifySimplePlaylist(
     val description: String? = null,
     val owner: SpotifyPlaylistOwner? = null,
     val tracks: SpotifyPlaylistTracksRef? = null,
+    // Newer responses name the count "items" — same shape as "tracks".
+    val items: SpotifyPlaylistTracksRef? = null,
+    val images: List<SpotifyImage>? = null,
+) {
+    val trackCount: Int? get() = (items ?: tracks)?.total
+}
+
+/**
+ * GET /v1/search?type=playlist. Items are nullable on purpose: Spotify pads
+ * playlist search pages with `null` where a result was withdrawn.
+ */
+@Serializable
+data class SpotifyPlaylistSearchResponse(
+    val playlists: SpotifyPagingObject<SpotifySimplePlaylist?>? = null,
 )

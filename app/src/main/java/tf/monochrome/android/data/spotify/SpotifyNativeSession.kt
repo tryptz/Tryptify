@@ -77,6 +77,17 @@ class SpotifyNativeSession @Inject constructor(
     /** Sign in now, ignoring the retry wait after a failure. */
     suspend fun signIn(): Boolean = connect(force = true)
 
+    /**
+     * A playlist through librespot, which — unlike the Web API — serves any
+     * public playlist. Signs in first if needed; throws if that fails.
+     */
+    suspend fun getPlaylist(playlistId: String): SpotifyNativePlaylist {
+        check(ensureConnected()) {
+            _status.value.error ?: "The in-app Spotify player isn't signed in"
+        }
+        return withContext(Dispatchers.IO) { librespot.getPlaylist(playlistId) }
+    }
+
     /** Disconnect and forget the stored login; the next sign-in uses the app's token. */
     suspend fun signOut() {
         mutex.withLock {

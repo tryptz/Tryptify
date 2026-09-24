@@ -12,9 +12,13 @@ import xyz.gianlu.librespot.core.Session
 import xyz.gianlu.librespot.core.TimeProvider
 import xyz.gianlu.librespot.core.TokenProvider
 import xyz.gianlu.librespot.metadata.PlayableId
+import xyz.gianlu.librespot.metadata.PlaylistId
+import xyz.gianlu.librespot.metadata.TrackId
 import xyz.gianlu.librespot.player.Player
 import xyz.gianlu.librespot.player.PlayerConfiguration
 import java.io.File
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -42,7 +46,7 @@ import javax.inject.Singleton
 class LibrespotPlayerWrapper @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
-    private var session: Session? = null
+    @Volatile private var session: Session? = null
     private var player: Player? = null
 
     /** The `spotify:track:` URI librespot currently has loaded, if any. */
@@ -193,6 +197,63 @@ class LibrespotPlayerWrapper @Inject constructor(
     }
 
     /**
+     * Reads a playlist through Spotify's own playlist service, then each
+     * track's metadata, [METADATA_THREADS] at a time. Needs a connected
+     * session — sign in with [connect] first. Blocking network I/O; call off
+     * the main thread.
+     *
+     * Deliberately not @Synchronized: a long playlist takes a while, and
+     * holding the lock would stall [openStream] — the song that is playing —
+     * until it finishes. It only reads [session] once.
+     */
+    @Throws(Exception::class)
+    fun getPlaylist(playlistId: String): SpotifyNativePlaylist {
+        val current = session?.takeIf { it.isValid }
+            ?: throw IllegalStateException("librespot is not signed in")
+        val startedAt = System.nanoTime()
+        val content = current.api().getPlaylist(PlaylistId.fromUri("spotify:playlist:$playlistId"))
+        // Episodes, local files and anything else a playlist can hold are
+        // skipped: only tracks can be played through the pipe.
+        val uris = content.contents.itemsList.map { it.uri }.filter { it.startsWith("spotify:track:") }
+
+        val pool = Executors.newFixedThreadPool(METADATA_THREADS)
+        val tracks = try {
+            pool.invokeAll(uris.map { uri -> Callable { runCatching { trackMetadata(current, uri) }.getOrNull() } })
+                .mapNotNull { it.get() }
+        } finally {
+            pool.shutdownNow()
+        }
+        Log.i(TAG, "playlist $playlistId: ${tracks.size}/${uris.size} tracks in ${elapsedMs(startedAt)} ms")
+
+        val attributes = content.attributes
+        return SpotifyNativePlaylist(
+            name = attributes.name,
+            description = attributes.description.takeIf { it.isNotBlank() },
+            owner = content.ownerUsername.takeIf { it.isNotBlank() },
+            tracks = tracks,
+        )
+    }
+
+    private fun trackMetadata(session: Session, uri: String): SpotifyNativeTrack? {
+        val track = session.api().getMetadata4Track(TrackId.fromUri(uri))
+        if (track.name.isBlank() || track.duration <= 0) return null
+        val album = track.album
+        val covers = album.coverList.ifEmpty { album.coverGroup.imageList }
+        val cover = covers.maxByOrNull { it.width }?.fileId
+            ?.takeIf { !it.isEmpty }
+            ?.let { "https://i.scdn.co/image/" + it.toByteArray().joinToString("") { b -> "%02x".format(b) } }
+        return SpotifyNativeTrack(
+            uri = uri,
+            name = track.name,
+            artists = track.artistList.map { it.name }.filter { it.isNotBlank() },
+            album = album.name.takeIf { it.isNotBlank() },
+            durationMs = track.duration.toLong(),
+            explicit = track.explicit,
+            coverUrl = cover,
+        )
+    }
+
+    /**
      * Disconnects and forgets the stored login, so the next [connect] signs in
      * from the app's access token again. What the Spotify settings' "sign out"
      * means, and what disconnecting the Spotify account has to do too — a blob
@@ -285,5 +346,6 @@ class LibrespotPlayerWrapper @Inject constructor(
         const val TAG = "LibrespotPlayer"
         const val DEVICE_NAME = "Tryptify"
         const val READY_TIMEOUT_S = 15L
+        const val METADATA_THREADS = 8
     }
 }

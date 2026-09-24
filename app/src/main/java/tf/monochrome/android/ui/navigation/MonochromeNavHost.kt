@@ -125,6 +125,9 @@ sealed class Screen(val route: String) {
     data object SpotifyAlbumDetail : Screen("spotify_album/{spotifyAlbumId}") {
         fun createRoute(albumId: String) = "spotify_album/$albumId"
     }
+    data object SpotifyPlaylistDetail : Screen("spotify_playlist/{spotifyPlaylistId}") {
+        fun createRoute(playlistId: String) = "spotify_playlist/$playlistId"
+    }
     data object ArtistDetail : Screen("artist/{artistId}?name={name}") {
         /**
          * [name] is the fallback identity. Some catalogue rows reach the player
@@ -570,6 +573,17 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 ) {
                     tf.monochrome.android.devedit.DevEditScreen("spotify_album_detail") {
                         SpotifyAlbumDetailScreen(navController = navController, playerViewModel = playerViewModel)
+                    }
+                }
+                composable(
+                    route = Screen.SpotifyPlaylistDetail.route,
+                    arguments = listOf(navArgument("spotifyPlaylistId") { type = NavType.StringType })
+                ) {
+                    tf.monochrome.android.devedit.DevEditScreen("spotify_playlist_detail") {
+                        tf.monochrome.android.ui.detail.SpotifyPlaylistDetailScreen(
+                            navController = navController,
+                            playerViewModel = playerViewModel,
+                        )
                     }
                 }
                 composable(

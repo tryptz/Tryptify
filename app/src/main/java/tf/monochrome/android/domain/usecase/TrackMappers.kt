@@ -2,16 +2,23 @@ package tf.monochrome.android.domain.usecase
 
 import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.api.SpotifyAlbumFull
+import tf.monochrome.android.data.api.SpotifyAlbum
+import tf.monochrome.android.data.api.SpotifyArtist
 import tf.monochrome.android.data.api.SpotifyArtistFull
+import tf.monochrome.android.data.api.SpotifyImage
+import tf.monochrome.android.data.api.SpotifySimplePlaylist
 import tf.monochrome.android.data.api.SpotifyIdRegistry
 import tf.monochrome.android.data.api.SpotifyTrack
 import tf.monochrome.android.data.api.spotifyNumericIdFor
 import tf.monochrome.android.data.cache.SpotifyShadowUri
+import tf.monochrome.android.data.spotify.SpotifyNativeTrack
 import tf.monochrome.android.domain.model.Album
 import tf.monochrome.android.domain.model.AlbumDetail
 import tf.monochrome.android.domain.model.Artist
 import tf.monochrome.android.domain.model.GenreConfidence
 import tf.monochrome.android.domain.model.PlaybackSource
+import tf.monochrome.android.domain.model.Playlist
+import tf.monochrome.android.domain.model.PlaylistCreator
 import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.domain.model.UnifiedArtistRef
@@ -249,6 +256,43 @@ fun SpotifyTrack.toSpotifyAlbumTrack(album: SpotifyAlbumFull): UnifiedTrack? {
 // the Qobuz slug registry and the Apple id sets use.
 
 /** A Spotify album as a catalog [Album], registered under its hashed id. */
+/**
+ * A playlist track read through librespot, as the Web API track it stands in
+ * for — so it goes through [toSpotifyUnifiedTrack]'s checks and comes out
+ * playable exactly like a search result.
+ */
+fun SpotifyNativeTrack.toSpotifyTrack(): SpotifyTrack = SpotifyTrack(
+    name = name,
+    durationMs = durationMs,
+    artists = artists.map { SpotifyArtist(name = it) },
+    album = album?.let { title ->
+        SpotifyAlbum(name = title, images = listOfNotNull(coverUrl?.let { SpotifyImage(url = it) }))
+    },
+    type = "track",
+    id = SpotifyShadowUri.trackIdOf(uri),
+    uri = uri,
+    explicit = explicit,
+)
+
+/**
+ * A Spotify playlist search result as a search-screen [Playlist]. The uuid
+ * carries a `spotify_` prefix — as Spotify album ids do — so a tap opens the
+ * Spotify playlist page instead of TIDAL's.
+ */
+fun SpotifySimplePlaylist.toSpotifySearchPlaylist(): Playlist? {
+    if (id.isBlank() || name.isBlank()) return null
+    return Playlist(
+        uuid = "$SPOTIFY_PLAYLIST_PREFIX$id",
+        title = name,
+        description = description?.takeIf { it.isNotBlank() },
+        numberOfTracks = trackCount,
+        cover = images?.firstOrNull()?.url?.takeIf { it.isNotBlank() },
+        creator = owner?.displayName?.let { PlaylistCreator(name = it) },
+    )
+}
+
+const val SPOTIFY_PLAYLIST_PREFIX = "spotify_"
+
 fun SpotifyAlbumFull.toSpotifyCatalogAlbum(registry: SpotifyIdRegistry): Album? {
     val base62 = id ?: return null
     if (name.isBlank()) return null

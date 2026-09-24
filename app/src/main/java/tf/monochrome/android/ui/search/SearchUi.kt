@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.search
 
+import tf.monochrome.android.domain.usecase.SPOTIFY_PLAYLIST_PREFIX
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
@@ -421,8 +422,13 @@ fun SearchResultsContent(
                         PlaylistSearchItem(
                             playlist = playlist,
                             onClick = {
+                                val spotifyId = playlist.uuid.removePrefix(SPOTIFY_PLAYLIST_PREFIX)
                                 navController.navigateSafe(
-                                    Screen.PlaylistDetail.createRoute(playlist.uuid)
+                                    if (spotifyId != playlist.uuid) {
+                                        Screen.SpotifyPlaylistDetail.createRoute(spotifyId)
+                                    } else {
+                                        Screen.PlaylistDetail.createRoute(playlist.uuid)
+                                    }
                                 )
                             }
                         )

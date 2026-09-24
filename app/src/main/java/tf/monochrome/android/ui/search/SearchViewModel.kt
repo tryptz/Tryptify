@@ -34,6 +34,8 @@ import tf.monochrome.android.domain.usecase.SearchUnifiedLibraryUseCase
 import tf.monochrome.android.domain.usecase.toQobuzUnifiedTrack
 import tf.monochrome.android.domain.usecase.toSpotifyCatalogAlbum
 import tf.monochrome.android.domain.usecase.toSpotifyCatalogArtist
+import tf.monochrome.android.domain.usecase.toSpotifySearchPlaylist
+import tf.monochrome.android.domain.usecase.SPOTIFY_PLAYLIST_PREFIX
 import tf.monochrome.android.domain.usecase.toSpotifyUnifiedTrack
 import tf.monochrome.android.domain.usecase.toUnifiedTrack
 
@@ -232,13 +234,16 @@ class SearchViewModel @Inject constructor(
         else artistResults.filter { source.admits(origins[it.id]) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    // Playlists come from TIDAL only.
+    // Playlists come from TIDAL and Spotify; a Spotify one carries its prefix.
     val playlists: StateFlow<List<Playlist>> = combine(
         _allPlaylists, _selectedType, _selectedSource,
     ) { playlistResults, type, source ->
         if (type != SearchTypeFilter.ALL && type != SearchTypeFilter.PLAYLISTS) emptyList()
-        else if (source.admits(SourceType.API)) playlistResults
-        else emptyList()
+        else playlistResults.filter {
+            source.admits(
+                if (it.uuid.startsWith(SPOTIFY_PLAYLIST_PREFIX)) SourceType.SPOTIFY else SourceType.API,
+            )
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
@@ -353,6 +358,9 @@ class SearchViewModel @Inject constructor(
         // lists the album/artist rows render — browse parity with Qobuz.
         var spotifyAlbums: List<Album> = emptyList()
         var spotifyArtists: List<Artist> = emptyList()
+        // Public playlists: found here through the Web API, opened through
+        // librespot (SpotifyPlaylistDetailViewModel), which can list them.
+        var spotifyPlaylists: List<Playlist> = emptyList()
         val (searchResult, qobuzResult, unifiedResultsResult) = coroutineScope {
             // Source mode (Settings → Instances → Source) gates which
             // catalogs we fan out to. *_ONLY modes restrict to one catalog;
@@ -407,9 +415,17 @@ class SearchViewModel @Inject constructor(
                     spotifyLeg("artists") { spotifyApi.searchArtists(trimmedQuery) }
                 }
             }
+            val spotifyPlaylistsDeferred = async {
+                if (!spotifyAuth.isConnected.value) {
+                    null
+                } else {
+                    spotifyLeg("playlists") { spotifyApi.searchPlaylists(trimmedQuery) }
+                }
+            }
             spotifyTracks = spotifyDeferred.await()?.mapNotNull { it.toSpotifyUnifiedTrack() }.orEmpty()
             spotifyAlbums = spotifyAlbumsDeferred.await()?.mapNotNull { it.toSpotifyCatalogAlbum(spotifyIdRegistry) }.orEmpty()
             spotifyArtists = spotifyArtistsDeferred.await()?.mapNotNull { it.toSpotifyCatalogArtist(spotifyIdRegistry) }.orEmpty()
+            spotifyPlaylists = spotifyPlaylistsDeferred.await()?.mapNotNull { it.toSpotifySearchPlaylist() }.orEmpty()
             Triple(apiDeferred.await(), qobuzDeferred.await(), libraryDeferred.await())
         }
         val unifiedResults = unifiedResultsResult.getOrNull()
@@ -464,7 +480,7 @@ class SearchViewModel @Inject constructor(
                 trimmedQuery,
                 (result.artists + qobuzArtists + spotifyArtists).distinctBy { it.id },
             ) { listOf(it.name) }
-            _allPlaylists.value = scoreItems(trimmedQuery, result.playlists) {
+            _allPlaylists.value = scoreItems(trimmedQuery, result.playlists + spotifyPlaylists) {
                 listOfNotNull(it.title, it.creator?.name, it.description)
             }
             preferences.addSearchHistoryQuery(trimmedQuery)
@@ -496,7 +512,9 @@ class SearchViewModel @Inject constructor(
                 trimmedQuery,
                 (qobuzArtists + spotifyArtists).distinctBy { it.id },
             ) { listOf(it.name) }
-            _allPlaylists.value = emptyList()
+            _allPlaylists.value = scoreItems(trimmedQuery, spotifyPlaylists) {
+                listOfNotNull(it.title, it.creator?.name, it.description)
+            }
             // TIDAL failed → mark its end on every type so loadMore won't retry.
             // This is also the path a QOBUZ_ONLY search takes: the TIDAL
             // deferred returns a failure rather than being skipped, so tidalEnd

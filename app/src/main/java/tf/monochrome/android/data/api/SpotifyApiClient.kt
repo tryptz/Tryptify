@@ -113,6 +113,42 @@ class SpotifyApiClient @Inject constructor(
     }
 
     /**
+     * Playlist search. Finding public playlists is still allowed for a
+     * Development-mode app; reading their tracks through the Web API is not —
+     * SpotifyNativeSession.getPlaylist does that.
+     */
+    suspend fun searchPlaylists(query: String, limit: Int = SEARCH_LIMIT): Result<List<SpotifySimplePlaylist>> = runCatching {
+        val q = URLEncoder.encode(query, "UTF-8").replace("+", "%20")
+        val resp = authedGet("${apiBase()}/search?q=$q&type=playlist&limit=$limit")
+        json.decodeFromString<SpotifyPlaylistSearchResponse>(resp.bodyAsText())
+            .playlists?.items.orEmpty()
+            .filterNotNull()
+            .filter { it.id.isNotBlank() }
+    }
+
+    /** A playlist's name, owner and cover, without its tracks. */
+    suspend fun getPlaylistHeader(playlistId: String): Result<SpotifySimplePlaylist> = runCatching {
+        val resp = authedGet("${apiBase()}/playlists/$playlistId?fields=id,name,description,images,owner(display_name)")
+        json.decodeFromString<SpotifySimplePlaylist>(resp.bodyAsText())
+    }
+
+    /**
+     * A playlist's tracks as full track objects (URIs included, so they
+     * play). Web API, so only playlists the user owns or collaborates on —
+     * the fallback when librespot is unavailable.
+     */
+    suspend fun getPlaylistTrackObjects(playlistId: String): Result<List<SpotifyTrack>> = runCatching {
+        paginate { offset ->
+            val fields = "items(item(id,uri,name,duration_ms,explicit,is_local,type,track_number," +
+                "disc_number,external_ids,artists(name,id),album(id,name,images,release_date))),next,total"
+            val resp = authedGet(
+                "${apiBase()}/playlists/$playlistId/items?limit=100&offset=$offset&fields=$fields",
+            )
+            json.decodeFromString<SpotifyPagingObject<SpotifyPlaylistTrackItem>>(resp.bodyAsText())
+        }.mapNotNull { it.trackOrItem }
+    }
+
+    /**
      * Album detail with its tracks, mirroring HiFiApiClient.getQobuzAlbum's
      * role: one call feeds AlbumDetailViewModel's Spotify branch. Track URIs
      * are included in the album-endpoint response, so each track maps straight
