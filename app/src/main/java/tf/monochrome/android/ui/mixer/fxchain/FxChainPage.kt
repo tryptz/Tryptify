@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -214,25 +217,29 @@ private fun BusSelectorRow(
     busAccent: (Int) -> Color,
     onSelectBus: (Int) -> Unit,
 ) {
+    // Up to 17 tabs, so they scroll rather than share the width; in the
+    // strips' order (master last), selected by the bus's real index.
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
             .padding(horizontal = MonoDimens.spacingSm, vertical = MonoDimens.spacingXs),
         horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingXs)
     ) {
-        buses.forEachIndexed { index, bus ->
+        BusConfig.displayOrder(buses).forEach { bus ->
+            val index = bus.index
             val selected = index == selectedBusIndex
             val accent = busAccent(index)
             Box(
                 modifier = Modifier
-                    .weight(1f)
+                    .widthIn(min = 64.dp)
                     .clip(MonoDimens.shapePill)
                     .liquidGlass(
                         shape = MonoDimens.shapePill,
                         tintAlpha = if (selected) 0.22f else 0.08f
                     )
                     .clickable { onSelectBus(index) }
-                    .padding(vertical = 8.dp),
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Row(

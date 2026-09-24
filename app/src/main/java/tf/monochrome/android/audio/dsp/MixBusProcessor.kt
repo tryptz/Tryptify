@@ -97,6 +97,11 @@ class MixBusProcessor @Inject constructor(
     external fun nativeGetBusWaveform(enginePtr: Long, busIndex: Int, outWave: FloatArray): Int
     external fun nativeGetAndResetClipped(enginePtr: Long): Boolean
     external fun nativeResetPluginState(enginePtr: Long)
+    // Adds a mix bus after the last (index 5, 6, … — the master stays at 4);
+    // -1 at 16 buses. Every lane of a multichannel stream gets it.
+    external fun nativeAddBus(enginePtr: Long): Int
+    // Removes mix bus [busIndex] (5 and up); the buses above move down one.
+    external fun nativeRemoveBus(enginePtr: Long, busIndex: Int): Boolean
     external fun nativeSetMixBypassed(enginePtr: Long, bypassed: Boolean)
     external fun nativeGetStateJson(enginePtr: Long): String
     external fun nativeLoadStateJson(enginePtr: Long, stateJson: String)

@@ -284,7 +284,9 @@ void DspEngine::processMixBusesLocked(const float* left, const float* right, int
     bool mixBypass = mixBypassed_.load(std::memory_order_relaxed);
 
     // Process mix buses 0-3
-    for (int b = 0; b < NUM_MIX_BUSES; b++) {
+    const int activeBuses = activeBusCount();
+    for (int b = 0; b < activeBuses; b++) {
+        if (b == MASTER_BUS) continue;
         Bus& bus = buses_[b];
 
         // Load atomic parameters once into locals
@@ -442,7 +444,7 @@ void DspEngine::finishBlockLocked(float* left, float* right, int numFrames) {
 
     // Update meter ballistics for all buses
     float decayAmount = meterDecayPerSample_ * static_cast<float>(numFrames);
-    for (int b = 0; b < TOTAL_BUSES; b++) {
+    for (int b = 0; b < activeBusCount(); b++) {
         Bus& bus = buses_[b];
         float peakL = bus.peakL.load(std::memory_order_relaxed);
         float peakR = bus.peakR.load(std::memory_order_relaxed);
@@ -497,32 +499,32 @@ static inline float finiteOr(float v, float fallback) {
 }
 
 void DspEngine::setBusGain(int busIndex, float gainDb) {
-    if (busIndex < 0 || busIndex >= TOTAL_BUSES) return;
+    if (!isActiveBus(busIndex)) return;
     const float clamped = std::max(-60.0f, std::min(12.0f, finiteOr(gainDb, 0.0f)));
     buses_[busIndex].gainDb.store(clamped, std::memory_order_relaxed);
 }
 
 void DspEngine::setBusPan(int busIndex, float pan) {
-    if (busIndex < 0 || busIndex >= TOTAL_BUSES) return;
+    if (!isActiveBus(busIndex)) return;
     buses_[busIndex].pan.store(
         std::max(-1.0f, std::min(1.0f, finiteOr(pan, 0.0f))),
         std::memory_order_relaxed);
 }
 
 void DspEngine::setBusMute(int busIndex, bool muted) {
-    if (busIndex < 0 || busIndex >= TOTAL_BUSES) return;
+    if (!isActiveBus(busIndex)) return;
     buses_[busIndex].muted.store(muted, std::memory_order_relaxed);
 }
 
 void DspEngine::setBusSolo(int busIndex, bool soloed) {
-    if (busIndex < 0 || busIndex >= TOTAL_BUSES) return;
+    if (!isActiveBus(busIndex)) return;
     buses_[busIndex].soloed.store(soloed, std::memory_order_relaxed);
 }
 
 // ── Plugin chain management ─────────────────────────────────────────────
 
 int DspEngine::addPlugin(int busIndex, int slotIndex, int pluginType) {
-    if (busIndex < 0 || busIndex >= TOTAL_BUSES) return -1;
+    if (!isActiveBus(busIndex)) return -1;
     Bus& bus = buses_[busIndex];
     if (static_cast<int>(bus.plugins.size()) >= MAX_PLUGINS_PER_BUS) return -1;
 
@@ -541,7 +543,7 @@ int DspEngine::addPlugin(int busIndex, int slotIndex, int pluginType) {
 }
 
 void DspEngine::removePlugin(int busIndex, int slotIndex) {
-    if (busIndex < 0 || busIndex >= TOTAL_BUSES) return;
+    if (!isActiveBus(busIndex)) return;
     Bus& bus = buses_[busIndex];
 
     // Outlives the critical section on purpose: ~SnapinProcessor frees delay
@@ -561,7 +563,7 @@ void DspEngine::removePlugin(int busIndex, int slotIndex) {
 }
 
 void DspEngine::movePlugin(int busIndex, int fromSlot, int toSlot) {
-    if (busIndex < 0 || busIndex >= TOTAL_BUSES) return;
+    if (!isActiveBus(busIndex)) return;
     Bus& bus = buses_[busIndex];
     int sz = static_cast<int>(bus.plugins.size());
     if (fromSlot < 0 || fromSlot >= sz || toSlot < 0 || toSlot >= sz) return;
@@ -574,7 +576,7 @@ void DspEngine::movePlugin(int busIndex, int fromSlot, int toSlot) {
 }
 
 void DspEngine::setParameter(int busIndex, int slotIndex, int paramIndex, float value) {
-    if (busIndex < 0 || busIndex >= TOTAL_BUSES) return;
+    if (!isActiveBus(busIndex)) return;
     std::lock_guard<std::mutex> lock(chainMutex_);
     Bus& bus = buses_[busIndex];
     if (slotIndex < 0 || slotIndex >= static_cast<int>(bus.plugins.size())) return;
@@ -584,7 +586,7 @@ void DspEngine::setParameter(int busIndex, int slotIndex, int paramIndex, float 
 }
 
 void DspEngine::setPluginBypassed(int busIndex, int slotIndex, bool bypassed) {
-    if (busIndex < 0 || busIndex >= TOTAL_BUSES) return;
+    if (!isActiveBus(busIndex)) return;
     std::lock_guard<std::mutex> lock(chainMutex_);
     Bus& bus = buses_[busIndex];
     if (slotIndex < 0 || slotIndex >= static_cast<int>(bus.plugins.size())) return;
@@ -594,7 +596,7 @@ void DspEngine::setPluginBypassed(int busIndex, int slotIndex, bool bypassed) {
 }
 
 void DspEngine::setBusInputEnabled(int busIndex, bool enabled) {
-    if (busIndex < 0 || busIndex >= NUM_MIX_BUSES) return;  // Only mix buses, not master
+    if (!isMixBus(busIndex)) return;  // Only mix buses, not master
     buses_[busIndex].inputEnabled.store(enabled, std::memory_order_relaxed);
 }
 
@@ -603,7 +605,7 @@ void DspEngine::setMixBypassed(bool bypassed) {
 }
 
 void DspEngine::setPluginDryWet(int busIndex, int slotIndex, float dryWet) {
-    if (busIndex < 0 || busIndex >= TOTAL_BUSES) return;
+    if (!isActiveBus(busIndex)) return;
     std::lock_guard<std::mutex> lock(chainMutex_);
     Bus& bus = buses_[busIndex];
     if (slotIndex < 0 || slotIndex >= static_cast<int>(bus.plugins.size())) return;
@@ -613,7 +615,7 @@ void DspEngine::setPluginDryWet(int busIndex, int slotIndex, float dryWet) {
 }
 
 void DspEngine::setPluginOversampling(int busIndex, int slotIndex, int factor) {
-    if (busIndex < 0 || busIndex >= TOTAL_BUSES) return;
+    if (!isActiveBus(busIndex)) return;
     std::lock_guard<std::mutex> lock(chainMutex_);
     Bus& bus = buses_[busIndex];
     if (slotIndex < 0 || slotIndex >= static_cast<int>(bus.plugins.size())) return;
@@ -622,11 +624,93 @@ void DspEngine::setPluginOversampling(int busIndex, int slotIndex, int factor) {
     }
 }
 
+// ── Adding and removing buses ───────────────────────────────────────────
+
+void DspEngine::resetBusLocked(Bus& bus) {
+    // Plugins are never destroyed here: callers move them out first, so the
+    // lock is not held across a destructor.
+    bus.gainDb.store(0.0f, std::memory_order_relaxed);
+    bus.pan.store(0.0f, std::memory_order_relaxed);
+    bus.muted.store(false, std::memory_order_relaxed);
+    bus.soloed.store(false, std::memory_order_relaxed);
+    bus.inputEnabled.store(false, std::memory_order_relaxed);
+    bus.smoothGainL = bus.smoothGainR = bus.targetGainL = bus.targetGainR = 1.0f;
+    bus.peakL.store(0.0f, std::memory_order_relaxed);
+    bus.peakR.store(0.0f, std::memory_order_relaxed);
+    for (int s = 0; s < MAX_PLUGINS_PER_BUS; s++) {
+        bus.slotInPeak[s].store(0.0f, std::memory_order_relaxed);
+        bus.slotOutPeak[s].store(0.0f, std::memory_order_relaxed);
+    }
+    std::fill(std::begin(bus.waveTap), std::end(bus.waveTap), 0.0f);
+    bus.waveTapPos.store(0, std::memory_order_relaxed);
+    bus.decayL = bus.decayR = bus.holdL = bus.holdR = -60.0f;
+    bus.holdCounterL = bus.holdCounterR = 0;
+}
+
+void DspEngine::moveBusLocked(Bus& dst, Bus& src) {
+    // dst's chain is empty by the time this runs (see removeBus), so the swap
+    // leaves src empty — no allocation, no free.
+    dst.plugins.swap(src.plugins);
+    dst.gainDb.store(src.gainDb.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    dst.pan.store(src.pan.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    dst.muted.store(src.muted.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    dst.soloed.store(src.soloed.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    dst.inputEnabled.store(src.inputEnabled.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    dst.smoothGainL = src.smoothGainL;
+    dst.smoothGainR = src.smoothGainR;
+    dst.targetGainL = src.targetGainL;
+    dst.targetGainR = src.targetGainR;
+    dst.peakL.store(src.peakL.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    dst.peakR.store(src.peakR.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    for (int s = 0; s < MAX_PLUGINS_PER_BUS; s++) {
+        dst.slotInPeak[s].store(src.slotInPeak[s].load(std::memory_order_relaxed), std::memory_order_relaxed);
+        dst.slotOutPeak[s].store(src.slotOutPeak[s].load(std::memory_order_relaxed), std::memory_order_relaxed);
+    }
+    std::copy(std::begin(src.waveTap), std::end(src.waveTap), std::begin(dst.waveTap));
+    dst.waveTapPos.store(src.waveTapPos.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    dst.decayL = src.decayL;
+    dst.decayR = src.decayR;
+    dst.holdL = src.holdL;
+    dst.holdR = src.holdR;
+    dst.holdCounterL = src.holdCounterL;
+    dst.holdCounterR = src.holdCounterR;
+}
+
+int DspEngine::addBus() {
+    std::lock_guard<std::mutex> lock(chainMutex_);
+    const int count = mixBusCount_.load(std::memory_order_relaxed);
+    if (count >= MAX_MIX_BUSES) return -1;
+    // Active buses are 0..count with the master at 4, so the next free index
+    // is count + 1: bus 5 is index 5, bus 6 index 6, and so on.
+    const int index = count + 1;
+    resetBusLocked(buses_[index]);
+    mixBusCount_.store(count + 1, std::memory_order_relaxed);
+    LOGD("Added bus %d (%d mix buses)", index, count + 1);
+    return index;
+}
+
+bool DspEngine::removeBus(int busIndex) {
+    // Outlives the lock: the removed bus's plugins are freed after it is
+    // released, never while the audio thread waits on it.
+    std::vector<std::unique_ptr<SnapinProcessor>> retired;
+    {
+        std::lock_guard<std::mutex> lock(chainMutex_);
+        const int count = mixBusCount_.load(std::memory_order_relaxed);
+        if (busIndex <= MASTER_BUS || busIndex > count) return false;
+        retired.swap(buses_[busIndex].plugins);
+        for (int b = busIndex; b < count; b++) moveBusLocked(buses_[b], buses_[b + 1]);
+        resetBusLocked(buses_[count]);
+        mixBusCount_.store(count - 1, std::memory_order_relaxed);
+    }
+    LOGD("Removed bus %d", busIndex);
+    return true;
+}
+
 // ── Metering ────────────────────────────────────────────────────────────
 
 void DspEngine::getBusLevels(float* outLevels, int maxFloats) {
     // Output format: [peakL, peakR, holdL, holdR] per bus (4 floats each)
-    int count = std::min(maxFloats, TOTAL_BUSES * 4);
+    int count = std::min(maxFloats, activeBusCount() * 4);
     for (int b = 0; b < TOTAL_BUSES && b * 4 + 3 < count; b++) {
         outLevels[b * 4]     = buses_[b].decayL;
         outLevels[b * 4 + 1] = buses_[b].decayR;
@@ -640,7 +724,7 @@ bool DspEngine::getAndResetClipped() {
 }
 
 void DspEngine::getPluginMeters(int busIndex, float* out, int maxFloats) {
-    if (busIndex < 0 || busIndex >= TOTAL_BUSES || !out) return;
+    if (!isActiveBus(busIndex) || !out) return;
     Bus& bus = buses_[busIndex];
     auto toDb = [](float lin) {
         return (lin > 1e-10f) ? std::max(-60.0f, 20.0f * std::log10(lin)) : -60.0f;
@@ -652,7 +736,7 @@ void DspEngine::getPluginMeters(int busIndex, float* out, int maxFloats) {
 }
 
 int DspEngine::getBusWaveform(int busIndex, float* out, int maxSamples) {
-    if (busIndex < 0 || busIndex >= TOTAL_BUSES || !out || maxSamples <= 0) return 0;
+    if (!isActiveBus(busIndex) || !out || maxSamples <= 0) return 0;
     Bus& bus = buses_[busIndex];
     int n = std::min(maxSamples, WAVE_TAP_SIZE);
     // Single-writer ring; read without locking — a torn block boundary is
@@ -667,7 +751,9 @@ int DspEngine::getBusWaveform(int busIndex, float* out, int maxSamples) {
 // ── Helpers ─────────────────────────────────────────────────────────────
 
 bool DspEngine::anySoloed() const {
-    for (int i = 0; i < NUM_MIX_BUSES; i++) {
+    const int activeBuses = activeBusCount();
+    for (int i = 0; i < activeBuses; i++) {
+        if (i == MASTER_BUS) continue;
         if (buses_[i].soloed.load(std::memory_order_relaxed)) return true;
     }
     return false;
@@ -687,7 +773,7 @@ void DspEngine::recalcBusGains(float gainDb, float pan, float& targetL, float& t
 
 void DspEngine::resetPluginState() {
     std::lock_guard<std::mutex> lock(chainMutex_);
-    for (int b = 0; b < TOTAL_BUSES; b++) {
+    for (int b = 0; b < activeBusCount(); b++) {
         Bus& bus = buses_[b];
         for (auto& plugin : bus.plugins) {
             if (plugin) plugin->reset();
@@ -712,7 +798,7 @@ std::string DspEngine::getStateJson() const {
     std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(chainMutex_));
     std::ostringstream ss;
     ss << "{\"buses\":[";
-    for (int b = 0; b < TOTAL_BUSES; b++) {
+    for (int b = 0; b < activeBusCount(); b++) {
         const Bus& bus = buses_[b];
         if (b > 0) ss << ",";
         ss << "{\"gain\":" << bus.gainDb.load(std::memory_order_relaxed)
@@ -905,6 +991,10 @@ void DspEngine::loadStateJson(const std::string& json) {
     // so nothing here can allocate or free.
     {
         std::lock_guard<std::mutex> lock(chainMutex_);
+        // A save with more than five entries carries buses 5 and up; an
+        // older one (exactly five) is the four-bus mixer it always was.
+        mixBusCount_.store(std::max(MIN_MIX_BUSES, std::min(MAX_MIX_BUSES, busIdx - 1)),
+                           std::memory_order_relaxed);
         for (int b = 0; b < TOTAL_BUSES; b++) {
             buses_[b].plugins.swap(staged[b]);
             buses_[b].gainDb.store(stagedBus[b].gainDb, std::memory_order_relaxed);

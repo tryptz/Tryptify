@@ -36,7 +36,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.unit.Dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountTree
@@ -588,8 +593,9 @@ fun MixerScreen(
             title = { Text("Reset the mixer?") },
             text = {
                 Text(
-                    "Removes every plugin and returns all buses to unity gain, " +
-                        "centred, unmuted. Saved presets are untouched."
+                    "Removes every plugin and every bus after Bus 4, and returns " +
+                        "the rest to unity gain, centred, unmuted. Saved presets " +
+                        "are untouched."
                 )
             },
             confirmButton = {
@@ -683,10 +689,16 @@ private fun DspPowerToggle(
 }
 
 /**
- * The row of channel strips. The 60 Hz `busLevels` meter flow is collected
- * HERE rather than in [MixerScreen] so a new meter frame recomposes only the
- * strips — the header, the DSP-canvas page, and the drag-transition gating all
- * stay out of the per-frame path (mirrors the local `audioAmplitude` pattern).
+ * The row of channel strips: buses 1 to 16 in number order, the master last,
+ * then a + tile that adds a bus while there is room for one. The 60 Hz
+ * `busLevels` meter flow is collected HERE rather than in [MixerScreen] so a
+ * new meter frame recomposes only the strips — the header, the DSP-canvas
+ * page, and the drag-transition gating all stay out of the per-frame path
+ * (mirrors the local `audioAmplitude` pattern).
+ *
+ * Every callback is by bus index, not by position in the row: the master sits
+ * at index 4 but is drawn last, so the two differ for every bus past 4.
+ * Long-press on bus 5 or later asks to remove it.
  */
 @Composable
 private fun ChannelStripRow(
@@ -701,27 +713,109 @@ private fun ChannelStripRow(
     modifier: Modifier = Modifier
 ) {
     val busLevels by viewModel.busLevels.collectAsStateWithLifecycle()
+    val ordered = remember(buses) { BusConfig.displayOrder(buses) }
+    val canAdd = BusConfig.mixBusCount(buses) < BusConfig.MAX_MIX_BUSES
+    var pendingRemoval by remember { mutableStateOf<BusConfig?>(null) }
+    // The + tile takes the strips' measured height, so it lines up with them.
+    val density = LocalDensity.current
+    var stripHeight by remember { mutableStateOf(0.dp) }
     LazyRow(
         modifier = modifier.fillMaxHeight(),
         contentPadding = PaddingValues(horizontal = MonoDimens.spacingMd, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        itemsIndexed(buses) { index, bus ->
+        items(ordered, key = { it.index }) { bus ->
+            val index = bus.index
             tf.monochrome.android.devedit.DevEditable("channel_strip_$index", Modifier) {
                 FLChannelStrip(
+                    modifier = Modifier.onSizeChanged {
+                        if (!bus.isMaster) stripHeight = with(density) { it.height.toDp() }
+                    },
                     bus = bus,
                     isSelected = index == selectedBusIndex,
                     levels = busLevels.getOrNull(index) ?: BusLevels(),
-                    accentColor = if (bus.isMaster) accent else busAccent(channelDynamicColor, accent, bus.index),
+                    accentColor = if (bus.isMaster) accent else busAccent(channelDynamicColor, accent, index),
                     hazeState = hazeState,
                     onSelect = { onSelectBus(index) },
+                    onLongPress = if (bus.isRemovable) ({ pendingRemoval = bus }) else null,
                     onGainChange = { viewModel.setBusGain(index, it) },
                     onPanChange = { viewModel.setBusPan(index, it) },
                     onToggleMute = { viewModel.toggleMute(index) },
                     onToggleSolo = { viewModel.toggleSolo(index) }
                 )
             }
+        }
+        if (canAdd) {
+            item(key = "add_bus") {
+                AddBusTile(
+                    height = if (stripHeight > 0.dp) stripHeight else 320.dp,
+                    accent = accent,
+                    onClick = {
+                        viewModel.addBus()
+                    }
+                )
+            }
+        }
+    }
+
+    pendingRemoval?.let { bus ->
+        AlertDialog(
+            onDismissRequest = { pendingRemoval = null },
+            title = { Text("Remove ${bus.name}?") },
+            text = {
+                Text(
+                    "Its effects and settings go with it. Buses after it move " +
+                        "down one number. Saved presets are untouched."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.removeBus(bus.index)
+                    pendingRemoval = null
+                }) { Text("Remove") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRemoval = null }) { Text("Cancel") }
+            }
+        )
+    }
+}
+
+/** The empty slot after the last strip: tap to add a bus. */
+@Composable
+private fun AddBusTile(
+    height: Dp,
+    accent: Color,
+    onClick: () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(PlayerDesignTokens.GlassCornerSmall)
+    Box(
+        modifier = Modifier
+            .width(60.dp)
+            .height(height)
+            .clip(shape)
+            .border(1.dp, colors.outline.copy(alpha = 0.30f), shape)
+            .bounceClick(onClick = onClick)
+            .semantics { contentDescription = "Add bus" },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(28.dp)
+            )
+            Text(
+                text = "Add bus",
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.onSurfaceVariant
+            )
         }
     }
 }

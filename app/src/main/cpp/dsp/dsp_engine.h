@@ -7,9 +7,14 @@
 #include <string>
 #include <atomic>
 
-static constexpr int NUM_MIX_BUSES = 4;
+// Mix buses are added and removed at run time, between 4 and 16. The master
+// stays at index 4 whatever the count — every saved mix and preset has it
+// there — so buses 1–4 are indices 0–3 and bus 5 onwards are 5, 6, … The
+// active buses are always the contiguous indices 0..mixBusCount().
+static constexpr int MIN_MIX_BUSES = 4;
+static constexpr int MAX_MIX_BUSES = 16;
 static constexpr int MASTER_BUS = 4;
-static constexpr int TOTAL_BUSES = 5;  // 4 mix + 1 master
+static constexpr int TOTAL_BUSES = MAX_MIX_BUSES + 1;  // capacity: 16 mix + master
 static constexpr int MAX_PLUGINS_PER_BUS = 16;
 
 // Per-bus post-fader waveform tap ring size. Power of two (index masking);
@@ -115,6 +120,14 @@ public:
     void setBusInputEnabled(int busIndex, bool enabled);
     void setMixBypassed(bool bypassed);
 
+    // Adds a mix bus after the last one: unity, centre, input off, no
+    // plugins. Returns its index, or -1 at MAX_MIX_BUSES.
+    int addBus();
+    // Removes mix bus [busIndex] and moves every bus above it down one
+    // index. Buses 1–4 (indices 0–3) and the master cannot be removed.
+    bool removeBus(int busIndex);
+    int mixBusCount() const { return mixBusCount_.load(std::memory_order_relaxed); }
+
     // Metering — returns levels in dB
     // Output: [bus0_peakL, bus0_peakR, bus0_holdL, bus0_holdR, ..., master_holdR]
     // Total: TOTAL_BUSES * 4 floats
@@ -150,6 +163,13 @@ private:
     std::vector<float> dryBufL_, dryBufR_;  // Pre-allocated for dry/wet blending
 
     bool anySoloed() const;
+    // Active buses are 0..mixBusCount_ (master at 4 among them).
+    int activeBusCount() const { return mixBusCount_.load(std::memory_order_relaxed) + 1; }
+    bool isActiveBus(int i) const { return i >= 0 && i < activeBusCount(); }
+    bool isMixBus(int i) const { return isActiveBus(i) && i != MASTER_BUS; }
+    static void resetBusLocked(Bus& bus);
+    static void moveBusLocked(Bus& dst, Bus& src);
+    std::atomic<int> mixBusCount_{MIN_MIX_BUSES};
     bool skippedOnThisLane(const SnapinProcessor& plugin) const;
     bool monoLane_ = false;
     void recalcBusGains(float gainDb, float pan, float& targetL, float& targetR);

@@ -91,7 +91,7 @@ fun ConsoleBusStrip(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text       = if (isMaster) "M" else "${bus.index + 1}",
+                text       = if (isMaster) "M" else "${bus.number}",
                 fontSize   = 10.sp,
                 fontWeight = FontWeight.Bold,
                 color      = if (isSelected) MaterialTheme.colorScheme.primary

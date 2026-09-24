@@ -41,9 +41,10 @@ class DspEngineManager @Inject constructor(
     val buses: StateFlow<List<BusConfig>> = _buses.asStateFlow()
 
     // Meter levels — polled from the UI once per display frame
-    // [peakL, peakR, holdL, holdR] per bus = 4 floats each
-    private val levelsBuffer = FloatArray(TOTAL_BUSES * 4)
-    private val _busLevels = MutableStateFlow(List(TOTAL_BUSES) { BusLevels() })
+    // [peakL, peakR, holdL, holdR] per bus = 4 floats each, indexed by bus
+    // index; sized for the most buses a mix can hold.
+    private val levelsBuffer = FloatArray(BusConfig.MAX_TOTAL_BUSES * 4)
+    private val _busLevels = MutableStateFlow(List(BusConfig.defaultBuses().size) { BusLevels() })
     val busLevels: StateFlow<List<BusLevels>> = _busLevels.asStateFlow()
 
     private val _clipped = MutableStateFlow(false)
@@ -132,6 +133,10 @@ class DspEngineManager @Inject constructor(
      * would be worse than no reset button.
      */
     fun resetToDefaults() {
+        // Back to four buses first, highest first so no index moves under us.
+        for (bus in _buses.value.filter { it.isRemovable }.sortedByDescending { it.index }) {
+            removeBus(bus.index)
+        }
         for (bus in _buses.value) {
             for (slot in bus.plugins.indices.reversed()) removePlugin(bus.index, slot)
         }
@@ -148,7 +153,8 @@ class DspEngineManager @Inject constructor(
         val ptr = processor.getEnginePtr()
         if (ptr == 0L) return
         processor.nativeGetBusLevels(ptr, levelsBuffer)
-        _busLevels.value = List(TOTAL_BUSES) { b ->
+        val count = _buses.value.size.coerceAtMost(BusConfig.MAX_TOTAL_BUSES)
+        _busLevels.value = List(count) { b ->
             BusLevels(
                 peakDbL = levelsBuffer[b * 4],
                 peakDbR = levelsBuffer[b * 4 + 1],
@@ -202,8 +208,6 @@ class DspEngineManager @Inject constructor(
     }
 
     companion object {
-        private const val TOTAL_BUSES = 5
-
         // Mirrors MAX_PLUGINS_PER_BUS in dsp_engine.h — native refuses inserts past this.
         const val MAX_PLUGINS_PER_BUS = 16
 
@@ -248,6 +252,38 @@ class DspEngineManager @Inject constructor(
 
         _enabled.value = enabled
         processor.setMixBypassed(!enabled)
+    }
+
+    // ── Adding and removing buses ───────────────────────────────────────
+
+    /**
+     * Adds a bus after the last one: unity, centre, input off, no plugins.
+     * Returns its index, or null at [BusConfig.MAX_MIX_BUSES] or with no
+     * engine.
+     */
+    fun addBus(): Int? {
+        val ptr = processor.getEnginePtr()
+        if (ptr == 0L) return null
+        val index = processor.nativeAddBus(ptr)
+        if (index < 0) return null
+        _buses.value = (_buses.value + BusConfig(index = index, name = BusConfig.nameFor(index)))
+            .sortedBy { it.index }
+        requestSave()
+        return index
+    }
+
+    /**
+     * Removes bus [busIndex] (bus 5 and up). The buses above it move down one
+     * index in the engine, so the Kotlin mirror is re-read from the engine's
+     * own state rather than patched by hand.
+     */
+    fun removeBus(busIndex: Int): Boolean {
+        val ptr = processor.getEnginePtr()
+        if (ptr == 0L) return false
+        if (!processor.nativeRemoveBus(ptr, busIndex)) return false
+        _buses.value = parseBusConfigsFromJson(processor.nativeGetStateJson(ptr))
+        requestSave()
+        return true
     }
 
     // ── Bus controls ────────────────────────────────────────────────────
@@ -428,15 +464,15 @@ class DspEngineManager @Inject constructor(
         }
     }
 
-    private val defaultBusNames = listOf("Bus 1", "Bus 2", "Bus 3", "Bus 4", "Master")
-
     private fun parseBusConfigsFromJson(json: String): List<BusConfig> {
         return try {
             val jsonParser = Json { ignoreUnknownKeys = true }
             val root = jsonParser.parseToJsonElement(json).jsonObject
             val busesArray = root["buses"]?.jsonArray ?: return BusConfig.defaultBuses()
 
-            busesArray.mapIndexed { index, element ->
+            // The engine takes at most 16 mix buses and the master; a longer
+            // (hand-edited) file is cut to what it will actually run.
+            val parsed = busesArray.take(BusConfig.MAX_TOTAL_BUSES).mapIndexed { index, element ->
                 val obj = element.jsonObject
                 val plugins = obj["plugins"]?.jsonArray?.mapIndexed { slotIdx, plugEl ->
                     val plugObj = plugEl.jsonObject
@@ -458,7 +494,7 @@ class DspEngineManager @Inject constructor(
                 val rawPan = obj["pan"]?.jsonPrimitive?.float ?: 0f
                 BusConfig(
                     index = index,
-                    name = defaultBusNames.getOrElse(index) { "Bus ${index + 1}" },
+                    name = BusConfig.nameFor(index),
                     gainDb = (if (rawGain.isFinite()) rawGain else 0f)
                         .coerceIn(MIN_BUS_GAIN_DB, MAX_BUS_GAIN_DB),
                     pan = (if (rawPan.isFinite()) rawPan else 0f).coerceIn(MIN_PAN, MAX_PAN),
@@ -468,6 +504,10 @@ class DspEngineManager @Inject constructor(
                     plugins = plugins
                 )
             }
+            // A short list still loads as buses 1–4 plus the master on the
+            // native side (the entries it lacks stay empty), so the mirror
+            // fills in the same buses rather than showing a mixer with no master.
+            parsed + BusConfig.defaultBuses().drop(parsed.size)
         } catch (e: Exception) {
             Log.w("DspEngineManager", "Failed to parse DSP state JSON, using defaults", e)
             BusConfig.defaultBuses()

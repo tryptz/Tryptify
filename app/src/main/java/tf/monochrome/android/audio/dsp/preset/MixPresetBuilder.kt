@@ -1,12 +1,20 @@
 package tf.monochrome.android.audio.dsp.preset
 
 import tf.monochrome.android.audio.dsp.SnapinType
+import tf.monochrome.android.audio.dsp.model.BusConfig
 
 /**
  * Builds DSP-engine state JSON for hard-coded presets.
  *
- * The native engine (`DspEngine::loadStateJson`) consumes a flat structure:
- * `{ "buses": [ {gain,pan,muted,soloed,inputEnabled,plugins:[{type,bypassed,dryWet,params:[...]}]} x5 ] }`.
+ * The native engine (`DspEngine::loadStateJson`) consumes a positional list:
+ * `{ "buses": [ {gain,pan,muted,soloed,inputEnabled,plugins:[{type,bypassed,dryWet,os,params:[...]}]} ... ] }`.
+ * Entry 4 is always the master. Entries 0–3 are buses 1–4, and entries 5 and
+ * up are the buses added with the + tile (bus 5 is entry 5), up to entry 16.
+ * The engine reads the mix-bus count off the list's length, so a preset that
+ * only touches buses 1–4 is written as the classic five entries and loads as
+ * a four-bus mixer, while one that touches bus 7 is written with entries up to
+ * 7 and brings buses 5–7 with it.
+ *
  * `params` is a flat array indexed by each processor's parameter enum, so this
  * builder starts from the processor defaults and applies typed overrides — no
  * hand-counting of array positions.
@@ -17,53 +25,107 @@ object MixPresetBuilder {
 }
 
 class PresetScope {
-    private val buses = Array(5) { BusScope(it) }
+    private val buses = sortedMapOf<Int, BusScope>()
 
-    /** Configure a mix bus (0-3) or the master bus (4). */
+    /**
+     * Configure the bus at engine [index]: 0–3 for buses 1–4, 5–16 for the
+     * added buses 5–16. The master has its own call, [master].
+     */
     fun bus(index: Int, gainDb: Float = 0f, block: BusScope.() -> Unit) {
-        buses[index].gainDb = gainDb
-        buses[index].block()
+        require(index in 0..BusConfig.MAX_MIX_BUSES) {
+            "bus index $index is outside 0..${BusConfig.MAX_MIX_BUSES}"
+        }
+        val bus = buses.getOrPut(index) { BusScope(index) }
+        bus.gainDb = gainDb
+        bus.block()
     }
 
-    /** Configure the master bus (index 4). */
-    fun master(gainDb: Float = 0f, block: BusScope.() -> Unit) = bus(4, gainDb, block)
+    /** Configure the master bus (always engine index 4). */
+    fun master(gainDb: Float = 0f, block: BusScope.() -> Unit = {}) =
+        bus(BusConfig.MASTER_INDEX, gainDb, block)
 
     fun toJson(): String {
+        // The list has to be contiguous — the engine counts entries, it does
+        // not read indices — so any bus skipped below the highest one used is
+        // written as an empty bus.
+        val last = maxOf(BusConfig.MASTER_INDEX, buses.lastKeyOrNull() ?: 0)
         val sb = StringBuilder()
         sb.append("{\"buses\":[")
-        buses.forEachIndexed { i, b ->
+        for (i in 0..last) {
             if (i > 0) sb.append(',')
-            b.appendJson(sb)
+            (buses[i] ?: BusScope(i)).appendJson(sb)
         }
         sb.append("]}")
         return sb.toString()
     }
+
+    private fun java.util.SortedMap<Int, BusScope>.lastKeyOrNull(): Int? =
+        if (isEmpty()) null else lastKey()
 }
 
 class BusScope(private val index: Int) {
     var gainDb: Float = 0f
     var pan: Float = 0f
+    var muted: Boolean = false
+    var soloed: Boolean = false
+
+    /**
+     * Whether the track feeds this bus. Only bus 1 does by default, as in a
+     * fresh mixer; set it on another bus to run it in parallel (a wet path
+     * beside a dry one, say). Ignored on the master, which always takes the
+     * sum of the buses.
+     */
+    var inputEnabled: Boolean = index == 0
+
     private val plugins = mutableListOf<PluginEntry>()
 
     /**
      * Add a processor to this bus. [overrides] are `(paramIndex to value)` pairs
      * applied on top of [MixPresetParams.defaults]; [dryWet] is the plugin-level
      * dry/wet blend (0..1, named-only — most demo effects keep this at 1 and
-     * shape the blend via the processor's own MIX parameter).
+     * shape the blend via the processor's own MIX parameter). [bypassed] keeps
+     * the processor in the chain but switched off; [oversample] is 1, 2 or 4.
      */
-    fun plugin(type: SnapinType, vararg overrides: Pair<Int, Float>, dryWet: Float = 1f) {
+    fun plugin(
+        type: SnapinType,
+        vararg overrides: Pair<Int, Float>,
+        dryWet: Float = 1f,
+        bypassed: Boolean = false,
+        oversample: Int = 1,
+    ) {
         val params = MixPresetParams.defaults(type).copyOf()
         for ((idx, value) in overrides) {
             if (idx in params.indices) params[idx] = value
         }
-        plugins.add(PluginEntry(type.ordinal, dryWet, params))
+        add(type, params, dryWet, bypassed, oversample)
+    }
+
+    /**
+     * Add a processor with its whole parameter array given verbatim — for a
+     * patch captured out of the mixer, where every value is already known and
+     * restating it as overrides of the defaults would only invite a slip.
+     */
+    fun pluginWithParams(
+        type: SnapinType,
+        params: FloatArray,
+        dryWet: Float = 1f,
+        bypassed: Boolean = false,
+        oversample: Int = 1,
+    ) = add(type, params.copyOf(), dryWet, bypassed, oversample)
+
+    private fun add(type: SnapinType, params: FloatArray, dryWet: Float, bypassed: Boolean, oversample: Int) {
+        require(oversample == 1 || oversample == 2 || oversample == 4) {
+            "oversample must be 1, 2 or 4, not $oversample"
+        }
+        plugins.add(PluginEntry(type.ordinal, dryWet, bypassed, oversample, params))
     }
 
     fun appendJson(sb: StringBuilder) {
         sb.append("{\"gain\":").append(gainDb)
             .append(",\"pan\":").append(pan)
-            .append(",\"muted\":false,\"soloed\":false")
-            .append(",\"inputEnabled\":").append(index == 0)
+            .append(",\"muted\":").append(muted)
+            .append(",\"soloed\":").append(soloed)
+            .append(",\"inputEnabled\":").append(inputEnabled && index != BusConfig.MASTER_INDEX)
             .append(",\"plugins\":[")
         plugins.forEachIndexed { i, p ->
             if (i > 0) sb.append(',')
@@ -76,12 +138,15 @@ class BusScope(private val index: Int) {
 private class PluginEntry(
     val typeOrdinal: Int,
     val dryWet: Float,
+    val bypassed: Boolean,
+    val oversample: Int,
     val params: FloatArray
 ) {
     fun appendJson(sb: StringBuilder) {
         sb.append("{\"type\":").append(typeOrdinal)
-            .append(",\"bypassed\":false")
+            .append(",\"bypassed\":").append(bypassed)
             .append(",\"dryWet\":").append(dryWet)
+            .append(",\"os\":").append(oversample)
             .append(",\"params\":[")
         params.forEachIndexed { i, v ->
             if (i > 0) sb.append(',')
