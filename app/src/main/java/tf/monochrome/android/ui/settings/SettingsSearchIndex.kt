@@ -148,6 +148,11 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     entry("Preserve Pitch", "Audio", listOf("speed", "tempo", "key", "chipmunk", "semitone")),
     entry("Never Resample Between Tracks", "Audio", listOf("sample rate", "gap", "dac", "bit perfect")),
     entry("USB DAC bit-perfect routing", "Audio", listOf("usb", "dac", "exclusive", "bit perfect", "output")),
+    entry(
+        "Hi-res output (Bluetooth & speaker)",
+        "Audio",
+        listOf("bluetooth", "24-bit", "96khz", "ldac", "float", "high resolution", "bit depth"),
+    ),
 
     // ── Equalizer ───────────────────────────────────────────────────────
     entry("Equalizer", "Equalizer", listOf("eq", "bass", "treble", "bands", "graphic"))

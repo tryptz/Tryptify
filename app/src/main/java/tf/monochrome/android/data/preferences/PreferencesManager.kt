@@ -410,6 +410,7 @@ class PreferencesManager @Inject constructor(
             booleanPreferencesKey("usb_exclusive_bit_perfect_enabled")
         private val MULTICHANNEL_DOWNMIX_ENABLED =
             booleanPreferencesKey("multichannel_downmix_enabled")
+        private val HIRES_HAL_OUTPUT_ENABLED = booleanPreferencesKey("hires_hal_output_enabled")
         // Powers of two mirroring the user-facing chip row in Settings.
         // Native engine's static MAX_BLOCK_SIZE caps the largest entry; bump
         // both together if you add another step.
@@ -1893,6 +1894,17 @@ class PreferencesManager @Inject constructor(
         dataStore.data.map { it[USB_EXCLUSIVE_BIT_PERFECT_ENABLED] ?: false }
     suspend fun setUsbExclusiveBitPerfectEnabled(enabled: Boolean) {
         dataStore.edit { it[USB_EXCLUSIVE_BIT_PERFECT_ENABLED] = enabled }
+    }
+
+    /**
+     * Hi-res sources (24-bit, 32-bit, float) keep their resolution on the
+     * normal Android output — Bluetooth, speaker, wired — instead of being
+     * cut to 16 bits before the DSP. Default on; off restores the 16-bit path.
+     */
+    val hiResHalOutputEnabled: Flow<Boolean> =
+        dataStore.data.map { it[HIRES_HAL_OUTPUT_ENABLED] ?: true }
+    suspend fun setHiResHalOutputEnabled(enabled: Boolean) {
+        dataStore.edit { it[HIRES_HAL_OUTPUT_ENABLED] = enabled }
     }
 
     /**

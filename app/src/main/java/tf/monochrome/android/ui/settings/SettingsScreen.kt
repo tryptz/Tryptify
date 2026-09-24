@@ -2013,6 +2013,19 @@ private fun UsbBitPerfectToggle(viewModel: SettingsViewModel) {
         onCheckedChange = { viewModel.setUsbBitPerfectEnabled(it) },
     )
 
+    val hiResHal by viewModel.hiResHalOutputEnabled.collectAsStateWithLifecycle()
+    SettingSwitchItem(
+        title = "Hi-res output (Bluetooth & speaker)",
+        subtitle = if (hiResHal) {
+            "On. 24-bit and float files keep full resolution through the DSP to Android's " +
+                "output, so LDAC/aptX HD get 24-bit. Changing speed falls back to 16-bit."
+        } else {
+            "Off. Hi-res files are cut to 16-bit before the DSP on Bluetooth and the speaker."
+        },
+        checked = hiResHal,
+        onCheckedChange = { viewModel.setHiResHalOutputEnabled(it) },
+    )
+
     val exclusiveEnabled by viewModel.usbExclusiveBitPerfectEnabled.collectAsStateWithLifecycle()
     val exclusiveStatus by viewModel.usbExclusiveStatus.collectAsStateWithLifecycle()
     val diagnostics by viewModel.usbBypassDiagnostics.collectAsStateWithLifecycle()

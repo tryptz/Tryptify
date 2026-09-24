@@ -6,6 +6,7 @@ import androidx.media3.common.Format
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.util.Util
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.ForwardingAudioSink
 import java.nio.ByteBuffer
@@ -41,9 +42,52 @@ class LibusbAudioSink(
      * speed would silently do nothing over USB.
      */
     private val resampler: VariRateAudioProcessor? = null,
+    /**
+     * The DSP for hi-res sources on the normal Android output (see
+     * [HalMode.HIRES]), run here in float because DefaultAudioSink's float
+     * branch would skip it. Empty disables that mode.
+     */
+    halProcessors: List<AudioProcessor> = emptyList(),
+    /** The user's "Hi-res output" setting, read at configure time. */
+    private val hiResHalEnabled: () -> Boolean = { false },
 ) : ForwardingAudioSink(delegate) {
 
     private val chain = AudioProcessorChain(processors)
+
+    /**
+     * How the delegate (Android's own output) is fed when bypass is not active.
+     *
+     * DefaultAudioSink runs the app's DSP only on its int branch, which narrows
+     * anything wider than 16 bits first; its float branch keeps the resolution
+     * but runs no DSP at all. So which one a stream takes is decided here:
+     */
+    private enum class HalMode {
+        /** 16-bit (or narrower): straight through; the int branch runs the DSP as ever. */
+        DIRECT,
+        /** Hi-res at unity speed: the DSP runs here in float, the float branch plays the result. */
+        HIRES,
+        /**
+         * Hi-res with hi-res output off, or speed/pitch away from unity (the
+         * float path has no varispeed or Sonic): narrowed to 16 bits here, so the
+         * int branch and its full chain run exactly as they did before.
+         */
+        NARROW,
+    }
+
+    private val trimmer = PcmTrimmingAudioProcessor()
+    private val halAvailable = halProcessors.isNotEmpty()
+    private val halChain = AudioProcessorChain(listOf(trimmer) + halProcessors)
+    private val narrowChain = AudioProcessorChain(
+        listOf(androidx.media3.common.audio.ToInt16PcmAudioProcessor())
+    )
+    private var halMode = HalMode.DIRECT
+    // Processed output the delegate has not taken yet. Delivered before any new
+    // input is accepted, so nothing is ever held across end of stream.
+    private var halPending: ByteBuffer = AudioProcessor.EMPTY_BUFFER
+    private var unityParams = true
+    // Set when speed moved across unity mid-track; applied once halPending is
+    // empty, the only point at which the delegate holds no buffer of ours.
+    private var halModeSwitchPending = false
 
     private var bypassActive = false
     private var configuredFormat: Format? = null
@@ -125,11 +169,11 @@ class LibusbAudioSink(
         specifiedBufferSize: Int,
         outputChannels: IntArray?,
     ) {
-        super.configure(inputFormat, specifiedBufferSize, outputChannels)
-
         configuredFormat = inputFormat
         configuredBufferSize = specifiedBufferSize
         configuredOutputChannels = outputChannels
+        configureDelegatePath(inputFormat)
+
         lastEngageFailHash = 0
         pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
         endOfStreamRequested = false
@@ -286,7 +330,17 @@ class LibusbAudioSink(
         checkDriverStillOwned()
 
         if (!bypassActive) {
-            return super.handleBuffer(buffer, presentationTimeUs, encodedAccessUnitCount)
+            if (halModeSwitchPending && !halPending.hasRemaining()) {
+                configuredFormat?.let { fmt ->
+                    Log.i(TAG, "speed moved across unity — switching the delegate path")
+                    configureDelegatePath(fmt)
+                }
+            }
+            return when (halMode) {
+                HalMode.DIRECT -> super.handleBuffer(buffer, presentationTimeUs, encodedAccessUnitCount)
+                HalMode.HIRES -> handleThroughHalChain(halChain, buffer, presentationTimeUs, encodedAccessUnitCount)
+                HalMode.NARROW -> handleThroughHalChain(narrowChain, buffer, presentationTimeUs, encodedAccessUnitCount)
+            }
         }
 
         // Paused: refuse everything. flushRing() emptied the DAC's queue at
@@ -437,10 +491,101 @@ class LibusbAudioSink(
     private fun handProcessorsToDelegate() {
         val fmt = configuredFormat ?: return
         try {
-            super.configure(fmt, configuredBufferSize, configuredOutputChannels)
+            configureDelegatePath(fmt)
         } catch (e: AudioSink.ConfigurationException) {
             Log.w(TAG, "could not hand the processors back to the delegate", e)
         }
+    }
+
+    private fun halModeFor(encoding: Int): HalMode = when {
+        !Util.isEncodingHighResolutionPcm(encoding) -> HalMode.DIRECT
+        halAvailable && unityParams && hiResHalEnabled() -> HalMode.HIRES
+        else -> HalMode.NARROW
+    }
+
+    /**
+     * Configures the delegate for [fmt] in whichever [HalMode] fits it now.
+     * Also the step that makes the delegate the last to configure the shared
+     * processors when it is the path carrying the audio (see
+     * [handProcessorsToDelegate]): in HIRES they are configured by [halChain],
+     * which is this path.
+     */
+    @Throws(AudioSink.ConfigurationException::class)
+    private fun configureDelegatePath(fmt: Format) {
+        halPending = AudioProcessor.EMPTY_BUFFER
+        halModeSwitchPending = false
+        var mode = halModeFor(fmt.pcmEncoding)
+        val input = AudioProcessor.AudioFormat(fmt.sampleRate, fmt.channelCount, fmt.pcmEncoding)
+        if (mode == HalMode.HIRES) {
+            trimmer.setTrimFrameCount(fmt.encoderDelay, fmt.encoderPadding)
+            val chainOut = halChain.configure(input)
+            val out = if (chainOut != AudioProcessor.AudioFormat.NOT_SET) chainOut else input
+            if (out.encoding == C.ENCODING_PCM_FLOAT && out.sampleRate > 0 && out.channelCount > 0) {
+                halMode = mode
+                // Delay and padding are this chain's to trim now (the float
+                // branch would ignore them anyway); channel count is what the
+                // DSP made of it (mono and multichannel come out stereo).
+                super.configure(
+                    fmt.buildUpon()
+                        .setPcmEncoding(C.ENCODING_PCM_FLOAT)
+                        .setSampleRate(out.sampleRate)
+                        .setChannelCount(out.channelCount)
+                        .setEncoderDelay(0)
+                        .setEncoderPadding(0)
+                        .build(),
+                    configuredBufferSize,
+                    null,
+                )
+                Log.i(TAG, "delegate: hi-res float path (${fmt.sampleRate}/${encodingLabel(fmt.pcmEncoding)}/" +
+                    "${fmt.channelCount}ch -> DSP -> ${out.sampleRate}/float/${out.channelCount}ch)")
+                return
+            }
+            Log.w(TAG, "delegate: hi-res chain produced ${encodingLabel(out.encoding)}, not float — narrowing instead")
+            mode = HalMode.NARROW
+        }
+        halMode = mode
+        when (mode) {
+            HalMode.NARROW -> {
+                narrowChain.configure(input)
+                super.configure(
+                    fmt.buildUpon().setPcmEncoding(C.ENCODING_PCM_16BIT).build(),
+                    configuredBufferSize,
+                    configuredOutputChannels,
+                )
+                Log.i(TAG, "delegate: 16-bit path for ${encodingLabel(fmt.pcmEncoding)} " +
+                    "(hi-res output=${hiResHalEnabled()}, unity speed=$unityParams)")
+            }
+            else -> super.configure(fmt, configuredBufferSize, configuredOutputChannels)
+        }
+    }
+
+    /** Feeds the delegate through [c], never handing it a new buffer while it holds one of ours. */
+    private fun handleThroughHalChain(
+        c: AudioProcessorChain,
+        buffer: ByteBuffer,
+        presentationTimeUs: Long,
+        encodedAccessUnitCount: Int,
+    ): Boolean {
+        if (halPending.hasRemaining()) {
+            super.handleBuffer(halPending, presentationTimeUs, encodedAccessUnitCount)
+            if (halPending.hasRemaining()) return false
+            halPending = AudioProcessor.EMPTY_BUFFER
+        }
+        if (!buffer.hasRemaining()) return true
+
+        val processed = if (c.anyActive()) c.process(buffer) else buffer
+        if (processed === buffer) {
+            // Nothing to do to it: the delegate consumes the renderer's buffer itself.
+            return super.handleBuffer(buffer, presentationTimeUs, encodedAccessUnitCount)
+        }
+        if (processed.hasRemaining()) {
+            super.handleBuffer(processed, presentationTimeUs, encodedAccessUnitCount)
+            if (processed.hasRemaining()) {
+                halPending = processed
+                return false
+            }
+        }
+        return !buffer.hasRemaining()
     }
 
     private fun checkDriverStillOwned() {
@@ -526,6 +671,14 @@ class LibusbAudioSink(
             abs(speed - 1f) >= SPEED_TOLERANCE
         val ratio = if (ridesTempo) speed else 1f
         speedRatio = ratio
+        // The float path has no varispeed or Sonic: away from unity a hi-res
+        // stream has to take the 16-bit path, whose chain has both.
+        val nowUnity = abs(speed - 1f) < SPEED_TOLERANCE && abs(pitch - 1f) < SPEED_TOLERANCE
+        if (nowUnity != unityParams) {
+            unityParams = nowUnity
+            val fmt = configuredFormat
+            if (fmt != null && halModeFor(fmt.pcmEncoding) != halMode) halModeSwitchPending = true
+        }
         resampler?.setRatio(ratio)
         // Speed and the mixer interact here and nowhere else, and until now
         // this path wrote nothing to the log at all — so a report of "the
@@ -657,7 +810,7 @@ class LibusbAudioSink(
     }
 
     override fun hasPendingData(): Boolean {
-        if (!bypassActive) return super.hasPendingData()
+        if (!bypassActive) return halPending.hasRemaining() || super.hasPendingData()
         return pendingProcessedOutput.hasRemaining() || driver.pendingFrames() > 0L
     }
 
@@ -669,6 +822,9 @@ class LibusbAudioSink(
     override fun flush() {
         super.flush()
         chain.flush()
+        halChain.flush()
+        narrowChain.flush()
+        halPending = AudioProcessor.EMPTY_BUFFER
 
         pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
         endOfStreamRequested = false
@@ -686,6 +842,11 @@ class LibusbAudioSink(
     override fun reset() {
         super.reset()
         chain.reset()
+        halChain.reset()
+        narrowChain.reset()
+        halPending = AudioProcessor.EMPTY_BUFFER
+        halModeSwitchPending = false
+        halMode = HalMode.DIRECT
         if (driver.isStreaming.value) driver.stop()
 
         bypassActive = false
@@ -699,8 +860,31 @@ class LibusbAudioSink(
         resetWatchdog()
     }
 
+    /**
+     * Float is supported directly only on the normal Android output, and only
+     * with hi-res output on. The decoders ask this before choosing their output
+     * format: said yes, MediaCodec decodes to float, which is what carries a
+     * 24-bit FLAC past 16 bits. While the USB DAC is open the answer stays what
+     * it always was, so a 16-bit file still reaches the DAC as 16-bit integers,
+     * bit-perfect.
+     */
+    override fun getFormatSupport(format: Format): Int {
+        val support = super.getFormatSupport(format)
+        if (format.pcmEncoding == C.ENCODING_PCM_FLOAT &&
+            support == AudioSink.SINK_FORMAT_SUPPORTED_DIRECTLY &&
+            (driver.isOpen.value || !hiResHalEnabled() || !halAvailable)
+        ) {
+            return AudioSink.SINK_FORMAT_SUPPORTED_WITH_TRANSCODING
+        }
+        return support
+    }
+
+    override fun supportsFormat(format: Format): Boolean =
+        getFormatSupport(format) != AudioSink.SINK_FORMAT_UNSUPPORTED
+
     override fun release() {
         pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
+        halPending = AudioProcessor.EMPTY_BUFFER
         super.release()
         if (driver.isStreaming.value) driver.stop()
     }
