@@ -163,6 +163,7 @@ fun MixerScreen(
     val enabled by viewModel.enabled.collectAsStateWithLifecycle()
     val buses by viewModel.buses.collectAsStateWithLifecycle()
     val selectedBusIndex by viewModel.selectedBusIndex.collectAsStateWithLifecycle()
+    val spreadChannels by viewModel.spreadChannels.collectAsStateWithLifecycle()
     val showPluginPicker by viewModel.showPluginPicker.collectAsStateWithLifecycle()
     val editingPlugin by viewModel.editingPlugin.collectAsStateWithLifecycle()
     val presets by viewModel.presets.collectAsStateWithLifecycle()
@@ -565,6 +566,8 @@ fun MixerScreen(
                                 onBusInputToggle = { busIdx, enabled ->
                                     viewModel.setBusInputEnabled(busIdx, enabled)
                                 },
+                                spreadChannels = spreadChannels,
+                                onSpreadChannelsChange = { viewModel.setSpreadChannels(it) },
                                 onDismissEditor = { viewModel.dismissPluginEditor() },
                                 onClose = { showInsertRack = false }
                             )

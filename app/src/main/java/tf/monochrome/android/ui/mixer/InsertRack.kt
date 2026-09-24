@@ -74,6 +74,8 @@ fun InsertRack(
     onParameterChange: (busIndex: Int, slotIndex: Int, paramIndex: Int, value: Float) -> Unit,
     onPluginDryWet: (busIndex: Int, slotIndex: Int, dryWet: Float) -> Unit = { _, _, _ -> },
     onBusInputToggle: (busIndex: Int, enabled: Boolean) -> Unit = { _, _ -> },
+    spreadChannels: Boolean = true,
+    onSpreadChannelsChange: (Boolean) -> Unit = {},
     onDismissEditor: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -188,16 +190,26 @@ fun InsertRack(
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = 2.dp)
                 )
+                MultichannelModeRow(
+                    spread = spreadChannels,
+                    onChange = onSpreadChannelsChange,
+                )
                 val mixBuses = allBuses.filter { !it.isMaster }
                 mixBuses.forEach { mixBus ->
+                    // A bus a channel group is spread onto takes those channels,
+                    // whatever its switch says: shown as such, not toggleable.
+                    val routed = mixBus.channelGroup != null
+                    val takesInput = routed || mixBus.inputEnabled
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .liquidGlass(
                                 shape = MonoDimens.shapeSm,
-                                tintAlpha = if (mixBus.inputEnabled) 0.15f else 0.06f
+                                tintAlpha = if (takesInput) 0.15f else 0.06f
                             )
-                            .clickable { onBusInputToggle(mixBus.index, !mixBus.inputEnabled) }
+                            .clickable(enabled = !routed) {
+                                onBusInputToggle(mixBus.index, !mixBus.inputEnabled)
+                            }
                             .padding(horizontal = MonoDimens.spacingSm, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -211,7 +223,7 @@ fun InsertRack(
                                     .size(8.dp)
                                     .clip(CircleShape)
                                     .background(
-                                        if (mixBus.inputEnabled) Color(0xFF4CAF50)
+                                        if (takesInput) Color(0xFF4CAF50)
                                         else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
                                     )
                             )
@@ -220,22 +232,82 @@ fun InsertRack(
                                 style = MaterialTheme.typography.labelSmall,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = if (mixBus.inputEnabled) MaterialTheme.colorScheme.onSurface
+                                color = if (takesInput) MaterialTheme.colorScheme.onSurface
                                 else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Text(
-                            text = if (mixBus.inputEnabled) "ON" else "OFF",
+                            text = when {
+                                routed -> "CHANNELS"
+                                mixBus.inputEnabled -> "ON"
+                                else -> "OFF"
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             fontSize = 8.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (mixBus.inputEnabled) Color(0xFF4CAF50)
+                            color = if (takesInput) Color(0xFF4CAF50)
                             else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                         )
                     }
                 }
             }
         }
+    }
+}
+
+// ── Multichannel mode ───────────────────────────────────────────────────
+
+/**
+ * How a stream wider than stereo (5.1, 7.1.4 Atmos…) meets the mixer: spread
+ * one channel group per bus — front, centre, LFE, surrounds and heights each
+ * on a strip of their own — or run whole through bus 1, as stereo does.
+ */
+@Composable
+private fun MultichannelModeRow(spread: Boolean, onChange: (Boolean) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Column(
+        modifier = Modifier.padding(bottom = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = "Multichannel",
+            style = MaterialTheme.typography.labelSmall,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Medium,
+            color = colors.onSurface
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            listOf(true to "Spread across buses", false to "One bus").forEach { (value, label) ->
+                val selected = spread == value
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(MonoDimens.shapeSm)
+                        .liquidGlass(shape = MonoDimens.shapeSm, tintAlpha = if (selected) 0.22f else 0.06f)
+                        .clickable { if (!selected) onChange(value) }
+                        .padding(vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 10.sp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (selected) colors.primary else colors.onSurfaceVariant
+                    )
+                }
+            }
+        }
+        Text(
+            text = if (spread) "5.1 and Atmos: front, centre, LFE, surrounds and heights each get a bus."
+                   else "5.1 and Atmos run whole through the buses switched on below.",
+            style = MaterialTheme.typography.labelSmall,
+            fontSize = 9.sp,
+            color = colors.onSurfaceVariant
+        )
     }
 }
 

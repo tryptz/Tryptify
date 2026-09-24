@@ -86,6 +86,31 @@ object ChannelLayout {
         return lanes
     }
 
+    /**
+     * A name for each of [lanes]' channel groups, in the same order — what the
+     * mixer strip a group is routed to is called while it plays: "Front",
+     * "Centre", "LFE", "Surround", "Top Front"…. Counts with no Android
+     * layout are named by the channels they carry.
+     */
+    fun laneLabels(count: Int): List<String> {
+        KNOWN_LABELS[count]?.let { return it }
+        return lanes(count).map { lane ->
+            if (lane.isMono) "Ch ${lane.first + 1}" else "Ch ${lane.first + 1}–${lane.second + 1}"
+        }
+    }
+
+    private val KNOWN_LABELS: Map<Int, List<String>> = mapOf(
+        2 to listOf("Front"),
+        3 to listOf("Front", "Centre"),
+        4 to listOf("Front", "Surround"),
+        5 to listOf("Front", "Centre", "Surround"),
+        6 to listOf("Front", "Centre", "LFE", "Surround"),
+        7 to listOf("Front", "Centre", "LFE", "Surround", "Rear Centre"),
+        8 to listOf("Front", "Centre", "LFE", "Rear", "Side"),
+        10 to listOf("Front", "Centre", "LFE", "Surround", "Top Front", "Top Rear"),
+        12 to listOf("Front", "Centre", "LFE", "Rear", "Side", "Top Front", "Top Rear"),
+    )
+
     /** Counts whose Android layout carries an LFE, always at index 3. */
     private val LFE_COUNTS = setOf(6, 7, 8, 10, 12)
 }

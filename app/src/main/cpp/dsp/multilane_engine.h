@@ -28,6 +28,12 @@
  *   whole bed is turned down together. Mix-bus dynamics stay per lane.
  * - A mono lane runs its channel as dual-mono and folds it back; effects that
  *   only reshape a stereo image are skipped there (DspEngine::setMonoLane).
+ * - Unless setSpread(false), the lanes are spread across the mixer: lane k feeds bus number k + 1
+ *   only (front on bus 1, centre on 2, LFE on 3, …), and the mixer grows to
+ *   one bus per lane. Every lane still carries every bus's chain, but a bus
+ *   with no input is skipped outright, so each channel group runs through
+ *   its own strip and nothing else. Meters for a bus come from the lane that
+ *   feeds it; the master's are the loudest across the lanes.
  *
  * Threads: control calls fan out under laneMutex_. The audio thread only
  * ever *tries* it; if a fan-out is mid-flight it runs that one block with the
@@ -72,17 +78,25 @@ public:
 
     /**
      * Sets the lanes: lane k carries channel first[k], and second[k] too
-     * unless it is negative (a mono lane). Builds or drops engines as needed —
+     * unless it is negative (a mono lane). While spreading (setSpread), lane
+     * k is routed to bus k + 1 — see the class notes. Builds or drops engines as needed —
      * allocation, so never from the audio thread. Lane 0 must be a pair.
      */
     void configureLanes(const int* first, const int* second, int count) {
         count = std::max(1, std::min(count, MAX_LANES));
+        // Route (and so grow or shrink) the lanes that stay first, so that
+        // the new ones below are cloned with the bus count already right.
+        {
+            std::lock_guard<std::mutex> lock(laneMutex_);
+            routeLanesLocked(std::min(count, laneCount()), count);
+        }
         // New lanes are clones of the primary, built before taking the lock.
-        const std::string state = primary().getStateJson();
+        const std::string state = primary().getStateJson(/* full = */ true);
         const bool mixBypass = primary().isMixBypassed();
         std::vector<std::unique_ptr<DspEngine>> fresh;
         for (int k = laneCount(); k < count; k++) {
             auto e = std::make_unique<DspEngine>(sampleRate_, maxBlock_);
+            e->setRouting(routeOf(k, count), routedCountFor(count));
             e->loadStateJson(state);
             e->setMixBypassed(mixBypass);
             fresh.push_back(std::move(e));
@@ -115,6 +129,51 @@ public:
         }
     }
 
+    /**
+     * Whether a wide stream is spread across the mixer, one bus per channel
+     * group (the default), or runs whole through the buses by their own input
+     * switches — bus 1 alone, unless others are switched on — as stereo does.
+     * Re-routes the lanes in place, without adding or dropping any, so it is
+     * safe from any thread.
+     */
+    void setSpread(bool spread) {
+        std::lock_guard<std::mutex> lock(laneMutex_);
+        spread_ = spread;
+        routeLanesLocked(laneCount(), laneCount());
+    }
+
+    /**
+     * [peakL, peakR, holdL, holdR] per bus, as DspEngine::getBusLevels, but
+     * each routed bus read from the lane that feeds it and the master from
+     * the loudest lane.
+     */
+    void getBusLevels(float* out, int maxFloats) {
+        std::lock_guard<std::mutex> lock(laneMutex_);
+        primary().getBusLevels(out, maxFloats);
+        float lv[4];
+        for (int k = 1; k < laneCount(); k++) {
+            const int bus = lanes_[k]->routedBus();
+            if (bus >= 0 && bus * 4 + 3 < maxFloats && lanes_[k]->getBusLevel(bus, lv)) {
+                for (int i = 0; i < 4; i++) out[bus * 4 + i] = lv[i];
+            }
+            if (MASTER_BUS * 4 + 3 < maxFloats && lanes_[k]->getBusLevel(MASTER_BUS, lv)) {
+                for (int i = 0; i < 4; i++) {
+                    out[MASTER_BUS * 4 + i] = std::max(out[MASTER_BUS * 4 + i], lv[i]);
+                }
+            }
+        }
+    }
+
+    /** Runs [f] on the lane whose channels feed [busIndex] (else the primary). */
+    template <typename F>
+    auto withBusLane(int busIndex, F&& f) {
+        std::lock_guard<std::mutex> lock(laneMutex_);
+        for (auto& e : lanes_) {
+            if (e->routedBus() == busIndex) return f(*e);
+        }
+        return f(primary());
+    }
+
     bool getAndResetClipped() {
         std::lock_guard<std::mutex> lock(laneMutex_);
         bool any = false;
@@ -123,6 +182,15 @@ public:
     }
 
 private:
+    // One lane is plain stereo: never routed, every bus by its own switch.
+    int routedCountFor(int lanes) const { return spread_ && lanes > 1 ? lanes : 0; }
+    int routeOf(int k, int lanes) const {
+        return routedCountFor(lanes) > 0 ? DspEngine::busIndexForNumber(k + 1) : -1;
+    }
+    void routeLanesLocked(int first, int lanes) {
+        for (int k = 0; k < first; k++) lanes_[k]->setRouting(routeOf(k, lanes), routedCountFor(lanes));
+    }
+
     void allocScratch() {
         const size_t n = static_cast<size_t>(std::max(1, maxBlock_));
         key_.assign(n, 0.0f);
@@ -220,6 +288,7 @@ private:
     }
 
     std::vector<std::unique_ptr<DspEngine>> lanes_;
+    bool spread_ = true;  // guarded by laneMutex_
     int laneFirst_[MAX_LANES] = {};
     int laneSecond_[MAX_LANES] = {};
     int sampleRate_;

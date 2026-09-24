@@ -283,7 +283,10 @@ void DspEngine::processMixBusesLocked(const float* left, const float* right, int
     bool hasSolo = anySoloed();
     bool mixBypass = mixBypassed_.load(std::memory_order_relaxed);
 
-    // Process mix buses 0-3
+    // A routed lane feeds its own bus only, among the routed ones.
+    const int routedBus = routedBus_.load(std::memory_order_relaxed);
+    const int routedCount = routedCount_.load(std::memory_order_relaxed);
+
     const int activeBuses = activeBusCount();
     for (int b = 0; b < activeBuses; b++) {
         if (b == MASTER_BUS) continue;
@@ -291,6 +294,10 @@ void DspEngine::processMixBusesLocked(const float* left, const float* right, int
 
         // Load atomic parameters once into locals
         bool busInputEnabled = bus.inputEnabled.load(std::memory_order_relaxed);
+        if (routedBus >= 0) {
+            busInputEnabled = b == routedBus ||
+                (busNumberForIndex(b) > routedCount && busInputEnabled);
+        }
         bool busMuted = bus.muted.load(std::memory_order_relaxed);
         bool busSoloed = bus.soloed.load(std::memory_order_relaxed);
         float busGainDb = mixBypass ? 0.0f : bus.gainDb.load(std::memory_order_relaxed);
@@ -697,6 +704,8 @@ bool DspEngine::removeBus(int busIndex) {
         std::lock_guard<std::mutex> lock(chainMutex_);
         const int count = mixBusCount_.load(std::memory_order_relaxed);
         if (busIndex <= MASTER_BUS || busIndex > count) return false;
+        // A bus a channel group is routed to stays while it is.
+        if (busNumberForIndex(busIndex) <= routedCount_.load(std::memory_order_relaxed)) return false;
         retired.swap(buses_[busIndex].plugins);
         for (int b = busIndex; b < count; b++) moveBusLocked(buses_[b], buses_[b + 1]);
         resetBusLocked(buses_[count]);
@@ -717,6 +726,69 @@ void DspEngine::getBusLevels(float* outLevels, int maxFloats) {
         outLevels[b * 4 + 2] = buses_[b].holdL;
         outLevels[b * 4 + 3] = buses_[b].holdR;
     }
+}
+
+bool DspEngine::getBusLevel(int busIndex, float* out4) const {
+    if (!isActiveBus(busIndex) || !out4) return false;
+    const Bus& bus = buses_[busIndex];
+    out4[0] = bus.decayL;
+    out4[1] = bus.decayR;
+    out4[2] = bus.holdL;
+    out4[3] = bus.holdR;
+    return true;
+}
+
+// ── Channel routing ─────────────────────────────────────────────────────
+
+bool DspEngine::pristineLocked(const Bus& bus) {
+    return bus.plugins.empty() &&
+           bus.gainDb.load(std::memory_order_relaxed) == 0.0f &&
+           bus.pan.load(std::memory_order_relaxed) == 0.0f &&
+           !bus.muted.load(std::memory_order_relaxed) &&
+           !bus.soloed.load(std::memory_order_relaxed) &&
+           !bus.inputEnabled.load(std::memory_order_relaxed);
+}
+
+bool DspEngine::busPristine(int busIndex) {
+    std::lock_guard<std::mutex> lock(chainMutex_);
+    return isMixBus(busIndex) && pristineLocked(buses_[busIndex]);
+}
+
+int DspEngine::savedMixBusCountLocked() const {
+    int n = mixBusCount_.load(std::memory_order_relaxed);
+    const int grownFrom = autoGrownFrom_.load(std::memory_order_relaxed);
+    if (grownFrom < 0) return n;
+    const int floor = std::max(MIN_MIX_BUSES, grownFrom);
+    while (n > floor && pristineLocked(buses_[busIndexForNumber(n)])) n--;
+    return n;
+}
+
+void DspEngine::setRouting(int routedBus, int routedCount) {
+    if (routedBus < 0) routedCount = 0;
+    routedCount = std::max(0, std::min(MAX_MIX_BUSES, routedCount));
+    routedCount_.store(routedCount, std::memory_order_relaxed);
+    routedBus_.store(routedBus, std::memory_order_relaxed);
+
+    const int count = mixBusCount();
+    if (routedCount > count) {
+        // Grow to one bus per channel group, remembering where from.
+        if (autoGrownFrom_.load(std::memory_order_relaxed) < 0) {
+            autoGrownFrom_.store(count, std::memory_order_relaxed);
+        }
+        while (mixBusCount() < routedCount && addBus() >= 0) {}
+        return;
+    }
+    const int grownFrom = autoGrownFrom_.load(std::memory_order_relaxed);
+    if (grownFrom < 0) return;
+    // Narrower now: drop the grown buses nobody touched, from the top, down
+    // to what the routing still needs. A touched one stops it — it is the
+    // user's now, and so is everything below it.
+    const int floor = std::max({MIN_MIX_BUSES, grownFrom, routedCount});
+    while (mixBusCount() > floor) {
+        const int idx = busIndexForNumber(mixBusCount());
+        if (!busPristine(idx) || !removeBus(idx)) break;
+    }
+    if (routedCount <= grownFrom) autoGrownFrom_.store(-1, std::memory_order_relaxed);
 }
 
 bool DspEngine::getAndResetClipped() {
@@ -794,11 +866,13 @@ void DspEngine::resetPluginState() {
 
 // ── State serialization (simple JSON) ───────────────────────────────────
 
-std::string DspEngine::getStateJson() const {
+std::string DspEngine::getStateJson(bool full) const {
     std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(chainMutex_));
+    // Mix buses 1..n are indices 0..n with the master among them (n >= 4).
+    const int entries = (full ? mixBusCount() : savedMixBusCountLocked()) + 1;
     std::ostringstream ss;
     ss << "{\"buses\":[";
-    for (int b = 0; b < activeBusCount(); b++) {
+    for (int b = 0; b < entries; b++) {
         const Bus& bus = buses_[b];
         if (b > 0) ss << ",";
         ss << "{\"gain\":" << bus.gainDb.load(std::memory_order_relaxed)
@@ -993,8 +1067,12 @@ void DspEngine::loadStateJson(const std::string& json) {
         std::lock_guard<std::mutex> lock(chainMutex_);
         // A save with more than five entries carries buses 5 and up; an
         // older one (exactly five) is the four-bus mixer it always was.
-        mixBusCount_.store(std::max(MIN_MIX_BUSES, std::min(MAX_MIX_BUSES, busIdx - 1)),
-                           std::memory_order_relaxed);
+        const int saved = std::max(MIN_MIX_BUSES, std::min(MAX_MIX_BUSES, busIdx - 1));
+        // While routed, the channel groups keep their buses: a saved mix with
+        // fewer is grown to fit (and those buses are the grown ones again).
+        const int routed = routedCount_.load(std::memory_order_relaxed);
+        mixBusCount_.store(std::max(saved, routed), std::memory_order_relaxed);
+        autoGrownFrom_.store(saved < routed ? saved : -1, std::memory_order_relaxed);
         for (int b = 0; b < TOTAL_BUSES; b++) {
             buses_[b].plugins.swap(staged[b]);
             buses_[b].gainDb.store(stagedBus[b].gainDb, std::memory_order_relaxed);

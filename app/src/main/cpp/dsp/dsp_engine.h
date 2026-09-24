@@ -128,10 +128,33 @@ public:
     bool removeBus(int busIndex);
     int mixBusCount() const { return mixBusCount_.load(std::memory_order_relaxed); }
 
+    // ── Channel routing, for MultiLaneEngine ────────────────────────────
+    // A stream wider than stereo is spread across the mixer: each lane (a
+    // channel group — front pair, centre, LFE, …) feeds one bus of its own,
+    // lane k to bus number k + 1. This engine is one lane: it feeds only
+    // [routedBus] among the first [routedCount] mix buses, while buses past
+    // those still take input by their own switch (a whole-bed send, say).
+    // routedBus -1 turns routing off: every bus by its switch, as in stereo.
+    //
+    // The mixer grows to at least [routedCount] mix buses, and remembers it
+    // did: when the routing narrows again the buses the growth added are
+    // removed, if they are still untouched. While routed those buses cannot
+    // be removed, a saved state keeps its own bus count through a load, and
+    // getStateJson() leaves the untouched grown buses out — so a mix saved
+    // during an Atmos track is still the mix the user built.
+    void setRouting(int routedBus, int routedCount);
+    int routedBus() const { return routedBus_.load(std::memory_order_relaxed); }
+    int routedCount() const { return routedCount_.load(std::memory_order_relaxed); }
+    // Bus number (1–16, as the strips show it) to engine index, and back.
+    static int busIndexForNumber(int n) { return n <= MASTER_BUS ? n - 1 : n; }
+    static int busNumberForIndex(int i) { return i < MASTER_BUS ? i + 1 : i; }
+
     // Metering — returns levels in dB
     // Output: [bus0_peakL, bus0_peakR, bus0_holdL, bus0_holdR, ..., master_holdR]
     // Total: TOTAL_BUSES * 4 floats
     void getBusLevels(float* outLevels, int maxFloats);
+    // One bus's [peakL, peakR, holdL, holdR]; false if it is not active.
+    bool getBusLevel(int busIndex, float* out4) const;
 
     // Clipping detection — returns true if master output clipped since last check
     bool getAndResetClipped();
@@ -148,7 +171,9 @@ public:
     void resetPluginState();
 
     // State serialization
-    std::string getStateJson() const;
+    // [full] includes the buses routing grew that are still untouched; the
+    // default leaves them out, which is the form to save or export.
+    std::string getStateJson(bool full = false) const;
     void loadStateJson(const std::string& json);
 
 private:
@@ -170,6 +195,14 @@ private:
     static void resetBusLocked(Bus& bus);
     static void moveBusLocked(Bus& dst, Bus& src);
     std::atomic<int> mixBusCount_{MIN_MIX_BUSES};
+    std::atomic<int> routedBus_{-1};
+    std::atomic<int> routedCount_{0};
+    // The mix-bus count before routing grew it, or -1 when it has not.
+    std::atomic<int> autoGrownFrom_{-1};
+    static bool pristineLocked(const Bus& bus);
+    bool busPristine(int busIndex);
+    // How many mix buses a save carries: the grown, untouched tail left off.
+    int savedMixBusCountLocked() const;
     bool skippedOnThisLane(const SnapinProcessor& plugin) const;
     bool monoLane_ = false;
     void recalcBusGains(float gainDb, float pan, float& targetL, float& targetR);

@@ -11,12 +11,21 @@ data class BusConfig(
     val muted: Boolean = false,
     val soloed: Boolean = false,
     val inputEnabled: Boolean = false,
-    val plugins: List<PluginInstance> = emptyList()
+    val plugins: List<PluginInstance> = emptyList(),
+    /**
+     * The channel group of a multichannel stream this bus carries right now
+     * ("Centre", "Top Front"…), or null. Set only while such a stream plays;
+     * never saved.
+     */
+    val channelGroup: String? = null,
 ) {
     val isMaster: Boolean get() = index == MASTER_INDEX
 
-    /** Buses 1–4 and the master stay; bus 5 and up can be removed. */
-    val isRemovable: Boolean get() = index > MASTER_INDEX
+    /**
+     * Buses 1–4 and the master stay; bus 5 and up can be removed, except
+     * while a channel group is routed to it.
+     */
+    val isRemovable: Boolean get() = index > MASTER_INDEX && channelGroup == null
 
     /** The number on the strip: 1–16, whatever the index behind it. */
     val number: Int get() = numberFor(index)

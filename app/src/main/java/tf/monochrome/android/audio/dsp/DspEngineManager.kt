@@ -77,6 +77,18 @@ class DspEngineManager @Inject constructor(
         scope.launch {
             preferences.dspBlockSize.collect { processor.setBlockSize(it) }
         }
+        // A wide stream spreads its channel groups one per bus, adding buses
+        // as it needs them; a narrower one hands back the ones nobody touched.
+        // Either way the engine changed the mixer, so the mirror re-reads it.
+        scope.launch {
+            preferences.dspSpreadChannels.collect { processor.setSpreadChannels(it) }
+        }
+        scope.launch {
+            processor.channelGroups.collect {
+                if (processor.getEnginePtr() != 0L) syncFromEngine()
+                else _buses.value = labelled(_buses.value)
+            }
+        }
         // Master "DSP mixer off" toggle becomes a true bypass on the audio
         // thread — no deinterleave, no nativeProcess, no Oxford, no
         // interleave — so flipping it off should leave audio identical to
@@ -266,8 +278,10 @@ class DspEngineManager @Inject constructor(
         if (ptr == 0L) return null
         val index = processor.nativeAddBus(ptr)
         if (index < 0) return null
-        _buses.value = (_buses.value + BusConfig(index = index, name = BusConfig.nameFor(index)))
-            .sortedBy { it.index }
+        _buses.value = labelled(
+            (_buses.value + BusConfig(index = index, name = BusConfig.nameFor(index)))
+                .sortedBy { it.index }
+        )
         requestSave()
         return index
     }
@@ -281,7 +295,7 @@ class DspEngineManager @Inject constructor(
         val ptr = processor.getEnginePtr()
         if (ptr == 0L) return false
         if (!processor.nativeRemoveBus(ptr, busIndex)) return false
-        _buses.value = parseBusConfigsFromJson(processor.nativeGetStateJson(ptr))
+        syncFromEngine()
         requestSave()
         return true
     }
@@ -452,8 +466,42 @@ class DspEngineManager @Inject constructor(
     fun loadStateJson(json: String) {
         val ptr = processor.getEnginePtr()
         if (ptr != 0L) processor.nativeLoadStateJson(ptr, json)
-        // Sync Kotlin state from the loaded JSON
-        _buses.value = parseBusConfigsFromJson(json)
+        // Sync Kotlin state from what the engine made of it — which, while a
+        // wide stream plays, can be more buses than the JSON had.
+        if (ptr != 0L) syncFromEngine() else _buses.value = labelled(parseBusConfigsFromJson(json))
+    }
+
+    val spreadChannels = preferences.dspSpreadChannels
+
+    fun setSpreadChannels(spread: Boolean) {
+        processor.setSpreadChannels(spread)  // at once, not after the write
+        scope.launch { preferences.setDspSpreadChannels(spread) }
+    }
+
+    /** The channel groups of the stream playing, in bus order; empty for stereo. */
+    val channelGroups: StateFlow<List<String>> get() = processor.channelGroups
+
+    /** Re-reads the whole mixer from the engine, grown buses included. */
+    private fun syncFromEngine() {
+        val ptr = processor.getEnginePtr()
+        if (ptr == 0L) return
+        _buses.value = labelled(parseBusConfigsFromJson(processor.nativeGetLiveStateJson(ptr)))
+    }
+
+    /**
+     * Names the buses a multichannel stream is spread onto after the channels
+     * they carry — "Front", "Centre", "LFE"… — and clears the names off the
+     * rest. Only the mirror is renamed; nothing here is saved.
+     */
+    private fun labelled(buses: List<BusConfig>): List<BusConfig> {
+        val groups = processor.channelGroups.value
+        return buses.map { bus ->
+            val group = if (bus.isMaster) null else groups.getOrNull(bus.number - 1)
+            bus.copy(
+                name = group ?: BusConfig.nameFor(bus.index),
+                channelGroup = group,
+            )
+        }
     }
 
     // ── Internal ────────────────────────────────────────────────────────

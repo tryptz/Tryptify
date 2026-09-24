@@ -90,6 +90,7 @@ void everyPairLaneRunsTheSameChain() {
     // it through the state clone: this is what proves the clone is whole.
     MultiLaneEngine lanes(kRate, kBlock);
     buildChain([&](auto f) { lanes.forEach(f); });
+    lanes.setSpread(false);  // one bus: every lane through bus 1's chain
     lanes.configureLanes(k714First, k714Second, k714Lanes);
     check(lanes.laneCount() == k714Lanes, "7.1.4 gets seven lanes");
 
@@ -133,6 +134,7 @@ void compressorGains(bool onMaster, double& front, double& centre) {
         e.addPlugin(bus, 0, static_cast<int>(SnapinType::COMPRESSOR));
         e.setParameter(bus, 0, 0, -30.0f);
     });
+    lanes.setSpread(false);  // one bus: every lane through bus 1's chain
     lanes.configureLanes(k714First, k714Second, k714Lanes);
 
     Planar p(k714Channels);
@@ -187,6 +189,7 @@ void monoLanesSkipImageEffects() {
             if (withHaas) e.addPlugin(0, 0, static_cast<int>(SnapinType::HAAS));
             e.addPlugin(0, withHaas ? 1 : 0, static_cast<int>(SnapinType::GAIN));
         });
+        lanes.setSpread(false);  // one bus: every lane through bus 1's chain
         lanes.configureLanes(k714First, k714Second, k714Lanes);
         Planar p(k714Channels);
         std::vector<float> centre;
@@ -276,6 +279,100 @@ void anAddedBusCarriesAudio() {
 
 }  // namespace
 
+// Fills every channel of a 7.1.4 block with its own tone.
+void fill714(Planar& p, long& n) {
+    for (int i = 0; i < kBlock; i++, n++) {
+        for (int c = 0; c < k714Channels; c++) p.ch[c][i] = tone(n, 110.0 * (c + 1), 0.3);
+    }
+}
+
+double rms(const std::vector<float>& v) {
+    double acc = 0.0;
+    for (float x : v) acc += static_cast<double>(x) * x;
+    return std::sqrt(acc / static_cast<double>(v.size()));
+}
+
+void atmosSpreadsAcrossTheMixer() {
+    MultiLaneEngine m(kRate, kBlock);
+    m.configureLanes(k714First, k714Second, k714Lanes);
+    check(m.primary().mixBusCount() == 7, "7.1.4 grows the mixer to one bus per channel group (7)");
+    // Mute bus 2 (index 1), the centre's: only the centre channel goes quiet.
+    m.forEach([](DspEngine& e) { e.setBusMute(1, true); });
+    Planar p(k714Channels);
+    long n = 0;
+    for (int b = 0; b < 20; b++) {
+        fill714(p, n);
+        m.processPlanar(p.ptr.data(), k714Channels, kBlock);
+    }
+    check(rms(p.ch[2]) < 1e-6, "muting the centre's bus silences the centre channel");
+    bool othersAlive = true;
+    for (int c = 0; c < k714Channels; c++) {
+        if (c != 2) othersAlive = othersAlive && rms(p.ch[c]) > 0.01;
+    }
+    check(othersAlive, "and every other channel still plays");
+    // Top rear pair is lane 6 -> bus 7 -> index 7.
+    m.forEach([](DspEngine& e) { e.setBusMute(1, false); e.setBusMute(7, true); });
+    for (int b = 0; b < 20; b++) {
+        fill714(p, n);
+        m.processPlanar(p.ptr.data(), k714Channels, kBlock);
+    }
+    check(rms(p.ch[10]) < 1e-6 && rms(p.ch[11]) < 1e-6 && rms(p.ch[2]) > 0.01,
+          "bus 7 is the top rear pair, and nothing else");
+    check(!m.primary().removeBus(7), "a bus a channel group feeds cannot be removed");
+}
+
+void grownBusesLeaveWithTheStream() {
+    MultiLaneEngine m(kRate, kBlock);
+    const std::string before = m.primary().getStateJson();
+    m.configureLanes(k714First, k714Second, k714Lanes);
+    check(m.primary().getStateJson() == before,
+          "the untouched grown buses are not saved");
+    check(m.primary().getStateJson(true) != before, "but the live state shows them");
+    // Touch bus 6 (a top front pair), leave 5 and 7 alone.
+    m.forEach([](DspEngine& e) { e.addPlugin(6, 0, static_cast<int>(SnapinType::GAIN)); });
+    const int stereoFirst[] = {0};
+    const int stereoSecond[] = {1};
+    m.configureLanes(stereoFirst, stereoSecond, 1);
+    check(m.primary().mixBusCount() == 6,
+          "back to stereo drops untouched bus 7 and keeps the edited bus 6 (and 5 below it)");
+    check(m.primary().routedBus() == -1, "and stereo is not routed");
+}
+
+void aSavedMixKeepsItsBusesThroughAnAtmosTrack() {
+    MultiLaneEngine m(kRate, kBlock);
+    m.configureLanes(k714First, k714Second, k714Lanes);
+    DspEngine plain(kRate, kBlock);
+    plain.setBusGain(0, -2.0f);
+    // The app reloads the saved mix whenever the format changes.
+    m.forEach([&](DspEngine& e) { e.loadStateJson(plain.getStateJson()); });
+    check(m.primary().mixBusCount() == 7, "a four-bus mix loaded mid-Atmos still has a bus per group");
+    check(m.primary().getStateJson() == plain.getStateJson(), "and saves as the four-bus mix it is");
+    const int stereoFirst[] = {0};
+    const int stereoSecond[] = {1};
+    m.configureLanes(stereoFirst, stereoSecond, 1);
+    check(m.primary().mixBusCount() == 4, "and is four buses again after");
+}
+
+void spreadCanBeSwitchedOffAndOnMidStream() {
+    MultiLaneEngine m(kRate, kBlock);
+    m.configureLanes(k714First, k714Second, k714Lanes);
+    m.forEach([](DspEngine& e) { e.setBusMute(0, true); });  // bus 1 = front only
+    Planar p(k714Channels);
+    long n = 0;
+    for (int b = 0; b < 20; b++) { fill714(p, n); m.processPlanar(p.ptr.data(), k714Channels, kBlock); }
+    check(rms(p.ch[0]) < 1e-6 && rms(p.ch[2]) > 0.01, "spread: muting bus 1 silences only the front");
+
+    m.setSpread(false);
+    check(m.primary().mixBusCount() == 4, "one bus: the grown buses go");
+    for (int b = 0; b < 20; b++) { fill714(p, n); m.processPlanar(p.ptr.data(), k714Channels, kBlock); }
+    bool allSilent = true;
+    for (int c = 0; c < k714Channels; c++) allSilent = allSilent && rms(p.ch[c]) < 1e-6;
+    check(allSilent, "one bus: every channel runs through bus 1, so muting it silences all");
+
+    m.setSpread(true);
+    check(m.primary().mixBusCount() == 7, "spread again: a bus per group again");
+}
+
 int main() {
     stereoIsUnchanged();
     everyPairLaneRunsTheSameChain();
@@ -286,6 +383,10 @@ int main() {
     removingABusMovesTheOnesAboveDown();
     stateRoundTripsBusCount();
     anAddedBusCarriesAudio();
+    atmosSpreadsAcrossTheMixer();
+    grownBusesLeaveWithTheStream();
+    aSavedMixKeepsItsBusesThroughAnAtmosTrack();
+    spreadCanBeSwitchedOffAndOnMidStream();
     std::printf("%s\n", failures == 0 ? "all passed" : "FAILURES");
     return failures == 0 ? 0 : 1;
 }

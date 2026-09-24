@@ -51,4 +51,16 @@ class ChannelLayoutTest {
             assertEquals("count $n", (0 until n).toList(), covered)
         }
     }
+
+    @Test
+    fun `every channel group has a name, one per lane`() {
+        assertEquals(listOf("Front", "Centre", "LFE", "Rear", "Side", "Top Front", "Top Rear"),
+            ChannelLayout.laneLabels(12))
+        assertEquals(listOf("Front", "Centre", "LFE", "Surround"), ChannelLayout.laneLabels(6))
+        for (n in 2..ChannelLayout.MAX_CHANNELS) {
+            assertEquals("count $n", ChannelLayout.lanes(n).size, ChannelLayout.laneLabels(n).size)
+        }
+        // A 7.1.4 bed fits the mixer's sixteen buses with room to spare.
+        assertTrue((2..ChannelLayout.MAX_CHANNELS).all { ChannelLayout.lanes(it).size <= 16 })
+    }
 }
