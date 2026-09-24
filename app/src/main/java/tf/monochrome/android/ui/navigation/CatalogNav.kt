@@ -94,6 +94,8 @@ fun NavController.openAlbum(albumId: String?) {
                 ?.let { navigateSafe(Screen.LocalAlbumDetail.createRoute(it)) }
         }
         albumId.startsWith("col_album_") -> Unit // no collection detail screen
+        albumId.startsWith("spotify_") ->
+            navigateSafe(Screen.SpotifyAlbumDetail.createRoute(albumId.removePrefix("spotify_")))
         else -> albumId.toLongOrNull()?.let { navigateSafe(Screen.AlbumDetail.createRoute(it)) }
     }
 }
@@ -109,6 +111,7 @@ fun isNavigableAlbumId(albumId: String?): Boolean {
     return when {
         albumId.startsWith("local_album_") -> albumId.removePrefix("local_album_").toLongOrNull() != null
         albumId.startsWith("col_album_") -> false
+        albumId.startsWith("spotify_") -> albumId.length > "spotify_".length
         else -> albumId.toLongOrNull() != null
     }
 }

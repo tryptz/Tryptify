@@ -9,9 +9,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.api.QobuzIdRegistry
+import tf.monochrome.android.data.api.SpotifyApiClient
+import tf.monochrome.android.data.api.SpotifyIdRegistry
 import tf.monochrome.android.data.downloads.DownloadManager
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.domain.model.AlbumDetail
+import tf.monochrome.android.domain.usecase.toSpotifyCatalogDetail
 import javax.inject.Inject
 
 @HiltViewModel
@@ -19,6 +22,8 @@ class AlbumDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: MusicRepository,
     private val qobuzIdRegistry: QobuzIdRegistry,
+    private val spotifyApiClient: SpotifyApiClient,
+    private val spotifyIdRegistry: SpotifyIdRegistry,
     private val downloadManager: DownloadManager,
 ) : ViewModel() {
 
@@ -50,18 +55,33 @@ class AlbumDetailViewModel @Inject constructor(
             _isLoading.value = true
             _error.value = null
 
-            // Apple first when this id came out of the Apple catalog: Apple and
-            // Qobuz ids share no namespace, so trying Qobuz with an Apple id
-            // just wastes a round trip and returns an error.
-            val appleResult = if (qobuzIdRegistry.isAppleAlbum(albumId)) {
-                repository.getAppleAlbum(albumId)
+            // Spotify first when this id came out of the Spotify catalog: the
+            // hashed numeric id is recorded in SpotifyIdRegistry with the real
+            // base62 id it stands for. Spotify, Apple and Qobuz ids share no
+            // namespace, so trying the others with a Spotify id just wastes a
+            // round trip and surfaces a misleading error.
+            val spotifyBase62 = spotifyIdRegistry.albumBase62For(albumId)
+            val spotifyResult = if (spotifyBase62 != null) {
+                spotifyApiClient.getAlbum(spotifyBase62)
+                    .mapCatching { it.toSpotifyCatalogDetail(spotifyIdRegistry)
+                        ?: error("Spotify album unavailable") }
             } else null
 
-            val qobuzSlug = qobuzIdRegistry.albumSlugFor(albumId)
-            val qobuzResult = if (appleResult?.isSuccess == true) null
+            // Apple next when this id came out of the Apple catalog: Apple and
+            // Qobuz ids share no namespace, so trying Qobuz with an Apple id
+            // just wastes a round trip and returns an error.
+            val appleResult = if (spotifyResult?.isSuccess == true) null
+                else if (qobuzIdRegistry.isAppleAlbum(albumId)) {
+                    repository.getAppleAlbum(albumId)
+                } else null
+
+            val qobuzSlug = if (spotifyResult?.isSuccess == true || appleResult?.isSuccess == true) null
+                else qobuzIdRegistry.albumSlugFor(albumId)
+            val qobuzResult = if (appleResult?.isSuccess == true || spotifyResult?.isSuccess == true) null
                 else qobuzSlug?.let { repository.getQobuzAlbum(it) }
 
             val finalResult = when {
+                spotifyResult?.isSuccess == true -> spotifyResult
                 appleResult?.isSuccess == true -> appleResult
                 qobuzResult?.isSuccess == true -> qobuzResult
                 else -> repository.getAlbum(albumId)

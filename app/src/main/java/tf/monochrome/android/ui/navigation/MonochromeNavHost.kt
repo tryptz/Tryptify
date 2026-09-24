@@ -72,6 +72,7 @@ import tf.monochrome.android.ui.theme.goToPage
 import tf.monochrome.android.ui.theme.reduceMotion
 import tf.monochrome.android.ui.theme.DynamicColorScope
 import tf.monochrome.android.ui.detail.AlbumDetailScreen
+import tf.monochrome.android.ui.detail.SpotifyAlbumDetailScreen
 import tf.monochrome.android.ui.detail.ArtistDetailScreen
 import tf.monochrome.android.ui.detail.LocalAlbumDetailScreen
 import tf.monochrome.android.ui.detail.LocalArtistDetailScreen
@@ -120,6 +121,9 @@ sealed class Screen(val route: String) {
     data object Library : Screen("library")
     data object AlbumDetail : Screen("album/{albumId}") {
         fun createRoute(albumId: Long) = "album/$albumId"
+    }
+    data object SpotifyAlbumDetail : Screen("spotify_album/{spotifyAlbumId}") {
+        fun createRoute(albumId: String) = "spotify_album/$albumId"
     }
     data object ArtistDetail : Screen("artist/{artistId}?name={name}") {
         /**
@@ -558,6 +562,14 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 ) {
                     tf.monochrome.android.devedit.DevEditScreen("album_detail") {
                         AlbumDetailScreen(navController = navController, playerViewModel = playerViewModel)
+                    }
+                }
+                composable(
+                    route = Screen.SpotifyAlbumDetail.route,
+                    arguments = listOf(navArgument("spotifyAlbumId") { type = NavType.StringType })
+                ) {
+                    tf.monochrome.android.devedit.DevEditScreen("spotify_album_detail") {
+                        SpotifyAlbumDetailScreen(navController = navController, playerViewModel = playerViewModel)
                     }
                 }
                 composable(

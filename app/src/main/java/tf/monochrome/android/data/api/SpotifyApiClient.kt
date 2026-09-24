@@ -9,6 +9,7 @@ import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import tf.monochrome.android.data.auth.SpotifyAuthManager
 import tf.monochrome.android.data.import_.CsvTrack
+import tf.monochrome.android.data.spotify.SpotifyLocalInstance
 import java.net.URLEncoder
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -33,14 +34,24 @@ class SpotifyApiClient @Inject constructor(
     private val httpClient: HttpClient,
     private val json: Json,
     private val authManager: SpotifyAuthManager,
+    private val localInstance: SpotifyLocalInstance,
 ) {
 
+    /**
+     * Base URL for every Web API call: the app's own localhost Spotify
+     * instance (see [SpotifyLocalInstance]) rather than api.spotify.com
+     * directly. The embedded server injects the PKCE token and mirrors
+     * Spotify's paths/status codes, so this client talks to it exactly like
+     * it talks to any other catalog instance.
+     */
+    private suspend fun apiBase(): String = localInstance.baseUrl()
+
     suspend fun getCurrentUser(): Result<SpotifyUserProfile> = runCatching {
-        json.decodeFromString<SpotifyUserProfile>(authedGet("$API_BASE/me").bodyAsText())
+        json.decodeFromString<SpotifyUserProfile>(authedGet("${apiBase()}/me").bodyAsText())
     }
 
     suspend fun getPlaylistMeta(playlistId: String): Result<SpotifyPlaylistMeta> = runCatching {
-        val resp = authedGet("$API_BASE/playlists/$playlistId?fields=id,name,description")
+        val resp = authedGet("${apiBase()}/playlists/$playlistId?fields=id,name,description")
         json.decodeFromString<SpotifyPlaylistMeta>(resp.bodyAsText())
     }
 
@@ -56,7 +67,7 @@ class SpotifyApiClient @Inject constructor(
         paginate { offset ->
             val fields = "items(item(name,duration_ms,is_local,type,artists(name),album(name))),next,total"
             val resp = authedGet(
-                "$API_BASE/playlists/$playlistId/items?limit=100&offset=$offset&fields=$fields",
+                "${apiBase()}/playlists/$playlistId/items?limit=100&offset=$offset&fields=$fields",
             )
             json.decodeFromString<SpotifyPagingObject<SpotifyPlaylistTrackItem>>(resp.bodyAsText())
         }.mapNotNull { it.trackOrItem.toCsvTrackOrNull() }
@@ -65,7 +76,7 @@ class SpotifyApiClient @Inject constructor(
     /** The connected user's playlists (owned + followed). */
     suspend fun getMyPlaylists(): Result<List<SpotifySimplePlaylist>> = runCatching {
         paginate { offset ->
-            val resp = authedGet("$API_BASE/me/playlists?limit=50&offset=$offset")
+            val resp = authedGet("${apiBase()}/me/playlists?limit=50&offset=$offset")
             json.decodeFromString<SpotifyPagingObject<SpotifySimplePlaylist>>(resp.bodyAsText())
         }
     }
@@ -77,16 +88,45 @@ class SpotifyApiClient @Inject constructor(
      */
     suspend fun searchTracks(query: String, limit: Int = SEARCH_LIMIT): Result<List<SpotifyTrack>> = runCatching {
         val q = URLEncoder.encode(query, "UTF-8").replace("+", "%20")
-        val resp = authedGet("$API_BASE/search?q=$q&type=track&limit=$limit")
+        val resp = authedGet("${apiBase()}/search?q=$q&type=track&limit=$limit")
         json.decodeFromString<SpotifySearchResponse>(resp.bodyAsText())
             .tracks?.items.orEmpty()
             .filter { !it.isLocal && it.type == "track" && !it.uri.isNullOrBlank() }
     }
 
+    /** Album search — the browse leg that puts Spotify albums alongside Qobuz's. */
+    suspend fun searchAlbums(query: String, limit: Int = SEARCH_LIMIT): Result<List<SpotifyAlbumFull>> = runCatching {
+        val q = URLEncoder.encode(query, "UTF-8").replace("+", "%20")
+        val resp = authedGet("${apiBase()}/search?q=$q&type=album&limit=$limit")
+        json.decodeFromString<SpotifyAlbumSearchResponse>(resp.bodyAsText())
+            .albums?.items.orEmpty()
+            .filter { !it.id.isNullOrBlank() }
+    }
+
+    /** Artist search — same deal as albums. */
+    suspend fun searchArtists(query: String, limit: Int = SEARCH_LIMIT): Result<List<SpotifyArtistFull>> = runCatching {
+        val q = URLEncoder.encode(query, "UTF-8").replace("+", "%20")
+        val resp = authedGet("${apiBase()}/search?q=$q&type=artist&limit=$limit")
+        json.decodeFromString<SpotifyArtistSearchResponse>(resp.bodyAsText())
+            .artists?.items.orEmpty()
+            .filter { !it.id.isNullOrBlank() }
+    }
+
+    /**
+     * Album detail with its tracks, mirroring HiFiApiClient.getQobuzAlbum's
+     * role: one call feeds AlbumDetailViewModel's Spotify branch. Track URIs
+     * are included in the album-endpoint response, so each track maps straight
+     * to a playable SpotifyRemote source.
+     */
+    suspend fun getAlbum(albumId: String): Result<SpotifyAlbumFull> = runCatching {
+        val resp = authedGet("${apiBase()}/albums/$albumId")
+        json.decodeFromString<SpotifyAlbumFull>(resp.bodyAsText())
+    }
+
     /** The connected user's Liked Songs. */
     suspend fun getLikedSongs(): Result<List<CsvTrack>> = runCatching {
         paginate { offset ->
-            val resp = authedGet("$API_BASE/me/tracks?limit=50&offset=$offset")
+            val resp = authedGet("${apiBase()}/me/tracks?limit=50&offset=$offset")
             json.decodeFromString<SpotifyPagingObject<SpotifySavedTrackItem>>(resp.bodyAsText())
         }.mapNotNull { it.track.toCsvTrackOrNull() }
     }
@@ -179,7 +219,6 @@ class SpotifyApiClient @Inject constructor(
     }
 
     companion object {
-        private const val API_BASE = "https://api.spotify.com/v1"
         private const val MAX_RETRIES = 3
         private const val MAX_RETRY_AFTER_SEC = 30L
         private const val MAX_TRACKS = 10_000

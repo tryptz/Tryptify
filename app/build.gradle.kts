@@ -93,7 +93,8 @@ android {
             cmake {
                 cppFlags += "-std=c++17"
                 arguments += "-DANDROID_STL=c++_shared"
-                abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+                // arm64 only: this device (and host toolchain) is arm64.
+                abiFilters += listOf("arm64-v8a")
             }
         }
     }
@@ -157,6 +158,9 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+        // Enum `.entries` and other stdlib experimental APIs are used across
+        // the app's existing code; enable them toolchain-wide.
+        freeCompilerArgs += "-opt-in=kotlin.ExperimentalStdlibApi"
     }
 
     buildFeatures {
@@ -306,12 +310,15 @@ dependencies {
     implementation(libs.ktor.serialization.json)
     implementation(libs.ktor.client.logging)
     implementation(libs.ktor.client.websockets)
+    // Spotify localhost instance: an embedded HTTP server the app hosts for
+    // itself, proxying api.spotify.com with the app's own PKCE token.
+    implementation(libs.ktor.server.core)
+    implementation(libs.ktor.server.cio)
 
-    // Spotify App Remote SDK — plays Spotify tracks through the Spotify app
-    // (Premium) and reports its PlayerState back. Not published to Maven, so
-    // the release .aar is vendored from github.com/spotify/android-sdk
-    // (Apache-2.0); see app/libs/README.md. Gson is its runtime JSON mapper.
-    implementation(files("libs/spotify-app-remote-release-0.8.0.aar"))
+    // Spotify wrapper module — the App Remote SDK .aar moved there along with
+    // the bridge/shadow classes; the app consumes the whole stack as one
+    // module. Gson remains the SDK's runtime JSON mapper.
+    implementation(project(":spotify-wrapper"))
     implementation(libs.gson)
 
     // Coil

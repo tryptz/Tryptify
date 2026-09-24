@@ -1,13 +1,21 @@
 package tf.monochrome.android.domain.usecase
 
 import tf.monochrome.android.data.api.QobuzIdRegistry
+import tf.monochrome.android.data.api.SpotifyAlbumFull
+import tf.monochrome.android.data.api.SpotifyArtistFull
+import tf.monochrome.android.data.api.SpotifyIdRegistry
 import tf.monochrome.android.data.api.SpotifyTrack
+import tf.monochrome.android.data.api.spotifyNumericIdFor
 import tf.monochrome.android.data.cache.SpotifyShadowUri
+import tf.monochrome.android.domain.model.Album
+import tf.monochrome.android.domain.model.AlbumDetail
+import tf.monochrome.android.domain.model.Artist
 import tf.monochrome.android.domain.model.GenreConfidence
 import tf.monochrome.android.domain.model.PlaybackSource
 import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.domain.model.UnifiedArtistRef
+import tf.monochrome.android.domain.model.UnifiedAlbum
 import tf.monochrome.android.domain.model.UnifiedTrack
 
 /**
@@ -173,5 +181,143 @@ fun SpotifyTrack.toSpotifyUnifiedTrack(): UnifiedTrack? {
         isrc = externalIds?.isrc,
         source = PlaybackSource.SpotifyRemote(spotifyUri = trackUri, durationMs = durationMs),
         sourceType = SourceType.SPOTIFY,
+    )
+}
+
+/**
+ * A Spotify album from search or the album-detail endpoint, mapped the way
+ * Qobuz albums are: a [UnifiedAlbum] whose id carries the `spotify_` prefix,
+ * so AlbumDetailViewModel can route the click to SpotifyAlbumViewModel's
+ * branch. Null for anything without a usable album id.
+ */
+fun SpotifyAlbumFull.toSpotifyUnifiedAlbum(): UnifiedAlbum? {
+    val albumId = id ?: return null
+    if (name.isBlank()) return null
+    return UnifiedAlbum(
+        id = "spotify_$albumId",
+        title = name,
+        artistName = artists.firstOrNull()?.name?.takeIf { it.isNotBlank() } ?: DEFAULT_ARTIST_NAME,
+        year = releaseDate?.take(4)?.toIntOrNull(),
+        trackCount = totalTracks,
+        artworkUri = images.firstOrNull()?.url?.takeIf { it.isNotBlank() },
+        sourceType = SourceType.SPOTIFY,
+    )
+}
+
+/**
+ * A track inside a Spotify album (or any Spotify catalog context that already
+ * carries the album). Same contract as [toSpotifyUnifiedTrack] but with the
+ * album fields filled from the parent album rather than a search fragment.
+ */
+fun SpotifyTrack.toSpotifyAlbumTrack(album: SpotifyAlbumFull): UnifiedTrack? {
+    val trackUri = uri ?: return null
+    if (isLocal || type != "track" || name.isBlank() || durationMs <= 0) return null
+    if (!trackUri.startsWith("spotify:track:") ||
+        !SpotifyShadowUri.isTrackId(SpotifyShadowUri.trackIdOf(trackUri))
+    ) return null
+
+    val names = artists.map { it.name }.filter { it.isNotBlank() }
+    return UnifiedTrack(
+        id = "spotify_${SpotifyShadowUri.trackIdOf(trackUri)}",
+        title = name,
+        durationSeconds = (durationMs / 1000).toInt(),
+        trackNumber = trackNumber,
+        discNumber = discNumber,
+        explicit = explicit,
+        artistName = names.joinToString(", ").ifBlank { DEFAULT_ARTIST_NAME },
+        artistNames = names,
+        albumArtistName = names.firstOrNull(),
+        artists = names.map { UnifiedArtistRef(id = null, name = it) },
+        albumTitle = album.name.takeIf { it.isNotBlank() },
+        albumId = album.id?.let { "spotify_$it" },
+        releaseYear = album.releaseDate?.take(4)?.toIntOrNull(),
+        artworkUri = album.images.firstOrNull()?.url?.takeIf { it.isNotBlank() },
+        isrc = externalIds?.isrc,
+        source = PlaybackSource.SpotifyRemote(spotifyUri = trackUri, durationMs = durationMs),
+        sourceType = SourceType.SPOTIFY,
+    )
+}
+
+// ========== Spotify catalog (domain-model) mappers ==========
+//
+// The Qobuz path renders search results as domain [Album]/[Artist] rows whose
+// ids are numeric route arguments; Spotify's base62 ids can't fit a Long, so
+// each Spotify catalog row gets a stable hashed numeric id (see
+// [spotifyNumericIdFor]) and the real base62 id is recorded in
+// [SpotifyIdRegistry]. AlbumDetailViewModel / StreamResolver consult the
+// registry to route these rows back to the Spotify Web API — the same trick
+// the Qobuz slug registry and the Apple id sets use.
+
+/** A Spotify album as a catalog [Album], registered under its hashed id. */
+fun SpotifyAlbumFull.toSpotifyCatalogAlbum(registry: SpotifyIdRegistry): Album? {
+    val base62 = id ?: return null
+    if (name.isBlank()) return null
+    val numericId = spotifyNumericIdFor(base62)
+    registry.registerAlbum(numericId, base62)
+    return Album(
+        id = numericId,
+        title = name,
+        artist = artists.firstOrNull()?.name?.takeIf { it.isNotBlank() }
+            ?.let { Artist(id = 0L, name = it) },
+        artists = artists.map { Artist(id = 0L, name = it.name) },
+        numberOfTracks = totalTracks.takeIf { it > 0 },
+        releaseDate = releaseDate,
+        cover = images.firstOrNull()?.url?.takeIf { it.isNotBlank() },
+    )
+}
+
+/** A track inside a Spotify album, as a catalog [Track] with a hashed id. */
+fun SpotifyTrack.toSpotifyCatalogTrack(
+    album: SpotifyAlbumFull,
+    registry: SpotifyIdRegistry,
+): Track? {
+    val trackUri = uri ?: return null
+    if (isLocal || type != "track" || name.isBlank() || durationMs <= 0) return null
+    val base62 = SpotifyShadowUri.trackIdOf(trackUri)
+    if (!SpotifyShadowUri.isTrackId(base62)) return null
+
+    val numericId = spotifyNumericIdFor(base62)
+    registry.registerTrack(numericId, base62)
+    album.id?.let { albumBase62 ->
+        registry.registerAlbum(spotifyNumericIdFor(albumBase62), albumBase62)
+    }
+
+    val names = artists.map { it.name }.filter { it.isNotBlank() }
+    return Track(
+        id = numericId,
+        title = name,
+        duration = (durationMs / 1000).toInt(),
+        artist = names.firstOrNull()?.let { Artist(id = 0L, name = it) },
+        artists = names.map { Artist(id = 0L, name = it) },
+        album = Album(
+            id = album.id?.let { spotifyNumericIdFor(it) } ?: 0L,
+            title = album.name,
+            cover = album.images.firstOrNull()?.url?.takeIf { it.isNotBlank() },
+        ),
+        explicit = explicit,
+        trackNumber = trackNumber,
+        volumeNumber = discNumber,
+    )
+}
+
+/** GET /v1/albums/{id} → a browsable [AlbumDetail] (album + its tracks). */
+fun SpotifyAlbumFull.toSpotifyCatalogDetail(
+    registry: SpotifyIdRegistry,
+): AlbumDetail? {
+    val album = toSpotifyCatalogAlbum(registry) ?: return null
+    val tracks = tracks?.items.orEmpty().mapNotNull { it.toSpotifyCatalogTrack(this, registry) }
+    return AlbumDetail(album = album, tracks = tracks)
+}
+
+/** A Spotify artist as a catalog [Artist], registered under its hashed id. */
+fun SpotifyArtistFull.toSpotifyCatalogArtist(registry: SpotifyIdRegistry): Artist? {
+    val base62 = id ?: return null
+    if (name.isBlank()) return null
+    val numericId = spotifyNumericIdFor(base62)
+    registry.registerArtist(numericId, base62)
+    return Artist(
+        id = numericId,
+        name = name,
+        picture = images.firstOrNull()?.url?.takeIf { it.isNotBlank() },
     )
 }

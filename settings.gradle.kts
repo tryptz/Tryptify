@@ -21,6 +21,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Monochrome"
+rootProject.name = "Tryptify"
 include(":app")
 include(":baselineprofile")
+include(":spotify-wrapper")

@@ -49,6 +49,18 @@
          that lack a USB host port; UsbAudioRouter no-ops on those. -->
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
+    <!-- Package visibility (Android 11+): the Spotify wrapper module's
+         SpotifyAppRemoteClient.isSpotifyInstalled() and the App Remote SDK's
+         connect() both resolve com.spotify.music before they can bind to it.
+         Without this query block, getPackageManager sees no Spotify app on
+         API 30+ and every Spotify track resolves as unplayable. -->
+    <queries>
+        <package android:name="com.spotify.music" />
+        <intent>
+            <action android:name="com.spotify.music.internal.broadcast.CURRENT_PLAYER_STATE" />
+        </intent>
+    </queries>
+
     <application
         android:name=".MonochromeApp"
         android:allowBackup="true"

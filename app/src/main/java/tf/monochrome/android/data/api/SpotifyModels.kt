@@ -101,6 +101,39 @@ data class SpotifySearchResponse(
     val tracks: SpotifyPagingObject<SpotifyTrack>? = null,
 )
 
+/** GET /v1/search?type=album — the albums section of a multi-type search. */
+@Serializable
+data class SpotifyAlbumSearchResponse(
+    val albums: SpotifyPagingObject<SpotifyAlbumFull>? = null,
+)
+
+/** GET /v1/search?type=artist — the artists section of a multi-type search. */
+@Serializable
+data class SpotifyArtistSearchResponse(
+    val artists: SpotifyPagingObject<SpotifyArtistFull>? = null,
+)
+
+/** Album as returned by search and by /v1/albums/{id}. */
+@Serializable
+data class SpotifyAlbumFull(
+    val name: String = "",
+    val id: String? = null,
+    val images: List<SpotifyImage> = emptyList(),
+    @SerialName("release_date") val releaseDate: String? = null,
+    val artists: List<SpotifyArtist> = emptyList(),
+    // Album-detail only; absent ("" on some shapes) in search results.
+    @SerialName("total_tracks") val totalTracks: Int = 0,
+    val tracks: SpotifyPagingObject<SpotifyTrack>? = null,
+)
+
+@Serializable
+data class SpotifyArtistFull(
+    val name: String = "",
+    val id: String? = null,
+    val images: List<SpotifyImage> = emptyList(),
+    val genres: List<String> = emptyList(),
+)
+
 /**
  * Item of /v1/playlists/{id}/items. The Feb 2026 Web API migration renamed
  * the wrapper field `track` → `item`; both are kept so old-shaped responses

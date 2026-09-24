@@ -9,6 +9,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.api.QobuzTrackMatch
+import tf.monochrome.android.data.api.SpotifyIdRegistry
 import tf.monochrome.android.data.cache.QobuzStreamUri
 import tf.monochrome.android.data.cache.QobuzStreamCacheManager
 import tf.monochrome.android.data.cache.SpotifyShadowUri
@@ -48,6 +49,7 @@ class StreamResolver @Inject constructor(
     private val qobuzIdRegistry: QobuzIdRegistry,
     private val localTrackLocator: LocalTrackLocator,
     private val spotifyRemote: SpotifyAppRemoteClient,
+    private val spotifyIdRegistry: SpotifyIdRegistry,
 ) {
     private fun normalizeArtworkUri(raw: String?): Uri? {
         if (raw.isNullOrBlank()) return null
@@ -105,6 +107,33 @@ class StreamResolver @Inject constructor(
         // getLyrics already applies for the same reason.
         if (qobuzIdRegistry.isQobuzTrack(track.id)) {
             return Pair(qobuzCachedMediaItem(track), null)
+        }
+
+        // Spotify is its own catalogue too. A track id registered in
+        // SpotifyIdRegistry maps back to the real base62 id, which resolves to
+        // the silent-WAV shadow (SpotifyPlaybackBridge mirrors play state into
+        // the Spotify app) — the legacy-Track twin of resolveSpotifyRemote.
+        // Without the Spotify app installed the track is unplayable; returning
+        // (null, null) makes callers skip it like any other dead stream.
+        spotifyIdRegistry.trackBase62For(track.id)?.let { base62 ->
+            if (!spotifyRemote.isSpotifyInstalled()) return Pair(null, null)
+            val spotifyUri = "spotify:track:$base62"
+            if (!SpotifyShadowUri.isTrackId(SpotifyShadowUri.trackIdOf(spotifyUri))) return Pair(null, null)
+            val metadata = MediaMetadata.Builder()
+                .setTitle(track.title)
+                .setArtist(track.displayArtist)
+                .setAlbumTitle(track.album?.title)
+                .setArtworkUri(normalizeArtworkUri(track.album?.cover))
+                .setTrackNumber(track.trackNumber)
+                .setDiscNumber(track.volumeNumber)
+                .build()
+            val mediaItem = MediaItem.Builder()
+                .setMediaId(track.id.toString())
+                .setUri(SpotifyShadowUri.build(spotifyUri, track.duration * 1000L))
+                .setMimeType(MimeTypes.AUDIO_WAV)
+                .setMediaMetadata(metadata)
+                .build()
+            return Pair(mediaItem, null)
         }
 
         val streamResult = repository.getTrackStream(track.id)
