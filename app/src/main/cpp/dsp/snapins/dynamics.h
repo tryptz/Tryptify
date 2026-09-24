@@ -29,6 +29,8 @@ public:
         gainSmooth_ = 0.0f;
     }
 
+    bool supportsLinkedDetection() const override { return true; }
+
     void process(float* left, float* right, int numFrames) override {
         float inputLin = std::pow(10.0f, inputGainDb_ / 20.0f);
         float outputLin = std::pow(10.0f, outputGainDb_ / 20.0f);
@@ -39,8 +41,9 @@ public:
             float inR = right[i] * inputLin;
 
             // Detect level (linked stereo)
-            float envValL = envL_.process(inL);
-            float envValR = envR_.process(inR);
+            // Linked across lanes when a key is set, at the same input gain.
+            float envValL = envL_.process(key_ ? key_[i] * inputLin : inL);
+            float envValR = envR_.process(key_ ? key_[i] * inputLin : inR);
             float envVal = std::max(envValL, envValR);
 
             float levelDb = (envVal > 1e-10f) ? 20.0f * std::log10(envVal) : -200.0f;

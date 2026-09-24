@@ -241,7 +241,10 @@ class InflatorEffect @Inject constructor() {
         if (h != 0L) InflatorNative.nativePrepare(h, sampleRate, channels)
     }
 
+    /** Planar [ch0..., ch1..., ...], [frames] per channel, up to 16 channels. */
     fun process(planarFloats: ByteBuffer, frames: Int, channels: Int) {
+        // Same fast path as processArrays: bypassed costs no JNI crossing.
+        if (!_state.value.effectIn) return
         require(planarFloats.isDirect) { "Buffer must be direct" }
         require(planarFloats.order() == ByteOrder.nativeOrder()) { "Buffer must be native-order" }
         val h = handle.get()
@@ -331,7 +334,13 @@ class CompressorEffect @Inject constructor() {
         if (h != 0L) CompressorNative.nativePrepare(h, sampleRate, channels)
     }
 
+    /**
+     * Planar [ch0..., ch1..., ...], [frames] per channel, up to 16 channels.
+     * Detection is the loudest of all of them, so a wide stream is compressed
+     * as one.
+     */
     fun process(planarFloats: ByteBuffer, frames: Int, channels: Int) {
+        if (_state.value.bypass) return
         val h = handle.get()
         if (h != 0L) CompressorNative.nativeProcess(h, planarFloats, frames, channels)
     }

@@ -46,6 +46,12 @@ class MixBusProcessor @Inject constructor(
     private var chunkScratchOutL = FloatArray(0)
     private var chunkScratchOutR = FloatArray(0)
 
+    // Multichannel (3–16 ch) scratch: the stream as one float array per
+    // channel, and the same block packed planar in a direct buffer that the
+    // mixer lanes and the Oxford stages all run on in place.
+    private val wideBlock = PlanarBlock()
+    private var planar: ByteBuffer = AudioProcessor.EMPTY_BUFFER
+
     // TPDF dither state for PCM16 output (triangular probability density function)
     private var ditherState: Long = 1L
 
@@ -58,6 +64,12 @@ class MixBusProcessor @Inject constructor(
     // constructors re-allocate FFT tables etc. — audible as a gap between
     // tracks of different sample rates (44.1k → 48k is the common case).
     private external fun nativeReconfigure(enginePtr: Long, sampleRate: Int, maxBlockSize: Int)
+    // Lane k carries channel first[k], and second[k] unless it is -1.
+    private external fun nativeConfigureLanes(enginePtr: Long, first: IntArray, second: IntArray)
+    // Planar direct float buffer, channel c at c * stride, processed in place.
+    private external fun nativeProcessPlanar(
+        enginePtr: Long, planar: ByteBuffer, numChannels: Int, stride: Int, numFrames: Int,
+    )
     private external fun nativeProcess(
         enginePtr: Long,
         inputL: FloatArray, inputR: FloatArray,
@@ -152,28 +164,31 @@ class MixBusProcessor @Inject constructor(
     // ── AudioProcessor implementation ────────────────────────────────────
 
     override fun configure(inputAudioFormat: AudioFormat): AudioFormat {
-        // Accept 16-bit PCM or float PCM, mono or stereo
+        // Accept 16-bit PCM or float PCM, 1 to 16 channels
         if (inputAudioFormat.encoding != C.ENCODING_PCM_16BIT &&
             inputAudioFormat.encoding != C.ENCODING_PCM_FLOAT) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }
-        if (inputAudioFormat.channelCount > 2) {
-            // Multichannel passthrough (downmix toggle off): drop out of the
+        if (inputAudioFormat.channelCount > ChannelLayout.MAX_CHANNELS) {
+            // Wider than any layout the mixer has lanes for: drop out of the
             // pipeline instead of killing playback. Both trackers must clear —
             // isActive() checks inputFormat too, and Media3's pipeline
             // checkState()s that an active processor didn't return NOT_SET.
-            // The native engine stays alive; the next 1/2-ch configure+flush
+            // The native engine stays alive; the next configure+flush
             // re-enters via the hot nativeReconfigure path.
             pendingFormat = AudioFormat.NOT_SET
             inputFormat = AudioFormat.NOT_SET
             return AudioFormat.NOT_SET
         }
-        if (inputAudioFormat.channelCount != 1 && inputAudioFormat.channelCount != 2) {
+        if (inputAudioFormat.channelCount < 1) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }
 
         pendingFormat = inputAudioFormat
-        // Always output stereo — mono is duplicated to both channels
+        // Mono is duplicated to stereo; everything else keeps its width. A
+        // multichannel stream runs through one mixer lane per channel pair
+        // (see MultiLaneEngine), so an Atmos bed passed on for Android's
+        // spatializer keeps the mixer instead of skipping it.
         return if (inputAudioFormat.channelCount == 1) {
             AudioFormat(inputAudioFormat.sampleRate, 2, inputAudioFormat.encoding)
         } else {
@@ -221,6 +236,10 @@ class MixBusProcessor @Inject constructor(
 
         val encoding = inputFormat.encoding
         val inputChannels = inputFormat.channelCount
+        if (inputChannels > 2) {
+            queueWide(inputBuffer, inputChannels, encoding)
+            return
+        }
         val bytesPerSample = if (encoding == C.ENCODING_PCM_FLOAT) 4 else 2
         val frameSize = bytesPerSample * inputChannels
         val numFrames = inputBuffer.remaining() / frameSize
@@ -349,6 +368,71 @@ class MixBusProcessor @Inject constructor(
         outputBuffer.limit(outBytes)
     }
 
+    /**
+     * A multichannel block: through the mixer's lanes, then the Oxford
+     * Inflator and compressor at full width. Crossfeed is left out here — it
+     * places a stereo pair's speakers for headphones, and a wide stream is on
+     * its way to Android's spatializer, which does that rendering itself.
+     */
+    private fun queueWide(inputBuffer: ByteBuffer, channels: Int, encoding: Int) {
+        val numFrames = wideBlock.read(inputBuffer, channels, encoding)
+        if (numFrames <= 0) return
+        val data = wideBlock.channels
+
+        val chunk = blockSize
+        val need = minOf(chunk, numFrames) * channels * 4
+        if (planar.capacity() < need) {
+            planar = ByteBuffer.allocateDirect(need).order(ByteOrder.nativeOrder())
+        }
+        var processed = 0
+        while (processed < numFrames) {
+            val n = minOf(chunk, numFrames - processed)
+            // Planar with stride n: what the lane engine and the Oxford
+            // stages both read, so all three run on the one buffer.
+            for (c in 0 until channels) {
+                val src = data[c]
+                val base = c * n * 4
+                for (i in 0 until n) planar.putFloat(base + i * 4, src[processed + i])
+            }
+            nativeProcessPlanar(enginePtr, planar, channels, n, n)
+            inflator.process(planar, n, channels)
+            compressor.process(planar, n, channels)
+            for (c in 0 until channels) {
+                val dst = data[c]
+                val base = c * n * 4
+                for (i in 0 until n) dst[processed + i] = planar.getFloat(base + i * 4)
+            }
+            processed += n
+        }
+
+        val bytesPerSample = if (encoding == C.ENCODING_PCM_FLOAT) 4 else 2
+        val outBytes = numFrames * channels * bytesPerSample
+        if (outputBuffer.capacity() < outBytes) {
+            outputBuffer = ByteBuffer.allocateDirect(outBytes).order(ByteOrder.nativeOrder())
+        } else {
+            outputBuffer.clear()
+        }
+        if (encoding == C.ENCODING_PCM_FLOAT) {
+            wideBlock.write(outputBuffer, numFrames, encoding)
+        } else {
+            // PCM16 with the same TPDF dither as the stereo path: one draw
+            // per frame, shared by every channel.
+            val frameBytes = channels * 2
+            for (i in 0 until numFrames) {
+                val dither = nextDitherSample() + nextDitherSample()
+                val off = i * frameBytes
+                for (c in 0 until channels) {
+                    outputBuffer.putShort(
+                        off + c * 2,
+                        ((data[c][i] * 32768f) + dither).toInt().coerceIn(-32768, 32767).toShort(),
+                    )
+                }
+            }
+        }
+        outputBuffer.position(0)
+        outputBuffer.limit(outBytes)
+    }
+
     override fun getOutput(): ByteBuffer {
         val buf = outputBuffer
         outputBuffer = AudioProcessor.EMPTY_BUFFER
@@ -387,10 +471,26 @@ class MixBusProcessor @Inject constructor(
                 nativeReconfigure(enginePtr, inputFormat.sampleRate, MAX_BLOCK_SIZE)
             }
 
+            // One mixer lane per channel pair of the layout; a stereo (or
+            // mono, doubled) stream is the single lane it always was, and
+            // configuring it also drops any lanes a wider track left behind.
+            val lanes = if (inputFormat.channelCount > 2) {
+                ChannelLayout.lanes(inputFormat.channelCount)
+            } else {
+                listOf(ChannelLayout.Lane(0, 1))
+            }
+            nativeConfigureLanes(
+                enginePtr,
+                IntArray(lanes.size) { lanes[it].first },
+                IntArray(lanes.size) { lanes[it].second },
+            )
+
             // Oxford post-chain isn't part of the native engine; still needs
-            // its own sample-rate prep call on every format change.
-            inflator.prepare(inputFormat.sampleRate.toDouble(), 2)
-            compressor.prepare(inputFormat.sampleRate.toDouble(), 2)
+            // its own sample-rate prep call on every format change — at the
+            // width it will be handed.
+            val oxfordChannels = if (inputFormat.channelCount > 2) inputFormat.channelCount else 2
+            inflator.prepare(inputFormat.sampleRate.toDouble(), oxfordChannels)
+            compressor.prepare(inputFormat.sampleRate.toDouble(), oxfordChannels)
             crossfeed.prepare(inputFormat.sampleRate.toDouble())
 
             // Signal ready (false→true transition ensures StateFlow emits)

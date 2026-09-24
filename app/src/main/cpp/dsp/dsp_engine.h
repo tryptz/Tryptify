@@ -72,6 +72,30 @@ public:
     // Audio processing — called from audio thread
     void process(float* left, float* right, int numFrames);
 
+    // ── Lane stepping, for MultiLaneEngine ──────────────────────────────
+    // process() is these three in a row. A host running several engines as
+    // the lanes of one multichannel stream steps them together instead, so
+    // that at a linked master slot every lane can be handed the same
+    // detector key. All of them expect chainMutex() to be held.
+    std::mutex& chainMutex() { return chainMutex_; }
+    void processMixBusesLocked(const float* left, const float* right, int numFrames);
+    int masterSlotCountLocked() const;
+    // Whether master slot [slot] would run and detects level (so linking it
+    // across lanes means something).
+    bool masterSlotLinkableLocked(int slot) const;
+    // detectorKey, when non-null, replaces the slot's own level detection:
+    // one non-negative sample per frame.
+    void processMasterSlotLocked(int slot, int numFrames, const float* detectorKey);
+    void finishBlockLocked(float* left, float* right, int numFrames);
+    // The master bus signal between slots: what the next slot will receive.
+    const float* masterSumL() const { return sumL_.data(); }
+    const float* masterSumR() const { return sumR_.data(); }
+
+    // A lane carrying one channel (centre, LFE) as dual-mono. Effects that
+    // only reshape a stereo image are skipped, and pans sit at centre.
+    void setMonoLane(bool mono) { monoLane_ = mono; }
+    bool isMixBypassed() const { return mixBypassed_.load(std::memory_order_relaxed); }
+
     // Bus control — simple writes, safe for cross-thread
     void setBusGain(int busIndex, float gainDb);
     void setBusPan(int busIndex, float pan);
@@ -126,6 +150,8 @@ private:
     std::vector<float> dryBufL_, dryBufR_;  // Pre-allocated for dry/wet blending
 
     bool anySoloed() const;
+    bool skippedOnThisLane(const SnapinProcessor& plugin) const;
+    bool monoLane_ = false;
     void recalcBusGains(float gainDb, float pan, float& targetL, float& targetR);
 
     // Smoothing coefficient for gain changes

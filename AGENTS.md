@@ -57,6 +57,14 @@ git submodule update --init --recursive --depth 1
 The third submodule, `app/src/main/assets/presets`, is the MilkDrop preset
 pack the visualizer ships; it comes down with the same command.
 
+The native DSP has host tests that build with the desktop compiler, no
+device or NDK needed — the multichannel mixer, the Oxford stages at Atmos
+widths, and the WSOLA shifter:
+
+```
+app/src/main/cpp/dsp/tests/run_host_tests.sh
+```
+
 Several tests exist specifically to hold the invariants above — `LightSchemesTest`,
 `CustomSchemeTest`, `GlobeLandClipTest`, `SettingsSearchIndexTest`. They are the
 guarantee, not a formality. If one fails, fix the code; do not loosen the

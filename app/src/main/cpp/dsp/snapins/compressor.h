@@ -40,6 +40,8 @@ public:
         updateAttackReleaseCoeffs();
     }
 
+    bool supportsLinkedDetection() const override { return true; }
+
     void process(float* left, float* right, int numFrames) override {
         const float makeupLin = dbToLin(makeupDb_);
 
@@ -48,8 +50,9 @@ public:
             float inR = right[i];
 
             // --- Detection path (pre-delay) ---
-            float envValL = envL_.process(inL);
-            float envValR = envR_.process(inR);
+            // Linked across lanes when a key is set (see setDetectorKey).
+            float envValL = envL_.process(key_ ? key_[i] : inL);
+            float envValR = envR_.process(key_ ? key_[i] : inR);
             float envVal = std::max(envValL, envValR); // linked stereo
 
             float levelDb = linToDb(envVal);
