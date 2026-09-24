@@ -214,6 +214,15 @@ class MixerViewModel @Inject constructor(
         dspManager.setParameter(busIndex, slotIndex, paramIndex, value)
     }
 
+    /** Applies [preset] to the effect in [slotIndex], every parameter at once. */
+    fun applyFxPreset(busIndex: Int, slotIndex: Int, preset: tf.monochrome.android.ui.mixer.fxchain.FxPreset) {
+        val plugin = dspManager.buses.value.firstOrNull { it.index == busIndex }
+            ?.plugins?.getOrNull(slotIndex) ?: return
+        val type = plugin.type ?: return
+        val defs = getParamDefs(type)
+        dspManager.setParameters(busIndex, slotIndex, preset.resolved(defs), preset.dryWet)
+    }
+
     fun setPluginDryWet(busIndex: Int, slotIndex: Int, dryWet: Float) {
         dspManager.setPluginDryWet(busIndex, slotIndex, dryWet)
     }

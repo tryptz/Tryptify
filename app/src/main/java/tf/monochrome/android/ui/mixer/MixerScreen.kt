@@ -390,6 +390,7 @@ fun MixerScreen(
                         onDryWet = { b, s, dw -> viewModel.setPluginDryWet(b, s, dw) },
                         onParam = { b, s, p, v -> viewModel.setParameter(b, s, p, v) },
                         onOversample = { b, s, f -> viewModel.setPluginOversampling(b, s, f) },
+                        onPreset = { b, s, p -> viewModel.applyFxPreset(b, s, p) },
                         onMove = { b, from, to -> viewModel.movePlugin(b, from, to) },
                     )
                 }
@@ -559,6 +560,9 @@ fun MixerScreen(
                                 onPluginRemove = { busIdx, slotIdx -> viewModel.removePlugin(busIdx, slotIdx) },
                                 onParameterChange = { busIdx, slotIdx, paramIdx, value ->
                                     viewModel.setParameter(busIdx, slotIdx, paramIdx, value)
+                                },
+                                onApplyPreset = { busIdx, slotIdx, preset ->
+                                    viewModel.applyFxPreset(busIdx, slotIdx, preset)
                                 },
                                 onPluginDryWet = { busIdx, slotIdx, dw ->
                                     viewModel.setPluginDryWet(busIdx, slotIdx, dw)

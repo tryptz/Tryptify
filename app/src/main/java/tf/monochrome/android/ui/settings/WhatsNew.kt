@@ -134,6 +134,14 @@ object WhatsNew {
                         "reset it; tap a knob's value to type one.",
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Five presets for every effect",
+                    body = "Each effect opens with presets drawn from mastering practice, safe on " +
+                        "a finished song, and its classic creative settings after a divider. The " +
+                        "one you are on lights up; turn a knob and it lets go.",
+                ),
+                WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = MIXER,
                     title = "The mixer and EQs work on every channel",
@@ -148,6 +156,14 @@ object WhatsNew {
                     body = "Knobs have ticks, a default mark and arcs that start from zero for " +
                         "plus-or-minus settings, and they follow your theme. Graphs are " +
                         "taller and labelled.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "Five effects fixed",
+                    body = "Pitch Shifter now shifts up and lands in tune, Tape Stop drops in pitch, " +
+                        "Dynamics no longer jumps at its knee, Resonator can't run away, and Stereo " +
+                        "at its defaults is transparent (3 dB louder than before).",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,

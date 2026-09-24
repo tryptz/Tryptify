@@ -81,6 +81,7 @@ fun FxCard(
     onDryWet: (Float) -> Unit,
     onParam: (paramIndex: Int, value: Float) -> Unit,
     onOversample: (Int) -> Unit,
+    onPreset: (FxPreset) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val bypassed = plugin.bypassed
@@ -191,6 +192,8 @@ fun FxCard(
                 verticalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm)
             ) {
                 FxVisual(plugin = plugin, accent = accent, slotIndex = position - 1, live = live, onParam = onParam)
+
+                FxPresetRow(plugin = plugin, accent = accent, onApply = onPreset)
 
                 val defs = getParamDefs(plugin.type)
                 if (plugin.type == SnapinType.EQ_10BAND) {
