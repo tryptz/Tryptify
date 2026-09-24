@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
+import java.util.concurrent.Callable;
 
 /**
  * Tryptify's replacement for librespot-java 1.6.5's TokenProvider, which is
@@ -57,6 +58,7 @@ public final class TokenProvider {
     /** librespot's desktop client id; what Login5Api always sends. */
     private static final String LIBRESPOT_CLIENT_ID = "65b708073fc0480ea92a077233ca87bd";
     private static volatile String clientId = LIBRESPOT_CLIENT_ID;
+    private static volatile Callable<FallbackToken> fallback;
     private final Session session;
     private StoredToken token;
 
@@ -67,6 +69,20 @@ public final class TokenProvider {
     public synchronized StoredToken getToken(String... scopes) throws IOException, MercuryClient.MercuryException {
         if (scopes.length == 0) throw new IllegalArgumentException();
         if (token != null && !token.expired()) return token;
+
+        try {
+            token = fromLogin5(scopes);
+            return token;
+        } catch (IOException login5Failure) {
+            FallbackToken app = fallbackToken();
+            if (app == null) throw login5Failure;
+            LOGGER.warn("login5 failed ({}); using the app's own access token", login5Failure.getMessage());
+            token = new StoredToken(app.expiresInSeconds, app.accessToken, scopes);
+            return token;
+        }
+    }
+
+    private StoredToken fromLogin5(String[] scopes) throws IOException {
 
         Login5.LoginRequest request = Login5.LoginRequest.newBuilder()
                 .setClientInfo(ClientInfoOuterClass.ClientInfo.newBuilder()
@@ -94,9 +110,42 @@ public final class TokenProvider {
         if (!response.hasOk()) throw new Login5Exception(response.getError(), response.getErrorValue());
 
         Login5.LoginOk ok = response.getOk();
-        token = new StoredToken(ok.getAccessTokenExpiresIn(), ok.getAccessToken(), scopes);
         LOGGER.debug("Updated token via login5, expires in {} s", ok.getAccessTokenExpiresIn());
-        return token;
+        return new StoredToken(ok.getAccessTokenExpiresIn(), ok.getAccessToken(), scopes);
+    }
+
+    private static FallbackToken fallbackToken() {
+        Callable<FallbackToken> source = fallback;
+        if (source == null) return null;
+        try {
+            FallbackToken app = source.call();
+            return app == null || app.accessToken == null || app.accessToken.isEmpty() ? null : app;
+        } catch (Exception ex) {
+            LOGGER.warn("The app's access token is unavailable", ex);
+            return null;
+        }
+    }
+
+    /**
+     * Where to get a token when login5 will not issue one: the app's own
+     * OAuth access token, which carries the {@code streaming} scope — the
+     * kind of token Spotify's Web Playback SDK plays with. login5 serves
+     * reusable credentials only to Spotify's own client ids, and refuses
+     * Tryptify's (INVALID_CREDENTIALS under librespot's id, BAD_REQUEST under
+     * the app's), so without this every sign-in failed there.
+     */
+    public static void setFallback(Callable<FallbackToken> source) {
+        fallback = source;
+    }
+
+    public static final class FallbackToken {
+        final String accessToken;
+        final int expiresInSeconds;
+
+        public FallbackToken(String accessToken, int expiresInSeconds) {
+            this.accessToken = accessToken;
+            this.expiresInSeconds = expiresInSeconds;
+        }
     }
 
     /**

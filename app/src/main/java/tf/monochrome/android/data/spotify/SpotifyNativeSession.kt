@@ -9,11 +9,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import tf.monochrome.android.BuildConfig
 import tf.monochrome.android.data.auth.SpotifyAuthManager
+import xyz.gianlu.librespot.core.TokenProvider
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -129,7 +131,7 @@ class SpotifyNativeSession @Inject constructor(
             }
             // Blocking network I/O; librespot applies its own connect timeout.
             val connected = token != null && withContext(Dispatchers.IO) {
-                runCatching { librespot.connect(token, BuildConfig.SPOTIFY_CLIENT_ID) }
+                runCatching { librespot.connect(token, BuildConfig.SPOTIFY_CLIENT_ID, ::appToken) }
                     .onFailure {
                         Log.w(TAG, "librespot sign-in failed; using the Spotify app instead", it)
                         failure = it.message ?: it.javaClass.simpleName
@@ -142,6 +144,18 @@ class SpotifyNativeSession @Inject constructor(
             publish(if (connected) State.SIGNED_IN else State.FAILED, failure)
             connected
         }
+    }
+
+    /**
+     * The app's access token for librespot's TokenProvider, when login5 won't
+     * issue one. Called on librespot's own threads, never the main thread, so
+     * blocking on a refresh here is fine.
+     */
+    private fun appToken(): TokenProvider.FallbackToken? {
+        val token = runBlocking { auth.getValidAccessToken() } ?: return null
+        val remainingS = ((auth.accessTokenExpiresAt.value - System.currentTimeMillis()) / 1000)
+            .coerceIn(60, 3600).toInt()
+        return TokenProvider.FallbackToken(token, remainingS)
     }
 
     private fun publish(state: State, error: String? = null) {

@@ -76,12 +76,20 @@ class LibrespotPlayerWrapper @Inject constructor(
      */
     @Synchronized
     @Throws(Exception::class)
-    fun connect(accessToken: String, clientId: String) {
+    fun connect(
+        accessToken: String,
+        clientId: String,
+        appToken: () -> TokenProvider.FallbackToken?,
+    ) {
         if (isConnected) return
         release()
         // login5 honours the session's reusable credentials only under the
         // client id of the token that created them — the app's, not librespot's.
         TokenProvider.setClientId(clientId)
+        // And it may refuse even then: login5 serves Spotify's own clients.
+        // The app's OAuth token (with the streaming scope) is what librespot
+        // uses for the dealer and spclient when it does.
+        TokenProvider.setFallback { appToken() }
         val startedAt = System.nanoTime()
         val credentialsFile = credentialsFile
         // Both paths must be set: librespot's defaults are relative to the
