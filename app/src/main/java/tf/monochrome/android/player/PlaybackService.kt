@@ -565,6 +565,7 @@ class PlaybackService : MediaSessionService() {
         // the 1024 default with the mixer on regardless of what the user set.
         serviceScope.launch { preferences.dspBlockSize.collect { dspBlockSize = it } }
         serviceScope.launch { preferences.dspEnabled.collect { dspEnabled = it } }
+        serviceScope.launch { preferences.hiResHalOutputEnabled.collect { hiResHalEnabled = it } }
 
         // Blend length. Any non-zero value takes over from the gapless window,
         // so re-derive that whenever it changes.
@@ -849,7 +850,8 @@ class PlaybackService : MediaSessionService() {
             ): AudioSink {
                 return try {
                     val defaultSink = DefaultAudioSink.Builder(context)
-                        // Deliberately false, whatever the factory was told.
+                        // On, but DefaultAudioSink never gets to act on it by
+                        // itself.
                         //
                         // DefaultAudioSink.configure builds its pipeline one of
                         // two ways, and they are not equivalent:
@@ -861,24 +863,20 @@ class PlaybackService : MediaSessionService() {
                         //     pipelineProcessors.add(audioProcessorChain.getAudioProcessors())
                         //   }
                         //
-                        // toFloatPcmAvailableAudioProcessors is exactly one
-                        // processor, the float converter. The custom chain is
-                        // added on the other branch only. So turning this on
-                        // silently deletes the mixer, both EQs, the spectrum
-                        // tap and the projectM feed from the HAL path, and the
-                        // audio keeps playing, which is how it went unnoticed:
-                        // every effect dead, nothing in the log.
+                        // The float branch has no custom chain: handed a hi-res
+                        // stream directly it would play with the mixer, both
+                        // EQs, the spectrum and the projectM feed silently gone.
+                        // The int branch has one, but narrows to 16 bits first.
                         //
-                        // shouldUseFloatOutput also requires high-resolution
-                        // input, so this only started biting once the renderer
-                        // above began emitting float.
-                        //
-                        // Nothing is lost. The exclusive USB path takes the
-                        // renderer's float directly and packs it into the DAC's
-                        // 24-bit subslots itself; this flag never touched it.
-                        // The HAL path goes back to what it did before, which
-                        // is 16-bit out with every effect running.
-                        .setEnableFloatOutput(false)
+                        // LibusbAudioSink stands in front and never hands this
+                        // sink a hi-res stream it would take down the float
+                        // branch unprocessed: it either runs the DSP itself in
+                        // float and passes the finished float here (hi-res
+                        // output — the reason this is on), or narrows to 16-bit
+                        // itself so the int branch and its chain run as before.
+                        // 16-bit sources come straight through to the int
+                        // branch, unchanged.
+                        .setEnableFloatOutput(true)
                         .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                         // Our own chain rather than setAudioProcessors, which
                         // would wrap these in DefaultAudioProcessorChain and send
@@ -978,6 +976,24 @@ class PlaybackService : MediaSessionService() {
                             // Spectrum tap is light-weight and fine.
                         ),
                         resampler = variRateProcessor,
+                        // The hi-res HAL path: the same DSP, run here in float
+                        // and handed to defaultSink finished (see the note on
+                        // setEnableFloatOutput). Only at unity speed, so no
+                        // resampler; with the projectM tap, which the normal
+                        // HAL path has and this one must not lose.
+                        halProcessors = listOf(
+                            tf.monochrome.android.audio.usb.ToFloatPcmAudioProcessor(),
+                            channelDetectorProcessor,
+                            atmosAudioProcessor,
+                            downmixProcessor,
+                            mixBusProcessor,
+                            autoEqProcessor,
+                            parametricEqProcessor,
+                            spectrumAnalyzerTap,
+                            TeeAudioProcessor(ProjectMAudioTapProcessor(audioBus)),
+                            stretchProcessor,
+                        ),
+                        hiResHalEnabled = { hiResHalEnabled },
                     )
                 } catch (error: Exception) {
                     projectMEngineRepository.reportAudioTapFailure(
@@ -1361,6 +1377,8 @@ class PlaybackService : MediaSessionService() {
     // defaults match PreferencesManager's until the collectors above land.
     @Volatile private var dspBlockSize = 1024
     @Volatile private var dspEnabled = false
+    // Read by LibusbAudioSink on the playback thread at configure time.
+    @Volatile private var hiResHalEnabled = true
 
     // Type left inferred, like atmosTapFactory above: spelling CrossfadeController
     // out here is itself an opt-in usage that an @OptIn on the property doesn't
