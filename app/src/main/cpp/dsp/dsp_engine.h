@@ -145,6 +145,11 @@ public:
     void setRouting(int routedBus, int routedCount);
     int routedBus() const { return routedBus_.load(std::memory_order_relaxed); }
     int routedCount() const { return routedCount_.load(std::memory_order_relaxed); }
+    // The mix-bus count routing grew this engine from, or -1. A lane cloned
+    // from another takes the original's with inheritGrowth, so both hand the
+    // same buses back when the stream narrows.
+    int autoGrownFrom() const { return autoGrownFrom_.load(std::memory_order_relaxed); }
+    void inheritGrowth(int grownFrom) { autoGrownFrom_.store(grownFrom, std::memory_order_relaxed); }
     // Bus number (1–16, as the strips show it) to engine index, and back.
     static int busIndexForNumber(int n) { return n <= MASTER_BUS ? n - 1 : n; }
     static int busNumberForIndex(int i) { return i < MASTER_BUS ? i + 1 : i; }

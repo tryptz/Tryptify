@@ -907,6 +907,13 @@ class LibusbAudioSink(
 
     override fun playToEndOfStream() {
         if (!bypassActive) {
+            // The hi-res chain's stages hold audio of their own — up to ~350 ms
+            // in the time-stretcher — which only comes out once they are told
+            // the stream ended. Hand all of it, and anything the delegate has
+            // not taken yet, over before telling the delegate; the renderer
+            // calls this again while it returns early with the delegate full.
+            // (The narrow chain is a 16-bit conversion and holds nothing.)
+            if (halMode != HalMode.DIRECT && !drainHalChainToEnd(halMode == HalMode.HIRES)) return
             super.playToEndOfStream()
             return
         }
@@ -917,6 +924,41 @@ class LibusbAudioSink(
         if (!paused && pendingProcessedOutput.hasRemaining()) {
             drainPendingProcessedOutput()
         }
+    }
+
+    /**
+     * Pushes [c]'s remaining audio into the delegate. True once all of it is
+     * in; false if the delegate is full, to be called again.
+     */
+    private fun drainHalChainToEnd(drainChain: Boolean): Boolean {
+        // halPending is the buffer the delegate already holds, so the
+        // timestamp is ignored for it. A new buffer from the chain continues
+        // the output where it stands: frames the delegate took, counted from
+        // the stream's base — what the delegate itself expects, so it sees no
+        // discontinuity.
+        val pts = halWritePositionUs()
+        if (halPending.hasRemaining()) {
+            feedDelegate(halPending, pts, 1)
+            if (halPending.hasRemaining()) return false
+            halPending = AudioProcessor.EMPTY_BUFFER
+        }
+        val c = halChain
+        if (!drainChain || !c.anyActive()) return true
+        c.queueEndOfStream()
+        // Bounded: a stage that never reports ended must not hang the renderer.
+        repeat(MAX_DRAIN_STEPS) {
+            if (c.isEnded()) return true
+            val out = c.process(AudioProcessor.EMPTY_BUFFER)
+            if (out.hasRemaining()) {
+                feedDelegate(out, halWritePositionUs(), 1)
+                if (out.hasRemaining()) {
+                    halPending = out
+                    return false
+                }
+            }
+        }
+        Log.w(TAG, "hal chain did not report ended after $MAX_DRAIN_STEPS steps; ending anyway")
+        return true
     }
 
     private fun checkIsoPumpWatchdog() {
@@ -1200,6 +1242,8 @@ class LibusbAudioSink(
 
     companion object {
         private const val TAG = "LibusbAudioSink"
+        /** Steps allowed for the hi-res chain to give up its tail at end of stream. */
+        private const val MAX_DRAIN_STEPS = 64
         /**
          * How far speed or pitch must sit from unity to count as a change.
          * Matches TryptifyAudioProcessorChain's own dead zone so the two paths

@@ -35,7 +35,8 @@
  *   its own strip and nothing else. Meters for a bus come from the lane that
  *   feeds it; the master's are the loudest across the lanes.
  *
- * Threads: control calls fan out under laneMutex_. The audio thread only
+ * Threads: control calls fan out under laneMutex_; meter reads take only
+ * shapeMutex_, which guards the lane list itself. The audio thread only
  * ever *tries* it; if a fan-out is mid-flight it runs that one block with the
  * lanes unlinked rather than wait, so it never blocks on the UI.
  *
@@ -86,24 +87,36 @@ public:
         count = std::max(1, std::min(count, MAX_LANES));
         // Route (and so grow or shrink) the lanes that stay first, so that
         // the new ones below are cloned with the bus count already right.
+        bool spread;
         {
             std::lock_guard<std::mutex> lock(laneMutex_);
+            spread = spread_;
             routeLanesLocked(std::min(count, laneCount()), count);
         }
         // New lanes are clones of the primary, built before taking the lock.
-        const std::string state = primary().getStateJson(/* full = */ true);
-        const bool mixBypass = primary().isMixBypassed();
+        // Only serialised when there is a lane to build: this runs on every
+        // track change, stereo included.
         std::vector<std::unique_ptr<DspEngine>> fresh;
-        for (int k = laneCount(); k < count; k++) {
-            auto e = std::make_unique<DspEngine>(sampleRate_, maxBlock_);
-            e->setRouting(routeOf(k, count), routedCountFor(count));
-            e->loadStateJson(state);
-            e->setMixBypassed(mixBypass);
-            fresh.push_back(std::move(e));
+        if (count > laneCount()) {
+            const std::string state = primary().getStateJson(/* full = */ true);
+            const bool mixBypass = primary().isMixBypassed();
+            const int grownFrom = primary().autoGrownFrom();
+            for (int k = laneCount(); k < count; k++) {
+                auto e = std::make_unique<DspEngine>(sampleRate_, maxBlock_);
+                e->setRouting(routeOf(k, count, spread), routedCountFor(count, spread));
+                e->loadStateJson(state);
+                // The state carries the grown buses as the clone's own; it
+                // has to know they were grown, as lane 0 does, or it keeps
+                // them when the stream narrows and lane 0 drops them.
+                e->inheritGrowth(grownFrom);
+                e->setMixBypassed(mixBypass);
+                fresh.push_back(std::move(e));
+            }
         }
         std::vector<std::unique_ptr<DspEngine>> retired;  // destroyed after unlock
         {
             std::lock_guard<std::mutex> lock(laneMutex_);
+            std::lock_guard<std::mutex> shape(shapeMutex_);
             while (laneCount() > count) {
                 retired.push_back(std::move(lanes_.back()));
                 lanes_.pop_back();
@@ -148,7 +161,7 @@ public:
      * the loudest lane.
      */
     void getBusLevels(float* out, int maxFloats) {
-        std::lock_guard<std::mutex> lock(laneMutex_);
+        std::lock_guard<std::mutex> lock(shapeMutex_);
         primary().getBusLevels(out, maxFloats);
         float lv[4];
         for (int k = 1; k < laneCount(); k++) {
@@ -167,7 +180,7 @@ public:
     /** Runs [f] on the lane whose channels feed [busIndex] (else the primary). */
     template <typename F>
     auto withBusLane(int busIndex, F&& f) {
-        std::lock_guard<std::mutex> lock(laneMutex_);
+        std::lock_guard<std::mutex> lock(shapeMutex_);
         for (auto& e : lanes_) {
             if (e->routedBus() == busIndex) return f(*e);
         }
@@ -175,7 +188,7 @@ public:
     }
 
     bool getAndResetClipped() {
-        std::lock_guard<std::mutex> lock(laneMutex_);
+        std::lock_guard<std::mutex> lock(shapeMutex_);
         bool any = false;
         for (auto& e : lanes_) any = e->getAndResetClipped() || any;
         return any;
@@ -183,12 +196,14 @@ public:
 
 private:
     // One lane is plain stereo: never routed, every bus by its own switch.
-    int routedCountFor(int lanes) const { return spread_ && lanes > 1 ? lanes : 0; }
-    int routeOf(int k, int lanes) const {
-        return routedCountFor(lanes) > 0 ? DspEngine::busIndexForNumber(k + 1) : -1;
+    static int routedCountFor(int lanes, bool spread) { return spread && lanes > 1 ? lanes : 0; }
+    static int routeOf(int k, int lanes, bool spread) {
+        return routedCountFor(lanes, spread) > 0 ? DspEngine::busIndexForNumber(k + 1) : -1;
     }
     void routeLanesLocked(int first, int lanes) {
-        for (int k = 0; k < first; k++) lanes_[k]->setRouting(routeOf(k, lanes), routedCountFor(lanes));
+        for (int k = 0; k < first; k++) {
+            lanes_[k]->setRouting(routeOf(k, lanes, spread_), routedCountFor(lanes, spread_));
+        }
     }
 
     void allocScratch() {
@@ -294,6 +309,11 @@ private:
     int sampleRate_;
     int maxBlock_;
     std::mutex laneMutex_;
+    // Held only while lanes_ itself changes (configureLanes) and by the meter
+    // reads, so the UI's 60 Hz polling never takes laneMutex_: the audio
+    // thread only try-locks that one, and a meter read winning it would run
+    // the block with the master dynamics unlinked.
+    std::mutex shapeMutex_;
     std::vector<float> key_;
     std::vector<float> monoL_[MAX_LANES];
     std::vector<float> monoR_[MAX_LANES];
