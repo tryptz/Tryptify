@@ -85,9 +85,35 @@ class MixerViewModel @Inject constructor(
     fun resetToDefaults() {
         dspManager.resetToDefaults()
         _currentPresetName.value = null
+        keepSelectionValid()
     }
 
     fun selectBus(index: Int) { _selectedBusIndex.value = index }
+
+    // ── Adding and removing buses ───────────────────────────────────────
+
+    /** Adds a bus after the last one and selects it; false at 16 buses. */
+    fun addBus(): Boolean {
+        val index = dspManager.addBus() ?: return false
+        _selectedBusIndex.value = index
+        return true
+    }
+
+    /** Removes bus [busIndex] (bus 5 and up); the ones above move down one. */
+    fun removeBus(busIndex: Int) {
+        if (!dspManager.removeBus(busIndex)) return
+        val selected = _selectedBusIndex.value
+        if (selected == busIndex) _selectedBusIndex.value = 0
+        else if (selected > busIndex) _selectedBusIndex.value = selected - 1
+    }
+
+    /**
+     * A preset or a reset can leave fewer buses than before; a selection past
+     * the last one would point at nothing, so it goes back to bus 1.
+     */
+    private fun keepSelectionValid() {
+        if (_selectedBusIndex.value >= buses.value.size) _selectedBusIndex.value = 0
+    }
 
     // ── Bus controls ────────────────────────────────────────────────────
 
@@ -208,6 +234,7 @@ class MixerViewModel @Inject constructor(
         // duration -- long enough to drop frames on a full five-bus preset.
         viewModelScope.launch(Dispatchers.Default) {
             dspManager.loadStateJson(preset.stateJson)
+            keepSelectionValid()
         }
         _currentPresetName.value = preset.name
     }
@@ -230,7 +257,7 @@ class MixerViewModel @Inject constructor(
     fun exportPayload(preset: MixPreset): String =
         json.encodeToString(
             MixPresetFile.serializer(),
-            MixPresetFile(name = preset.name, stateJson = preset.stateJson)
+            MixPresetFile.of(name = preset.name, stateJson = preset.stateJson)
         )
 
     /**
@@ -265,6 +292,7 @@ class MixerViewModel @Inject constructor(
                 MixPreset(name = name, stateJson = stateJson, isCustom = true)
             )
             dspManager.loadStateJson(stateJson)
+            keepSelectionValid()
             _currentPresetName.value = name
             onResult(true)
         }

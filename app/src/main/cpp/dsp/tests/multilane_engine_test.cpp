@@ -8,6 +8,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <string>
 #include <vector>
 
 #include "../dsp_engine.h"
@@ -202,6 +203,77 @@ void monoLanesSkipImageEffects() {
     check(run(true) == run(false), "Haas is skipped on the centre lane");
 }
 
+
+void busesAddUpToSixteenAndStopThere() {
+    DspEngine e(kRate, kBlock);
+    check(e.mixBusCount() == 4, "a new mixer has four buses");
+    bool indicesRight = true;
+    for (int expected = 5; expected <= 16; expected++) indicesRight = indicesRight && e.addBus() == expected;
+    check(indicesRight, "added buses take indices 5 to 16, past the master at 4");
+    check(e.mixBusCount() == 16, "sixteen mix buses at most");
+    check(e.addBus() == -1, "a seventeenth is refused");
+}
+
+void removingABusMovesTheOnesAboveDown() {
+    DspEngine e(kRate, kBlock);
+    e.addBus();  // 5
+    e.addBus();  // 6
+    e.setBusGain(6, -6.0f);
+    e.setBusInputEnabled(6, true);
+    e.addPlugin(6, 0, static_cast<int>(SnapinType::GAIN));
+    check(!e.removeBus(3), "buses 1-4 cannot be removed");
+    check(!e.removeBus(MASTER_BUS), "the master cannot be removed");
+    check(e.removeBus(5), "bus 5 is removed");
+    check(e.mixBusCount() == 5, "five mix buses remain");
+    const std::string state = e.getStateJson();
+    // Bus 6 is now bus 5 (the sixth entry, after the master): gain, input
+    // and its plugin all came with it.
+    size_t at = 0;
+    for (int i = 0; i < 6; i++) at = state.find("{\"gain\":", at + 1);
+    const std::string moved = state.substr(at, state.find("]}", at) - at);
+    check(moved.find("\"gain\":-6") != std::string::npos &&
+          moved.find("\"inputEnabled\":true") != std::string::npos &&
+          moved.find("\"type\":0") != std::string::npos,
+          "the bus above moved down with its gain, input and plugin");
+}
+
+void stateRoundTripsBusCount() {
+    DspEngine a(kRate, kBlock);
+    for (int i = 0; i < 3; i++) a.addBus();  // 7 mix buses
+    a.setBusGain(7, -3.0f);
+    DspEngine b(kRate, kBlock);
+    b.loadStateJson(a.getStateJson());
+    check(b.mixBusCount() == 7, "a saved 7-bus mix loads as 7 buses");
+    check(b.getStateJson() == a.getStateJson(), "and saves back identically");
+
+    DspEngine c(kRate, kBlock);
+    for (int i = 0; i < 5; i++) c.addBus();
+    DspEngine old(kRate, kBlock);  // a four-bus save, as every earlier build wrote
+    c.loadStateJson(old.getStateJson());
+    check(c.mixBusCount() == 4, "an older five-entry save loads as four buses");
+}
+
+void anAddedBusCarriesAudio() {
+    auto peak = [](bool useBus5) {
+        DspEngine e(kRate, kBlock);
+        e.setBusInputEnabled(0, false);
+        if (useBus5) {
+            const int idx = e.addBus();
+            e.setBusInputEnabled(idx, true);
+        }
+        std::vector<float> l(kBlock), r(kBlock);
+        float p = 0;
+        long n = 0;
+        for (int b = 0; b < 10; b++) {
+            for (int i = 0; i < kBlock; i++, n++) l[i] = r[i] = tone(n, 440, 0.5);
+            e.process(l.data(), r.data(), kBlock);
+            for (int i = 0; i < kBlock; i++) p = std::max(p, std::fabs(l[i]));
+        }
+        return p;
+    };
+    check(peak(false) == 0.0f && peak(true) > 0.1f, "an added bus with its input on is heard");
+}
+
 }  // namespace
 
 int main() {
@@ -210,6 +282,10 @@ int main() {
     masterDynamicsAreLinked();
     busDynamicsArePerLane();
     monoLanesSkipImageEffects();
+    busesAddUpToSixteenAndStopThere();
+    removingABusMovesTheOnesAboveDown();
+    stateRoundTripsBusCount();
+    anAddedBusCarriesAudio();
     std::printf("%s\n", failures == 0 ? "all passed" : "FAILURES");
     return failures == 0 ? 0 : 1;
 }

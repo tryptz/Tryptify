@@ -13,38 +13,6 @@ import tf.monochrome.android.audio.dsp.model.MixPreset
  */
 object BuiltInMixPresets {
 
-    /**
-     * A preset captured out of the mixer rather than written in the DSL below,
-     * kept as the engine's own state JSON so it is exactly what was tuned.
-     *
-     * It has to be raw: [PresetScope] cannot describe it. The builder decides
-     * `inputEnabled` from the bus index (only bus 0 takes input) and writes
-     * `bypassed` as false for every processor, and this preset needs input on
-     * TWO buses and two bypassed processors on the first. That is the shape of
-     * it -- a dry path and a wet path running in parallel off the same input:
-     *
-     *   bus 0  the dry side, trimmed a hair, with a Haas and a Stereo parked on
-     *          it bypassed (set up, switched off -- kept because they are part
-     *          of the patch as saved)
-     *   bus 1  the wet side: a long, wide Reverb, then Stereo, then Gain, run
-     *          up +8.2 dB to sit against the dry
-     *   bus 4  master, +4.6 dB
-     *
-     * Re-expressing it in the DSL would mean transcribing sixteen float
-     * parameters by index and teaching the builder two new concepts, with a
-     * changed sound as the cost of getting either wrong. If the builder grows
-     * `inputEnabled` and `bypassed` later, this can move across -- and the
-     * string here is the reference to check the result against.
-     */
-    private const val WIDE_STAGE =
-        """{"buses":[""" +
-            """{"gain":-0.0919491,"pan":0,"muted":false,"soloed":false,"inputEnabled":true,"plugins":[{"type":23,"bypassed":true,"dryWet":1,"os":1,"params":[1,10.3143]},{"type":1,"bypassed":true,"dryWet":1,"os":1,"params":[-2.1135,4.39726,0]}]},""" +
-            """{"gain":8.15997,"pan":0,"muted":false,"soloed":false,"inputEnabled":true,"plugins":[{"type":17,"bypassed":false,"dryWet":1,"os":1,"params":[0,2.81718,34.0753,94.4716,34.6712,0.05,68.7378,10863,386.575,0,100,100]},{"type":1,"bypassed":false,"dryWet":1,"os":1,"params":[-13.8023,0,0]},{"type":0,"bypassed":false,"dryWet":1,"os":1,"params":[5.59187]}]},""" +
-            """{"gain":0,"pan":0,"muted":false,"soloed":false,"inputEnabled":false,"plugins":[]},""" +
-            """{"gain":0,"pan":0,"muted":false,"soloed":false,"inputEnabled":false,"plugins":[]},""" +
-            """{"gain":4.61484,"pan":0,"muted":false,"soloed":false,"inputEnabled":false,"plugins":[]}""" +
-            """]}"""
-
     val presets: List<MixPreset> = listOf(
         builtIn(-1L, "Concert Hall") {
             bus(0) {
@@ -157,7 +125,30 @@ object BuiltInMixPresets {
             }
         },
 
-        builtInRaw(-8L, "Wide Stage", WIDE_STAGE),
+        // Captured out of the mixer, so its values are written out whole rather
+        // than as overrides. A dry path and a wet path run in parallel off the
+        // same input -- which is why bus 2 takes input too:
+        //   bus 1  the dry side, trimmed a hair, with a Haas and a Stereo parked
+        //          on it bypassed (set up, switched off -- part of the patch)
+        //   bus 2  the wet side: a long, wide Reverb, then Stereo, then Gain,
+        //          run up +8.2 dB to sit against the dry
+        //   master +4.6 dB
+        builtIn(-8L, "Wide Stage") {
+            bus(0, gainDb = -0.0919491f) {
+                pluginWithParams(SnapinType.HAAS, floatArrayOf(1f, 10.3143f), bypassed = true)
+                pluginWithParams(SnapinType.STEREO, floatArrayOf(-2.1135f, 4.39726f, 0f), bypassed = true)
+            }
+            bus(1, gainDb = 8.15997f) {
+                inputEnabled = true
+                pluginWithParams(
+                    SnapinType.REVERB,
+                    floatArrayOf(0f, 2.81718f, 34.0753f, 94.4716f, 34.6712f, 0.05f, 68.7378f, 10863f, 386.575f, 0f, 100f, 100f),
+                )
+                pluginWithParams(SnapinType.STEREO, floatArrayOf(-13.8023f, 0f, 0f))
+                pluginWithParams(SnapinType.GAIN, floatArrayOf(5.59187f))
+            }
+            master(gainDb = 4.61484f)
+        },
 
         builtIn(-7L, "Vocal Air") {
             bus(0) {
@@ -178,10 +169,6 @@ object BuiltInMixPresets {
             }
         },
     )
-
-    /** As [builtIn], for a preset carried as engine state JSON rather than built. */
-    private fun builtInRaw(id: Long, name: String, stateJson: String): MixPreset =
-        MixPreset(id = id, name = name, stateJson = stateJson, isCustom = false)
 
     private fun builtIn(id: Long, name: String, block: PresetScope.() -> Unit): MixPreset =
         MixPreset(

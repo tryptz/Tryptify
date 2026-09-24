@@ -269,6 +269,38 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeLoadStateJson(
     }
 }
 
+// ── Adding and removing buses ───────────────────────────────────────────
+
+/** Adds a mix bus on every lane; returns lane 0's index for it, or -1 at the limit. */
+extern "C" JNIEXPORT jint JNICALL
+Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeAddBus(
+    JNIEnv* /*env*/, jobject /*thiz*/, jlong enginePtr) {
+    auto* engine = getEngine(enginePtr);
+    if (!engine) return -1;
+    int result = -1;
+    bool first = true;
+    engine->forEach([&](DspEngine& e) {
+        const int idx = e.addBus();
+        if (first) { result = idx; first = false; }
+    });
+    return result;
+}
+
+/** Removes mix bus [busIndex] on every lane; buses above it move down one. */
+extern "C" JNIEXPORT jboolean JNICALL
+Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeRemoveBus(
+    JNIEnv* /*env*/, jobject /*thiz*/, jlong enginePtr, jint busIndex) {
+    auto* engine = getEngine(enginePtr);
+    if (!engine) return JNI_FALSE;
+    bool removed = false;
+    bool first = true;
+    engine->forEach([&](DspEngine& e) {
+        const bool ok = e.removeBus(busIndex);
+        if (first) { removed = ok; first = false; }
+    });
+    return removed ? JNI_TRUE : JNI_FALSE;
+}
+
 // ── Multichannel ────────────────────────────────────────────────────────
 
 /**
