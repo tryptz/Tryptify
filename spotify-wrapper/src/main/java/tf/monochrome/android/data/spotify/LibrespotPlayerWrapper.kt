@@ -4,16 +4,17 @@ import android.content.Context
 import android.util.Log
 import com.google.protobuf.ByteString
 import com.spotify.Authentication
+import com.spotify.login5v3.Login5
 import dagger.hilt.android.qualifiers.ApplicationContext
 import xyz.gianlu.librespot.audio.MetadataWrapper
 import xyz.gianlu.librespot.audio.decoders.AudioQuality
 import xyz.gianlu.librespot.core.Session
 import xyz.gianlu.librespot.core.TimeProvider
+import xyz.gianlu.librespot.core.TokenProvider
 import xyz.gianlu.librespot.metadata.PlayableId
 import xyz.gianlu.librespot.player.Player
 import xyz.gianlu.librespot.player.PlayerConfiguration
 import java.io.File
-import java.io.IOException
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -96,17 +97,12 @@ class LibrespotPlayerWrapper @Inject constructor(
             try {
                 Session.Builder(conf).setDeviceName(DEVICE_NAME).stored(credentialsFile).create()
             } catch (rejected: Exception) {
-                // login5 folds credential validation into the token request, so a
-                // stale blob surfaces as an IOException from TokenProvider rather
-                // than a SpotifyAuthenticationException at session creation. Treat
-                // both as "blob is bad"; rethrow anything else, because it happened
-                // *after* the login was accepted — the keymaster 403 was one — and
-                // deleting good credentials for it just hides the real error behind
-                // a second one.
-                val badBlob = rejected is Session.SpotifyAuthenticationException ||
-                    (rejected is IOException &&
-                        rejected.message?.contains("INVALID_CREDENTIALS") == true)
-                if (!badBlob) throw rejected
+                // Only a credentials failure means the blob is bad: drop it and
+                // fall back to the fresh token. Anything else (network, a 403
+                // from some other endpoint) is not the blob's fault, and
+                // deleting good credentials for it just hides the real error
+                // behind a second one.
+                if (!isCredentialsRejection(rejected)) throw rejected
                 Log.w(TAG, "connect: stored credentials rejected by Spotify, using the access token", rejected)
                 credentialsFile.delete()
                 withToken()
@@ -246,6 +242,18 @@ class LibrespotPlayerWrapper @Inject constructor(
     }
 
     private fun elapsedMs(startNanos: Long): Long = (System.nanoTime() - startNanos) / 1_000_000
+
+    /**
+     * Whether a stored-credentials login failed because the blob itself is no
+     * good. The access point says so with [Session.SpotifyAuthenticationException];
+     * login5 says so with INVALID_CREDENTIALS. login5 matters because the access
+     * point can accept a blob that login5 then refuses — blobs stored before the
+     * move off keymaster do exactly that — and Session.create() asks login5 for
+     * a token straight after the access point lets it in.
+     */
+    private fun isCredentialsRejection(error: Throwable): Boolean =
+        error is Session.SpotifyAuthenticationException ||
+            (error is TokenProvider.Login5Exception && error.error == Login5.LoginError.INVALID_CREDENTIALS)
 
     private companion object {
         const val TAG = "LibrespotPlayer"

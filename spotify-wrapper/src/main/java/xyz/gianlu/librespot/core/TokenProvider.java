@@ -61,10 +61,7 @@ public final class TokenProvider {
             throw new IOException("login5 challenge could not be solved", ex);
         }
 
-        if (!response.hasOk()) {
-            throw new IOException("login5 refused the token request: " + response.getError()
-                    + " (" + response.getErrorValue() + ")");
-        }
+        if (!response.hasOk()) throw new Login5Exception(response.getError(), response.getErrorValue());
 
         Login5.LoginOk ok = response.getOk();
         token = new StoredToken(ok.getAccessTokenExpiresIn(), ok.getAccessToken(), scopes);
@@ -74,6 +71,20 @@ public final class TokenProvider {
 
     public String get(String scope) throws IOException, MercuryClient.MercuryException {
         return getToken(scope).accessToken;
+    }
+
+    /**
+     * login5 answered, and said no. Typed, rather than a bare IOException, so a
+     * caller can tell INVALID_CREDENTIALS — the reusable credential is no good
+     * and a fresh login might be — from a network failure, where it isn't.
+     */
+    public static final class Login5Exception extends IOException {
+        public final Login5.LoginError error;
+
+        Login5Exception(Login5.LoginError error, int errorValue) {
+            super("login5 refused the token request: " + error + " (" + errorValue + ")");
+            this.error = error;
+        }
     }
 
     public static class StoredToken {
