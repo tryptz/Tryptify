@@ -13,6 +13,7 @@ import xyz.gianlu.librespot.metadata.PlayableId
 import xyz.gianlu.librespot.player.Player
 import xyz.gianlu.librespot.player.PlayerConfiguration
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -94,12 +95,18 @@ class LibrespotPlayerWrapper @Inject constructor(
             Log.i(TAG, "connect: trying stored librespot credentials")
             try {
                 Session.Builder(conf).setDeviceName(DEVICE_NAME).stored(credentialsFile).create()
-            } catch (rejected: Session.SpotifyAuthenticationException) {
-                // Only an authentication failure means the blob is bad (revoked
-                // server-side): drop it and fall back to the fresh token. Any
-                // other failure happened *after* the login was accepted — the
-                // keymaster 403 was one — and deleting good credentials for it
-                // just hides the real error behind a second one.
+            } catch (rejected: Exception) {
+                // login5 folds credential validation into the token request, so a
+                // stale blob surfaces as an IOException from TokenProvider rather
+                // than a SpotifyAuthenticationException at session creation. Treat
+                // both as "blob is bad"; rethrow anything else, because it happened
+                // *after* the login was accepted — the keymaster 403 was one — and
+                // deleting good credentials for it just hides the real error behind
+                // a second one.
+                val badBlob = rejected is Session.SpotifyAuthenticationException ||
+                    (rejected is IOException &&
+                        rejected.message?.contains("INVALID_CREDENTIALS") == true)
+                if (!badBlob) throw rejected
                 Log.w(TAG, "connect: stored credentials rejected by Spotify, using the access token", rejected)
                 credentialsFile.delete()
                 withToken()
