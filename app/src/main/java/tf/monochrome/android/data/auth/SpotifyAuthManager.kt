@@ -68,6 +68,17 @@ class SpotifyAuthManager @Inject constructor(
     val connectedUserName: StateFlow<String?> = preferences.spotifyUserName
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    /**
+     * A librespot access token the user pasted in from their own Spotify web
+     * session. Used only when login5 will not mint one for native playback.
+     */
+    val manualLibrespotToken: StateFlow<String?> = preferences.spotifyManualToken
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    suspend fun setManualLibrespotToken(token: String?) {
+        preferences.setSpotifyManualToken(token)
+    }
+
     /** When the current access token expires (epoch ms); 0 when there is none. */
     val accessTokenExpiresAt: StateFlow<Long> = preferences.spotifyTokenExpiresAt
         .stateIn(scope, SharingStarted.Eagerly, 0L)

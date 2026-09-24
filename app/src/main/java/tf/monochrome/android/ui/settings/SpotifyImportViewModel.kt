@@ -45,6 +45,16 @@ class SpotifyImportViewModel @Inject constructor(
     val importProgress: StateFlow<ImportProgress> = playlistImportService.progress
     val accessTokenExpiresAt: StateFlow<Long> = spotifyAuthManager.accessTokenExpiresAt
     val nativeStatus: StateFlow<SpotifyNativeSession.Status> = nativeSession.status
+    val manualToken: StateFlow<String?> = spotifyAuthManager.manualLibrespotToken
+
+    fun setManualToken(token: String?) {
+        viewModelScope.launch {
+            spotifyAuthManager.setManualLibrespotToken(token)
+            // Re-sign-in so the pasted token is tried straight away.
+            nativeSession.signOutKeepAccount()
+            nativeSession.signIn()
+        }
+    }
 
     private val _tokenRefreshing = MutableStateFlow(false)
     val tokenRefreshing: StateFlow<Boolean> = _tokenRefreshing.asStateFlow()

@@ -2770,6 +2770,8 @@ private fun SpotifyAccountControls() {
                 }
             }
         }
+
+        SpotifyManualTokenControls(spotifyViewModel)
     } else {
         Text(
             "Connect your Spotify account to search, import playlists and play "
@@ -2787,6 +2789,68 @@ private fun SpotifyAccountControls() {
         }
     }
     authError?.let { SettingsErrorText(it) }
+}
+
+/**
+ * An advanced escape hatch: paste a librespot access token taken from your own
+ * Spotify web session. Used only when login5 refuses to mint one for the app's
+ * own OAuth token — a web-player token is minted for Spotify's own web client,
+ * so it is honoured where the app's is not.
+ *
+ * A collapsed section, off the main flow, with the caveat stated plainly: a
+ * token from the web player belongs to Spotify's client, and using it in a
+ * third-party player is against Spotify's terms and can get an account flagged.
+ * It is the user's own credential and the user's own call.
+ */
+@Composable
+private fun SpotifyManualTokenControls(spotifyViewModel: SpotifyImportViewModel) {
+    val saved by spotifyViewModel.manualToken.collectAsStateWithLifecycle()
+    var expanded by remember { mutableStateOf(false) }
+    var draft by remember(saved) { mutableStateOf(saved.orEmpty()) }
+
+    Spacer(modifier = Modifier.height(8.dp))
+    TextButton(onClick = { expanded = !expanded }) {
+        Text(if (expanded) "Hide manual token" else "Manual access token (advanced)")
+    }
+    if (expanded) {
+        Text(
+            "Paste an access token from your own Spotify web player (Web Inspector → "
+                + "Network → a request to api.spotify.com → the Authorization header, the "
+                + "part after \"Bearer \"). Used only when normal sign-in is refused. "
+                + "This token belongs to Spotify's web client; using it here is against "
+                + "Spotify's terms and can get your account flagged. Your call.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        OutlinedTextField(
+            value = draft,
+            onValueChange = { draft = it },
+            label = { Text("Access token") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = { spotifyViewModel.setManualToken(draft) },
+                enabled = draft.isNotBlank() && draft != saved,
+            ) { Text("Save & sign in") }
+            if (!saved.isNullOrBlank()) {
+                OutlinedButton(onClick = {
+                    draft = ""
+                    spotifyViewModel.setManualToken(null)
+                }) { Text("Clear") }
+            }
+        }
+        if (!saved.isNullOrBlank()) {
+            Text(
+                "A manual token is set.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
 }
 
 @Composable

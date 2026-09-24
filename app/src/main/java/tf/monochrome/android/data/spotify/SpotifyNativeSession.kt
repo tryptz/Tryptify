@@ -91,6 +91,19 @@ class SpotifyNativeSession @Inject constructor(
         return withContext(Dispatchers.IO) { librespot.getPlaylist(playlistId) }
     }
 
+    /**
+     * Drop librespot's session and stored blob but leave the Spotify account
+     * connected — used when the manual token changes, so the next sign-in
+     * picks the new token up instead of a cached session.
+     */
+    suspend fun signOutKeepAccount() {
+        mutex.withLock {
+            withContext(Dispatchers.IO) { librespot.signOut() }
+            lastFailureAt = 0L
+            publish(State.SIGNED_OUT)
+        }
+    }
+
     /** Disconnect and forget the stored login; the next sign-in uses the app's token. */
     suspend fun signOut() {
         mutex.withLock {
@@ -152,6 +165,12 @@ class SpotifyNativeSession @Inject constructor(
      * blocking on a refresh here is fine.
      */
     private fun appToken(): TokenProvider.FallbackToken? {
+        // A token the user pasted in wins: they supplied it precisely because
+        // the granted one is not being honoured. Its lifetime is unknown, so
+        // assume a short one and let a failure re-ask.
+        auth.manualLibrespotToken.value?.takeIf { it.isNotBlank() }?.let {
+            return TokenProvider.FallbackToken(it, 1800)
+        }
         val token = runBlocking { auth.getValidAccessToken() } ?: return null
         val remainingS = ((auth.accessTokenExpiresAt.value - System.currentTimeMillis()) / 1000)
             .coerceIn(60, 3600).toInt()

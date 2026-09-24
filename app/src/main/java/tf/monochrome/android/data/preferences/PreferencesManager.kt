@@ -344,6 +344,9 @@ class PreferencesManager @Inject constructor(
         private val SPOTIFY_REFRESH_TOKEN = stringPreferencesKey("spotify_refresh_token")
         private val SPOTIFY_TOKEN_EXPIRES_AT = longPreferencesKey("spotify_token_expires_at")
         private val SPOTIFY_USER_NAME = stringPreferencesKey("spotify_user_name")
+        // A librespot access token the user pasted in by hand (from their own
+        // Spotify web session), used when login5 won't mint one.
+        private val SPOTIFY_MANUAL_TOKEN = stringPreferencesKey("spotify_manual_librespot_token")
 
         // PocketBase
         private val POCKETBASE_TOKEN = stringPreferencesKey("pocketbase_token")
@@ -1591,6 +1594,15 @@ class PreferencesManager @Inject constructor(
     val spotifyRefreshToken: Flow<String?> = dataStore.data.map { it[SPOTIFY_REFRESH_TOKEN] }
     val spotifyTokenExpiresAt: Flow<Long> = dataStore.data.map { it[SPOTIFY_TOKEN_EXPIRES_AT] ?: 0L }
     val spotifyUserName: Flow<String?> = dataStore.data.map { it[SPOTIFY_USER_NAME] }
+    val spotifyManualToken: Flow<String?> = dataStore.data.map { it[SPOTIFY_MANUAL_TOKEN] }
+
+    suspend fun setSpotifyManualToken(token: String?) {
+        dataStore.edit {
+            val trimmed = token?.trim()
+            if (trimmed.isNullOrEmpty()) it.remove(SPOTIFY_MANUAL_TOKEN)
+            else it[SPOTIFY_MANUAL_TOKEN] = trimmed
+        }
+    }
 
     suspend fun setSpotifyTokens(accessToken: String, refreshToken: String, expiresAtMillis: Long) {
         dataStore.edit {
@@ -1613,6 +1625,7 @@ class PreferencesManager @Inject constructor(
             it.remove(SPOTIFY_REFRESH_TOKEN)
             it.remove(SPOTIFY_TOKEN_EXPIRES_AT)
             it.remove(SPOTIFY_USER_NAME)
+            it.remove(SPOTIFY_MANUAL_TOKEN)
         }
     }
 
