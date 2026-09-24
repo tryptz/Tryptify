@@ -85,8 +85,13 @@ class OutputDeviceProbe @Inject constructor(
      * `canBeSpatialized` is the exact question: it answers for this format on
      * the route the platform would use now. Null before Android 12L, where
      * there is no spatializer API to ask, and — past "off" and "unavailable",
-     * which hold for any stream — when [channelCount] is null because the
-     * caller does not know what the chain hands the platform.
+     * which hold for any stream — when [channelCount] is unknown or has no
+     * standard layout.
+     *
+     * [channelCount] is what leaves the chain, not what the file has: an
+     * Atmos bed rendered to binaural reaches the platform as stereo, and a
+     * bed passed on in Direct mode as 5.1 or 7.1.4 — the case the
+     * spatializer exists for.
      */
     fun spatialAudio(sampleRate: Int?, channelCount: Int?): SpatialAudio? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S_V2) return null
@@ -98,24 +103,33 @@ class OutputDeviceProbe @Inject constructor(
                 !spatializer.isAvailable -> SpatialAudio.UNAVAILABLE
                 !spatializer.isEnabled -> SpatialAudio.OFF
                 sampleRate == null || sampleRate <= 0 || channelCount == null -> null
-                spatializer.canBeSpatialized(MEDIA_ATTRIBUTES, streamFormat(sampleRate, channelCount)) ->
-                    SpatialAudio.APPLIED
-                else -> SpatialAudio.NOT_THIS_STREAM
+                else -> {
+                    val format = streamFormat(sampleRate, channelCount) ?: return@runCatching null
+                    if (spatializer.canBeSpatialized(MEDIA_ATTRIBUTES, format)) {
+                        SpatialAudio.APPLIED
+                    } else {
+                        SpatialAudio.NOT_THIS_STREAM
+                    }
+                }
             }
         }.getOrNull()
     }
 
-    private fun streamFormat(sampleRate: Int, channelCount: Int?): AudioFormat =
-        AudioFormat.Builder()
+    /**
+     * The format the AudioTrack is built with: Media3's own count-to-mask
+     * table, so the question asked is the one the platform actually gets.
+     * Null for a count with no standard layout.
+     */
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun streamFormat(sampleRate: Int, channelCount: Int): AudioFormat? {
+        val mask = androidx.media3.common.util.Util.getAudioTrackChannelConfig(channelCount)
+        if (mask == AudioFormat.CHANNEL_INVALID) return null
+        return AudioFormat.Builder()
             .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
             .setSampleRate(sampleRate)
-            .setChannelMask(
-                when (channelCount) {
-                    1 -> AudioFormat.CHANNEL_OUT_MONO
-                    else -> AudioFormat.CHANNEL_OUT_STEREO
-                }
-            )
+            .setChannelMask(mask)
             .build()
+    }
 
     private fun currentOutput(): RoutedOutput? {
         val outputs = runCatching {
