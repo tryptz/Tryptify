@@ -43,6 +43,12 @@ class MixerViewModel @Inject constructor(
         viewModelScope.launch { preferencesManager.setMixerChannelDynamic(enabled) }
     }
 
+    /** Wide streams: one bus per channel group (true) or all through bus 1. */
+    val spreadChannels: StateFlow<Boolean> = dspManager.spreadChannels
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    fun setSpreadChannels(spread: Boolean) = dspManager.setSpreadChannels(spread)
+
     val presets: StateFlow<List<MixPreset>> = presetRepository.getAllPresets()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 

@@ -32,6 +32,39 @@ class MixBusProcessor @Inject constructor(
     private val _engineReady = MutableStateFlow(false)
     val engineReady: StateFlow<Boolean> = _engineReady.asStateFlow()
 
+    /**
+     * The channel groups of the stream playing, in bus order — group k is
+     * spread onto bus number k + 1 — or empty for stereo and mono, which are
+     * not spread. Changes on the playback thread when the format does.
+     */
+    private val _channelGroups = MutableStateFlow<List<String>>(emptyList())
+    val channelGroups: StateFlow<List<String>> = _channelGroups.asStateFlow()
+
+    @Volatile private var spreadChannels = true
+    // Channel count of the stream the lanes were last configured for.
+    @Volatile private var laneChannels = 2
+
+    /**
+     * Spread a wide stream one channel group per bus (true), or run all of it
+     * through the buses by their input switches, bus 1 alone by default, as
+     * stereo does (false). Takes effect at once, mid-track included.
+     */
+    fun setSpreadChannels(spread: Boolean) {
+        spreadChannels = spread
+        val ptr = enginePtr
+        if (ptr != 0L) nativeSetSpreadChannels(ptr, spread)
+        publishChannelGroups()
+    }
+
+    private fun publishChannelGroups() {
+        val channels = laneChannels
+        _channelGroups.value = if (spreadChannels && channels > 2) {
+            ChannelLayout.laneLabels(channels)
+        } else {
+            emptyList()
+        }
+    }
+
     // Scratch float arrays — allocated once per format change
     private var scratchInL = FloatArray(0)
     private var scratchInR = FloatArray(0)
@@ -66,6 +99,7 @@ class MixBusProcessor @Inject constructor(
     private external fun nativeReconfigure(enginePtr: Long, sampleRate: Int, maxBlockSize: Int)
     // Lane k carries channel first[k], and second[k] unless it is -1.
     private external fun nativeConfigureLanes(enginePtr: Long, first: IntArray, second: IntArray)
+    private external fun nativeSetSpreadChannels(enginePtr: Long, spread: Boolean)
     // Planar direct float buffer, channel c at c * stride, processed in place.
     private external fun nativeProcessPlanar(
         enginePtr: Long, planar: ByteBuffer, numChannels: Int, stride: Int, numFrames: Int,
@@ -104,6 +138,8 @@ class MixBusProcessor @Inject constructor(
     external fun nativeRemoveBus(enginePtr: Long, busIndex: Int): Boolean
     external fun nativeSetMixBypassed(enginePtr: Long, bypassed: Boolean)
     external fun nativeGetStateJson(enginePtr: Long): String
+    // As the engine runs now, with buses a wide stream grew; for the UI mirror.
+    external fun nativeGetLiveStateJson(enginePtr: Long): String
     external fun nativeLoadStateJson(enginePtr: Long, stateJson: String)
 
     companion object {
@@ -469,6 +505,7 @@ class MixBusProcessor @Inject constructor(
             if (enginePtr == 0L) {
                 // Cold start — no existing engine, full construct + state restore.
                 enginePtr = nativeCreate(inputFormat.sampleRate, MAX_BLOCK_SIZE)
+                nativeSetSpreadChannels(enginePtr, spreadChannels)
             } else {
                 // Hot path — live reconfigure keeps the bus graph, plugin
                 // instances, and every atomic parameter untouched. No state
@@ -484,11 +521,16 @@ class MixBusProcessor @Inject constructor(
             } else {
                 listOf(ChannelLayout.Lane(0, 1))
             }
+            // More than one lane spreads them across the mixer, one bus per
+            // channel group — which can add buses, so the groups are published
+            // after, for the UI to re-read the mixer and name the strips.
             nativeConfigureLanes(
                 enginePtr,
                 IntArray(lanes.size) { lanes[it].first },
                 IntArray(lanes.size) { lanes[it].second },
             )
+            laneChannels = inputFormat.channelCount
+            publishChannelGroups()
 
             // Oxford post-chain isn't part of the native engine; still needs
             // its own sample-rate prep call on every format change — at the
@@ -508,6 +550,8 @@ class MixBusProcessor @Inject constructor(
 
     override fun reset() {
         _engineReady.value = false
+        laneChannels = 2
+        publishChannelGroups()
         flush()
         if (enginePtr != 0L) {
             nativeDestroy(enginePtr)

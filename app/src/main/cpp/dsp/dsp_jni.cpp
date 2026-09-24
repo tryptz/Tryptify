@@ -192,7 +192,7 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeGetBusLevels(
     int len = env->GetArrayLength(outLevels);
     float* arr = env->GetFloatArrayElements(outLevels, nullptr);
     if (arr) {
-        engine->primary().getBusLevels(arr, len);
+        engine->getBusLevels(arr, len);
         env->ReleaseFloatArrayElements(outLevels, arr, 0);
     }
 }
@@ -212,7 +212,7 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeGetPluginMeters(
     int len = env->GetArrayLength(outMeters);
     float* arr = env->GetFloatArrayElements(outMeters, nullptr);
     if (arr) {
-        engine->primary().getPluginMeters(busIndex, arr, len);
+        engine->withBusLane(busIndex, [&](DspEngine& e) { e.getPluginMeters(busIndex, arr, len); });
         env->ReleaseFloatArrayElements(outMeters, arr, 0);
     }
 }
@@ -225,7 +225,7 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeGetBusWaveform(
     int len = env->GetArrayLength(outWave);
     float* arr = env->GetFloatArrayElements(outWave, nullptr);
     if (!arr) return 0;
-    int written = engine->primary().getBusWaveform(busIndex, arr, len);
+    int written = engine->withBusLane(busIndex, [&](DspEngine& e) { return e.getBusWaveform(busIndex, arr, len); });
     env->ReleaseFloatArrayElements(outWave, arr, 0);
     return written;
 }
@@ -253,6 +253,20 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeGetStateJson(
     auto* engine = getEngine(enginePtr);
     if (!engine) return env->NewStringUTF("{}");
     std::string json = engine->primary().getStateJson();
+    return env->NewStringUTF(json.c_str());
+}
+
+/**
+ * The state as the engine runs it right now, including the buses a
+ * multichannel stream grew and nobody has touched (nativeGetStateJson leaves
+ * those out, being the form that is saved). For the UI's mirror of the mixer.
+ */
+extern "C" JNIEXPORT jstring JNICALL
+Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeGetLiveStateJson(
+    JNIEnv* env, jobject /*thiz*/, jlong enginePtr) {
+    auto* engine = getEngine(enginePtr);
+    if (!engine) return env->NewStringUTF("{}");
+    std::string json = engine->primary().getStateJson(/* full = */ true);
     return env->NewStringUTF(json.c_str());
 }
 
@@ -322,6 +336,14 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeConfigureLanes(
     int fb[MultiLaneEngine::MAX_LANES];
     for (int k = 0; k < count; k++) { fa[k] = a[k]; fb[k] = b[k]; }
     engine->configureLanes(fa, fb, count);
+}
+
+/** Spread a wide stream one channel group per bus, or run it whole. */
+extern "C" JNIEXPORT void JNICALL
+Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeSetSpreadChannels(
+    JNIEnv* /*env*/, jobject /*thiz*/, jlong enginePtr, jboolean spread) {
+    auto* engine = getEngine(enginePtr);
+    if (engine) engine->setSpread(spread);
 }
 
 /**

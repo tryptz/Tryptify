@@ -395,6 +395,7 @@ class PreferencesManager @Inject constructor(
         private val DSP_STATE_JSON = stringPreferencesKey("dsp_state_json")
         private val MIXER_CHANNEL_DYNAMIC = booleanPreferencesKey("mixer_channel_dynamic")
         private val DSP_BLOCK_SIZE = intPreferencesKey("dsp_block_size")
+        private val DSP_SPREAD_CHANNELS = booleanPreferencesKey("dsp_spread_channels")
         private val DOWNLOAD_QUEUE_JSON = stringPreferencesKey("download_queue_json")
 
         // One-shot marker for the move of the cover store out of cacheDir.
@@ -1855,6 +1856,16 @@ class PreferencesManager @Inject constructor(
     suspend fun setDspBlockSize(value: Int) {
         if (value !in DSP_BLOCK_SIZES) return
         dataStore.edit { it[DSP_BLOCK_SIZE] = value }
+    }
+
+    /**
+     * Whether a multichannel stream is spread across the mixer, one bus per
+     * channel group (front, centre, LFE, surrounds, heights), or runs whole
+     * through bus 1 like stereo. Spread by default.
+     */
+    val dspSpreadChannels: Flow<Boolean> = dataStore.data.map { it[DSP_SPREAD_CHANNELS] ?: true }
+    suspend fun setDspSpreadChannels(value: Boolean) {
+        dataStore.edit { it[DSP_SPREAD_CHANNELS] = value }
     }
 
     /**
