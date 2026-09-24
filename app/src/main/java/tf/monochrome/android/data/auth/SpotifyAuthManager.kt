@@ -261,7 +261,9 @@ class SpotifyAuthManager @Inject constructor(
         // for playback under this same client id. Accounts connected before it
         // was added get Spotify's own one-time consent on first play instead.
         private const val SCOPES =
-            "playlist-read-private playlist-read-collaborative user-library-read app-remote-control"
+            // streaming: the in-process librespot client logs in with this
+            // token to decode Spotify audio into the DSP chain.
+            "playlist-read-private playlist-read-collaborative user-library-read app-remote-control streaming"
         private const val EXPIRY_MARGIN_MS = 60_000L
         private const val BASE64_URL_FLAGS = Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
         private const val KEY_VERIFIER = "code_verifier"

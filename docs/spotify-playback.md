@@ -1,8 +1,64 @@
 # Spotify playback
 
-Spotify tracks found in search play **in the Spotify app**, driven by the
-official [App Remote SDK](https://github.com/spotify/android-sdk). Tryptify
-never receives, stores or decodes Spotify audio.
+Spotify tracks play through one of two routes, chosen per track by
+`StreamResolver.spotifyPlaybackUri`:
+
+1. **Native PCM, through the DSP** (preferred). An embedded librespot client
+   signs in with the app's own Spotify token, decodes the song in-process, and
+   ExoPlayer plays that PCM as a WAV — so `monochrome_dsp`, AutoEQ, the mixer,
+   the visualizer taps and the USB DAC path all apply, exactly as for any
+   other source. Needs Premium and the `streaming` scope.
+2. **App Remote shadow** (fallback). When librespot can't sign in, the song
+   plays **in the Spotify app**, driven by the official
+   [App Remote SDK](https://github.com/spotify/android-sdk), while ExoPlayer
+   plays a silent stand-in. This audio bypasses the DSP.
+
+## Native PCM route
+
+```
+librespot (decode)  →  PcmSink  →  PcmPipe  →  PcmSinkDataSource  →  ExoPlayer  →  AudioProcessor chain (DSP)
+   own thread          4 KiB      bounded      spotify-pcm:// as WAV    WavExtractor
+                       writes     ring, 2 s
+```
+
+| Piece | Role |
+|---|---|
+| `SpotifyNativeSession` (app) | Signs librespot in on demand with `SpotifyAuthManager`'s access token; backs off 5 min after a failure. |
+| `LibrespotPlayerWrapper` | The librespot `Session` + `Player`. `openStream(uri, startMs)` loads/seeks and starts a new pipe generation. Normalisation off, volume max, autoplay/preload off. |
+| `PcmSink` | librespot's `SinkOutput`, built by reflection (keep rule in `spotify-wrapper/consumer-rules.pro`). Copies each write into the pipe. |
+| `PcmPipe` | Bounded ring with **blocking** writes. ExoPlayer's read rate is the only clock. Generations stop a superseded stream's audio leaking into the next. |
+| `PcmSinkDataSource` | Serves `spotify-pcm://track/<id>?durationMs=N`: a 44-byte WAV header from the duration, then the pipe's PCM. |
+
+Contract: 44.1 kHz, 16-bit signed little-endian, stereo, interleaved —
+librespot's output format. `PcmSink.start` checks it; any other format makes
+the data source refuse rather than play noise under a wrong header.
+
+Behaviour worth knowing before changing it:
+
+- **Nothing mirrors play/pause into librespot.** Pausing is backpressure:
+  ExoPlayer stops reading, the pipe fills, librespot's output thread blocks in
+  `write`. librespot's own pause would call `SinkOutput.stop()`, and its
+  position is never ExoPlayer's anyway (ExoPlayer buffers up to 120 s ahead).
+- **Seeking** is ordinary WAV seeking: WavExtractor reopens the data source at
+  a byte offset, and `open` → first read → `openStream` seeks librespot to that
+  millisecond. librespot's seek flushes the sink.
+- **The stream starts on the first PCM read**, not in `open`, so opening a
+  source only to read its header (prepare, preload) does not take librespot
+  away from the track that is playing.
+- **Length**: the header uses Spotify's advertised duration. A short decode is
+  padded with silence, and a long one is cut at the header's length. "Ended" is
+  reported only after the pipe stays empty for 250 ms, because librespot says
+  it's done while its last buffers are still in flight.
+- **One stream at a time.** If a second Spotify item starts reading PCM while
+  another is still loading (crossfade into a Spotify track whose predecessor
+  isn't fully buffered, for example), the first is superseded and ends at
+  whatever it had buffered.
+- A stall of 10 s with no PCM throws a timeout; ExoPlayer's retry reopens at
+  the same offset, which restarts librespot there.
+
+Dependencies: `libs/librespot-player-stripped-1.6.5.jar` has no POM, so
+`spotify-wrapper/build.gradle.kts` declares librespot's runtime dependencies
+itself, at the versions librespot 1.6.5 pins.
 
 ## Setup (once, in the Spotify Developer Dashboard)
 
@@ -22,7 +78,7 @@ App Remote authenticates the calling *app*, not just the user:
 On the phone: the Spotify app installed and logged in, on a **Premium**
 account (App Remote refuses to start a specific track otherwise).
 
-## How it fits the player
+## App Remote shadow route
 
 | Piece | Role |
 |---|---|
@@ -50,11 +106,11 @@ end-of-track advance work with no Spotify-specific code. The bridge:
 
 ## Known limits
 
-- Spotify audio bypasses `monochrome_dsp`, AutoEQ, the mixer and the USB DAC
-  path. With exclusive USB output active, Spotify is heard wherever Android
-  routes it, not through the DAC.
-- Crossfade into or out of a Spotify track is a cut on the Spotify side: the
-  ramp only ever applies to the silent shadow.
+- On the shadow route only: Spotify audio bypasses `monochrome_dsp`, AutoEQ,
+  the mixer and the USB DAC path, and crossfade is a cut on the Spotify side.
+  The native route has neither limit.
+- Native sign-in needs the `streaming` scope. Accounts connected before it was
+  added keep using the shadow route until they reconnect Spotify.
 - Search is tracks only, one page (10). Spotify artists/albums have no pages
   here — their ids are base62 and every catalogue screen takes a numeric id.
 - Mirroring reacts to `PlayerState` events, which Spotify sends on change, not

@@ -18,6 +18,7 @@ configure<com.android.build.api.dsl.LibraryExtension> {
 
     defaultConfig {
         minSdk = 26
+        consumerProguardFiles("consumer-rules.pro")
         // Same defaults as the app's BuildConfig — the client id and redirect
         // are registered in the Spotify Developer Dashboard against this
         // package name + signing SHA-1.
@@ -64,6 +65,24 @@ dependencies {
     // com.spotify protobuf messages, zeroconf); the real dependencies come in
     // via the artifact's normal POM. Regenerate with: unzip, prune, jar cf.
     api(files("libs/librespot-player-stripped-1.6.5.jar"))
+
+    // A files() jar carries no POM, so "the real dependencies" above are
+    // declared here by hand, at the versions librespot 1.6.5's own POMs pin
+    // (librespot-java parent + librespot-lib). Without them the first class
+    // librespot loads — every one logs through slf4j, the wire format is
+    // protobuf, and Vorbis decoding is jorbis — is a NoClassDefFoundError.
+    //
+    // Left out on purpose, because only code this app never runs uses them:
+    // log4j and night-config (librespot's CLI Main and its TOML
+    // FileConfiguration) and zeroconf (ZeroconfServer). consumer-rules.pro
+    // tells R8 they are missing on purpose.
+    api("com.google.protobuf:protobuf-java:3.25.2")
+    implementation("org.slf4j:slf4j-api:2.0.16")
+    implementation("org.jcraft:jorbis:0.0.17")
+    implementation("com.badlogicgames.jlayer:jlayer:1.0.2-gdx")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("commons-net:commons-net:3.11.1")
+    implementation(libs.gson)
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation(libs.hilt.android)

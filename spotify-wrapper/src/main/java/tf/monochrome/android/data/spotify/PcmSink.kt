@@ -1,60 +1,55 @@
 package tf.monochrome.android.data.spotify
 
+import android.util.Log
 import xyz.gianlu.librespot.player.mixing.output.OutputAudioFormat
 import xyz.gianlu.librespot.player.mixing.output.SinkOutput
-import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.TimeUnit
 
 /**
- * The pipe between librespot's decoder and ExoPlayer: librespot's player is
- * configured with `setOutputClass(PcmSink)`, so it reflects an instance of
- * this class and writes every decoded PCM chunk into it. The chunk queue is
- * what [PcmSinkDataSource] — an ExoPlayer DataSource — pulls from, turning
- * Spotify's audio into just another MediaItem inside Tryptify's queue.
+ * librespot's audio output. The player is configured with
+ * `setOutputClass(PcmSink)`, so librespot instantiates this by reflection (it
+ * needs the public no-arg constructor — see the keep rule in
+ * `consumer-rules.pro`) and its `AudioSink` thread calls [write] with every
+ * decoded chunk. Everything goes straight into [PcmSinkRegistry.pipe], which
+ * [PcmSinkDataSource] reads for ExoPlayer — and from there the DSP chain.
  *
- * Ring-buffer semantics: if the reader falls behind, the oldest chunk is
- * dropped rather than blocking Spotify's decoder thread.
+ * What librespot's calls mean here, read from its `AudioSink`/`PlayerSession`:
+ * - [write] reuses one 4 KiB buffer every call; the pipe copies it.
+ * - [stop] is called whenever librespot pauses. It must *not* drop audio: the
+ *   ring holds the next samples ExoPlayer will read.
+ * - [flush] is called on a seek; the buffered audio is from before the seek.
  */
 class PcmSink : SinkOutput {
 
-    private val queue = LinkedBlockingQueue<ByteArray>(QUEUE_CAPACITY)
-
     override fun start(format: OutputAudioFormat): Boolean {
-        PcmSinkRegistry.sink = this
+        val supported = format.sampleRate.toInt() == PcmSinkRegistry.SAMPLE_RATE &&
+            format.channels == PcmSinkRegistry.CHANNELS &&
+            format.sampleSizeInBits == 16 &&
+            !format.isBigEndian
+        PcmSinkRegistry.formatSupported = supported
+        if (!supported) {
+            Log.e(TAG, "Unsupported librespot output format: ${format.sampleRate} Hz, " +
+                "${format.sampleSizeInBits}-bit, ${format.channels} ch, bigEndian=${format.isBigEndian}")
+        }
         return true
     }
 
     override fun write(buffer: ByteArray, offset: Int, len: Int) {
-        val chunk = if (offset == 0 && len == buffer.size) buffer else buffer.copyOfRange(offset, offset + len)
-        // Drop the oldest chunk when the reader stalls — audio keeps flowing.
-        while (!queue.offer(chunk)) {
-            queue.poll()
-        }
+        PcmSinkRegistry.pipe.write(buffer, offset, len)
     }
 
     override fun flush() {
-        queue.clear()
+        PcmSinkRegistry.pipe.clear()
     }
 
-    override fun stop() {
-        flush()
-    }
+    override fun stop() = Unit
 
-    override fun release() {
-        flush()
-    }
+    override fun drain() = Unit
 
-    override fun close() = flush()
+    override fun release() = Unit
 
-    /** Called by [PcmSinkDataSource]; blocks up to [timeoutMs] for the next chunk. */
-    fun read(timeoutMs: Long): ByteArray? = try {
-        queue.poll(timeoutMs, TimeUnit.MILLISECONDS)
-    } catch (e: InterruptedException) {
-        Thread.currentThread().interrupt()
-        null
-    }
+    override fun close() = Unit
 
     private companion object {
-        const val QUEUE_CAPACITY = 256
+        const val TAG = "SpotifyPcmSink"
     }
 }

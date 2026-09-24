@@ -16,6 +16,8 @@ import tf.monochrome.android.data.cache.SpotifyShadowUri
 import tf.monochrome.android.data.local.coil.AudioFileCoverFetcher
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.data.spotify.SpotifyAppRemoteClient
+import tf.monochrome.android.data.spotify.SpotifyNativeSession
+import tf.monochrome.android.data.spotify.SpotifyPcmUri
 import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.CollectionDirectLink
 import tf.monochrome.android.domain.model.PlaybackSource
@@ -50,6 +52,7 @@ class StreamResolver @Inject constructor(
     private val localTrackLocator: LocalTrackLocator,
     private val spotifyRemote: SpotifyAppRemoteClient,
     private val spotifyIdRegistry: SpotifyIdRegistry,
+    private val spotifyNative: SpotifyNativeSession,
 ) {
     private fun normalizeArtworkUri(raw: String?): Uri? {
         if (raw.isNullOrBlank()) return null
@@ -110,15 +113,13 @@ class StreamResolver @Inject constructor(
         }
 
         // Spotify is its own catalogue too. A track id registered in
-        // SpotifyIdRegistry maps back to the real base62 id, which resolves to
-        // the silent-WAV shadow (SpotifyPlaybackBridge mirrors play state into
-        // the Spotify app) — the legacy-Track twin of resolveSpotifyRemote.
-        // Without the Spotify app installed the track is unplayable; returning
+        // SpotifyIdRegistry maps back to the real base62 id, which resolves
+        // like resolveSpotifyRemote does (see spotifyPlaybackUri) — this is
+        // its legacy-Track twin. When neither route is available, returning
         // (null, null) makes callers skip it like any other dead stream.
         spotifyIdRegistry.trackBase62For(track.id)?.let { base62 ->
-            if (!spotifyRemote.isSpotifyInstalled()) return Pair(null, null)
-            val spotifyUri = "spotify:track:$base62"
-            if (!SpotifyShadowUri.isTrackId(SpotifyShadowUri.trackIdOf(spotifyUri))) return Pair(null, null)
+            val playbackUri = spotifyPlaybackUri("spotify:track:$base62", track.duration * 1000L)
+                ?: return Pair(null, null)
             val metadata = MediaMetadata.Builder()
                 .setTitle(track.title)
                 .setArtist(track.displayArtist)
@@ -129,7 +130,7 @@ class StreamResolver @Inject constructor(
                 .build()
             val mediaItem = MediaItem.Builder()
                 .setMediaId(track.id.toString())
-                .setUri(SpotifyShadowUri.build(spotifyUri, track.duration * 1000L))
+                .setUri(playbackUri)
                 .setMimeType(MimeTypes.AUDIO_WAV)
                 .setMediaMetadata(metadata)
                 .build()
@@ -248,26 +249,45 @@ class StreamResolver @Inject constructor(
     }
 
     /**
-     * A Spotify track = a silent WAV exactly as long as the song, carrying its
-     * Spotify URI (see [SpotifyShadowUri]). ExoPlayer plays the silence and
-     * keeps owning play state, position and end-of-track; SpotifyPlaybackBridge
-     * sees the shadow URI become current and has the Spotify app play the
-     * real thing in step with it.
+     * Where a Spotify track's audio comes from, as a WAV-shaped URI ExoPlayer
+     * can play; null when it cannot be played on this device.
      *
-     * Touches no network: whether the account is Premium, or the app is logged
-     * in, is only known once App Remote is asked to play, and the bridge
-     * handles that failure. The one thing knowable here is whether the Spotify
-     * app exists at all — without it the silence would play to nobody, so the
-     * track is reported unplayable and PlaybackService skips it like any other.
+     * 1. `spotify-pcm://` — the in-process librespot client decodes the song
+     *    and [PcmSinkDataSource][tf.monochrome.android.data.spotify.PcmSinkDataSource]
+     *    serves the PCM as a WAV, so it runs through the DSP chain, AutoEQ,
+     *    the mixer and the USB DAC like every other source. Needs librespot
+     *    signed in ([SpotifyNativeSession]), which is network the first time.
+     * 2. `spotify-shadow://` — a silent WAV exactly as long as the song (see
+     *    [SpotifyShadowUri]); SpotifyPlaybackBridge has the Spotify app play
+     *    the real thing in step with it. The audio bypasses the DSP. Whether
+     *    the account is Premium or logged in is only known once App Remote is
+     *    asked to play, and the bridge handles that failure; the one thing
+     *    knowable here is whether the Spotify app exists at all.
+     */
+    private suspend fun spotifyPlaybackUri(spotifyUri: String, durationMs: Long): String? {
+        if (durationMs <= 0 || !SpotifyShadowUri.isTrackId(SpotifyShadowUri.trackIdOf(spotifyUri))) {
+            return null
+        }
+        return when {
+            spotifyNative.ensureConnected() -> SpotifyPcmUri.build(spotifyUri, durationMs)
+            spotifyRemote.isSpotifyInstalled() -> SpotifyShadowUri.build(spotifyUri, durationMs)
+            else -> null
+        }
+    }
+
+    /**
+     * A Spotify track, from either route of [spotifyPlaybackUri]. Both are
+     * WAVs to ExoPlayer, which keeps owning play state, position and
+     * end-of-track either way. Unplayable when neither route is available;
+     * PlaybackService skips it like any other.
      */
     @OptIn(UnstableApi::class)
-    private fun resolveSpotifyRemote(
+    private suspend fun resolveSpotifyRemote(
         track: UnifiedTrack,
         source: PlaybackSource.SpotifyRemote,
     ): ResolvedMedia {
-        val playable = source.durationMs > 0 &&
-            SpotifyShadowUri.isTrackId(SpotifyShadowUri.trackIdOf(source.spotifyUri)) &&
-            spotifyRemote.isSpotifyInstalled()
+        val playbackUri = spotifyPlaybackUri(source.spotifyUri, source.durationMs)
+        val playable = playbackUri != null
 
         val metadata = MediaMetadata.Builder()
             .setTitle(track.title)
@@ -281,8 +301,8 @@ class StreamResolver @Inject constructor(
         val mediaItem = MediaItem.Builder()
             .setMediaId(track.id)
             .apply {
-                if (playable) {
-                    setUri(SpotifyShadowUri.build(source.spotifyUri, source.durationMs))
+                if (playbackUri != null) {
+                    setUri(playbackUri)
                     setMimeType(MimeTypes.AUDIO_WAV)
                 }
             }

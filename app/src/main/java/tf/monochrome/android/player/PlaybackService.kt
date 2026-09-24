@@ -91,6 +91,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var audioPipelineMonitor: tf.monochrome.android.audio.pipeline.AudioPipelineMonitor
     @Inject lateinit var qobuzCache: tf.monochrome.android.data.cache.QobuzStreamCacheManager
     @Inject lateinit var spotifyRemote: tf.monochrome.android.data.spotify.SpotifyAppRemoteClient
+    @Inject lateinit var librespot: tf.monochrome.android.data.spotify.LibrespotPlayerWrapper
     @Inject lateinit var usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter
     @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
     @Inject lateinit var bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController
@@ -136,11 +137,15 @@ class PlaybackService : MediaSessionService() {
         val default = androidx.media3.datasource.DefaultDataSource.Factory(this, http)
         val qobuz = tf.monochrome.android.data.cache.QobuzPartialDataSource.Factory(qobuzCache)
         val spotifyShadow = tf.monochrome.android.data.cache.SilentWavDataSource.Factory()
+        // Real Spotify audio, decoded in-process: through here it reaches the
+        // renderer's AudioProcessor chain like any other WAV.
+        val spotifyPcm = tf.monochrome.android.data.spotify.PcmSinkDataSource.Factory(librespot)
         return androidx.media3.datasource.DataSource.Factory {
             tf.monochrome.android.data.cache.SchemeRoutingDataSource(
                 default.createDataSource(),
                 qobuz.createDataSource(),
                 spotifyShadow.createDataSource(),
+                spotifyPcm.createDataSource(),
             )
         }
     }

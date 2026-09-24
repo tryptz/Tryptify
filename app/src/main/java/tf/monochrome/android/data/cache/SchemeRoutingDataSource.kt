@@ -5,12 +5,14 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.TransferListener
+import tf.monochrome.android.data.spotify.SpotifyPcmUri
 
 /**
  * Picks a [DataSource] by URI scheme at open time: the app's own `qobuz://`
  * URIs go to [qobuz], `spotify-shadow://` URIs (the silent stand-in for a
- * track the Spotify app is playing) go to [spotifyShadow], and everything else
- * (file, content, asset, http) to [default].
+ * track the Spotify app is playing) go to [spotifyShadow], `spotify-pcm://`
+ * URIs (Spotify audio decoded in-process by librespot) go to [spotifyPcm], and
+ * everything else (file, content, asset, http) to [default].
  *
  * DefaultDataSource has a closed set of schemes and no extension point, so this
  * sits in front of it rather than trying to replace it — the standard schemes
@@ -21,16 +23,18 @@ class SchemeRoutingDataSource(
     private val default: DataSource,
     private val qobuz: DataSource,
     private val spotifyShadow: DataSource,
+    private val spotifyPcm: DataSource,
 ) : DataSource {
 
     private var active: DataSource? = null
 
     override fun addTransferListener(transferListener: TransferListener) {
-        // Registered on both: which one handles a given open() isn't known yet,
+        // Registered on all: which one handles a given open() isn't known yet,
         // and the bandwidth meter needs the events either way.
         default.addTransferListener(transferListener)
         qobuz.addTransferListener(transferListener)
         spotifyShadow.addTransferListener(transferListener)
+        spotifyPcm.addTransferListener(transferListener)
     }
 
     override fun open(dataSpec: DataSpec): Long {
@@ -38,6 +42,7 @@ class SchemeRoutingDataSource(
         val source = when {
             QobuzPartialDataSource.isQobuzUri(uri) -> qobuz
             SpotifyShadowUri.matches(uri) -> spotifyShadow
+            SpotifyPcmUri.matches(uri) -> spotifyPcm
             else -> default
         }
         active = source
