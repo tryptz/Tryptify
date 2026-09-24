@@ -92,6 +92,12 @@ object WhatsNew {
     /** The now-playing screen: its artwork, its transport and its dock. */
     private const val PLAYER = "Now playing"
 
+    /** Where the sound goes after decoding, as the Audio Pipeline panel shows it. */
+    private const val PIPELINE = "Audio pipeline"
+
+    /** Playing Spotify's catalogue, natively or through the Spotify app. */
+    private const val SPOTIFY = "Spotify"
+
     /** The playback speed panel and the two engines behind it. */
     private const val SPEED = "Speed and pitch"
 
@@ -103,6 +109,76 @@ object WhatsNew {
 
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
+        WhatsNewRelease(
+            versionCode = 191,
+            versionName = "1.9.1",
+            entries = listOf(
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SPOTIFY,
+                    title = "Play Spotify from search",
+                    body = "Tracks, albums, artists and public playlists from Spotify's " +
+                        "catalogue play inside the app and through the equalizer and mixer. " +
+                        "If native playback fails, the Spotify app takes over instead of " +
+                        "playing silence.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Up to 16 buses",
+                    body = "Tap the + after the last strip to add a bus, up to 16. Long-press " +
+                        "bus 5 or later to remove it. Presets and exports carry the extra buses.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Surround and Atmos spread across the mixer",
+                    body = "A 5.1 or Atmos track puts front, centre, LFE, surrounds and heights " +
+                        "on buses of their own, named after them. Prefer it all on one bus? " +
+                        "Switch it under Input routing on the master.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Drag the effect graphs",
+                    body = "Every effect's graph has handles: pull an EQ band, a compressor's " +
+                        "knee or a reverb's tail and the knobs follow. Double-tap a handle to " +
+                        "reset it; tap a knob's value to type one.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "The mixer and EQs work on every channel",
+                    body = "Surround and Atmos streams keep all their channels through the " +
+                        "mixer, AutoEQ and the parametric EQ, up to 16. Compressors on the " +
+                        "master turn the whole bed down together.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "New knobs and effect cards",
+                    body = "Knobs have ticks, a default mark and arcs that start from zero for " +
+                        "plus-or-minus settings, and they follow your theme. Graphs are " +
+                        "taller and labelled.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = SPEED,
+                    title = "Speed on hi-res, Bluetooth and Atmos",
+                    body = "Changing speed no longer drops a hi-res stream to 16-bit, breaks up " +
+                        "or crashes on hi-res Bluetooth, and now works on spatial and Atmos " +
+                        "tracks at any sample rate.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PIPELINE,
+                    title = "Bluetooth says what it is doing",
+                    body = "The Audio Pipeline panel shows how a Bluetooth output connects " +
+                        "(Classic, LE Audio or hands-free) and whether spatial audio applies, " +
+                        "and no longer passes off the phone speaker's rate as the headphones'.",
+                ),
+            ),
+        ),
         WhatsNewRelease(
             versionCode = 190,
             versionName = "1.9.0",

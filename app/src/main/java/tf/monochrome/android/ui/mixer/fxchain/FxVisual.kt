@@ -228,8 +228,15 @@ internal fun FxVisual(
                             if (!next.isFinite()) return
                             val clamped = next.coerceIn(def.min, def.max)
                             if (clamped != pNow(axis.param)) {
+                                // Kept smooth here so small moves add up; a
+                                // stepped parameter is sent as whole steps.
                                 moved[axis.param] = clamped
-                                latestOnParam?.invoke(axis.param, clamped)
+                                val steps = def.steps
+                                val sent = if (steps == null || steps <= 0) clamped else {
+                                    val frac = (clamped - def.min) / (def.max - def.min)
+                                    def.min + kotlin.math.round(frac * steps) / steps * (def.max - def.min)
+                                }
+                                latestOnParam?.invoke(axis.param, sent)
                             }
                         }
                         while (true) {
