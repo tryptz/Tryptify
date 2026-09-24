@@ -238,6 +238,41 @@ static inline void writeWaveSilence(Bus& bus, int numFrames) {
 }
 
 void DspEngine::process(float* left, float* right, int numFrames) {
+    // Lock for reading plugin chains (brief lock — plugins don't allocate during process)
+    std::lock_guard<std::mutex> lock(chainMutex_);
+    processMixBusesLocked(left, right, numFrames);
+    const int slots = masterSlotCountLocked();
+    for (int s = 0; s < slots; s++) processMasterSlotLocked(s, numFrames, nullptr);
+    finishBlockLocked(left, right, numFrames);
+}
+
+int DspEngine::masterSlotCountLocked() const {
+    return static_cast<int>(buses_[MASTER_BUS].plugins.size());
+}
+
+bool DspEngine::masterSlotLinkableLocked(int slot) const {
+    const Bus& master = buses_[MASTER_BUS];
+    if (slot < 0 || slot >= static_cast<int>(master.plugins.size())) return false;
+    const auto& plugin = master.plugins[static_cast<size_t>(slot)];
+    return plugin && !plugin->isBypassed() && plugin->getDryWet() > 0.001f &&
+           plugin->supportsLinkedDetection();
+}
+
+bool DspEngine::skippedOnThisLane(const SnapinProcessor& plugin) const {
+    if (!monoLane_) return false;
+    // Effects that only reshape a stereo image. On one channel there is no
+    // image, and Haas on dual-mono folded back to mono is a comb filter.
+    switch (plugin.getType()) {
+        case SnapinType::STEREO:
+        case SnapinType::HAAS:
+        case SnapinType::CHANNEL_MIXER:
+            return true;
+        default:
+            return false;
+    }
+}
+
+void DspEngine::processMixBusesLocked(const float* left, const float* right, int numFrames) {
     // Flush denormals to zero — prevents 10-100x CPU spikes in feedback tails
     enableFlushToZero();
 
@@ -248,9 +283,6 @@ void DspEngine::process(float* left, float* right, int numFrames) {
     bool hasSolo = anySoloed();
     bool mixBypass = mixBypassed_.load(std::memory_order_relaxed);
 
-    // Lock for reading plugin chains (brief lock — plugins don't allocate during process)
-    std::lock_guard<std::mutex> lock(chainMutex_);
-
     // Process mix buses 0-3
     for (int b = 0; b < NUM_MIX_BUSES; b++) {
         Bus& bus = buses_[b];
@@ -260,7 +292,8 @@ void DspEngine::process(float* left, float* right, int numFrames) {
         bool busMuted = bus.muted.load(std::memory_order_relaxed);
         bool busSoloed = bus.soloed.load(std::memory_order_relaxed);
         float busGainDb = mixBypass ? 0.0f : bus.gainDb.load(std::memory_order_relaxed);
-        float busPan = mixBypass ? 0.0f : bus.pan.load(std::memory_order_relaxed);
+        // A mono lane has no stereo image to place: its pan sits at centre.
+        float busPan = (mixBypass || monoLane_) ? 0.0f : bus.pan.load(std::memory_order_relaxed);
 
         // Skip if no input, muted, or (solo mode active and this bus not soloed)
         if (!busInputEnabled || busMuted || (hasSolo && !busSoloed)) {
@@ -281,7 +314,7 @@ void DspEngine::process(float* left, float* right, int numFrames) {
         } else {
             for (size_t s = 0; s < bus.plugins.size(); s++) {
                 auto& plugin = bus.plugins[s];
-                if (plugin && !plugin->isBypassed()) {
+                if (plugin && !plugin->isBypassed() && !skippedOnThisLane(*plugin)) {
                     bus.slotInPeak[s].store(
                         stereoPeak(busL_.data(), busR_.data(), numFrames),
                         std::memory_order_relaxed);
@@ -338,12 +371,18 @@ void DspEngine::process(float* left, float* right, int numFrames) {
         bus.peakL.store(busPeakL, std::memory_order_relaxed);
         bus.peakR.store(busPeakR, std::memory_order_relaxed);
     }
+}
 
-    // Run master bus chain with dry/wet blending
+void DspEngine::processMasterSlotLocked(int slot, int numFrames, const float* detectorKey) {
     Bus& master = buses_[MASTER_BUS];
-    for (size_t s = 0; s < master.plugins.size(); s++) {
+    if (slot < 0 || slot >= static_cast<int>(master.plugins.size())) return;
+    const size_t s = static_cast<size_t>(slot);
+    {
         auto& plugin = master.plugins[s];
-        if (plugin && !plugin->isBypassed()) {
+        if (plugin && !plugin->isBypassed() && !skippedOnThisLane(*plugin)) {
+            // Linked detection for this block only: a multi-lane host hands
+            // every lane the same key, so every lane computes the same gain.
+            plugin->setDetectorKey(plugin->supportsLinkedDetection() ? detectorKey : nullptr);
             master.slotInPeak[s].store(
                 stereoPeak(sumL_.data(), sumR_.data(), numFrames),
                 std::memory_order_relaxed);
@@ -365,15 +404,19 @@ void DspEngine::process(float* left, float* right, int numFrames) {
             master.slotOutPeak[s].store(
                 stereoPeak(sumL_.data(), sumR_.data(), numFrames),
                 std::memory_order_relaxed);
+            plugin->setDetectorKey(nullptr);
         } else {
             master.slotInPeak[s].store(0.0f, std::memory_order_relaxed);
             master.slotOutPeak[s].store(0.0f, std::memory_order_relaxed);
         }
     }
+}
 
+void DspEngine::finishBlockLocked(float* left, float* right, int numFrames) {
+    Bus& master = buses_[MASTER_BUS];
     // Apply master gain and write to output
     float masterGainDb = master.gainDb.load(std::memory_order_relaxed);
-    float masterPan = master.pan.load(std::memory_order_relaxed);
+    float masterPan = monoLane_ ? 0.0f : master.pan.load(std::memory_order_relaxed);
     recalcBusGains(masterGainDb, masterPan, master.targetGainL, master.targetGainR);
     float masterPeakL = 0.0f, masterPeakR = 0.0f;
     bool clipped = false;

@@ -64,16 +64,38 @@ public:
 
     int getOversampling() const { return osFactor_; }
 
+    // ── Linked detection ─────────────────────────────────────────────────
+    // Dynamics that measure level (compressor, limiter, dynamics, compactor,
+    // gate) can take their detector from an outside key instead of their own
+    // left/right: one non-negative sample per frame. A multichannel host
+    // hands every lane's instance the same key — the loudest of all lanes —
+    // so the whole bed is turned down together instead of lane by lane.
+    // The key is set around one process call and cleared after; null means
+    // detect on the signal, exactly as before.
+    virtual bool supportsLinkedDetection() const { return false; }
+    void setDetectorKey(const float* key) { key_ = key; }
+
     void processOS(float* left, float* right, int numFrames) {
         if (osFactor_ <= 1 || osBufL_.empty()) {
             process(left, right, numFrames);
             return;
+        }
+        // At the oversampled rate the key has to be too: each base-rate
+        // sample held for the factor's worth of frames. A peak key is a
+        // level, not a waveform, so holding it is what it means.
+        const float* baseKey = key_;
+        if (baseKey && !osKey_.empty()) {
+            for (int i = 0; i < numFrames; i++) {
+                for (int k = 0; k < osFactor_; k++) osKey_[static_cast<size_t>(i * osFactor_ + k)] = baseKey[i];
+            }
+            key_ = osKey_.data();
         }
         osL_.upsample(left, osBufL_.data(), numFrames);
         osR_.upsample(right, osBufR_.data(), numFrames);
         process(osBufL_.data(), osBufR_.data(), numFrames * osFactor_);
         osL_.downsample(osBufL_.data(), left, numFrames);
         osR_.downsample(osBufR_.data(), right, numFrames);
+        key_ = baseKey;
     }
 
 protected:
@@ -81,17 +103,20 @@ protected:
     int maxBlockSize_ = 512;
     bool bypassed_ = false;
     float dryWet_ = 1.0f;  // 0 = fully dry, 1 = fully wet
+    const float* key_ = nullptr;  // see setDetectorKey
 
 private:
     void applyOS() {
         if (osFactor_ > 1) {
             osBufL_.assign(static_cast<size_t>(osBaseBlock_) * osFactor_, 0.0f);
             osBufR_.assign(static_cast<size_t>(osBaseBlock_) * osFactor_, 0.0f);
+            osKey_.assign(static_cast<size_t>(osBaseBlock_) * osFactor_, 0.0f);
             osL_.prepare(osBaseRate_, osFactor_);
             osR_.prepare(osBaseRate_, osFactor_);
         } else {
             osBufL_.clear();
             osBufR_.clear();
+            osKey_.clear();
         }
         prepare(osBaseRate_ * osFactor_, osBaseBlock_ * osFactor_);
     }
@@ -99,7 +124,7 @@ private:
     int osFactor_ = 1;
     double osBaseRate_ = 0.0;
     int osBaseBlock_ = 0;
-    std::vector<float> osBufL_, osBufR_;
+    std::vector<float> osBufL_, osBufR_, osKey_;
     ChannelOversampler osL_, osR_;
 };
 

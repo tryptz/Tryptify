@@ -202,6 +202,11 @@ private:
 // Inflator
 // ============================================================================
 
+// Widest stream either processor takes: a 7.1.4 Atmos bed with room to spare.
+// Stereo keeps using channels 0 and 1 exactly as before; the meters read those
+// two whatever the width.
+static constexpr int kMaxChannels = 16;
+
 class InflatorProcessor {
 public:
     struct Params {
@@ -221,7 +226,7 @@ public:
 
     void prepare(double sampleRate, int numChannels) {
         sr_   = sampleRate;
-        nCh_  = std::clamp(numChannels, 1, 2);
+        nCh_  = std::clamp(numChannels, 1, kMaxChannels);
 
         // Sonnox's split-band crossovers are estimated at ~260 Hz and ~2.2 kHz
         // from 3rd-harmonic measurements. The linear-phase FIR means lo+hi sums
@@ -273,7 +278,7 @@ public:
         // alias, so it stays at the base rate and the FIR designs are untouched.
         const int osFactor = clampOsFactor(params.oversampling.load(std::memory_order_relaxed));
         if (osFactor != osFactorApplied_) {
-            for (int c = 0; c < 2; ++c) {
+            for (int c = 0; c < kMaxChannels; ++c) {
                 for (int b = 0; b < kOsBands; ++b) os_[c][b].prepare(sr_, osFactor);
             }
             osFactorApplied_ = osFactor;
@@ -323,8 +328,8 @@ public:
                 buffers[c][n] = y;
 
                 const float ay = std::fabs(y);
-                if (c == 0) { if (ay > pkL) pkL = ay; }
-                else        { if (ay > pkR) pkR = ay; }
+                if (c == 0)      { if (ay > pkL) pkL = ay; }
+                else if (c == 1) { if (ay > pkR) pkR = ay; }
             }
         }
 
@@ -366,7 +371,7 @@ private:
         return y;
     }
 
-    ChannelOversampler os_[2][kOsBands];
+    ChannelOversampler os_[kMaxChannels][kOsBands];
     int osFactorApplied_ = 0;
 
     void updateMeters(float* const* buffers, int n) noexcept {
@@ -400,8 +405,8 @@ private:
 
     double sr_{48000.0};
     int    nCh_{2};
-    std::array<LinearPhaseFir, 2> firLow_, firHigh_;
-    std::array<FirAlignDelay, 2>  dryDelay_;
+    std::array<LinearPhaseFir, kMaxChannels> firLow_, firHigh_;
+    std::array<FirAlignDelay, kMaxChannels>  dryDelay_;
     Smoothed preGain_, postGain_, effect_, curve_;
 };
 
@@ -430,7 +435,7 @@ public:
 
     void prepare(double sampleRate, int numChannels) {
         sr_   = sampleRate;
-        nCh_  = std::clamp(numChannels, 1, 2);
+        nCh_  = std::clamp(numChannels, 1, kMaxChannels);
         envDb_ = -120.0f;
         grSmoothDb_ = 0.0f;
         grCoef_ = std::exp(-1.0f / (0.030f * static_cast<float>(sr_)));  // 30 ms UI smoothing
@@ -458,7 +463,7 @@ public:
         // decimation filter removes them instead.
         const int osFactor = clampOsFactor(params.oversampling.load(std::memory_order_relaxed));
         if (osFactor != osFactorApplied_) {
-            for (int c = 0; c < 2; ++c) os_[c].prepare(sr_, osFactor);
+            for (int c = 0; c < kMaxChannels; ++c) os_[c].prepare(sr_, osFactor);
             osRate_ = sr_ * osFactor;
             // Attack, release and the meter smoothing are all times in ms, so
             // their coefficients must be derived from the rate the loop
@@ -477,19 +482,20 @@ public:
         float pkL = 0.0f, pkR = 0.0f;
 
         for (int n = 0; n < numFrames; ++n) {
-            float upL[kMaxOsFactor], upR[kMaxOsFactor];
-            if (osFactor > 1) {
-                os_[0].upsample(&buffers[0][n], upL, 1);
-                if (nCh_ > 1) os_[1].upsample(&buffers[1][n], upR, 1);
-            } else {
-                upL[0] = buffers[0][n];
-                if (nCh_ > 1) upR[0] = buffers[1][n];
+            // One row per channel; up_[c] holds channel c's samples at the
+            // running rate for this frame. A member, not a local, so a 16-
+            // channel frame does not put 256 bytes on the stack per sample.
+            for (int c = 0; c < nCh_; ++c) {
+                if (osFactor > 1) os_[c].upsample(&buffers[c][n], up_[c], 1);
+                else              up_[c][0] = buffers[c][n];
             }
 
             for (int k = 0; k < osFactor; ++k) {
-            // Linked detection: max abs across channels
-            float peak = std::fabs(upL[k]);
-            if (nCh_ > 1) peak = std::max(peak, std::fabs(upR[k]));
+            // Linked detection: max abs across every channel — so a wide
+            // stream is turned down as one, the way a master compressor on a
+            // surround mix is expected to behave.
+            float peak = std::fabs(up_[0][k]);
+            for (int c = 1; c < nCh_; ++c) peak = std::max(peak, std::fabs(up_[c][k]));
 
             const float inDb = (peak > 1e-9f) ? 20.0f * std::log10(peak) : -120.0f;
 
@@ -513,8 +519,7 @@ public:
             // 10^(-grDb/20) = exp(-grDb * ln(10)/20) = exp(-grDb * 0.11512925f)
             const float gainLin = std::exp(-grDb * 0.11512925f) * makeupLin;
 
-            upL[k] *= gainLin;
-            if (nCh_ > 1) upR[k] *= gainLin;
+            for (int c = 0; c < nCh_; ++c) up_[c][k] *= gainLin;
 
             // Per-sample UI-smoothed GR: asymmetric — attack fast (follow increases),
             // release slow (linger on the meter so user can read it)
@@ -522,12 +527,9 @@ public:
             else                    grSmoothDb_ = grDb + (grSmoothDb_ - grDb) * grCoef_;
             }
 
-            if (osFactor > 1) {
-                os_[0].downsample(upL, &buffers[0][n], 1);
-                if (nCh_ > 1) os_[1].downsample(upR, &buffers[1][n], 1);
-            } else {
-                buffers[0][n] = upL[0];
-                if (nCh_ > 1) buffers[1][n] = upR[0];
+            for (int c = 0; c < nCh_; ++c) {
+                if (osFactor > 1) os_[c].downsample(up_[c], &buffers[c][n], 1);
+                else              buffers[c][n] = up_[c][0];
             }
 
             // Meters read the delivered output, after decimation.
@@ -548,7 +550,8 @@ private:
         return (f >= 4) ? 4 : (f >= 2 ? 2 : 1);
     }
 
-    ChannelOversampler os_[2];
+    ChannelOversampler os_[kMaxChannels];
+    float  up_[kMaxChannels][kMaxOsFactor] = {};
     int    osFactorApplied_{0};
     double osRate_{48000.0};
 
