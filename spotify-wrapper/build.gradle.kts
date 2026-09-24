@@ -70,6 +70,12 @@ dependencies {
     // endpoint (403), which failed every login. The replacement, using login5,
     // is src/main/java/xyz/gianlu/librespot/core/TokenProvider.java. When
     // regenerating the jar, delete those three classes again.
+    //
+    // Likewise xyz/gianlu/librespot/core/ApResolver.class: 1.6.5's picks one
+    // access point at random and Session tries only that one, so a :80 entry
+    // on a network that refuses Spotify's protocol on port 80 failed every
+    // sign-in. The replacement, src/main/java/xyz/gianlu/librespot/core/
+    // ApResolver.java, returns the first reachable one, preferring 4070/443.
 
     // A files() jar carries no POM, so "the real dependencies" above are
     // declared here by hand, at the versions librespot 1.6.5's own POMs pin
