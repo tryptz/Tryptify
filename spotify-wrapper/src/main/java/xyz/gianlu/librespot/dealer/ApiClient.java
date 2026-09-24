@@ -1,0 +1,406 @@
+/*
+ * Copyright 2022 devgianlu
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package xyz.gianlu.librespot.dealer;
+
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.google.protobuf.Message;
+import com.spotify.clienttoken.data.v0.Connectivity;
+import com.spotify.clienttoken.http.v0.ClientToken;
+import com.spotify.connectstate.Connect;
+import com.spotify.extendedmetadata.ExtendedMetadata;
+import com.spotify.extendedmetadata.ExtensionKindOuterClass;
+import com.spotify.metadata.Metadata;
+import com.spotify.playlist4.Playlist4ApiProto;
+import okhttp3.*;
+import okio.BufferedSink;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import xyz.gianlu.librespot.Version;
+import xyz.gianlu.librespot.core.Session;
+import xyz.gianlu.librespot.json.StationsWrapper;
+import xyz.gianlu.librespot.mercury.MercuryClient;
+import xyz.gianlu.librespot.mercury.MercuryRequests;
+import xyz.gianlu.librespot.metadata.*;
+
+import java.io.IOException;
+import java.util.List;
+
+import static com.spotify.canvaz.CanvazOuterClass.EntityCanvazRequest;
+import static com.spotify.canvaz.CanvazOuterClass.EntityCanvazResponse;
+
+/**
+ * Tryptify's replacement for librespot-java 1.6.5's ApiClient, which is
+ * stripped out of libs/librespot-player-stripped-1.6.5.jar so this one takes
+ * its place (see spotify-wrapper/build.gradle.kts).
+ *
+ * It is 1.6.5's class with upstream's fix for issue #1102 (commit 52a8c24)
+ * applied. In November 2025 Spotify stopped serving playable files from
+ * /metadata/4/track/{hex}: the request still succeeds and the track still has
+ * a name and a duration, but no audio files, so PlayableContentFeeder logs
+ * "Track should be available, but no alternatives found" and every track
+ * fails to load. The getMetadata4* methods now ask the extended-metadata
+ * endpoint for the same V4 protobufs instead.
+ *
+ * Only that fix is ported. Upstream's newer ApiClient also switches to
+ * TokenProvider.TokenException and a scope-less TokenProvider.get(), which
+ * belong to its login5 TokenProvider; Tryptify has its own login5
+ * TokenProvider that keeps 1.6.5's signatures, so those stay as they were.
+ *
+ * @author devgianlu
+ */
+public final class ApiClient {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ApiClient.class);
+    private final Session session;
+    private final String baseUrl;
+    private String clientToken = null;
+
+    public ApiClient(@NotNull Session session) {
+        this.session = session;
+        this.baseUrl = "https://" + session.apResolver().getRandomSpclient();
+    }
+
+    @NotNull
+    public static RequestBody protoBody(@NotNull Message msg) {
+        return new RequestBody() {
+            @Override
+            public MediaType contentType() {
+                return MediaType.get("application/x-protobuf");
+            }
+
+            @Override
+            public void writeTo(@NotNull BufferedSink sink) throws IOException {
+                sink.write(msg.toByteArray());
+            }
+        };
+    }
+
+    @NotNull
+    private Request buildRequest(@NotNull String method, @NotNull String suffix, @Nullable Headers headers, @Nullable RequestBody body) throws IOException, MercuryClient.MercuryException {
+        if (clientToken == null) {
+            ClientToken.ClientTokenResponse resp = clientToken();
+            clientToken = resp.getGrantedToken().getToken();
+            LOGGER.debug("Updated client token: {}", clientToken);
+        }
+
+        Request.Builder request = new Request.Builder();
+        request.method(method, body);
+        if (headers != null) request.headers(headers);
+        request.addHeader("Authorization", "Bearer " + session.tokens().get("playlist-read"));
+        request.addHeader("client-token", clientToken);
+        request.url(baseUrl + suffix);
+        return request.build();
+    }
+
+    public void sendAsync(@NotNull String method, @NotNull String suffix, @Nullable Headers headers, @Nullable RequestBody body, @NotNull Callback callback) throws IOException, MercuryClient.MercuryException {
+        session.client().newCall(buildRequest(method, suffix, headers, body)).enqueue(callback);
+    }
+
+    /**
+     * Sends a request to the Spotify API.
+     *
+     * @param method  The request method
+     * @param suffix  The suffix to be appended to {@link #baseUrl} also know as path
+     * @param headers Additional headers
+     * @param body    The request body
+     * @param tries   How many times the request should be reattempted (0 = none)
+     * @return The response
+     * @throws IOException                    The last {@link IOException} thrown by {@link Call#execute()}
+     * @throws MercuryClient.MercuryException If the API token couldn't be requested
+     */
+    @NotNull
+    public Response send(@NotNull String method, @NotNull String suffix, @Nullable Headers headers, @Nullable RequestBody body, int tries) throws IOException, MercuryClient.MercuryException {
+        IOException lastEx;
+        do {
+            try {
+                Response resp = session.client().newCall(buildRequest(method, suffix, headers, body)).execute();
+                if (resp.code() == 503) {
+                    lastEx = new StatusCodeException(resp);
+                    continue;
+                }
+
+                return resp;
+            } catch (IOException ex) {
+                lastEx = ex;
+            }
+        } while (tries-- > 1);
+
+        throw lastEx;
+    }
+
+    @NotNull
+    public Response send(@NotNull String method, @NotNull String suffix, @Nullable Headers headers, @Nullable RequestBody body) throws IOException, MercuryClient.MercuryException {
+        return send(method, suffix, headers, body, 1);
+    }
+
+    public void putConnectState(@NotNull String connectionId, @NotNull Connect.PutStateRequest proto) throws IOException, MercuryClient.MercuryException {
+        try (Response resp = send("PUT", "/connect-state/v1/devices/" + session.deviceId(), new Headers.Builder()
+                .add("X-Spotify-Connection-Id", connectionId).build(), protoBody(proto), 5 /* We want this to succeed */)) {
+            if (resp.code() == 413)
+                LOGGER.warn("PUT state payload is too large: {} bytes uncompressed.", proto.getSerializedSize());
+            else if (resp.code() != 200)
+                LOGGER.warn("PUT state returned {}. {headers: {}}", resp.code(), resp.headers());
+        }
+    }
+
+    @NotNull
+    public Metadata.Track getMetadata4Track(@NotNull TrackId track) throws IOException, MercuryClient.MercuryException {
+        ExtendedMetadata.BatchedExtensionResponse response = getExtendedMetadata(ExtensionKindOuterClass.ExtensionKind.TRACK_V4, track);
+
+        checkExtendedMetadataResponse(response);
+
+        return Metadata.Track.parseFrom(response.getExtendedMetadata(0).getExtensionData(0).getExtensionData().getValue());
+    }
+
+    @NotNull
+    public Metadata.Episode getMetadata4Episode(@NotNull EpisodeId episode) throws IOException, MercuryClient.MercuryException {
+        ExtendedMetadata.BatchedExtensionResponse response = getExtendedMetadata(ExtensionKindOuterClass.ExtensionKind.EPISODE_V4, episode);
+
+        checkExtendedMetadataResponse(response);
+
+        return Metadata.Episode.parseFrom(response.getExtendedMetadata(0).getExtensionData(0).getExtensionData().getValue());
+    }
+
+    @NotNull
+    public Metadata.Album getMetadata4Album(@NotNull AlbumId album) throws IOException, MercuryClient.MercuryException {
+        ExtendedMetadata.BatchedExtensionResponse response = getExtendedMetadata(ExtensionKindOuterClass.ExtensionKind.ALBUM_V4, album);
+
+        checkExtendedMetadataResponse(response);
+
+        return Metadata.Album.parseFrom(response.getExtendedMetadata(0).getExtensionData(0).getExtensionData().getValue());
+    }
+
+    @NotNull
+    public Metadata.Artist getMetadata4Artist(@NotNull ArtistId artist) throws IOException, MercuryClient.MercuryException {
+        ExtendedMetadata.BatchedExtensionResponse response = getExtendedMetadata(ExtensionKindOuterClass.ExtensionKind.ARTIST_V4, artist);
+
+        checkExtendedMetadataResponse(response);
+
+        return Metadata.Artist.parseFrom(response.getExtendedMetadata(0).getExtensionData(0).getExtensionData().getValue());
+    }
+
+    @NotNull
+    public Metadata.Show getMetadata4Show(@NotNull ShowId show) throws IOException, MercuryClient.MercuryException {
+        ExtendedMetadata.BatchedExtensionResponse response = getExtendedMetadata(ExtensionKindOuterClass.ExtensionKind.SHOW_V4, show);
+
+        checkExtendedMetadataResponse(response);
+
+        return Metadata.Show.parseFrom(response.getExtendedMetadata(0).getExtensionData(0).getExtensionData().getValue());
+    }
+
+    @NotNull
+    public EntityCanvazResponse getCanvases(@NotNull EntityCanvazRequest req) throws IOException, MercuryClient.MercuryException {
+        try (Response resp = send("POST", "/canvaz-cache/v0/canvases", null, protoBody(req))) {
+            StatusCodeException.checkStatus(resp);
+
+            ResponseBody body;
+            if ((body = resp.body()) == null) throw new IOException();
+            return EntityCanvazResponse.parseFrom(body.byteStream());
+        }
+    }
+
+    public void checkExtendedMetadataResponse(ExtendedMetadata.BatchedExtensionResponse response) throws IOException {
+        if (response.getExtendedMetadataCount() == 0)
+            throw new IOException("No metadata in BatchedExtensionResponse");
+
+        if (response.getExtendedMetadata(0).getExtensionDataCount() == 0)
+            throw new IOException("No metadata in ExtendedMetadata in BatchedExtensionResponse");
+
+        if (response.getExtendedMetadata(0).getExtensionData(0).getHeader().getStatusCode() != 200)
+            throw new IOException("Bad status code for metadata: " + response.getExtendedMetadata(0).getExtensionData(0).getHeader().getStatusCode());
+    }
+
+    @NotNull
+    public ExtendedMetadata.BatchedExtensionResponse getExtendedMetadata(@NotNull ExtendedMetadata.BatchedEntityRequest req) throws IOException, MercuryClient.MercuryException {
+        try (Response resp = send("POST", "/extended-metadata/v0/extended-metadata", null, protoBody(req))) {
+            StatusCodeException.checkStatus(resp);
+
+            ResponseBody body;
+            if ((body = resp.body()) == null) throw new IOException();
+            return ExtendedMetadata.BatchedExtensionResponse.parseFrom(body.byteStream());
+        }
+    }
+
+    @NotNull
+    public ExtendedMetadata.BatchedExtensionResponse getExtendedMetadata(@NotNull ExtensionKindOuterClass.ExtensionKind extensionKind, @NotNull SpotifyId spotifyId) throws IOException, MercuryClient.MercuryException {
+        try (Response resp = send("POST", "/extended-metadata/v0/extended-metadata", null, protoBody(ExtendedMetadata.BatchedEntityRequest.newBuilder()
+                .addEntityRequest(ExtendedMetadata.EntityRequest.newBuilder()
+                        .setEntityUri(spotifyId.toSpotifyUri())
+                        .addQuery(ExtendedMetadata.ExtensionQuery.newBuilder()
+                                .setExtensionKind(extensionKind)
+                                .build())
+                        .build())
+                .build()))) {
+            StatusCodeException.checkStatus(resp);
+
+            ResponseBody body;
+            if ((body = resp.body()) == null) throw new IOException();
+            return ExtendedMetadata.BatchedExtensionResponse.parseFrom(body.byteStream());
+        }
+    }
+
+    @NotNull
+    public Playlist4ApiProto.SelectedListContent getPlaylist(@NotNull PlaylistId id) throws IOException, MercuryClient.MercuryException {
+        try (Response resp = send("GET", "/playlist/v2/playlist/" + id.id(), null, null)) {
+            StatusCodeException.checkStatus(resp);
+
+
+            ResponseBody body;
+            if ((body = resp.body()) == null) throw new IOException();
+            return Playlist4ApiProto.SelectedListContent.parseFrom(body.byteStream());
+        }
+    }
+
+    @NotNull
+    public JsonObject getUserProfile(@NotNull String id, @Nullable Integer playlistLimit, @Nullable Integer artistLimit) throws IOException, MercuryClient.MercuryException {
+        StringBuilder url = new StringBuilder();
+        url.append("/user-profile-view/v3/profile/");
+        url.append(id);
+
+        if (playlistLimit != null || artistLimit != null) {
+            url.append("?");
+
+            if (playlistLimit != null) {
+                url.append("playlist_limit=");
+                url.append(playlistLimit);
+                if (artistLimit != null)
+                    url.append("&");
+            }
+
+            if (artistLimit != null) {
+                url.append("artist_limit=");
+                url.append(artistLimit);
+            }
+        }
+
+        try (Response resp = send("GET", url.toString(), null, null)) {
+            StatusCodeException.checkStatus(resp);
+
+            ResponseBody body;
+            if ((body = resp.body()) == null) throw new IOException();
+            return JsonParser.parseReader(body.charStream()).getAsJsonObject();
+        }
+    }
+
+    @NotNull
+    public JsonObject getUserFollowers(@NotNull String id) throws IOException, MercuryClient.MercuryException {
+        try (Response resp = send("GET", "/user-profile-view/v3/profile/" + id + "/followers", null, null)) {
+            StatusCodeException.checkStatus(resp);
+
+            ResponseBody body;
+            if ((body = resp.body()) == null) throw new IOException();
+            return JsonParser.parseReader(body.charStream()).getAsJsonObject();
+        }
+    }
+
+    @NotNull
+    public JsonObject getUserFollowing(@NotNull String id) throws IOException, MercuryClient.MercuryException {
+        try (Response resp = send("GET", "/user-profile-view/v3/profile/" + id + "/following", null, null)) {
+            StatusCodeException.checkStatus(resp);
+
+            ResponseBody body;
+            if ((body = resp.body()) == null) throw new IOException();
+            return JsonParser.parseReader(body.charStream()).getAsJsonObject();
+        }
+    }
+
+    @NotNull
+    public JsonObject getRadioForTrack(@NotNull PlayableId id) throws IOException, MercuryClient.MercuryException {
+        try (Response resp = send("GET", "/inspiredby-mix/v2/seed_to_playlist/" + id.toSpotifyUri() + "?response-format=json", null, null)) {
+            StatusCodeException.checkStatus(resp);
+
+            ResponseBody body;
+            if ((body = resp.body()) == null) throw new IOException();
+            return JsonParser.parseReader(body.charStream()).getAsJsonObject();
+        }
+    }
+
+    @NotNull
+    public StationsWrapper getApolloStation(@NotNull String context, @NotNull List<String> prevTracks, int count, boolean autoplay) throws IOException, MercuryClient.MercuryException {
+        StringBuilder prevTracksStr = new StringBuilder();
+        for (int i = 0; i < prevTracks.size(); i++) {
+            if (i != 0) prevTracksStr.append(",");
+            prevTracksStr.append(prevTracks.get(i));
+        }
+
+        try (Response resp = send("GET", String.format("/radio-apollo/v3/stations/%s?count=%d&prev_tracks=%s&autoplay=%b", context, count, prevTracksStr, autoplay), null, null)) {
+            StatusCodeException.checkStatus(resp);
+
+            ResponseBody body;
+            if ((body = resp.body()) == null) throw new IOException();
+            return new StationsWrapper(JsonParser.parseReader(body.charStream()).getAsJsonObject());
+        }
+    }
+
+    @NotNull
+    private ClientToken.ClientTokenResponse clientToken() throws IOException {
+        ClientToken.ClientTokenRequest protoReq = ClientToken.ClientTokenRequest.newBuilder()
+                .setRequestType(ClientToken.ClientTokenRequestType.REQUEST_CLIENT_DATA_REQUEST)
+                .setClientData(ClientToken.ClientDataRequest.newBuilder()
+                        .setClientId(MercuryRequests.KEYMASTER_CLIENT_ID)
+                        .setClientVersion(Version.versionNumber())
+                        .setConnectivitySdkData(Connectivity.ConnectivitySdkData.newBuilder()
+                                .setDeviceId(session.deviceId())
+                                .setPlatformSpecificData(Connectivity.PlatformSpecificData.newBuilder()
+                                        .setWindows(Connectivity.NativeWindowsData.newBuilder()
+                                                .setSomething1(10)
+                                                .setSomething3(21370)
+                                                .setSomething4(2)
+                                                .setSomething6(9)
+                                                .setSomething7(332)
+                                                .setSomething8(34404)
+                                                .setSomething10(true)
+                                                .build())
+                                        .build())
+                                .build())
+                        .build())
+                .build();
+
+        Request.Builder req = new Request.Builder()
+                .url("https://clienttoken.spotify.com/v1/clienttoken")
+                .header("Accept", "application/x-protobuf")
+                .header("Content-Encoding", "")
+                .post(protoBody(protoReq));
+
+        try (Response resp = session.client().newCall(req.build()).execute()) {
+            StatusCodeException.checkStatus(resp);
+
+            ResponseBody body = resp.body();
+            if (body == null) throw new IOException();
+            return ClientToken.ClientTokenResponse.parseFrom(body.byteStream());
+        }
+    }
+
+    public void setClientToken(@Nullable String clientToken) {
+        this.clientToken = clientToken;
+    }
+
+    public static class StatusCodeException extends IOException {
+        public final int code;
+
+        StatusCodeException(@NotNull Response resp) {
+            super(String.format("%d: %s", resp.code(), resp.message()));
+            code = resp.code();
+        }
+
+        private static void checkStatus(@NotNull Response resp) throws StatusCodeException {
+            if (resp.code() != 200) throw new StatusCodeException(resp);
+        }
+    }
+}

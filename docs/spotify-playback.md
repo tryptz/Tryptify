@@ -55,10 +55,30 @@ Behaviour worth knowing before changing it:
   whatever it had buffered.
 - A stall of 10 s with no PCM throws a timeout; ExoPlayer's retry reopens at
   the same offset, which restarts librespot there.
+- **A failure is not an end.** When librespot gives up on a track
+  (`onPlaybackFailed`, or its panic state) the pipe is marked *failed*, not
+  ended: whatever is buffered still plays, then the read throws instead of
+  padding the rest of the track with silence. Before this, a track that never
+  loaded played as a silent timeline running to its full length.
 
 Dependencies: `libs/librespot-player-stripped-1.6.5.jar` has no POM, so
 `spotify-wrapper/build.gradle.kts` declares librespot's runtime dependencies
 itself, at the versions librespot 1.6.5 pins.
+
+Classes replaced in source: the jar has these removed, and
+`spotify-wrapper/src/main/java/xyz/gianlu/librespot/` has Tryptify's versions.
+Remove them again whenever the jar is regenerated, or the build fails with
+duplicate classes.
+
+| Class | Why |
+| --- | --- |
+| `core.TokenProvider` | 1.6.5 asked the retired keymaster endpoint for tokens; ours uses login5. |
+| `core.ApResolver` | Tries access points in port order until one answers; always uses `spclient.wg.spotify.com` (upstream 5981fb5). |
+| `dealer.ApiClient` | 1.6.5's `/metadata/4/track` has returned tracks with no audio files since November 2025 (every track: "no alternatives found"). Ours has upstream's extended-metadata fix (52a8c24). |
+
+If extended metadata works but loading then stops at `Audio key error`, the
+account is the problem, not the code: librespot needs Premium and valid
+reusable credentials.
 
 ## Setup (once, in the Spotify Developer Dashboard)
 

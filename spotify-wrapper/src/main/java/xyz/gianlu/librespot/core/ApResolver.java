@@ -40,11 +40,13 @@ import java.util.concurrent.ThreadLocalRandom;
  * afterwards; the probe only decides where.
  *
  * The list is fetched over HTTPS, not the original's plain HTTP, for the same
- * reason. Dealer and spclient picks are unchanged: those are HTTPS/WSS on 443.
+ * reason. Dealer picks are unchanged: those are WSS on 443. spclient is no
+ * longer picked at all; see {@link #getRandomSpclient()}.
  */
 public final class ApResolver {
     private static final String BASE_URL = "https://apresolve.spotify.com/";
     private static final int PROBE_TIMEOUT_MS = 3000;
+    private static final String SPCLIENT = "spclient.wg.spotify.com:443";
     private static final Logger LOGGER = LoggerFactory.getLogger(ApResolver.class);
     private final OkHttpClient client;
     private final Map<String, List<String>> pool = new HashMap<>(3);
@@ -130,8 +132,13 @@ public final class ApResolver {
         return getRandomOf("dealer");
     }
 
+    /**
+     * Always spclient.wg.spotify.com, not a pick from apresolve's list: the
+     * individual spclient hosts it hands out answer some requests with 500s.
+     * Upstream librespot-java made the same change after 1.6.5 (5981fb5).
+     */
     public String getRandomSpclient() {
-        return getRandomOf("spclient");
+        return SPCLIENT;
     }
 
     /**

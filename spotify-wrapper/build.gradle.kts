@@ -76,6 +76,13 @@ dependencies {
     // on a network that refuses Spotify's protocol on port 80 failed every
     // sign-in. The replacement, src/main/java/xyz/gianlu/librespot/core/
     // ApResolver.java, returns the first reachable one, preferring 4070/443.
+    //
+    // And xyz/gianlu/librespot/dealer/ApiClient*.class (ApiClient, ApiClient$1,
+    // ApiClient$StatusCodeException): 1.6.5 reads track metadata from
+    // /metadata/4/track, which since November 2025 returns tracks with no
+    // playable files, so every track failed with "no alternatives found".
+    // src/main/java/xyz/gianlu/librespot/dealer/ApiClient.java is 1.6.5's
+    // class with upstream's extended-metadata fix (52a8c24) ported in.
 
     // A files() jar carries no POM, so "the real dependencies" above are
     // declared here by hand, at the versions librespot 1.6.5's own POMs pin
