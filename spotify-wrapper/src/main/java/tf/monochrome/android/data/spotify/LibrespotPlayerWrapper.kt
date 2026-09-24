@@ -76,9 +76,12 @@ class LibrespotPlayerWrapper @Inject constructor(
      */
     @Synchronized
     @Throws(Exception::class)
-    fun connect(accessToken: String) {
+    fun connect(accessToken: String, clientId: String) {
         if (isConnected) return
         release()
+        // login5 honours the session's reusable credentials only under the
+        // client id of the token that created them — the app's, not librespot's.
+        TokenProvider.setClientId(clientId)
         val startedAt = System.nanoTime()
         val credentialsFile = credentialsFile
         // Both paths must be set: librespot's defaults are relative to the

@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import tf.monochrome.android.BuildConfig
 import tf.monochrome.android.data.auth.SpotifyAuthManager
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -128,7 +129,7 @@ class SpotifyNativeSession @Inject constructor(
             }
             // Blocking network I/O; librespot applies its own connect timeout.
             val connected = token != null && withContext(Dispatchers.IO) {
-                runCatching { librespot.connect(token) }
+                runCatching { librespot.connect(token, BuildConfig.SPOTIFY_CLIENT_ID) }
                     .onFailure {
                         Log.w(TAG, "librespot sign-in failed; using the Spotify app instead", it)
                         failure = it.message ?: it.javaClass.simpleName
