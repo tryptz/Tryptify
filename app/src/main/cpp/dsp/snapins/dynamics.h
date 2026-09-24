@@ -125,7 +125,10 @@ private:
         else if (levelDb < lowThreshDb_ + halfKnee && kneeDb_ > 0.0f) {
             float x = levelDb - lowThreshDb_ + halfKnee;
             float t = x / kneeDb_;
-            float kneeGain = (1.0f / lowRatio_ - 1.0f) * (1.0f - t) * (1.0f - t) * 0.5f;
+            // Meets the curve below in value and slope, and unity above. The
+            // sign was flipped, so the gain jumped by twice its size at the
+            // knee's lower edge.
+            float kneeGain = (1.0f - 1.0f / lowRatio_) * (1.0f - t) * (1.0f - t) * 0.5f;
             return kneeGain * kneeDb_;
         }
         // Unity region (between thresholds)

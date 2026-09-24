@@ -144,3 +144,8 @@ tools/cities15000.zip
 # Local Claude Code guidance (untracked by request)
 CLAUDE.md
 tools/__pycache__/
+
+# The snapin defaults table both the native host test and the Kotlin unit
+# test check against (see app/src/main/cpp/dsp/tests/snapin_defaults_test.cpp).
+# The blanket *.csv above would drop it.
+!app/src/test/resources/snapin_defaults.csv
