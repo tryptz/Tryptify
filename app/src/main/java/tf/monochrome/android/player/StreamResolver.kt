@@ -1,6 +1,7 @@
 package tf.monochrome.android.player
 
 import android.net.Uri
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
@@ -266,12 +267,19 @@ class StreamResolver @Inject constructor(
      */
     private suspend fun spotifyPlaybackUri(spotifyUri: String, durationMs: Long): String? {
         if (durationMs <= 0 || !SpotifyShadowUri.isTrackId(SpotifyShadowUri.trackIdOf(spotifyUri))) {
+            Log.w(SPOTIFY_TAG, "$spotifyUri unplayable: bad id or duration ($durationMs ms)")
             return null
         }
         return when {
-            spotifyNative.ensureConnected() -> SpotifyPcmUri.build(spotifyUri, durationMs)
-            spotifyRemote.isSpotifyInstalled() -> SpotifyShadowUri.build(spotifyUri, durationMs)
-            else -> null
+            spotifyNative.ensureConnected() -> SpotifyPcmUri.build(spotifyUri, durationMs).also {
+                Log.i(SPOTIFY_TAG, "$spotifyUri → native PCM through the DSP ($durationMs ms)")
+            }
+            spotifyRemote.isSpotifyInstalled() -> SpotifyShadowUri.build(spotifyUri, durationMs).also {
+                Log.i(SPOTIFY_TAG, "$spotifyUri → Spotify app (App Remote shadow); native sign-in unavailable")
+            }
+            else -> null.also {
+                Log.w(SPOTIFY_TAG, "$spotifyUri unplayable: librespot not signed in and the Spotify app isn't installed")
+            }
         }
     }
 
@@ -799,3 +807,5 @@ internal fun pathLooksLikeAudioFile(path: String?): Boolean {
     val ext = (path ?: return false).substringAfterLast('.', "").lowercase()
     return ext in AudioFileCoverFetcher.AUDIO_EXTENSIONS
 }
+
+private const val SPOTIFY_TAG = "SpotifyRoute"

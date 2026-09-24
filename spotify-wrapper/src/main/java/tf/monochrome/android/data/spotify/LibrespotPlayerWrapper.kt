@@ -62,6 +62,7 @@ class LibrespotPlayerWrapper @Inject constructor(
     fun connect(accessToken: String) {
         if (isConnected) return
         release()
+        val startedAt = System.nanoTime()
         val credentialsFile = File(storageDir, "credentials.json")
         // Both paths must be set: librespot's defaults are relative to the
         // working directory, which on Android is "/" and not writable.
@@ -77,6 +78,7 @@ class LibrespotPlayerWrapper @Inject constructor(
 
         fun withToken(): Session {
             require(accessToken.isNotBlank()) { "Spotify access token is blank" }
+            Log.i(TAG, "connect: logging in with the app's access token (${accessToken.length} chars)")
             return Session.Builder(conf)
                 .setDeviceName(DEVICE_NAME)
                 .credentials(
@@ -89,6 +91,7 @@ class LibrespotPlayerWrapper @Inject constructor(
         }
 
         val newSession = if (credentialsFile.canRead()) {
+            Log.i(TAG, "connect: trying stored librespot credentials")
             runCatching {
                 Session.Builder(conf).setDeviceName(DEVICE_NAME).stored(credentialsFile).create()
             }.getOrElse {
@@ -99,8 +102,11 @@ class LibrespotPlayerWrapper @Inject constructor(
                 withToken()
             }
         } else {
+            Log.i(TAG, "connect: no stored credentials yet")
             withToken()
         }
+        Log.i(TAG, "connect: session up as '${newSession.username()}' in ${elapsedMs(startedAt)} ms, " +
+            "credentials stored=${credentialsFile.canRead()}")
 
         try {
             val newPlayer = Player(
@@ -125,7 +131,9 @@ class LibrespotPlayerWrapper @Inject constructor(
             newPlayer.addEventsListener(EndListener())
             session = newSession
             player = newPlayer
+            Log.i(TAG, "connect: player ready (output=${PcmSink::class.java.name}, quality=VERY_HIGH)")
         } catch (error: Throwable) {
+            Log.e(TAG, "connect: player construction failed", error)
             runCatching { newSession.close() }
             throw error
         }
@@ -140,11 +148,13 @@ class LibrespotPlayerWrapper @Inject constructor(
     @Synchronized
     fun openStream(spotifyUri: String, startMs: Int): Long {
         val p = player ?: throw IllegalStateException("librespot is not connected")
+        val startedAt = System.nanoTime()
         val pipe = PcmSinkRegistry.pipe
         // New generation first: it wakes the output thread if it is blocked
         // on a full pipe and makes it discard what it held for the old stream.
         val generation = pipe.newGeneration()
         if (loadedUri != spotifyUri) {
+            Log.i(TAG, "openStream #$generation: loading $spotifyUri from ${startMs} ms (was ${loadedUri ?: "nothing"})")
             p.ready().get(READY_TIMEOUT_S, TimeUnit.SECONDS)
             // Synchronous: resolves the track, builds a fresh PlayerSession on
             // the sink and starts decoding from 0.
@@ -152,6 +162,7 @@ class LibrespotPlayerWrapper @Inject constructor(
             loadedUri = spotifyUri
             if (startMs > 0) p.seek(startMs)
         } else {
+            Log.i(TAG, "openStream #$generation: seeking $spotifyUri to ${startMs} ms")
             // Seeking also flushes the sink (PlayerSession.seekCurrent), which
             // is what discards audio decoded before the seek.
             p.seek(startMs)
@@ -160,11 +171,13 @@ class LibrespotPlayerWrapper @Inject constructor(
         // Whatever the output thread wrote between the new generation and the
         // seek is from the old position.
         pipe.clear()
+        Log.i(TAG, "openStream #$generation: ready in ${elapsedMs(startedAt)} ms")
         return generation
     }
 
     @Synchronized
     fun release() {
+        if (session != null || player != null) Log.i(TAG, "release")
         runCatching { player?.close() }
         player = null
         runCatching { session?.close() }
@@ -180,28 +193,49 @@ class LibrespotPlayerWrapper @Inject constructor(
      * next [openStream] must load it again rather than seek a dead session.
      */
     private inner class EndListener : Player.EventsListener {
-        private fun finished() {
+        private fun finished(why: String) {
+            Log.i(TAG, "event: $why — forgetting ${loadedUri ?: "nothing"}, pipe marked ended")
             synchronized(this@LibrespotPlayerWrapper) { loadedUri = null }
             PcmSinkRegistry.pipe.markEnded()
         }
-        override fun onPlaybackEnded(player: Player) = finished()
+        override fun onPlaybackEnded(player: Player) = finished("playback ended")
         override fun onPlaybackFailed(player: Player, e: Exception) {
-            Log.w(TAG, "librespot playback failed", e)
-            finished()
+            Log.e(TAG, "event: playback failed", e)
+            finished("playback failed")
         }
-        override fun onContextChanged(player: Player, newUri: String) = Unit
-        override fun onTrackChanged(player: Player, id: PlayableId, metadata: MetadataWrapper?, userInitiated: Boolean) = Unit
-        override fun onPlaybackPaused(player: Player, trackTime: Long) = Unit
-        override fun onPlaybackResumed(player: Player, trackTime: Long) = Unit
-        override fun onTrackSeeked(player: Player, trackTime: Long) = Unit
-        override fun onMetadataAvailable(player: Player, metadata: MetadataWrapper) = Unit
-        override fun onPlaybackHaltStateChanged(player: Player, halted: Boolean, trackTime: Long) = Unit
-        override fun onInactiveSession(player: Player, timeout: Boolean) = Unit
-        override fun onVolumeChanged(player: Player, volume: Float) = Unit
-        override fun onPanicState(player: Player) = finished()
-        override fun onStartedLoading(player: Player) = Unit
-        override fun onFinishedLoading(player: Player) = Unit
+        override fun onPanicState(player: Player) {
+            Log.e(TAG, "event: panic state (librespot gave up on the track)")
+            finished("panic")
+        }
+        override fun onContextChanged(player: Player, newUri: String) =
+            logEvent("context changed to $newUri")
+        override fun onTrackChanged(player: Player, id: PlayableId, metadata: MetadataWrapper?, userInitiated: Boolean) =
+            logEvent("track changed to ${id.toSpotifyUri()} (${metadata?.name ?: "no metadata yet"}, " +
+                "duration=${metadata?.duration() ?: -1} ms)")
+        override fun onPlaybackPaused(player: Player, trackTime: Long) = logEvent("paused at $trackTime ms")
+        override fun onPlaybackResumed(player: Player, trackTime: Long) = logEvent("resumed at $trackTime ms")
+        override fun onTrackSeeked(player: Player, trackTime: Long) = logEvent("seeked to $trackTime ms")
+        override fun onMetadataAvailable(player: Player, metadata: MetadataWrapper) =
+            logEvent("metadata: '${metadata.name}' by ${metadata.artist}, ${metadata.duration()} ms")
+        override fun onPlaybackHaltStateChanged(player: Player, halted: Boolean, trackTime: Long) {
+            // Halted = librespot is starved of network data mid-track.
+            if (halted) Log.w(TAG, "event: halted (buffering from Spotify) at $trackTime ms")
+            else logEvent("un-halted at $trackTime ms")
+        }
+        override fun onInactiveSession(player: Player, timeout: Boolean) {
+            // Another device took over the account's playback, or the session timed out.
+            Log.w(TAG, "event: session inactive (timeout=$timeout) — another device may have taken playback")
+        }
+        override fun onVolumeChanged(player: Player, volume: Float) = logEvent("volume $volume")
+        override fun onStartedLoading(player: Player) = logEvent("started loading")
+        override fun onFinishedLoading(player: Player) = logEvent("finished loading")
+
+        private fun logEvent(message: String) {
+            Log.d(TAG, "event: $message")
+        }
     }
+
+    private fun elapsedMs(startNanos: Long): Long = (System.nanoTime() - startNanos) / 1_000_000
 
     private companion object {
         const val TAG = "LibrespotPlayer"

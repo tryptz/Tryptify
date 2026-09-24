@@ -1,6 +1,7 @@
 package tf.monochrome.android.data.spotify
 
 import android.net.Uri
+import android.util.Log
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
@@ -43,11 +44,20 @@ class PcmSinkDataSource(
     private var generation = NO_STREAM
     private var drained = false   // librespot finished; the rest is silence
     private var opened = false
+    private var pcmBytesServed = 0L
+    private var paddedBytes = 0L
+    private var streamRequestedAt = 0L
+    private var loggedFirstPcm = false
 
     override fun open(dataSpec: DataSpec): Long {
         val request = SpotifyPcmUri.parse(dataSpec.uri.toString())
-            ?: throw DataSourceException(PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND)
+        if (request == null) {
+            Log.e(TAG, "open: not a playable spotify-pcm URI: ${dataSpec.uri}")
+            throw DataSourceException(PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND)
+        }
         if (!librespot.isConnected || !PcmSinkRegistry.formatSupported) {
+            Log.e(TAG, "open: refusing ${request.spotifyUri} — librespot connected=${librespot.isConnected}, " +
+                "output format supported=${PcmSinkRegistry.formatSupported}")
             throw DataSourceException(PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
         }
         transferInitializing(dataSpec)
@@ -72,6 +82,11 @@ class PcmSinkDataSource(
         // librespot away from the track that is playing.
         generation = NO_STREAM
         drained = false
+        pcmBytesServed = 0
+        paddedBytes = 0
+        loggedFirstPcm = false
+        Log.i(TAG, "open: ${request.spotifyUri} at byte ${dataSpec.position} " +
+            "(${pcmOffsetToMs(position - SilentWav.HEADER_SIZE)} ms) of $total, serving $bytesRemaining")
         opened = true
         transferStarted(dataSpec)
         return bytesRemaining
@@ -99,13 +114,16 @@ class PcmSinkDataSource(
     private fun readPcm(buffer: ByteArray, offset: Int, wanted: Int): Int? {
         if (drained) {
             java.util.Arrays.fill(buffer, offset, offset + wanted, 0.toByte())
+            paddedBytes += wanted
             return wanted
         }
         if (generation == NO_STREAM) {
             val startMs = pcmOffsetToMs(position - SilentWav.HEADER_SIZE)
+            streamRequestedAt = System.nanoTime()
             generation = try {
                 librespot.openStream(checkNotNull(spotifyUri), startMs)
             } catch (e: Exception) {
+                Log.e(TAG, "read: librespot could not start $spotifyUri at $startMs ms", e)
                 throw DataSourceException(e, PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED)
             }
         }
@@ -113,24 +131,45 @@ class PcmSinkDataSource(
         return when (n) {
             PcmPipe.ENDED -> {
                 // Decoded length came up short of the advertised duration.
+                Log.i(TAG, "read #$generation: librespot finished; padding the last " +
+                    "${bytesRemaining} bytes (${pcmOffsetToMs(bytesRemaining)} ms) with silence")
                 drained = true
                 java.util.Arrays.fill(buffer, offset, offset + wanted, 0.toByte())
                 wanted
             }
-            PcmPipe.SUPERSEDED -> null
+            PcmPipe.SUPERSEDED -> {
+                Log.w(TAG, "read #$generation: stream superseded by another open; ending $spotifyUri early " +
+                    "after ${pcmOffsetToMs(pcmBytesServed)} ms")
+                null
+            }
             PcmPipe.TIMED_OUT -> {
+                Log.w(TAG, "read #$generation: no audio from librespot for ${READ_TIMEOUT_MS} ms " +
+                    "(served ${pcmOffsetToMs(pcmBytesServed)} ms so far) — failing the load so ExoPlayer retries")
                 // Forget the stream: ExoPlayer retries the load by reopening at
                 // the current byte offset, which restarts librespot there.
                 generation = NO_STREAM
                 throw DataSourceException(PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT)
             }
-            else -> n
+            else -> {
+                if (!loggedFirstPcm) {
+                    loggedFirstPcm = true
+                    Log.i(TAG, "read #$generation: first audio after " +
+                        "${(System.nanoTime() - streamRequestedAt) / 1_000_000} ms")
+                }
+                pcmBytesServed += n
+                n
+            }
         }
     }
 
     override fun getUri(): Uri? = uri
 
     override fun close() {
+        if (opened) {
+            Log.i(TAG, "close: ${spotifyUri} served ${pcmOffsetToMs(pcmBytesServed)} ms of audio" +
+                (if (paddedBytes > 0) " + ${pcmOffsetToMs(paddedBytes)} ms silence" else "") +
+                ", ${bytesRemaining} bytes left unread")
+        }
         uri = null
         spotifyUri = null
         generation = NO_STREAM
@@ -145,6 +184,7 @@ class PcmSinkDataSource(
     }
 
     companion object {
+        private const val TAG = "SpotifyPcmSource"
         private const val NO_STREAM = -1L
         private const val READ_TIMEOUT_MS = 10_000L
         private const val BYTES_PER_SECOND =

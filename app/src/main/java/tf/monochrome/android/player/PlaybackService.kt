@@ -360,6 +360,12 @@ class PlaybackService : MediaSessionService() {
              * needs a moment before it counts as failed.
              */
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                player.currentMediaItem?.localConfiguration?.uri?.toString()
+                    ?.takeIf { it.startsWith("spotify-") }
+                    ?.let { uri ->
+                        android.util.Log.e("SpotifyPlayback",
+                            "player error on $uri: ${error.errorCodeName} (${error.errorCode})", error)
+                    }
                 dropGaplessNext()
                 val attempt = consecutivePlayerErrors++
                 // A live station gets a far longer rope than a track does. Two

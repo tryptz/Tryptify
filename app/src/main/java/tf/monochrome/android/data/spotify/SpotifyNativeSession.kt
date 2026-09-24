@@ -35,9 +35,15 @@ class SpotifyNativeSession @Inject constructor(
         return mutex.withLock {
             if (librespot.isConnected) return@withLock true
             if (lastFailureAt != 0L && SystemClock.elapsedRealtime() - lastFailureAt < RETRY_AFTER_MS) {
+                val waitS = (RETRY_AFTER_MS - (SystemClock.elapsedRealtime() - lastFailureAt)) / 1000
+                Log.i(TAG, "native sign-in failed recently; not retrying for ${waitS}s (Spotify app fallback)")
                 return@withLock false
             }
+            Log.i(TAG, "signing librespot in (Spotify account connected=${auth.isConnected.value})")
             val token = auth.getValidAccessToken()
+            if (token == null) {
+                Log.w(TAG, "no Spotify access token — the account isn't connected or the refresh failed")
+            }
             // Blocking network I/O; librespot applies its own connect timeout.
             val connected = token != null && withContext(Dispatchers.IO) {
                 runCatching { librespot.connect(token) }
@@ -45,6 +51,8 @@ class SpotifyNativeSession @Inject constructor(
                     .isSuccess
             }
             lastFailureAt = if (connected) 0L else SystemClock.elapsedRealtime()
+            Log.i(TAG, if (connected) "librespot signed in — Spotify tracks will play through the DSP"
+                else "librespot not signed in — retrying in ${RETRY_AFTER_MS / 1000}s")
             connected
         }
     }
