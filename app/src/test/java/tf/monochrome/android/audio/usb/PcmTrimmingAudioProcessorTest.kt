@@ -3,6 +3,7 @@ package tf.monochrome.android.audio.usb
 import androidx.media3.common.C
 import androidx.media3.common.audio.AudioProcessor.AudioFormat
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -43,6 +44,18 @@ class PcmTrimmingAudioProcessorTest {
         p.configure(floatStereo)
         p.flush()
         return p
+    }
+
+    @Test
+    fun `counts every frame it drops, delay and padding`() {
+        val p = configured(start = 3, end = 4)
+        process(p, frames(0, 10))
+        assertEquals(3L, p.trimmedFrames)
+        // Next track: the held tail is the padding, dropped at its flush.
+        p.setTrimFrameCount(0, 0)
+        p.configure(floatStereo)
+        p.flush()
+        assertEquals(7L, p.trimmedFrames)
     }
 
     @Test

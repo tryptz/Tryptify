@@ -963,6 +963,13 @@ class PlaybackService : MediaSessionService() {
                     // configures + drains them at a time (bypassActive
                     // gates inside LibusbAudioSink), so there's no
                     // contention.
+                    // Time-stretching for the two paths that run the DSP in
+                    // the sink. DefaultAudioSink's int branch keeps Media3's
+                    // Sonic; this one also takes float, so hi-res and USB
+                    // streams change speed at their own resolution. One
+                    // instance, like the other shared stages: only one of
+                    // the two paths runs at a time.
+                    val timeStretch = tf.monochrome.android.audio.resample.FloatSonicAudioProcessor()
                     tf.monochrome.android.audio.usb.LibusbAudioSink(
                         delegate = defaultSink,
                         driver = libusbDriver,
@@ -1012,6 +1019,11 @@ class PlaybackService : MediaSessionService() {
                             // passes the block straight through, so
                             // bit-perfect output survives.
                             stretchProcessor,
+                            // Speed with pitch preserved. Without it that mode
+                            // did nothing over USB. Not in the chain until a
+                            // speed is used, and exact at 1.00x after that,
+                            // so bit-perfect output survives here too.
+                            timeStretch,
                             // ProjectM tap intentionally omitted from
                             // the bypass chain — the inline pump runs
                             // on the renderer thread and the visualizer
@@ -1019,11 +1031,14 @@ class PlaybackService : MediaSessionService() {
                             // Spectrum tap is light-weight and fine.
                         ),
                         resampler = variRateProcessor,
+                        timeStretch = timeStretch,
                         // The hi-res HAL path: the same DSP, run here in float
                         // and handed to defaultSink finished (see the note on
-                        // setEnableFloatOutput). Only at unity speed, so no
-                        // resampler; with the projectM tap, which the normal
-                        // HAL path has and this one must not lose.
+                        // setEnableFloatOutput). Speed included, with the
+                        // transport stages last in the int branch's order, so
+                        // a speed change never moves the stream off this path.
+                        // With the projectM tap, which the normal HAL path
+                        // has and this one must not lose.
                         halProcessors = listOf(
                             tf.monochrome.android.audio.usb.ToFloatPcmAudioProcessor(),
                             channelDetectorProcessor,
@@ -1034,7 +1049,9 @@ class PlaybackService : MediaSessionService() {
                             parametricEqProcessor,
                             spectrumAnalyzerTap,
                             TeeAudioProcessor(ProjectMAudioTapProcessor(audioBus)),
+                            variRateProcessor,
                             stretchProcessor,
+                            timeStretch,
                         ),
                         hiResHalEnabled = { hiResHalEnabled },
                     )
