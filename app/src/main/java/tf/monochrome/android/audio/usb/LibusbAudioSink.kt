@@ -115,6 +115,11 @@ class LibusbAudioSink(
     private var copyScratch: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var packScratch: ByteBuffer = AudioProcessor.EMPTY_BUFFER
 
+    // What the last configure() was called with, so the delegate can be
+    // configured again when the shared processors have to be handed back.
+    private var configuredBufferSize = 0
+    private var configuredOutputChannels: IntArray? = null
+
     override fun configure(
         inputFormat: Format,
         specifiedBufferSize: Int,
@@ -123,6 +128,8 @@ class LibusbAudioSink(
         super.configure(inputFormat, specifiedBufferSize, outputChannels)
 
         configuredFormat = inputFormat
+        configuredBufferSize = specifiedBufferSize
+        configuredOutputChannels = outputChannels
         lastEngageFailHash = 0
         pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
         endOfStreamRequested = false
@@ -150,6 +157,23 @@ class LibusbAudioSink(
             return
         }
 
+        // Exclusive mode off — Bluetooth, the speaker, any HAL route — and the
+        // delegate carries the audio. Leave the chain alone.
+        //
+        // The chain's processors are the same instances DefaultAudioSink runs,
+        // and super.configure() above has just set them up for *its* pipeline,
+        // which puts Media3's ToInt16PcmAudioProcessor in front of anything
+        // wider than 16 bits. Configuring the chain here as well told them
+        // the stream was float (ours widens instead), and the last configure
+        // wins: the mixer then read the delegate's 16-bit samples two at a
+        // time as floats and clamped the garbage to full scale. A 32-bit float
+        // or 24-bit song on Bluetooth with the mixer on came out as a scream;
+        // 16-bit was fine only because both paths agree on 16 bits.
+        if (!driver.isOpen.value) {
+            bypassActive = false
+            return
+        }
+
         val chainOut = chain.configure(
             AudioProcessor.AudioFormat(rate, channels, inputFormat.pcmEncoding)
         )
@@ -169,6 +193,8 @@ class LibusbAudioSink(
                     "(${encodingLabel(out.encoding)}) — delegate takes over",
             )
             bypassActive = false
+            lastEngageFailHash = engageHash(rate, channels, inputFormat.pcmEncoding)
+            handProcessorsToDelegate()
             return
         }
 
@@ -181,6 +207,10 @@ class LibusbAudioSink(
                     "${encodingLabel(out.encoding)} (driverOpen=$driverOpen) " +
                     "— delegate takes over",
             )
+            // tryLazyEngage would otherwise retry the same format on the next
+            // buffer and configure everything a second time for nothing.
+            lastEngageFailHash = engageHash(rate, channels, inputFormat.pcmEncoding)
+            handProcessorsToDelegate()
         }
 
         if (bypassActive) {
@@ -390,6 +420,29 @@ class LibusbAudioSink(
      * per renderer tick) before the delegate took over. Both flags are cleared
      * only by an explicit close()/stop(), so this cannot false-trip mid-stream.
      */
+    /**
+     * Gives the shared processors back to the delegate's pipeline.
+     *
+     * Whichever path carries the audio has to be the last to configure them,
+     * because they hold one format each and the two paths disagree about it
+     * for anything wider than 16 bits (Media3 narrows to 16, the chain widens
+     * to float). Configuring the delegate again rebuilds its pipeline, which
+     * configures them for its format, and it flushes that in before it
+     * handles the next buffer.
+     */
+    /** Identifies a source format whose engage attempt failed, to throttle retries. */
+    private fun engageHash(rate: Int, channels: Int, encoding: Int): Int =
+        (rate * 31 + channels) * 31 + encoding
+
+    private fun handProcessorsToDelegate() {
+        val fmt = configuredFormat ?: return
+        try {
+            super.configure(fmt, configuredBufferSize, configuredOutputChannels)
+        } catch (e: AudioSink.ConfigurationException) {
+            Log.w(TAG, "could not hand the processors back to the delegate", e)
+        }
+    }
+
     private fun checkDriverStillOwned() {
         if (!bypassActive) return
         if (driver.isOpen.value && driver.isStreaming.value) return
@@ -397,6 +450,8 @@ class LibusbAudioSink(
         Log.i(TAG, "driver released the DAC — disengaging bypass, delegate takes over")
         bypassActive = false
         pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
+        // The processors are still configured for the chain's format.
+        handProcessorsToDelegate()
         // Clear the engage throttle so a replug re-engages on the next buffer
         // instead of waiting for a configure()/flush().
         lastEngageFailHash = 0
@@ -407,25 +462,28 @@ class LibusbAudioSink(
         if (bypassActive || !driver.isOpen.value) return
 
         val fmt = configuredFormat ?: return
-        val chainOut = chain.outputFormat()
+        val input = AudioProcessor.AudioFormat(fmt.sampleRate, fmt.channelCount, fmt.pcmEncoding)
+        if (input.sampleRate <= 0 || input.channelCount <= 0 ||
+            sourceBytesPerSample(input.encoding) <= 0
+        ) return
 
-        val rate: Int
-        val channels: Int
-        val encoding: Int
-        if (chainOut != AudioProcessor.AudioFormat.NOT_SET) {
-            rate = chainOut.sampleRate
-            channels = chainOut.channelCount
-            encoding = chainOut.encoding
-        } else {
-            rate = fmt.sampleRate
-            channels = fmt.channelCount
-            encoding = fmt.pcmEncoding
-        }
-
-        if (rate <= 0 || channels <= 0 || sourceBytesPerSample(encoding) <= 0) return
-
-        val fmtHash = (rate * 31 + channels) * 31 + encoding
+        val fmtHash = engageHash(input.sampleRate, input.channelCount, input.encoding)
         if (fmtHash == lastEngageFailHash) return
+
+        // configure() skipped the chain while the driver was closed, so it is
+        // configured for nothing (or for an earlier track). Configure it for
+        // this stream now; that also takes the shared processors over from
+        // the delegate, and they are handed back below if the DAC says no.
+        val chainOut = chain.configure(input)
+        val out = if (chainOut != AudioProcessor.AudioFormat.NOT_SET) chainOut else input
+        val rate = out.sampleRate
+        val channels = out.channelCount
+        val encoding = out.encoding
+        if (rate <= 0 || channels <= 0 || sourceBytesPerSample(encoding) <= 0) {
+            lastEngageFailHash = fmtHash
+            handProcessorsToDelegate()
+            return
+        }
 
         bypassActive = engageDriver(rate, channels, encoding)
 
@@ -446,6 +504,7 @@ class LibusbAudioSink(
                 "bypass engage failed for $rate/${encodingLabel(encoding)}/${channels}ch " +
                     "— staying on delegate",
             )
+            handProcessorsToDelegate()
         }
     }
 
