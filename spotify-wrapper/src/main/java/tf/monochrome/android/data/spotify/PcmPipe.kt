@@ -45,6 +45,7 @@ class PcmPipe(
     private var generation = 0L
     private var ended = false     // librespot finished the track of this generation
     private var endedAt = 0L      // nanoTime of markEnded
+    private var failure: Throwable? = null  // librespot gave up on this generation's track
     private var closed = false
 
     private val lock = ReentrantLock()
@@ -60,6 +61,7 @@ class PcmPipe(
         head = 0
         size = 0
         ended = false
+        failure = null
         notFull.signalAll()
         notEmpty.signalAll()
         generation
@@ -81,6 +83,23 @@ class PcmPipe(
         ended = true
         endedAt = nanoTime()
         notEmpty.signalAll()
+    }
+
+    /**
+     * librespot could not play the track — it never loaded (no playable file,
+     * no audio key) or broke off mid-way. Unlike [markEnded] this is not an
+     * end of stream: [read] still hands out what is buffered, then reports
+     * [FAILED] instead of [ENDED], so the reader can fail the load rather
+     * than pad the rest of the track with silence. [failureOf] has the cause.
+     */
+    fun markFailed(cause: Throwable) = lock.withLock {
+        failure = cause
+        notEmpty.signalAll()
+    }
+
+    /** Why generation [readerGeneration] failed; null if it did not or is gone. */
+    fun failureOf(readerGeneration: Long): Throwable? = lock.withLock {
+        if (generation == readerGeneration) failure else null
     }
 
     /** Wakes and fails every waiter permanently; for shutdown. */
@@ -122,6 +141,7 @@ class PcmPipe(
      *
      * @return bytes read (> 0); [TIMED_OUT] if nothing arrived within
      *   [timeoutMs]; [ENDED] if the track is finished and fully drained;
+     *   [FAILED] if librespot gave up on the track and the pipe is drained;
      *   [SUPERSEDED] if a newer stream replaced this one or the pipe closed.
      */
     fun read(readerGeneration: Long, dst: ByteArray, offset: Int, len: Int, timeoutMs: Long): Int {
@@ -131,6 +151,7 @@ class PcmPipe(
             while (true) {
                 if (closed || generation != readerGeneration) return SUPERSEDED
                 if (size > 0) break
+                if (failure != null) return FAILED
                 if (ended) {
                     val graceLeft = endGraceNanos - (nanoTime() - endedAt)
                     if (graceLeft <= 0L) return ENDED
@@ -153,6 +174,7 @@ class PcmPipe(
         const val TIMED_OUT = 0
         const val ENDED = -1
         const val SUPERSEDED = -2
+        const val FAILED = -3
         const val DEFAULT_END_GRACE_MS = 250L
     }
 }

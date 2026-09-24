@@ -30,6 +30,11 @@ import tf.monochrome.android.data.cache.SilentWav
  * **Length mismatch.** Spotify's advertised duration and the decoded length
  * differ by a few milliseconds. If librespot finishes early the rest is
  * padded with silence; if it runs long the tail is cut at the declared length.
+ *
+ * **Failure is not the end.** Only a track librespot actually finished is
+ * padded. If it gave up on the track instead ([PcmPipe.markFailed]) the read
+ * throws, so the player reports an error rather than a silent track whose
+ * timeline runs to the end.
  */
 @UnstableApi
 class PcmSinkDataSource(
@@ -136,6 +141,15 @@ class PcmSinkDataSource(
                 drained = true
                 java.util.Arrays.fill(buffer, offset, offset + wanted, 0.toByte())
                 wanted
+            }
+            PcmPipe.FAILED -> {
+                val cause = PcmSinkRegistry.pipe.failureOf(generation)
+                    ?: java.io.IOException("librespot playback failed")
+                Log.e(TAG, "read #$generation: librespot failed $spotifyUri after " +
+                    "${pcmOffsetToMs(pcmBytesServed)} ms of audio — failing the load, not padding with silence", cause)
+                // Like a timeout: a retry reopens here and loads the track again.
+                generation = NO_STREAM
+                throw DataSourceException(cause, PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
             }
             PcmPipe.SUPERSEDED -> {
                 Log.w(TAG, "read #$generation: stream superseded by another open; ending $spotifyUri early " +

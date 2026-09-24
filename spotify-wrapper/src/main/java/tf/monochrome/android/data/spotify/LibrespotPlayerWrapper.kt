@@ -291,25 +291,31 @@ class LibrespotPlayerWrapper @Inject constructor(
     }
 
     /**
-     * Tells the pipe when the loaded track has been fully decoded. The track
-     * is also forgotten: a finished librespot session cannot seek, so if
-     * ExoPlayer reopens it (repeat-one, or a seek back past its buffer) the
-     * next [openStream] must load it again rather than seek a dead session.
+     * Tells the pipe when the loaded track has been fully decoded — or has
+     * failed, which the pipe keeps apart so a failure is not padded out as
+     * silence. Either way the track is forgotten: a finished librespot
+     * session cannot seek, so if ExoPlayer reopens it (repeat-one, a seek
+     * back past its buffer, a retry after a failure) the next [openStream]
+     * must load it again rather than seek a dead session.
      */
     private inner class EndListener : Player.EventsListener {
-        private fun finished(why: String) {
-            Log.i(TAG, "event: $why — forgetting ${loadedUri ?: "nothing"}, pipe marked ended")
+        private fun forget(why: String) {
+            Log.i(TAG, "event: $why — forgetting ${loadedUri ?: "nothing"}")
             synchronized(this@LibrespotPlayerWrapper) { loadedUri = null }
+        }
+        override fun onPlaybackEnded(player: Player) {
+            forget("playback ended")
             PcmSinkRegistry.pipe.markEnded()
         }
-        override fun onPlaybackEnded(player: Player) = finished("playback ended")
         override fun onPlaybackFailed(player: Player, e: Exception) {
             Log.e(TAG, "event: playback failed", e)
-            finished("playback failed")
+            forget("playback failed")
+            PcmSinkRegistry.pipe.markFailed(e)
         }
         override fun onPanicState(player: Player) {
             Log.e(TAG, "event: panic state (librespot gave up on the track)")
-            finished("panic")
+            forget("panic")
+            PcmSinkRegistry.pipe.markFailed(IllegalStateException("librespot entered its panic state"))
         }
         override fun onContextChanged(player: Player, newUri: String) =
             logEvent("context changed to $newUri")

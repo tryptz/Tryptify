@@ -2,6 +2,8 @@ package tf.monochrome.android.data.spotify
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.CountDownLatch
@@ -123,6 +125,38 @@ class PcmPipeTest {
         pipe.newGeneration()
         pipe.markEnded()
         val gen = pipe.newGeneration()
+        assertEquals(PcmPipe.TIMED_OUT, pipe.read(gen, ByteArray(4), 0, 4, 20))
+    }
+
+    @Test
+    fun `a failure drains buffered audio, then reports failed instead of ended`() {
+        val pipe = PcmPipe(capacityBytes = 16, endGraceNanos = 0)
+        val gen = pipe.newGeneration()
+        pipe.write(ramp(3), 0, 3)
+        val cause = IllegalStateException("no alternatives found")
+        pipe.markFailed(cause)
+        assertArrayEquals(ramp(3), drain(pipe, gen, 3))
+        assertEquals(PcmPipe.FAILED, pipe.read(gen, ByteArray(4), 0, 4, 1_000))
+        assertSame(cause, pipe.failureOf(gen))
+    }
+
+    @Test
+    fun `a failure wakes a waiting reader`() {
+        val pipe = PcmPipe(capacityBytes = 8)
+        val gen = pipe.newGeneration()
+        val failer = thread { Thread.sleep(50); pipe.markFailed(RuntimeException()) }
+        assertEquals(PcmPipe.FAILED, pipe.read(gen, ByteArray(4), 0, 4, 5_000))
+        failer.join()
+    }
+
+    @Test
+    fun `a new generation clears the failure`() {
+        val pipe = PcmPipe(capacityBytes = 8)
+        val old = pipe.newGeneration()
+        pipe.markFailed(RuntimeException())
+        val gen = pipe.newGeneration()
+        assertNull(pipe.failureOf(old))
+        assertNull(pipe.failureOf(gen))
         assertEquals(PcmPipe.TIMED_OUT, pipe.read(gen, ByteArray(4), 0, 4, 20))
     }
 
