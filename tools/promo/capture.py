@@ -111,7 +111,7 @@ class Capture:
             time.sleep(1.5)
         return root
 
-    def wait(self, text, timeout=12):
+    def wait(self, text, timeout=30):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             node = find_node(self.tree(), text)
@@ -155,7 +155,19 @@ class Capture:
             time.sleep(.4)
         raise RuntimeError(f'Could not find tab: {text}')
 
+    def demo_status_bar(self):
+        # System UI can restart on the slow emulator and drop demo mode (a run
+        # came back with the real clock and a 3G glyph), so set it every time.
+        for command in ('clock -e hhmm 0941', 'battery -e level 100 -e plugged false',
+                        'notifications -e visible false',
+                        'network -e wifi show -e level 4 -e mobile hide -e satellite hide'):
+            self.d.shell('am broadcast -a com.android.systemui.demo -e command ' + command)
+
     def home(self):
+        try:
+            self.demo_status_bar()
+        except Exception:
+            pass  # cosmetic only; never fail a capture over the status bar
         self.d.app_stop(PACKAGE)
         self.d.app_start(PACKAGE, use_monkey=True)
         deadline = time.monotonic() + 25
@@ -197,7 +209,13 @@ class Capture:
                 time.sleep(1.5)
                 break
             time.sleep(1)
-        self.wait('Collapse')
+        # With music playing the player animates constantly, and each
+        # hierarchy read on the software-rendered emulator takes seconds.
+        self.wait('Collapse', timeout=45)
+        # Pause: a still player reads quickly and captures cleanly, and the
+        # screenshots show the full player all the same.
+        if find_node(self.tree(), 'Pause') is not None:
+            self.click('Pause', scroll=False)
 
     def save(self, name, diagnostic=False):
         folder = OUT / ('diagnostics' if diagnostic else 'screenshots')
