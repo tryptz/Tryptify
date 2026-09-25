@@ -165,7 +165,7 @@ class HiFiApiClient @Inject constructor(
                         if (sniff == '<') {
                             lastError = Exception(
                                 "Instance returned HTML instead of JSON " +
-                                    "(check Settings → Instances → Dev Mode URL)"
+                                    "(check the API address under Settings → Connections)"
                             )
                             instanceIndex++
                         } else {
@@ -485,8 +485,8 @@ class HiFiApiClient @Inject constructor(
     // Deezer ids are plain numbers in the same range as Qobuz and TIDAL ids, so
     // every id is registered as Deezer (never as Qobuz) and every track carries
     // its id again as [Track.deezerId], which routing trusts first. Served by
-    // the Qobuz instance URL; every call fails soft so it never blocks another
-    // catalog.
+    // whichever added API answers /api/deezer/*; every call fails soft so it
+    // never blocks another catalog.
 
     // ISRCs seen in Deezer payloads, so the Qobuz match needs no extra lookup.
     // Search results usually have none (Deezer's /search omits it); a pasted
@@ -494,7 +494,7 @@ class HiFiApiClient @Inject constructor(
     private val deezerIsrcs = java.util.concurrent.ConcurrentHashMap<Long, String>()
 
     private suspend fun deezerBaseOrNull(): String? =
-        instanceManager.qobuzInstanceOrNull()?.url?.trimEnd('/')
+        instanceManager.deezerInstanceOrNull()?.url?.trimEnd('/')
 
     /** Map a Deezer track item: Deezer identity, and no lossless claim — it is a preview until matched. */
     private fun QobuzTrackItem.toDeezerTrack(

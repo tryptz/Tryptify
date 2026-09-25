@@ -181,11 +181,12 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     // ── Connections ─────────────────────────────────────────────────────
     entry("Last.fm scrobbling", "Connections", listOf("scrobble", "account", "history")),
     entry("ListenBrainz", "Connections", listOf("scrobble", "account", "history")),
-    entry("Custom API endpoint", "Connections", listOf("server", "instance", "url")),
-    entry("Qobuz instance", "Connections", listOf("server", "url", "source")),
-    entry("Apple instance", "Connections", listOf("server", "url", "source")),
-    entry("Source mode", "Connections", listOf("provider", "catalogue", "backend")),
-    entry("Deezer catalog", "Connections", listOf("deezer", "search", "source", "preview")),
+    entry(
+        "APIs", "Connections",
+        listOf("server", "instance", "url", "endpoint", "source", "catalogue", "catalog",
+            "tidal", "qobuz", "apple", "deezer", "hifi", "add"),
+    ),
+    entry("How to set up an API", "Connections", listOf("help", "guide", "configure", "server", "setup")),
     entry("Show what I'm playing", "Connections", listOf("discord", "presence", "rich", "status", "playing")),
     entry("Spotify", "Connections", listOf("import", "playlist", "account", "transfer")),
 

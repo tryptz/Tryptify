@@ -40,8 +40,6 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 
 /** Which catalog(s) drive search and discovery surfaces. BOTH runs TIDAL + Qobuz
  *  + Apple Music; the *_ONLY modes restrict to a single catalog. */
-enum class SourceMode { BOTH, TIDAL_ONLY, QOBUZ_ONLY }
-
 /**
  * Format asked of the Apple wrapper. These are the wrapper's own format codes,
  * not a mapping of [AudioQuality] — Apple's ladder doesn't line up with the
@@ -183,8 +181,7 @@ class PreferencesManager @Inject constructor(
         private val APPLE_ATMOS_PREFERRED = booleanPreferencesKey("apple_atmos_preferred")
         private val APPLE_QUALITY = stringPreferencesKey("apple_quality")
         private val DEV_MODE_ENABLED = booleanPreferencesKey("dev_mode_enabled")
-        private val SOURCE_MODE = stringPreferencesKey("source_mode")
-        private val DEEZER_SEARCH_ENABLED = booleanPreferencesKey("deezer_search_enabled")
+        private val API_SERVERS = stringPreferencesKey("api_servers")
 
         // Lyrics 3D appearance (legacy per-field keys, read for migration only)
         private val LYRICS_3D_ROTATION = floatPreferencesKey("lyrics_3d_rotation")
@@ -476,7 +473,7 @@ class PreferencesManager @Inject constructor(
             PITCH_ENGINE, PITCH_QUALITY,
             DOWNLOAD_QUALITY, DOWNLOAD_LYRICS, AUTO_DOWNLOAD_LIKED,
             LASTFM_ENABLED, LASTFM_USERNAME, LISTENBRAINZ_ENABLED,
-            CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, APPLE_WRAPPER_URL, SOURCE_MODE, DEEZER_SEARCH_ENABLED, DEV_MODE_ENABLED,
+            CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, APPLE_WRAPPER_URL, API_SERVERS, DEV_MODE_ENABLED,
             NOW_PLAYING_VIEW_MODE, PLAYER_DYNAMIC_COLOR, PLAYER_BLURRED_BACKGROUND,
             ROMAJI_LYRICS, LYRICS_WORD_PROVIDER,
             LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON, GLOBE_FX_JSON, PLAYER_GLASS_JSON,
@@ -942,36 +939,45 @@ class PreferencesManager @Inject constructor(
     }
 
     /**
-     * Which catalog(s) drive search/discovery. BOTH (default) is the
-     * existing fan-out behavior; TIDAL_ONLY skips the Qobuz call so search
-     * doesn't surface Qobuz hits; QOBUZ_ONLY skips the TIDAL pool. Stream
-     * playback and downloads still follow the per-track PlaybackSource —
-     * the setting only governs which catalogs feed search results.
+     * The APIs added under Settings › Connections, in the user's priority
+     * order, each with the services it was found to serve.
+     *
+     * Never saved yet means an install from before the list existed: it is
+     * seeded from the old per-catalog fields, so an update keeps a working
+     * setup without anyone re-entering it. The seed is not written back until
+     * the list is first edited.
      */
-    val sourceMode: Flow<SourceMode> = dataStore.data.map { prefs ->
-        // A stored "APPLE_ONLY" from before Apple was dropped no longer names a
-        // constant, so valueOf throws, getOrNull swallows it and it reads as
-        // BOTH — which is what anyone left on it should get, since neither the
-        // picker nor search can represent Apple any more.
-        prefs[SOURCE_MODE]?.let { runCatching { SourceMode.valueOf(it) }.getOrNull() }
-            ?: SourceMode.BOTH
-    }
-
-    suspend fun setSourceMode(mode: SourceMode) {
-        dataStore.edit { it[SOURCE_MODE] = mode.name }
+    val apiServers: Flow<List<tf.monochrome.android.data.api.ApiServer>> = dataStore.data.map { prefs ->
+        prefs[API_SERVERS]
+            ?.let { raw ->
+                runCatching { json.decodeFromString<List<tf.monochrome.android.data.api.ApiServer>>(raw) }.getOrNull()
+            }
+            ?: tf.monochrome.android.data.api.ApiServers.fromLegacy(
+                tidalUrl = prefs[CUSTOM_API_ENDPOINT],
+                qobuzUrl = prefs[QOBUZ_INSTANCE_URL],
+                appleUrl = prefs[APPLE_INSTANCE_URL],
+            )
     }
 
     /**
-     * Whether Search also asks the instance's /api/deezer routes. Independent
-     * of [sourceMode]: Deezer is a browse-only catalog here (the public API
-     * serves 30-second previews, and a pick plays through Qobuz when the same
-     * recording is there), so it adds to either mode rather than replacing one.
-     * Served by the Qobuz instance, so it does nothing until that URL is set.
+     * Saves the list, and mirrors it onto the old per-catalog keys. Nothing
+     * here reads those for routing any more (InstanceManager reads the list),
+     * but a few call sites ask whether Qobuz is set up, and a downgrade should
+     * find the servers where that build looks for them.
      */
-    val deezerSearchEnabled: Flow<Boolean> = dataStore.data.map { it[DEEZER_SEARCH_ENABLED] ?: true }
-
-    suspend fun setDeezerSearchEnabled(enabled: Boolean) {
-        dataStore.edit { it[DEEZER_SEARCH_ENABLED] = enabled }
+    suspend fun setApiServers(servers: List<tf.monochrome.android.data.api.ApiServer>) {
+        val encoded = json.encodeToString(servers)
+        fun urlFor(service: tf.monochrome.android.data.api.ApiService) =
+            tf.monochrome.android.data.api.ApiServers.serverFor(servers, service)?.url
+        dataStore.edit { prefs ->
+            prefs[API_SERVERS] = encoded
+            urlFor(tf.monochrome.android.data.api.ApiService.TIDAL)
+                ?.let { prefs[CUSTOM_API_ENDPOINT] = it } ?: prefs.remove(CUSTOM_API_ENDPOINT)
+            urlFor(tf.monochrome.android.data.api.ApiService.QOBUZ)
+                ?.let { prefs[QOBUZ_INSTANCE_URL] = it } ?: prefs.remove(QOBUZ_INSTANCE_URL)
+            urlFor(tf.monochrome.android.data.api.ApiService.APPLE)
+                ?.let { prefs[APPLE_INSTANCE_URL] = it } ?: prefs.remove(APPLE_INSTANCE_URL)
+        }
     }
 
     val devModeEnabled: Flow<Boolean> = dataStore.data.map { prefs ->

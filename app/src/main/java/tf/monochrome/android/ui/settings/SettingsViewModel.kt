@@ -49,6 +49,7 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val preferences: PreferencesManager,
     private val instanceManager: InstanceManager,
+    private val apiServerProber: tf.monochrome.android.data.api.ApiServerProber,
     private val authRepository: AuthRepository,
     private val backupManager: BackupManager,
     private val projectMEngineRepository: ProjectMEngineRepository,
@@ -382,20 +383,19 @@ class SettingsViewModel @Inject constructor(
     val apiInstances: StateFlow<List<Instance>> = _apiInstances.asStateFlow()
     private val _streamingInstances = MutableStateFlow<List<Instance>>(emptyList())
     val streamingInstances: StateFlow<List<Instance>> = _streamingInstances.asStateFlow()
-    val customEndpoint: StateFlow<String?> = preferences.customApiEndpoint
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-    val qobuzEndpoint: StateFlow<String?> = preferences.qobuzInstanceUrl
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    /** The APIs under Settings › Connections, in priority order. */
+    val apiServers: StateFlow<List<tf.monochrome.android.data.api.ApiServer>> = preferences.apiServers
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** URLs being re-checked right now, so their cards can show it. */
+    private val _apiChecking = MutableStateFlow<Set<String>>(emptySet())
+    val apiChecking: StateFlow<Set<String>> = _apiChecking.asStateFlow()
+
+    /** The Add API dialog's progress; see [addApi]. */
+    private val _addApiState = MutableStateFlow<AddApiState>(AddApiState.Idle)
+    val addApiState: StateFlow<AddApiState> = _addApiState.asStateFlow()
     val devModeEnabled: StateFlow<Boolean> = preferences.devModeEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-    val sourceMode: StateFlow<tf.monochrome.android.data.preferences.SourceMode> =
-        preferences.sourceMode.stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5000),
-            tf.monochrome.android.data.preferences.SourceMode.BOTH,
-        )
-    val deezerSearchEnabled: StateFlow<Boolean> = preferences.deezerSearchEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     private val _instancesRefreshing = MutableStateFlow(false)
     val instancesRefreshing: StateFlow<Boolean> = _instancesRefreshing.asStateFlow()
 
@@ -989,28 +989,77 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun setCustomEndpoint(endpoint: String?) {
+    /**
+     * Check a typed-in address and add it when it serves anything.
+     *
+     * A server that serves nothing is not added: an entry that can never be
+     * used would sit in the list looking configured. The dialog shows why each
+     * service didn't answer instead, which is the part worth reading.
+     */
+    fun addApi(raw: String) {
+        val url = tf.monochrome.android.data.api.ApiServers.normalizeUrl(raw)
+        if (url == null) {
+            _addApiState.value = AddApiState.Invalid
+            return
+        }
+        if (apiServers.value.any { it.url.equals(url, ignoreCase = true) }) {
+            _addApiState.value = AddApiState.AlreadyAdded(url)
+            return
+        }
+        _addApiState.value = AddApiState.Checking(url)
         viewModelScope.launch {
-            preferences.setCustomApiEndpoint(endpoint)
+            val result = apiServerProber.probe(url)
+            if (result.services.isNotEmpty()) {
+                val current = preferences.apiServers.first()
+                preferences.setApiServers(
+                    current + tf.monochrome.android.data.api.ApiServer(
+                        url = url,
+                        services = result.services,
+                        checkedAt = System.currentTimeMillis(),
+                    )
+                )
+                loadInstances()
+            }
+            _addApiState.value = AddApiState.Done(result)
+        }
+    }
+
+    fun resetAddApi() {
+        _addApiState.value = AddApiState.Idle
+    }
+
+    /** Ask a listed server again — after it gained a key, say, or lost one. */
+    fun recheckApi(url: String) {
+        if (url in _apiChecking.value) return
+        _apiChecking.value = _apiChecking.value + url
+        viewModelScope.launch {
+            val result = apiServerProber.probe(url)
+            val current = preferences.apiServers.first()
+            preferences.setApiServers(current.map {
+                if (it.url == url) it.copy(services = result.services, checkedAt = System.currentTimeMillis()) else it
+            })
+            loadInstances()
+            _apiChecking.value = _apiChecking.value - url
+        }
+    }
+
+    fun removeApi(url: String) {
+        viewModelScope.launch {
+            preferences.setApiServers(preferences.apiServers.first().filterNot { it.url == url })
             loadInstances()
         }
     }
 
-    fun setQobuzEndpoint(endpoint: String?) {
+    /** Move a server one place up, so it wins the services it shares with the one above. */
+    fun moveApiUp(url: String) {
         viewModelScope.launch {
-            preferences.setQobuzInstanceUrl(endpoint)
-        }
-    }
-
-    fun setSourceMode(mode: tf.monochrome.android.data.preferences.SourceMode) {
-        viewModelScope.launch {
-            preferences.setSourceMode(mode)
+            val list = preferences.apiServers.first().toMutableList()
+            val i = list.indexOfFirst { it.url == url }
+            if (i <= 0) return@launch
+            list.add(i - 1, list.removeAt(i))
+            preferences.setApiServers(list)
             loadInstances()
         }
-    }
-
-    fun setDeezerSearchEnabled(enabled: Boolean) {
-        viewModelScope.launch { preferences.setDeezerSearchEnabled(enabled) }
     }
 
     fun setDevModeEnabled(enabled: Boolean) {
@@ -1071,4 +1120,15 @@ class SettingsViewModel @Inject constructor(
             else -> String.format(Locale.US, "%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
         }
     }
+}
+
+/** Where the Add API dialog is. */
+sealed interface AddApiState {
+    data object Idle : AddApiState
+    /** Not something that can be a server address. */
+    data object Invalid : AddApiState
+    data class AlreadyAdded(val url: String) : AddApiState
+    data class Checking(val url: String) : AddApiState
+    /** Checked; added when [ProbeResult.services] is non-empty. */
+    data class Done(val result: tf.monochrome.android.data.api.ProbeResult) : AddApiState
 }

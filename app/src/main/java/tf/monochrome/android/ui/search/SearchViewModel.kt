@@ -357,35 +357,19 @@ class SearchViewModel @Inject constructor(
         // swallowed so the existing TIDAL flow keeps working unchanged.
         var deezerSearch: tf.monochrome.android.domain.model.SearchResult? = null
         val (searchResult, qobuzResult, unifiedResultsResult) = coroutineScope {
-            // Source mode (Settings → Instances → Source) gates which
-            // catalogs we fan out to. *_ONLY modes restrict to one catalog;
-            // BOTH (default) runs TIDAL + Qobuz.
-            val sourceMode = preferences.sourceMode.first()
-            val apiDeferred = async {
-                if (sourceMode == tf.monochrome.android.data.preferences.SourceMode.QOBUZ_ONLY) {
-                    runCatching {
-                        Result.failure<tf.monochrome.android.domain.model.SearchResult>(
-                            IllegalStateException("TIDAL disabled by source mode")
-                        )
-                    }
-                } else {
-                    runCatching { repository.search(trimmedQuery) }
-                }
-            }
+            // Every catalog is asked; which ones answer is decided by the APIs
+            // under Settings › Connections. One no API serves comes back empty
+            // (or, for TIDAL, as a failure the branches below already treat as
+            // "TIDAL is down"), so there is nothing to choose between here.
+            val apiDeferred = async { runCatching { repository.search(trimmedQuery) } }
             val qobuzDeferred = async {
-                if (sourceMode == tf.monochrome.android.data.preferences.SourceMode.TIDAL_ONLY) {
-                    null
-                } else {
-                    withTimeoutOrNull(QOBUZ_BUDGET_MS) {
-                        runCatching { repository.searchQobuz(trimmedQuery) }
-                    }
+                withTimeoutOrNull(QOBUZ_BUDGET_MS) {
+                    runCatching { repository.searchQobuz(trimmedQuery) }
                 }
             }
-            // Deezer rides alongside whichever mode is set (it is a toggle, not
-            // a mode) on the same time budget as Qobuz, and fails soft.
+            // Deezer runs on the same time budget as Qobuz, and fails soft.
             val deezerDeferred = async {
-                if (!preferences.deezerSearchEnabled.first()) null
-                else withTimeoutOrNull(QOBUZ_BUDGET_MS) {
+                withTimeoutOrNull(QOBUZ_BUDGET_MS) {
                     repository.searchDeezer(trimmedQuery).getOrNull()
                 }
             }
@@ -479,9 +463,9 @@ class SearchViewModel @Inject constructor(
             _allArtists.value = scoreItems(trimmedQuery, (qobuzArtists + deezerArtists).distinctBy { it.id }) { listOf(it.name) }
             _allPlaylists.value = emptyList()
             // TIDAL failed → mark its end on every type so loadMore won't retry.
-            // This is also the path a QOBUZ_ONLY search takes: the TIDAL
-            // deferred returns a failure rather than being skipped, so tidalEnd
-            // lands here and paging never asks TIDAL for a page 2.
+            // This is also the path a setup with no TIDAL API takes: the TIDAL
+            // search fails rather than being skipped, so tidalEnd lands here and
+            // paging never asks TIDAL for a page 2.
             tracksPage.tidalEnd = true; albumsPage.tidalEnd = true
             artistsPage.tidalEnd = true; playlistsPage.tidalEnd = true
             seedPageEnd(tracksPage,    /*tidal=*/0, qobuzTracks.size,  qobuzAvailable)

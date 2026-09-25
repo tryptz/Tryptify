@@ -2654,7 +2654,7 @@ private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
 @Composable
 private fun ConnectionsTab(viewModel: SettingsViewModel) {
     SettingsTabContent {
-        CatalogControls(viewModel)
+        ApiServersSection(viewModel)
         Spacer(modifier = Modifier.height(20.dp))
         ScrobblingControls(viewModel)
         Spacer(modifier = Modifier.height(20.dp))
@@ -2765,166 +2765,6 @@ private fun AccountControls(viewModel: SettingsViewModel) {
             "Use the Account page to sign in with Google or email.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-/**
- * Catalog picker + the self-hosted server URLs, unwrapped from any scroll
- * container so [ConnectionsTab] can stack it with the scrobbler, Spotify and
- * account groups — [SettingsTabContent] is a LazyColumn and two cannot nest.
- *
- * Depends on nothing but [viewModel]; both text fields own their own state.
- */
-@Composable
-private fun CatalogControls(viewModel: SettingsViewModel) {
-    val customEndpoint by viewModel.customEndpoint.collectAsStateWithLifecycle()
-    val qobuzEndpoint by viewModel.qobuzEndpoint.collectAsStateWithLifecycle()
-    val sourceMode by viewModel.sourceMode.collectAsStateWithLifecycle()
-    val deezerSearchEnabled by viewModel.deezerSearchEnabled.collectAsStateWithLifecycle()
-    var customInput by remember(customEndpoint) { mutableStateOf(customEndpoint ?: "") }
-    var qobuzInput by remember(qobuzEndpoint) { mutableStateOf(qobuzEndpoint ?: "") }
-
-    SettingsGroupHeader("Catalog Source")
-    // Source mode picker — controls which catalogs feed search/discovery.
-    // Plays/downloads still follow the per-track PlaybackSource so a
-    // download you triggered earlier keeps working regardless of this
-    // setting.
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Text(
-            text = "Catalog source",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = "Which catalogs power Search and Browse.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        val sourceOptions = listOf(
-            tf.monochrome.android.data.preferences.SourceMode.BOTH to "Both",
-            tf.monochrome.android.data.preferences.SourceMode.TIDAL_ONLY to "TIDAL only",
-            tf.monochrome.android.data.preferences.SourceMode.QOBUZ_ONLY to "Qobuz only",
-        )
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            sourceOptions.forEachIndexed { index, (mode, label) ->
-                SegmentedButton(
-                    selected = sourceMode == mode,
-                    onClick = { viewModel.setSourceMode(mode) },
-                    shape = SegmentedButtonDefaults.itemShape(index, sourceOptions.size),
-                ) {
-                    Text(label)
-                }
-            }
-        }
-    }
-
-    // Deezer rides on the Qobuz instance's /api/deezer/* layer, and adds to
-    // whichever mode is picked above rather than being a mode of its own.
-    SettingSwitchItem(
-        title = "Deezer catalog",
-        subtitle = "Also search Deezer through your Qobuz instance. Picks play from " +
-            "Qobuz when it has the same recording, otherwise as a 30-second preview.",
-        checked = deezerSearchEnabled,
-        onCheckedChange = viewModel::setDeezerSearchEnabled,
-    )
-
-    Spacer(modifier = Modifier.height(20.dp))
-    SettingsGroupHeader("Servers")
-
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Tidal HiFi URL",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "Your own Tidal HiFi server, used for search, browse, and streaming.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        // Snapshot the latest input/saved value into stable holders so the
-        // onFocusChanged closure captured by the OutlinedTextField doesn't
-        // need to re-allocate on every keystroke recomposition.
-        val latestInput = rememberUpdatedState(customInput)
-        val latestSaved = rememberUpdatedState(customEndpoint)
-        OutlinedTextField(
-            value = customInput,
-            onValueChange = { customInput = it },
-            placeholder = {
-                Text(
-                    "API endpoint",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = {
-                viewModel.setCustomEndpoint(latestInput.value.trim().ifBlank { null })
-            }),
-            modifier = Modifier
-                .widthIn(max = 240.dp)
-                .onFocusChanged { focusState ->
-                    if (!focusState.isFocused) {
-                        val trimmed = latestInput.value.trim().ifBlank { null }
-                        if (trimmed != latestSaved.value) {
-                            viewModel.setCustomEndpoint(trimmed)
-                        }
-                    }
-                }
-        )
-    }
-
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Qobuz URL",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "Used for downloads. Honored whenever set, independent of Dev Mode.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        val latestQobuzInput = rememberUpdatedState(qobuzInput)
-        val latestQobuzSaved = rememberUpdatedState(qobuzEndpoint)
-        OutlinedTextField(
-            value = qobuzInput,
-            onValueChange = { qobuzInput = it },
-            placeholder = {
-                Text(
-                    "Qobuz instance",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = {
-                viewModel.setQobuzEndpoint(latestQobuzInput.value.trim().ifBlank { null })
-            }),
-            modifier = Modifier
-                .widthIn(max = 240.dp)
-                .onFocusChanged { focusState ->
-                    if (!focusState.isFocused) {
-                        val trimmed = latestQobuzInput.value.trim().ifBlank { null }
-                        if (trimmed != latestQobuzSaved.value) {
-                            viewModel.setQobuzEndpoint(trimmed)
-                        }
-                    }
-                }
         )
     }
 }
@@ -3362,7 +3202,7 @@ internal fun devSlug(text: String): String =
     text.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_').ifEmpty { "item" }
 
 @Composable
-private fun SettingsGroupHeader(title: String) {
+internal fun SettingsGroupHeader(title: String) {
     tf.monochrome.android.devedit.DevEditable("hdr_${devSlug(title)}", Modifier.fillMaxWidth()) {
         Text(
             text = title,
