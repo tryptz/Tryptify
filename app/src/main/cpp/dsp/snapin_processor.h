@@ -1,5 +1,7 @@
 #pragma once
+#include "finite.h"
 #include "oversampler.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <vector>
@@ -35,8 +37,17 @@ public:
 
     float getDryWet() const { return dryWet_; }
     void setDryWet(float v) {
-        const float safe = std::isfinite(v) ? v : 1.0f;
+        const float safe = dspIsFinite(v) ? v : 1.0f;
         dryWet_ = (safe < 0.0f) ? 0.0f : (safe > 1.0f) ? 1.0f : safe;
+    }
+
+    // Sets parameter [index] from anywhere a value can come from — a knob, a
+    // preset, a saved mix. The effects clamp their own ranges, but not every
+    // one survives NaN (a float-to-int cast of it is undefined), and an index
+    // past the end must not reach a switch that assumes it cannot happen.
+    void applyParameter(int index, float value) {
+        if (index < 0 || index >= getNumParameters() || !dspIsFinite(value)) return;
+        setParameter(index, std::fmax(-1e7f, std::fmin(1e7f, value)));
     }
 
     // ── Per-snapin oversampling (1x/2x/4x) ──────────────────────────────
@@ -44,8 +55,19 @@ public:
     // factor > 1 the snapin itself is prepared at baseRate × factor and runs
     // between a ChannelOversampler pair, so nonlinear effects fold harmonics
     // above the audio band instead of aliasing into it. Factor 1 is a direct
-    // pass-through with zero overhead. Never call on the audio thread while
-    // unlocked — the engine serializes via its chain mutex.
+    // pass-through with zero overhead.
+    //
+    // The factor asked for is what is saved and shown; the one that runs is
+    // capped by the rate (ChannelOversampler::effectiveFactor) — a hi-res
+    // stream at 192 kHz has the headroom 4x would buy already, and 4x of it
+    // would run every delay line and reverb at 768 kHz.
+    //
+    // The round trip delays the effect's output by latency() samples, the
+    // same at every frequency. The engine holds the dry signal back to match
+    // (delayDry) and lines the other buses up with it, so an oversampled
+    // effect blended with its dry, or summed with another bus, never
+    // comb-filters. Never call on the audio thread while unlocked — the
+    // engine serializes via its chain mutex.
 
     void prepareOS(double baseSampleRate, int maxBlockSize) {
         osBaseRate_ = baseSampleRate;
@@ -62,7 +84,31 @@ public:
         if (osBaseRate_ > 0.0) applyOS();
     }
 
+    // The factor asked for (and saved): 1, 2 or 4.
     int getOversampling() const { return osFactor_; }
+
+    // The factor running at the current rate.
+    int getEffectiveOversampling() const { return osRun_; }
+
+    // Base-rate samples the effect's output lags its input by.
+    int latency() const { return osLatency_; }
+
+    // Holds [left]/[right] back by latency(), in place: the dry signal of a
+    // blend, or the whole signal while the effect is bypassed, so a bus's
+    // delay does not change with the bypass switch.
+    void delayDry(float* left, float* right, int numFrames) {
+        if (osLatency_ == 0) return;
+        dryL_.process(left, numFrames);
+        dryR_.process(right, numFrames);
+    }
+
+    // Clears everything the effect remembers, the oversampling filters with
+    // it: for when its output can no longer be trusted.
+    void resetAll() {
+        reset();
+        osL_.reset();
+        osR_.reset();
+    }
 
     // ── Linked detection ─────────────────────────────────────────────────
     // Dynamics that measure level (compressor, limiter, dynamics, compactor,
@@ -76,26 +122,17 @@ public:
     void setDetectorKey(const float* key) { key_ = key; }
 
     void processOS(float* left, float* right, int numFrames) {
-        if (osFactor_ <= 1 || osBufL_.empty()) {
+        if (osRun_ <= 1 || osBufL_.empty()) {
             process(left, right, numFrames);
             return;
         }
-        // At the oversampled rate the key has to be too: each base-rate
-        // sample held for the factor's worth of frames. A peak key is a
-        // level, not a waveform, so holding it is what it means.
-        const float* baseKey = key_;
-        if (baseKey && !osKey_.empty()) {
-            for (int i = 0; i < numFrames; i++) {
-                for (int k = 0; k < osFactor_; k++) osKey_[static_cast<size_t>(i * osFactor_ + k)] = baseKey[i];
-            }
-            key_ = osKey_.data();
+        // The scratch holds osChunk_ frames at the high rate; a longer block
+        // goes through in pieces rather than past its end.
+        for (int done = 0; done < numFrames; done += osChunk_) {
+            const int n = std::min(osChunk_, numFrames - done);
+            processOSChunk(left + done, right + done, n,
+                           key_ ? key_ + done : nullptr);
         }
-        osL_.upsample(left, osBufL_.data(), numFrames);
-        osR_.upsample(right, osBufR_.data(), numFrames);
-        process(osBufL_.data(), osBufR_.data(), numFrames * osFactor_);
-        osL_.downsample(osBufL_.data(), left, numFrames);
-        osR_.downsample(osBufR_.data(), right, numFrames);
-        key_ = baseKey;
     }
 
 protected:
@@ -106,26 +143,64 @@ protected:
     const float* key_ = nullptr;  // see setDetectorKey
 
 private:
+    void processOSChunk(float* left, float* right, int numFrames, const float* baseKey) {
+        // At the oversampled rate the key has to be too: each base-rate
+        // sample held for the factor's worth of frames. A peak key is a
+        // level, not a waveform, so holding it is what it means.
+        const float* savedKey = key_;
+        if (baseKey && !osKey_.empty()) {
+            for (int i = 0; i < numFrames; i++) {
+                for (int k = 0; k < osRun_; k++) osKey_[static_cast<size_t>(i * osRun_ + k)] = baseKey[i];
+            }
+            key_ = osKey_.data();
+        }
+        osL_.upsample(left, osBufL_.data(), numFrames);
+        osR_.upsample(right, osBufR_.data(), numFrames);
+        process(osBufL_.data(), osBufR_.data(), numFrames * osRun_);
+        osL_.downsample(osBufL_.data(), left, numFrames);
+        osR_.downsample(osBufR_.data(), right, numFrames);
+        key_ = savedKey;
+    }
+
     void applyOS() {
-        if (osFactor_ > 1) {
-            osBufL_.assign(static_cast<size_t>(osBaseBlock_) * osFactor_, 0.0f);
-            osBufR_.assign(static_cast<size_t>(osBaseBlock_) * osFactor_, 0.0f);
-            osKey_.assign(static_cast<size_t>(osBaseBlock_) * osFactor_, 0.0f);
-            osL_.prepare(osBaseRate_, osFactor_);
-            osR_.prepare(osBaseRate_, osFactor_);
+        osRun_ = ChannelOversampler::effectiveFactor(osBaseRate_, osFactor_);
+        osBaseBlock_ = std::max(1, osBaseBlock_);
+        // The engine is prepared for blocks of up to 16384 frames; scratch
+        // for that at 4x is 768 KB per effect per lane, and a wide stream has
+        // a lane per channel group. Pieces of kOsChunk cost nothing audible
+        // (the filters carry their state across) and keep it to ~48 KB.
+        osChunk_ = std::min(osBaseBlock_, kOsChunk);
+        if (osRun_ > 1) {
+            osBufL_.assign(static_cast<size_t>(osChunk_) * osRun_, 0.0f);
+            osBufR_.assign(static_cast<size_t>(osChunk_) * osRun_, 0.0f);
+            osKey_.assign(static_cast<size_t>(osChunk_) * osRun_, 0.0f);
+            osL_.prepare(osBaseRate_, osRun_);
+            osR_.prepare(osBaseRate_, osRun_);
         } else {
             osBufL_.clear();
             osBufR_.clear();
             osKey_.clear();
+            osL_.prepare(osBaseRate_, 1);
+            osR_.prepare(osBaseRate_, 1);
         }
-        prepare(osBaseRate_ * osFactor_, osBaseBlock_ * osFactor_);
+        osLatency_ = osL_.latency();
+        dryL_.prepare(osLatency_);
+        dryR_.prepare(osLatency_);
+        // Oversampled, the effect only ever sees one piece at a time.
+        prepare(osBaseRate_ * osRun_, osRun_ > 1 ? osChunk_ * osRun_ : osBaseBlock_);
     }
 
-    int osFactor_ = 1;
+    static constexpr int kOsChunk = 1024;
+
+    int osFactor_ = 1;   // asked for
+    int osRun_ = 1;      // running, after the rate cap
+    int osLatency_ = 0;
     double osBaseRate_ = 0.0;
     int osBaseBlock_ = 0;
+    int osChunk_ = 1;
     std::vector<float> osBufL_, osBufR_, osKey_;
     ChannelOversampler osL_, osR_;
+    LatencyLine dryL_, dryR_;
 };
 
 // Factory — implemented in dsp_engine.cpp

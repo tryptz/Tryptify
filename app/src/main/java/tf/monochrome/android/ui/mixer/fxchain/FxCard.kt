@@ -215,6 +215,11 @@ fun FxCard(
  * multiple of the stream rate between anti-alias resamplers — worth its CPU on
  * nonlinear effects (distortions, bitcrush, ring mod), where it removes
  * aliasing; changing it resets the effect's internal state.
+ *
+ * The engine never runs an effect above 192 kHz inside: at 96 kHz 4x runs as
+ * 2x, and a stream at 176.4 kHz or more already has the headroom oversampling
+ * buys, so there it runs as off. The note says so, since the chip shows what
+ * was asked for, which is what a saved mix keeps.
  */
 @Composable
 private fun OversampleRow(
@@ -253,6 +258,14 @@ private fun OversampleRow(
                             else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+        if (current > 1) {
+            Text(
+                text = "up to 192 kHz",
+                fontSize = 8.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                maxLines = 1,
+            )
         }
     }
 }

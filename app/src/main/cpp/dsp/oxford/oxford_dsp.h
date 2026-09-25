@@ -276,10 +276,16 @@ public:
         // instead. Everything else in this processor — the gain smoothing, the
         // Linkwitz-Riley band split, the dry delay — is linear and cannot
         // alias, so it stays at the base rate and the FIR designs are untouched.
-        const int osFactor = clampOsFactor(params.oversampling.load(std::memory_order_relaxed));
+        // Capped by the rate: past 192 kHz inside there is nothing to gain.
+        const int osFactor = ChannelOversampler::effectiveFactor(
+            sr_, clampOsFactor(params.oversampling.load(std::memory_order_relaxed)));
         if (osFactor != osFactorApplied_) {
             for (int c = 0; c < kMaxChannels; ++c) {
                 for (int b = 0; b < kOsBands; ++b) os_[c][b].prepare(sr_, osFactor);
+                // The shaped path now lags by the oversampler's latency; the
+                // dry half of the Effect blend is held back to match, or the
+                // two comb-filter against each other below 100 %.
+                osDryAlign_[c].prepare(os_[c][kOsFull].latency());
             }
             osFactorApplied_ = osFactor;
         }
@@ -323,7 +329,8 @@ public:
                     shaped = shapeOs(c, kOsFull, xd, A, B, C, D, osFactor);
                 }
 
-                float y = (dry * xd + wet * shaped) * post;
+                const float xdAligned = osFactor > 1 ? osDryAlign_[c].process(xd) : xd;
+                float y = (dry * xdAligned + wet * shaped) * post;
                 if (clip) y = std::clamp(y, -1.0f, 1.0f);
                 buffers[c][n] = y;
 
@@ -372,6 +379,7 @@ private:
     }
 
     ChannelOversampler os_[kMaxChannels][kOsBands];
+    LatencyLine osDryAlign_[kMaxChannels];
     int osFactorApplied_ = 0;
 
     void updateMeters(float* const* buffers, int n) noexcept {
@@ -461,7 +469,9 @@ public:
         // envelope speed. Running the detector and the gain application at 2x
         // or 4x puts the ripple and its sidebands below the new Nyquist so the
         // decimation filter removes them instead.
-        const int osFactor = clampOsFactor(params.oversampling.load(std::memory_order_relaxed));
+        // Capped by the rate: past 192 kHz inside there is nothing to gain.
+        const int osFactor = ChannelOversampler::effectiveFactor(
+            sr_, clampOsFactor(params.oversampling.load(std::memory_order_relaxed)));
         if (osFactor != osFactorApplied_) {
             for (int c = 0; c < kMaxChannels; ++c) os_[c].prepare(sr_, osFactor);
             osRate_ = sr_ * osFactor;

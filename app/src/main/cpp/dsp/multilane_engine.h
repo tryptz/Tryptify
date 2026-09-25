@@ -71,9 +71,15 @@ public:
 
     void reconfigure(int sampleRate, int maxBlockSize) {
         std::lock_guard<std::mutex> lock(laneMutex_);
-        sampleRate_ = sampleRate;
-        maxBlock_ = maxBlockSize;
-        for (auto& e : lanes_) e->reconfigure(sampleRate, maxBlockSize);
+        // shapeMutex_ as well: the scratch below is what the audio thread's
+        // unlinked fallback writes into, and that path holds only this one.
+        std::lock_guard<std::mutex> shape(shapeMutex_);
+        sampleRate_.store(sampleRate, std::memory_order_relaxed);
+        // Never shrinks, like each engine's own scratch: a block already cut
+        // to the old size must still fit.
+        const int block = std::max(maxBlock_.load(std::memory_order_relaxed), maxBlockSize);
+        for (auto& e : lanes_) e->reconfigure(sampleRate, block);
+        maxBlock_.store(block, std::memory_order_relaxed);
         allocScratch();
     }
 
@@ -102,7 +108,7 @@ public:
             const bool mixBypass = primary().isMixBypassed();
             const int grownFrom = primary().autoGrownFrom();
             for (int k = laneCount(); k < count; k++) {
-                auto e = std::make_unique<DspEngine>(sampleRate_, maxBlock_);
+                auto e = std::make_unique<DspEngine>(sampleRate_.load(std::memory_order_relaxed), maxBlock_.load(std::memory_order_relaxed));
                 e->setRouting(routeOf(k, count, spread), routedCountFor(count, spread));
                 e->loadStateJson(state);
                 // The state carries the grown buses as the clone's own; it
@@ -136,8 +142,9 @@ public:
      * prepared for are run in pieces.
      */
     void processPlanar(float* const* channels, int numChannels, int numFrames) {
-        for (int done = 0; done < numFrames; done += maxBlock_) {
-            const int n = std::min(maxBlock_, numFrames - done);
+        const int block = maxBlock_.load(std::memory_order_relaxed);
+        for (int done = 0; done < numFrames; done += block) {
+            const int n = std::min(block, numFrames - done);
             processChunk(channels, numChannels, done, n);
         }
     }
@@ -207,7 +214,7 @@ private:
     }
 
     void allocScratch() {
-        const size_t n = static_cast<size_t>(std::max(1, maxBlock_));
+        const size_t n = static_cast<size_t>(std::max(1, maxBlock_.load(std::memory_order_relaxed)));
         key_.assign(n, 0.0f);
         for (int k = 0; k < MAX_LANES; k++) {
             monoL_[k].assign(n, 0.0f);
@@ -243,23 +250,36 @@ private:
 
     void processChunk(float* const* ch, int numChannels, int offset, int n) {
         std::unique_lock<std::mutex> lanesLock(laneMutex_, std::try_to_lock);
+
+        if (!lanesLock.owns_lock()) {
+            // A control change is fanning out: this block runs each lane on
+            // its own, unlinked, rather than wait for it.
+            //
+            // laneMutex_ is not held here, and configureLanes pushes and pops
+            // lanes_ under it — reading lanes_ bare raced that, and a track
+            // change from stereo to 7.1.4 mid-block read a lane that was being
+            // destroyed (engine_stress_test's chaos run found it). shapeMutex_
+            // is the lock configureLanes holds for exactly that swap, and
+            // otherwise only meter reads take it, for microseconds, so waiting
+            // on it is bounded.
+            std::lock_guard<std::mutex> shape(shapeMutex_);
+            const int count = laneCount();
+            for (int k = 0; k < count; k++) {
+                float* l;
+                float* r;
+                if (!lanePointers(k, ch, numChannels, offset, n, l, r)) continue;
+                lanes_[k]->process(l, r, n);
+                foldMono(k, ch, offset, n);
+            }
+            return;
+        }
+
         const int count = laneCount();
         float* laneL[MAX_LANES];
         float* laneR[MAX_LANES];
         bool active[MAX_LANES];
         for (int k = 0; k < count; k++) {
             active[k] = lanePointers(k, ch, numChannels, offset, n, laneL[k], laneR[k]);
-        }
-
-        if (!lanesLock.owns_lock()) {
-            // A control change is fanning out: this block runs each lane on
-            // its own, unlinked, rather than wait for it.
-            for (int k = 0; k < count; k++) {
-                if (!active[k]) continue;
-                lanes_[k]->process(laneL[k], laneR[k], n);
-                foldMono(k, ch, offset, n);
-            }
-            return;
         }
 
         std::unique_lock<std::mutex> chainLocks[MAX_LANES];
@@ -306,8 +326,9 @@ private:
     bool spread_ = true;  // guarded by laneMutex_
     int laneFirst_[MAX_LANES] = {};
     int laneSecond_[MAX_LANES] = {};
-    int sampleRate_;
-    int maxBlock_;
+    std::atomic<int> sampleRate_;
+    // Read by the audio thread without a lock, to cut blocks.
+    std::atomic<int> maxBlock_;
     std::mutex laneMutex_;
     // Held only while lanes_ itself changes (configureLanes) and by the meter
     // reads, so the UI's 60 Hz polling never takes laneMutex_: the audio

@@ -21,6 +21,10 @@ static constexpr int MAX_PLUGINS_PER_BUS = 16;
 // ~43 ms at 48 kHz — enough history for the FX-chain scope displays.
 static constexpr int WAVE_TAP_SIZE = 2048;
 
+// Longest delay a bus can be held back by to line up with the slowest bus:
+// sixteen effects at 4x at 22.05 kHz is ~1600 samples. Power of two.
+static constexpr int PDC_SIZE = 2048;
+
 struct Bus {
     std::vector<std::unique_ptr<SnapinProcessor>> plugins;
 
@@ -60,6 +64,15 @@ struct Bus {
     float holdR = 0.0f;
     int holdCounterL = 0;
     int holdCounterR = 0;
+
+    // Delay compensation (audio thread only): the bus's output held back so
+    // it arrives with the bus whose effects delay it most. PDC_SIZE each,
+    // allocated once by the engine.
+    std::vector<float> pdcL, pdcR;
+    int pdcPos = 0;
+    // Set when the ring holds audio from before a pause in this bus's
+    // processing (it was muted, off or moved), so it is cleared first.
+    bool pdcStale = true;
 };
 
 class DspEngine {
@@ -213,6 +226,17 @@ private:
     // How many mix buses a save carries: the grown, untouched tail left off.
     int savedMixBusCountLocked() const;
     bool skippedOnThisLane(const SnapinProcessor& plugin) const;
+    // One slot of a chain, in place on [l]/[r]: processed and blended when
+    // [run], otherwise delayed by the effect's latency so the chain's delay
+    // is the same bypassed or not. A block the effect turns non-finite is
+    // replaced by its dry signal and the effect reset.
+    void runSlotLocked(SnapinProcessor& plugin, float* l, float* r, int numFrames, bool run);
+    // Base-rate samples the chain on [bus] delays its signal by.
+    static int chainLatencyLocked(const Bus& bus);
+    // Holds [l]/[r] back by [delay] through [bus]'s compensation ring.
+    static void delayBusLocked(Bus& bus, float* l, float* r, int numFrames, int delay);
+    // The pieces of process(), for one block no longer than maxBlockSize_.
+    void processBlockLocked(float* left, float* right, int numFrames);
     bool monoLane_ = false;
     void recalcBusGains(float gainDb, float pan, float& targetL, float& targetR);
 

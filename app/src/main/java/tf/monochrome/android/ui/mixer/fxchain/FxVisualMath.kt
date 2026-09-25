@@ -136,7 +136,20 @@ internal object FxVisualMath {
     fun filterDb(typeIndex: Int, freq: Float, cutoff: Float, q: Float, gainDb: Float, slope: Int): Float {
         val shape = FILTER_TYPE_MAP[typeIndex.coerceIn(0, FILTER_TYPE_MAP.size - 1)]
         val stages = slope.coerceIn(0, 3) + 1
-        return biquadDb(shape, freq, cutoff, q, gainDb) * stages
+        // As filter.h cascades them: the resonance on the first stage only,
+        // the rest Butterworth; a shelf's or peak's gain shared between the
+        // stages; and a shelf's Q held to 2, as biquad.h holds it.
+        val resonant = shape == BiquadShape.LOWPASS || shape == BiquadShape.HIGHPASS
+        val shelf = shape == BiquadShape.LOWSHELF || shape == BiquadShape.HIGHSHELF
+        val gainType = shelf || shape == BiquadShape.PEAK
+        val stageQ = if (shelf) q.coerceAtMost(2f) else q
+        val stageGain = if (gainType) gainDb / stages else gainDb
+        var total = 0f
+        for (s in 0 until stages) {
+            val qs = if (resonant && s > 0) 0.7071f else stageQ
+            total += biquadDb(shape, freq, cutoff, qs, stageGain)
+        }
+        return total
     }
 
     /**
@@ -286,13 +299,16 @@ internal object FxVisualMath {
         val halfKnee = kneeDb * 0.5f
         val loR = lowRatio.coerceAtLeast(0.05f)
         val hiR = highRatio.coerceAtLeast(1f)
-        return when {
+        val gain = when {
             levelDb < lowThreshDb - halfKnee ->
                 lowThreshDb + (levelDb - lowThreshDb) / loR - levelDb
             levelDb < lowThreshDb + halfKnee && kneeDb > 0f -> {
                 val x = levelDb - lowThreshDb + halfKnee
                 val t = x / kneeDb
-                (1f / loR - 1f) * (1f - t) * (1f - t) * 0.5f * kneeDb
+                // (1 - 1/ratio), as the engine has it since its knee fix: this
+                // meets the curve below in value, where (1/ratio - 1) drew the
+                // knee bending the wrong way.
+                (1f - 1f / loR) * (1f - t) * (1f - t) * 0.5f * kneeDb
             }
             levelDb < highThreshDb - halfKnee -> 0f
             levelDb < highThreshDb + halfKnee && kneeDb > 0f -> {
@@ -302,7 +318,11 @@ internal object FxVisualMath {
             }
             else -> highThreshDb + (levelDb - highThreshDb) / hiR - levelDb
         }
+        // The engine never lifts by more than this (DynamicsProcessor::kMaxLiftDb).
+        return gain.coerceAtMost(DYNAMICS_MAX_LIFT_DB)
     }
+
+    const val DYNAMICS_MAX_LIFT_DB = 24f
 
     /** Compactor: limiter-style curve whose strength scales with range% (0–200). */
     fun compactorOutDb(inDb: Float, threshDb: Float, rangePct: Float): Float {

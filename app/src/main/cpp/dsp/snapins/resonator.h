@@ -40,11 +40,18 @@ public:
             float combOutL = combL_.readCubic(delaySamples);
             float combOutR = combR_.readCubic(delaySamples);
 
-            // One-pole damping in feedback loop
-            dampL_ += dampCoeff * (combOutL - dampL_);
-            dampR_ += dampCoeff * (combOutR - dampR_);
-            float fbL = combOutL * (1.0f - dampCoeff) + dampL_;
-            float fbR = combOutR * (1.0f - dampCoeff) + dampR_;
+            // One-pole low-pass in the feedback loop: the damping. It used to
+            // add the low-passed signal to (1 - d) of the unfiltered one,
+            // which at DC is a gain of 2 - d — 1.85 at the default decay, so
+            // the loop gain was 1.85 × 0.745 = 1.38 and a bass note ran away
+            // (to 1e6 in a tenth of a second). Filtering instead of adding
+            // keeps the loop at unity for DC and below it everywhere else, so
+            // fb alone sets the decay. At 100 % decay dampCoeff is 0 and the
+            // filter is a wire, as before.
+            dampL_ += (1.0f - dampCoeff) * (combOutL - dampL_);
+            dampR_ += (1.0f - dampCoeff) * (combOutR - dampR_);
+            float fbL = dampL_;
+            float fbR = dampR_;
 
             // Square timbre: add inverted comb at half delay (cancels even harmonics)
             if (timbre_ == 1) {

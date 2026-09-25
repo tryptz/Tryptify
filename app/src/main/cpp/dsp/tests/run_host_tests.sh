@@ -40,3 +40,27 @@ $cxx $flags "$here/snapin_defaults_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/snap
 echo "== state_fixture_test"
 $cxx $flags "$here/state_fixture_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/state_fixture_test"
 "$out/state_fixture_test" "$here/../../../../test/resources/mixer_state_fixture.json"
+
+# The oversampler: exact latency, linear phase, passband null, image rejection.
+echo "== oversampler_test"
+$cxx $flags "$here/oversampler_test.cpp" -o "$out/oversampler_test"
+"$out/oversampler_test"
+
+# Everything that could break the engine, under AddressSanitizer and
+# UndefinedBehaviorSanitizer, with -ffast-math as on the phone (a NaN guard
+# the flag would delete must fail here). Then the control-vs-audio thread
+# chaos again under ThreadSanitizer, which cannot share a binary with ASan.
+# Sanitizers need a toolchain that ships them; SANITIZE=0 skips them.
+if [ "${SANITIZE:-1}" != "0" ]; then
+    echo "== engine_stress_test (asan, ubsan, fast-math)"
+    $cxx $flags -ffast-math -g -fsanitize=address,undefined -fno-omit-frame-pointer \
+        "$here/engine_stress_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/engine_stress_test" -lpthread
+    UBSAN_OPTIONS=halt_on_error=1 "$out/engine_stress_test" \
+        "$here/../../../../test/resources/snapin_ranges.csv" 8
+
+    echo "== engine_stress_test chaos (tsan)"
+    $cxx $flags -g -fsanitize=thread \
+        "$here/engine_stress_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/engine_stress_tsan" -lpthread
+    TSAN_OPTIONS=halt_on_error=1 "$out/engine_stress_tsan" \
+        "$here/../../../../test/resources/snapin_ranges.csv" 10 chaos
+fi
