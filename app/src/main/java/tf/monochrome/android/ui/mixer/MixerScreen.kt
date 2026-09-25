@@ -626,6 +626,9 @@ fun MixerScreen(
                     )
                 }
                 }
+
+                // ── The player's timeline, under the strips ─────────────
+                MixerTimeline(playerViewModel = playerViewModel, accent = accent)
             }
             }
         }
