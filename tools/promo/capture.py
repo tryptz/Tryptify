@@ -242,7 +242,7 @@ def inventory():
             'Connections', 'Radio', 'System', 'About')
     for tab in tabs:
         targets.append({'id': 'settings-' + tab.lower().replace(' ', '-'),
-                        'steps': [{'click': 'Settings'}, {'tab': tab}], 'scroll_pages': 8})
+                        'steps': [{'click': 'Settings'}, {'tab': tab}], 'scroll_pages': 3})
     for title, tab in [('Open Precision AutoEQ', 'Equalizer'), ('Open Parametric EQ', 'Equalizer'),
                        ('Seap Compressor', 'Audio'), ('Seap Inflator', 'Audio'),
                        ('Atmos Renderer Configuration', 'Audio')]:
@@ -252,7 +252,7 @@ def inventory():
     for tab in ('Player', 'UI panels', 'Lyrics', 'Visualizer'):
         targets.append({'id': 'visual-studio-' + tab.lower().replace(' ', '-'),
                         'steps': [{'click': 'Settings'}, {'tab': 'Visual Studio'},
-                                  {'click': 'Player Visuals Studio'}, {'tab': tab}], 'scroll_pages': 4})
+                                  {'click': 'Player Visuals Studio'}, {'tab': tab}], 'scroll_pages': 2})
     targets.extend([
         {'id': 'now-playing', 'player': True},
         {'id': 'mixer', 'player': True, 'steps': [{'click': 'Mixer/FX'}, {'expect': 'Insert Rack'}]},
@@ -269,7 +269,7 @@ LIMITATIONS = [
     'Catalog album/artist/playlist detail, genre chart/shelf detail, signed-in statistics, every DSP insert editor, '
     'onboarding steps and every modal are not covered by this initial inventory.',
     'The visualizer configuration page is included; live visualization and lyrics need suitable playback data.',
-    'Long pages are bounded to eight extra viewports (four in Visual Studio); the report flags the scroll limit.',
+    'Long pages are bounded to three extra viewports (two in Visual Studio); the report flags the scroll limit.',
 ]
 
 

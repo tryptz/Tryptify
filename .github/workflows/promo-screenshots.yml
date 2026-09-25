@@ -124,6 +124,10 @@ jobs:
           ls -l /dev/kvm
           test -r /dev/kvm && test -w /dev/kvm
       - name: Capture app screens
+        # Bounded below the job limit: when a slow emulator runs long, this
+        # step stops and the summary and upload below still run, so the
+        # screens already captured are kept.
+        timeout-minutes: 70
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: 35

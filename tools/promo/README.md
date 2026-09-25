@@ -53,8 +53,8 @@ They are not posted publicly as marketing material by this workflow.
 Home, Discover, World radio, library pages and local categories, account and
 search, all ten settings tabs, Precision AutoEQ, Parametric EQ, compressor,
 inflator, Atmos configuration, four Visual Studio tabs, Now Playing, the mixer,
-audio tools and the output picker. Long settings pages capture up to eight
-additional viewports; Visual Studio captures up to four. A report flag means the
+audio tools and the output picker. Long settings pages capture up to three
+additional viewports; Visual Studio captures up to two. A report flag means the
 scroll bound was reached, not that all content was captured.
 
 Every target starts from a fresh launch with existing demo data. The runner uses
