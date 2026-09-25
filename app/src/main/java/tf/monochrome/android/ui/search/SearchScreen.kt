@@ -31,6 +31,8 @@ fun SearchScreen(
     val selectedType by viewModel.selectedType.collectAsStateWithLifecycle()
     val selectedSource by viewModel.selectedSource.collectAsStateWithLifecycle()
     val showSourceFilter by viewModel.showSourceFilter.collectAsStateWithLifecycle()
+    val albumSources by viewModel.albumSources.collectAsStateWithLifecycle()
+    val artistSources by viewModel.artistSources.collectAsStateWithLifecycle()
     val isLoadingMore by viewModel.isLoadingMore.collectAsStateWithLifecycle()
     val endReached by viewModel.endReached.collectAsStateWithLifecycle()
     val searchError by viewModel.searchError.collectAsStateWithLifecycle()
@@ -59,7 +61,7 @@ fun SearchScreen(
             autoFocus = true,
             onSubmit = viewModel::submitSearch,
         ) { searchTopInset ->
-        Column(modifier = Modifier.fillMaxSize().padding(top = searchTopInset)) {
+        Column(modifier = Modifier.fillMaxSize()) {
         SearchResultsContent(
             navController = navController,
             playerViewModel = playerViewModel,
@@ -81,6 +83,9 @@ fun SearchScreen(
             endReached = endReached,
             searchError = searchError,
             onRetry = viewModel::submitSearch,
+            topInset = searchTopInset,
+            albumSources = albumSources,
+            artistSources = artistSources,
             emptyContent = {
                 SearchHistoryContent(
                     history = searchHistory,

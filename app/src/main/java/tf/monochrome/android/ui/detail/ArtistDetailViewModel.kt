@@ -66,6 +66,16 @@ class ArtistDetailViewModel @Inject constructor(
             _isLoading.value = true
             _error.value = null
 
+            // Deezer artist ids, like Deezer album ids, resolve to someone else
+            // anywhere but Deezer — so Deezer only, and a miss stays a miss.
+            if (qobuzIdRegistry.isDeezerArtist(artistId)) {
+                repository.getDeezerArtist(artistId)
+                    .onSuccess { _artistDetail.value = it }
+                    .onFailure { _error.value = it.message ?: "Failed to load artist" }
+                _isLoading.value = false
+                return@launch
+            }
+
             // A fallback-played TIDAL track links its TIDAL artist id to the
             // matched Qobuz artist id; use that for the Qobuz call when present.
             val aliasQobuzId = qobuzIdRegistry.qobuzArtistIdFor(artistId)

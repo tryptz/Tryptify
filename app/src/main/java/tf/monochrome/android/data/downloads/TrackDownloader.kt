@@ -44,6 +44,7 @@ class TrackDownloader @Inject constructor(
     private val preferences: PreferencesManager,
     private val downloadDao: DownloadDao,
     private val qobuzIdRegistry: tf.monochrome.android.data.api.QobuzIdRegistry,
+    private val deezerQobuzMatcher: tf.monochrome.android.data.api.DeezerQobuzMatcher,
     private val localLibraryRevision: tf.monochrome.android.data.local.LocalLibraryRevision,
 ) {
 
@@ -82,6 +83,8 @@ class TrackDownloader @Inject constructor(
         val explicitAppleId = item.appleId.takeIf { it > 0L }
         val isApple = explicitAppleId != null || qobuzIdRegistry.isAppleTrack(trackId)
         val appleId = explicitAppleId ?: trackId
+        val deezerId = item.deezerId.takeIf { it > 0L }
+            ?: trackId.takeIf { qobuzIdRegistry.isDeezerTrack(it) && !qobuzIdRegistry.isQobuzTrack(it) }
 
         return try {
             // Get download quality preference
@@ -97,7 +100,28 @@ class TrackDownloader @Inject constructor(
             // synthetic hash has no usable native id, but the same recording is
             // almost always in the Apple catalog and the wrapper can decrypt it.
             var usedApple = isApple
-            val streamUrl = if (isApple) {
+            val streamUrl = if (deezerId != null) {
+                // A Deezer pick downloads from Qobuz, and only as the same
+                // recording (ISRC first, then a strict title/artist match).
+                // Deezer itself only offers a 30-second preview, which is not
+                // a download; and the bare Deezer id handed to Qobuz or TIDAL
+                // would fetch whatever other song has that number.
+                val match = deezerQobuzMatcher.qobuzMatchFor(
+                    deezerId = deezerId,
+                    knownIsrc = null,
+                    title = trackTitle,
+                    artist = artistName,
+                    durationSeconds = duration,
+                ) ?: run {
+                    Log.w(TAG, "no Qobuz recording matches Deezer track \"$trackTitle\" (deezerId=$deezerId) - not downloading a preview")
+                    return Outcome.PERMANENT
+                }
+                Log.i(TAG, "Deezer \"$trackTitle\" (deezerId=$deezerId) -> Qobuz id=${match.trackId}")
+                apiClient.getQobuzDownloadUrl(match.trackId, quality) ?: run {
+                    Log.w(TAG, "Qobuz could not serve the match for Deezer \"$trackTitle\" (qobuzId=${match.trackId}, q=$quality)")
+                    return Outcome.PERMANENT
+                }
+            } else if (isApple) {
                 // An Apple pick is wrapper-only. No Qobuz/TIDAL fallback and no
                 // metadata bridge — those would hand back a different recording
                 // than the one chosen in search. If the wrapper can't serve it,

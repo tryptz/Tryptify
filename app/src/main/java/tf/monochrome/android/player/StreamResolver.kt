@@ -7,6 +7,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
+import tf.monochrome.android.data.api.DeezerQobuzMatcher
 import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.api.QobuzTrackMatch
 import tf.monochrome.android.data.cache.QobuzStreamUri
@@ -45,6 +46,7 @@ class StreamResolver @Inject constructor(
     private val qobuzCache: QobuzStreamCacheManager,
     private val qobuzIdRegistry: QobuzIdRegistry,
     private val localTrackLocator: LocalTrackLocator,
+    private val deezerQobuzMatcher: DeezerQobuzMatcher,
 ) {
     private fun normalizeArtworkUri(raw: String?): Uri? {
         if (raw.isNullOrBlank()) return null
@@ -102,6 +104,21 @@ class StreamResolver @Inject constructor(
         // getLyrics already applies for the same reason.
         if (qobuzIdRegistry.isQobuzTrack(track.id)) {
             return Pair(qobuzCachedMediaItem(track), null)
+        }
+
+        // Deezer ids share the number range with TIDAL's, so this must come
+        // before the TIDAL lookup below — and before its Qobuz fallback, which
+        // would fetch the ISRC of the TIDAL track that has this number.
+        if (track.deezerId != null || qobuzIdRegistry.isDeezerTrack(track.id)) {
+            val deezerId = track.deezerId ?: track.id
+            val uri = deezerStreamUri(
+                deezerId = deezerId,
+                isrc = null,
+                title = track.title,
+                artist = track.displayArtist,
+                durationSeconds = track.duration,
+            ) ?: return Pair(null, null)
+            return Pair(buildFileMediaItem(track, uri), null)
         }
 
         val streamResult = repository.getTrackStream(track.id)
@@ -195,6 +212,7 @@ class StreamResolver @Inject constructor(
                     is PlaybackSource.HiFiApi -> source.tidalId
                     is PlaybackSource.QobuzCached -> source.qobuzId
                     is PlaybackSource.AppleCached -> source.appleId
+                    is PlaybackSource.DeezerPreview -> source.deezerId
                     else -> null
                 },
                 isrc = track.isrc,
@@ -210,6 +228,7 @@ class StreamResolver @Inject constructor(
             is PlaybackSource.HiFiApi -> resolveHiFiApi(track, source)
             is PlaybackSource.QobuzCached -> resolveQobuzCached(track, source)
             is PlaybackSource.AppleCached -> resolveAppleCached(track, source)
+            is PlaybackSource.DeezerPreview -> resolveDeezer(track, source)
             is PlaybackSource.RadioStream -> resolveRadioStream(track, source)
         }
     }
@@ -296,6 +315,64 @@ class StreamResolver @Inject constructor(
             mediaItem = mediaItem,
             isPlayable = !streamUrl.isNullOrBlank(),
         )
+    }
+
+    /**
+     * A Deezer pick. Deezer's public API only serves 30-second previews, so
+     * play the same recording from Qobuz when Qobuz has it (full length,
+     * lossless, cached like any Qobuz play) and the preview when it doesn't.
+     */
+    private suspend fun resolveDeezer(
+        track: UnifiedTrack,
+        source: PlaybackSource.DeezerPreview,
+    ): ResolvedMedia {
+        val uri = deezerStreamUri(
+            deezerId = source.deezerId,
+            isrc = source.isrc ?: track.isrc,
+            title = track.title,
+            artist = track.artistName,
+            durationSeconds = track.durationSeconds,
+        )
+
+        val metadata = MediaMetadata.Builder()
+            .setTitle(track.title)
+            .setArtist(track.artistName)
+            .setAlbumTitle(track.albumTitle)
+            .setArtworkUri(normalizeArtworkUri(track.artworkUri))
+            .setTrackNumber(track.trackNumber)
+            .setDiscNumber(track.discNumber)
+            .build()
+
+        val mediaItem = MediaItem.Builder()
+            .setMediaId(track.id)
+            .apply { if (uri != null) setUri(uri) }
+            .setMediaMetadata(metadata)
+            .build()
+
+        return ResolvedMedia(mediaItem = mediaItem, isPlayable = uri != null)
+    }
+
+    /**
+     * Where a Deezer track's audio comes from: the Qobuz cache for the same
+     * recording, else the instance's signed preview URL, else nowhere (null —
+     * callers skip it).
+     */
+    private suspend fun deezerStreamUri(
+        deezerId: Long,
+        isrc: String?,
+        title: String,
+        artist: String,
+        durationSeconds: Int,
+    ): Uri? {
+        val match = runCatching {
+            deezerQobuzMatcher.qobuzMatchFor(deezerId, isrc, title, artist, durationSeconds)
+        }.getOrNull()
+        if (match != null) {
+            val started = runCatching { qobuzCache.openPartial(match.trackId, AudioQuality.LOSSLESS) }
+                .getOrNull()
+            if (started != null && started.failure == null) return QobuzStreamUri.build(match.trackId, AudioQuality.LOSSLESS).toUri()
+        }
+        return repository.deezerPreviewUrl(deezerId)?.toUri()
     }
 
     // Qobuz resolution = "fetch via /api/download-music, park in app cache,

@@ -129,6 +129,8 @@ fun HomeScreen(
     val selectedType by searchViewModel.selectedType.collectAsStateWithLifecycle()
     val selectedSource by searchViewModel.selectedSource.collectAsStateWithLifecycle()
     val showSourceFilter by searchViewModel.showSourceFilter.collectAsStateWithLifecycle()
+    val searchAlbumSources by searchViewModel.albumSources.collectAsStateWithLifecycle()
+    val searchArtistSources by searchViewModel.artistSources.collectAsStateWithLifecycle()
     val isLoadingMore by searchViewModel.isLoadingMore.collectAsStateWithLifecycle()
     val endReached by searchViewModel.endReached.collectAsStateWithLifecycle()
     val searchError by searchViewModel.searchError.collectAsStateWithLifecycle()
@@ -268,6 +270,9 @@ fun HomeScreen(
                 endReached = endReached,
                 searchError = searchError,
                 onRetry = searchViewModel::submitSearch,
+                topInset = searchTopInset,
+                albumSources = searchAlbumSources,
+                artistSources = searchArtistSources,
                 // Recent-search history — previously only reachable from the
                 // orphaned standalone SearchScreen; now shown when the Home
                 // search is open with an empty query.

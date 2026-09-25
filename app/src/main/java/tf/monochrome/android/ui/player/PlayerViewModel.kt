@@ -520,9 +520,14 @@ class PlayerViewModel @Inject constructor(
                                 // so its (synced) lyrics would never match. The
                                 // resolved source is the authoritative signal;
                                 // qobuzIdRegistry is a backstop.
-                                val skipTidal = unifiedTrackRegistry[track.id]?.sourceType ==
+                                // Deezer ids have the same problem.
+                                val resolvedSource = unifiedTrackRegistry[track.id]?.sourceType
+                                val skipTidal = resolvedSource ==
                                     tf.monochrome.android.domain.model.SourceType.QOBUZ ||
-                                    qobuzIdRegistry.isQobuzTrack(track.id)
+                                    resolvedSource == tf.monochrome.android.domain.model.SourceType.DEEZER ||
+                                    track.deezerId != null ||
+                                    qobuzIdRegistry.isQobuzTrack(track.id) ||
+                                    qobuzIdRegistry.isDeezerTrack(track.id)
                                 // Pass the full Track so the repository can fall
                                 // back to LRCLib (track + artist + album +
                                 // duration) when TIDAL returns no lyrics.
@@ -1212,6 +1217,9 @@ class PlayerViewModel @Inject constructor(
      * cache-on-demand path rather than TIDAL streaming.
      */
     private fun synthesizeQobuzUnifiedTrack(track: Track): UnifiedTrack? {
+        // A Deezer pick whose number is also a known Qobuz id is still the
+        // Deezer pick; StreamResolver's legacy path routes it by deezerId.
+        if (track.deezerId != null) return null
         if (!qobuzIdRegistry.isQobuzTrack(track.id)) return null
         return UnifiedTrack(
             id = "qobuz_${track.id}",

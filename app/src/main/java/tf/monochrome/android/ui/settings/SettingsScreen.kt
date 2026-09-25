@@ -2781,6 +2781,7 @@ private fun CatalogControls(viewModel: SettingsViewModel) {
     val customEndpoint by viewModel.customEndpoint.collectAsStateWithLifecycle()
     val qobuzEndpoint by viewModel.qobuzEndpoint.collectAsStateWithLifecycle()
     val sourceMode by viewModel.sourceMode.collectAsStateWithLifecycle()
+    val deezerSearchEnabled by viewModel.deezerSearchEnabled.collectAsStateWithLifecycle()
     var customInput by remember(customEndpoint) { mutableStateOf(customEndpoint ?: "") }
     var qobuzInput by remember(qobuzEndpoint) { mutableStateOf(qobuzEndpoint ?: "") }
 
@@ -2818,6 +2819,16 @@ private fun CatalogControls(viewModel: SettingsViewModel) {
             }
         }
     }
+
+    // Deezer rides on the Qobuz instance's /api/deezer/* layer, and adds to
+    // whichever mode is picked above rather than being a mode of its own.
+    SettingSwitchItem(
+        title = "Deezer catalog",
+        subtitle = "Also search Deezer through your Qobuz instance. Picks play from " +
+            "Qobuz when it has the same recording, otherwise as a 30-second preview.",
+        checked = deezerSearchEnabled,
+        onCheckedChange = viewModel::setDeezerSearchEnabled,
+    )
 
     Spacer(modifier = Modifier.height(20.dp))
     SettingsGroupHeader("Servers")

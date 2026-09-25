@@ -478,6 +478,188 @@ class HiFiApiClient @Inject constructor(
         )
     }
 
+    // --- Deezer (trypt-hifi /api/deezer/*) ------------------------------------
+    //
+    // The instance normalizes the public Deezer API into the Qobuz envelopes, so
+    // decoding and mapping reuse the Qobuz types. What differs is identity:
+    // Deezer ids are plain numbers in the same range as Qobuz and TIDAL ids, so
+    // every id is registered as Deezer (never as Qobuz) and every track carries
+    // its id again as [Track.deezerId], which routing trusts first. Served by
+    // the Qobuz instance URL; every call fails soft so it never blocks another
+    // catalog.
+
+    // ISRCs seen in Deezer payloads, so the Qobuz match needs no extra lookup.
+    // Search results usually have none (Deezer's /search omits it); a pasted
+    // track URL and album tracks sometimes do.
+    private val deezerIsrcs = java.util.concurrent.ConcurrentHashMap<Long, String>()
+
+    private suspend fun deezerBaseOrNull(): String? =
+        instanceManager.qobuzInstanceOrNull()?.url?.trimEnd('/')
+
+    /** Map a Deezer track item: Deezer identity, and no lossless claim — it is a preview until matched. */
+    private fun QobuzTrackItem.toDeezerTrack(
+        fallbackAlbum: tf.monochrome.android.domain.model.Album? = null,
+    ): Track {
+        val trackId = id ?: 0L
+        registerDeezerTrackItem(this)
+        return toDomainTrack(fallbackAlbum).copy(deezerId = trackId, audioQuality = null)
+    }
+
+    private fun registerDeezerTrackItem(item: QobuzTrackItem) {
+        val trackId = item.id ?: return
+        qobuzIdRegistry.registerDeezerTrack(trackId)
+        item.isrc?.takeIf { it.isNotBlank() }?.let { deezerIsrcs[trackId] = it }
+        item.album?.qobuzId?.let { qobuzIdRegistry.registerDeezerAlbum(it) }
+        item.performer?.id?.let { qobuzIdRegistry.registerDeezerArtist(it) }
+        item.album?.artist?.id?.let { qobuzIdRegistry.registerDeezerArtist(it) }
+    }
+
+    private fun registerDeezerAlbumItem(item: QobuzAlbumItem) {
+        (item.qobuzId ?: item.id?.toLongOrNull())?.let { qobuzIdRegistry.registerDeezerAlbum(it) }
+        item.artist?.id?.let { qobuzIdRegistry.registerDeezerArtist(it) }
+        item.artists.forEach { ref -> ref.id?.let { qobuzIdRegistry.registerDeezerArtist(it) } }
+    }
+
+    /** Deezer catalog search — GET /api/deezer/get-music?q=<query>&offset=<n>. */
+    suspend fun searchDeezer(query: String, offset: Int = 0): SearchResult {
+        val base = deezerBaseOrNull() ?: return SearchResult()
+        val envelope = withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
+            runCatching {
+                val res = httpClient.get("$base/api/deezer/get-music?q=${query.encodeUrl()}&offset=$offset")
+                if (!res.status.isSuccess()) return@runCatching null
+                json.decodeFromString<QobuzSearchEnvelope>(res.bodyAsText())
+            }.getOrNull()
+        } ?: return SearchResult()
+
+        if (!envelope.success || envelope.data == null) return SearchResult()
+        val data = envelope.data
+
+        data.albums?.items?.forEach { registerDeezerAlbumItem(it) }
+        data.artists?.items?.forEach { item -> item.id?.let { qobuzIdRegistry.registerDeezerArtist(it) } }
+
+        return SearchResult(
+            tracks = data.tracks?.items?.map { it.toDeezerTrack() } ?: emptyList(),
+            albums = data.albums?.items?.map { it.toDomainAlbum() } ?: emptyList(),
+            artists = data.artists?.items?.map { it.toDomainArtist() } ?: emptyList(),
+            playlists = emptyList(),
+        )
+    }
+
+    /** Deezer album detail — GET /api/deezer/get-album?album_id=<n>. */
+    suspend fun getDeezerAlbum(albumId: Long): AlbumDetail? {
+        val base = deezerBaseOrNull() ?: return null
+        val envelope = withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
+            runCatching {
+                val res = httpClient.get("$base/api/deezer/get-album?album_id=$albumId")
+                if (!res.status.isSuccess()) return@runCatching null
+                json.decodeFromString<QobuzAlbumDetailEnvelope>(res.bodyAsText())
+            }.getOrNull()
+        } ?: return null
+
+        if (!envelope.success || envelope.data == null) return null
+        val albumItem = envelope.data
+        qobuzIdRegistry.registerDeezerAlbum(albumId)
+        registerDeezerAlbumItem(albumItem)
+        val album = albumItem.toDomainAlbum()
+        val tracks = albumItem.tracks?.items?.map { it.toDeezerTrack(fallbackAlbum = album) } ?: emptyList()
+        return AlbumDetail(album = album, tracks = tracks)
+    }
+
+    /**
+     * Deezer artist detail — GET /api/deezer/get-artist?artist_id=<n>.
+     *
+     * The instance fetches the whole discography up front and buckets it by
+     * record type, so there is no paging to do here.
+     */
+    suspend fun getDeezerArtist(artistId: Long): ArtistDetail? {
+        val base = deezerBaseOrNull() ?: return null
+        val envelope = withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
+            runCatching {
+                val res = httpClient.get("$base/api/deezer/get-artist?artist_id=$artistId")
+                if (!res.status.isSuccess()) return@runCatching null
+                json.decodeFromString<tf.monochrome.android.data.api.model.DeezerArtistEnvelope>(res.bodyAsText())
+            }.getOrNull()
+        } ?: return null
+
+        val raw = envelope.data?.artist
+        if (!envelope.success || raw == null) return null
+        qobuzIdRegistry.registerDeezerArtist(artistId)
+
+        val releases = raw.releases.mapValues { (_, bucket) ->
+            bucket.items.onEach { registerDeezerAlbumItem(it) }
+        }
+        // No portrait in this payload; the release artist is the full artist
+        // record, pictures included, so borrow it from there.
+        val picture = releases.values.asSequence().flatten()
+            .firstNotNullOfOrNull { it.artist?.image?.let { img -> img.extralarge ?: img.large ?: img.medium } }
+
+        val singles = mutableListOf<Album>()
+        val eps = mutableListOf<Album>()
+        releases["epSingle"].orEmpty().forEach { item ->
+            if ((item.tracksCount ?: 0) <= 1) singles.add(item.toDomainAlbum()) else eps.add(item.toDomainAlbum())
+        }
+        val albums = listOf("album", "live", "compilation")
+            .flatMap { releases[it].orEmpty() }
+            .map { it.toDomainAlbum() }
+
+        return ArtistDetail(
+            artist = Artist(
+                id = raw.id?.toLongOrNull() ?: artistId,
+                name = raw.name?.display ?: "",
+                picture = picture,
+            ),
+            topTracks = raw.topTracks.map { it.toDeezerTrack() },
+            albums = albums,
+            eps = eps,
+            singles = singles,
+            unreleasedTracks = emptyList(),
+            similarArtists = emptyList(),
+        )
+    }
+
+    /**
+     * ISRC of a Deezer track, for matching it on Qobuz. Cached from any payload
+     * that carried one; otherwise asks the instance's search with the track's
+     * deezer.com URL, which it resolves to the single full track record — the
+     * one Deezer shape that always includes the ISRC.
+     */
+    suspend fun getDeezerIsrc(deezerId: Long): String? {
+        deezerIsrcs[deezerId]?.let { return it }
+        val base = deezerBaseOrNull() ?: return null
+        val url = "https://www.deezer.com/track/$deezerId"
+        val envelope = withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
+            runCatching {
+                val res = httpClient.get("$base/api/deezer/get-music?q=${url.encodeUrl()}&offset=0")
+                if (!res.status.isSuccess()) return@runCatching null
+                json.decodeFromString<QobuzSearchEnvelope>(res.bodyAsText())
+            }.getOrNull()
+        } ?: return null
+        val isrc = envelope.data?.tracks?.items
+            ?.firstOrNull { it.id == deezerId }
+            ?.isrc?.takeIf { it.isNotBlank() }
+            ?: return null
+        deezerIsrcs[deezerId] = isrc
+        return isrc
+    }
+
+    /**
+     * Playable URL of a Deezer track's 30-second preview — a signed /api/file
+     * link on the instance. Fetched fresh every time: Deezer's preview URLs
+     * carry a short-lived token.
+     */
+    suspend fun getDeezerPreviewUrl(deezerId: Long): String? {
+        val base = deezerBaseOrNull() ?: return null
+        val envelope = withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
+            runCatching {
+                val res = httpClient.get("$base/api/deezer/preview?track_id=$deezerId")
+                if (!res.status.isSuccess()) return@runCatching null
+                json.decodeFromString<tf.monochrome.android.data.api.model.DeezerPreviewEnvelope>(res.bodyAsText())
+            }.getOrNull()
+        } ?: return null
+        val raw = envelope.data?.url?.takeIf { envelope.success && it.isNotBlank() } ?: return null
+        return absoluteUrl(raw, base)
+    }
+
     /**
      * Find the Apple Music adamId for a recording the app knows by metadata,
      * so a Qobuz/TIDAL/local track can be pulled from the Apple wrapper.
@@ -930,6 +1112,16 @@ class HiFiApiClient @Inject constructor(
         // is GET /api/download-music?track_id=<id>&quality=<qobuz_code>, which
         // returns a JSON envelope containing a short-lived HMAC-signed
         // /api/file?... URL we then stream the bytes from.
+        // A Deezer id means nothing to Qobuz or TIDAL — both would answer with
+        // whatever recording happens to have that number. Deezer picks are
+        // matched to Qobuz by recording (DeezerQobuzMatcher) before they get
+        // here; a bare Deezer id arriving at this point has no stream.
+        if (qobuzIdRegistry.isDeezerTrack(trackId) && !qobuzIdRegistry.isQobuzTrack(trackId)) {
+            throw IllegalStateException(
+                "Track $trackId is a Deezer track; refusing to resolve it against Qobuz or TIDAL"
+            )
+        }
+
         if (forDownload) {
             val qobuzUrl = runCatching { resolveQobuzDownloadUrl(trackId, quality) }.getOrNull()
             if (qobuzUrl != null) {
@@ -1009,6 +1201,9 @@ class HiFiApiClient @Inject constructor(
     // --- Recommendations ---
 
     suspend fun getRecommendations(trackId: Long): List<Track> {
+        // TIDAL's /recommendations is keyed by TIDAL id; a Deezer id would seed
+        // the radio from some other song entirely.
+        if (qobuzIdRegistry.isDeezerTrack(trackId) && !qobuzIdRegistry.isQobuzTrack(trackId)) return emptyList()
         val body = fetchWithRetry("/recommendations/?id=$trackId", minVersion = "2.4")
         val response = json.decodeFromString<RecommendationsResponse>(unwrapResponse(body))
         return response.items.map { apiTrack ->
@@ -1046,7 +1241,7 @@ class HiFiApiClient @Inject constructor(
         // — returns a *different* track's synced lyrics: right-looking text that
         // is never in sync. Skip TIDAL for known Qobuz ids; callers fall back to
         // the metadata-based LRCLib lookup instead.
-        if (qobuzIdRegistry.isQobuzTrack(trackId)) return null
+        if (qobuzIdRegistry.isQobuzTrack(trackId) || qobuzIdRegistry.isDeezerTrack(trackId)) return null
         return try {
             val body = fetchWithRetry("/lyrics/?id=$trackId")
             val response = json.decodeFromString<LyricsResponse>(unwrapResponse(body))

@@ -394,6 +394,8 @@ class SettingsViewModel @Inject constructor(
             SharingStarted.WhileSubscribed(5000),
             tf.monochrome.android.data.preferences.SourceMode.BOTH,
         )
+    val deezerSearchEnabled: StateFlow<Boolean> = preferences.deezerSearchEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     private val _instancesRefreshing = MutableStateFlow(false)
     val instancesRefreshing: StateFlow<Boolean> = _instancesRefreshing.asStateFlow()
 
@@ -1005,6 +1007,10 @@ class SettingsViewModel @Inject constructor(
             preferences.setSourceMode(mode)
             loadInstances()
         }
+    }
+
+    fun setDeezerSearchEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferences.setDeezerSearchEnabled(enabled) }
     }
 
     fun setDevModeEnabled(enabled: Boolean) {

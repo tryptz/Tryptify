@@ -184,6 +184,7 @@ class PreferencesManager @Inject constructor(
         private val APPLE_QUALITY = stringPreferencesKey("apple_quality")
         private val DEV_MODE_ENABLED = booleanPreferencesKey("dev_mode_enabled")
         private val SOURCE_MODE = stringPreferencesKey("source_mode")
+        private val DEEZER_SEARCH_ENABLED = booleanPreferencesKey("deezer_search_enabled")
 
         // Lyrics 3D appearance (legacy per-field keys, read for migration only)
         private val LYRICS_3D_ROTATION = floatPreferencesKey("lyrics_3d_rotation")
@@ -475,7 +476,7 @@ class PreferencesManager @Inject constructor(
             PITCH_ENGINE, PITCH_QUALITY,
             DOWNLOAD_QUALITY, DOWNLOAD_LYRICS, AUTO_DOWNLOAD_LIKED,
             LASTFM_ENABLED, LASTFM_USERNAME, LISTENBRAINZ_ENABLED,
-            CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, APPLE_WRAPPER_URL, SOURCE_MODE, DEV_MODE_ENABLED,
+            CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, APPLE_WRAPPER_URL, SOURCE_MODE, DEEZER_SEARCH_ENABLED, DEV_MODE_ENABLED,
             NOW_PLAYING_VIEW_MODE, PLAYER_DYNAMIC_COLOR, PLAYER_BLURRED_BACKGROUND,
             ROMAJI_LYRICS, LYRICS_WORD_PROVIDER,
             LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON, GLOBE_FX_JSON, PLAYER_GLASS_JSON,
@@ -958,6 +959,19 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setSourceMode(mode: SourceMode) {
         dataStore.edit { it[SOURCE_MODE] = mode.name }
+    }
+
+    /**
+     * Whether Search also asks the instance's /api/deezer/* layer. Independent
+     * of [sourceMode]: Deezer is a browse-only catalog here (the public API
+     * serves 30-second previews, and a pick plays through Qobuz when the same
+     * recording is there), so it adds to either mode rather than replacing one.
+     * Served by the Qobuz instance, so it does nothing until that URL is set.
+     */
+    val deezerSearchEnabled: Flow<Boolean> = dataStore.data.map { it[DEEZER_SEARCH_ENABLED] ?: true }
+
+    suspend fun setDeezerSearchEnabled(enabled: Boolean) {
+        dataStore.edit { it[DEEZER_SEARCH_ENABLED] = enabled }
     }
 
     val devModeEnabled: Flow<Boolean> = dataStore.data.map { prefs ->
