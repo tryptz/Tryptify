@@ -83,6 +83,9 @@ object WhatsNew {
     /** The app's own surfaces — glass, themes, search. */
     private const val LOOK = "Look and feel"
 
+    /** What Search looks in, and how it shows where each result came from. */
+    private const val SEARCH = "Search and Deezer"
+
     /** The DSP mixer, its buses and the presets that ship with it. */
     private const val MIXER = "Mixer"
 
@@ -106,6 +109,55 @@ object WhatsNew {
 
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
+        WhatsNewRelease(
+            versionCode = 192,
+            versionName = "1.9.2",
+            entries = listOf(
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SEARCH,
+                    title = "Deezer in Search",
+                    body = "Search now finds Deezer's songs, albums and artists through your " +
+                        "Qobuz server, and they open as Deezer pages. Turn it off under " +
+                        "Settings › Catalog Source › Deezer catalog.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SEARCH,
+                    title = "Deezer songs play in full",
+                    body = "A Deezer pick plays from Qobuz when Qobuz has the same recording, in " +
+                        "full and lossless. When it doesn't, you hear Deezer's 30-second preview.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SEARCH,
+                    title = "Every result shows where it's from",
+                    body = "Songs, albums and artists carry a pill with their catalog's logo and " +
+                        "colour: TIDAL, Qobuz, Deezer, Apple Music or Local.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = DOWNLOADS,
+                    title = "Download Deezer songs",
+                    body = "Downloading a Deezer song saves the same recording from Qobuz. If " +
+                        "Qobuz doesn't have it, the download stops instead of saving a preview.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = SEARCH,
+                    title = "Source filters for albums and artists",
+                    body = "The source row sits under Tracks, Albums, Artists and Playlists, and " +
+                        "filters all of them. Songs you have downloaded count as Local.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = SEARCH,
+                    title = "The search bar no longer covers the filters",
+                    body = "On Home, the filter pills start below the search bar instead of under " +
+                        "it, and stay on screen while results load.",
+                ),
+            ),
+        ),
         WhatsNewRelease(
             versionCode = 191,
             versionName = "1.9.1",
