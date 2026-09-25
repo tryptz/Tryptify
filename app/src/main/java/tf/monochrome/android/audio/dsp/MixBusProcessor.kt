@@ -131,6 +131,15 @@ class MixBusProcessor @Inject constructor(
     external fun nativeGetBusWaveform(enginePtr: Long, busIndex: Int, outWave: FloatArray): Int
     external fun nativeGetAndResetClipped(enginePtr: Long): Boolean
     external fun nativeResetPluginState(enginePtr: Long)
+    external fun nativeResetMeters(enginePtr: Long)
+
+    /**
+     * Blocks the engine has processed. The meters only move while it
+     * processes, so the UI watches this to tell a quiet song from a paused
+     * one — and lets the meters fall on its own clock in the second case.
+     */
+    @Volatile var processedBlocks: Long = 0L
+        private set
     // Adds a mix bus after the last (index 5, 6, … — the master stays at 4);
     // -1 at 16 buses. Every lane of a multichannel stream gets it.
     external fun nativeAddBus(enginePtr: Long): Int
@@ -244,6 +253,7 @@ class MixBusProcessor @Inject constructor(
         pendingFormat != AudioFormat.NOT_SET || inputFormat != AudioFormat.NOT_SET
 
     override fun queueInput(inputBuffer: ByteBuffer) {
+        if (!bypassed && enginePtr != 0L && inputBuffer.hasRemaining()) processedBlocks++
         // True bypass — when the user has the DSP mixer off we don't even
         // touch the audio thread's float scratch arrays. Same as the
         // no-engine pass-through below.

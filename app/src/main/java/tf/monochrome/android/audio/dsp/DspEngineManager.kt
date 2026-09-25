@@ -184,9 +184,46 @@ class DspEngineManager @Inject constructor(
         }
     }
 
+    // What the meter poll last saw of the engine's processing, for [pollLevels].
+    private var lastProcessedBlocks = -1L
+    private var lastBlocksChangedNanos = 0L
+    private var lastPollNanos = 0L
+    private var metersIdle = false
+
     fun pollLevels() {
         val ptr = processor.getEnginePtr()
-        if (ptr == 0L) return
+        val now = System.nanoTime()
+        val dtSec = if (lastPollNanos == 0L) 0f else ((now - lastPollNanos) / 1e9f).coerceAtMost(0.25f)
+        lastPollNanos = now
+        val blocks = processor.processedBlocks
+        if (blocks != lastProcessedBlocks) {
+            lastProcessedBlocks = blocks
+            lastBlocksChangedNanos = now
+        }
+        // The player feeds audio in bursts, so many polls see no new block
+        // even mid-song; only a quarter second without one means it stopped.
+        val processing = ptr != 0L && now - lastBlocksChangedNanos < IDLE_AFTER_NANOS
+
+        if (!processing) {
+            // Paused, stopped, bypassed or no engine: nothing moves the
+            // engine's meters, which fall only as audio is processed. Let the
+            // shown levels fall here instead, at the engine's own 20 dB/s, and
+            // clear the engine's so they do not jump back up on resume. (They
+            // used to freeze at whatever was last playing.)
+            if (!metersIdle && ptr != 0L) processor.nativeResetMeters(ptr)
+            metersIdle = true
+            val fall = METER_FALL_DB_PER_SEC * dtSec
+            _busLevels.value = _busLevels.value.map {
+                BusLevels(
+                    peakDbL = (it.peakDbL - fall).coerceAtLeast(METER_FLOOR_DB),
+                    peakDbR = (it.peakDbR - fall).coerceAtLeast(METER_FLOOR_DB),
+                    holdDbL = (it.holdDbL - fall).coerceAtLeast(METER_FLOOR_DB),
+                    holdDbR = (it.holdDbR - fall).coerceAtLeast(METER_FLOOR_DB),
+                )
+            }
+            return
+        }
+        metersIdle = false
         processor.nativeGetBusLevels(ptr, levelsBuffer)
         val count = _buses.value.size.coerceAtMost(BusConfig.MAX_TOTAL_BUSES)
         _busLevels.value = List(count) { b ->
@@ -243,6 +280,10 @@ class DspEngineManager @Inject constructor(
     }
 
     companion object {
+        /** The engine's meter release (dsp_engine.cpp meterDecayPerSample_), and its floor. */
+        private const val METER_FALL_DB_PER_SEC = 20f
+        private const val METER_FLOOR_DB = -60f
+        private const val IDLE_AFTER_NANOS = 250_000_000L
         // Mirrors MAX_PLUGINS_PER_BUS in dsp_engine.h — native refuses inserts past this.
         const val MAX_PLUGINS_PER_BUS = 16
 

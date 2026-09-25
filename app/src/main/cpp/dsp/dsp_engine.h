@@ -158,6 +158,10 @@ public:
     // Output: [bus0_peakL, bus0_peakR, bus0_holdL, bus0_holdR, ..., master_holdR]
     // Total: TOTAL_BUSES * 4 floats
     void getBusLevels(float* outLevels, int maxFloats);
+    // Drops every meter to silence. The meters only fall while audio is
+    // processed, so after a pause they would otherwise hold their last level
+    // and show it again the moment playback resumes.
+    void resetMeters();
     // One bus's [peakL, peakR, holdL, holdR]; false if it is not active.
     bool getBusLevel(int busIndex, float* out4) const;
 

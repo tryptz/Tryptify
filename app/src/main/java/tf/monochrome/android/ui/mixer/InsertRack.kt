@@ -280,29 +280,21 @@ private fun MultichannelModeRow(spread: Boolean, onChange: (Boolean) -> Unit) {
             fontWeight = FontWeight.Medium,
             color = colors.onSurface
         )
+        // Two equal glass chips; the caption below says what each does, so
+        // the labels stay one line and the pair stays symmetrical.
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            listOf(true to "Spread across buses", false to "One bus").forEach { (value, label) ->
-                val selected = spread == value
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(MonoDimens.shapeSm)
-                        .liquidGlass(shape = MonoDimens.shapeSm, tintAlpha = if (selected) 0.22f else 0.06f)
-                        .clickable { if (!selected) onChange(value) }
-                        .padding(vertical = 6.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontSize = 10.sp,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (selected) colors.primary else colors.onSurfaceVariant
-                    )
-                }
+            listOf(true to "Spread", false to "One bus").forEach { (value, label) ->
+                GlassChoiceChip(
+                    label = label,
+                    selected = spread == value,
+                    accent = colors.primary,
+                    onClick = { if (spread != value) onChange(value) },
+                    modifier = Modifier.weight(1f),
+                    description = if (value) "Spread channels across buses" else "Run all channels through one bus",
+                )
             }
         }
         Text(

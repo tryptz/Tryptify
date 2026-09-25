@@ -728,6 +728,17 @@ void DspEngine::getBusLevels(float* outLevels, int maxFloats) {
     }
 }
 
+void DspEngine::resetMeters() {
+    std::lock_guard<std::mutex> lock(chainMutex_);
+    for (int b = 0; b < TOTAL_BUSES; b++) {
+        Bus& bus = buses_[b];
+        bus.decayL = bus.decayR = bus.holdL = bus.holdR = -60.0f;
+        bus.holdCounterL = bus.holdCounterR = 0;
+        bus.peakL.store(0.0f, std::memory_order_relaxed);
+        bus.peakR.store(0.0f, std::memory_order_relaxed);
+    }
+}
+
 bool DspEngine::getBusLevel(int busIndex, float* out4) const {
     if (!isActiveBus(busIndex) || !out4) return false;
     const Bus& bus = buses_[busIndex];
