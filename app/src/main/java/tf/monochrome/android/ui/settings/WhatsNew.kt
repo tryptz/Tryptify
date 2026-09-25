@@ -128,6 +128,14 @@ object WhatsNew {
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = MIXER,
+                    title = "Put every channel where you want it",
+                    body = "The spatial-audio button in the mixer opens a map of the room around " +
+                        "you. Drag a 5.1, Atmos bed or 9.1.6 channel anywhere: on headphones it " +
+                        "is heard there, and closer is louder. Double-tap to put one back.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
                     title = "Drag the effect graphs",
                     body = "Every effect's graph has handles: pull an EQ band, a compressor's " +
                         "knee or a reverb's tail and the knobs follow. Double-tap a handle to " +

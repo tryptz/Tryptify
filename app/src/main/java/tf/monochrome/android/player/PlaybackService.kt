@@ -71,6 +71,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var projectMEngineRepository: ProjectMEngineRepository
     @Inject lateinit var channelDetectorProcessor: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor
     @Inject lateinit var downmixProcessor: tf.monochrome.android.audio.dsp.DownmixProcessor
+    @Inject lateinit var spatialPlacement: tf.monochrome.android.audio.dsp.spatial.SpatialPlacementStore
     @Inject lateinit var mixBusProcessor: MixBusProcessor
     // The Oxford post-chain, injected so a blend's DSP copy can be seeded with
     // whatever these are set to right now.
@@ -537,6 +538,14 @@ class PlaybackService : MediaSessionService() {
             preferences.rendererProfile.collect { profile ->
                 downmixProcessor.setPreampDb(profile.downmixPreampDb)
                 downmixProcessor.setLfeLowpass(profile.lfeLowpass)
+                // The spatial map's binaural fold uses the Atmos renderer's
+                // headphone settings, so the two sound alike.
+                downmixProcessor.setHeadphoneRender(
+                    profile.binauralStrength,
+                    profile.heightVirtualization,
+                    profile.bassManagement,
+                    profile.crossoverHz,
+                )
             }
         }
 
@@ -1439,7 +1448,7 @@ class PlaybackService : MediaSessionService() {
      */
     @OptIn(UnstableApi::class)
     private fun buildSeededDspChain(): tf.monochrome.android.audio.dsp.DspChain {
-        val chain = tf.monochrome.android.audio.dsp.DspChain.createCopy()
+        val chain = tf.monochrome.android.audio.dsp.DspChain.createCopy(spatialPlacement)
         val autoEq = lastAutoEq
         val paramEq = lastParametricEq
         chain.seedFrom(

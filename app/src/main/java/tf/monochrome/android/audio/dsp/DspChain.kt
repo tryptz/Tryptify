@@ -177,13 +177,17 @@ class DspChain private constructor(
          * injected: Hilt hands out the singletons the main player uses, and the
          * entire point here is to *not* get those.
          */
-        fun createCopy(): DspChain {
+        fun createCopy(
+            // The spatial map is one setting, not per-stream state: the blend
+            // places its outgoing tail where the map has the channels too.
+            placement: tf.monochrome.android.audio.dsp.spatial.SpatialPlacementStore? = null,
+        ): DspChain {
             val inflator = InflatorEffect()
             val compressor = CompressorEffect()
             val crossfeed = CrossfeedEffect()
             return DspChain(
                 channelDetector = ChannelDetectorProcessor(),
-                downmix = DownmixProcessor(crossfeed),
+                downmix = DownmixProcessor(crossfeed, placement),
                 mixBus = MixBusProcessor(inflator, compressor, crossfeed),
                 autoEq = AutoEqProcessor(),
                 parametricEq = ParametricEqProcessor(),

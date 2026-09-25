@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -25,8 +26,60 @@ import javax.inject.Inject
 class MixerViewModel @Inject constructor(
     private val dspManager: DspEngineManager,
     private val presetRepository: MixPresetRepository,
-    private val preferencesManager: PreferencesManager
+    private val preferencesManager: PreferencesManager,
+    private val spatialStore: tf.monochrome.android.audio.dsp.spatial.SpatialPlacementStore,
+    private val channelDetector: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor,
+    atmosProcessor: tf.monochrome.android.audio.atmos.AtmosAudioProcessor,
 ) : ViewModel() {
+
+    // ── Spatial map ─────────────────────────────────────────────────────
+
+    /** Where each channel of a multichannel bed sits; drags land here live. */
+    val spatialPlacement: StateFlow<tf.monochrome.android.audio.dsp.spatial.SpatialPlacement> = spatialStore.state
+
+    /** The playing stream's channels and live per-channel levels, while the map is open. */
+    val channelState: StateFlow<tf.monochrome.android.audio.dsp.ChannelDetectorProcessor.ChannelState?> =
+        channelDetector.state
+
+    /** False when multichannel goes to Android whole: the map has nothing to fold then. */
+    val stereoFoldEnabled: StateFlow<Boolean> = preferencesManager.multichannelDownmixEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    /** Set while Atmos objects are being rendered, which places the track by itself. */
+    val atmosRenderingObjects: StateFlow<Boolean> = atmosProcessor.outcome
+        .map { it == tf.monochrome.android.audio.atmos.AtmosAudioProcessor.Outcome.OBJECTS_BINAURAL }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    // The detector only measures while someone is watching; the map is.
+    private var detectorHeld = false
+
+    fun openSpatialMap() {
+        if (!detectorHeld) {
+            channelDetector.acquire()
+            detectorHeld = true
+        }
+    }
+
+    fun closeSpatialMap() {
+        if (detectorHeld) {
+            channelDetector.release()
+            detectorHeld = false
+        }
+    }
+
+    fun setSpatialEnabled(on: Boolean) = spatialStore.update { it.copy(enabled = on) }
+
+    fun setSpatialBinaural(binaural: Boolean) = spatialStore.update { it.copy(binaural = binaural) }
+
+    fun moveChannel(count: Int, index: Int, placement: tf.monochrome.android.audio.dsp.spatial.ChannelPlacement) =
+        spatialStore.update { it.withChannel(count, index, placement) }
+
+    fun resetSpatialLayout(count: Int) = spatialStore.update { it.resetLayout(count) }
+
+    override fun onCleared() {
+        closeSpatialMap()
+        super.onCleared()
+    }
 
     val enabled: StateFlow<Boolean> = dspManager.enabled
     val buses: StateFlow<List<BusConfig>> = dspManager.buses

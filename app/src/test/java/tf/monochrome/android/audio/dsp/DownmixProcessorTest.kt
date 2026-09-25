@@ -14,8 +14,8 @@ import java.nio.ByteOrder
  * Pure-JVM tests for the fixed-matrix multichannel → stereo fold-down.
  *
  * Expected coefficients (verbatim, no normalization):
- *   FL/BL/BLC/SL/TFL/TSL/TBL → [1, 0]
- *   FR/BR/BRC/SR/TFR/TSR/TBR → [0, 1]
+ *   FL/BL/FLC/SL/TFL/TBL/TSL → [1, 0]
+ *   FR/BR/FRC/SR/TFR/TBR/TSR → [0, 1]
  *   FC (and BC in 6.1)       → [0.70710678, 0.70710678]
  *   LFE                      → [2.26464431, 2.26464431]
  */
@@ -23,7 +23,7 @@ class DownmixProcessorTest {
 
     private val floatTol = 1e-4f
 
-    private fun processor(enabled: Boolean = true) = DownmixProcessor(crossfeed = null).apply { setEnabled(enabled) }
+    private fun processor(enabled: Boolean = true) = DownmixProcessor(crossfeed = null, placement = null).apply { setEnabled(enabled) }
 
     private fun configureAndFlush(p: DownmixProcessor, sampleRate: Int, channels: Int, encoding: Int): AudioFormat {
         val out = p.configure(AudioFormat(sampleRate, channels, encoding))
@@ -379,7 +379,7 @@ class DownmixProcessorTest {
     }
 
     // ── 16-channel (9.1.6-style) layout ──────────────────────────────────
-    // Order: FL FR FC LFE BL BR BLC BRC SL SR TFL TFR TSL TSR TBL TBR
+    // Order (FFmpeg): FL FR FC LFE BL BR FLC FRC SL SR TFL TFR TBL TBR TSL TSR
 
     @Test
     fun `16ch - configure maps to stereo`() {
@@ -398,16 +398,16 @@ class DownmixProcessorTest {
             floatArrayOf(2.26464431f, 2.26464431f),     // LFE
             floatArrayOf(1f, 0f),                       // BL
             floatArrayOf(0f, 1f),                       // BR
-            floatArrayOf(1f, 0f),                       // BLC
-            floatArrayOf(0f, 1f),                       // BRC
+            floatArrayOf(1f, 0f),                       // FLC
+            floatArrayOf(0f, 1f),                       // FRC
             floatArrayOf(1f, 0f),                       // SL
             floatArrayOf(0f, 1f),                       // SR
             floatArrayOf(1f, 0f),                       // TFL
             floatArrayOf(0f, 1f),                       // TFR
-            floatArrayOf(1f, 0f),                       // TSL
-            floatArrayOf(0f, 1f),                       // TSR
             floatArrayOf(1f, 0f),                       // TBL
             floatArrayOf(0f, 1f),                       // TBR
+            floatArrayOf(1f, 0f),                       // TSL
+            floatArrayOf(0f, 1f),                       // TSR
         )
         for (ch in 0 until 16) {
             val out = drainFloats(p, floatBuffer(soloFrame(16, ch)))

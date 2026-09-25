@@ -168,6 +168,7 @@ target_link_libraries(mysofa z)
 # upmix on the decoded bed PCM. No FFmpeg dependency here.
 add_library(monochrome_atmos_jni SHARED
     atmos/atmos_jni.cpp
+    atmos/placer_jni.cpp
     atmos/render/sofa_loader.cpp
 )
 target_include_directories(monochrome_atmos_jni PRIVATE

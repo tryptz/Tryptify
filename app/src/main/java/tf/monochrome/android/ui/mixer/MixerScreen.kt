@@ -47,6 +47,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.SettingsBackupRestore
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.SpatialAudio
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -180,6 +181,13 @@ fun MixerScreen(
     )
 
     var showInsertRack by remember { mutableStateOf(false) }
+    var showSpatialMap by remember { mutableStateOf(false) }
+    val spatialPlacement by viewModel.spatialPlacement.collectAsStateWithLifecycle()
+    // The detector measures only while the map is up.
+    LaunchedEffect(showSpatialMap) {
+        if (showSpatialMap) viewModel.openSpatialMap() else viewModel.closeSpatialMap()
+    }
+    androidx.activity.compose.BackHandler(enabled = showSpatialMap) { showSpatialMap = false }
     var showResetConfirm by remember { mutableStateOf(false) }
 
     // ── The backdrop the console's glass stands on ──────────────────────
@@ -451,6 +459,14 @@ fun MixerScreen(
 
                         Box(modifier = Modifier.weight(1f))
 
+                        // The spatial map: lit while it is open or placing.
+                        NavIconButton(
+                            icon = Icons.Default.SpatialAudio,
+                            contentDescription = "Spatial map",
+                            active = showSpatialMap || spatialPlacement.enabled,
+                            accent = accent,
+                            onClick = { showSpatialMap = !showSpatialMap }
+                        )
                         NavIconButton(
                             icon = Icons.Default.Tune,
                             contentDescription = "Insert Rack",
@@ -521,7 +537,8 @@ fun MixerScreen(
                 }
 
                 // ── Channel strips + insert rack ────────────────────────
-                Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                Row(modifier = Modifier.fillMaxSize()) {
 
                     // Horizontal-scrolling channel strips. Hoisted into its own
                     // composable that collects the 60Hz busLevels flow LOCALLY,
@@ -577,6 +594,35 @@ fun MixerScreen(
                             )
                         }
                     }
+                }
+
+                // ── Spatial map, over the strips ────────────────────────
+                // In this window, not a dialog: glass cannot sample across
+                // windows (docs/ui-invariants.md). Qualified: the enclosing
+                // Column's scoped overload would otherwise be picked.
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showSpatialMap,
+                    enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.96f),
+                    exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.96f),
+                ) {
+                    val channelState by viewModel.channelState.collectAsStateWithLifecycle()
+                    val stereoFold by viewModel.stereoFoldEnabled.collectAsStateWithLifecycle()
+                    val atmosObjects by viewModel.atmosRenderingObjects.collectAsStateWithLifecycle()
+                    tf.monochrome.android.ui.mixer.spatial.SpatialMapPanel(
+                        placement = spatialPlacement,
+                        channelState = channelState,
+                        stereoFoldEnabled = stereoFold,
+                        atmosRenderingObjects = atmosObjects,
+                        accent = accent,
+                        onEnabledChange = { viewModel.setSpatialEnabled(it) },
+                        onBinauralChange = { viewModel.setSpatialBinaural(it) },
+                        onMove = { count, index, p -> viewModel.moveChannel(count, index, p) },
+                        onResetLayout = { viewModel.resetSpatialLayout(it) },
+                        onClose = { showSpatialMap = false },
+                        modifier = Modifier.fillMaxSize().padding(MonoDimens.spacingSm),
+                        hazeState = mixerHaze,
+                    )
+                }
                 }
             }
             }

@@ -64,3 +64,12 @@ if [ "${SANITIZE:-1}" != "0" ]; then
     TSAN_OPTIONS=halt_on_error=1 "$out/engine_stress_tsan" \
         "$here/../../../../test/resources/snapin_ranges.csv" 10 chaos
 fi
+
+# The spatial map's placer: channels heard where they are placed (HRIR and
+# pan), the LFE undirected, drags smooth, nonsense ignored. Lives with the
+# Atmos renderer it drives; -ffast-math as on the phone.
+echo "== channel_placer_test"
+atmos="$dsp/../atmos"
+$cxx -std=c++17 -O2 -ffast-math -I"$atmos" -I"$atmos/render" \
+    "$atmos/tests/channel_placer_test.cpp" -o "$out/channel_placer_test"
+"$out/channel_placer_test"

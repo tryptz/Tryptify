@@ -207,6 +207,8 @@ class PreferencesManager @Inject constructor(
         // device-local — the layout tracks the connected DAC and the HRTF is a
         // local measurement — so it is deliberately NOT in SETTINGS_SYNC_KEYS.
         private val RENDERER_PROFILE_JSON = stringPreferencesKey("renderer_profile_json")
+        // The mixer's spatial map: where each channel of a multichannel bed sits.
+        private val SPATIAL_PLACEMENT_JSON = stringPreferencesKey("spatial_placement_json")
 
         // Player / display
         private val PLAYER_DYNAMIC_COLOR = booleanPreferencesKey("player_dynamic_color")
@@ -2227,6 +2229,20 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setRendererProfile(profile: tf.monochrome.android.domain.model.RendererProfile) {
         dataStore.edit { it[RENDERER_PROFILE_JSON] = json.encodeToString(profile.clamped()) }
+    }
+
+    /** The mixer's spatial map (off, at standard positions, until set). */
+    val spatialPlacement: Flow<tf.monochrome.android.audio.dsp.spatial.SpatialPlacement> = dataStore.data
+        .map { it[SPATIAL_PLACEMENT_JSON] }
+        .distinctUntilChanged()
+        .map { raw ->
+            raw
+                ?.let { s -> runCatching { json.decodeFromString<tf.monochrome.android.audio.dsp.spatial.SpatialPlacement>(s) }.getOrNull() }
+                ?: tf.monochrome.android.audio.dsp.spatial.SpatialPlacement.DEFAULT
+        }
+
+    suspend fun setSpatialPlacement(placement: tf.monochrome.android.audio.dsp.spatial.SpatialPlacement) {
+        dataStore.edit { it[SPATIAL_PLACEMENT_JSON] = json.encodeToString(placement) }
     }
 
     /** User-saved Player Glass themes (empty until the user saves one). */
