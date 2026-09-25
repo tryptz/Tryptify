@@ -74,12 +74,15 @@ jobs:
           path: app-src
           submodules: recursive
           fetch-depth: 1
-      - name: Set up Android SDK
-        if: env.BUILD_REF != ''
-        uses: android-actions/setup-android@v3
+      # The runner image ships an Android SDK (ANDROID_HOME). setup-android@v3
+      # is not used: it installs the retired 'tools' package, which sdkmanager
+      # no longer finds, and fails.
       - name: Install NDK and CMake
         if: env.BUILD_REF != ''
-        run: sdkmanager "ndk;29.0.14206865" "cmake;3.22.1"
+        run: |
+          sdkmanager=$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -n 1)
+          yes | "$sdkmanager" --licenses > /dev/null || true
+          "$sdkmanager" "ndk;29.0.14206865" "cmake;3.22.1"
       - name: Build release-shaped APK from build_ref
         if: env.BUILD_REF != ''
         working-directory: app-src
