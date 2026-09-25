@@ -200,6 +200,11 @@ class Capture:
                     self.click(step['click'], long=step.get('long', False))
                 elif 'expect' in step:
                     self.wait(step['expect'])
+                elif 'dismiss' in step:
+                    # A first-visit intro (Precision AutoEQ's walkthrough):
+                    # tap its skip button when it is showing, carry on if not.
+                    if find_node(self.tree(), step['dismiss']) is not None:
+                        self.click(step['dismiss'], scroll=False)
             time.sleep(2)
             result['images'].append(self.save(target['id']))
             seen = {fingerprint(self.tree())}
@@ -248,7 +253,7 @@ def inventory():
                        ('Atmos Renderer Configuration', 'Audio')]:
         targets.append({'id': re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-'),
                         'steps': [{'click': 'Settings'}, {'tab': tab}, {'click': title},
-                                  {'expect': 'Back'}]})
+                                  {'dismiss': 'SKIP'}, {'expect': 'Back'}]})
     for tab in ('Player', 'UI panels', 'Lyrics', 'Visualizer'):
         targets.append({'id': 'visual-studio-' + tab.lower().replace(' ', '-'),
                         'steps': [{'click': 'Settings'}, {'tab': 'Visual Studio'},

@@ -63,6 +63,25 @@ class CaptureTests(unittest.TestCase):
         # An app button called Wait is not a system dialog.
         self.assertIsNone(capture.system_dialog_button(tree(text='Wait')))
 
+    def test_optional_dismiss_skips_intro_only_when_present(self):
+        class Device:
+            def window_size(self): return 1080, 2400
+            class jsonrpc:
+                @staticmethod
+                def setConfigurator(value): pass
+        runner = capture.Capture(Device())
+        clicked = []
+        with patch.object(runner, 'click', side_effect=lambda t, **k: clicked.append(t)), \
+             patch.object(runner, 'home'), patch.object(runner, 'wait'), \
+             patch.object(runner, 'save', return_value='screenshots/x.png'), \
+             patch.object(capture, 'write_report'), patch.object(capture.time, 'sleep'):
+            with patch.object(runner, 'tree', return_value=tree(text='SKIP')):
+                runner.run({'id': 'with-intro', 'steps': [{'dismiss': 'SKIP'}]})
+            with patch.object(runner, 'tree', return_value=tree(text='Back')):
+                runner.run({'id': 'no-intro', 'steps': [{'dismiss': 'SKIP'}]})
+        self.assertEqual(clicked, ['SKIP'])
+        self.assertTrue(all(r['status'] == 'captured-needs-review' for r in runner.results))
+
     def test_failed_screen_preserves_report_and_next_screen_restarts(self):
         class Device:
             def window_size(self): return 1080, 2400
