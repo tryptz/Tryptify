@@ -121,8 +121,8 @@ object WhatsNew {
                     kind = WhatsNewKind.NEW,
                     section = MIXER,
                     title = "Surround and Atmos spread across the mixer",
-                    body = "A 5.1 or Atmos track puts front, centre, LFE, surrounds and heights " +
-                        "on buses of their own, named after them. Prefer it all on one bus? " +
+                    body = "A 5.1, 7.1.4 or 9.1.6 track adds a bus for each channel group, named " +
+                        "after it, even when it ends up folded to stereo. Prefer one bus? " +
                         "Switch it under Input routing on the master.",
                 ),
                 WhatsNewEntry(
@@ -164,6 +164,32 @@ object WhatsNew {
                     body = "Pitch Shifter now shifts up and lands in tune, Tape Stop drops in pitch, " +
                         "Dynamics no longer jumps at its knee, Resonator can't run away, and Stereo " +
                         "at its defaults is transparent (3 dB louder than before).",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "The mixer is no longer 6 dB quieter",
+                    body = "Switching the mixer on turned everything down 6 dB; it is now level " +
+                        "with the mixer off, and pan works as a balance. If you had turned a " +
+                        "bus or the master up to make up for it, turn it back down.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "Cleaner oversampling",
+                    body = "2x and 4x use linear-phase filters with deeper image rejection, and " +
+                        "stay in time with the dry signal and the other buses, so a blend no " +
+                        "longer thins the sound. Hi-res streams stop at 192 kHz inside, where " +
+                        "there is nothing left to gain.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "No setting can break the mixer",
+                    body = "Every effect was pushed to every sample rate and knob extreme. " +
+                        "Filter, Ladder Filter, Resonator, Dynamics and the EQs no longer blow " +
+                        "up; an effect that ever does is reset and plays dry, and a damaged " +
+                        "saved mix loads instead of crashing.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,

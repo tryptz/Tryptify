@@ -49,7 +49,7 @@ class DspChain private constructor(
      * track, and a blend's outgoing tail must not push frames into them.
      */
     val processors: Array<AudioProcessor>
-        get() = arrayOf(channelDetector, downmix, mixBus, autoEq, parametricEq)
+        get() = arrayOf(channelDetector, mixBus, downmix, autoEq, parametricEq)
 
     /**
      * Copies the live chain's settings onto this one.
@@ -183,7 +183,7 @@ class DspChain private constructor(
             val crossfeed = CrossfeedEffect()
             return DspChain(
                 channelDetector = ChannelDetectorProcessor(),
-                downmix = DownmixProcessor(),
+                downmix = DownmixProcessor(crossfeed),
                 mixBus = MixBusProcessor(inflator, compressor, crossfeed),
                 autoEq = AutoEqProcessor(),
                 parametricEq = ParametricEqProcessor(),

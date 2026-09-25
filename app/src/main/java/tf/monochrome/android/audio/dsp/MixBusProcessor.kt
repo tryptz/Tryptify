@@ -422,8 +422,9 @@ class MixBusProcessor @Inject constructor(
     /**
      * A multichannel block: through the mixer's lanes, then the Oxford
      * Inflator and compressor at full width. Crossfeed is left out here — it
-     * places a stereo pair's speakers for headphones, and a wide stream is on
-     * its way to Android's spatializer, which does that rendering itself.
+     * places a stereo pair's speakers for headphones: a wide stream is either
+     * on its way to Android's spatializer, which does that rendering itself,
+     * or to DownmixProcessor, which runs the crossfeed once it has folded it.
      */
     private fun queueWide(inputBuffer: ByteBuffer, channels: Int, encoding: Int) {
         val numFrames = wideBlock.read(inputBuffer, channels, encoding)

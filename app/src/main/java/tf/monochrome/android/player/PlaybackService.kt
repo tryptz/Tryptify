@@ -893,8 +893,12 @@ class PlaybackService : MediaSessionService() {
                                 arrayOf(
                                 channelDetectorProcessor, // Passive tap: reports source channel count/layout + per-channel activity
                                 atmosAudioProcessor,    // Atmos: multichannel bed → object render → binaural stereo; inactive for ≤2ch
+                                // The mixer before the fold, so it sees the song's own layout: a
+                                // 9.1.6 bed spreads one channel group per bus (nine of them), and
+                                // is folded to stereo only after it has been mixed. With the fold
+                                // first, every multichannel song reached the mixer as plain stereo.
+                                mixBusProcessor,        // DSP engine (mixer/effects), up to 16 channels
                                 downmixProcessor,       // Multichannel→stereo fold-down; inactive (NOT_SET) for mono/stereo
-                                mixBusProcessor,        // DSP engine (mixer/effects)
                                 autoEqProcessor,        // AutoEQ (independent, always-on when enabled)
                                 parametricEqProcessor,  // Parametric EQ (after AutoEQ, stacks on top)
                                 spectrumAnalyzerTap,    // Passive FFT tap for the Parametric EQ editor visualizer
@@ -947,8 +951,9 @@ class PlaybackService : MediaSessionService() {
                             tf.monochrome.android.audio.usb.ToFloatPcmAudioProcessor(),
                             channelDetectorProcessor,
                             atmosAudioProcessor,
-                            downmixProcessor,
+                            // Mixer before the fold, as in the chain above.
                             mixBusProcessor,
+                            downmixProcessor,
                             autoEqProcessor,
                             parametricEqProcessor,
                             spectrumAnalyzerTap,
@@ -1002,8 +1007,9 @@ class PlaybackService : MediaSessionService() {
                             tf.monochrome.android.audio.usb.ToFloatPcmAudioProcessor(),
                             channelDetectorProcessor,
                             atmosAudioProcessor,
-                            downmixProcessor,
+                            // Mixer before the fold, as in the chain above.
                             mixBusProcessor,
+                            downmixProcessor,
                             autoEqProcessor,
                             parametricEqProcessor,
                             spectrumAnalyzerTap,

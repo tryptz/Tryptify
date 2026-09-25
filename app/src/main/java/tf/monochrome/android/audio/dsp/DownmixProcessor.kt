@@ -12,10 +12,12 @@ import javax.inject.Singleton
 import kotlin.math.pow
 
 /**
- * Multichannel → stereo downmix renderer. Sits FIRST in the AudioProcessor
- * chain so everything downstream (MixBusProcessor → native stereo engine,
- * AutoEQ, Parametric EQ, USB DAC negotiation) keeps its 1/2-channel world
- * view while 3.0–16-channel sources still play.
+ * Multichannel → stereo downmix renderer. Sits right after MixBusProcessor
+ * in the AudioProcessor chain: the mixer sees the song's own layout (a 9.1.6
+ * bed spread one channel group per bus) and this folds what it made to
+ * stereo, so everything after it (AutoEQ, Parametric EQ, USB DAC
+ * negotiation) keeps its 1/2-channel world view while 3.0–16-channel sources
+ * still play. It used to sit first, and the mixer only ever saw stereo.
  *
  * One fixed per-channel gain matrix — the peqdb Downmix Renderer's ADC2
  * direct matrix, no HRTF/virtualization, and deliberately no alternative
@@ -35,8 +37,9 @@ import kotlin.math.pow
  * Channel-order assumption: FLAC spec order, FFmpeg native order, and
  * Android's canonical CHANNEL_OUT_* order all agree for 3–8 channels
  * (6 ch = FL FR FC LFE BL BR), so a single per-channel-count table is used.
- * 16-channel sources are assumed to be 9.1.6, laid out as
- * FL FR FC LFE BL BR BLC BRC SL SR TFL TFR TSL TSR TBL TBR. Counts 9–15
+ * 16-channel sources are assumed to be 9.1.6 in FFmpeg's order,
+ * FL FR FC LFE BL BR FLC FRC SL SR TFL TFR TBL TBR TSL TSR (every pair after
+ * the LFE folds left/right the same whichever speakers it is). Counts 9–15
  * have no well-known layout and pass through untouched. Media3's
  * AudioFormat carries no layout, only a count; sources with an exotic
  * layout at the same count would fold with wrong positions (imaging off),
@@ -53,7 +56,15 @@ import kotlin.math.pow
  */
 @Singleton
 @OptIn(UnstableApi::class)
-class DownmixProcessor @Inject constructor() : AudioProcessor {
+class DownmixProcessor @Inject constructor(
+    // Headphone crossfeed, applied to the fold. MixBusProcessor runs it on a
+    // stereo stream, but leaves a wide one alone (a wide stream may be going
+    // to Android's spatializer, which places the speakers itself) — and the
+    // mixer now runs before this fold, so a folded song would otherwise lose
+    // it. The same singleton, so it is one setting; only one of the two runs
+    // it for any stream. Null in the unit tests.
+    private val crossfeed: tf.monochrome.android.audio.dsp.crossfeed.CrossfeedEffect?,
+) : AudioProcessor {
 
     // pendingFormat == NOT_SET ⇔ inactive. IMPORTANT: unlike
     // MixBusProcessor, isActive() must NOT also consider a lingering
@@ -65,6 +76,10 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
     private var inputFormat = AudioFormat.NOT_SET
     private var outputBuffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var inputEnded = false
+
+    // The folded block as floats, for the crossfeed; grown on demand.
+    private var foldL = FloatArray(0)
+    private var foldR = FloatArray(0)
 
     // Active coefficient rows, length == inputFormat.channelCount,
     // normalization baked in. Selected in flush().
@@ -208,6 +223,10 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         // thread (same rationale as MixBusProcessor's hot loop).
         val cL = coefL
         val cR = coefR
+        if (foldL.size < numFrames) {
+            foldL = FloatArray(numFrames)
+            foldR = FloatArray(numFrames)
+        }
         val startPos = inputBuffer.position()
         for (i in 0 until numFrames) {
             val base = startPos + i * frameSize
@@ -239,17 +258,25 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
                 accL = lfeFilter.delayDryL(accL) + lfeGainL * f
                 accR = lfeFilter.delayDryR(accR) + lfeGainR * f
             }
-            if (isFloat) {
-                val off = i * 8
-                outputBuffer.putFloat(off, accL)
-                outputBuffer.putFloat(off + 4, accR)
-            } else {
-                val off = i * 4
-                outputBuffer.putShort(off, (accL * 32768f).toInt().coerceIn(-32768, 32767).toShort())
-                outputBuffer.putShort(off + 2, (accR * 32768f).toInt().coerceIn(-32768, 32767).toShort())
-            }
+            foldL[i] = accL
+            foldR[i] = accR
         }
         inputBuffer.position(startPos + numFrames * frameSize)
+
+        // Now stereo, the crossfeed can place its two speakers.
+        crossfeed?.processArrays(foldL, foldR, numFrames)
+
+        for (i in 0 until numFrames) {
+            if (isFloat) {
+                val off = i * 8
+                outputBuffer.putFloat(off, foldL[i])
+                outputBuffer.putFloat(off + 4, foldR[i])
+            } else {
+                val off = i * 4
+                outputBuffer.putShort(off, (foldL[i] * 32768f).toInt().coerceIn(-32768, 32767).toShort())
+                outputBuffer.putShort(off + 2, (foldR[i] * 32768f).toInt().coerceIn(-32768, 32767).toShort())
+            }
+        }
         outputBuffer.position(0)
         outputBuffer.limit(outBytes)
     }

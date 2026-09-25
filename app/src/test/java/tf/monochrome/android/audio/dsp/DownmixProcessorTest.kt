@@ -23,7 +23,7 @@ class DownmixProcessorTest {
 
     private val floatTol = 1e-4f
 
-    private fun processor(enabled: Boolean = true) = DownmixProcessor().apply { setEnabled(enabled) }
+    private fun processor(enabled: Boolean = true) = DownmixProcessor(crossfeed = null).apply { setEnabled(enabled) }
 
     private fun configureAndFlush(p: DownmixProcessor, sampleRate: Int, channels: Int, encoding: Int): AudioFormat {
         val out = p.configure(AudioFormat(sampleRate, channels, encoding))

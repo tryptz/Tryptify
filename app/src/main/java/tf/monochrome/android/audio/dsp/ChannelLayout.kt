@@ -9,8 +9,10 @@ package tf.monochrome.android.audio.dsp
  * AudioTrack from (`Util.getAudioTrackChannelConfig`): the channel-mask bits
  * in ascending order. So 5.1 is FL FR FC LFE BL BR and 7.1.4 is
  * FL FR FC LFE BL BR SL SR TFL TFR TBL TBR — every left channel immediately
- * followed by its right partner. Counts Android has no layout for (9, 11,
- * 13–16) are read as consecutive left/right pairs, with a trailing odd
+ * followed by its right partner. Sixteen channels are 9.1.6 in FFmpeg's order
+ * (the decoder's): FL FR FC LFE BL BR FLC FRC SL SR TFL TFR TBL TBR TSL TSR,
+ * the same reading DownmixProcessor folds it by. Counts with no layout (9, 11,
+ * 13–15) are read as consecutive left/right pairs, with a trailing odd
  * channel in the centre; that is the only reading that keeps pairs together
  * for any source that pairs its channels at all.
  *
@@ -18,7 +20,7 @@ package tf.monochrome.android.audio.dsp
  */
 object ChannelLayout {
 
-    /** Widest stream the DSP accepts: a 7.1.4 bed with room to spare. */
+    /** Widest stream the DSP accepts: a 9.1.6 bed. */
     const val MAX_CHANNELS = 16
 
     enum class Side { LEFT, RIGHT, CENTER }
@@ -47,6 +49,7 @@ object ChannelLayout {
         8 to arrayOf(L, R, C, C, L, R, L, R),           // 7.1
         10 to arrayOf(L, R, C, C, L, R, L, R, L, R),    // 5.1.4
         12 to arrayOf(L, R, C, C, L, R, L, R, L, R, L, R), // 7.1.4
+        16 to arrayOf(L, R, C, C, L, R, L, R, L, R, L, R, L, R, L, R), // 9.1.6
     )
 
     /** Which side each channel of a [count]-channel stream is on. */
@@ -109,8 +112,12 @@ object ChannelLayout {
         8 to listOf("Front", "Centre", "LFE", "Rear", "Side"),
         10 to listOf("Front", "Centre", "LFE", "Surround", "Top Front", "Top Rear"),
         12 to listOf("Front", "Centre", "LFE", "Rear", "Side", "Top Front", "Top Rear"),
+        16 to listOf(
+            "Front", "Centre", "LFE", "Rear", "Front Wide", "Side",
+            "Top Front", "Top Rear", "Top Side",
+        ),
     )
 
     /** Counts whose Android layout carries an LFE, always at index 3. */
-    private val LFE_COUNTS = setOf(6, 7, 8, 10, 12)
+    private val LFE_COUNTS = setOf(6, 7, 8, 10, 12, 16)
 }

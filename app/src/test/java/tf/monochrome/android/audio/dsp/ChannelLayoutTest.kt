@@ -40,8 +40,23 @@ class ChannelLayoutTest {
             listOf(Lane(0, 1), Lane(2, 3), Lane(4, 5), Lane(6, 7), Lane(8, -1)),
             ChannelLayout.lanes(9),
         )
-        assertEquals(8, ChannelLayout.lanes(16).size)
-        assertTrue(ChannelLayout.lanes(16).none { it.isMono })
+    }
+
+    @Test
+    fun `sixteen channels are 9_1_6, centre and LFE on their own`() {
+        assertEquals(
+            listOf(
+                Lane(0, 1), Lane(2, -1), Lane(3, -1), Lane(4, 5), Lane(6, 7),
+                Lane(8, 9), Lane(10, 11), Lane(12, 13), Lane(14, 15),
+            ),
+            ChannelLayout.lanes(16),
+        )
+        assertEquals(
+            listOf("Front", "Centre", "LFE", "Rear", "Front Wide", "Side", "Top Front", "Top Rear", "Top Side"),
+            ChannelLayout.laneLabels(16),
+        )
+        assertTrue(ChannelLayout.isLfe(16, 3))
+        assertFalse(ChannelLayout.isLfe(16, 2))
     }
 
     @Test
@@ -60,7 +75,7 @@ class ChannelLayoutTest {
         for (n in 2..ChannelLayout.MAX_CHANNELS) {
             assertEquals("count $n", ChannelLayout.lanes(n).size, ChannelLayout.laneLabels(n).size)
         }
-        // A 7.1.4 bed fits the mixer's sixteen buses with room to spare.
+        // Even a 9.1.6 bed (nine groups) fits the mixer's sixteen buses.
         assertTrue((2..ChannelLayout.MAX_CHANNELS).all { ChannelLayout.lanes(it).size <= 16 })
     }
 }
