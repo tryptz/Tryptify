@@ -131,7 +131,8 @@ object WhatsNew {
                     title = "Put every channel where you want it",
                     body = "The spatial-audio button in the mixer opens a map of the room around " +
                         "you. Drag a 5.1, Atmos bed or 9.1.6 channel anywhere: on headphones it " +
-                        "is heard there, and closer is louder. Double-tap to put one back.",
+                        "is heard there, tuned to an AutoEQ target of your choice, and closer " +
+                        "is louder.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,

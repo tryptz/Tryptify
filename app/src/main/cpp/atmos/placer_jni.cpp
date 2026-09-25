@@ -52,6 +52,20 @@ Java_tf_monochrome_android_audio_atmos_ChannelPlacerNative_nativeSetMode(
   if (p) p->setMode(binaural, strength, height, bassManagement, crossoverHz);
 }
 
+// [db]: ChannelPlacer::kTargetPoints dB values on its log grid, the headphone
+// target relative to the neutral (diffuse-field) render.
+JNIEXPORT void JNICALL
+Java_tf_monochrome_android_audio_atmos_ChannelPlacerNative_nativeSetTarget(
+    JNIEnv* env, jclass, jlong h, jfloatArray db) {
+  ChannelPlacer* p = placer_of(h);
+  if (!p || !db) return;
+  float v[ChannelPlacer::kTargetPoints] = {};
+  jsize n = env->GetArrayLength(db);
+  if (n > ChannelPlacer::kTargetPoints) n = ChannelPlacer::kTargetPoints;
+  env->GetFloatArrayRegion(db, 0, n, v);
+  p->setTarget(v, n);
+}
+
 JNIEXPORT void JNICALL
 Java_tf_monochrome_android_audio_atmos_ChannelPlacerNative_nativeReset(JNIEnv*, jclass, jlong h) {
   ChannelPlacer* p = placer_of(h);

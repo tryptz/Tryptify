@@ -201,6 +201,82 @@ void nonsenseIsIgnored() {
     check(finite, "NaN, infinite and huge placements play finite audio");
 }
 
+/** Power of a [hz] tone on channel 0 placed at [azDeg], both ears summed, after settling. */
+double tonePower(double hz, float azDeg, bool binaural, const float* target = nullptr) {
+    ChannelPlacer p;
+    p.configure(kRate, 6, 3);
+    p.setMode(binaural, 1.0f, true, true, 80);
+    if (target) p.setTarget(target, ChannelPlacer::kTargetPoints);
+    place(p, 0, azDeg, 0.0f, 1.0f);
+    std::vector<float> in(1024), out(2048);
+    const float* ptr[6];
+    std::vector<float> silent(1024, 0.0f);
+    double power = 0.0;
+    long n = 0;
+    for (int b = 0; b < 40; b++) {
+        for (int i = 0; i < 1024; i++) in[i] = 0.5f * static_cast<float>(std::sin(2 * M_PI * hz * (n + i) / kRate));
+        ptr[0] = in.data();
+        for (int c = 1; c < 6; c++) ptr[c] = silent.data();
+        p.process(ptr, 1024, out.data());
+        if (b >= 10) for (int i = 0; i < 2048; i++) power += out[i] * out[i];
+        n += 1024;
+    }
+    return power;
+}
+
+void notTinny() {
+    // The complaint: the headphone render sounded thin and honky. Averaged
+    // over every direction round the listener — what a whole mix hears — the
+    // tonal balance must be close to flat, where the raw HRIRs swung 25 dB
+    // (-15 dB at 100 Hz, +10 dB at 2.5 kHz).
+    const double freqs[] = {150, 300, 1000, 2500, 6000, 10000};
+    double lo = 1e9, hi = -1e9, at[6];
+    for (int f = 0; f < 6; f++) {
+        double sum = 0.0;
+        for (int az = -180; az < 180; az += 15) sum += tonePower(freqs[f], static_cast<float>(az), true);
+        at[f] = 10.0 * std::log10(sum);
+    }
+    for (double v : at) { lo = std::min(lo, v); hi = std::max(hi, v); }
+    char what[200];
+    std::snprintf(what, sizeof what,
+                  "averaged round the listener, the headphone render is flat within %.1f dB from 150 Hz to 10 kHz "
+                  "(150 %+.1f, 300 %+.1f, 1k %+.1f, 2.5k %+.1f, 6k %+.1f, 10k %+.1f)",
+                  hi - lo, at[0] - at[2], at[1] - at[2], 0.0, at[3] - at[2], at[4] - at[2], at[5] - at[2]);
+    check(hi - lo < 6.0, what);
+
+    // And about as loud as the speaker fold at 1 kHz, so switching modes does
+    // not jump.
+    double bin = 0.0, pan = 0.0;
+    for (int az = -180; az < 180; az += 15) {
+        bin += tonePower(1000, static_cast<float>(az), true);
+        pan += tonePower(1000, static_cast<float>(az), false);
+    }
+    const double diff = 10.0 * std::log10(bin / pan);
+    std::snprintf(what, sizeof what, "headphones and speakers are within 3 dB of each other in loudness (%+.1f dB)", diff);
+    check(std::fabs(diff) < 3.0, what);
+}
+
+void targetShapesTheTone() {
+    // A bass-shelf target (+6 dB below 200 Hz, as the Harman curves have
+    // relative to the diffuse field): the bass comes up by about that, the
+    // presence region stays where it was.
+    float shelf[ChannelPlacer::kTargetPoints];
+    for (int i = 0; i < ChannelPlacer::kTargetPoints; i++) {
+        shelf[i] = ChannelPlacer::targetFreq(i) < 200.0 ? 6.0f : 0.0f;
+    }
+    auto average = [&](double hz, const float* target) {
+        double sum = 0.0;
+        for (int az = -180; az < 180; az += 30) sum += tonePower(hz, static_cast<float>(az), true, target);
+        return 10.0 * std::log10(sum);
+    };
+    const double bass = average(120, shelf) - average(120, nullptr);
+    const double presence = average(2500, shelf) - average(2500, nullptr);
+    char what[160];
+    std::snprintf(what, sizeof what, "a bass-shelf target lifts the bass (%+.1f dB at 120 Hz) and leaves 2.5 kHz (%+.1f dB)",
+                  bass, presence);
+    check(bass > 4.0 && bass < 8.0 && std::fabs(presence) < 0.7, what);
+}
+
 }  // namespace
 
 int main() {
@@ -209,6 +285,8 @@ int main() {
     lfeIsDiffuse();
     dragIsSmoothAndFinite();
     nonsenseIsIgnored();
+    notTinny();
+    targetShapesTheTone();
     std::printf("%s\n", failures ? "FAILED" : "all passed");
     return failures ? 1 : 0;
 }

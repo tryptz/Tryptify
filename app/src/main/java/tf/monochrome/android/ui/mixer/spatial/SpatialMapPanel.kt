@@ -100,6 +100,9 @@ fun SpatialMapPanel(
     onResetLayout: (count: Int) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    // AutoEQ's targets, (id, label), for tuning the headphone render.
+    headphoneTargets: List<Pair<String, String>> = emptyList(),
+    onTargetChange: (String) -> Unit = {},
     // The mixer's backdrop, which this pane is a sibling of: frosting it hides
     // the busy strips beneath the map rather than showing them through.
     hazeState: dev.chrisbanes.haze.HazeState? = null,
@@ -188,6 +191,30 @@ fun SpatialMapPanel(
                 modifier = Modifier.weight(1f),
                 description = "Speakers: panned left to right",
             )
+        }
+
+        // ── Headphone target: AutoEQ's curves, the render equalized to one ─
+        if (placement.binaural && headphoneTargets.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Target",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.onSurfaceVariant,
+                )
+                headphoneTargets.forEach { (id, label) ->
+                    GlassChoiceChip(
+                        label = label,
+                        selected = placement.targetId == id,
+                        accent = accent,
+                        onClick = { onTargetChange(id) },
+                        description = "Headphone target: $label",
+                    )
+                }
+            }
         }
 
         // ── The map ────────────────────────────────────────────────────

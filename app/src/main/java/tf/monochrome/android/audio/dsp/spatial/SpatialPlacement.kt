@@ -28,6 +28,11 @@ data class SpatialPlacement(
     val enabled: Boolean = false,
     /** Binaural (headphones) when true, a stereo pan (speakers) when false. */
     val binaural: Boolean = true,
+    /**
+     * The AutoEQ target the headphone render is equalized to
+     * ([tf.monochrome.android.audio.eq.FrequencyTargets] id).
+     */
+    val targetId: String = HeadphoneTarget.DEFAULT_ID,
     val layouts: Map<String, List<ChannelPlacement>> = emptyMap(),
 ) {
     /** The placement for a [count]-channel stream: saved, or the standard one. */
@@ -138,5 +143,47 @@ object SpatialLayout {
         10 -> "5.1.4"
         12 -> "7.1.4"
         else -> ChannelDetectorProcessor.layoutName(count)
+    }
+}
+
+/**
+ * A headphone target as the placer takes it: the curve the binaural render is
+ * equalized to.
+ *
+ * The placer's equalizer divides the HRIRs' direction-averaged response out
+ * (hrir_dfe.h), then multiplies this curve in, so the render's average over
+ * every direction becomes the chosen target — Diffuse Field, Harman, SEAP or
+ * any other of AutoEQ's curves, each taken as it is. Levelled at 1 kHz, so
+ * choosing a target changes the tone, not the loudness.
+ */
+object HeadphoneTarget {
+    /** AutoEQ's Diffuse Field target: where the map starts, one target among the rest. */
+    const val DEFAULT_ID = "diffuse_field"
+
+    /** [points] dB values at [freqAt], the target levelled to 0 dB at 1 kHz; all zero when missing. */
+    fun curve(
+        target: List<tf.monochrome.android.domain.model.FrequencyPoint>,
+        points: Int,
+        freqAt: (Int) -> Double,
+    ): FloatArray {
+        if (target.size < 2) return FloatArray(points)
+        val ref = at(target, 1000.0)
+        return FloatArray(points) { i -> (at(target, freqAt(i)) - ref).toFloat() }
+    }
+
+    /** A curve's level at [f], interpolated on log frequency, held past its ends. */
+    fun at(curve: List<tf.monochrome.android.domain.model.FrequencyPoint>, f: Double): Double {
+        if (f <= curve.first().freq) return curve.first().gain.toDouble()
+        if (f >= curve.last().freq) return curve.last().gain.toDouble()
+        var lo = 0
+        var hi = curve.size - 1
+        while (hi - lo > 1) {
+            val mid = (lo + hi) / 2
+            if (curve[mid].freq <= f) lo = mid else hi = mid
+        }
+        val a = curve[lo]
+        val b = curve[hi]
+        val t = kotlin.math.ln(f / a.freq) / kotlin.math.ln(b.freq.toDouble() / a.freq)
+        return a.gain + (b.gain - a.gain) * t
     }
 }

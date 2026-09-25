@@ -65,6 +65,21 @@ struct Bus {
     int holdCounterL = 0;
     int holdCounterR = 0;
 
+    // The ballistics as the meters read them: published by publishMeters()
+    // after each block. The fields above are the audio thread's working
+    // copy; reading them from the UI's 60 Hz poll was a data race.
+    std::atomic<float> shownDecayL{-60.0f};
+    std::atomic<float> shownDecayR{-60.0f};
+    std::atomic<float> shownHoldL{-60.0f};
+    std::atomic<float> shownHoldR{-60.0f};
+
+    void publishMeters() {
+        shownDecayL.store(decayL, std::memory_order_relaxed);
+        shownDecayR.store(decayR, std::memory_order_relaxed);
+        shownHoldL.store(holdL, std::memory_order_relaxed);
+        shownHoldR.store(holdR, std::memory_order_relaxed);
+    }
+
     // Delay compensation (audio thread only): the bus's output held back so
     // it arrives with the bus whose effects delay it most. PDC_SIZE each,
     // allocated once by the engine.

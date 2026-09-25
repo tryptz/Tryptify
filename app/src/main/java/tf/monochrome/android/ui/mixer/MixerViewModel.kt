@@ -71,6 +71,11 @@ class MixerViewModel @Inject constructor(
 
     fun setSpatialBinaural(binaural: Boolean) = spatialStore.update { it.copy(binaural = binaural) }
 
+    /** AutoEQ's targets, offered for the headphone render. */
+    val headphoneTargets: List<Pair<String, String>> by lazy { spatialStore.targets.map { it.id to it.label } }
+
+    fun setSpatialTarget(id: String) = spatialStore.update { it.copy(targetId = id) }
+
     fun moveChannel(count: Int, index: Int, placement: tf.monochrome.android.audio.dsp.spatial.ChannelPlacement) =
         spatialStore.update { it.withChannel(count, index, placement) }
 

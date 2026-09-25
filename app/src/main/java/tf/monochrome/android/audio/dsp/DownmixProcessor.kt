@@ -97,6 +97,7 @@ class DownmixProcessor @Inject constructor(
     private var pushedPreampDb = Float.NaN
     private var pushedBinaural: Boolean? = null
     private var pushedRender = -1
+    private var pushedTarget: FloatArray? = null
 
     // The Atmos profile's headphone settings, which the binaural placement
     // shares with the Atmos renderer. Set from PlaybackService.
@@ -412,6 +413,12 @@ class DownmixProcessor @Inject constructor(
             pushedPlacement = spatial
             pushedPreampDb = pre
         }
+        // The headphone target: worked out by the store, handed on here.
+        val target = placement?.targetCurve
+        if (target != null && target !== pushedTarget) {
+            tf.monochrome.android.audio.atmos.ChannelPlacerNative.nativeSetTarget(placer, target)
+            pushedTarget = target
+        }
         val render = hpVersion
         if (binaural != pushedBinaural || render != pushedRender) {
             tf.monochrome.android.audio.atmos.ChannelPlacerNative.nativeSetMode(
@@ -450,6 +457,7 @@ class DownmixProcessor @Inject constructor(
         pushedPreampDb = Float.NaN
         pushedBinaural = null
         pushedRender = -1
+        pushedTarget = null
     }
 
     private fun releasePlacer() {

@@ -618,6 +618,8 @@ fun MixerScreen(
                         onBinauralChange = { viewModel.setSpatialBinaural(it) },
                         onMove = { count, index, p -> viewModel.moveChannel(count, index, p) },
                         onResetLayout = { viewModel.resetSpatialLayout(it) },
+                        headphoneTargets = viewModel.headphoneTargets,
+                        onTargetChange = { viewModel.setSpatialTarget(it) },
                         onClose = { showSpatialMap = false },
                         modifier = Modifier.fillMaxSize().padding(MonoDimens.spacingSm),
                         hazeState = mixerHaze,

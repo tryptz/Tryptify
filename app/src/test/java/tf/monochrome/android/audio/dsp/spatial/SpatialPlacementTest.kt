@@ -96,3 +96,39 @@ class SpatialPlacementTest {
         assertEquals(2f, SpatialLayout.gainFor(0.01f), 1e-6f)
     }
 }
+
+class HeadphoneTargetTest {
+    private fun pts(vararg p: Pair<Float, Float>) =
+        p.map { tf.monochrome.android.domain.model.FrequencyPoint(it.first, it.second) }
+
+    private val grid = { i: Int -> 20.0 * Math.pow(1000.0, i / 63.0) }
+
+    @Test
+    fun `a target is taken as it is, levelled at 1 kHz`() {
+        // Diffuse Field is a target like any other: its ear gain is kept.
+        val df = pts(20f to 71f, 1000f to 75f, 3000f to 86.7f, 20000f to 70f)
+        val c = HeadphoneTarget.curve(df, 64, grid)
+        assertEquals(-4f, c[0], 1e-3f)
+        val at1k = c.indices.minByOrNull { kotlin.math.abs(grid(it) - 1000.0) }!!
+        // The grid point nearest 1 kHz is a few percent above it, on a steep rise.
+        assertEquals(0f, c[at1k], 0.5f)
+        val at3k = c.indices.minByOrNull { kotlin.math.abs(grid(it) - 3000.0) }!!
+        assertEquals(11.7f, c[at3k], 0.6f)
+    }
+
+    @Test
+    fun `a flat target is flat`() {
+        val flat = pts(20f to 75f, 20000f to 75f)
+        assertTrue(HeadphoneTarget.curve(flat, 64, grid).all { kotlin.math.abs(it) < 1e-4f })
+    }
+
+    @Test
+    fun `a missing curve is flat, not silence`() {
+        assertTrue(HeadphoneTarget.curve(emptyList(), 64, grid).all { it == 0f })
+    }
+
+    @Test
+    fun `the map starts on AutoEQ's Diffuse Field target`() {
+        assertEquals("diffuse_field", SpatialPlacement.DEFAULT.targetId)
+    }
+}

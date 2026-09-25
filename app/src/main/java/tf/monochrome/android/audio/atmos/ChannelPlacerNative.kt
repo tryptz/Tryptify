@@ -35,6 +35,15 @@ object ChannelPlacerNative {
 
     @JvmStatic external fun nativeReset(handle: Long)
 
+    /** [db]: [TARGET_POINTS] values at [targetFreq], the headphone target the render is equalized to. */
+    @JvmStatic external fun nativeSetTarget(handle: Long, db: FloatArray)
+
+    /** Points in a headphone target, as ChannelPlacer::kTargetPoints. */
+    const val TARGET_POINTS = 64
+
+    /** Frequency of target point [i]: a log grid from 20 Hz to 20 kHz, as ChannelPlacer::targetFreq. */
+    fun targetFreq(i: Int): Double = 20.0 * Math.pow(1000.0, i / (TARGET_POINTS - 1).toDouble())
+
     /** [planar]: channel c at float c * [stride]; [stereoOut]: 2 * [numFrames] interleaved floats. */
     @JvmStatic external fun nativeProcess(handle: Long, planar: ByteBuffer, stride: Int, numFrames: Int, stereoOut: ByteBuffer)
 }

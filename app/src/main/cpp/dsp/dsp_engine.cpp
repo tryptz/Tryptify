@@ -579,6 +579,7 @@ void DspEngine::finishBlockLocked(float* left, float* right, int numFrames) {
                 if (bus.holdR < -60.0f) bus.holdR = -60.0f;
             }
         }
+        bus.publishMeters();
     }
 }
 
@@ -780,6 +781,7 @@ void DspEngine::resetBusLocked(Bus& bus) {
     bus.waveTapPos.store(0, std::memory_order_relaxed);
     bus.decayL = bus.decayR = bus.holdL = bus.holdR = -60.0f;
     bus.holdCounterL = bus.holdCounterR = 0;
+    bus.publishMeters();
     bus.pdcStale = true;
 }
 
@@ -810,6 +812,7 @@ void DspEngine::moveBusLocked(Bus& dst, Bus& src) {
     dst.holdR = src.holdR;
     dst.holdCounterL = src.holdCounterL;
     dst.holdCounterR = src.holdCounterR;
+    dst.publishMeters();
     dst.pdcStale = true;
     src.pdcStale = true;
 }
@@ -852,10 +855,10 @@ void DspEngine::getBusLevels(float* outLevels, int maxFloats) {
     // Output format: [peakL, peakR, holdL, holdR] per bus (4 floats each)
     int count = std::min(maxFloats, activeBusCount() * 4);
     for (int b = 0; b < TOTAL_BUSES && b * 4 + 3 < count; b++) {
-        outLevels[b * 4]     = buses_[b].decayL;
-        outLevels[b * 4 + 1] = buses_[b].decayR;
-        outLevels[b * 4 + 2] = buses_[b].holdL;
-        outLevels[b * 4 + 3] = buses_[b].holdR;
+        outLevels[b * 4]     = buses_[b].shownDecayL.load(std::memory_order_relaxed);
+        outLevels[b * 4 + 1] = buses_[b].shownDecayR.load(std::memory_order_relaxed);
+        outLevels[b * 4 + 2] = buses_[b].shownHoldL.load(std::memory_order_relaxed);
+        outLevels[b * 4 + 3] = buses_[b].shownHoldR.load(std::memory_order_relaxed);
     }
 }
 
@@ -865,6 +868,7 @@ void DspEngine::resetMeters() {
         Bus& bus = buses_[b];
         bus.decayL = bus.decayR = bus.holdL = bus.holdR = -60.0f;
         bus.holdCounterL = bus.holdCounterR = 0;
+        bus.publishMeters();
         bus.peakL.store(0.0f, std::memory_order_relaxed);
         bus.peakR.store(0.0f, std::memory_order_relaxed);
     }
@@ -873,10 +877,10 @@ void DspEngine::resetMeters() {
 bool DspEngine::getBusLevel(int busIndex, float* out4) const {
     if (!isActiveBus(busIndex) || !out4) return false;
     const Bus& bus = buses_[busIndex];
-    out4[0] = bus.decayL;
-    out4[1] = bus.decayR;
-    out4[2] = bus.holdL;
-    out4[3] = bus.holdR;
+    out4[0] = bus.shownDecayL.load(std::memory_order_relaxed);
+    out4[1] = bus.shownDecayR.load(std::memory_order_relaxed);
+    out4[2] = bus.shownHoldL.load(std::memory_order_relaxed);
+    out4[3] = bus.shownHoldR.load(std::memory_order_relaxed);
     return true;
 }
 
@@ -1009,6 +1013,7 @@ void DspEngine::resetPluginState() {
         bus.holdR = -60.0f;
         bus.holdCounterL = 0;
         bus.holdCounterR = 0;
+        bus.publishMeters();
     }
     LOGD("Plugin state reset");
 }
