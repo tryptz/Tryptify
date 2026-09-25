@@ -8,6 +8,11 @@ on:
         default: latest
         required: true
         type: string
+      build_ref:
+        description: 'Branch, tag or commit to build and capture instead of a release (e.g. tryptz/mixer-add-bus). Empty uses release_tag.'
+        default: ''
+        required: false
+        type: string
       strict:
         description: 'Fail if any planned screen cannot be captured (artifacts are still uploaded)'
         default: true
@@ -22,15 +27,17 @@ permissions:
   contents: read
 
 concurrency:
-  group: promo-screenshots-${{ github.ref }}
+  group: promo-screenshots-${{ github.ref }}-${{ inputs.build_ref }}
   cancel-in-progress: true
 
 jobs:
   capture:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # A branch build adds the native/Gradle build (~30 min) before capture.
+    timeout-minutes: 100
     env:
       RELEASE_TAG: ${{ inputs.release_tag || 'latest' }}
+      BUILD_REF: ${{ inputs.build_ref || '' }}
       STRICT_CAPTURE: ${{ github.event_name == 'push' || inputs.strict }}
     steps:
       - uses: actions/checkout@v4
@@ -51,7 +58,48 @@ jobs:
           python -m unittest discover -s tools/promo -p 'test_*.py'
           python -m py_compile tools/promo/capture.py tools/promo/prepare.py
           bash -n tools/promo/capture.sh
-      - name: Download published APK and create demo library
+      # ── Branch build (only when build_ref is set) ─────────────────────
+      # The capture scripts come from this checkout; the app comes from
+      # build_ref, checked out beside it with its submodules. The benchmark
+      # variant is release-shaped (minified, not debuggable) but signed with
+      # the committed debug key, so no release keystore is needed.
+      - name: Free runner disk for the build
+        if: env.BUILD_REF != ''
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/node_modules /opt/ghc /usr/local/.ghcup /usr/share/swift
+      - name: Check out build_ref
+        if: env.BUILD_REF != ''
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
+          path: app-src
+          submodules: recursive
+          fetch-depth: 1
+      - name: Set up Android SDK
+        if: env.BUILD_REF != ''
+        uses: android-actions/setup-android@v3
+      - name: Install NDK and CMake
+        if: env.BUILD_REF != ''
+        run: sdkmanager "ndk;29.0.14206865" "cmake;3.22.1"
+      - name: Build release-shaped APK from build_ref
+        if: env.BUILD_REF != ''
+        working-directory: app-src
+        run: |
+          set -o pipefail
+          chmod +x gradlew
+          ./gradlew :app:assembleBenchmark --stacktrace 2>&1 | tee ../gradle-build.log
+          apk=$(find app/build/outputs/apk/benchmark -name '*.apk' | head -n 1)
+          test -n "$apk"
+          echo "APK_PATH=$PWD/$apk" >> "$GITHUB_ENV"
+          echo "BUILD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Upload build log
+        if: failure() && env.BUILD_REF != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: promo-build-log-${{ github.run_number }}
+          path: gradle-build.log
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Prepare APK and create demo library
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
