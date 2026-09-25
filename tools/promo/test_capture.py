@@ -82,6 +82,13 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(clicked, ['SKIP'])
         self.assertTrue(all(r['status'] == 'captured-needs-review' for r in runner.results))
 
+    def test_visualizer_is_last_and_not_scrolled(self):
+        targets = capture.inventory()
+        self.assertEqual(targets[-1]['id'], 'visual-studio-visualizer')
+        self.assertEqual(targets[-1]['scroll_pages'], 0)
+        ids = [t['id'] for t in targets]
+        self.assertLess(ids.index('mixer'), ids.index('visual-studio-player'))
+
     def test_failed_screen_preserves_report_and_next_screen_restarts(self):
         class Device:
             def window_size(self): return 1080, 2400

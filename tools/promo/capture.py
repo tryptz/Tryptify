@@ -254,16 +254,23 @@ def inventory():
         targets.append({'id': re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-'),
                         'steps': [{'click': 'Settings'}, {'tab': tab}, {'click': title},
                                   {'dismiss': 'SKIP'}, {'expect': 'Back'}]})
-    for tab in ('Player', 'UI panels', 'Lyrics', 'Visualizer'):
-        targets.append({'id': 'visual-studio-' + tab.lower().replace(' ', '-'),
-                        'steps': [{'click': 'Settings'}, {'tab': 'Visual Studio'},
-                                  {'click': 'Player Visuals Studio'}, {'tab': tab}], 'scroll_pages': 2})
+    # The player screens come before the Visual Studio tabs: they are the
+    # ones a promotion needs most, and must not depend on what follows.
     targets.extend([
         {'id': 'now-playing', 'player': True},
         {'id': 'mixer', 'player': True, 'steps': [{'click': 'Mixer/FX'}, {'expect': 'Insert Rack'}]},
         {'id': 'audio-tools', 'player': True, 'steps': [{'click': 'Audio tools'}, {'expect': 'AutoEQ'}]},
         {'id': 'output-device', 'player': True, 'steps': [{'click': 'Output device'}]},
     ])
+    for tab in ('Player', 'UI panels', 'Lyrics', 'Visualizer'):
+        targets.append({'id': 'visual-studio-' + tab.lower().replace(' ', '-'),
+                        'steps': [{'click': 'Settings'}, {'tab': 'Visual Studio'},
+                                  {'click': 'Player Visuals Studio'}, {'tab': tab}],
+                        # Scrolling the Visualizer tab took the software-
+                        # rendered emulator down twice (system UI restarted,
+                        # then the device went offline), so it is captured
+                        # one viewport deep and last.
+                        'scroll_pages': 0 if tab == 'Visualizer' else 2})
     return targets
 
 
