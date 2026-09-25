@@ -144,3 +144,9 @@ tools/cities15000.zip
 # Local Claude Code guidance (untracked by request)
 CLAUDE.md
 tools/__pycache__/
+
+# Promotional capture dependencies and generated local output.
+!tools/promo/requirements.txt
+!tools/promo/*.py
+tools/promo/__pycache__/
+/promo-output/
