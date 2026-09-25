@@ -13,6 +13,10 @@ adb shell settings put system screen_off_timeout 2147483647
 adb shell settings put global sysui_demo_allowed 1
 adb shell am broadcast -a com.android.systemui.demo -e command clock -e hhmm 0941
 adb shell am broadcast -a com.android.systemui.demo -e command battery -e level 100 -e plugged false
+# Demo mode for the rest of the status bar: no notification icons, and full
+# Wi-Fi/mobile bars instead of the emulator's satellite/no-signal glyphs.
+adb shell am broadcast -a com.android.systemui.demo -e command notifications -e visible false
+adb shell am broadcast -a com.android.systemui.demo -e command network -e wifi show -e level 4 -e mobile hide -e satellite hide
 adb shell input keyevent KEYCODE_WAKEUP
 adb shell input keyevent KEYCODE_MENU
 adb install -r -g promo-output/tryptify.apk

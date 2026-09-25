@@ -150,6 +150,10 @@ class Capture:
             root = self.tree()
             if find_node(root, 'Skip setup') is not None:
                 self.click('Skip setup', scroll=False)
+            elif find_node(root, "Don't show again") is not None:
+                # The "Updated to x.y" card: dismissing it only hides the card,
+                # and keeps it out of every screenshot that follows.
+                self.click("Don't show again", scroll=False)
             elif all(find_node(root, x) is not None for x in ('Settings', 'Discover', 'Local')):
                 return
             time.sleep(1)
