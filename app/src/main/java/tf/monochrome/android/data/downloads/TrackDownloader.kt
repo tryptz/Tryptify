@@ -44,7 +44,7 @@ class TrackDownloader @Inject constructor(
     private val preferences: PreferencesManager,
     private val downloadDao: DownloadDao,
     private val qobuzIdRegistry: tf.monochrome.android.data.api.QobuzIdRegistry,
-    private val deezerQobuzMatcher: tf.monochrome.android.data.api.DeezerQobuzMatcher,
+    private val deezerQobuzMatcher: tf.monochrome.android.domain.usecase.DeezerQobuzMatcher,
     private val localLibraryRevision: tf.monochrome.android.data.local.LocalLibraryRevision,
 ) {
 

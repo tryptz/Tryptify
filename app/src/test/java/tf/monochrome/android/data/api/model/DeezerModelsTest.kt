@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The instance's /api/deezer/* layer (trypt-hifi lib/deezer.tsx) reshapes Deezer
+ * The instance's /api/deezer routes (trypt-hifi lib/deezer.tsx) reshapes Deezer
  * into Qobuz envelopes, but not byte for byte: album ids are strings beside a
  * numeric qobuz_id, artist images can be null, and the artist payload has an
  * object-shaped `releases` and a string `id`. One mismatched field fails the

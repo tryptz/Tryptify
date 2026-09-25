@@ -1,6 +1,8 @@
-package tf.monochrome.android.data.api
+package tf.monochrome.android.domain.usecase
 
-import tf.monochrome.android.domain.usecase.CrossSourceMatcher
+import tf.monochrome.android.data.api.HiFiApiClient
+import tf.monochrome.android.data.api.QobuzIdRegistry
+import tf.monochrome.android.data.api.QobuzTrackMatch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -8,7 +10,7 @@ import javax.inject.Singleton
  * Finds the Qobuz track that is the same recording as a Deezer track.
  *
  * Deezer comes into the app as a browse catalog: the public API behind the
- * instance's /api/deezer/* layer only serves 30-second previews. So a Deezer
+ * instance's /api/deezer routes only serve 30-second previews. So a Deezer
  * pick is played — and downloaded — from Qobuz whenever Qobuz has the same
  * recording, and only falls back to the preview when it doesn't.
  *

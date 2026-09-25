@@ -387,7 +387,7 @@ sealed class PlaybackSource {
     ) : PlaybackSource()
 
     /**
-     * Deezer catalog pick, from the instance's /api/deezer/* layer.
+     * Deezer catalog pick, from the instance's /api/deezer routes.
      *
      * The public Deezer API only serves 30-second MP3 previews, so
      * StreamResolver first looks for the same recording on Qobuz (ISRC, then a

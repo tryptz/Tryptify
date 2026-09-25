@@ -962,7 +962,7 @@ class PreferencesManager @Inject constructor(
     }
 
     /**
-     * Whether Search also asks the instance's /api/deezer/* layer. Independent
+     * Whether Search also asks the instance's /api/deezer routes. Independent
      * of [sourceMode]: Deezer is a browse-only catalog here (the public API
      * serves 30-second previews, and a pick plays through Qobuz when the same
      * recording is there), so it adds to either mode rather than replacing one.

@@ -1114,7 +1114,7 @@ class HiFiApiClient @Inject constructor(
         // /api/file?... URL we then stream the bytes from.
         // A Deezer id means nothing to Qobuz or TIDAL — both would answer with
         // whatever recording happens to have that number. Deezer picks are
-        // matched to Qobuz by recording (DeezerQobuzMatcher) before they get
+        // matched to Qobuz by recording (domain.usecase.DeezerQobuzMatcher) before they get
         // here; a bare Deezer id arriving at this point has no stream.
         if (qobuzIdRegistry.isDeezerTrack(trackId) && !qobuzIdRegistry.isQobuzTrack(trackId)) {
             throw IllegalStateException(

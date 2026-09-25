@@ -7,7 +7,6 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
-import tf.monochrome.android.data.api.DeezerQobuzMatcher
 import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.api.QobuzTrackMatch
 import tf.monochrome.android.data.cache.QobuzStreamUri
@@ -22,6 +21,7 @@ import tf.monochrome.android.domain.model.TrackStream
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.domain.model.buildCoverUrl
 import tf.monochrome.android.domain.usecase.CrossSourceMatcher
+import tf.monochrome.android.domain.usecase.DeezerQobuzMatcher
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
