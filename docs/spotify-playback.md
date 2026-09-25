@@ -38,3 +38,7 @@ and a Spotify id is never sent through the Qobuz, TIDAL or Apple downloader.
   tracks; its stored credential and read-through cache live in app-private data.
 - Native setup failure stops the Spotify item; it never changes to an external
   playback path.
+- librespot-java 1.6.5 fetched tokens from Spotify's retired keymaster
+  endpoint, which answers 403. `spotify-wrapper` ships upstream's unreleased
+  login5 `TokenProvider` in its place; when regenerating the stripped jar, delete
+  `xyz/gianlu/librespot/core/TokenProvider*.class` from it again.

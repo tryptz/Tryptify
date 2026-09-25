@@ -53,6 +53,12 @@ dependencies {
     // com.spotify protobuf messages). A local files() dependency has no POM,
     // so the upstream 1.6.5 dependencies are declared explicitly below.
     // Regenerate with: unzip, prune, jar cf.
+    //
+    // Also delete xyz/gianlu/librespot/core/TokenProvider*.class from the jar.
+    // 1.6.5's TokenProvider asks the retired keymaster endpoint for tokens and
+    // gets a 403, so src/main/java/xyz/gianlu/librespot/core/TokenProvider.java
+    // replaces it with upstream's login5 version. With both present the dex
+    // step fails on the duplicate class.
     api(files("libs/librespot-player-stripped-1.6.5.jar"))
 
     // The stripped jar keeps librespot and Spotify's generated protobufs but

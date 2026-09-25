@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+
+#### Spotify native playback failing with a 403
+- **librespot-java 1.6.5 still asks Spotify's retired keymaster endpoint for its access tokens.** Spotify refuses those requests with a 403. Every token-bearing call goes through that one provider (the dealer websocket, track metadata and storage-resolve), so the session logs in and then no track can load.
+- **`TokenProvider` is replaced with upstream's login5 version**, which trades the session's reusable credential for a token at `login5.spotify.com`. The fix is on librespot-java's `dev` branch but was never released, so it lives in `spotify-wrapper` under librespot's own package, and the 1.6.5 class is deleted from the stripped jar.
+
 ### Removed
 
 #### The pane behind the Player tab's preview
