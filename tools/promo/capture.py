@@ -6,6 +6,7 @@ mislabelled screenshots of the previous page. The report is a capture inventory,
 not an assertion that the images are ready to publish.
 """
 import hashlib
+import concurrent.futures
 import html
 import json
 import os
@@ -16,6 +17,7 @@ import xml.etree.ElementTree as ET
 
 PACKAGE = 'tf.monotrypt.android'
 OUT = Path('promo-output')
+DUMP_TIMEOUT = 60
 
 
 def labels(node):
@@ -97,11 +99,27 @@ class Capture:
         self.d.jsonrpc.setConfigurator({'waitForIdleTimeout': 0, 'waitForSelectorTimeout': 0})
         self.results = []
 
+    def dump(self):
+        """The hierarchy XML, or an error after DUMP_TIMEOUT seconds.
+
+        uiautomator waits for the app to go idle before it answers, and a
+        screen that never stops animating (the playing player) can hold that
+        wait forever: one run spent 50 minutes on a single read. Bounded, a
+        stuck read fails that screen instead of the whole run.
+        """
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        try:
+            return pool.submit(self.d.dump_hierarchy, compressed=False).result(timeout=DUMP_TIMEOUT)
+        except concurrent.futures.TimeoutError:
+            raise RuntimeError(f'Hierarchy read took over {DUMP_TIMEOUT} s') from None
+        finally:
+            pool.shutdown(wait=False)
+
     def tree(self):
         # Every lookup goes through here, so a system dialog that pops up at
         # any point is cleared before the next step looks for an app label.
         for _ in range(3):
-            root = ET.fromstring(self.d.dump_hierarchy(compressed=False))
+            root = ET.fromstring(self.dump())
             button = system_dialog_button(root)
             if button is None:
                 return root
@@ -158,7 +176,7 @@ class Capture:
     def demo_status_bar(self):
         # System UI can restart on the slow emulator and drop demo mode (a run
         # came back with the real clock and a 3G glyph), so set it every time.
-        for command in ('clock -e hhmm 0941', 'battery -e level 100 -e plugged false',
+        for command in ('enter', 'clock -e hhmm 0941', 'battery -e level 100 -e plugged false',
                         'notifications -e visible false',
                         'network -e wifi show -e level 4 -e mobile hide -e satellite hide'):
             self.d.shell('am broadcast -a com.android.systemui.demo -e command ' + command)
@@ -195,6 +213,12 @@ class Capture:
         # centre sits on the row's artist button, and a run landed on the
         # album page instead of playing.
         self.click('Shuffle all', scroll=False)
+        # Pause at once with the media key: no hierarchy read needed, and a
+        # still player is what makes the reads below return. The mini player
+        # and the player keep the paused track.
+        time.sleep(3)
+        self.d.shell('input keyevent KEYCODE_MEDIA_PAUSE')
+        time.sleep(1)
         deadline = time.monotonic() + 15
         while time.monotonic() < deadline:
             root = self.tree()
@@ -212,10 +236,7 @@ class Capture:
         # With music playing the player animates constantly, and each
         # hierarchy read on the software-rendered emulator takes seconds.
         self.wait('Collapse', timeout=45)
-        # Pause: a still player reads quickly and captures cleanly, and the
-        # screenshots show the full player all the same.
-        if find_node(self.tree(), 'Pause') is not None:
-            self.click('Pause', scroll=False)
+
 
     def save(self, name, diagnostic=False):
         folder = OUT / ('diagnostics' if diagnostic else 'screenshots')
@@ -223,7 +244,7 @@ class Capture:
         if not diagnostic and self.d.app_current().get('package') != PACKAGE:
             raise RuntimeError('App lost foreground; refusing to label another app as Tryptify')
         self.d.screenshot(str(folder / f'{name}.png'))
-        (folder / f'{name}.xml').write_text(self.d.dump_hierarchy(compressed=False))
+        (folder / f'{name}.xml').write_text(self.dump())
         return f'{folder.name}/{name}.png'
 
     def run(self, target):

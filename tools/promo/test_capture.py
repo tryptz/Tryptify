@@ -1,4 +1,5 @@
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -105,6 +106,20 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(ids, ['now-playing', 'mixer'])
         with self.assertRaises(SystemExit):
             capture.selected_targets('no-such-screen')
+
+    def test_a_stuck_hierarchy_read_fails_the_screen_not_the_run(self):
+        class Device:
+            def window_size(self): return 1080, 2400
+            class jsonrpc:
+                @staticmethod
+                def setConfigurator(value): pass
+            def dump_hierarchy(self, compressed=False):
+                time.sleep(2)
+                return '<hierarchy/>'
+        runner = capture.Capture(Device())
+        with patch.object(capture, 'DUMP_TIMEOUT', 0.2):
+            with self.assertRaises(RuntimeError):
+                runner.dump()
 
     def test_failed_screen_preserves_report_and_next_screen_restarts(self):
         class Device:

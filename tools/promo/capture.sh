@@ -11,6 +11,7 @@ adb shell wm size 1080x2400
 adb shell wm density 420
 adb shell settings put system screen_off_timeout 2147483647
 adb shell settings put global sysui_demo_allowed 1
+adb shell am broadcast -a com.android.systemui.demo -e command enter
 adb shell am broadcast -a com.android.systemui.demo -e command clock -e hhmm 0941
 adb shell am broadcast -a com.android.systemui.demo -e command battery -e level 100 -e plugged false
 # Demo mode for the rest of the status bar: no notification icons, and full
