@@ -32,7 +32,7 @@ import tf.monochrome.android.ui.theme.MonoDimens
  *
  * [light] and [dark] are the same brand hue at two lightnesses. The official
  * colours are tuned for white backgrounds; as text on this app's dark surfaces
- * Qobuz blue and Deezer purple are hard to read, so dark themes get a lifted
+ * Qobuz teal and Deezer purple are hard to read, so dark themes get a lifted
  * shade. A null colour means "the theme's own" — TIDAL's brand is black and
  * white, and the non-catalog sources have no brand at all.
  */
@@ -46,9 +46,12 @@ data class SourceBrand(
     val tintLogo: Boolean = false,
 )
 
+// The Qobuz and Deezer marks are PNGs cut from the brands' own artwork
+// (drawable-nodpi, 192px): the Qobuz record "Q", and Deezer's heart. Qobuz's
+// colour is the teal at the top of its brand gradient; Deezer's is the heart's.
 fun SourceType.brand(): SourceBrand = when (this) {
     SourceType.API -> SourceBrand("TIDAL", null, null, logo = R.drawable.logo_tidal, tintLogo = true)
-    SourceType.QOBUZ -> SourceBrand("Qobuz", Color(0xFF0C68F4), Color(0xFF6FA5FF), logo = R.drawable.logo_qobuz)
+    SourceType.QOBUZ -> SourceBrand("Qobuz", Color(0xFF0F6F78), Color(0xFF4FC3C4), logo = R.drawable.logo_qobuz)
     SourceType.APPLE -> SourceBrand("Apple Music", Color(0xFFFA243C), Color(0xFFFF6B7D), logo = R.drawable.logo_apple_music)
     SourceType.DEEZER -> SourceBrand("Deezer", Color(0xFFA238FF), Color(0xFFC98BFF), logo = R.drawable.logo_deezer)
     SourceType.LOCAL -> SourceBrand("Local", null, null, icon = Icons.Default.PhoneAndroid)
