@@ -38,6 +38,27 @@ def find_node(root, text, top=None):
     return None
 
 
+# Android's own "X isn't responding" / "X keeps stopping" dialogs. On a slow,
+# software-rendered emulator the launcher can stall long enough to raise one,
+# and it then sits over the app: every tap lands on the dialog and no app label
+# is ever visible. 'Wait' leaves the stalled app running; 'Close app' is only
+# used where Android offers nothing else.
+SYSTEM_DIALOG_TITLES = ("isn't responding", 'keeps stopping', 'has stopped')
+SYSTEM_DIALOG_BUTTONS = ('wait', 'close app', 'ok')
+
+
+def system_dialog_button(root):
+    """The button that dismisses a system error dialog, or None when there is none."""
+    nodes = [n for n in root.iter('node') if n.get('package') == 'android']
+    if not any(title in label for n in nodes for label in labels(n) for title in SYSTEM_DIALOG_TITLES):
+        return None
+    for wanted in SYSTEM_DIALOG_BUTTONS:
+        for node in nodes:
+            if wanted in labels(node) and bounds(node):
+                return node
+    return None
+
+
 def selected(root, node):
     parents = {child: parent for parent in root.iter() for child in parent}
     while node is not None:
@@ -62,7 +83,18 @@ class Capture:
         self.results = []
 
     def tree(self):
-        return ET.fromstring(self.d.dump_hierarchy(compressed=False))
+        # Every lookup goes through here, so a system dialog that pops up at
+        # any point is cleared before the next step looks for an app label.
+        for _ in range(3):
+            root = ET.fromstring(self.d.dump_hierarchy(compressed=False))
+            button = system_dialog_button(root)
+            if button is None:
+                return root
+            x1, y1, x2, y2 = bounds(button)
+            print('Dismissing system dialog: ' + ', '.join(sorted(labels(button))), flush=True)
+            self.d.click((x1+x2)//2, (y1+y2)//2)
+            time.sleep(1.5)
+        return root
 
     def wait(self, text, timeout=12):
         deadline = time.monotonic() + timeout

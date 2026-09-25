@@ -41,6 +41,20 @@ class CaptureTests(unittest.TestCase):
         for name in names:
             self.assertRegex(name, r'^[a-z0-9-]+$')
 
+    def test_system_dialog_is_found_and_waited_on(self):
+        root = ET.fromstring(
+            '<hierarchy>'
+            '<node package="android" text="Pixel Launcher isn\'t responding" bounds="[168,966][912,1124]"/>'
+            '<node package="android" text="Close app" bounds="[84,1177][996,1345]"/>'
+            '<node package="android" text="Wait" bounds="[84,1345][996,1513]"/>'
+            '</hierarchy>')
+        self.assertEqual(capture.system_dialog_button(root).get('text'), 'Wait')
+
+    def test_app_screen_has_no_system_dialog(self):
+        self.assertIsNone(capture.system_dialog_button(tree()))
+        # An app button called Wait is not a system dialog.
+        self.assertIsNone(capture.system_dialog_button(tree(text='Wait')))
+
     def test_failed_screen_preserves_report_and_next_screen_restarts(self):
         class Device:
             def window_size(self): return 1080, 2400
