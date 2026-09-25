@@ -59,6 +59,19 @@ def system_dialog_button(root):
     return None
 
 
+DEMO_TITLES = ('Afterglow (Demo)', 'Night Drive (Demo)', 'Prism (Demo)')
+
+
+def mini_player_title(root, height):
+    """The playing demo track's title in the mini player: the lowest one on
+    screen, in its bottom third. Shuffle can start any of the three."""
+    wanted = {t.casefold() for t in DEMO_TITLES}
+    matches = [n for n in root.iter('node')
+               if n.get('package') == PACKAGE and labels(n) & wanted
+               and bounds(n) and bounds(n)[1] > height * 2 // 3]
+    return max(matches, key=lambda n: bounds(n)[1]) if matches else None
+
+
 def selected(root, node):
     # A Compose tab reports its state as checked (it is a checkable,
     # selectable node), a View-based tab as selected; accept either.
@@ -164,18 +177,26 @@ class Capture:
         self.click('Songs')
         if find_node(self.tree(), 'Scan') is not None:
             self.click('Scan', scroll=False)
-        self.wait('Afterglow (Demo)', timeout=40)
-        self.click('Afterglow (Demo)')
-        # Depending on the View Mode, a song tap either expands the player or
-        # starts playback in the mini player. Open the latter by its title.
-        if find_node(self.tree(), 'Collapse') is None:
+        self.wait(DEMO_TITLES[0], timeout=40)
+        # Start playback with the header's Shuffle all: one labelled button.
+        # Tapping a song row by its title was not reliable — the title's
+        # centre sits on the row's artist button, and a run landed on the
+        # album page instead of playing.
+        self.click('Shuffle all', scroll=False)
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
             root = self.tree()
-            matches = [n for n in root.iter('node') if 'afterglow (demo)' in labels(n) and bounds(n)]
-            if not matches:
-                raise RuntimeError('Demo track did not appear in the mini player')
-            node = max(matches, key=lambda n: bounds(n)[1])
-            x1, y1, x2, y2 = bounds(node)
-            self.d.click((x1+x2)//2, (y1+y2)//2)
+            if find_node(root, 'Collapse') is not None:
+                return
+            # Depending on the View Mode, playback either expands the player
+            # or starts in the mini player; open the latter by its title.
+            node = mini_player_title(root, self.height)
+            if node is not None:
+                x1, y1, x2, y2 = bounds(node)
+                self.d.click((x1+x2)//2, (y1+y2)//2)
+                time.sleep(1.5)
+                break
+            time.sleep(1)
         self.wait('Collapse')
 
     def save(self, name, diagnostic=False):
@@ -313,10 +334,23 @@ def write_report(results):
         '<a href="coverage.md">Read coverage and limitations</a>.</p><main>' + ''.join(cards) + '</main>')
 
 
+def selected_targets(only=None):
+    """The inventory, or just the ids named in a comma-separated PROMO_TARGETS."""
+    only = os.environ.get('PROMO_TARGETS', '') if only is None else only
+    wanted = {t.strip() for t in only.split(',') if t.strip()}
+    targets = inventory()
+    if not wanted:
+        return targets
+    unknown = wanted - {t['id'] for t in targets}
+    if unknown:
+        raise SystemExit('Unknown target ids: ' + ', '.join(sorted(unknown)))
+    return [t for t in targets if t['id'] in wanted]
+
+
 def main():
     import uiautomator2 as u2
     runner = Capture(u2.connect())
-    for target in inventory():
+    for target in selected_targets():
         runner.run(target)
     failures = [r for r in runner.results if r['status'] == 'failed']
     if failures and os.environ.get('STRICT_CAPTURE', 'true').lower() == 'true':

@@ -13,6 +13,11 @@ on:
         default: ''
         required: false
         type: string
+      targets:
+        description: 'Only these screen ids, comma-separated (e.g. now-playing,mixer). Empty captures all.'
+        default: ''
+        required: false
+        type: string
       strict:
         description: 'Fail if any planned screen cannot be captured (artifacts are still uploaded)'
         default: true
@@ -27,7 +32,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: promo-screenshots-${{ github.ref }}-${{ inputs.build_ref }}
+  group: promo-screenshots-${{ github.ref }}-${{ inputs.build_ref }}-${{ inputs.targets }}
   cancel-in-progress: true
 
 jobs:
@@ -38,6 +43,7 @@ jobs:
     env:
       RELEASE_TAG: ${{ inputs.release_tag || 'latest' }}
       BUILD_REF: ${{ inputs.build_ref || '' }}
+      PROMO_TARGETS: ${{ inputs.targets || '' }}
       STRICT_CAPTURE: ${{ github.event_name == 'push' || inputs.strict }}
     steps:
       - uses: actions/checkout@v4

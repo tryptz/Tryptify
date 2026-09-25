@@ -89,6 +89,23 @@ class CaptureTests(unittest.TestCase):
         ids = [t['id'] for t in targets]
         self.assertLess(ids.index('mixer'), ids.index('visual-studio-player'))
 
+    def test_mini_player_title_is_the_lowest_demo_title_near_the_bottom(self):
+        root = ET.fromstring(
+            f'<hierarchy>'
+            f'<node package="{capture.PACKAGE}" text="Prism (Demo)" bounds="[168,400][446,450]"/>'
+            f'<node package="{capture.PACKAGE}" text="Night Drive (Demo)" bounds="[168,2150][600,2200]"/>'
+            '</hierarchy>')
+        self.assertEqual(capture.mini_player_title(root, 2400).get('text'), 'Night Drive (Demo)')
+        # A title only in the list, high on the page, is not the mini player.
+        self.assertIsNone(capture.mini_player_title(tree(text='Prism (Demo)'), 2400))
+
+    def test_targets_can_be_narrowed_by_id(self):
+        self.assertEqual(len(capture.selected_targets('')), len(capture.inventory()))
+        ids = [t['id'] for t in capture.selected_targets(' mixer, now-playing ')]
+        self.assertEqual(ids, ['now-playing', 'mixer'])
+        with self.assertRaises(SystemExit):
+            capture.selected_targets('no-such-screen')
+
     def test_failed_screen_preserves_report_and_next_screen_restarts(self):
         class Device:
             def window_size(self): return 1080, 2400

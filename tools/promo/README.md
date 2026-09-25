@@ -15,10 +15,12 @@ After this workflow is on the repository's default branch:
    `tryptz/mixer-add-bus`). The job then checks that branch out with its
    submodules, builds the `benchmark` variant (release-shaped, signed with the
    committed debug key, so no keystore is needed) and captures that APK.
-   `build.json` records the branch and commit. This adds about 30 minutes.
-4. Leave `strict` enabled to fail the job if any planned destination is missed.
-5. Download **tryptify-promo-<run number>** from the run's Artifacts section.
-6. Extract the ZIP and open `index.html`. Review `coverage.md` before choosing
+   `build.json` records the branch and commit. The build adds about 12 minutes.
+4. To re-shoot only some screens, list their ids in `targets` (for example
+   `now-playing,mixer`); the ids are the file names in `screenshots/`.
+5. Leave `strict` enabled to fail the job if any planned destination is missed.
+6. Download **tryptify-promo-<run number>** from the run's Artifacts section.
+7. Extract the ZIP and open `index.html`. Review `coverage.md` before choosing
    images for promotional layouts.
 
 A push changing the workflow or capture scripts on `tryptz/promo-screenshots`
