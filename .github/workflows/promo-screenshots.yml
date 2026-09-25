@@ -110,6 +110,15 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+          # The trigger is asynchronous: wait for it, and set the mode directly
+          # so the check below does not race the udev rule.
+          sudo udevadm settle
+          if [ ! -e /dev/kvm ]; then
+            echo '::error::/dev/kvm is missing: this runner has no hardware virtualization.'
+            exit 1
+          fi
+          sudo chmod 666 /dev/kvm
+          ls -l /dev/kvm
           test -r /dev/kvm && test -w /dev/kvm
       - name: Capture app screens
         uses: reactivecircus/android-emulator-runner@v2.38.0
