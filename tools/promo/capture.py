@@ -18,6 +18,12 @@ import xml.etree.ElementTree as ET
 PACKAGE = 'tf.monotrypt.android'
 OUT = Path('promo-output')
 DUMP_TIMEOUT = 60
+# The player cannot be read (see open_player), so its controls are tapped by
+# position. Centres of the controls in a 1080 x 2400, 420 dpi capture of the
+# player (run 13's hierarchy): the Output device button in the top bar, the
+# Audio tools handle under the dock, and the Mixer / FX tile in Audio tools.
+PLAYER_TAPS = {'output_device': (639, 183), 'audio_tools': (540, 2270), 'mixer_fx': (784, 1517)}
+PLAYER_SETTLE = 8
 
 
 def labels(node):
@@ -233,18 +239,35 @@ class Capture:
                 time.sleep(1.5)
                 break
             time.sleep(1)
-        # With music playing the player animates constantly, and each
-        # hierarchy read on the software-rendered emulator takes seconds.
-        self.wait('Collapse', timeout=45)
+        # From here on nothing reads the hierarchy: the glass player redraws
+        # every frame even when paused, so uiautomator never sees it idle and
+        # a read does not return (run 15: every one timed out). The player is
+        # driven by fixed positions instead (see PLAYER_TAPS) and checked
+        # only by which app is in front.
+        time.sleep(PLAYER_SETTLE)
+        if self.d.app_current().get('package') != PACKAGE:
+            raise RuntimeError('Player did not open in the app')
 
 
-    def save(self, name, diagnostic=False):
+    def save(self, name, diagnostic=False, no_dump=False):
         folder = OUT / ('diagnostics' if diagnostic else 'screenshots')
         folder.mkdir(parents=True, exist_ok=True)
         if not diagnostic and self.d.app_current().get('package') != PACKAGE:
             raise RuntimeError('App lost foreground; refusing to label another app as Tryptify')
+        if not diagnostic:
+            # System UI restarts on this emulator reset demo mode more than
+            # once per run; set it immediately before every capture.
+            try:
+                self.demo_status_bar()
+                time.sleep(1)
+            except Exception:
+                pass
         self.d.screenshot(str(folder / f'{name}.png'))
-        (folder / f'{name}.xml').write_text(self.dump())
+        if not no_dump:
+            try:
+                (folder / f'{name}.xml').write_text(self.dump())
+            except RuntimeError:
+                pass  # the image is what matters; the XML is a debugging aid
         return f'{folder.name}/{name}.png'
 
     def run(self, target):
@@ -260,30 +283,37 @@ class Capture:
                     self.click(step['click'], long=step.get('long', False))
                 elif 'expect' in step:
                     self.wait(step['expect'])
+                elif 'tap_at' in step:
+                    x, y = step['tap_at']
+                    self.d.click(x, y)
+                    time.sleep(step.get('settle', 3))
                 elif 'dismiss' in step:
                     # A first-visit intro (Precision AutoEQ's walkthrough):
                     # tap its skip button when it is showing, carry on if not.
                     if find_node(self.tree(), step['dismiss']) is not None:
                         self.click(step['dismiss'], scroll=False)
             time.sleep(2)
-            result['images'].append(self.save(target['id']))
-            seen = {fingerprint(self.tree())}
-            result['scroll_limit_reached'] = False
-            for page in range(1, target.get('scroll_pages', 0) + 1):
-                self.d.swipe(.5, .80, .5, .32, duration=.5)
-                time.sleep(1)
-                signature = fingerprint(self.tree())
-                if signature in seen:
-                    break
-                seen.add(signature)
-                result['images'].append(self.save(f"{target['id']}-{page+1:02d}"))
-            else:
-                result['scroll_limit_reached'] = target.get('scroll_pages', 0) > 0
+            player = target.get('player', False)
+            result['images'].append(self.save(target['id'], no_dump=player))
+            if target.get('scroll_pages') and not player:
+                seen = {fingerprint(self.tree())}
+                result['scroll_limit_reached'] = False
+                for page in range(1, target['scroll_pages'] + 1):
+                    self.d.swipe(.5, .80, .5, .32, duration=.5)
+                    time.sleep(1)
+                    signature = fingerprint(self.tree())
+                    if signature in seen:
+                        break
+                    seen.add(signature)
+                    result['images'].append(self.save(f"{target['id']}-{page+1:02d}"))
+                else:
+                    result['scroll_limit_reached'] = True
             result['status'] = 'captured-needs-review'
         except Exception as exc:
             result['error'] = str(exc)
             try:
-                result['diagnostic'] = self.save(target['id'] + '-failure', diagnostic=True)
+                result['diagnostic'] = self.save(target['id'] + '-failure', diagnostic=True,
+                                                 no_dump=target.get('player', False))
             except Exception as diagnostic_error:
                 result['diagnostic_error'] = str(diagnostic_error)
         self.results.append(result)
@@ -318,9 +348,10 @@ def inventory():
     # ones a promotion needs most, and must not depend on what follows.
     targets.extend([
         {'id': 'now-playing', 'player': True},
-        {'id': 'mixer', 'player': True, 'steps': [{'click': 'Mixer/FX'}, {'expect': 'Insert Rack'}]},
-        {'id': 'audio-tools', 'player': True, 'steps': [{'click': 'Audio tools'}, {'expect': 'AutoEQ'}]},
-        {'id': 'output-device', 'player': True, 'steps': [{'click': 'Output device'}]},
+        {'id': 'mixer', 'player': True, 'steps': [{'tap_at': PLAYER_TAPS['audio_tools'], 'settle': 5},
+                                                  {'tap_at': PLAYER_TAPS['mixer_fx'], 'settle': 10}]},
+        {'id': 'audio-tools', 'player': True, 'steps': [{'tap_at': PLAYER_TAPS['audio_tools'], 'settle': 5}]},
+        {'id': 'output-device', 'player': True, 'steps': [{'tap_at': PLAYER_TAPS['output_device'], 'settle': 5}]},
     ])
     for tab in ('Player', 'UI panels', 'Lyrics', 'Visualizer'):
         targets.append({'id': 'visual-studio-' + tab.lower().replace(' ', '-'),

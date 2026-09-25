@@ -121,6 +121,14 @@ class CaptureTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 runner.dump()
 
+    def test_player_screens_never_read_the_hierarchy(self):
+        for target in capture.inventory():
+            if target.get('player'):
+                self.assertFalse(any(k in step for step in target.get('steps', [])
+                                     for k in ('click', 'expect', 'tab', 'dismiss')), target['id'])
+        for x, y in capture.PLAYER_TAPS.values():
+            self.assertTrue(0 < x < 1080 and 0 < y < 2400)
+
     def test_failed_screen_preserves_report_and_next_screen_restarts(self):
         class Device:
             def window_size(self): return 1080, 2400
