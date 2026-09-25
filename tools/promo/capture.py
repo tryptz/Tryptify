@@ -60,9 +60,11 @@ def system_dialog_button(root):
 
 
 def selected(root, node):
+    # A Compose tab reports its state as checked (it is a checkable,
+    # selectable node), a View-based tab as selected; accept either.
     parents = {child: parent for parent in root.iter() for child in parent}
     while node is not None:
-        if node.get('selected') == 'true':
+        if node.get('selected') == 'true' or node.get('checked') == 'true':
             return True
         node = parents.get(node)
     return False

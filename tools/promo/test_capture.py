@@ -30,6 +30,14 @@ class CaptureTests(unittest.TestCase):
         root = tree(selected='false')
         self.assertFalse(capture.selected(root, capture.find_node(root, 'Audio')))
 
+    def test_compose_tab_reports_checked_not_selected(self):
+        # As the Settings tab strip dumps: the clickable parent is checked.
+        root = ET.fromstring(
+            f'<hierarchy><node package="{capture.PACKAGE}" selected="false" checkable="true" checked="true">'
+            f'<node text="Appearance" package="{capture.PACKAGE}" enabled="true" selected="false" '
+            'checked="false" bounds="[74,331][268,370]"/></node></hierarchy>')
+        self.assertTrue(capture.selected(root, capture.find_node(root, 'Appearance')))
+
     def test_scroll_fingerprint_changes_when_content_moves(self):
         self.assertNotEqual(capture.fingerprint(tree()),
                             capture.fingerprint(tree(box='[10,200][200,260]')))

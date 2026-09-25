@@ -19,7 +19,23 @@ adb install -r -g promo-output/tryptify.apk
 adb shell mkdir -p /sdcard/Music/TryptifyDemo
 for file in promo-output/demo-media/*.flac; do
   adb push "$file" /sdcard/Music/TryptifyDemo/
-  adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE \
-    -d "file:///sdcard/Music/TryptifyDemo/$(basename "$file")"
 done
+# The app reads the library from MediaStore. Android 11+ ignores the old
+# MEDIA_SCANNER_SCAN_FILE broadcast, so an unindexed push leaves the library
+# empty ("No local music found") and every Local/player screen fails. Ask
+# MediaProvider to rescan the volume, then wait until the tracks are indexed.
+adb shell content call --uri content://media --method scan_volume --arg external_primary || true
+# Older images still honour the per-file broadcast; harmless where ignored.
+for file in promo-output/demo-media/*.flac; do
+  adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE \
+    -d "file:///sdcard/Music/TryptifyDemo/$(basename "$file")" > /dev/null || true
+done
+indexed=0
+for _ in $(seq 1 30); do
+  indexed=$(adb shell content query --uri content://media/external/audio/media \
+    --projection _display_name 2>/dev/null | grep -c 'demo.flac' || true)
+  [ "$indexed" -ge 3 ] && break
+  sleep 2
+done
+echo "MediaStore has indexed $indexed of 3 demo tracks"
 python tools/promo/capture.py
