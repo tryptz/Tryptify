@@ -83,7 +83,6 @@ monochrome_tf_reference-*.pdf
 *.txt
 *.csv
 *.ttf
-*.json
 *.py
 old_HomeViewModel.kt
 # The generated baseline profile. `*.txt` above would swallow it silently:
@@ -106,13 +105,6 @@ old_HomeViewModel.kt
 # rule would leave run.sh calling a file that isn't in the repo).
 !app/src/main/cpp/atmos/tools/reference_check/compare.py
 
-!monochrome-library-2026-03-23.json
-!app/src/main/assets/devedit_default_layout.json
-!app/src/main/assets/qobuz_recommendations.json
-!app/src/main/assets/discovery_moods.json
-!app/src/main/assets/genre_graph.json
-!app/src/main/assets/genre_vocabulary.json
-!app/src/main/assets/genre_history.json
 # The genre graph's source and build/validate scripts. The committed JSON assets
 # above are generated from these, so without them the dataset is unmaintainable.
 !tools/genre_source.py
@@ -120,15 +112,6 @@ old_HomeViewModel.kt
 !tools/validate_genre_graph.py
 !tools/fetch_genre_history.py
 !tools/musicbrainz_genres.txt
-# The two research caches the build reads and never regenerates on its own:
-# Last.fm tag reach, and the Wikipedia histories. Both are the *input* to a
-# build, not its output — the blanket *.json rule was quietly excluding the
-# reach cache, so rebuilding the graph on a fresh clone dropped the popularity
-# figures from all 771 genres and there was no way to get them back without a
-# four-minute refetch. Committed, a build is reproducible offline and produces
-# the same asset every time, which is the whole reason the caches exist.
-!tools/genre_reach.json
-!tools/genre_history.json
 # The world radio globe: the same three-stage shape, plus its two inputs. The
 # GeoNames gazetteer zip is deliberately *not* here — it is 3 MB, it is a
 # download rather than a decision, and fetch_world_radio.py re-fetches it on
@@ -136,12 +119,10 @@ old_HomeViewModel.kt
 !tools/fetch_world_radio.py
 !tools/build_world_radio.py
 !tools/validate_world_radio.py
-!tools/world_radio.json
 !tools/world_coastline.geojson
 !tools/world_borders.geojson
 # The gazetteer download itself stays out: 3 MB, re-fetched on demand.
 tools/cities15000.zip
-!app/src/main/assets/world_radio.json
 # The bundled font library. Caught by the blanket *.ttf and *.txt rules above,
 # but these ship in the APK — and the licence file has to travel with the fonts
 # it covers, so it is not optional.
@@ -151,3 +132,8 @@ tools/cities15000.zip
 # Local Claude Code guidance (untracked by request)
 CLAUDE.md
 tools/__pycache__/
+
+# The snapin defaults table both the native host test and the Kotlin unit
+# test check against (see app/src/main/cpp/dsp/tests/snapin_defaults_test.cpp).
+# The blanket *.csv above would drop it.
+!app/src/test/resources/snapin_defaults.csv

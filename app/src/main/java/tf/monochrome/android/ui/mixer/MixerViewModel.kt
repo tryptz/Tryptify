@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -25,8 +26,65 @@ import javax.inject.Inject
 class MixerViewModel @Inject constructor(
     private val dspManager: DspEngineManager,
     private val presetRepository: MixPresetRepository,
-    private val preferencesManager: PreferencesManager
+    private val preferencesManager: PreferencesManager,
+    private val spatialStore: tf.monochrome.android.audio.dsp.spatial.SpatialPlacementStore,
+    private val channelDetector: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor,
+    atmosProcessor: tf.monochrome.android.audio.atmos.AtmosAudioProcessor,
 ) : ViewModel() {
+
+    // ── Spatial map ─────────────────────────────────────────────────────
+
+    /** Where each channel of a multichannel bed sits; drags land here live. */
+    val spatialPlacement: StateFlow<tf.monochrome.android.audio.dsp.spatial.SpatialPlacement> = spatialStore.state
+
+    /** The playing stream's channels and live per-channel levels, while the map is open. */
+    val channelState: StateFlow<tf.monochrome.android.audio.dsp.ChannelDetectorProcessor.ChannelState?> =
+        channelDetector.state
+
+    /** False when multichannel goes to Android whole: the map has nothing to fold then. */
+    val stereoFoldEnabled: StateFlow<Boolean> = preferencesManager.multichannelDownmixEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    /** Set while Atmos objects are being rendered, which places the track by itself. */
+    val atmosRenderingObjects: StateFlow<Boolean> = atmosProcessor.outcome
+        .map { it == tf.monochrome.android.audio.atmos.AtmosAudioProcessor.Outcome.OBJECTS_BINAURAL }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    // The detector only measures while someone is watching; the map is.
+    private var detectorHeld = false
+
+    fun openSpatialMap() {
+        if (!detectorHeld) {
+            channelDetector.acquire()
+            detectorHeld = true
+        }
+    }
+
+    fun closeSpatialMap() {
+        if (detectorHeld) {
+            channelDetector.release()
+            detectorHeld = false
+        }
+    }
+
+    fun setSpatialEnabled(on: Boolean) = spatialStore.update { it.copy(enabled = on) }
+
+    fun setSpatialBinaural(binaural: Boolean) = spatialStore.update { it.copy(binaural = binaural) }
+
+    /** AutoEQ's targets, offered for the headphone render. */
+    val headphoneTargets: List<Pair<String, String>> by lazy { spatialStore.targets.map { it.id to it.label } }
+
+    fun setSpatialTarget(id: String) = spatialStore.update { it.copy(targetId = id) }
+
+    fun moveChannel(count: Int, index: Int, placement: tf.monochrome.android.audio.dsp.spatial.ChannelPlacement) =
+        spatialStore.update { it.withChannel(count, index, placement) }
+
+    fun resetSpatialLayout(count: Int) = spatialStore.update { it.resetLayout(count) }
+
+    override fun onCleared() {
+        closeSpatialMap()
+        super.onCleared()
+    }
 
     val enabled: StateFlow<Boolean> = dspManager.enabled
     val buses: StateFlow<List<BusConfig>> = dspManager.buses
@@ -42,6 +100,12 @@ class MixerViewModel @Inject constructor(
     fun setChannelDynamicColor(enabled: Boolean) {
         viewModelScope.launch { preferencesManager.setMixerChannelDynamic(enabled) }
     }
+
+    /** Wide streams: one bus per channel group (true) or all through bus 1. */
+    val spreadChannels: StateFlow<Boolean> = dspManager.spreadChannels
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    fun setSpreadChannels(spread: Boolean) = dspManager.setSpreadChannels(spread)
 
     val presets: StateFlow<List<MixPreset>> = presetRepository.getAllPresets()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -85,9 +149,35 @@ class MixerViewModel @Inject constructor(
     fun resetToDefaults() {
         dspManager.resetToDefaults()
         _currentPresetName.value = null
+        keepSelectionValid()
     }
 
     fun selectBus(index: Int) { _selectedBusIndex.value = index }
+
+    // ── Adding and removing buses ───────────────────────────────────────
+
+    /** Adds a bus after the last one and selects it; false at 16 buses. */
+    fun addBus(): Boolean {
+        val index = dspManager.addBus() ?: return false
+        _selectedBusIndex.value = index
+        return true
+    }
+
+    /** Removes bus [busIndex] (bus 5 and up); the ones above move down one. */
+    fun removeBus(busIndex: Int) {
+        if (!dspManager.removeBus(busIndex)) return
+        val selected = _selectedBusIndex.value
+        if (selected == busIndex) _selectedBusIndex.value = 0
+        else if (selected > busIndex) _selectedBusIndex.value = selected - 1
+    }
+
+    /**
+     * A preset or a reset can leave fewer buses than before; a selection past
+     * the last one would point at nothing, so it goes back to bus 1.
+     */
+    private fun keepSelectionValid() {
+        if (_selectedBusIndex.value >= buses.value.size) _selectedBusIndex.value = 0
+    }
 
     // ── Bus controls ────────────────────────────────────────────────────
 
@@ -182,6 +272,15 @@ class MixerViewModel @Inject constructor(
         dspManager.setParameter(busIndex, slotIndex, paramIndex, value)
     }
 
+    /** Applies [preset] to the effect in [slotIndex], every parameter at once. */
+    fun applyFxPreset(busIndex: Int, slotIndex: Int, preset: tf.monochrome.android.ui.mixer.fxchain.FxPreset) {
+        val plugin = dspManager.buses.value.firstOrNull { it.index == busIndex }
+            ?.plugins?.getOrNull(slotIndex) ?: return
+        val type = plugin.type ?: return
+        val defs = getParamDefs(type)
+        dspManager.setParameters(busIndex, slotIndex, preset.resolved(defs), preset.dryWet)
+    }
+
     fun setPluginDryWet(busIndex: Int, slotIndex: Int, dryWet: Float) {
         dspManager.setPluginDryWet(busIndex, slotIndex, dryWet)
     }
@@ -208,6 +307,7 @@ class MixerViewModel @Inject constructor(
         // duration -- long enough to drop frames on a full five-bus preset.
         viewModelScope.launch(Dispatchers.Default) {
             dspManager.loadStateJson(preset.stateJson)
+            keepSelectionValid()
         }
         _currentPresetName.value = preset.name
     }
@@ -230,7 +330,7 @@ class MixerViewModel @Inject constructor(
     fun exportPayload(preset: MixPreset): String =
         json.encodeToString(
             MixPresetFile.serializer(),
-            MixPresetFile(name = preset.name, stateJson = preset.stateJson)
+            MixPresetFile.of(name = preset.name, stateJson = preset.stateJson)
         )
 
     /**
@@ -265,6 +365,7 @@ class MixerViewModel @Inject constructor(
                 MixPreset(name = name, stateJson = stateJson, isCustom = true)
             )
             dspManager.loadStateJson(stateJson)
+            keepSelectionValid()
             _currentPresetName.value = name
             onResult(true)
         }

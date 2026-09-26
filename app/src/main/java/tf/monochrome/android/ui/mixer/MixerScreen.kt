@@ -36,12 +36,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.unit.Dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.SettingsBackupRestore
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.SpatialAudio
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -158,6 +164,7 @@ fun MixerScreen(
     val enabled by viewModel.enabled.collectAsStateWithLifecycle()
     val buses by viewModel.buses.collectAsStateWithLifecycle()
     val selectedBusIndex by viewModel.selectedBusIndex.collectAsStateWithLifecycle()
+    val spreadChannels by viewModel.spreadChannels.collectAsStateWithLifecycle()
     val showPluginPicker by viewModel.showPluginPicker.collectAsStateWithLifecycle()
     val editingPlugin by viewModel.editingPlugin.collectAsStateWithLifecycle()
     val presets by viewModel.presets.collectAsStateWithLifecycle()
@@ -174,6 +181,13 @@ fun MixerScreen(
     )
 
     var showInsertRack by remember { mutableStateOf(false) }
+    var showSpatialMap by remember { mutableStateOf(false) }
+    val spatialPlacement by viewModel.spatialPlacement.collectAsStateWithLifecycle()
+    // The detector measures only while the map is up.
+    LaunchedEffect(showSpatialMap) {
+        if (showSpatialMap) viewModel.openSpatialMap() else viewModel.closeSpatialMap()
+    }
+    androidx.activity.compose.BackHandler(enabled = showSpatialMap) { showSpatialMap = false }
     var showResetConfirm by remember { mutableStateOf(false) }
 
     // ── The backdrop the console's glass stands on ──────────────────────
@@ -384,6 +398,7 @@ fun MixerScreen(
                         onDryWet = { b, s, dw -> viewModel.setPluginDryWet(b, s, dw) },
                         onParam = { b, s, p, v -> viewModel.setParameter(b, s, p, v) },
                         onOversample = { b, s, f -> viewModel.setPluginOversampling(b, s, f) },
+                        onPreset = { b, s, p -> viewModel.applyFxPreset(b, s, p) },
                         onMove = { b, from, to -> viewModel.movePlugin(b, from, to) },
                     )
                 }
@@ -444,6 +459,14 @@ fun MixerScreen(
 
                         Box(modifier = Modifier.weight(1f))
 
+                        // The spatial map: lit while it is open or placing.
+                        NavIconButton(
+                            icon = Icons.Default.SpatialAudio,
+                            contentDescription = "Spatial map",
+                            active = showSpatialMap || spatialPlacement.enabled,
+                            accent = accent,
+                            onClick = { showSpatialMap = !showSpatialMap }
+                        )
                         NavIconButton(
                             icon = Icons.Default.Tune,
                             contentDescription = "Insert Rack",
@@ -514,7 +537,8 @@ fun MixerScreen(
                 }
 
                 // ── Channel strips + insert rack ────────────────────────
-                Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                Row(modifier = Modifier.fillMaxSize()) {
 
                     // Horizontal-scrolling channel strips. Hoisted into its own
                     // composable that collects the 60Hz busLevels flow LOCALLY,
@@ -554,18 +578,57 @@ fun MixerScreen(
                                 onParameterChange = { busIdx, slotIdx, paramIdx, value ->
                                     viewModel.setParameter(busIdx, slotIdx, paramIdx, value)
                                 },
+                                onApplyPreset = { busIdx, slotIdx, preset ->
+                                    viewModel.applyFxPreset(busIdx, slotIdx, preset)
+                                },
                                 onPluginDryWet = { busIdx, slotIdx, dw ->
                                     viewModel.setPluginDryWet(busIdx, slotIdx, dw)
                                 },
                                 onBusInputToggle = { busIdx, enabled ->
                                     viewModel.setBusInputEnabled(busIdx, enabled)
                                 },
+                                spreadChannels = spreadChannels,
+                                onSpreadChannelsChange = { viewModel.setSpreadChannels(it) },
                                 onDismissEditor = { viewModel.dismissPluginEditor() },
                                 onClose = { showInsertRack = false }
                             )
                         }
                     }
                 }
+
+                // ── Spatial map, over the strips ────────────────────────
+                // In this window, not a dialog: glass cannot sample across
+                // windows (docs/ui-invariants.md). Qualified: the enclosing
+                // Column's scoped overload would otherwise be picked.
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showSpatialMap,
+                    enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.96f),
+                    exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.96f),
+                ) {
+                    val channelState by viewModel.channelState.collectAsStateWithLifecycle()
+                    val stereoFold by viewModel.stereoFoldEnabled.collectAsStateWithLifecycle()
+                    val atmosObjects by viewModel.atmosRenderingObjects.collectAsStateWithLifecycle()
+                    tf.monochrome.android.ui.mixer.spatial.SpatialMapPanel(
+                        placement = spatialPlacement,
+                        channelState = channelState,
+                        stereoFoldEnabled = stereoFold,
+                        atmosRenderingObjects = atmosObjects,
+                        accent = accent,
+                        onEnabledChange = { viewModel.setSpatialEnabled(it) },
+                        onBinauralChange = { viewModel.setSpatialBinaural(it) },
+                        onMove = { count, index, p -> viewModel.moveChannel(count, index, p) },
+                        onResetLayout = { viewModel.resetSpatialLayout(it) },
+                        headphoneTargets = viewModel.headphoneTargets,
+                        onTargetChange = { viewModel.setSpatialTarget(it) },
+                        onClose = { showSpatialMap = false },
+                        modifier = Modifier.fillMaxSize().padding(MonoDimens.spacingSm),
+                        hazeState = mixerHaze,
+                    )
+                }
+                }
+
+                // ── The player's timeline, under the strips ─────────────
+                MixerTimeline(playerViewModel = playerViewModel, accent = accent)
             }
             }
         }
@@ -588,8 +651,9 @@ fun MixerScreen(
             title = { Text("Reset the mixer?") },
             text = {
                 Text(
-                    "Removes every plugin and returns all buses to unity gain, " +
-                        "centred, unmuted. Saved presets are untouched."
+                    "Removes every plugin and every bus after Bus 4, and returns " +
+                        "the rest to unity gain, centred, unmuted. Saved presets " +
+                        "are untouched."
                 )
             },
             confirmButton = {
@@ -683,10 +747,16 @@ private fun DspPowerToggle(
 }
 
 /**
- * The row of channel strips. The 60 Hz `busLevels` meter flow is collected
- * HERE rather than in [MixerScreen] so a new meter frame recomposes only the
- * strips — the header, the DSP-canvas page, and the drag-transition gating all
- * stay out of the per-frame path (mirrors the local `audioAmplitude` pattern).
+ * The row of channel strips: buses 1 to 16 in number order, the master last,
+ * then a + tile that adds a bus while there is room for one. The 60 Hz
+ * `busLevels` meter flow is collected HERE rather than in [MixerScreen] so a
+ * new meter frame recomposes only the strips — the header, the DSP-canvas
+ * page, and the drag-transition gating all stay out of the per-frame path
+ * (mirrors the local `audioAmplitude` pattern).
+ *
+ * Every callback is by bus index, not by position in the row: the master sits
+ * at index 4 but is drawn last, so the two differ for every bus past 4.
+ * Long-press on bus 5 or later asks to remove it.
  */
 @Composable
 private fun ChannelStripRow(
@@ -701,27 +771,109 @@ private fun ChannelStripRow(
     modifier: Modifier = Modifier
 ) {
     val busLevels by viewModel.busLevels.collectAsStateWithLifecycle()
+    val ordered = remember(buses) { BusConfig.displayOrder(buses) }
+    val canAdd = BusConfig.mixBusCount(buses) < BusConfig.MAX_MIX_BUSES
+    var pendingRemoval by remember { mutableStateOf<BusConfig?>(null) }
+    // The + tile takes the strips' measured height, so it lines up with them.
+    val density = LocalDensity.current
+    var stripHeight by remember { mutableStateOf(0.dp) }
     LazyRow(
         modifier = modifier.fillMaxHeight(),
         contentPadding = PaddingValues(horizontal = MonoDimens.spacingMd, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        itemsIndexed(buses) { index, bus ->
+        items(ordered, key = { it.index }) { bus ->
+            val index = bus.index
             tf.monochrome.android.devedit.DevEditable("channel_strip_$index", Modifier) {
                 FLChannelStrip(
+                    modifier = Modifier.onSizeChanged {
+                        if (!bus.isMaster) stripHeight = with(density) { it.height.toDp() }
+                    },
                     bus = bus,
                     isSelected = index == selectedBusIndex,
                     levels = busLevels.getOrNull(index) ?: BusLevels(),
-                    accentColor = if (bus.isMaster) accent else busAccent(channelDynamicColor, accent, bus.index),
+                    accentColor = if (bus.isMaster) accent else busAccent(channelDynamicColor, accent, index),
                     hazeState = hazeState,
                     onSelect = { onSelectBus(index) },
+                    onLongPress = if (bus.isRemovable) ({ pendingRemoval = bus }) else null,
                     onGainChange = { viewModel.setBusGain(index, it) },
                     onPanChange = { viewModel.setBusPan(index, it) },
                     onToggleMute = { viewModel.toggleMute(index) },
                     onToggleSolo = { viewModel.toggleSolo(index) }
                 )
             }
+        }
+        if (canAdd) {
+            item(key = "add_bus") {
+                AddBusTile(
+                    height = if (stripHeight > 0.dp) stripHeight else 320.dp,
+                    accent = accent,
+                    onClick = {
+                        viewModel.addBus()
+                    }
+                )
+            }
+        }
+    }
+
+    pendingRemoval?.let { bus ->
+        AlertDialog(
+            onDismissRequest = { pendingRemoval = null },
+            title = { Text("Remove ${bus.name}?") },
+            text = {
+                Text(
+                    "Its effects and settings go with it. Buses after it move " +
+                        "down one number. Saved presets are untouched."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.removeBus(bus.index)
+                    pendingRemoval = null
+                }) { Text("Remove") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRemoval = null }) { Text("Cancel") }
+            }
+        )
+    }
+}
+
+/** The empty slot after the last strip: tap to add a bus. */
+@Composable
+private fun AddBusTile(
+    height: Dp,
+    accent: Color,
+    onClick: () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(PlayerDesignTokens.GlassCornerSmall)
+    Box(
+        modifier = Modifier
+            .width(60.dp)
+            .height(height)
+            .clip(shape)
+            .border(1.dp, colors.outline.copy(alpha = 0.30f), shape)
+            .bounceClick(onClick = onClick)
+            .semantics { contentDescription = "Add bus" },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(28.dp)
+            )
+            Text(
+                text = "Add bus",
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.onSurfaceVariant
+            )
         }
     }
 }

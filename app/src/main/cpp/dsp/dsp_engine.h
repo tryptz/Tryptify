@@ -7,14 +7,23 @@
 #include <string>
 #include <atomic>
 
-static constexpr int NUM_MIX_BUSES = 4;
+// Mix buses are added and removed at run time, between 4 and 16. The master
+// stays at index 4 whatever the count — every saved mix and preset has it
+// there — so buses 1–4 are indices 0–3 and bus 5 onwards are 5, 6, … The
+// active buses are always the contiguous indices 0..mixBusCount().
+static constexpr int MIN_MIX_BUSES = 4;
+static constexpr int MAX_MIX_BUSES = 16;
 static constexpr int MASTER_BUS = 4;
-static constexpr int TOTAL_BUSES = 5;  // 4 mix + 1 master
+static constexpr int TOTAL_BUSES = MAX_MIX_BUSES + 1;  // capacity: 16 mix + master
 static constexpr int MAX_PLUGINS_PER_BUS = 16;
 
 // Per-bus post-fader waveform tap ring size. Power of two (index masking);
 // ~43 ms at 48 kHz — enough history for the FX-chain scope displays.
 static constexpr int WAVE_TAP_SIZE = 2048;
+
+// Longest delay a bus can be held back by to line up with the slowest bus:
+// sixteen effects at 4x at 22.05 kHz is ~1600 samples. Power of two.
+static constexpr int PDC_SIZE = 2048;
 
 struct Bus {
     std::vector<std::unique_ptr<SnapinProcessor>> plugins;
@@ -55,6 +64,30 @@ struct Bus {
     float holdR = 0.0f;
     int holdCounterL = 0;
     int holdCounterR = 0;
+
+    // The ballistics as the meters read them: published by publishMeters()
+    // after each block. The fields above are the audio thread's working
+    // copy; reading them from the UI's 60 Hz poll was a data race.
+    std::atomic<float> shownDecayL{-60.0f};
+    std::atomic<float> shownDecayR{-60.0f};
+    std::atomic<float> shownHoldL{-60.0f};
+    std::atomic<float> shownHoldR{-60.0f};
+
+    void publishMeters() {
+        shownDecayL.store(decayL, std::memory_order_relaxed);
+        shownDecayR.store(decayR, std::memory_order_relaxed);
+        shownHoldL.store(holdL, std::memory_order_relaxed);
+        shownHoldR.store(holdR, std::memory_order_relaxed);
+    }
+
+    // Delay compensation (audio thread only): the bus's output held back so
+    // it arrives with the bus whose effects delay it most. PDC_SIZE each,
+    // allocated once by the engine.
+    std::vector<float> pdcL, pdcR;
+    int pdcPos = 0;
+    // Set when the ring holds audio from before a pause in this bus's
+    // processing (it was muted, off or moved), so it is cleared first.
+    bool pdcStale = true;
 };
 
 class DspEngine {
@@ -71,6 +104,30 @@ public:
 
     // Audio processing — called from audio thread
     void process(float* left, float* right, int numFrames);
+
+    // ── Lane stepping, for MultiLaneEngine ──────────────────────────────
+    // process() is these three in a row. A host running several engines as
+    // the lanes of one multichannel stream steps them together instead, so
+    // that at a linked master slot every lane can be handed the same
+    // detector key. All of them expect chainMutex() to be held.
+    std::mutex& chainMutex() { return chainMutex_; }
+    void processMixBusesLocked(const float* left, const float* right, int numFrames);
+    int masterSlotCountLocked() const;
+    // Whether master slot [slot] would run and detects level (so linking it
+    // across lanes means something).
+    bool masterSlotLinkableLocked(int slot) const;
+    // detectorKey, when non-null, replaces the slot's own level detection:
+    // one non-negative sample per frame.
+    void processMasterSlotLocked(int slot, int numFrames, const float* detectorKey);
+    void finishBlockLocked(float* left, float* right, int numFrames);
+    // The master bus signal between slots: what the next slot will receive.
+    const float* masterSumL() const { return sumL_.data(); }
+    const float* masterSumR() const { return sumR_.data(); }
+
+    // A lane carrying one channel (centre, LFE) as dual-mono. Effects that
+    // only reshape a stereo image are skipped, and pans sit at centre.
+    void setMonoLane(bool mono) { monoLane_ = mono; }
+    bool isMixBypassed() const { return mixBypassed_.load(std::memory_order_relaxed); }
 
     // Bus control — simple writes, safe for cross-thread
     void setBusGain(int busIndex, float gainDb);
@@ -91,10 +148,50 @@ public:
     void setBusInputEnabled(int busIndex, bool enabled);
     void setMixBypassed(bool bypassed);
 
+    // Adds a mix bus after the last one: unity, centre, input off, no
+    // plugins. Returns its index, or -1 at MAX_MIX_BUSES.
+    int addBus();
+    // Removes mix bus [busIndex] and moves every bus above it down one
+    // index. Buses 1–4 (indices 0–3) and the master cannot be removed.
+    bool removeBus(int busIndex);
+    int mixBusCount() const { return mixBusCount_.load(std::memory_order_relaxed); }
+
+    // ── Channel routing, for MultiLaneEngine ────────────────────────────
+    // A stream wider than stereo is spread across the mixer: each lane (a
+    // channel group — front pair, centre, LFE, …) feeds one bus of its own,
+    // lane k to bus number k + 1. This engine is one lane: it feeds only
+    // [routedBus] among the first [routedCount] mix buses, while buses past
+    // those still take input by their own switch (a whole-bed send, say).
+    // routedBus -1 turns routing off: every bus by its switch, as in stereo.
+    //
+    // The mixer grows to at least [routedCount] mix buses, and remembers it
+    // did: when the routing narrows again the buses the growth added are
+    // removed, if they are still untouched. While routed those buses cannot
+    // be removed, a saved state keeps its own bus count through a load, and
+    // getStateJson() leaves the untouched grown buses out — so a mix saved
+    // during an Atmos track is still the mix the user built.
+    void setRouting(int routedBus, int routedCount);
+    int routedBus() const { return routedBus_.load(std::memory_order_relaxed); }
+    int routedCount() const { return routedCount_.load(std::memory_order_relaxed); }
+    // The mix-bus count routing grew this engine from, or -1. A lane cloned
+    // from another takes the original's with inheritGrowth, so both hand the
+    // same buses back when the stream narrows.
+    int autoGrownFrom() const { return autoGrownFrom_.load(std::memory_order_relaxed); }
+    void inheritGrowth(int grownFrom) { autoGrownFrom_.store(grownFrom, std::memory_order_relaxed); }
+    // Bus number (1–16, as the strips show it) to engine index, and back.
+    static int busIndexForNumber(int n) { return n <= MASTER_BUS ? n - 1 : n; }
+    static int busNumberForIndex(int i) { return i < MASTER_BUS ? i + 1 : i; }
+
     // Metering — returns levels in dB
     // Output: [bus0_peakL, bus0_peakR, bus0_holdL, bus0_holdR, ..., master_holdR]
     // Total: TOTAL_BUSES * 4 floats
     void getBusLevels(float* outLevels, int maxFloats);
+    // Drops every meter to silence. The meters only fall while audio is
+    // processed, so after a pause they would otherwise hold their last level
+    // and show it again the moment playback resumes.
+    void resetMeters();
+    // One bus's [peakL, peakR, holdL, holdR]; false if it is not active.
+    bool getBusLevel(int busIndex, float* out4) const;
 
     // Clipping detection — returns true if master output clipped since last check
     bool getAndResetClipped();
@@ -111,7 +208,9 @@ public:
     void resetPluginState();
 
     // State serialization
-    std::string getStateJson() const;
+    // [full] includes the buses routing grew that are still untouched; the
+    // default leaves them out, which is the form to save or export.
+    std::string getStateJson(bool full = false) const;
     void loadStateJson(const std::string& json);
 
 private:
@@ -126,6 +225,34 @@ private:
     std::vector<float> dryBufL_, dryBufR_;  // Pre-allocated for dry/wet blending
 
     bool anySoloed() const;
+    // Active buses are 0..mixBusCount_ (master at 4 among them).
+    int activeBusCount() const { return mixBusCount_.load(std::memory_order_relaxed) + 1; }
+    bool isActiveBus(int i) const { return i >= 0 && i < activeBusCount(); }
+    bool isMixBus(int i) const { return isActiveBus(i) && i != MASTER_BUS; }
+    static void resetBusLocked(Bus& bus);
+    static void moveBusLocked(Bus& dst, Bus& src);
+    std::atomic<int> mixBusCount_{MIN_MIX_BUSES};
+    std::atomic<int> routedBus_{-1};
+    std::atomic<int> routedCount_{0};
+    // The mix-bus count before routing grew it, or -1 when it has not.
+    std::atomic<int> autoGrownFrom_{-1};
+    static bool pristineLocked(const Bus& bus);
+    bool busPristine(int busIndex);
+    // How many mix buses a save carries: the grown, untouched tail left off.
+    int savedMixBusCountLocked() const;
+    bool skippedOnThisLane(const SnapinProcessor& plugin) const;
+    // One slot of a chain, in place on [l]/[r]: processed and blended when
+    // [run], otherwise delayed by the effect's latency so the chain's delay
+    // is the same bypassed or not. A block the effect turns non-finite is
+    // replaced by its dry signal and the effect reset.
+    void runSlotLocked(SnapinProcessor& plugin, float* l, float* r, int numFrames, bool run);
+    // Base-rate samples the chain on [bus] delays its signal by.
+    static int chainLatencyLocked(const Bus& bus);
+    // Holds [l]/[r] back by [delay] through [bus]'s compensation ring.
+    static void delayBusLocked(Bus& bus, float* l, float* r, int numFrames, int delay);
+    // The pieces of process(), for one block no longer than maxBlockSize_.
+    void processBlockLocked(float* left, float* right, int numFrames);
+    bool monoLane_ = false;
     void recalcBusGains(float gainDb, float pan, float& targetL, float& targetR);
 
     // Smoothing coefficient for gain changes

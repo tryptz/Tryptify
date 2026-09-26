@@ -71,6 +71,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var projectMEngineRepository: ProjectMEngineRepository
     @Inject lateinit var channelDetectorProcessor: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor
     @Inject lateinit var downmixProcessor: tf.monochrome.android.audio.dsp.DownmixProcessor
+    @Inject lateinit var spatialPlacement: tf.monochrome.android.audio.dsp.spatial.SpatialPlacementStore
     @Inject lateinit var mixBusProcessor: MixBusProcessor
     // The Oxford post-chain, injected so a blend's DSP copy can be seeded with
     // whatever these are set to right now.
@@ -521,8 +522,10 @@ class PlaybackService : MediaSessionService() {
 
         // Multichannel handling: fold 5.1/7.1 down to stereo (default) or,
         // when the user turns the toggle off, pass multichannel PCM through
-        // to AudioTrack untouched (the stereo-only processors deactivate
-        // themselves for >2 ch). Takes effect on the next pipeline
+        // to AudioTrack untouched — where Android's spatializer can take it.
+        // The chain runs at that width, up to 16 channels: the mixer as one
+        // lane per channel pair, both EQs per channel, speed and
+        // transposition per channel. Takes effect on the next pipeline
         // reconfigure (track change / seek), like the other DSP toggles.
         //
         // The Atmos speaker render (Atmos page › Speakers) outputs the layout's
@@ -547,6 +550,14 @@ class PlaybackService : MediaSessionService() {
             preferences.rendererProfile.collect { profile ->
                 downmixProcessor.setPreampDb(profile.downmixPreampDb)
                 downmixProcessor.setLfeLowpass(profile.lfeLowpass)
+                // The spatial map's binaural fold uses the Atmos renderer's
+                // headphone settings, so the two sound alike.
+                downmixProcessor.setHeadphoneRender(
+                    profile.binauralStrength,
+                    profile.heightVirtualization,
+                    profile.bassManagement,
+                    profile.crossoverHz,
+                )
             }
         }
 
@@ -577,6 +588,7 @@ class PlaybackService : MediaSessionService() {
         // the 1024 default with the mixer on regardless of what the user set.
         serviceScope.launch { preferences.dspBlockSize.collect { dspBlockSize = it } }
         serviceScope.launch { preferences.dspEnabled.collect { dspEnabled = it } }
+        serviceScope.launch { preferences.hiResHalOutputEnabled.collect { hiResHalEnabled = it } }
 
         // Blend length. Any non-zero value takes over from the gapless window,
         // so re-derive that whenever it changes.
@@ -868,7 +880,8 @@ class PlaybackService : MediaSessionService() {
                                 atmosAudioProcessor.activeLayout
                             }
                         )
-                        // Deliberately false, whatever the factory was told.
+                        // Float output: on, but DefaultAudioSink never gets to
+                        // act on it by itself.
                         //
                         // DefaultAudioSink.configure builds its pipeline one of
                         // two ways, and they are not equivalent:
@@ -880,24 +893,20 @@ class PlaybackService : MediaSessionService() {
                         //     pipelineProcessors.add(audioProcessorChain.getAudioProcessors())
                         //   }
                         //
-                        // toFloatPcmAvailableAudioProcessors is exactly one
-                        // processor, the float converter. The custom chain is
-                        // added on the other branch only. So turning this on
-                        // silently deletes the mixer, both EQs, the spectrum
-                        // tap and the projectM feed from the HAL path, and the
-                        // audio keeps playing, which is how it went unnoticed:
-                        // every effect dead, nothing in the log.
+                        // The float branch has no custom chain: handed a hi-res
+                        // stream directly it would play with the mixer, both
+                        // EQs, the spectrum and the projectM feed silently gone.
+                        // The int branch has one, but narrows to 16 bits first.
                         //
-                        // shouldUseFloatOutput also requires high-resolution
-                        // input, so this only started biting once the renderer
-                        // above began emitting float.
-                        //
-                        // Nothing is lost. The exclusive USB path takes the
-                        // renderer's float directly and packs it into the DAC's
-                        // 24-bit subslots itself; this flag never touched it.
-                        // The HAL path goes back to what it did before, which
-                        // is 16-bit out with every effect running.
-                        .setEnableFloatOutput(false)
+                        // LibusbAudioSink stands in front and never hands this
+                        // sink a hi-res stream it would take down the float
+                        // branch unprocessed: it either runs the DSP itself in
+                        // float and passes the finished float here (hi-res
+                        // output — the reason this is on), or narrows to 16-bit
+                        // itself so the int branch and its chain run as before.
+                        // 16-bit sources come straight through to the int
+                        // branch, unchanged.
+                        .setEnableFloatOutput(true)
                         .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                         // Our own chain rather than setAudioProcessors, which
                         // would wrap these in DefaultAudioProcessorChain and send
@@ -912,8 +921,15 @@ class PlaybackService : MediaSessionService() {
                                 arrayOf(
                                 channelDetectorProcessor, // Passive tap: reports source channel count/layout + per-channel activity
                                 atmosAudioProcessor,    // Atmos: multichannel bed → object render → binaural stereo or speakers; inactive for ≤2ch
+                                // The mixer before the fold, so it sees the song's own layout: a
+                                // 9.1.6 bed spreads one channel group per bus (nine of them), and
+                                // is folded to stereo only after it has been mixed. With the fold
+                                // first, every multichannel song reached the mixer as plain stereo.
+                                // An Atmos speaker render reaches it as the layout's speakers, so
+                                // up to 7.1.4 is mixed per speaker group; 9.1.4 / 9.1.6 travel as a
+                                // 24-channel frame, past its 16, and it steps aside for those.
+                                mixBusProcessor,        // DSP engine (mixer/effects), up to 16 channels
                                 downmixProcessor,       // Multichannel→stereo fold-down; inactive (NOT_SET) for mono/stereo
-                                mixBusProcessor,        // DSP engine (mixer/effects)
                                 autoEqProcessor,        // AutoEQ (independent, always-on when enabled)
                                 parametricEqProcessor,  // Parametric EQ (after AutoEQ, stacks on top)
                                 spectrumAnalyzerTap,    // Passive FFT tap for the Parametric EQ editor visualizer
@@ -941,6 +957,13 @@ class PlaybackService : MediaSessionService() {
                     // configures + drains them at a time (bypassActive
                     // gates inside LibusbAudioSink), so there's no
                     // contention.
+                    // Time-stretching for the two paths that run the DSP in
+                    // the sink. DefaultAudioSink's int branch keeps Media3's
+                    // Sonic; this one also takes float, so hi-res and USB
+                    // streams change speed at their own resolution. One
+                    // instance, like the other shared stages: only one of
+                    // the two paths runs at a time.
+                    val timeStretch = tf.monochrome.android.audio.resample.FloatSonicAudioProcessor()
                     tf.monochrome.android.audio.usb.LibusbAudioSink(
                         delegate = defaultSink,
                         driver = libusbDriver,
@@ -959,8 +982,9 @@ class PlaybackService : MediaSessionService() {
                             tf.monochrome.android.audio.usb.ToFloatPcmAudioProcessor(),
                             channelDetectorProcessor,
                             atmosAudioProcessor,
-                            downmixProcessor,
+                            // Mixer before the fold, as in the chain above.
                             mixBusProcessor,
+                            downmixProcessor,
                             autoEqProcessor,
                             parametricEqProcessor,
                             spectrumAnalyzerTap,
@@ -990,6 +1014,11 @@ class PlaybackService : MediaSessionService() {
                             // passes the block straight through, so
                             // bit-perfect output survives.
                             stretchProcessor,
+                            // Speed with pitch preserved. Without it that mode
+                            // did nothing over USB. Not in the chain until a
+                            // speed is used, and exact at 1.00x after that,
+                            // so bit-perfect output survives here too.
+                            timeStretch,
                             // ProjectM tap intentionally omitted from
                             // the bypass chain — the inline pump runs
                             // on the renderer thread and the visualizer
@@ -997,6 +1026,30 @@ class PlaybackService : MediaSessionService() {
                             // Spectrum tap is light-weight and fine.
                         ),
                         resampler = variRateProcessor,
+                        timeStretch = timeStretch,
+                        // The hi-res HAL path: the same DSP, run here in float
+                        // and handed to defaultSink finished (see the note on
+                        // setEnableFloatOutput). Speed included, with the
+                        // transport stages last in the int branch's order, so
+                        // a speed change never moves the stream off this path.
+                        // With the projectM tap, which the normal HAL path
+                        // has and this one must not lose.
+                        halProcessors = listOf(
+                            tf.monochrome.android.audio.usb.ToFloatPcmAudioProcessor(),
+                            channelDetectorProcessor,
+                            atmosAudioProcessor,
+                            // Mixer before the fold, as in the chain above.
+                            mixBusProcessor,
+                            downmixProcessor,
+                            autoEqProcessor,
+                            parametricEqProcessor,
+                            spectrumAnalyzerTap,
+                            TeeAudioProcessor(ProjectMAudioTapProcessor(audioBus)),
+                            variRateProcessor,
+                            stretchProcessor,
+                            timeStretch,
+                        ),
+                        hiResHalEnabled = { hiResHalEnabled },
                     )
                 } catch (error: Exception) {
                     projectMEngineRepository.reportAudioTapFailure(
@@ -1419,6 +1472,8 @@ class PlaybackService : MediaSessionService() {
     // defaults match PreferencesManager's until the collectors above land.
     @Volatile private var dspBlockSize = 1024
     @Volatile private var dspEnabled = false
+    // Read by LibusbAudioSink on the playback thread at configure time.
+    @Volatile private var hiResHalEnabled = true
 
     // Type left inferred, like atmosTapFactory above: spelling CrossfadeController
     // out here is itself an opt-in usage that an @OptIn on the property doesn't
@@ -1454,7 +1509,7 @@ class PlaybackService : MediaSessionService() {
      */
     @OptIn(UnstableApi::class)
     private fun buildSeededDspChain(): tf.monochrome.android.audio.dsp.DspChain {
-        val chain = tf.monochrome.android.audio.dsp.DspChain.createCopy()
+        val chain = tf.monochrome.android.audio.dsp.DspChain.createCopy(spatialPlacement)
         val autoEq = lastAutoEq
         val paramEq = lastParametricEq
         chain.seedFrom(

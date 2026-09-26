@@ -41,9 +41,10 @@ class DspEngineManager @Inject constructor(
     val buses: StateFlow<List<BusConfig>> = _buses.asStateFlow()
 
     // Meter levels — polled from the UI once per display frame
-    // [peakL, peakR, holdL, holdR] per bus = 4 floats each
-    private val levelsBuffer = FloatArray(TOTAL_BUSES * 4)
-    private val _busLevels = MutableStateFlow(List(TOTAL_BUSES) { BusLevels() })
+    // [peakL, peakR, holdL, holdR] per bus = 4 floats each, indexed by bus
+    // index; sized for the most buses a mix can hold.
+    private val levelsBuffer = FloatArray(BusConfig.MAX_TOTAL_BUSES * 4)
+    private val _busLevels = MutableStateFlow(List(BusConfig.defaultBuses().size) { BusLevels() })
     val busLevels: StateFlow<List<BusLevels>> = _busLevels.asStateFlow()
 
     private val _clipped = MutableStateFlow(false)
@@ -76,6 +77,18 @@ class DspEngineManager @Inject constructor(
         scope.launch {
             preferences.dspBlockSize.collect { processor.setBlockSize(it) }
         }
+        // A wide stream spreads its channel groups one per bus, adding buses
+        // as it needs them; a narrower one hands back the ones nobody touched.
+        // Either way the engine changed the mixer, so the mirror re-reads it.
+        scope.launch {
+            preferences.dspSpreadChannels.collect { processor.setSpreadChannels(it) }
+        }
+        scope.launch {
+            processor.channelGroups.collect {
+                if (processor.getEnginePtr() != 0L) syncFromEngine()
+                else _buses.value = labelled(_buses.value)
+            }
+        }
         // Master "DSP mixer off" toggle becomes a true bypass on the audio
         // thread — no deinterleave, no nativeProcess, no Oxford, no
         // interleave — so flipping it off should leave audio identical to
@@ -104,9 +117,32 @@ class DspEngineManager @Inject constructor(
      */
     @Volatile private var liveStateJson: String? = null
 
+    // Set by the first edit, so the saved mix loaded at startup (below) never
+    // lands on top of a change the user has already made.
+    @Volatile private var edited = false
+
     private fun requestSave() {
+        edited = true
         getStateJson().takeIf { it != "{}" }?.let { liveStateJson = it }
         saveSignal.tryEmit(Unit)
+    }
+
+    // Placed after the fields it touches: Kotlin runs initialisers and init
+    // blocks in source order, and this coroutine may run at once on another
+    // thread — started any earlier, a field initialiser could reset what it set.
+    init {
+        // The engine is only built when audio first plays, but the mixer can
+        // be opened before that. Show — and edit — the saved mix meanwhile,
+        // not a blank one: a blank mirror saved over the file would lose it.
+        scope.launch {
+            val json = preferences.dspStateJson.first()
+            if (!json.isNullOrEmpty() && json != "{}" &&
+                processor.getEnginePtr() == 0L && !edited
+            ) {
+                _buses.value = labelled(parseBusConfigsFromJson(json))
+                if (liveStateJson == null) liveStateJson = json
+            }
+        }
     }
 
     /**
@@ -132,6 +168,10 @@ class DspEngineManager @Inject constructor(
      * would be worse than no reset button.
      */
     fun resetToDefaults() {
+        // Back to four buses first, highest first so no index moves under us.
+        for (bus in _buses.value.filter { it.isRemovable }.sortedByDescending { it.index }) {
+            removeBus(bus.index)
+        }
         for (bus in _buses.value) {
             for (slot in bus.plugins.indices.reversed()) removePlugin(bus.index, slot)
         }
@@ -144,11 +184,49 @@ class DspEngineManager @Inject constructor(
         }
     }
 
+    // What the meter poll last saw of the engine's processing, for [pollLevels].
+    private var lastProcessedBlocks = -1L
+    private var lastBlocksChangedNanos = 0L
+    private var lastPollNanos = 0L
+    private var metersIdle = false
+
     fun pollLevels() {
         val ptr = processor.getEnginePtr()
-        if (ptr == 0L) return
+        val now = System.nanoTime()
+        val dtSec = if (lastPollNanos == 0L) 0f else ((now - lastPollNanos) / 1e9f).coerceAtMost(0.25f)
+        lastPollNanos = now
+        val blocks = processor.processedBlocks
+        if (blocks != lastProcessedBlocks) {
+            lastProcessedBlocks = blocks
+            lastBlocksChangedNanos = now
+        }
+        // The player feeds audio in bursts, so many polls see no new block
+        // even mid-song; only a quarter second without one means it stopped.
+        val processing = ptr != 0L && now - lastBlocksChangedNanos < IDLE_AFTER_NANOS
+
+        if (!processing) {
+            // Paused, stopped, bypassed or no engine: nothing moves the
+            // engine's meters, which fall only as audio is processed. Let the
+            // shown levels fall here instead, at the engine's own 20 dB/s, and
+            // clear the engine's so they do not jump back up on resume. (They
+            // used to freeze at whatever was last playing.)
+            if (!metersIdle && ptr != 0L) processor.nativeResetMeters(ptr)
+            metersIdle = true
+            val fall = METER_FALL_DB_PER_SEC * dtSec
+            _busLevels.value = _busLevels.value.map {
+                BusLevels(
+                    peakDbL = (it.peakDbL - fall).coerceAtLeast(METER_FLOOR_DB),
+                    peakDbR = (it.peakDbR - fall).coerceAtLeast(METER_FLOOR_DB),
+                    holdDbL = (it.holdDbL - fall).coerceAtLeast(METER_FLOOR_DB),
+                    holdDbR = (it.holdDbR - fall).coerceAtLeast(METER_FLOOR_DB),
+                )
+            }
+            return
+        }
+        metersIdle = false
         processor.nativeGetBusLevels(ptr, levelsBuffer)
-        _busLevels.value = List(TOTAL_BUSES) { b ->
+        val count = _buses.value.size.coerceAtMost(BusConfig.MAX_TOTAL_BUSES)
+        _busLevels.value = List(count) { b ->
             BusLevels(
                 peakDbL = levelsBuffer[b * 4],
                 peakDbR = levelsBuffer[b * 4 + 1],
@@ -202,8 +280,10 @@ class DspEngineManager @Inject constructor(
     }
 
     companion object {
-        private const val TOTAL_BUSES = 5
-
+        /** The engine's meter release (dsp_engine.cpp meterDecayPerSample_), and its floor. */
+        private const val METER_FALL_DB_PER_SEC = 20f
+        private const val METER_FLOOR_DB = -60f
+        private const val IDLE_AFTER_NANOS = 250_000_000L
         // Mirrors MAX_PLUGINS_PER_BUS in dsp_engine.h — native refuses inserts past this.
         const val MAX_PLUGINS_PER_BUS = 16
 
@@ -239,7 +319,9 @@ class DspEngineManager @Inject constructor(
 
     suspend fun restoreState() {
         val enabled = preferences.dspEnabled.first()
-        val stateJson = preferences.dspStateJson.first()
+        // Edits made before the engine existed are newer than the file, which
+        // is only written half a second after them.
+        val stateJson = liveStateJson ?: preferences.dspStateJson.first()
 
         if (!stateJson.isNullOrEmpty() && stateJson != "{}") {
             loadStateJson(stateJson)
@@ -248,6 +330,57 @@ class DspEngineManager @Inject constructor(
 
         _enabled.value = enabled
         processor.setMixBypassed(!enabled)
+    }
+
+    // ── Adding and removing buses ───────────────────────────────────────
+
+    /**
+     * Adds a bus after the last one: unity, centre, input off, no plugins.
+     * Returns its index, or null at [BusConfig.MAX_MIX_BUSES] or with no
+     * engine.
+     */
+    fun addBus(): Int? {
+        val ptr = processor.getEnginePtr()
+        val index = if (ptr != 0L) {
+            processor.nativeAddBus(ptr)
+        } else {
+            // No engine yet: the mirror is the mix. Same rule as the engine:
+            // buses 1–4 and the master are indices 0–4, the next is count + 1.
+            val count = BusConfig.mixBusCount(_buses.value)
+            if (count >= BusConfig.MAX_MIX_BUSES) -1 else count + 1
+        }
+        if (index < 0) return null
+        _buses.value = labelled(
+            (_buses.value + BusConfig(index = index, name = BusConfig.nameFor(index)))
+                .sortedBy { it.index }
+        )
+        requestSave()
+        return index
+    }
+
+    /**
+     * Removes bus [busIndex] (bus 5 and up). The buses above it move down one
+     * index in the engine, so the Kotlin mirror is re-read from the engine's
+     * own state rather than patched by hand.
+     */
+    fun removeBus(busIndex: Int): Boolean {
+        val ptr = processor.getEnginePtr()
+        if (ptr != 0L) {
+            if (!processor.nativeRemoveBus(ptr, busIndex)) return false
+            syncFromEngine()
+        } else {
+            // No engine yet: do to the mirror what the engine would do —
+            // drop the bus and move every bus above it down one index.
+            val bus = _buses.value.firstOrNull { it.index == busIndex }
+            if (bus == null || !bus.isRemovable) return false
+            _buses.value = labelled(
+                _buses.value.filter { it.index != busIndex }.map {
+                    if (it.index > busIndex) it.copy(index = it.index - 1) else it
+                }.sortedBy { it.index }
+            )
+        }
+        requestSave()
+        return true
     }
 
     // ── Bus controls ────────────────────────────────────────────────────
@@ -294,8 +427,16 @@ class DspEngineManager @Inject constructor(
 
     fun addPlugin(busIndex: Int, slotIndex: Int, type: SnapinType): Int {
         val ptr = processor.getEnginePtr()
-        if (ptr == 0L) return -1
-        val resultSlot = processor.nativeAddPlugin(ptr, busIndex, slotIndex, type.ordinal)
+        val resultSlot = if (ptr != 0L) {
+            processor.nativeAddPlugin(ptr, busIndex, slotIndex, type.ordinal)
+        } else {
+            // No engine yet (nothing has played): add it to the mirror, which
+            // is saved and handed to the engine when it is built. This used to
+            // return -1 and the effect silently never appeared.
+            val bus = _buses.value.firstOrNull { it.index == busIndex }
+            if (bus == null || bus.plugins.size >= MAX_PLUGINS_PER_BUS) -1
+            else slotIndex.coerceIn(0, bus.plugins.size)
+        }
         if (resultSlot >= 0) {
             updateBus(busIndex) { bus ->
                 val plugins = bus.plugins.toMutableList()
@@ -355,6 +496,33 @@ class DspEngineManager @Inject constructor(
         requestSave()
     }
 
+    /**
+     * A whole preset at once: every parameter and the dry/wet, one update of
+     * the mirror and one save. (Through [setParameter] a 12-parameter preset
+     * would serialise the whole mixer twelve times.)
+     */
+    fun setParameters(busIndex: Int, slotIndex: Int, values: FloatArray, dryWet: Float) {
+        val sanitized = FloatArray(values.size) { sanitizeParam(values[it]) }
+        val dw = (if (dryWet.isFinite()) dryWet else MAX_DRY_WET).coerceIn(MIN_DRY_WET, MAX_DRY_WET)
+        val ptr = processor.getEnginePtr()
+        if (ptr != 0L) {
+            sanitized.forEachIndexed { i, v -> processor.nativeSetParameter(ptr, busIndex, slotIndex, i, v) }
+            processor.nativeSetPluginDryWet(ptr, busIndex, slotIndex, dw)
+        }
+        updateBus(busIndex) { bus ->
+            val plugins = bus.plugins.toMutableList()
+            if (slotIndex in plugins.indices) {
+                val plugin = plugins[slotIndex]
+                plugins[slotIndex] = plugin.copy(
+                    parameters = plugin.parameters + sanitized.withIndex().associate { it.index to it.value },
+                    dryWet = dw,
+                )
+            }
+            bus.copy(plugins = plugins)
+        }
+        requestSave()
+    }
+
     fun setPluginBypassed(busIndex: Int, slotIndex: Int, bypassed: Boolean) {
         val ptr = processor.getEnginePtr()
         if (ptr != 0L) processor.nativeSetPluginBypassed(ptr, busIndex, slotIndex, bypassed)
@@ -407,17 +575,56 @@ class DspEngineManager @Inject constructor(
 
     // ── State serialization ─────────────────────────────────────────────
 
+    /**
+     * The mix as the engine's state JSON: the engine's own when it exists,
+     * otherwise the mirror written in the same format ([DspStateJson]), so
+     * saving, presets and export all work before anything has played.
+     */
     fun getStateJson(): String {
         val ptr = processor.getEnginePtr()
-        if (ptr == 0L) return "{}"
+        if (ptr == 0L) return DspStateJson.encode(_buses.value)
         return processor.nativeGetStateJson(ptr)
     }
 
     fun loadStateJson(json: String) {
         val ptr = processor.getEnginePtr()
         if (ptr != 0L) processor.nativeLoadStateJson(ptr, json)
-        // Sync Kotlin state from the loaded JSON
-        _buses.value = parseBusConfigsFromJson(json)
+        // Sync Kotlin state from what the engine made of it — which, while a
+        // wide stream plays, can be more buses than the JSON had.
+        if (ptr != 0L) syncFromEngine() else _buses.value = labelled(parseBusConfigsFromJson(json))
+    }
+
+    val spreadChannels = preferences.dspSpreadChannels
+
+    fun setSpreadChannels(spread: Boolean) {
+        processor.setSpreadChannels(spread)  // at once, not after the write
+        scope.launch { preferences.setDspSpreadChannels(spread) }
+    }
+
+    /** The channel groups of the stream playing, in bus order; empty for stereo. */
+    val channelGroups: StateFlow<List<String>> get() = processor.channelGroups
+
+    /** Re-reads the whole mixer from the engine, grown buses included. */
+    private fun syncFromEngine() {
+        val ptr = processor.getEnginePtr()
+        if (ptr == 0L) return
+        _buses.value = labelled(parseBusConfigsFromJson(processor.nativeGetLiveStateJson(ptr)))
+    }
+
+    /**
+     * Names the buses a multichannel stream is spread onto after the channels
+     * they carry — "Front", "Centre", "LFE"… — and clears the names off the
+     * rest. Only the mirror is renamed; nothing here is saved.
+     */
+    private fun labelled(buses: List<BusConfig>): List<BusConfig> {
+        val groups = processor.channelGroups.value
+        return buses.map { bus ->
+            val group = if (bus.isMaster) null else groups.getOrNull(bus.number - 1)
+            bus.copy(
+                name = group ?: BusConfig.nameFor(bus.index),
+                channelGroup = group,
+            )
+        }
     }
 
     // ── Internal ────────────────────────────────────────────────────────
@@ -428,15 +635,15 @@ class DspEngineManager @Inject constructor(
         }
     }
 
-    private val defaultBusNames = listOf("Bus 1", "Bus 2", "Bus 3", "Bus 4", "Master")
-
     private fun parseBusConfigsFromJson(json: String): List<BusConfig> {
         return try {
             val jsonParser = Json { ignoreUnknownKeys = true }
             val root = jsonParser.parseToJsonElement(json).jsonObject
             val busesArray = root["buses"]?.jsonArray ?: return BusConfig.defaultBuses()
 
-            busesArray.mapIndexed { index, element ->
+            // The engine takes at most 16 mix buses and the master; a longer
+            // (hand-edited) file is cut to what it will actually run.
+            val parsed = busesArray.take(BusConfig.MAX_TOTAL_BUSES).mapIndexed { index, element ->
                 val obj = element.jsonObject
                 val plugins = obj["plugins"]?.jsonArray?.mapIndexed { slotIdx, plugEl ->
                     val plugObj = plugEl.jsonObject
@@ -458,7 +665,7 @@ class DspEngineManager @Inject constructor(
                 val rawPan = obj["pan"]?.jsonPrimitive?.float ?: 0f
                 BusConfig(
                     index = index,
-                    name = defaultBusNames.getOrElse(index) { "Bus ${index + 1}" },
+                    name = BusConfig.nameFor(index),
                     gainDb = (if (rawGain.isFinite()) rawGain else 0f)
                         .coerceIn(MIN_BUS_GAIN_DB, MAX_BUS_GAIN_DB),
                     pan = (if (rawPan.isFinite()) rawPan else 0f).coerceIn(MIN_PAN, MAX_PAN),
@@ -468,6 +675,10 @@ class DspEngineManager @Inject constructor(
                     plugins = plugins
                 )
             }
+            // A short list still loads as buses 1–4 plus the master on the
+            // native side (the entries it lacks stay empty), so the mirror
+            // fills in the same buses rather than showing a mixer with no master.
+            parsed + BusConfig.defaultBuses().drop(parsed.size)
         } catch (e: Exception) {
             Log.w("DspEngineManager", "Failed to parse DSP state JSON, using defaults", e)
             BusConfig.defaultBuses()

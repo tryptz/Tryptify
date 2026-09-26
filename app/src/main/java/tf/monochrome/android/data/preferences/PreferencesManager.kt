@@ -208,6 +208,8 @@ class PreferencesManager @Inject constructor(
         // device-local — the layout tracks the connected DAC and the HRTF is a
         // local measurement — so it is deliberately NOT in SETTINGS_SYNC_KEYS.
         private val RENDERER_PROFILE_JSON = stringPreferencesKey("renderer_profile_json")
+        // The mixer's spatial map: where each channel of a multichannel bed sits.
+        private val SPATIAL_PLACEMENT_JSON = stringPreferencesKey("spatial_placement_json")
 
         // Player / display
         private val PLAYER_DYNAMIC_COLOR = booleanPreferencesKey("player_dynamic_color")
@@ -396,6 +398,7 @@ class PreferencesManager @Inject constructor(
         private val DSP_STATE_JSON = stringPreferencesKey("dsp_state_json")
         private val MIXER_CHANNEL_DYNAMIC = booleanPreferencesKey("mixer_channel_dynamic")
         private val DSP_BLOCK_SIZE = intPreferencesKey("dsp_block_size")
+        private val DSP_SPREAD_CHANNELS = booleanPreferencesKey("dsp_spread_channels")
         private val DOWNLOAD_QUEUE_JSON = stringPreferencesKey("download_queue_json")
 
         // One-shot marker for the move of the cover store out of cacheDir.
@@ -408,6 +411,7 @@ class PreferencesManager @Inject constructor(
             booleanPreferencesKey("usb_exclusive_bit_perfect_enabled")
         private val MULTICHANNEL_DOWNMIX_ENABLED =
             booleanPreferencesKey("multichannel_downmix_enabled")
+        private val HIRES_HAL_OUTPUT_ENABLED = booleanPreferencesKey("hires_hal_output_enabled")
         // Powers of two mirroring the user-facing chip row in Settings.
         // Native engine's static MAX_BLOCK_SIZE caps the largest entry; bump
         // both together if you add another step.
@@ -1866,6 +1870,16 @@ class PreferencesManager @Inject constructor(
     }
 
     /**
+     * Whether a multichannel stream is spread across the mixer, one bus per
+     * channel group (front, centre, LFE, surrounds, heights), or runs whole
+     * through bus 1 like stereo. Spread by default.
+     */
+    val dspSpreadChannels: Flow<Boolean> = dataStore.data.map { it[DSP_SPREAD_CHANNELS] ?: true }
+    suspend fun setDspSpreadChannels(value: Boolean) {
+        dataStore.edit { it[DSP_SPREAD_CHANNELS] = value }
+    }
+
+    /**
      * When on, PlaybackService pins the player's output to the
      * currently-attached USB Audio Class DAC (if any) via
      * setPreferredAudioDevice, bypassing the system's mix-rate downsampler
@@ -1889,6 +1903,17 @@ class PreferencesManager @Inject constructor(
         dataStore.data.map { it[USB_EXCLUSIVE_BIT_PERFECT_ENABLED] ?: false }
     suspend fun setUsbExclusiveBitPerfectEnabled(enabled: Boolean) {
         dataStore.edit { it[USB_EXCLUSIVE_BIT_PERFECT_ENABLED] = enabled }
+    }
+
+    /**
+     * Hi-res sources (24-bit, 32-bit, float) keep their resolution on the
+     * normal Android output — Bluetooth, speaker, wired — instead of being
+     * cut to 16 bits before the DSP. Default on; off restores the 16-bit path.
+     */
+    val hiResHalOutputEnabled: Flow<Boolean> =
+        dataStore.data.map { it[HIRES_HAL_OUTPUT_ENABLED] ?: true }
+    suspend fun setHiResHalOutputEnabled(enabled: Boolean) {
+        dataStore.edit { it[HIRES_HAL_OUTPUT_ENABLED] = enabled }
     }
 
     /**
@@ -2213,6 +2238,20 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setRendererProfile(profile: tf.monochrome.android.domain.model.RendererProfile) {
         dataStore.edit { it[RENDERER_PROFILE_JSON] = json.encodeToString(profile.clamped()) }
+    }
+
+    /** The mixer's spatial map (off, at standard positions, until set). */
+    val spatialPlacement: Flow<tf.monochrome.android.audio.dsp.spatial.SpatialPlacement> = dataStore.data
+        .map { it[SPATIAL_PLACEMENT_JSON] }
+        .distinctUntilChanged()
+        .map { raw ->
+            raw
+                ?.let { s -> runCatching { json.decodeFromString<tf.monochrome.android.audio.dsp.spatial.SpatialPlacement>(s) }.getOrNull() }
+                ?: tf.monochrome.android.audio.dsp.spatial.SpatialPlacement.DEFAULT
+        }
+
+    suspend fun setSpatialPlacement(placement: tf.monochrome.android.audio.dsp.spatial.SpatialPlacement) {
+        dataStore.edit { it[SPATIAL_PLACEMENT_JSON] = json.encodeToString(placement) }
     }
 
     /** User-saved Player Glass themes (empty until the user saves one). */

@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -74,6 +77,7 @@ fun FxChainPage(
     onDryWet: (busIndex: Int, slotIndex: Int, dryWet: Float) -> Unit,
     onParam: (busIndex: Int, slotIndex: Int, paramIndex: Int, value: Float) -> Unit,
     onOversample: (busIndex: Int, slotIndex: Int, factor: Int) -> Unit,
+    onPreset: (busIndex: Int, slotIndex: Int, preset: FxPreset) -> Unit,
     onMove: (busIndex: Int, from: Int, to: Int) -> Unit,
 ) {
     val bus = buses.getOrNull(selectedBusIndex)
@@ -173,6 +177,7 @@ fun FxChainPage(
                     onDryWet = { dw -> onDryWet(selectedBusIndex, index, dw) },
                     onParam = { pi, v -> onParam(selectedBusIndex, index, pi, v) },
                     onOversample = { f -> onOversample(selectedBusIndex, index, f) },
+                    onPreset = { p -> onPreset(selectedBusIndex, index, p) },
                     modifier = Modifier
                         .zIndex(if (isDragged) 1f else 0f)
                         .graphicsLayer {
@@ -214,25 +219,29 @@ private fun BusSelectorRow(
     busAccent: (Int) -> Color,
     onSelectBus: (Int) -> Unit,
 ) {
+    // Up to 17 tabs, so they scroll rather than share the width; in the
+    // strips' order (master last), selected by the bus's real index.
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
             .padding(horizontal = MonoDimens.spacingSm, vertical = MonoDimens.spacingXs),
         horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingXs)
     ) {
-        buses.forEachIndexed { index, bus ->
+        BusConfig.displayOrder(buses).forEach { bus ->
+            val index = bus.index
             val selected = index == selectedBusIndex
             val accent = busAccent(index)
             Box(
                 modifier = Modifier
-                    .weight(1f)
+                    .widthIn(min = 64.dp)
                     .clip(MonoDimens.shapePill)
                     .liquidGlass(
                         shape = MonoDimens.shapePill,
                         tintAlpha = if (selected) 0.22f else 0.08f
                     )
                     .clickable { onSelectBus(index) }
-                    .padding(vertical = 8.dp),
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Row(

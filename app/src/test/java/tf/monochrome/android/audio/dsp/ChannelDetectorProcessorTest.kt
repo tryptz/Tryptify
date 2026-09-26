@@ -63,7 +63,8 @@ class ChannelDetectorProcessorTest {
         assertEquals("9.1.6", s.layoutName)
         assertEquals(48000, s.sampleRate)
         assertTrue(s.isFloat)
-        assertEquals("TBR", s.channelNames.last())
+        // FFmpeg order: the top sides (its highest channel bits) come last.
+        assertEquals("TSR", s.channelNames.last())
         // No subscriber yet — every channel floored.
         assertTrue(s.peaksDb.all { it <= ChannelDetectorProcessor.ACTIVE_THRESHOLD_DB })
     }
@@ -133,8 +134,8 @@ class ChannelDetectorProcessorTest {
         assertEquals("12 ch", ChannelDetectorProcessor.layoutName(12))
         assertEquals(
             listOf(
-                "FL", "FR", "FC", "LFE", "BL", "BR", "BLC", "BRC",
-                "SL", "SR", "TFL", "TFR", "TSL", "TSR", "TBL", "TBR",
+                "FL", "FR", "FC", "LFE", "BL", "BR", "FLC", "FRC",
+                "SL", "SR", "TFL", "TFR", "TBL", "TBR", "TSL", "TSR",
             ),
             ChannelDetectorProcessor.channelNames(16),
         )

@@ -92,6 +92,9 @@ object WhatsNew {
     /** The now-playing screen: its artwork, its transport and its dock. */
     private const val PLAYER = "Now playing"
 
+    /** Where the sound goes after decoding, as the Audio Pipeline panel shows it. */
+    private const val PIPELINE = "Audio pipeline"
+
     /** The playback speed panel and the two engines behind it. */
     private const val SPEED = "Speed and pitch"
 
@@ -103,6 +106,118 @@ object WhatsNew {
 
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
+        WhatsNewRelease(
+            versionCode = 191,
+            versionName = "1.9.1",
+            entries = listOf(
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Up to 16 buses",
+                    body = "Tap the + after the last strip to add a bus, up to 16. Long-press " +
+                        "bus 5 or later to remove it. Presets and exports carry the extra buses.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Surround and Atmos spread across the mixer",
+                    body = "A 5.1, 7.1.4 or 9.1.6 track adds a bus for each channel group, named " +
+                        "after it, even when it ends up folded to stereo. Prefer one bus? " +
+                        "Switch it under Input routing on the master.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Put every channel where you want it",
+                    body = "The spatial-audio button in the mixer opens a map of the room around " +
+                        "you. Drag a 5.1, Atmos bed or 9.1.6 channel anywhere: on headphones it " +
+                        "is heard there, tuned to an AutoEQ target of your choice, and closer " +
+                        "is louder.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Drag the effect graphs",
+                    body = "Every effect's graph has handles: pull an EQ band, a compressor's " +
+                        "knee or a reverb's tail and the knobs follow. Double-tap a handle to " +
+                        "reset it; tap a knob's value to type one.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Five presets for every effect",
+                    body = "Each effect opens with presets drawn from mastering practice, safe on " +
+                        "a finished song, and its classic creative settings after a divider. The " +
+                        "one you are on lights up; turn a knob and it lets go.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "The mixer and EQs work on every channel",
+                    body = "Surround and Atmos streams keep all their channels through the " +
+                        "mixer, AutoEQ and the parametric EQ, up to 16. Compressors on the " +
+                        "master turn the whole bed down together.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "New knobs and effect cards",
+                    body = "Knobs have ticks, a default mark and arcs that start from zero for " +
+                        "plus-or-minus settings, and they follow your theme. Graphs are " +
+                        "taller and labelled.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "Five effects fixed",
+                    body = "Pitch Shifter now shifts up and lands in tune, Tape Stop drops in pitch, " +
+                        "Dynamics no longer jumps at its knee, Resonator can't run away, and Stereo " +
+                        "at its defaults is transparent (3 dB louder than before).",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "The mixer is no longer 6 dB quieter",
+                    body = "Switching the mixer on turned everything down 6 dB; it is now level " +
+                        "with the mixer off, and pan works as a balance. If you had turned a " +
+                        "bus or the master up to make up for it, turn it back down.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "Cleaner oversampling",
+                    body = "2x and 4x use linear-phase filters with deeper image rejection, and " +
+                        "stay in time with the dry signal and the other buses, so a blend no " +
+                        "longer thins the sound. Hi-res streams stop at 192 kHz inside, where " +
+                        "there is nothing left to gain.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "No setting can break the mixer",
+                    body = "Every effect was pushed to every sample rate and knob extreme. " +
+                        "Filter, Ladder Filter, Resonator, Dynamics and the EQs no longer blow " +
+                        "up; an effect that ever does is reset and plays dry, and a damaged " +
+                        "saved mix loads instead of crashing.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = SPEED,
+                    title = "Speed on hi-res, Bluetooth and Atmos",
+                    body = "Changing speed no longer drops a hi-res stream to 16-bit, breaks up " +
+                        "or crashes on hi-res Bluetooth, and now works on spatial and Atmos " +
+                        "tracks at any sample rate.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PIPELINE,
+                    title = "Bluetooth says what it is doing",
+                    body = "The Audio Pipeline panel shows how a Bluetooth output connects " +
+                        "(Classic, LE Audio or hands-free) and whether spatial audio applies, " +
+                        "and no longer passes off the phone speaker's rate as the headphones'.",
+                ),
+            ),
+        ),
         WhatsNewRelease(
             versionCode = 190,
             versionName = "1.9.0",

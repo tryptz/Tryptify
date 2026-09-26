@@ -2,8 +2,11 @@ package tf.monochrome.android.audio.dsp.preset
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.float
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -17,11 +20,10 @@ import org.junit.Test
 /**
  * The shipped mixer presets.
  *
- * Most of these are built by [MixPresetBuilder], which cannot produce malformed
- * state. "Wide Stage" is not: it is a patch captured out of the mixer and kept
- * as the engine's own JSON, so nothing between here and the native parser would
- * notice if a character of it were lost to an edit or a bad merge. The engine
- * answers a broken preset by silently doing nothing, so it is pinned here.
+ * "Wide Stage" was captured out of the mixer and shipped as the engine's own
+ * JSON until [MixPresetBuilder] could express it. It is built now, and the
+ * captured string lives on here as the reference: the built preset has to say
+ * exactly what the saved patch said, or it no longer sounds like it.
  */
 class BuiltInMixPresetsTest {
 
@@ -49,8 +51,9 @@ class BuiltInMixPresetsTest {
     fun `every preset is state the engine can load`() {
         for (preset in BuiltInMixPresets.presets) {
             val buses = buses(preset.stateJson)
-            // The engine's state is a fixed four mix buses plus a master.
-            assertEquals("${preset.name} bus count", 5, buses.size)
+            // Buses 1-4 and the master at least, and never more than the
+            // engine's sixteen mix buses plus the master.
+            assertTrue("${preset.name} bus count ${buses.size}", buses.size in 5..17)
             for (bus in buses) {
                 val o = bus.jsonObject
                 listOf("gain", "pan", "muted", "soloed", "inputEnabled", "plugins")
@@ -68,35 +71,42 @@ class BuiltInMixPresetsTest {
     fun `Wide Stage is the patch that was saved`() {
         val preset = BuiltInMixPresets.presets.single { it.name == "Wide Stage" }
         assertEquals(-8L, preset.id)
-        val buses = buses(preset.stateJson)
+        // Same JSON tree, compared as numbers so 0 and 0.0 are the same value.
+        assertEquals(normalize(Json.parseToJsonElement(WIDE_STAGE_AS_SAVED)),
+                     normalize(Json.parseToJsonElement(preset.stateJson)))
 
-        // Two buses take input. That parallel dry/wet split is the preset, and
-        // it is the exact thing MixPresetBuilder cannot express -- it derives
-        // inputEnabled from the bus index, so a "port this to the DSL" change
-        // would quietly collapse it to the dry bus alone.
+        // And the two things that make it this patch, spelled out: two buses
+        // take input (a dry and a wet path in parallel), and the dry side's
+        // processors are present but switched off.
+        val buses = buses(preset.stateJson)
         assertTrue("dry bus takes input", buses[0].jsonObject.b("inputEnabled"))
         assertTrue("wet bus takes input", buses[1].jsonObject.b("inputEnabled"))
         assertFalse(buses[2].jsonObject.b("inputEnabled"))
         assertFalse(buses[3].jsonObject.b("inputEnabled"))
-
-        // Dry side: two processors present but switched off. The builder writes
-        // bypassed = false unconditionally, so this is the other thing it would
-        // lose -- and turning these on changes the sound.
         val dry = buses[0].jsonObject["plugins"]!!.jsonArray
-        assertEquals(2, dry.size)
         assertTrue("dry processors stay bypassed", dry.all { it.jsonObject.b("bypassed") })
-        assertEquals(-0.0919491f, buses[0].jsonObject.f("gain"), 1e-6f)
-
-        // Wet side: Reverb (17) -> Stereo (1) -> Gain (0), in that order.
         val wet = buses[1].jsonObject["plugins"]!!.jsonArray
         assertEquals(listOf(17, 1, 0), wet.map { it.jsonObject["type"]!!.jsonPrimitive.int })
-        assertTrue("wet processors are active", wet.none { it.jsonObject.b("bypassed") })
-        assertEquals(8.15997f, buses[1].jsonObject.f("gain"), 1e-5f)
-        assertEquals(
-            listOf(0f, 2.81718f, 34.0753f, 94.4716f, 34.6712f, 0.05f, 68.7378f, 10863f, 386.575f, 0f, 100f, 100f),
-            wet[0].jsonObject["params"]!!.jsonArray.map { it.jsonPrimitive.float },
-        )
-
         assertEquals("master trim", 4.61484f, buses[4].jsonObject.f("gain"), 1e-5f)
+    }
+
+    private fun normalize(e: JsonElement): Any? = when (e) {
+        is JsonObject -> e.mapValues { normalize(it.value) }
+        is JsonArray -> e.map { normalize(it) }
+        is JsonPrimitive -> if (e.isString) e.content
+            else e.booleanOrNull ?: e.content.toFloat()
+        else -> null
+    }
+
+    private companion object {
+        /** The patch exactly as the mixer saved it, before it moved to the builder. */
+        const val WIDE_STAGE_AS_SAVED =
+            """{"buses":[""" +
+                """{"gain":-0.0919491,"pan":0,"muted":false,"soloed":false,"inputEnabled":true,"plugins":[{"type":23,"bypassed":true,"dryWet":1,"os":1,"params":[1,10.3143]},{"type":1,"bypassed":true,"dryWet":1,"os":1,"params":[-2.1135,4.39726,0]}]},""" +
+                """{"gain":8.15997,"pan":0,"muted":false,"soloed":false,"inputEnabled":true,"plugins":[{"type":17,"bypassed":false,"dryWet":1,"os":1,"params":[0,2.81718,34.0753,94.4716,34.6712,0.05,68.7378,10863,386.575,0,100,100]},{"type":1,"bypassed":false,"dryWet":1,"os":1,"params":[-13.8023,0,0]},{"type":0,"bypassed":false,"dryWet":1,"os":1,"params":[5.59187]}]},""" +
+                """{"gain":0,"pan":0,"muted":false,"soloed":false,"inputEnabled":false,"plugins":[]},""" +
+                """{"gain":0,"pan":0,"muted":false,"soloed":false,"inputEnabled":false,"plugins":[]},""" +
+                """{"gain":4.61484,"pan":0,"muted":false,"soloed":false,"inputEnabled":false,"plugins":[]}""" +
+                """]}"""
     }
 }

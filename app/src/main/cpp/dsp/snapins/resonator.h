@@ -40,17 +40,28 @@ public:
             float combOutL = combL_.readCubic(delaySamples);
             float combOutR = combR_.readCubic(delaySamples);
 
-            // One-pole damping in feedback loop
-            dampL_ += dampCoeff * (combOutL - dampL_);
-            dampR_ += dampCoeff * (combOutR - dampR_);
-            float fbL = combOutL * (1.0f - dampCoeff) + dampL_;
-            float fbR = combOutR * (1.0f - dampCoeff) + dampR_;
+            // One-pole low-pass in the feedback loop: the damping. It used to
+            // add the low-passed signal to (1 - d) of the unfiltered one,
+            // which at DC is a gain of 2 - d — 1.85 at the default decay, so
+            // the loop gain was 1.85 × 0.745 = 1.38 and a bass note ran away
+            // (to 1e6 in a tenth of a second). Filtering instead of adding
+            // keeps the loop at unity for DC and below it everywhere else, so
+            // fb alone sets the decay. At 100 % decay dampCoeff is 0 and the
+            // filter is a wire, as before.
+            dampL_ += (1.0f - dampCoeff) * (combOutL - dampL_);
+            dampR_ += (1.0f - dampCoeff) * (combOutR - dampR_);
+            float fbL = dampL_;
+            float fbR = dampR_;
 
             // Square timbre: add inverted comb at half delay (cancels even harmonics)
             if (timbre_ == 1) {
+                // Subtracting the half-period copy cancels even harmonics and
+                // doubles up odd ones: on those the loop gain is 1.5 × fb,
+                // which ran away above ~34 % decay. Scaled back by 1.5 the
+                // odd harmonics loop at fb (< 1) and the tone is unchanged.
                 float halfDelay = delaySamples * 0.5f;
-                fbL -= combL_.readCubic(halfDelay) * 0.5f;
-                fbR -= combR_.readCubic(halfDelay) * 0.5f;
+                fbL = (fbL - combL_.readCubic(halfDelay) * 0.5f) * (1.0f / 1.5f);
+                fbR = (fbR - combR_.readCubic(halfDelay) * 0.5f) * (1.0f / 1.5f);
             }
 
             // Write input + feedback

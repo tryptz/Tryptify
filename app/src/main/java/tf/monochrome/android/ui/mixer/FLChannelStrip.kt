@@ -45,6 +45,7 @@ import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.performance.LocalLowPerformance
 import tf.monochrome.android.performance.LocalPerformanceProfile
 import tf.monochrome.android.ui.components.bounceClick
+import tf.monochrome.android.ui.components.bounceCombinedClick
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.components.toggleSemantics
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
@@ -111,6 +112,8 @@ fun FLChannelStrip(
      */
     glass: PlayerGlassSettings = LocalMiniPlayerGlass.current,
     onSelect: () -> Unit,
+    /** Long-press on the pane; null for buses that cannot be removed. */
+    onLongPress: (() -> Unit)? = null,
     onGainChange: (Float) -> Unit,
     onPanChange: (Float) -> Unit,
     onToggleMute: () -> Unit,
@@ -182,7 +185,7 @@ fun FLChannelStrip(
             // whole sheet of glass and not just the labels standing on it. Still
             // an ancestor of the fader and the knob, exactly as before, so their
             // drags claim the gesture first.
-            .bounceClick(onClick = onSelect)
+            .bounceCombinedClick(onLongClick = onLongPress, onClick = onSelect)
     ) {
         // ── The pane, behind the controls ─────────────────────────────────
         // Its own node so the glass is relit on its own layer and the fader,
@@ -269,7 +272,7 @@ fun FLChannelStrip(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = if (isMaster) "M" else "${bus.index + 1}",
+                text = if (isMaster) "M" else "${bus.number}",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (isSelected) onAccent else colors.onSurfaceVariant

@@ -35,6 +35,8 @@ public:
         holdCounterR_ = 0;
     }
 
+    bool supportsLinkedDetection() const override { return true; }
+
     void process(float* left, float* right, int numFrames) override {
         float threshLin = std::pow(10.0f, thresholdDb_ / 20.0f);
         int holdSamples = static_cast<int>(holdMs_ * 0.001f * static_cast<float>(sampleRate_));
@@ -46,16 +48,19 @@ public:
             float delL = lookaheadL_.process(left[i]);
             float delR = lookaheadR_.process(right[i]);
 
-            // Envelope detection on undelayed signal
-            float envValL = envL_.process(left[i]);
-            float envValR = envR_.process(right[i]);
+            // Envelope detection on undelayed signal — or on the lanes' shared
+            // key when linked (see setDetectorKey).
+            const float detL = key_ ? key_[i] : left[i];
+            const float detR = key_ ? key_[i] : right[i];
+            float envValL = envL_.process(detL);
+            float envValR = envR_.process(detR);
 
             // ISP mode: parabolic interpolation between samples
             if (mode_ == 2) {
-                envValL = ispPeak(left[i], prevL_);
-                envValR = ispPeak(right[i], prevR_);
-                prevL_ = left[i];
-                prevR_ = right[i];
+                envValL = ispPeak(detL, prevL_);
+                envValR = ispPeak(detR, prevR_);
+                prevL_ = detL;
+                prevR_ = detR;
             }
 
             // Stereo linking

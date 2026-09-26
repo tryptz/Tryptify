@@ -14,12 +14,15 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.delay
 import tf.monochrome.android.audio.UsbAudioRouter
+import tf.monochrome.android.audio.atmos.AtmosAudioProcessor
 import tf.monochrome.android.audio.dsp.DspEngineManager
 import tf.monochrome.android.audio.dsp.ChannelDetectorProcessor
 import tf.monochrome.android.audio.dsp.SnapinType
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.audio.pipeline.AudioPipelineInputs
+import tf.monochrome.android.audio.pipeline.AtmosStage
 import tf.monochrome.android.audio.pipeline.AudioPipelineMonitor
+import tf.monochrome.android.audio.pipeline.DecodedStream
 import tf.monochrome.android.audio.pipeline.ChainInput
 import tf.monochrome.android.audio.pipeline.OutputDeviceProbe
 import tf.monochrome.android.audio.pipeline.OutputPath
@@ -47,6 +50,7 @@ class AudioPipelineViewModel @Inject constructor(
     private val variRate: VariRateAudioProcessor,
     private val spectrumTap: SpectrumAnalyzerTap,
     private val outputProbe: OutputDeviceProbe,
+    private val atmosProcessor: AtmosAudioProcessor,
     usbRouter: UsbAudioRouter,
     usbExclusive: UsbExclusiveController,
     dspEngine: DspEngineManager,
@@ -70,17 +74,42 @@ class AudioPipelineViewModel @Inject constructor(
                     speedRatio = variRate.getRatio(),
                     fftSize = spectrumTap.fftSize,
                     halSampleRateHz = outputProbe.halSampleRateHz(),
+                    outputChannels = spectrumTap.outputChannelCount.takeIf { it > 0 },
                 )
             )
             delay(POLL_INTERVAL_MS)
         }
     }
 
+    private data class Live(
+        val stream: DecodedStream?,
+        val decoderName: String?,
+        val chain: ChainInput?,
+        val atmos: AtmosAudioProcessor.Outcome?,
+    )
+
     private data class PolledValues(
         val speedRatio: Float,
         val fftSize: Int,
         val halSampleRateHz: Int?,
+        val outputChannels: Int?,
     )
+
+    /**
+     * The Atmos row, for a multichannel source only. The processor reports
+     * what it did once frames flow; before that, and when it is out of the
+     * chain, the setting and the native library say why.
+     */
+    private fun atmosStage(sourceChannels: Int?, outcome: AtmosAudioProcessor.Outcome?): AtmosStage? {
+        if (sourceChannels == null || sourceChannels <= 2) return null
+        return when {
+            outcome == AtmosAudioProcessor.Outcome.OBJECTS_BINAURAL -> AtmosStage.OBJECTS_BINAURAL
+            outcome == AtmosAudioProcessor.Outcome.BED_FOLDED -> AtmosStage.BED_FOLDED
+            atmosProcessor.isPassthrough -> AtmosStage.PASSTHROUGH
+            !atmosProcessor.isRendererAvailable -> AtmosStage.UNAVAILABLE
+            else -> null
+        }
+    }
 
     private val eqPresetName: Flow<String?> = preferences.eqActivePresetId
         .flatMapLatest { id ->
@@ -155,8 +184,8 @@ class AudioPipelineViewModel @Inject constructor(
     }
 
     val inputs: StateFlow<AudioPipelineInputs> = combine(
-        combine(monitor.stream, monitor.decoderName, chain) { stream, decoder, chainInput ->
-            Triple(stream, decoder, chainInput)
+        combine(monitor.stream, monitor.decoderName, chain, atmosProcessor.outcome) { stream, decoder, chainInput, atmos ->
+            Live(stream, decoder, chainInput, atmos)
         },
         polled,
         combine(preferences.dspBlockSize, eqPresetName, stereoWidthDb) { block, eq, width ->
@@ -167,9 +196,9 @@ class AudioPipelineViewModel @Inject constructor(
     ) { live, poll, dsp, usb, routed ->
         val (path, usbStream) = usb
         AudioPipelineInputs(
-            stream = live.first,
-            decoderName = live.second,
-            chain = live.third,
+            stream = live.stream,
+            decoderName = live.decoderName,
+            chain = live.chain,
             speedRatio = poll.speedRatio,
             dspBlockFrames = dsp.first,
             eqPresetName = dsp.second,
@@ -177,8 +206,16 @@ class AudioPipelineViewModel @Inject constructor(
             visualizerFftSize = poll.fftSize,
             outputPath = path,
             deviceName = routed?.name,
+            outputKind = routed?.kind,
             halSampleRateHz = poll.halSampleRateHz,
             usb = usbStream,
+            // Asked on every tick rather than observed: the spatializer's own
+            // listener says nothing about which format it would take, and the
+            // chain's format is part of the question — its *output* format,
+            // from the tap after the Atmos and downmix stages.
+            spatialAudio = outputProbe.spatialAudio(live.chain?.sampleRate, poll.outputChannels),
+            atmos = atmosStage(live.chain?.channelCount, live.atmos),
+            outputChannels = poll.outputChannels,
         )
     }.stateIn(
         viewModelScope,

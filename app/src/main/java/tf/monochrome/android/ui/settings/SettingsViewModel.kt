@@ -262,6 +262,11 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val usbExclusiveBitPerfectEnabled: StateFlow<Boolean> = preferences.usbExclusiveBitPerfectEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val hiResHalOutputEnabled: StateFlow<Boolean> = preferences.hiResHalOutputEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    fun setHiResHalOutputEnabled(enabled: Boolean) { viewModelScope.launch {
+        preferences.setHiResHalOutputEnabled(enabled)
+    } }
     /** Human-readable name of the attached USB DAC, or null when nothing is plugged in. */
     val usbOutputDeviceName: StateFlow<String?> =
         usbAudioRouter.usbOutputDevice

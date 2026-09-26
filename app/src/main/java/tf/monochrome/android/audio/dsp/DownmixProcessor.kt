@@ -12,17 +12,19 @@ import javax.inject.Singleton
 import kotlin.math.pow
 
 /**
- * Multichannel → stereo downmix renderer. Sits FIRST in the AudioProcessor
- * chain so everything downstream (MixBusProcessor → native stereo engine,
- * AutoEQ, Parametric EQ, USB DAC negotiation) keeps its 1/2-channel world
- * view while 3.0–16-channel sources still play.
+ * Multichannel → stereo downmix renderer. Sits right after MixBusProcessor
+ * in the AudioProcessor chain: the mixer sees the song's own layout (a 9.1.6
+ * bed spread one channel group per bus) and this folds what it made to
+ * stereo, so everything after it (AutoEQ, Parametric EQ, USB DAC
+ * negotiation) keeps its 1/2-channel world view while 3.0–16-channel sources
+ * still play. It used to sit first, and the mixer only ever saw stereo.
  *
  * One fixed per-channel gain matrix — the peqdb Downmix Renderer's ADC2
  * direct matrix, no HRTF/virtualization, and deliberately no alternative
  * matrix options:
  *
- *   FL/BL/BLC/SL/TFL/TSL/TBL → [1, 0]      (hard left)
- *   FR/BR/BRC/SR/TFR/TSR/TBR → [0, 1]      (hard right)
+ *   FL/BL/FLC/SL/TFL/TBL/TSL → [1, 0]      (hard left)
+ *   FR/BR/FRC/SR/TFR/TBR/TSR → [0, 1]      (hard right)
  *   FC (and BC in 6.1)       → [0.70710678, 0.70710678]
  *   LFE                      → [2.26464431, 2.26464431]
  *
@@ -35,8 +37,9 @@ import kotlin.math.pow
  * Channel-order assumption: FLAC spec order, FFmpeg native order, and
  * Android's canonical CHANNEL_OUT_* order all agree for 3–8 channels
  * (6 ch = FL FR FC LFE BL BR), so a single per-channel-count table is used.
- * 16-channel sources are assumed to be 9.1.6, laid out as
- * FL FR FC LFE BL BR BLC BRC SL SR TFL TFR TSL TSR TBL TBR. Counts 9–15
+ * 16-channel sources are assumed to be 9.1.6 in FFmpeg's order,
+ * FL FR FC LFE BL BR FLC FRC SL SR TFL TFR TBL TBR TSL TSR (every pair after
+ * the LFE folds left/right the same whichever speakers it is). Counts 9–15
  * have no well-known layout and pass through untouched. Media3's
  * AudioFormat carries no layout, only a count; sources with an exotic
  * layout at the same count would fold with wrong positions (imaging off),
@@ -53,7 +56,19 @@ import kotlin.math.pow
  */
 @Singleton
 @OptIn(UnstableApi::class)
-class DownmixProcessor @Inject constructor() : AudioProcessor {
+class DownmixProcessor @Inject constructor(
+    // Headphone crossfeed, applied to the fold. MixBusProcessor runs it on a
+    // stereo stream, but leaves a wide one alone (a wide stream may be going
+    // to Android's spatializer, which places the speakers itself) — and the
+    // mixer now runs before this fold, so a folded song would otherwise lose
+    // it. The same singleton, so it is one setting; only one of the two runs
+    // it for any stream. Null in the unit tests.
+    private val crossfeed: tf.monochrome.android.audio.dsp.crossfeed.CrossfeedEffect?,
+    // The mixer's spatial map. While it is on, the fold places every channel
+    // where the map has it (ChannelPlacer: HRIRs on headphones, a pan
+    // otherwise) instead of running the fixed matrix. Null in the unit tests.
+    private val placement: tf.monochrome.android.audio.dsp.spatial.SpatialPlacementStore?,
+) : AudioProcessor {
 
     // pendingFormat == NOT_SET ⇔ inactive. IMPORTANT: unlike
     // MixBusProcessor, isActive() must NOT also consider a lingering
@@ -65,6 +80,40 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
     private var inputFormat = AudioFormat.NOT_SET
     private var outputBuffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var inputEnded = false
+
+    // The folded block as floats, for the crossfeed; grown on demand.
+    private var foldL = FloatArray(0)
+    private var foldR = FloatArray(0)
+
+    // The native channel placer for the current format (0 = none), and the
+    // direct buffers it reads planar input from and writes stereo into.
+    private var placer = 0L
+    private var placerRate = 0
+    private var placerChannels = 0
+    private var placerIn: ByteBuffer = AudioProcessor.EMPTY_BUFFER
+    private var placerOut: ByteBuffer = AudioProcessor.EMPTY_BUFFER
+    // What was last handed to it, so it is only told about changes.
+    private var pushedPlacement: tf.monochrome.android.audio.dsp.spatial.SpatialPlacement? = null
+    private var pushedPreampDb = Float.NaN
+    private var pushedBinaural: Boolean? = null
+    private var pushedRender = -1
+    private var pushedTarget: FloatArray? = null
+
+    // The Atmos profile's headphone settings, which the binaural placement
+    // shares with the Atmos renderer. Set from PlaybackService.
+    @Volatile private var hpStrength = 1f
+    @Volatile private var hpHeight = true
+    @Volatile private var hpBass = true
+    @Volatile private var hpCrossover = 80
+    @Volatile private var hpVersion = 0
+
+    fun setHeadphoneRender(strength: Float, heightVirtualization: Boolean, bassManagement: Boolean, crossoverHz: Int) {
+        hpStrength = strength
+        hpHeight = heightVirtualization
+        hpBass = bassManagement
+        hpCrossover = crossoverHz
+        hpVersion++
+    }
 
     // Active coefficient rows, length == inputFormat.channelCount,
     // normalization baked in. Selected in flush().
@@ -135,11 +184,12 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
     private fun rebuildCoefs(resetLfeState: Boolean) {
         val pre = preampDb
         val lfeOn = lfeLowpassEnabled
-        val rows = COEF_TABLES.getValue(inputFormat.channelCount)
+        val rows = COEF_TABLES[inputFormat.channelCount] ?: PLACE_COEF_TABLES.getValue(inputFormat.channelCount)
         val gain = 10f.pow(pre / 20f)
         coefL = FloatArray(rows.first.size) { rows.first[it] * gain }
         coefR = FloatArray(rows.second.size) { rows.second[it] * gain }
-        lfeIndex = KIND_TABLES.getValue(inputFormat.channelCount).indexOf(Kind.LFE_CH)
+        lfeIndex = (KIND_TABLES[inputFormat.channelCount] ?: PLACE_KIND_TABLES.getValue(inputFormat.channelCount))
+            .indexOf(Kind.LFE_CH)
         val nowActive = lfeOn && lfeIndex >= 0
         if (nowActive && (resetLfeState || !lfeActive)) {
             lfeFilter.configure(inputFormat.sampleRate)
@@ -166,8 +216,12 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
             inputAudioFormat.channelCount > MAX_INPUT_CHANNELS) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }
-        if (!enabled || inputAudioFormat.channelCount <= 2 ||
-            !KIND_TABLES.containsKey(inputAudioFormat.channelCount)) {
+        // 5.1.4 and 7.1.4 have no fixed fold here — they go to Android whole —
+        // but with the spatial map on they are placed and folded like the rest.
+        val placing = placement?.current?.enabled == true
+        val foldable = KIND_TABLES.containsKey(inputAudioFormat.channelCount) ||
+            (placing && PLACE_KIND_TABLES.containsKey(inputAudioFormat.channelCount))
+        if (!enabled || inputAudioFormat.channelCount <= 2 || !foldable) {
             pendingFormat = AudioFormat.NOT_SET
             inputFormat = AudioFormat.NOT_SET
             return AudioFormat.NOT_SET
@@ -203,11 +257,21 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
             outputBuffer.clear()
         }
 
+        val spatial = placement?.current
+        if (spatial != null && spatial.enabled && placer != 0L) {
+            placeBlock(inputBuffer, numFrames, channels, isFloat, spatial)
+            return
+        }
+
         // Fused deinterleave + matrix + interleave via positional get*/put* —
         // no asShortBuffer()/asFloatBuffer() view allocations on the audio
         // thread (same rationale as MixBusProcessor's hot loop).
         val cL = coefL
         val cR = coefR
+        if (foldL.size < numFrames) {
+            foldL = FloatArray(numFrames)
+            foldR = FloatArray(numFrames)
+        }
         val startPos = inputBuffer.position()
         for (i in 0 until numFrames) {
             val base = startPos + i * frameSize
@@ -239,19 +303,168 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
                 accL = lfeFilter.delayDryL(accL) + lfeGainL * f
                 accR = lfeFilter.delayDryR(accR) + lfeGainR * f
             }
-            if (isFloat) {
-                val off = i * 8
-                outputBuffer.putFloat(off, accL)
-                outputBuffer.putFloat(off + 4, accR)
-            } else {
-                val off = i * 4
-                outputBuffer.putShort(off, (accL * 32768f).toInt().coerceIn(-32768, 32767).toShort())
-                outputBuffer.putShort(off + 2, (accR * 32768f).toInt().coerceIn(-32768, 32767).toShort())
-            }
+            foldL[i] = accL
+            foldR[i] = accR
         }
         inputBuffer.position(startPos + numFrames * frameSize)
+
+        // Now stereo, the crossfeed can place its two speakers.
+        crossfeed?.processArrays(foldL, foldR, numFrames)
+        writeFold(numFrames, isFloat)
         outputBuffer.position(0)
         outputBuffer.limit(outBytes)
+    }
+
+    /** The folded block, [foldL]/[foldR], into [outputBuffer] in the stream's encoding. */
+    private fun writeFold(numFrames: Int, isFloat: Boolean) {
+        for (i in 0 until numFrames) {
+            if (isFloat) {
+                val off = i * 8
+                outputBuffer.putFloat(off, foldL[i])
+                outputBuffer.putFloat(off + 4, foldR[i])
+            } else {
+                val off = i * 4
+                outputBuffer.putShort(off, (foldL[i] * 32768f).toInt().coerceIn(-32768, 32767).toShort())
+                outputBuffer.putShort(off + 2, (foldR[i] * 32768f).toInt().coerceIn(-32768, 32767).toShort())
+            }
+        }
+    }
+
+    /**
+     * The spatial map's fold: the block handed to the native placer a chunk
+     * at a time, planar, and its stereo read back. Ends like the matrix fold,
+     * with the output set up to [numFrames] frames.
+     */
+    private fun placeBlock(
+        input: ByteBuffer,
+        numFrames: Int,
+        channels: Int,
+        isFloat: Boolean,
+        spatial: tf.monochrome.android.audio.dsp.spatial.SpatialPlacement,
+    ) {
+        val binaural = pushPlacement(spatial, channels)
+        if (foldL.size < numFrames) {
+            foldL = FloatArray(numFrames)
+            foldR = FloatArray(numFrames)
+        }
+        val bytesPerSample = if (isFloat) 4 else 2
+        val frameSize = bytesPerSample * channels
+        val startPos = input.position()
+        var done = 0
+        while (done < numFrames) {
+            val n = minOf(PLACE_CHUNK, numFrames - done)
+            for (i in 0 until n) {
+                val base = startPos + (done + i) * frameSize
+                for (c in 0 until channels) {
+                    val v = if (isFloat) input.getFloat(base + c * 4)
+                    else input.getShort(base + c * 2).toFloat() / 32768f
+                    placerIn.putFloat((c * PLACE_CHUNK + i) * 4, v)
+                }
+            }
+            tf.monochrome.android.audio.atmos.ChannelPlacerNative.nativeProcess(
+                placer, placerIn, PLACE_CHUNK, n, placerOut,
+            )
+            for (i in 0 until n) {
+                foldL[done + i] = placerOut.getFloat(i * 8)
+                foldR[done + i] = placerOut.getFloat(i * 8 + 4)
+            }
+            done += n
+        }
+        input.position(startPos + numFrames * frameSize)
+        // A binaural render already carries each ear's view of every channel;
+        // crossfeed on top would blur it. A pan is plain stereo and takes it.
+        if (!binaural) crossfeed?.processArrays(foldL, foldR, numFrames)
+        writeFold(numFrames, isFloat)
+        outputBuffer.position(0)
+        outputBuffer.limit(numFrames * bytesPerSample * 2)
+    }
+
+    // Scratch for pushPlacement, sized for the widest bed.
+    private val pushAz = FloatArray(MAX_INPUT_CHANNELS)
+    private val pushEl = FloatArray(MAX_INPUT_CHANNELS)
+    private val pushGain = FloatArray(MAX_INPUT_CHANNELS)
+
+    /**
+     * Tells the placer what changed since the last block, and returns whether
+     * it is rendering binaurally. Only allocates (the layout lists) while the
+     * map is being dragged.
+     */
+    private fun pushPlacement(spatial: tf.monochrome.android.audio.dsp.spatial.SpatialPlacement, channels: Int): Boolean {
+        // The HRIR table is measured at 48 kHz; above that its pinna cues
+        // would land an octave too high, so a hi-res stream is panned.
+        val binaural = spatial.binaural && placerRate <= 48000
+        val pre = preampDb
+        if (spatial !== pushedPlacement || pre != pushedPreampDb) {
+            val speakers = tf.monochrome.android.audio.dsp.spatial.SpatialLayout.speakers(channels)
+            val placed = spatial.placementFor(channels)
+            val preGain = 10f.pow(pre / 20f)
+            for (c in 0 until channels) {
+                val p = placed.getOrNull(c)
+                pushAz[c] = Math.toRadians((p?.azimuthDeg ?: 0f).toDouble()).toFloat()
+                pushEl[c] = Math.toRadians(speakers.getOrNull(c)?.elevationDeg?.toDouble() ?: 0.0).toFloat()
+                // The LFE keeps the fold's own level for it.
+                val lfe = speakers.getOrNull(c)?.isLfe == true
+                pushGain[c] = tf.monochrome.android.audio.dsp.spatial.SpatialLayout.gainFor(p?.distance ?: 1f) *
+                    preGain * (if (lfe) LFE_COEF else 1f)
+            }
+            tf.monochrome.android.audio.atmos.ChannelPlacerNative.nativeSetPlacement(
+                placer, pushAz.copyOf(channels), pushEl.copyOf(channels), pushGain.copyOf(channels),
+            )
+            pushedPlacement = spatial
+            pushedPreampDb = pre
+        }
+        // The headphone target: worked out by the store, handed on here.
+        val target = placement?.targetCurve
+        if (target != null && target !== pushedTarget) {
+            tf.monochrome.android.audio.atmos.ChannelPlacerNative.nativeSetTarget(placer, target)
+            pushedTarget = target
+        }
+        val render = hpVersion
+        if (binaural != pushedBinaural || render != pushedRender) {
+            tf.monochrome.android.audio.atmos.ChannelPlacerNative.nativeSetMode(
+                placer, binaural, hpStrength, hpHeight, hpBass, hpCrossover,
+            )
+            pushedBinaural = binaural
+            pushedRender = render
+        }
+        return binaural
+    }
+
+    /** A placer for the current format, when there is a map to play and a library to play it. */
+    private fun ensurePlacer() {
+        val fmt = inputFormat
+        val ch = fmt.channelCount
+        val wanted = placement != null && ch in 3..MAX_INPUT_CHANNELS &&
+            tf.monochrome.android.audio.atmos.ChannelPlacerNative.available
+        if (!wanted) {
+            releasePlacer()
+            return
+        }
+        if (placer != 0L && placerRate == fmt.sampleRate && placerChannels == ch) {
+            tf.monochrome.android.audio.atmos.ChannelPlacerNative.nativeReset(placer)
+            return
+        }
+        releasePlacer()
+        placer = tf.monochrome.android.audio.atmos.ChannelPlacerNative.create(
+            fmt.sampleRate, ch, tf.monochrome.android.audio.dsp.spatial.SpatialLayout.lfeIndex(ch),
+        )
+        if (placer == 0L) return
+        placerRate = fmt.sampleRate
+        placerChannels = ch
+        placerIn = ByteBuffer.allocateDirect(ch * PLACE_CHUNK * 4).order(ByteOrder.nativeOrder())
+        placerOut = ByteBuffer.allocateDirect(PLACE_CHUNK * 8).order(ByteOrder.nativeOrder())
+        pushedPlacement = null
+        pushedPreampDb = Float.NaN
+        pushedBinaural = null
+        pushedRender = -1
+        pushedTarget = null
+    }
+
+    private fun releasePlacer() {
+        if (placer != 0L) tf.monochrome.android.audio.atmos.ChannelPlacerNative.nativeDestroy(placer)
+        placer = 0L
+        placerRate = 0
+        placerChannels = 0
     }
 
     override fun getOutput(): ByteBuffer {
@@ -277,6 +490,8 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
             // Seek/reconfigure: rebuild rows and clear LFE history so no
             // pre-seek audio leaks out of the filter or the dry delay.
             rebuildCoefs(resetLfeState = true)
+            // And the placer's convolution history, or a new one for a new format.
+            ensurePlacer()
         }
     }
 
@@ -289,6 +504,7 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         lfeActive = false
         lfeIndex = -1
         lfeFilter.reset()
+        releasePlacer()
     }
 
     companion object {
@@ -299,6 +515,9 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
 
         /** LFE contribution to BOTH sides of the fold (~+7.1 dB). */
         private const val LFE_COEF = 2.26464431f
+
+        /** Frames per trip to the native placer. */
+        private const val PLACE_CHUNK = 1024
 
         /** Position class of one input channel; the matrix derives from it. */
         private enum class Kind { L_FRONT, R_FRONT, CENTER, LFE_CH, L_SURR, R_SURR, C_SURR }
@@ -311,7 +530,7 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         //   6:  FL FR FC LFE BL BR     (5.1; 5.1-side folds identically)
         //   7:  FL FR FC LFE BC SL SR  (6.1)
         //   8:  FL FR FC LFE BL BR SL SR (7.1)
-        //   16: FL FR FC LFE BL BR BLC BRC SL SR TFL TFR TSL TSR TBL TBR (9.1.6)
+        //   16: FL FR FC LFE BL BR FLC FRC SL SR TFL TFR TBL TBR TSL TSR (9.1.6, FFmpeg order)
         // Top-front (TFL/TFR) count as fronts; side/back tops as surrounds.
         private val KIND_TABLES: Map<Int, Array<Kind>> = mapOf(
             3 to arrayOf(Kind.L_FRONT, Kind.R_FRONT, Kind.CENTER),
@@ -348,6 +567,32 @@ class DownmixProcessor @Inject constructor() : AudioProcessor {
         // Computed once at class load; the audio thread only indexes.
         private val COEF_TABLES: Map<Int, Pair<FloatArray, FloatArray>> =
             KIND_TABLES.mapValues { (_, kinds) ->
+                Pair(
+                    FloatArray(kinds.size) { gains(kinds[it]).first },
+                    FloatArray(kinds.size) { gains(kinds[it]).second },
+                )
+            }
+
+        // 5.1.4 and 7.1.4 (Android's order), folded only while the spatial
+        // map is on: without it they go to Android whole, as they always did.
+        // The same classes, so the map's off switch mid-song folds them the
+        // way the matrix folds everything else.
+        //   10: FL FR FC LFE BL BR TFL TFR TBL TBR
+        //   12: FL FR FC LFE BL BR SL SR TFL TFR TBL TBR
+        private val PLACE_KIND_TABLES: Map<Int, Array<Kind>> = mapOf(
+            10 to arrayOf(
+                Kind.L_FRONT, Kind.R_FRONT, Kind.CENTER, Kind.LFE_CH,
+                Kind.L_SURR, Kind.R_SURR, Kind.L_FRONT, Kind.R_FRONT,
+                Kind.L_SURR, Kind.R_SURR,
+            ),
+            12 to arrayOf(
+                Kind.L_FRONT, Kind.R_FRONT, Kind.CENTER, Kind.LFE_CH,
+                Kind.L_SURR, Kind.R_SURR, Kind.L_SURR, Kind.R_SURR,
+                Kind.L_FRONT, Kind.R_FRONT, Kind.L_SURR, Kind.R_SURR,
+            ),
+        )
+        private val PLACE_COEF_TABLES: Map<Int, Pair<FloatArray, FloatArray>> =
+            PLACE_KIND_TABLES.mapValues { (_, kinds) ->
                 Pair(
                     FloatArray(kinds.size) { gains(kinds[it]).first },
                     FloatArray(kinds.size) { gains(kinds[it]).second },

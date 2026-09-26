@@ -290,4 +290,121 @@ class AudioPipelineSnapshotTest {
         assertEquals("6", channels(6, null))
         assertEquals("6", channels(6, "  "))
     }
+
+    // ── Bluetooth ────────────────────────────────────────────────────────
+
+    private fun bluetooth(kind: OutputKind, spatial: SpatialAudio? = null) = buildAudioPipelineSnapshot(
+        AudioPipelineInputs(
+            chain = ChainInput(sampleRate = 44100, channelCount = 2, layoutName = "Stereo", isFloat = true),
+            deviceName = "Focal Bathys",
+            outputKind = kind,
+            halSampleRateHz = 48000,
+            spatialAudio = spatial,
+        )
+    )
+
+    @Test
+    fun `the primary output's rate is not claimed for a Bluetooth link`() {
+        val snapshot = bluetooth(OutputKind.BLUETOOTH_CLASSIC)
+        // 48000 is the speaker path's mix rate. Printed here it read as "the
+        // headphones get 48 kHz" — and blamed a resample on the HAL.
+        assertEquals(EM_DASH, snapshot.field(PipelineStage.OUTPUT, "Sample Rate").display)
+        assertEquals("44100 Hz → $EM_DASH", snapshot.field(PipelineStage.RESAMPLER, "I/O Rate").display)
+        assertEquals(EM_DASH, snapshot.field(PipelineStage.RESAMPLER, "Conversion").display)
+        assertTrue(snapshot.stage(PipelineStage.RESAMPLER).note!!.contains("codec's rate"))
+    }
+
+    @Test
+    fun `a Bluetooth link says what it is and what it does to the audio`() {
+        val snapshot = bluetooth(OutputKind.BLUETOOTH_CLASSIC)
+        assertEquals("Bluetooth Classic (A2DP)", snapshot.field(PipelineStage.OUTPUT, "Connection").display)
+        assertEquals("Re-encoded on the phone", snapshot.field(PipelineStage.OUTPUT, "Encoding").display)
+        // Android never tells an app the codec: asked, and answered honestly.
+        assertEquals(EM_DASH, snapshot.field(PipelineStage.OUTPUT, "Codec").display)
+        assertEquals(EM_DASH, snapshot.field(PipelineStage.OUTPUT, "Bit Depth Out").display)
+        val note = snapshot.stage(PipelineStage.OUTPUT).note!!
+        assertTrue(note.contains("LDAC") && note.contains("LC3") && note.contains("Developer options"))
+    }
+
+    @Test
+    fun `LE Audio is named as such`() {
+        val snapshot = bluetooth(OutputKind.BLUETOOTH_LE)
+        assertEquals("Bluetooth LE Audio", snapshot.field(PipelineStage.OUTPUT, "Connection").display)
+        assertEquals(EM_DASH, snapshot.field(PipelineStage.OUTPUT, "Codec").display)
+    }
+
+    @Test
+    fun `the hands-free link is called out as the voice link it is`() {
+        val snapshot = bluetooth(OutputKind.BLUETOOTH_SCO)
+        assertEquals("Voice codec, mono", snapshot.field(PipelineStage.OUTPUT, "Encoding").display)
+        assertTrue(snapshot.stage(PipelineStage.OUTPUT).note!!.contains("hands-free call link"))
+    }
+
+    @Test
+    fun `wired output keeps the HAL rate and has no codec row`() {
+        val snapshot = buildAudioPipelineSnapshot(
+            AudioPipelineInputs(
+                chain = ChainInput(sampleRate = 44100, channelCount = 2, layoutName = "Stereo", isFloat = true),
+                outputKind = OutputKind.WIRED,
+                halSampleRateHz = 48000,
+            )
+        )
+        assertEquals("48000 Hz", snapshot.field(PipelineStage.OUTPUT, "Sample Rate").display)
+        assertEquals("Wired", snapshot.field(PipelineStage.OUTPUT, "Connection").display)
+        assertTrue(snapshot.stage(PipelineStage.OUTPUT).fields.none { it.label == "Codec" })
+    }
+
+    @Test
+    fun `spatial audio prints Android's answer, and a dash when there is none`() {
+        assertEquals(
+            "Applied by Android",
+            bluetooth(OutputKind.BLUETOOTH_CLASSIC, SpatialAudio.APPLIED)
+                .field(PipelineStage.OUTPUT, "Spatial Audio").display,
+        )
+        assertEquals(
+            EM_DASH,
+            bluetooth(OutputKind.BLUETOOTH_CLASSIC, null).field(PipelineStage.OUTPUT, "Spatial Audio").display,
+        )
+    }
+
+    // ── Atmos and spatial audio ──────────────────────────────────────────
+
+    @Test
+    fun `an Atmos source says what the renderer did and what leaves the chain`() {
+        val snapshot = buildAudioPipelineSnapshot(
+            AudioPipelineInputs(
+                chain = ChainInput(sampleRate = 48000, channelCount = 6, layoutName = "5.1", isFloat = true),
+                atmos = AtmosStage.OBJECTS_BINAURAL,
+                outputChannels = 2,
+            )
+        )
+        assertEquals("Objects rendered to binaural stereo", snapshot.field(PipelineStage.DSP, "Atmos").display)
+        assertEquals("2 (Stereo)", snapshot.field(PipelineStage.OUTPUT, "Channels Out").display)
+    }
+
+    @Test
+    fun `a bed passed on in Direct mode reaches the platform wide`() {
+        val snapshot = buildAudioPipelineSnapshot(
+            AudioPipelineInputs(
+                chain = ChainInput(sampleRate = 48000, channelCount = 12, layoutName = "7.1.4", isFloat = true),
+                atmos = AtmosStage.PASSTHROUGH,
+                outputChannels = 12,
+                spatialAudio = SpatialAudio.APPLIED,
+            )
+        )
+        assertEquals("Direct: bed passed on unrendered", snapshot.field(PipelineStage.DSP, "Atmos").display)
+        assertEquals("12 (7.1.4)", snapshot.field(PipelineStage.OUTPUT, "Channels Out").display)
+        assertEquals("Applied by Android", snapshot.field(PipelineStage.OUTPUT, "Spatial Audio").display)
+    }
+
+    @Test
+    fun `a stereo track has no Atmos row at all`() {
+        val snapshot = buildAudioPipelineSnapshot(
+            AudioPipelineInputs(
+                chain = ChainInput(sampleRate = 44100, channelCount = 2, layoutName = "Stereo", isFloat = true),
+                outputChannels = 2,
+            )
+        )
+        assertTrue(snapshot.stage(PipelineStage.DSP).fields.none { it.label == "Atmos" })
+    }
 }

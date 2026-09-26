@@ -788,9 +788,10 @@ fun MainPlayerScreen(
 /**
  * The scrubber and its time labels — the only part of the player that needs the
  * play head. Split out so a position tick recomposes this and nothing above it.
+ * Internal so the mixer's timeline is this same control, not a copy of it.
  */
 @Composable
-private fun PlayerProgressSection(
+internal fun PlayerProgressSection(
     positionState: State<Long>,
     durationState: State<Long>,
     centerLabel: String,

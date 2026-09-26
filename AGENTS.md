@@ -45,6 +45,25 @@ Conventions in this file override it wherever the two differ.
 
 `assembleDebug` needs the git submodules (`third_party/projectm`, `libusb`)
 checked out; without them it fails for reasons unrelated to your change.
+Fetch them **recursively** — projectM has its own nested submodule
+(`third_party/projectm/vendor/projectm-eval`), and a plain `--init` leaves it
+empty, so CMake stops with "`vendor/projectm-eval` does not contain a
+CMakeLists.txt file":
+
+```
+git submodule update --init --recursive --depth 1
+```
+
+The third submodule, `app/src/main/assets/presets`, is the MilkDrop preset
+pack the visualizer ships; it comes down with the same command.
+
+The native DSP has host tests that build with the desktop compiler, no
+device or NDK needed — the multichannel mixer, the Oxford stages at Atmos
+widths, and the WSOLA shifter:
+
+```
+app/src/main/cpp/dsp/tests/run_host_tests.sh
+```
 
 Several tests exist specifically to hold the invariants above — `LightSchemesTest`,
 `CustomSchemeTest`, `GlobeLandClipTest`, `SettingsSearchIndexTest`. They are the
