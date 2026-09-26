@@ -102,6 +102,9 @@ old_HomeViewModel.kt
 # The host CTest project for the native Atmos tests. `*.txt` above would drop
 # it silently, and the tests would go back to being run by hand only.
 !app/src/main/cpp/atmos/tests/CMakeLists.txt
+# The Atmos real-content reference check's analysis script (the blanket *.py
+# rule would leave run.sh calling a file that isn't in the repo).
+!app/src/main/cpp/atmos/tools/reference_check/compare.py
 
 !monochrome-library-2026-03-23.json
 !app/src/main/assets/devedit_default_layout.json
