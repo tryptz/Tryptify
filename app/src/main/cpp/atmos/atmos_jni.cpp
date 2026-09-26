@@ -197,4 +197,47 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeProcessFrame(
   return rc;
 }
 
+// Selects the loudspeaker layout for nativeProcessFrameSpeakers (Kotlin
+// ChannelLayout.nativeId: 1 = 5.1 ... 8 = 9.1.6) and returns its channel count.
+// Allocates, so it is called when the processor (re)configures, not per frame.
+JNIEXPORT jint JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeSetOutputLayout(
+    JNIEnv* /*env*/, jclass /*clazz*/, jlong pipeline, jint layoutId) {
+  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  if (pipe == nullptr) return 0;
+  return pipe->set_output_layout(layoutId);
+}
+
+// Renders one E-AC-3 frame to the loudspeaker layout set above. `out` receives
+// outChannels*samples interleaved floats in Android channel-mask order when
+// the pipeline produced output. Returns 1 (written) or -1 (inactive — the
+// caller plays the bed itself). Same no-allocation marshaling as
+// nativeProcessFrame.
+JNIEXPORT jint JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeProcessFrameSpeakers(
+    JNIEnv* env, jclass /*clazz*/, jlong pipeline, jbyteArray frame,
+    jfloatArray bedInterleaved, jint channels, jint samples, jfloatArray out,
+    jint outChannels) {
+  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  if (pipe == nullptr || channels <= 0 || samples <= 0) return -1;
+  if (outChannels != pipe->output_channels()) return -1;  // layout/buffer mismatch
+  const jsize flen = env->GetArrayLength(frame);
+  std::vector<uint8_t>& fbuf = pipe->frame_scratch(static_cast<size_t>(flen));
+  env->GetByteArrayRegion(frame, 0, flen, reinterpret_cast<jbyte*>(fbuf.data()));
+  const jsize blen = env->GetArrayLength(bedInterleaved);
+  if (blen < static_cast<jsize>(channels) * samples) return -1;
+  std::vector<float>& bbuf = pipe->bed_scratch(static_cast<size_t>(blen));
+  env->GetFloatArrayRegion(bedInterleaved, 0, blen, bbuf.data());
+  const size_t n = static_cast<size_t>(outChannels) * samples;
+  // The stereo scratch is just a float buffer; it grows once to the layout size.
+  std::vector<float>& obuf = pipe->stereo_scratch(n);
+  const int rc = pipe->process_frame_speakers_interleaved(
+      fbuf.data(), static_cast<size_t>(flen), bbuf.data(), channels, samples, obuf.data());
+  if (rc == 1) {
+    if (env->GetArrayLength(out) < static_cast<jsize>(n)) return -1;
+    env->SetFloatArrayRegion(out, 0, static_cast<jsize>(n), obuf.data());
+  }
+  return rc;
+}
+
 }  // extern "C"

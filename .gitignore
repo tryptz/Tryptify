@@ -99,6 +99,10 @@ old_HomeViewModel.kt
 # looks like it simply failed to save.
 !app/src/main/assets/autoeq/targets/*.txt
 
+# The host CTest project for the native Atmos tests. `*.txt` above would drop
+# it silently, and the tests would go back to being run by hand only.
+!app/src/main/cpp/atmos/tests/CMakeLists.txt
+
 !monochrome-library-2026-03-23.json
 !app/src/main/assets/devedit_default_layout.json
 !app/src/main/assets/qobuz_recommendations.json

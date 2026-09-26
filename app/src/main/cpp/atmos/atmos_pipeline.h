@@ -18,6 +18,7 @@
 #include "object_engine.h"
 #include "render/hrir_renderer.h"
 #include "render/sofa_loader.h"  // runtime SOFA HRTF (defined only in the JNI lib)
+#include "speaker_renderer.h"     // multichannel object render (5.1 .. 9.1.6)
 #include "vbap.h"  // Vec3
 
 namespace tf {
@@ -59,7 +60,34 @@ class AtmosPipeline {
     last_path_ = kPathNone;
     drc_env_ = 0.0f;
     renderer_.reset_history();
+    speakers_.reset_history();
+    std::fill(spk_delay_.begin(), spk_delay_.end(), 0.0f);
+    spk_idx_ = 0;
+    spk_last_path_ = kPathNone;
   }
+
+  // Selects the loudspeaker layout for process_frame_speakers (an OutputLayout
+  // id, i.e. Kotlin ChannelLayout.nativeId). Allocates — call it off the audio
+  // thread or from the processor's flush/configure, never per frame. Returns
+  // the layout's channel count.
+  int set_output_layout(int layout_id) {
+    if (layout_id < static_cast<int>(OutputLayout::k5_1) ||
+        layout_id > static_cast<int>(OutputLayout::k9_1_6)) {
+      layout_id = static_cast<int>(OutputLayout::k5_1);
+    }
+    speakers_.configure(static_cast<OutputLayout>(layout_id), max_objects_);
+    const int ch = speakers_.channels();
+    spk_delay_.assign(static_cast<size_t>(kQmfLatency) * ch, 0.0f);
+    spk_idx_ = 0;
+    spk_last_path_ = kPathNone;
+    spk_ptrs_.assign(static_cast<size_t>(max_objects_), nullptr);
+    spk_states_.assign(static_cast<size_t>(max_objects_), nullptr);
+    // One E-AC-3 frame is 1536 samples; size the scratch for it up front.
+    spk_dm_.assign(static_cast<size_t>(kFrameSamples) * ch, 0.0f);
+    spk_bed_.assign(static_cast<size_t>(kFrameSamples) * ch, 0.0f);
+    return ch;
+  }
+  int output_channels() const { return speakers_.channels(); }
 
   // Applies the user's RendererProfile. `lfe_gain_db` currently affects the
   // bed-HRTF path (in object render the objects carry their own OAMD gains).
@@ -123,6 +151,68 @@ class AtmosPipeline {
                          out_stereo);
   }
 
+  // Interleaved bed in, interleaved speaker feeds out (output_channels() wide).
+  int process_frame_speakers_interleaved(const uint8_t* frame, size_t frame_size,
+                                         const float* bed_interleaved, int channels,
+                                         int samples, float* out) {
+    deinterleave(bed_interleaved, channels, samples);
+    return process_frame_speakers(frame, frame_size, planar_ptrs_.data(), channels, samples, out);
+  }
+
+  // Renders one E-AC-3 frame to the configured loudspeaker layout: the JOC
+  // objects through the SpeakerRenderer, or — for frames without usable JOC —
+  // the decoded bed mapped onto the layout, delayed by the QMF round-trip so
+  // the two paths stay sample-aligned and a switch is an equal-power
+  // crossfade. `out` holds output_channels() * samples interleaved floats.
+  // Returns 1 when written, -1 when inactive (passthrough, or no layout set).
+  int process_frame_speakers(const uint8_t* frame, size_t frame_size, const float* const* bed,
+                             int bed_channels, int samples, float* out) {
+    const int ch = speakers_.channels();
+    if (mode_ == kPassthrough || ch <= 0 || bed_channels <= 0 || samples <= 0) return -1;
+    const size_t n = static_cast<size_t>(samples) * ch;
+    if (spk_dm_.size() < n) spk_dm_.assign(n, 0.0f);  // only for non-standard frame sizes
+    if (spk_bed_.size() < n) spk_bed_.assign(n, 0.0f);
+    dialnorm_gain_ = 1.0f;
+    frame_has_compr_ = false;
+    if (dialog_norm_ || drc_mode_ == 3) parse_bsi(frame, frame_size);
+    if (mode_ == kBedHrtf) {
+      // "Bed" mode on speakers: the core bed on the layout, no object decode.
+      std::fill(out, out + n, 0.0f);
+      speakers_.render_bed(bed, bed_channels, lfe_gain_, samples, out);
+      apply_post(out, samples, ch);
+      return 1;
+    }
+
+    // The latency-matched bed fallback runs every frame (see process_frame).
+    std::fill(spk_bed_.begin(), spk_bed_.begin() + n, 0.0f);
+    speakers_.render_bed(bed, bed_channels, lfe_gain_, samples, spk_bed_.data());
+    delay_speakers(spk_bed_.data(), samples, spk_dm_.data());
+
+    const int objects = engine_.upmix_frame(frame, frame_size, bed, bed_channels, samples);
+    const int want = objects > 0 ? kPathRender : kPathDownmix;
+    if (want == kPathRender) render_speaker_objects(objects, samples, out);
+
+    if (spk_last_path_ == kPathNone) spk_last_path_ = want;
+    if (want != spk_last_path_) {
+      if (want == kPathDownmix) {
+        const int held = engine_.upmix_held(bed, bed_channels, samples);
+        if (held > 0) {
+          render_speaker_objects(held, samples, out);
+          crossfade(out, spk_dm_.data(), samples, out, ch);
+        } else {
+          std::copy(spk_dm_.data(), spk_dm_.data() + n, out);
+        }
+      } else {
+        crossfade(spk_dm_.data(), out, samples, out, ch);
+      }
+      spk_last_path_ = want;
+    } else if (want == kPathDownmix) {
+      std::copy(spk_dm_.data(), spk_dm_.data() + n, out);
+    }
+    apply_post(out, samples, ch);
+    return 1;
+  }
+
   // Renders one E-AC-3 frame to interleaved stereo (`out` holds 2*samples
   // floats). Returns 1 whenever the binaural render is active: the output is
   // the object render or, for frames without usable JOC, a fixed-matrix downmix
@@ -183,6 +273,7 @@ class AtmosPipeline {
 
  private:
   static constexpr int kMaxBedCh = 8;
+  static constexpr int kFrameSamples = 1536;  // 6 blocks x 256 per E-AC-3 frame
   // The object render's bed passes through QMF analysis+synthesis, which the
   // fallback downmix does not. MEASURED round-trip: cavern_qmf_test's best-lag
   // cross-correlation reports 577 samples (not the textbook 640-64=576) — the
@@ -193,15 +284,15 @@ class AtmosPipeline {
 
   // The object render (JOC objects -> HRIR binaural + diffuse LFE) for the
   // engine's current upmix. `object_count` is the engine's return value.
-  void render_objects(int object_count, int samples, float* out) {
+  // Applies each object's OAMD gain (dialog/ambience trims mastered into the
+  // stream) to the reconstructed PCM, ramped from the previously applied value.
+  // A negative gain is the "no state yet" sentinel — keep the last one. Returns
+  // the number of objects to render (capped at max_objects_).
+  int apply_object_gains(int object_count) {
     const int objects = object_count < max_objects_ ? object_count : max_objects_;
     // Silent truncation would be a debugging trap; the JNI layer logs this
     // once. DD+ JOC practice is <=16 objects, so it should never fire.
     last_truncated_ = object_count > max_objects_ ? object_count - max_objects_ : 0;
-
-    // Apply each object's OAMD gain (dialog/ambience trims mastered into the
-    // stream) to the reconstructed PCM, ramped from the previously applied
-    // value. A negative gain is OAMD's "hold" sentinel — keep the last one.
     if (static_cast<int>(obj_gain_.size()) < objects) obj_gain_.resize(objects, 1.0f);
     for (int o = 0; o < objects; ++o) {
       const float g = engine_.object_gain(o);
@@ -209,6 +300,53 @@ class AtmosPipeline {
       engine_.scale_object(o, obj_gain_[o], g1);
       obj_gain_[o] = g1;
     }
+    return objects;
+  }
+
+  // The object render to loudspeakers for the engine's current upmix.
+  void render_speaker_objects(int object_count, int samples, float* out) {
+    const int objects = apply_object_gains(object_count);
+    for (int o = 0; o < objects; ++o) {
+      spk_ptrs_[o] = engine_.object_channel(o);
+      spk_states_[o] = engine_.object_state(o);
+    }
+    speakers_.render(spk_ptrs_.data(), spk_states_.data(), objects, engine_.lfe_object_index(),
+                     lfe_gain_, samples, out);
+  }
+
+  // Pushes `in` (interleaved, output_channels() wide) through the kQmfLatency
+  // delay line into `out`, like render_downmix does for stereo.
+  void delay_speakers(const float* in, int samples, float* out) {
+    const int ch = speakers_.channels();
+    for (int i = 0; i < samples; ++i) {
+      float* slot = &spk_delay_[static_cast<size_t>(spk_idx_) * ch];
+      const float* src = in + static_cast<size_t>(i) * ch;
+      float* dst = out + static_cast<size_t>(i) * ch;
+      for (int c = 0; c < ch; ++c) {
+        dst[c] = slot[c];
+        slot[c] = src[c];
+      }
+      if (++spk_idx_ == kQmfLatency) spk_idx_ = 0;
+    }
+  }
+
+  void deinterleave(const float* bed_interleaved, int channels, int samples) {
+    if (static_cast<int>(planar_.size()) != channels) {
+      planar_.assign(static_cast<size_t>(channels), std::vector<float>());
+    }
+    planar_ptrs_.resize(static_cast<size_t>(channels));
+    for (int c = 0; c < channels; ++c) {
+      if (static_cast<int>(planar_[c].size()) < samples) planar_[c].resize(samples);
+      float* dst = planar_[c].data();
+      for (int i = 0; i < samples; ++i) {
+        dst[i] = bed_interleaved[static_cast<size_t>(i) * channels + c];
+      }
+      planar_ptrs_[c] = dst;
+    }
+  }
+
+  void render_objects(int object_count, int samples, float* out) {
+    const int objects = apply_object_gains(object_count);
 
     // The LFE is non-directional bass. Spatializing it through the HRIR places
     // it at a point (and, with no OAMD position, at the front-left origin corner
@@ -276,13 +414,15 @@ class AtmosPipeline {
 
   // Equal-power fade from `from` into `to` across the frame. `out` may alias
   // either input — each index is read before it is written.
-  void crossfade(const float* from, const float* to, int samples, float* out) {
+  void crossfade(const float* from, const float* to, int samples, float* out, int ch = 2) {
     for (int i = 0; i < samples; ++i) {
       const float t = (i + 0.5f) / static_cast<float>(samples);
       const float wf = std::cos(t * kHalfPi);
       const float wt = std::sin(t * kHalfPi);
-      out[2 * i] = wf * from[2 * i] + wt * to[2 * i];
-      out[2 * i + 1] = wf * from[2 * i + 1] + wt * to[2 * i + 1];
+      for (int c = 0; c < ch; ++c) {
+        const size_t k = static_cast<size_t>(i) * ch + c;
+        out[k] = wf * from[k] + wt * to[k];
+      }
     }
   }
 
@@ -348,9 +488,9 @@ class AtmosPipeline {
   //               across the frame, plus a limiter for overload protection —
   //               falling back to the generic heavy curve for streams that
   //               never carry compr.
-  void apply_post(float* out, int samples) {
+  void apply_post(float* out, int samples, int ch = 2) {
     if (dialnorm_gain_ != 1.0f) {
-      for (int i = 0; i < 2 * samples; ++i) out[i] *= dialnorm_gain_;
+      for (int i = 0; i < ch * samples; ++i) out[i] *= dialnorm_gain_;
     }
     if (drc_mode_ == 0) return;
 
@@ -370,8 +510,7 @@ class AtmosPipeline {
       const float step = (rf_target_ - g0) / static_cast<float>(samples);
       float g = g0;
       for (int i = 0; i < samples; ++i) {
-        out[2 * i] *= g;
-        out[2 * i + 1] *= g;
+        for (int c = 0; c < ch; ++c) out[static_cast<size_t>(i) * ch + c] *= g;
         g += step;
       }
       rf_gain_ = rf_target_;
@@ -384,16 +523,20 @@ class AtmosPipeline {
         default: thresh = 0.20f; ratio = 8.0f; break;  // HEAVY without compr
       }
     }
+    // One envelope across every channel (the loudest drives the gain), so the
+    // compressor never shifts the image the way per-channel gains would.
     for (int i = 0; i < samples; ++i) {
-      const float l = out[2 * i], r = out[2 * i + 1];
-      const float al = l < 0.0f ? -l : l, ar = r < 0.0f ? -r : r;
-      const float peak = al > ar ? al : ar;
+      float* frame = out + static_cast<size_t>(i) * ch;
+      float peak = 0.0f;
+      for (int k = 0; k < ch; ++k) {
+        const float a = frame[k] < 0.0f ? -frame[k] : frame[k];
+        if (a > peak) peak = a;
+      }
       const float c = peak > drc_env_ ? kDrcAttack : kDrcRelease;
       drc_env_ = c * drc_env_ + (1.0f - c) * peak;
       float gain = 1.0f;
       if (drc_env_ > thresh) gain = (thresh + (drc_env_ - thresh) / ratio) / drc_env_;
-      out[2 * i] = l * gain;
-      out[2 * i + 1] = r * gain;
+      for (int k = 0; k < ch; ++k) frame[k] *= gain;
     }
   }
 
@@ -402,6 +545,14 @@ class AtmosPipeline {
 
   ObjectEngine engine_;
   render::BinauralRenderer renderer_;
+  // Loudspeaker path (process_frame_speakers): renderer, the bed fallback's
+  // latency-matching delay line, scratch, and its own path memory.
+  SpeakerRenderer speakers_;
+  std::vector<float> spk_delay_, spk_dm_, spk_bed_;
+  int spk_idx_ = 0;
+  int spk_last_path_ = kPathNone;
+  std::vector<const float*> spk_ptrs_;
+  std::vector<const cavern::ObjectState*> spk_states_;
   int max_objects_ = 16;
   int mode_ = kObjectRender;
   int downmix_ = kBinaural;

@@ -145,3 +145,69 @@ worth knowing when debugging:
 Host tests live in `tests/` (each file states its compile line); the render
 suite is `hrtf_render_test`, `hrtf_motion_test`, `hrtf_polish_test`,
 `atmos_pipeline_test`, `object_engine_test`.
+
+## Loudspeaker render (5.1 .. 9.1.6)
+
+`speaker_renderer.h` renders the reconstructed objects to a physical layout —
+5.1, 7.1, 5.1.2, 5.1.4, 7.1.2, 7.1.4, 9.1.4, 9.1.6 — for HDMI receivers and
+multichannel USB interfaces (`AtmosPipeline::process_frame_speakers`, JNI
+`nativeSetOutputLayout` / `nativeProcessFrameSpeakers`). Output is interleaved
+in Android channel-mask order so the Kotlin side hands it to the AudioTrack
+unchanged (`AtmosAudioTrackProvider` sets the exact mask; 9.1.x travels as a
+24-channel frame whose extra positions are silent, because Media3 1.5 only
+accepts 1-8, 10, 12 and 24 channels).
+
+- **Positions**: OAMD room-cube coordinates are warped onto the Dolby home
+  speaker angles (cube azimuth 45 -> 30 deg, 135 -> 150 deg; the top of a wall
+  lands on the 45-degree top speakers) before panning — raw cube angles would
+  put the front corners at 45 degrees, between L and the side.
+- **Panning**: VBAP over the precomputed convex hull of the layout, closed with
+  imaginary zenith/nadir speakers whose gain is shared out, so every direction
+  has a solution on every layout (the constant-power grid test checks this).
+- **Object properties (TS 103 420 clause 5.2)**: size (box sampling, power
+  sum), divergence (power-preserving centre + two sides, BS.2127-style), zone
+  constraints (one hull per constraint over the permitted speakers, speaker ->
+  zone map of Table A.7), channel lock (nearest speaker). Bed objects play from
+  their own channel when the layout has it; the LFE object goes to the LFE.
+- **Fallback**: frames without JOC play the decoded bed on the layout, delayed
+  by the same 577-sample QMF latency and crossfaded, exactly like the stereo path.
+
+Host tests: `speaker_renderer_test`, `atmos_speaker_pipeline_test`.
+
+## OAMD decode fixes against TS 103 420
+
+Cavern's decode (and this port) disagreed with the spec in places that change
+what is heard. Fixed, with tests in `cavern_oamd_resolve_test`:
+
+- `read_signed` returned 0 for every input (a C# precedence bug upstream), so
+  every differential position update was dropped and moving objects froze
+  between absolute updates. It is now the spec's two's-complement delta.
+- Differential positions are relative to the PREVIOUS metadata block (clause
+  5.3), not the same block slot of the previous frame; Z clamps to [-1, 1].
+- `oa_element_size` counts BYTES after the size field (clause 5.6.4.3). The port
+  seeked `size + 1` BITS from before it — harmless with one element, but it
+  desynchronised any element after the first. Seeking is now forward-only.
+- `object_gain_idx == 3` is the previous OBJECT's gain in the same block
+  (Table 18), not a hold; inactive objects are silent (Table 28).
+- Blocks follow the default / full / reuse / mixed rules of Tables 28-29, so
+  unsignalled fields hold instead of resetting.
+- Newly decoded and applied: zone constraints + elevation, per-axis size, snap,
+  screen anchoring (clause 5.2.1.3, with Cavern's default screen), room-distance
+  projection (clause 5.2.1.2), and the extended_object_element (divergence and
+  extended-precision position).
+- Bed objects take their channel's position (they used to sit at the cube
+  origin, the front-left corner), in the binaural path as well.
+
+Still open / approximate:
+
+- ISF (stacked-ring) objects: the spec gives ring sizes and order but not the
+  ring azimuths, so rings are spaced evenly from the front.
+- The obj_render_info[] bit order: the syntax (index 0 = position) and Table 31
+  (index 3 = position) disagree; the port keeps Cavern's reading, which matches
+  the syntax and the other flag arrays. Confirm against reference content.
+- Nothing here is verified against Dolby's reference renderer or certified test
+  content; the tests prove spec conformance of each step, not equivalence.
+- AC-4 is not decoded natively (there is no AC-4 decoder in FFmpeg); it plays
+  through the platform decoder or HDMI passthrough.
+
+Run every host test with CTest: see `tests/CMakeLists.txt`.
