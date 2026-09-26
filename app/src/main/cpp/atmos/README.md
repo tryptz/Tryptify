@@ -205,9 +205,44 @@ Still open / approximate:
 - The obj_render_info[] bit order: the syntax (index 0 = position) and Table 31
   (index 3 = position) disagree; the port keeps Cavern's reading, which matches
   the syntax and the other flag arrays. Confirm against reference content.
-- Nothing here is verified against Dolby's reference renderer or certified test
-  content; the tests prove spec conformance of each step, not equivalence.
+- Not compared with Dolby's reference renderer or certified test content (both
+  need a Dolby licence). What IS checked against Dolby is below.
 - AC-4 is not decoded natively (there is no AC-4 decoder in FFmpeg); it plays
   through the platform decoder or HDMI passthrough.
 
 Run every host test with CTest: see `tests/CMakeLists.txt`.
+
+## Real-content reference check
+
+`tools/reference_check/run.sh` decodes the bundled `assets/atmos_test.mp4` (a
+real 768 kb/s E-AC-3 JOC stream, the profile TIDAL serves) with FFmpeg, runs
+this code over it, renders the objects to 5.1 and compares with the stream's
+own 5.1 core — which is Dolby's encoder rendering the same objects to 5.1. It
+exits non-zero when an audible moving object's path stops tracking the core,
+when a speaker stops tracking the same speaker of the core, or when the energy
+distribution across speakers diverges.
+
+It found two bugs that no synthetic test could, both in ObjectEngine and both
+present in the binaural path too:
+
+- JOC's inputs are FL FR FC SL SR [RL RR] with no LFE, but the decoded bed
+  (FL FR FC LFE SL SR ...) was fed straight in, so JOC's left surround was the
+  LFE and its right surround the left surround.
+- OAMD numbers objects with the LFE bed object included; JOC reconstructs only
+  the others. Objects were paired 1:1, so every object got the next one's
+  metadata — on the test clip the audible voice sat frozen at the front-left
+  corner while the silent objects moved. The core LFE is now spliced in at the
+  OAMD LFE slot (latency-matched), as Cavern's EnhancedAC3Renderer does.
+
+Results on the test clip after the fixes: the moving objects' paths track the
+core at +0.91..+0.99; each 5.1 speaker tracks the core at +0.88..+0.96 (LFE
++1.00); the per-window speaker-energy distribution matches with median
+similarity 1.00; on 7.1.4, top-speaker energy follows object height at +0.999.
+Levels sit about 3 dB under the core on every channel — Cavern's anti-clip
+trim — with the centre about 1 dB lower still. Before the fixes the same check
+fails outright (everything out of L; similarity 0.02). It also picked the
+layout-aware cube warp in speaker_renderer.h over a fixed one (5.1 surrounds
++0.86 -> +0.95).
+
+The clip exercises no mixed-update blocks, zones, size, snap or divergence, so
+those paths remain spec-checked only.

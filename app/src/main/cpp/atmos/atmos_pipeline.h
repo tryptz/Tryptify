@@ -61,6 +61,7 @@ class AtmosPipeline {
     drc_env_ = 0.0f;
     renderer_.reset_history();
     speakers_.reset_history();
+    engine_.flush_history();
     std::fill(spk_delay_.begin(), spk_delay_.end(), 0.0f);
     spk_idx_ = 0;
     spk_last_path_ = kPathNone;

@@ -12,6 +12,7 @@
 #ifndef TF_ATMOS_OBJECT_ENGINE_H
 #define TF_ATMOS_OBJECT_ENGINE_H
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -79,8 +80,15 @@ class ObjectEngine {
     const int objects = joc.object_count();
     if (channels <= 0 || objects <= 0 || frame_samples <= 0) return -1;
     if (frame_samples % kTimeslot != 0) return -1;
-    const int usable_channels = channels < bed_channels ? channels : bed_channels;
     const int timeslots = frame_samples / kTimeslot;
+    // JOC's input channels are FL FR FC SL SR [RL RR] (Cavern's
+    // JointObjectCodingTables.inputMatrix) — no LFE. The decoded bed is in
+    // decoder order FL FR FC LFE SL SR [BL BR], so for a bed that carries an
+    // LFE (4+ channels) JOC channel ch reads decoder channel ch, skipping index
+    // 3. Feeding the bed straight through (as this did) handed JOC the LFE as
+    // its left surround and the left surround as its right surround.
+    const bool bed_has_lfe = bed_channels >= 4;
+    auto bed_index = [&](int ch) { return (bed_has_lfe && ch >= 3) ? ch + 1 : ch; };
 
     ensure_capacity(joc, channels, objects, frame_samples);
     joc.get_mixing_matrices(frame_samples);
@@ -89,8 +97,9 @@ class ObjectEngine {
       const int base = ts * kTimeslot;
       for (int ch = 0; ch < channels; ++ch) {
         float* dst = ts_input_[ch].data();
-        if (ch < usable_channels) {
-          const float* src = bed[ch] + base;
+        const int src_ch = bed_index(ch);
+        if (src_ch < bed_channels) {
+          const float* src = bed[src_ch] + base;
           for (int i = 0; i < kTimeslot; ++i) dst[i] = src[i];
         } else {
           for (int i = 0; i < kTimeslot; ++i) dst[i] = 0.0f;  // missing bed channel
@@ -103,15 +112,40 @@ class ObjectEngine {
         for (int i = 0; i < kTimeslot; ++i) dst[i] = src[i];
       }
     }
-    object_count_ = objects;
-    return objects;
+    joc_objects_ = objects;
+
+    // OAMD indexes objects with the LFE bed object included; JOC reconstructs
+    // only the others (the LFE travels in the core bed's LFE channel). Like
+    // Cavern's EnhancedAC3Renderer, splice the bed LFE in at OAMD's LFE slot so
+    // object index o means OAMD object o everywhere downstream. It is delayed
+    // by the QMF round trip so it stays aligned with the JOC objects.
+    const int lfe = emdf_.oamd().valid() ? emdf_.oamd().get_lfe_position() : -1;
+    lfe_slot_ = (lfe >= 0 && lfe <= objects && bed_has_lfe) ? lfe : -1;
+    if (lfe_slot_ >= 0) {
+      if (static_cast<int>(lfe_pcm_.size()) != frame_samples) lfe_pcm_.assign(frame_samples, 0.0f);
+      if (static_cast<int>(lfe_delay_.size()) != kQmfLatency) {
+        lfe_delay_.assign(kQmfLatency, 0.0f);
+        lfe_delay_idx_ = 0;
+      }
+      const float* src = bed[3];
+      for (int i = 0; i < frame_samples; ++i) {
+        lfe_pcm_[i] = lfe_delay_[lfe_delay_idx_];
+        lfe_delay_[lfe_delay_idx_] = src[i];
+        if (++lfe_delay_idx_ == kQmfLatency) lfe_delay_idx_ = 0;
+      }
+    }
+    object_count_ = objects + (lfe_slot_ >= 0 ? 1 : 0);
+    return object_count_;
   }
 
+  // Objects in the last upmix, in OAMD order (JOC objects + the bed LFE).
   int object_count() const { return object_count_; }
   int frame_samples() const { return frame_samples_; }
-  // Object PCM for the last upmix (frame_samples() long). Null if out of range.
+  // PCM of OAMD object `obj` for the last upmix (frame_samples() long), or
+  // null if out of range. The LFE slot is the core bed's (delayed) LFE.
   const float* object_channel(int obj) const {
-    return (obj >= 0 && obj < object_count_) ? object_pcm_[obj].data() : nullptr;
+    float* p = mutable_channel(obj);
+    return p;
   }
   // The decoded OAMD frame (object positions), for the HRTF render (P2).
   const cavern::ObjectAudioMetadata& oamd() const { return emdf_.oamd(); }
@@ -140,7 +174,8 @@ class ObjectEngine {
   void scale_object(int obj, float g0, float g1) {
     if (obj < 0 || obj >= object_count_ || frame_samples_ <= 0) return;
     if (g0 == 1.0f && g1 == 1.0f) return;
-    float* p = object_pcm_[obj].data();
+    float* p = mutable_channel(obj);
+    if (p == nullptr) return;
     const float step = (g1 - g0) / static_cast<float>(frame_samples_);
     float g = g0;
     for (int i = 0; i < frame_samples_; ++i) {
@@ -153,7 +188,14 @@ class ObjectEngine {
   // slots in object order, and the LFE's bed-order index is therefore its object
   // index. The LFE is non-directional bass and must NOT be HRIR-spatialized —
   // the renderer sums it to both ears instead of placing it at a point.
-  int lfe_object_index() const { return emdf_.oamd().get_lfe_position(); }
+  int lfe_object_index() const { return lfe_slot_; }
+
+  // Clears time history (the spliced LFE's latency delay) on seek/flush.
+  // Allocation-free.
+  void flush_history() {
+    std::fill(lfe_delay_.begin(), lfe_delay_.end(), 0.0f);
+    lfe_delay_idx_ = 0;
+  }
 
   // Render-space position of object `obj` (x = left..right, y = down..up,
   // z = back..front), from the resolved OAMD state: the LAST info block's
@@ -166,6 +208,19 @@ class ObjectEngine {
   }
 
  private:
+  // Measured QMF analysis+synthesis round trip (cavern_qmf_test), matching
+  // AtmosPipeline::kQmfLatency.
+  static constexpr int kQmfLatency = 577;
+
+  // OAMD object index -> its PCM (JOC object storage, or the spliced LFE).
+  float* mutable_channel(int obj) const {
+    if (obj < 0 || obj >= object_count_) return nullptr;
+    if (obj == lfe_slot_) return const_cast<float*>(lfe_pcm_.data());
+    const int j = (lfe_slot_ >= 0 && obj > lfe_slot_) ? obj - 1 : obj;
+    if (j < 0 || j >= joc_objects_) return nullptr;
+    return const_cast<float*>(object_pcm_[j].data());
+  }
+
   void ensure_capacity(const cavern::JointObjectCoding& joc, int channels,
                        int objects, int frame_samples) {
     if (applier_ == nullptr || channels != applier_channels_ ||
@@ -196,6 +251,11 @@ class ObjectEngine {
   int applier_channels_ = -1;
   int applier_objects_ = -1;
   int object_count_ = 0;
+  int joc_objects_ = 0;
+  int lfe_slot_ = -1;                 // OAMD index of the spliced bed LFE, or -1
+  std::vector<float> lfe_pcm_;        // [frame_samples], delayed bed LFE
+  std::vector<float> lfe_delay_;      // [kQmfLatency] ring
+  int lfe_delay_idx_ = 0;
   int frame_samples_ = -1;
   std::vector<std::vector<float>> object_pcm_;  // [object][frame_samples]
   std::vector<std::vector<float>> ts_input_;    // [channel][kTimeslot] scratch

@@ -117,8 +117,14 @@ inline std::vector<SpeakerDef> layout_speakers(OutputLayout layout) {
 
 // OAMD room coordinates (x 0..1 left->right, y 0..1 front->back, z -1..1
 // floor->ceiling) -> a unit direction in the vbap.h convention (+x right,
-// +y front, +z up). See the header comment for the warp.
-inline Vec3 room_to_direction(const Vec3& room) {
+// +y front, +z up). Cube landmarks are warped onto where the layout's speakers
+// actually are: the front corner onto L/R (30 deg), the middle of the side
+// wall onto `side_az`, the rear corner onto `rear_az` — 90 / 150 for 7.x-style
+// layouts, 70 / 110 for 5.x, whose surrounds sit at 110 deg. (A fixed 150-deg
+// rear corner on 5.1 panned back-corner sounds across the back into the
+// opposite surround; measured against the Dolby-encoded 5.1 core of a real
+// JOC stream, the layout-aware warp tracks it best.)
+inline Vec3 room_to_direction(const Vec3& room, float side_az = 90.0f, float rear_az = 150.0f) {
   const float dx = room.x - 0.5f, dy = 0.5f - room.y;
   // Chebyshev radius: 1 on every wall, so a point at the top of a wall and a
   // point at the top of a corner both sit at 45 degrees elevation.
@@ -127,9 +133,9 @@ inline Vec3 room_to_direction(const Vec3& room) {
   const float a = std::fabs(az);
   float w;
   if (a <= 45.0f) w = a * (30.0f / 45.0f);
-  else if (a <= 90.0f) w = 30.0f + (a - 45.0f) * (60.0f / 45.0f);
-  else if (a <= 135.0f) w = 90.0f + (a - 90.0f) * (60.0f / 45.0f);
-  else w = 150.0f + (a - 135.0f) * (30.0f / 45.0f);
+  else if (a <= 90.0f) w = 30.0f + (a - 45.0f) * ((side_az - 30.0f) / 45.0f);
+  else if (a <= 135.0f) w = side_az + (a - 90.0f) * ((rear_az - side_az) / 45.0f);
+  else w = rear_az + (a - 135.0f) * ((180.0f - rear_az) / 45.0f);
   az = az < 0.0f ? -w : w;
   // Below ear level is rendered at ear level: home layouts have no floor speakers.
   const float z = std::fmax(room.z, 0.0f);
@@ -317,6 +323,11 @@ class SpeakerRenderer {
     channels_ = static_cast<int>(speakers_.size());
     lfe_ = -1;
     for (int i = 0; i < channels_; ++i) if (is_lfe(speakers_[i])) lfe_ = i;
+    // 5.x layouts have their surrounds at 110 deg and no side/rear pair.
+    bool five = false;
+    for (const SpeakerDef& sp : speakers_) if (sp.role == SpeakerRole::kLs) five = true;
+    side_az_ = five ? 70.0f : 90.0f;
+    rear_az_ = five ? 110.0f : 150.0f;
     for (int v = 0; v < kZoneVariants; ++v) {
       zone_panners_[v].configure(speakers_, allowed_for(v / 2, (v & 1) != 0));
       if (zone_panners_[v].empty()) zone_panners_[v].configure(speakers_, all_speakers());
@@ -364,7 +375,7 @@ class SpeakerRenderer {
     if (zone < 0 || zone > 5) zone = 0;  // 6, 7 reserved: no constraint
     const HullPanner& panner = zone_panners_[zone * 2 + (st.enable_elevation ? 1 : 0)];
     if (st.snap) {
-      const int ch = panner.nearest(room_to_direction(st.room));
+      const int ch = panner.nearest(room_to_direction(st.room, side_az_, rear_az_));
       if (ch >= 0) gains[ch] = 1.0f;
       return;
     }
@@ -527,7 +538,7 @@ class SpeakerRenderer {
           const Vec3 p{std::fmin(1.0f, std::fmax(0.0f, centre.x + ox)),
                        std::fmin(1.0f, std::fmax(0.0f, centre.y + oy)),
                        std::fmin(1.0f, std::fmax(-1.0f, centre.z + oz))};
-          panner.accumulate_power(room_to_direction(p), each, gains);
+          panner.accumulate_power(room_to_direction(p, side_az_, rear_az_), each, gains);
         }
       }
     }
@@ -553,6 +564,7 @@ class SpeakerRenderer {
   }
 
   OutputLayout layout_ = OutputLayout::k5_1;
+  float side_az_ = 90.0f, rear_az_ = 150.0f;  // room_to_direction warp targets
   std::vector<SpeakerDef> speakers_;
   int channels_ = 0;
   int lfe_ = -1;
