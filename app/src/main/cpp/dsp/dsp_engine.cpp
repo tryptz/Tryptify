@@ -122,13 +122,16 @@ DspEngine::DspEngine(int sampleRate, int maxBlockSize)
     : sampleRate_(sampleRate), maxBlockSize_(maxBlockSize) {
     sumL_.resize(maxBlockSize, 0.0f);
     sumR_.resize(maxBlockSize, 0.0f);
-    busL_.resize(maxBlockSize, 0.0f);
-    busR_.resize(maxBlockSize, 0.0f);
     dryBufL_.resize(maxBlockSize, 0.0f);
     dryBufR_.resize(maxBlockSize, 0.0f);
+    inRingL_.assign(PDC_SIZE, 0.0f);
+    inRingR_.assign(PDC_SIZE, 0.0f);
     for (auto& bus : buses_) {
         bus.pdcL.assign(PDC_SIZE, 0.0f);
         bus.pdcR.assign(PDC_SIZE, 0.0f);
+        bus.inL.assign(ROUTE_BLOCK, 0.0f);
+        bus.inR.assign(ROUTE_BLOCK, 0.0f);
+        defaultSendsLocked(bus);
         // Inserting a plugin happens under the chain lock; with the room
         // reserved here it never reallocates there.
         bus.plugins.reserve(MAX_PLUGINS_PER_BUS);
@@ -178,8 +181,6 @@ void DspEngine::reconfigure(int sampleRate, int maxBlockSize) {
         maxBlockSize_ = maxBlockSize;
         sumL_.resize(maxBlockSize_, 0.0f);
         sumR_.resize(maxBlockSize_, 0.0f);
-        busL_.resize(maxBlockSize_, 0.0f);
-        busR_.resize(maxBlockSize_, 0.0f);
         dryBufL_.resize(maxBlockSize_, 0.0f);
         dryBufR_.resize(maxBlockSize_, 0.0f);
     }
@@ -310,25 +311,6 @@ int DspEngine::chainLatencyLocked(const Bus& bus) {
     return total;
 }
 
-void DspEngine::delayBusLocked(Bus& bus, float* l, float* r, int numFrames, int delay) {
-    if (bus.pdcStale) {
-        std::fill(bus.pdcL.begin(), bus.pdcL.end(), 0.0f);
-        std::fill(bus.pdcR.begin(), bus.pdcR.end(), 0.0f);
-        bus.pdcStale = false;
-    }
-    delay = std::max(0, std::min(PDC_SIZE - 1, delay));
-    int pos = bus.pdcPos;
-    for (int i = 0; i < numFrames; i++) {
-        bus.pdcL[static_cast<size_t>(pos)] = l[i];
-        bus.pdcR[static_cast<size_t>(pos)] = r[i];
-        const int read = (pos - delay) & (PDC_SIZE - 1);
-        l[i] = bus.pdcL[static_cast<size_t>(read)];
-        r[i] = bus.pdcR[static_cast<size_t>(read)];
-        pos = (pos + 1) & (PDC_SIZE - 1);
-    }
-    bus.pdcPos = pos;
-}
-
 int DspEngine::masterSlotCountLocked() const {
     return static_cast<int>(buses_[MASTER_BUS].plugins.size());
 }
@@ -355,6 +337,90 @@ bool DspEngine::skippedOnThisLane(const SnapinProcessor& plugin) const {
     }
 }
 
+// ── Routing ─────────────────────────────────────────────────────────────
+
+// dst[i] += x[i - k] * g, where x is [cur] for this piece and [ring] (history,
+// next write at [ringPos]) before it; g ramps g0 -> g1 across the piece.
+static inline void tapAdd(float* dst, const float* cur, const std::vector<float>& ring, int ringPos,
+                          int n, int k, float g0, float g1) {
+    const float step = (g1 - g0) / static_cast<float>(n);
+    float g = g0;
+    for (int i = 0; i < n; i++) {
+        g += step;
+        const float x = i >= k ? cur[i - k]
+                               : ring[static_cast<size_t>((ringPos - (k - i)) & (PDC_SIZE - 1))];
+        dst[i] += x * g;
+    }
+}
+
+static inline void ringAppend(std::vector<float>& ring, int& pos, const float* x, int n) {
+    for (int i = 0; i < n; i++) {
+        ring[static_cast<size_t>(pos)] = x[i];
+        pos = (pos + 1) & (PDC_SIZE - 1);
+    }
+}
+
+void DspEngine::defaultSendsLocked(Bus& bus) {
+    for (int d = 0; d < TOTAL_BUSES; d++) {
+        bus.send[d].store(d == MASTER_BUS ? 1.0f : 0.0f, std::memory_order_relaxed);
+        bus.sendApplied[d] = d == MASTER_BUS ? 1.0f : 0.0f;
+    }
+}
+
+int DspEngine::orderLocked(int* order) const {
+    // Kahn's algorithm, lowest index first among the ready, so an unrouted
+    // mixer runs in index order as it always has. The graph is kept free of
+    // loops; were one ever to slip in, its buses still run, appended.
+    const int active = activeBusCount();
+    int indegree[TOTAL_BUSES] = {};
+    for (int s = 0; s < active; s++) {
+        if (s == MASTER_BUS) continue;
+        for (int d = 0; d < active; d++) {
+            if (d != MASTER_BUS && buses_[s].send[d].load(std::memory_order_relaxed) > 0.0f) indegree[d]++;
+        }
+    }
+    bool placed[TOTAL_BUSES] = {};
+    const int mixCount = active - 1;
+    int n = 0;
+    while (n < mixCount) {
+        int pick = -1;
+        for (int b = 0; b < active; b++) {
+            if (b != MASTER_BUS && !placed[b] && indegree[b] == 0) { pick = b; break; }
+        }
+        if (pick < 0) break;
+        placed[pick] = true;
+        order[n++] = pick;
+        for (int d = 0; d < active; d++) {
+            if (d != MASTER_BUS && buses_[pick].send[d].load(std::memory_order_relaxed) > 0.0f) indegree[d]--;
+        }
+    }
+    for (int b = 0; b < active && n < mixCount; b++) {
+        if (b != MASTER_BUS && !placed[b]) order[n++] = b;
+    }
+    return n;
+}
+
+bool DspEngine::reachesLocked(int from, int to) const {
+    if (from == to) return true;
+    const int active = activeBusCount();
+    bool seen[TOTAL_BUSES] = {};
+    int stack[TOTAL_BUSES];
+    int top = 0;
+    stack[top++] = from;
+    seen[from] = true;
+    while (top > 0) {
+        const int b = stack[--top];
+        for (int d = 0; d < active; d++) {
+            if (d == MASTER_BUS || seen[d]) continue;
+            if (buses_[b].send[d].load(std::memory_order_relaxed) <= 0.0f) continue;
+            if (d == to) return true;
+            seen[d] = true;
+            stack[top++] = d;
+        }
+    }
+    return false;
+}
+
 void DspEngine::processMixBusesLocked(const float* left, const float* right, int numFrames) {
     // Flush denormals to zero — prevents 10-100x CPU spikes in feedback tails
     enableFlushToZero();
@@ -363,77 +429,165 @@ void DspEngine::processMixBusesLocked(const float* left, const float* right, int
     std::fill(sumL_.begin(), sumL_.begin() + numFrames, 0.0f);
     std::fill(sumR_.begin(), sumR_.begin() + numFrames, 0.0f);
 
-    bool hasSolo = anySoloed();
-    bool mixBypass = mixBypassed_.load(std::memory_order_relaxed);
+    const int active = activeBusCount();
+    orderCount_ = orderLocked(order_);
 
     // A routed lane feeds its own bus only, among the routed ones.
     const int routedBus = routedBus_.load(std::memory_order_relaxed);
     const int routedCount = routedCount_.load(std::memory_order_relaxed);
 
-    const int activeBuses = activeBusCount();
-
-    // Delay compensation: every bus arrives at the master as late as the
-    // slowest. Taken over the whole graph, not just the buses sounding on this
-    // lane, so every lane of a wide stream — which share the graph — is
-    // delayed alike and its channels stay in step with each other.
-    int slowest = 0;
-    for (int b = 0; b < activeBuses; b++) {
-        if (b != MASTER_BUS) slowest = std::max(slowest, chainLatencyLocked(buses_[b]));
+    // ── Delay compensation over the routing graph ──────────────────────
+    // A bus's input is as late as the latest thing arriving at it (its
+    // input delay); its output is that plus its own effects (its latency).
+    // Every route reads the sender's output history at the difference, so
+    // at each bus and at the master everything arrives in step. Worked out
+    // from the graph alone — not from what sounds on this lane — so every
+    // lane of a wide stream, which share the graph, is delayed alike and its
+    // channels stay together.
+    for (int b = 0; b < active; b++) inDelay_[b] = 0;
+    masterInDelay_ = 0;
+    for (int k = 0; k < orderCount_; k++) {
+        const int b = order_[k];
+        outLat_[b] = inDelay_[b] + chainLatencyLocked(buses_[b]);
+        for (int d = 0; d < active; d++) {
+            if (d == b || buses_[b].send[d].load(std::memory_order_relaxed) <= 0.0f) continue;
+            if (d == MASTER_BUS) masterInDelay_ = std::max(masterInDelay_, outLat_[b]);
+            else inDelay_[d] = std::max(inDelay_[d], outLat_[b]);
+        }
     }
 
-    for (int b = 0; b < activeBuses; b++) {
+    // ── Who runs, and who is heard ─────────────────────────────────────
+    // Live: takes the player's signal, or something live sends to it. Live
+    // ignores mute, so an effect bus fed by a bus just muted keeps running on
+    // silence and its tail rings out instead of freezing.
+    for (int b = 0; b < active; b++) live_[b] = false;
+    for (int k = 0; k < orderCount_; k++) {
+        const int b = order_[k];
+        bool input = buses_[b].inputEnabled.load(std::memory_order_relaxed);
+        if (routedBus >= 0) {
+            input = b == routedBus || (busNumberForIndex(b) > routedCount && input);
+        }
+        takesInput_[b] = input;
+        if (input) live_[b] = true;
+        if (!live_[b]) continue;
+        for (int d = 0; d < active; d++) {
+            if (d != MASTER_BUS && d != b && buses_[b].send[d].load(std::memory_order_relaxed) > 0.0f) live_[d] = true;
+        }
+    }
+    // Solo, as in FL: a soloed bus is heard with everything it feeds and
+    // everything feeding it; every other bus is silenced.
+    if (anySoloed()) {
+        bool down[TOTAL_BUSES] = {}, up[TOTAL_BUSES] = {};
+        for (int k = 0; k < orderCount_; k++) {
+            const int b = order_[k];
+            if (buses_[b].soloed.load(std::memory_order_relaxed)) down[b] = true;
+            if (!down[b]) continue;
+            for (int d = 0; d < active; d++) {
+                if (d != MASTER_BUS && buses_[b].send[d].load(std::memory_order_relaxed) > 0.0f) down[d] = true;
+            }
+        }
+        for (int k = orderCount_ - 1; k >= 0; k--) {
+            const int b = order_[k];
+            if (buses_[b].soloed.load(std::memory_order_relaxed)) { up[b] = true; continue; }
+            for (int d = 0; d < active; d++) {
+                if (d != MASTER_BUS && up[d] && buses_[b].send[d].load(std::memory_order_relaxed) > 0.0f) {
+                    up[b] = true;
+                    break;
+                }
+            }
+        }
+        for (int b = 0; b < active; b++) audible_[b] = down[b] || up[b];
+    } else {
+        for (int b = 0; b < active; b++) audible_[b] = true;
+    }
+
+    for (int b = 0; b < active; b++) blockPeakL_[b] = blockPeakR_[b] = 0.0f;
+    for (int done = 0; done < numFrames; done += ROUTE_BLOCK) {
+        processMixPieceLocked(left, right, done, std::min(ROUTE_BLOCK, numFrames - done), done == 0);
+    }
+    // Update peak meters (relaxed store — UI reads are non-critical)
+    for (int b = 0; b < active; b++) {
         if (b == MASTER_BUS) continue;
+        buses_[b].peakL.store(blockPeakL_[b], std::memory_order_relaxed);
+        buses_[b].peakR.store(blockPeakR_[b], std::memory_order_relaxed);
+    }
+}
+
+void DspEngine::processMixPieceLocked(const float* left, const float* right, int offset, int numFrames,
+                                      bool first) {
+    const float* inPL = left + offset;
+    const float* inPR = right + offset;
+    const bool mixBypass = mixBypassed_.load(std::memory_order_relaxed);
+    const int active = activeBusCount();
+
+    // Every live bus starts the piece empty; the buses before it in the
+    // order add their sends as they finish.
+    for (int k = 0; k < orderCount_; k++) {
+        Bus& bus = buses_[order_[k]];
+        if (!live_[order_[k]]) continue;
+        std::fill(bus.inL.begin(), bus.inL.begin() + numFrames, 0.0f);
+        std::fill(bus.inR.begin(), bus.inR.begin() + numFrames, 0.0f);
+    }
+
+    for (int k = 0; k < orderCount_; k++) {
+        const int b = order_[k];
         Bus& bus = buses_[b];
 
-        // Load atomic parameters once into locals
-        bool busInputEnabled = bus.inputEnabled.load(std::memory_order_relaxed);
-        if (routedBus >= 0) {
-            busInputEnabled = b == routedBus ||
-                (busNumberForIndex(b) > routedCount && busInputEnabled);
-        }
         bool busMuted = bus.muted.load(std::memory_order_relaxed);
-        bool busSoloed = bus.soloed.load(std::memory_order_relaxed);
         float busGainDb = mixBypass ? 0.0f : bus.gainDb.load(std::memory_order_relaxed);
         // A mono lane has no stereo image to place: its pan sits at centre.
         float busPan = (mixBypass || monoLane_) ? 0.0f : bus.pan.load(std::memory_order_relaxed);
 
-        // Skip if no input, muted, or (solo mode active and this bus not soloed)
-        if (!busInputEnabled || busMuted || (hasSolo && !busSoloed)) {
-            bus.peakL.store(0.0f, std::memory_order_relaxed);
-            bus.peakR.store(0.0f, std::memory_order_relaxed);
-            zeroSlotMeters(bus);
+        // Not running, muted, or solo'd out: contributes nothing.
+        if (!live_[b] || busMuted || !audible_[b]) {
+            if (first) zeroSlotMeters(bus);
             writeWaveSilence(bus, numFrames);
-            // What its rings hold is from before; clear them when it returns.
+            // Its history is from before; cleared when it returns.
             bus.pdcStale = true;
+            // Sends parked at their targets, so a bus coming back doesn't
+            // glide in from a stale level.
+            for (int d = 0; d < TOTAL_BUSES; d++) {
+                bus.sendApplied[d] = bus.send[d].load(std::memory_order_relaxed);
+            }
             continue;
         }
+        if (bus.pdcStale) {
+            std::fill(bus.pdcL.begin(), bus.pdcL.end(), 0.0f);
+            std::fill(bus.pdcR.begin(), bus.pdcR.end(), 0.0f);
+            bus.pdcStale = false;
+        }
 
-        // Copy input to bus scratch buffer
-        std::copy(left, left + numFrames, busL_.data());
-        std::copy(right, right + numFrames, busR_.data());
+        float* l = bus.inL.data();
+        float* r = bus.inR.data();
+        // The player's signal, delayed to arrive with the sends into this bus.
+        if (takesInput_[b]) {
+            const int delay = std::min(PDC_SIZE - 1, inDelay_[b]);
+            tapAdd(l, inPL, inRingL_, inRingPos_, numFrames, delay, 1.0f, 1.0f);
+            tapAdd(r, inPR, inRingR_, inRingPos_, numFrames, delay, 1.0f, 1.0f);
+        }
 
         // Run plugin chain with dry/wet blending (skip when mixer DSP is
         // bypassed — but still at the chain's delay, as bypassed slots are).
         if (mixBypass) {
-            zeroSlotMeters(bus);
+            if (first) zeroSlotMeters(bus);
             for (auto& plugin : bus.plugins) {
-                if (plugin) runSlotLocked(*plugin, busL_.data(), busR_.data(), numFrames, false);
+                if (plugin) runSlotLocked(*plugin, l, r, numFrames, false);
             }
         } else {
             for (size_t s = 0; s < bus.plugins.size(); s++) {
                 auto& plugin = bus.plugins[s];
                 if (!plugin) continue;
                 const bool run = !plugin->isBypassed() && !skippedOnThisLane(*plugin);
+                // Block peak across the pieces: the first sets, the rest raise.
+                auto meter = [&](std::atomic<float>& m) {
+                    const float v = stereoPeak(l, r, numFrames);
+                    m.store(first ? v : std::max(v, m.load(std::memory_order_relaxed)),
+                            std::memory_order_relaxed);
+                };
+                if (run) meter(bus.slotInPeak[s]);
+                runSlotLocked(*plugin, l, r, numFrames, run);
                 if (run) {
-                    bus.slotInPeak[s].store(
-                        stereoPeak(busL_.data(), busR_.data(), numFrames),
-                        std::memory_order_relaxed);
-                }
-                runSlotLocked(*plugin, busL_.data(), busR_.data(), numFrames, run);
-                if (run) {
-                    bus.slotOutPeak[s].store(
-                        stereoPeak(busL_.data(), busR_.data(), numFrames),
-                        std::memory_order_relaxed);
+                    meter(bus.slotOutPeak[s]);
                 } else {
                     bus.slotInPeak[s].store(0.0f, std::memory_order_relaxed);
                     bus.slotOutPeak[s].store(0.0f, std::memory_order_relaxed);
@@ -441,25 +595,19 @@ void DspEngine::processMixBusesLocked(const float* left, const float* right, int
             }
         }
 
-        // Line this bus up with the slowest one before it is summed.
-        const int behind = slowest - chainLatencyLocked(bus);
-        if (behind > 0 || !bus.pdcStale) {
-            delayBusLocked(bus, busL_.data(), busR_.data(), numFrames, behind);
-        }
-
         // Recalculate target gains from dB + pan
         recalcBusGains(busGainDb, busPan, bus.targetGainL, bus.targetGainR);
 
-        // Apply bus gain + pan with smoothing, sum into master input
-        float busPeakL = 0.0f, busPeakR = 0.0f;
+        // Fader and pan with smoothing, in place: the buffer is post-fader now.
+        float busPeakL = blockPeakL_[b], busPeakR = blockPeakR_[b];
         int wavePos = bus.waveTapPos.load(std::memory_order_relaxed);
         for (int i = 0; i < numFrames; i++) {
             bus.smoothGainL += gainSmoothCoeff_ * (bus.targetGainL - bus.smoothGainL);
             bus.smoothGainR += gainSmoothCoeff_ * (bus.targetGainR - bus.smoothGainR);
-            float sL = busL_[i] * bus.smoothGainL;
-            float sR = busR_[i] * bus.smoothGainR;
-            sumL_[i] += sL;
-            sumR_[i] += sR;
+            float sL = l[i] * bus.smoothGainL;
+            float sR = r[i] * bus.smoothGainR;
+            l[i] = sL;
+            r[i] = sR;
             float absL = std::fabs(sL);
             float absR = std::fabs(sR);
             if (absL > busPeakL) busPeakL = absL;
@@ -469,10 +617,48 @@ void DspEngine::processMixBusesLocked(const float* left, const float* right, int
             wavePos = (wavePos + 1) & (WAVE_TAP_SIZE - 1);
         }
         bus.waveTapPos.store(wavePos, std::memory_order_relaxed);
-        // Update peak meters (relaxed store — UI reads are non-critical)
-        bus.peakL.store(busPeakL, std::memory_order_relaxed);
-        bus.peakR.store(busPeakR, std::memory_order_relaxed);
+        blockPeakL_[b] = busPeakL;
+        blockPeakR_[b] = busPeakR;
+
+        // Routes out: each destination gets this bus's output at the delay
+        // that lines it up there, at a level ramped from last piece's.
+        for (int d = 0; d < active; d++) {
+            if (d == b) continue;
+            const float target = bus.send[d].load(std::memory_order_relaxed);
+            const float from = bus.sendApplied[d];
+            bus.sendApplied[d] = target;
+            if (target <= 0.0f && from <= 0.0f) continue;
+            float* dl;
+            float* dr;
+            int delay;
+            if (d == MASTER_BUS) {
+                dl = sumL_.data() + offset;
+                dr = sumR_.data() + offset;
+                delay = masterInDelay_ - outLat_[b];
+            } else {
+                // A route fading out may point at a bus that no longer runs
+                // (or already ran): nothing there to add to.
+                if (!live_[d]) continue;
+                dl = buses_[d].inL.data();
+                dr = buses_[d].inR.data();
+                delay = inDelay_[d] - outLat_[b];
+            }
+            delay = std::max(0, std::min(PDC_SIZE - 1, delay));
+            tapAdd(dl, l, bus.pdcL, bus.pdcPos, numFrames, delay, from, target);
+            tapAdd(dr, r, bus.pdcR, bus.pdcPos, numFrames, delay, from, target);
+        }
+        int pos = bus.pdcPos;
+        ringAppend(bus.pdcL, pos, l, numFrames);
+        pos = bus.pdcPos;
+        ringAppend(bus.pdcR, pos, r, numFrames);
+        bus.pdcPos = pos;
     }
+
+    int pos = inRingPos_;
+    ringAppend(inRingL_, pos, inPL, numFrames);
+    pos = inRingPos_;
+    ringAppend(inRingR_, pos, inPR, numFrames);
+    inRingPos_ = pos;
 }
 
 void DspEngine::processMasterSlotLocked(int slot, int numFrames, const float* detectorKey) {
@@ -705,6 +891,23 @@ void DspEngine::setMixBypassed(bool bypassed) {
     mixBypassed_.store(bypassed, std::memory_order_relaxed);
 }
 
+bool DspEngine::setSend(int src, int dst, float level) {
+    const float clamped = std::max(0.0f, std::min(1.0f, finiteOr(level, 0.0f)));
+    std::lock_guard<std::mutex> lock(chainMutex_);
+    if (!isMixBus(src) || !isActiveBus(dst) || dst == src) return false;
+    Bus& bus = buses_[src];
+    const bool had = bus.send[dst].load(std::memory_order_relaxed) > 0.0f;
+    // A new bus-to-bus route must not close a loop.
+    if (clamped > 0.0f && !had && dst != MASTER_BUS && reachesLocked(dst, src)) return false;
+    bus.send[dst].store(clamped, std::memory_order_relaxed);
+    return true;
+}
+
+float DspEngine::getSend(int src, int dst) const {
+    if (src < 0 || src >= TOTAL_BUSES || dst < 0 || dst >= TOTAL_BUSES) return 0.0f;
+    return buses_[src].send[dst].load(std::memory_order_relaxed);
+}
+
 void DspEngine::setPluginDryWet(int busIndex, int slotIndex, float dryWet) {
     if (!isActiveBus(busIndex)) return;
     std::lock_guard<std::mutex> lock(chainMutex_);
@@ -783,6 +986,7 @@ void DspEngine::resetBusLocked(Bus& bus) {
     bus.holdCounterL = bus.holdCounterR = 0;
     bus.publishMeters();
     bus.pdcStale = true;
+    defaultSendsLocked(bus);
 }
 
 void DspEngine::moveBusLocked(Bus& dst, Bus& src) {
@@ -815,6 +1019,11 @@ void DspEngine::moveBusLocked(Bus& dst, Bus& src) {
     dst.publishMeters();
     dst.pdcStale = true;
     src.pdcStale = true;
+    // Destinations were already renumbered by removeBus.
+    for (int d = 0; d < TOTAL_BUSES; d++) {
+        dst.send[d].store(src.send[d].load(std::memory_order_relaxed), std::memory_order_relaxed);
+        dst.sendApplied[d] = src.sendApplied[d];
+    }
 }
 
 int DspEngine::addBus() {
@@ -841,6 +1050,18 @@ bool DspEngine::removeBus(int busIndex) {
         // A bus a channel group is routed to stays while it is.
         if (busNumberForIndex(busIndex) <= routedCount_.load(std::memory_order_relaxed)) return false;
         retired.swap(buses_[busIndex].plugins);
+        // Routes into the removed bus go; routes to the buses above it follow
+        // them down one index.
+        for (int b = 0; b <= count; b++) {
+            if (b == MASTER_BUS) continue;
+            Bus& from = buses_[b];
+            for (int d = busIndex; d < count; d++) {
+                from.send[d].store(from.send[d + 1].load(std::memory_order_relaxed), std::memory_order_relaxed);
+                from.sendApplied[d] = from.sendApplied[d + 1];
+            }
+            from.send[count].store(0.0f, std::memory_order_relaxed);
+            from.sendApplied[count] = 0.0f;
+        }
         for (int b = busIndex; b < count; b++) moveBusLocked(buses_[b], buses_[b + 1]);
         resetBusLocked(buses_[count]);
         mixBusCount_.store(count - 1, std::memory_order_relaxed);
@@ -886,7 +1107,15 @@ bool DspEngine::getBusLevel(int busIndex, float* out4) const {
 
 // ── Channel routing ─────────────────────────────────────────────────────
 
-bool DspEngine::pristineLocked(const Bus& bus) {
+bool DspEngine::pristineLocked(int busIndex) const {
+    const Bus& bus = buses_[busIndex];
+    for (int d = 0; d < TOTAL_BUSES; d++) {
+        if (bus.send[d].load(std::memory_order_relaxed) != (d == MASTER_BUS ? 1.0f : 0.0f)) return false;
+    }
+    const int active = activeBusCount();
+    for (int b = 0; b < active; b++) {
+        if (b != MASTER_BUS && buses_[b].send[busIndex].load(std::memory_order_relaxed) > 0.0f) return false;
+    }
     return bus.plugins.empty() &&
            bus.gainDb.load(std::memory_order_relaxed) == 0.0f &&
            bus.pan.load(std::memory_order_relaxed) == 0.0f &&
@@ -897,7 +1126,7 @@ bool DspEngine::pristineLocked(const Bus& bus) {
 
 bool DspEngine::busPristine(int busIndex) {
     std::lock_guard<std::mutex> lock(chainMutex_);
-    return isMixBus(busIndex) && pristineLocked(buses_[busIndex]);
+    return isMixBus(busIndex) && pristineLocked(busIndex);
 }
 
 int DspEngine::savedMixBusCountLocked() const {
@@ -905,7 +1134,7 @@ int DspEngine::savedMixBusCountLocked() const {
     const int grownFrom = autoGrownFrom_.load(std::memory_order_relaxed);
     if (grownFrom < 0) return n;
     const int floor = std::max(MIN_MIX_BUSES, grownFrom);
-    while (n > floor && pristineLocked(buses_[busIndexForNumber(n)])) n--;
+    while (n > floor && pristineLocked(busIndexForNumber(n))) n--;
     return n;
 }
 
@@ -1033,8 +1262,29 @@ std::string DspEngine::getStateJson(bool full) const {
            << ",\"pan\":" << bus.pan.load(std::memory_order_relaxed)
            << ",\"muted\":" << (bus.muted.load(std::memory_order_relaxed) ? "true" : "false")
            << ",\"soloed\":" << (bus.soloed.load(std::memory_order_relaxed) ? "true" : "false")
-           << ",\"inputEnabled\":" << (bus.inputEnabled.load(std::memory_order_relaxed) ? "true" : "false")
-           << ",\"plugins\":[";
+           << ",\"inputEnabled\":" << (bus.inputEnabled.load(std::memory_order_relaxed) ? "true" : "false");
+        // Routes, as [dst, level, ...] by engine index, only when they differ
+        // from the default (the master alone): a mix that routes nothing
+        // saves exactly as it did before routing existed.
+        if (b != MASTER_BUS) {
+            bool isDefault = true;
+            for (int d = 0; d < TOTAL_BUSES && isDefault; d++) {
+                isDefault = bus.send[d].load(std::memory_order_relaxed) == (d == MASTER_BUS ? 1.0f : 0.0f);
+            }
+            if (!isDefault) {
+                ss << ",\"sends\":[";
+                bool firstSend = true;
+                for (int d = 0; d < TOTAL_BUSES; d++) {
+                    const float lv = bus.send[d].load(std::memory_order_relaxed);
+                    if (lv <= 0.0f) continue;
+                    if (!firstSend) ss << ",";
+                    firstSend = false;
+                    ss << d << "," << lv;
+                }
+                ss << "]";
+            }
+        }
+        ss << ",\"plugins\":[";
         for (int p = 0; p < static_cast<int>(bus.plugins.size()); p++) {
             if (p > 0) ss << ",";
             auto& plug = bus.plugins[p];
@@ -1086,6 +1336,11 @@ void DspEngine::loadStateJson(const std::string& json) {
         bool muted = false;
         bool soloed = false;
         bool inputEnabled = false;
+        // Routes as saved; absent (every save before routing) = master alone.
+        bool hasSends = false;
+        int sendCount = 0;
+        int sendDst[TOTAL_BUSES] = {};
+        float sendLevel[TOTAL_BUSES] = {};
     };
     StagedBus stagedBus[TOTAL_BUSES];
     for (int b = 0; b < TOTAL_BUSES; b++) {
@@ -1158,6 +1413,34 @@ void DspEngine::loadStateJson(const std::string& json) {
         if (inputEnabledPos != std::string::npos && inputEnabledPos < json.find("\"plugins\":", pos)) {
             stagedBus[busIdx].inputEnabled = readBool(inputEnabledPos + 15);
             pos = inputEnabledPos + 15;
+        }
+
+        size_t sendsPos = json.find("\"sends\":[", pos);
+        if (sendsPos != std::string::npos && sendsPos < json.find("\"plugins\":", pos)) {
+            StagedBus& sb = stagedBus[busIdx];
+            sb.hasSends = true;
+            pos = sendsPos + 9;
+            int half = 0;
+            int dst = -1;
+            while (pos < json.size() && json[pos] != ']' && sb.sendCount < TOTAL_BUSES) {
+                if (json[pos] == ',' || json[pos] == ' ') { pos++; continue; }
+                if (half == 0) {
+                    dst = readInt(pos);
+                    half = 1;
+                } else {
+                    const float lv = readFloat(pos);
+                    if (dst >= 0 && dst < TOTAL_BUSES && dspIsFinite(lv) && lv > 0.0f) {
+                        sb.sendDst[sb.sendCount] = dst;
+                        sb.sendLevel[sb.sendCount] = std::min(1.0f, lv);
+                        sb.sendCount++;
+                    }
+                    half = 0;
+                }
+                size_t next = json.find_first_of(",]", pos);
+                if (next == std::string::npos) break;
+                pos = next;
+                if (json[pos] == ',') pos++;
+            }
         }
 
         // Parse plugins array
@@ -1252,6 +1535,27 @@ void DspEngine::loadStateJson(const std::string& json) {
             buses_[b].muted.store(stagedBus[b].muted, std::memory_order_relaxed);
             buses_[b].soloed.store(stagedBus[b].soloed, std::memory_order_relaxed);
             buses_[b].inputEnabled.store(stagedBus[b].inputEnabled, std::memory_order_relaxed);
+            defaultSendsLocked(buses_[b]);
+        }
+        // Routes last, once every bus is in place: to an active bus only, one
+        // at a time and skipping any that would close a loop, so even a
+        // hand-edited file can't make the graph cyclic.
+        const int active = activeBusCount();
+        for (int b = 0; b < active; b++) {
+            if (b == MASTER_BUS || !stagedBus[b].hasSends) continue;
+            buses_[b].send[MASTER_BUS].store(0.0f, std::memory_order_relaxed);
+            buses_[b].sendApplied[MASTER_BUS] = 0.0f;
+        }
+        for (int b = 0; b < active; b++) {
+            if (b == MASTER_BUS) continue;
+            const StagedBus& sb = stagedBus[b];
+            for (int i = 0; i < sb.sendCount; i++) {
+                const int d = sb.sendDst[i];
+                if (d == b || !isActiveBus(d)) continue;
+                if (d != MASTER_BUS && reachesLocked(d, b)) continue;
+                buses_[b].send[d].store(sb.sendLevel[i], std::memory_order_relaxed);
+                buses_[b].sendApplied[d] = sb.sendLevel[i];
+            }
         }
     }
 

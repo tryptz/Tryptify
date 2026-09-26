@@ -7,19 +7,25 @@
 #include <string>
 #include <atomic>
 
-// Mix buses are added and removed at run time, between 4 and 16. The master
+// Mix buses are added and removed at run time, between 4 and 48. The master
 // stays at index 4 whatever the count — every saved mix and preset has it
 // there — so buses 1–4 are indices 0–3 and bus 5 onwards are 5, 6, … The
 // active buses are always the contiguous indices 0..mixBusCount().
 static constexpr int MIN_MIX_BUSES = 4;
-static constexpr int MAX_MIX_BUSES = 16;
+static constexpr int MAX_MIX_BUSES = 48;
 static constexpr int MASTER_BUS = 4;
-static constexpr int TOTAL_BUSES = MAX_MIX_BUSES + 1;  // capacity: 16 mix + master
+static constexpr int TOTAL_BUSES = MAX_MIX_BUSES + 1;  // capacity: 48 mix + master
 static constexpr int MAX_PLUGINS_PER_BUS = 16;
 
 // Per-bus post-fader waveform tap ring size. Power of two (index masking);
 // ~43 ms at 48 kHz — enough history for the FX-chain scope displays.
 static constexpr int WAVE_TAP_SIZE = 2048;
+
+// The routing stage runs a block in pieces of at most this many frames, so
+// each bus's input buffer is this long rather than the engine's max block
+// (16384): 49 of them per lane would otherwise be megabytes. Effects stream,
+// so where a block is cut changes nothing they compute.
+static constexpr int ROUTE_BLOCK = 1024;
 
 // Longest delay a bus can be held back by to line up with the slowest bus:
 // sixteen effects at 4x at 22.05 kHz is ~1600 samples. Power of two.
@@ -34,6 +40,18 @@ struct Bus {
     std::atomic<bool> muted{false};
     std::atomic<bool> soloed{false};
     std::atomic<bool> inputEnabled{false};
+
+    // Routing (mix buses only): post-fader send level to each other bus,
+    // linear 0..1, indexed by destination engine index (MASTER_BUS = the
+    // master); 0 = not routed. A new mix bus goes to the master alone. Written
+    // under chainMutex_ (setSend, loadStateJson, add/removeBus), which keep
+    // the graph free of loops; read by the audio thread.
+    std::atomic<float> send[TOTAL_BUSES] = {};
+    // Levels applied last block, ramped toward `send` (audio thread only).
+    float sendApplied[TOTAL_BUSES] = {};
+    // This bus's input for the current piece: the player's signal if it
+    // takes it, plus every send into it. ROUTE_BLOCK frames, processed in place.
+    std::vector<float> inL, inR;
 
     // Smoothed gain values (audio thread only)
     float smoothGainL = 1.0f;
@@ -80,9 +98,10 @@ struct Bus {
         shownHoldR.store(holdR, std::memory_order_relaxed);
     }
 
-    // Delay compensation (audio thread only): the bus's output held back so
-    // it arrives with the bus whose effects delay it most. PDC_SIZE each,
-    // allocated once by the engine.
+    // Delay compensation (audio thread only): the history of this bus's
+    // post-fader output, PDC_SIZE each, allocated once by the engine. Every
+    // route out of the bus reads it at its own delay, so a signal meeting
+    // another — at a bus or at the master — arrives in step with it.
     std::vector<float> pdcL, pdcR;
     int pdcPos = 0;
     // Set when the ring holds audio from before a pause in this bus's
@@ -147,6 +166,13 @@ public:
     void setPluginOversampling(int busIndex, int slotIndex, int factor);
     void setBusInputEnabled(int busIndex, bool enabled);
     void setMixBypassed(bool bypassed);
+
+    // Routes mix bus [src]'s post-fader output to bus [dst] (another mix bus
+    // or MASTER_BUS) at linear [level], clamped 0..1; 0 removes the route.
+    // Refused (false) for inactive buses and for a route that would close a
+    // loop — [dst] already feeding [src], directly or through other buses.
+    bool setSend(int src, int dst, float level);
+    float getSend(int src, int dst) const;
 
     // Adds a mix bus after the last one: unity, centre, input off, no
     // plugins. Returns its index, or -1 at MAX_MIX_BUSES.
@@ -221,7 +247,6 @@ private:
 
     // Scratch buffers
     std::vector<float> sumL_, sumR_;
-    std::vector<float> busL_, busR_;
     std::vector<float> dryBufL_, dryBufR_;  // Pre-allocated for dry/wet blending
 
     bool anySoloed() const;
@@ -236,8 +261,36 @@ private:
     std::atomic<int> routedCount_{0};
     // The mix-bus count before routing grew it, or -1 when it has not.
     std::atomic<int> autoGrownFrom_{-1};
-    static bool pristineLocked(const Bus& bus);
+    // Untouched: default everything, routed to the master alone, and nothing
+    // sending to it.
+    bool pristineLocked(int busIndex) const;
+    static void defaultSendsLocked(Bus& bus);
+    // Whether [from] feeds [to] along routes with level > 0 (mix buses only).
+    bool reachesLocked(int from, int to) const;
+    // The player's signal, PDC_SIZE of history, for the input delays.
+    std::vector<float> inRingL_, inRingR_;
+    int inRingPos_ = 0;
+    // Mix-bus order for this block, every bus after the buses sending to it.
+    int orderLocked(int* order) const;
+    // One piece (<= ROUTE_BLOCK frames at [offset]) of processMixBusesLocked,
+    // using the graph worked out for the block in the members below.
+    void processMixPieceLocked(const float* left, const float* right, int offset, int numFrames, bool first);
+    // The block's graph (audio thread only): processing order, each bus's
+    // input delay and output latency in base-rate samples, the master's input
+    // delay, and which buses run (live), are heard (solo) and take the
+    // player's signal on this lane.
+    int order_[TOTAL_BUSES] = {};
+    int orderCount_ = 0;
+    int inDelay_[TOTAL_BUSES] = {};
+    int outLat_[TOTAL_BUSES] = {};
+    int masterInDelay_ = 0;
+    bool live_[TOTAL_BUSES] = {};
+    bool audible_[TOTAL_BUSES] = {};
+    bool takesInput_[TOTAL_BUSES] = {};
     bool busPristine(int busIndex);
+    // Per-block peaks across the pieces, stored once at the end.
+    float blockPeakL_[TOTAL_BUSES] = {};
+    float blockPeakR_[TOTAL_BUSES] = {};
     // How many mix buses a save carries: the grown, untouched tail left off.
     int savedMixBusCountLocked() const;
     bool skippedOnThisLane(const SnapinProcessor& plugin) const;
@@ -248,8 +301,6 @@ private:
     void runSlotLocked(SnapinProcessor& plugin, float* l, float* r, int numFrames, bool run);
     // Base-rate samples the chain on [bus] delays its signal by.
     static int chainLatencyLocked(const Bus& bus);
-    // Holds [l]/[r] back by [delay] through [bus]'s compensation ring.
-    static void delayBusLocked(Bus& bus, float* l, float* r, int numFrames, int delay);
     // The pieces of process(), for one block no longer than maxBlockSize_.
     void processBlockLocked(float* left, float* right, int numFrames);
     bool monoLane_ = false;

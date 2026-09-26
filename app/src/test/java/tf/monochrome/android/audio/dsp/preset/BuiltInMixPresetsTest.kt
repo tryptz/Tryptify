@@ -16,6 +16,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import tf.monochrome.android.audio.dsp.model.BusConfig
 
 /**
  * The shipped mixer presets.
@@ -52,8 +53,8 @@ class BuiltInMixPresetsTest {
         for (preset in BuiltInMixPresets.presets) {
             val buses = buses(preset.stateJson)
             // Buses 1-4 and the master at least, and never more than the
-            // engine's sixteen mix buses plus the master.
-            assertTrue("${preset.name} bus count ${buses.size}", buses.size in 5..17)
+            // engine's mix buses plus the master.
+            assertTrue("${preset.name} bus count ${buses.size}", buses.size in 5..BusConfig.MAX_TOTAL_BUSES)
             for (bus in buses) {
                 val o = bus.jsonObject
                 listOf("gain", "pan", "muted", "soloed", "inputEnabled", "plugins")

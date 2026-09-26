@@ -167,6 +167,23 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeSetBusInputEnabled(
     if (engine) engine->forEach([&](DspEngine& e) { e.setBusInputEnabled(busIndex, enabled); });
 }
 
+// Every lane carries the same graph, so a route is set on all of them; the
+// primary's answer (refused when it would loop) speaks for the rest.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeSetSend(
+    JNIEnv* /*env*/, jobject /*thiz*/, jlong enginePtr,
+    jint srcBus, jint dstBus, jfloat level) {
+    auto* engine = getEngine(enginePtr);
+    if (!engine) return JNI_FALSE;
+    bool result = false;
+    bool first = true;
+    engine->forEach([&](DspEngine& e) {
+        const bool ok = e.setSend(srcBus, dstBus, level);
+        if (first) { result = ok; first = false; }
+    });
+    return result ? JNI_TRUE : JNI_FALSE;
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeSetPluginDryWet(
     JNIEnv* /*env*/, jobject /*thiz*/, jlong enginePtr,

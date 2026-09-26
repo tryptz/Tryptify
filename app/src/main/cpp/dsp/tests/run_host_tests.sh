@@ -36,6 +36,11 @@ echo "== snapin_defaults_test"
 $cxx $flags "$here/snapin_defaults_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/snapin_defaults_test"
 "$out/snapin_defaults_test" "$here/../../../../test/resources/snapin_defaults.csv"
 
+# Bus-to-bus routing: order, levels, loops, solo, delay compensation, saves.
+echo "== dsp_routing_test"
+$cxx $flags "$here/dsp_routing_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/dsp_routing_test"
+"$out/dsp_routing_test"
+
 # The mix as Kotlin writes it before the engine exists, read by the engine.
 echo "== state_fixture_test"
 $cxx $flags "$here/state_fixture_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/state_fixture_test"

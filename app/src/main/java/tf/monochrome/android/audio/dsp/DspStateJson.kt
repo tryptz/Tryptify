@@ -17,8 +17,9 @@ import tf.monochrome.android.ui.mixer.getParamDefs
  * two together from both sides (DspStateJsonTest, and the host test
  * state_fixture_test that loads it into the engine).
  *
- * Buses are written in index order, the master fifth. Every plugin carries
- * its full parameter array: indices the mirror has no value for take the
+ * Buses are written in index order, the master fifth. A bus routed anywhere
+ * but the master alone carries `"sends":[dst,level,…]` before its plugins.
+ * Every plugin carries its full parameter array: indices the mirror has no value for take the
  * parameter's default, which ParamDefs holds pinned to the engine's
  * (snapin_defaults.csv).
  */
@@ -34,7 +35,17 @@ object DspStateJson {
                 .append(",\"muted\":").append(bus.muted)
                 .append(",\"soloed\":").append(bus.soloed)
                 .append(",\"inputEnabled\":").append(bus.inputEnabled)
-                .append(",\"plugins\":[")
+            // Routes only when not the default (master alone), as the engine
+            // writes them: [dst, level, ...] in destination order.
+            if (bus.hasCustomSends) {
+                sb.append(",\"sends\":[")
+                bus.sends.filterValues { it > 0f }.toSortedMap().entries.forEachIndexed { k, (dst, level) ->
+                    if (k > 0) sb.append(',')
+                    sb.append(dst).append(',').append(num(level))
+                }
+                sb.append(']')
+            }
+            sb.append(",\"plugins\":[")
             bus.plugins.forEachIndexed { p, plugin ->
                 if (p > 0) sb.append(',')
                 val type = plugin.type

@@ -55,10 +55,10 @@ class MixPresetBuilderTest {
     }
 
     @Test
-    fun `bus 16 is the last one there is`() {
-        assertEquals(17, buses(MixPresetBuilder.build { bus(16) {} }).size)
+    fun `bus 48 is the last one there is`() {
+        assertEquals(49, buses(MixPresetBuilder.build { bus(48) {} }).size)
         assertThrows(IllegalArgumentException::class.java) {
-            MixPresetBuilder.build { bus(17) {} }
+            MixPresetBuilder.build { bus(49) {} }
         }
         assertThrows(IllegalArgumentException::class.java) {
             MixPresetBuilder.build { bus(-1) {} }

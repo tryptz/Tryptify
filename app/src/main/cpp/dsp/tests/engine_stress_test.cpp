@@ -454,7 +454,7 @@ void corruptState() {
         const std::string full = e.getStateJson(true);
         DspEngine f(48000, 512);
         f.loadStateJson(full);
-        check(f.getStateJson(true) == full, "a full mix (16 buses x 16 slots at 4x) round-trips");
+        check(f.getStateJson(true) == full, "a full mix (every bus x 16 slots at 4x) round-trips");
         for (int b = 0; b < 4; b++) {
             for (int i = 0; i < 512; i++) l[i] = r[i] = 0.2f * std::sin(0.07f * static_cast<float>(b * 512 + i));
             f.process(l.data(), r.data(), 256);

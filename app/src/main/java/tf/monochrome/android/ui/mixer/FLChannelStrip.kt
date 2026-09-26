@@ -61,6 +61,13 @@ import tf.monochrome.android.ui.player.rememberLiquidGlassAvailable
 private val FaderTravel = 280.dp
 
 /**
+ * FL's route arrow at the foot of a strip, relative to the selected bus:
+ * [routed] = the selected bus sends here (at [level]); [allowed] = false where
+ * a route here would loop back into the selected bus.
+ */
+data class StripRoute(val routed: Boolean, val level: Float, val allowed: Boolean)
+
+/**
  * Compact DAW channel strip cut from the app's own liquid glass: the AGSL
  * `playerGlass` slab, theme-driven accents, a weighted fader cap and clean VU
  * metering.
@@ -118,6 +125,9 @@ fun FLChannelStrip(
     onPanChange: (Float) -> Unit,
     onToggleMute: () -> Unit,
     onToggleSolo: () -> Unit,
+    /** Null on the selected strip itself, and when the master is selected. */
+    route: StripRoute? = null,
+    onRouteTap: () -> Unit = {},
 ) {
     val colors = MaterialTheme.colorScheme
     val isMaster = bus.isMaster
@@ -423,6 +433,42 @@ fun FLChannelStrip(
                 // height, so it reserves exactly what the button would measure
                 // whether or not the touch-target minimum is being enforced.
                 Spacer(modifier = Modifier.minimumInteractiveComponentSize().size(26.dp))
+            }
+        }
+
+        // ── Route arrow (FL's "send to this track") ────────────────────────
+        // Routes the SELECTED bus here, or unroutes it. Always holds its space
+        // so every strip keeps the same height and the faders stay level.
+        val routeShape = RoundedCornerShape(5.dp)
+        val routeModifier = Modifier.minimumInteractiveComponentSize().size(width = 40.dp, height = 20.dp)
+        if (route == null) {
+            Spacer(modifier = routeModifier)
+        } else {
+            val on = route.routed
+            Box(
+                modifier = routeModifier
+                    .clip(routeShape)
+                    .background(
+                        if (on) accent.copy(alpha = 0.85f)
+                        else inactiveButton.copy(alpha = if (route.allowed) 0.88f else 0.35f)
+                    )
+                    .border(1.dp, if (on) accent else colors.outline.copy(alpha = 0.18f), routeShape)
+                    .then(if (route.allowed || on) Modifier.bounceClick(onClick = onRouteTap) else Modifier)
+                    .toggleSemantics(label = "Route the selected bus to ${bus.name}", checked = on),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = when {
+                        !on -> "▲"
+                        route.level >= 0.995f -> "▲ 0"
+                        else -> "▲ %.0f".format(20f * kotlin.math.log10(route.level.coerceAtLeast(0.001f)))
+                    },
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (on) onAccent
+                            else colors.onSurfaceVariant.copy(alpha = if (route.allowed) 0.8f else 0.3f),
+                    maxLines = 1
+                )
             }
         }
     }

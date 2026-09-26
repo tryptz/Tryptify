@@ -123,6 +123,8 @@ class MixBusProcessor @Inject constructor(
     external fun nativeSetPluginDryWet(enginePtr: Long, busIndex: Int, slotIndex: Int, dryWet: Float)
     // Per-plugin oversampling factor: 1 (off), 2, or 4
     external fun nativeSetPluginOversampling(enginePtr: Long, busIndex: Int, slotIndex: Int, factor: Int)
+    /** Routes bus [srcBus] to [dstBus] at linear [level] (0 removes); false if refused (would loop). */
+    external fun nativeSetSend(enginePtr: Long, srcBus: Int, dstBus: Int, level: Float): Boolean
     external fun nativeSetBusInputEnabled(enginePtr: Long, busIndex: Int, enabled: Boolean)
     external fun nativeGetBusLevels(enginePtr: Long, outLevels: FloatArray)
     // Per-plugin tap meters for one bus: [slot0_inDb, slot0_outDb, ...] (dB, floor -60)
@@ -141,7 +143,7 @@ class MixBusProcessor @Inject constructor(
     @Volatile var processedBlocks: Long = 0L
         private set
     // Adds a mix bus after the last (index 5, 6, … — the master stays at 4);
-    // -1 at 16 buses. Every lane of a multichannel stream gets it.
+    // -1 at 48 buses. Every lane of a multichannel stream gets it.
     external fun nativeAddBus(enginePtr: Long): Int
     // Removes mix bus [busIndex] (5 and up); the buses above move down one.
     external fun nativeRemoveBus(enginePtr: Long, busIndex: Int): Boolean

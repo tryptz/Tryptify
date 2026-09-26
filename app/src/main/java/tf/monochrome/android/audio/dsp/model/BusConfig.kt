@@ -18,7 +18,17 @@ data class BusConfig(
      * never saved.
      */
     val channelGroup: String? = null,
+    /**
+     * Where this bus's post-fader signal goes: destination bus index
+     * ([MASTER_INDEX] for the master) to linear send level 0..1, mirroring the
+     * engine's routing. A mix bus goes to the master alone until routed
+     * elsewhere; the master sends nowhere.
+     */
+    val sends: Map<Int, Float> = if (index == MASTER_INDEX) emptyMap() else DEFAULT_SENDS,
 ) {
+    /** Routed anywhere other than the master alone. */
+    val hasCustomSends: Boolean get() = !isMaster && sends != DEFAULT_SENDS
+
     val isMaster: Boolean get() = index == MASTER_INDEX
 
     /**
@@ -27,7 +37,7 @@ data class BusConfig(
      */
     val isRemovable: Boolean get() = index > MASTER_INDEX && channelGroup == null
 
-    /** The number on the strip: 1–16, whatever the index behind it. */
+    /** The number on the strip: 1–48, whatever the index behind it. */
     val number: Int get() = numberFor(index)
 
     companion object {
@@ -39,7 +49,10 @@ data class BusConfig(
          */
         const val MASTER_INDEX = 4
         const val MIN_MIX_BUSES = 4
-        const val MAX_MIX_BUSES = 16
+        const val MAX_MIX_BUSES = 48
+
+        /** A mix bus's routing until it is changed: the master, at unity. */
+        val DEFAULT_SENDS: Map<Int, Float> = mapOf(MASTER_INDEX to 1f)
 
         /** Every bus a mix can hold, master included. */
         const val MAX_TOTAL_BUSES = MAX_MIX_BUSES + 1

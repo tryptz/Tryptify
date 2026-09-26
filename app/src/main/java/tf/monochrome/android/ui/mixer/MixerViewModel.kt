@@ -156,7 +156,7 @@ class MixerViewModel @Inject constructor(
 
     // ── Adding and removing buses ───────────────────────────────────────
 
-    /** Adds a bus after the last one and selects it; false at 16 buses. */
+    /** Adds a bus after the last one and selects it; false at 48 buses. */
     fun addBus(): Boolean {
         val index = dspManager.addBus() ?: return false
         _selectedBusIndex.value = index
@@ -193,6 +193,27 @@ class MixerViewModel @Inject constructor(
         val bus = buses.value.getOrNull(busIndex) ?: return
         dspManager.setBusSolo(busIndex, !bus.soloed)
     }
+
+    // ── Routing ─────────────────────────────────────────────────────────
+
+    /**
+     * FL's route arrow: routes the SELECTED bus to [dstIndex], or unroutes it
+     * if it already goes there. False when refused — [dstIndex] already feeds
+     * the selected bus, so the route would loop.
+     */
+    fun toggleRouteTo(dstIndex: Int): Boolean {
+        val src = _selectedBusIndex.value
+        val bus = buses.value.firstOrNull { it.index == src } ?: return false
+        if (bus.isMaster || dstIndex == src) return false
+        val routed = (bus.sends[dstIndex] ?: 0f) > 0f
+        return dspManager.setSend(src, dstIndex, if (routed) 0f else 1f)
+    }
+
+    fun setSendLevel(src: Int, dst: Int, level: Float) = dspManager.setSend(src, dst, level)
+
+    /** Whether routing the selected bus to [dstIndex] would make a loop. */
+    fun routeWouldLoop(dstIndex: Int): Boolean =
+        dstIndex != BusConfig.MASTER_INDEX && dspManager.routeReaches(dstIndex, _selectedBusIndex.value)
 
     // ── Plugin chain ────────────────────────────────────────────────────
 

@@ -192,7 +192,17 @@ fun FxChainPage(
 
             item(key = "out") {
                 ChainEndCap(
-                    label = if (bus?.isMaster == true) "OUT — Device" else "OUT — Master",
+                    // Where the chain's output goes: the device from the master,
+                    // else every bus this one is routed to.
+                    label = when {
+                        bus == null -> "OUT"
+                        bus.isMaster -> "OUT — Device"
+                        else -> bus.sends.filterValues { it > 0f }.keys
+                            .sortedBy { if (it == BusConfig.MASTER_INDEX) Int.MAX_VALUE else BusConfig.numberFor(it) }
+                            .joinToString(", ") { dst -> buses.firstOrNull { it.index == dst }?.name ?: BusConfig.nameFor(dst) }
+                            .ifEmpty { "nowhere (silent)" }
+                            .let { "OUT — $it" }
+                    },
                     accent = accent,
                     isOutput = true,
                     modifier = Modifier.then(if (!dragState.isDragging) Modifier.animateItem() else Modifier)

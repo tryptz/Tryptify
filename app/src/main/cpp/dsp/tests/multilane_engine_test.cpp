@@ -207,14 +207,15 @@ void monoLanesSkipImageEffects() {
 }
 
 
-void busesAddUpToSixteenAndStopThere() {
+void busesAddUpToTheCapAndStopThere() {
     DspEngine e(kRate, kBlock);
     check(e.mixBusCount() == 4, "a new mixer has four buses");
+    check(MAX_MIX_BUSES == 48, "the cap is 48 mix buses");
     bool indicesRight = true;
-    for (int expected = 5; expected <= 16; expected++) indicesRight = indicesRight && e.addBus() == expected;
-    check(indicesRight, "added buses take indices 5 to 16, past the master at 4");
-    check(e.mixBusCount() == 16, "sixteen mix buses at most");
-    check(e.addBus() == -1, "a seventeenth is refused");
+    for (int expected = 5; expected <= MAX_MIX_BUSES; expected++) indicesRight = indicesRight && e.addBus() == expected;
+    check(indicesRight, "added buses take indices 5 to 48, past the master at 4");
+    check(e.mixBusCount() == MAX_MIX_BUSES, "48 mix buses at most");
+    check(e.addBus() == -1, "a 49th is refused");
 }
 
 void removingABusMovesTheOnesAboveDown() {
@@ -393,7 +394,7 @@ int main() {
     masterDynamicsAreLinked();
     busDynamicsArePerLane();
     monoLanesSkipImageEffects();
-    busesAddUpToSixteenAndStopThere();
+    busesAddUpToTheCapAndStopThere();
     removingABusMovesTheOnesAboveDown();
     stateRoundTripsBusCount();
     anAddedBusCarriesAudio();

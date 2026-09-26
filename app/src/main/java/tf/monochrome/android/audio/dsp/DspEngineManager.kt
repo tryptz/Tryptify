@@ -182,6 +182,11 @@ class DspEngineManager @Inject constructor(
             setBusSolo(default.index, default.soloed)
             setBusInputEnabled(default.index, default.inputEnabled)
         }
+        // Every bus back to the master alone.
+        for (bus in _buses.value.filter { it.hasCustomSends }) {
+            for (dst in bus.sends.keys - BusConfig.DEFAULT_SENDS.keys) setSend(bus.index, dst, 0f)
+            setSend(bus.index, BusConfig.MASTER_INDEX, 1f)
+        }
     }
 
     // What the meter poll last saw of the engine's processing, for [pollLevels].
@@ -375,12 +380,60 @@ class DspEngineManager @Inject constructor(
             if (bus == null || !bus.isRemovable) return false
             _buses.value = labelled(
                 _buses.value.filter { it.index != busIndex }.map {
-                    if (it.index > busIndex) it.copy(index = it.index - 1) else it
+                    val moved = if (it.index > busIndex) it.copy(index = it.index - 1) else it
+                    // Routes into the removed bus go; routes above it move down.
+                    moved.copy(sends = moved.sends.mapNotNull { (dst, lv) ->
+                        when {
+                            dst == busIndex -> null
+                            dst > busIndex -> dst - 1 to lv
+                            else -> dst to lv
+                        }
+                    }.toMap())
                 }.sortedBy { it.index }
             )
         }
         requestSave()
         return true
+    }
+
+    // ── Routing ─────────────────────────────────────────────────────────
+
+    /**
+     * Sends bus [src]'s post-fader output to bus [dst] (another mix bus or
+     * [BusConfig.MASTER_INDEX]) at linear [level]; 0 removes the route.
+     * Returns false when refused — the master as a source, a bus that isn't
+     * there, or a route that would feed a bus back into itself — and the
+     * mirror is left as it was.
+     */
+    fun setSend(src: Int, dst: Int, level: Float): Boolean {
+        val clamped = (if (level.isFinite()) level else 0f).coerceIn(0f, 1f)
+        val buses = _buses.value
+        if (src == dst || src == BusConfig.MASTER_INDEX) return false
+        if (buses.none { it.index == src } || buses.none { it.index == dst }) return false
+        if (clamped > 0f && dst != BusConfig.MASTER_INDEX && routeReaches(dst, src)) return false
+        val ptr = processor.getEnginePtr()
+        if (ptr != 0L && !processor.nativeSetSend(ptr, src, dst, clamped)) return false
+        updateBus(src) { bus ->
+            bus.copy(sends = if (clamped > 0f) bus.sends + (dst to clamped) else bus.sends - dst)
+        }
+        requestSave()
+        return true
+    }
+
+    /** Whether bus [from] already feeds [to], directly or through other buses. */
+    fun routeReaches(from: Int, to: Int): Boolean {
+        val byIndex = _buses.value.associateBy { it.index }
+        val seen = HashSet<Int>()
+        val stack = ArrayDeque(listOf(from))
+        while (stack.isNotEmpty()) {
+            val b = stack.removeLast()
+            if (b == to) return true
+            if (!seen.add(b)) continue
+            byIndex[b]?.sends?.forEach { (d, lv) ->
+                if (lv > 0f && d != BusConfig.MASTER_INDEX && d !in seen) stack.addLast(d)
+            }
+        }
+        return false
     }
 
     // ── Bus controls ────────────────────────────────────────────────────
@@ -641,7 +694,7 @@ class DspEngineManager @Inject constructor(
             val root = jsonParser.parseToJsonElement(json).jsonObject
             val busesArray = root["buses"]?.jsonArray ?: return BusConfig.defaultBuses()
 
-            // The engine takes at most 16 mix buses and the master; a longer
+            // The engine takes at most 48 mix buses and the master; a longer
             // (hand-edited) file is cut to what it will actually run.
             val parsed = busesArray.take(BusConfig.MAX_TOTAL_BUSES).mapIndexed { index, element ->
                 val obj = element.jsonObject
@@ -663,6 +716,21 @@ class DspEngineManager @Inject constructor(
 
                 val rawGain = obj["gain"]?.jsonPrimitive?.float ?: 0f
                 val rawPan = obj["pan"]?.jsonPrimitive?.float ?: 0f
+                // [dst, level, ...]; absent — every save before routing — is
+                // the master alone.
+                val sends = when {
+                    index == BusConfig.MASTER_INDEX -> emptyMap()
+                    obj["sends"] == null -> BusConfig.DEFAULT_SENDS
+                    else -> obj["sends"]!!.jsonArray.chunked(2).mapNotNull { pair ->
+                        if (pair.size < 2) return@mapNotNull null
+                        val d = pair[0].jsonPrimitive.float
+                        val lv = pair[1].jsonPrimitive.float
+                        if (!d.isFinite() || !lv.isFinite() || lv <= 0f) return@mapNotNull null
+                        val dst = d.toInt()
+                        if (dst == index || dst !in 0 until busesArray.size.coerceAtMost(BusConfig.MAX_TOTAL_BUSES)) null
+                        else dst to lv.coerceAtMost(1f)
+                    }.toMap()
+                }
                 BusConfig(
                     index = index,
                     name = BusConfig.nameFor(index),
@@ -672,7 +740,8 @@ class DspEngineManager @Inject constructor(
                     muted = obj["muted"]?.jsonPrimitive?.boolean ?: false,
                     soloed = obj["soloed"]?.jsonPrimitive?.boolean ?: false,
                     inputEnabled = obj["inputEnabled"]?.jsonPrimitive?.boolean ?: (index == 0),
-                    plugins = plugins
+                    plugins = plugins,
+                    sends = sends
                 )
             }
             // A short list still loads as buses 1–4 plus the master on the

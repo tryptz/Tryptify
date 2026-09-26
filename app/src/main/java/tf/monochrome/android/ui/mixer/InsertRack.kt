@@ -77,6 +77,7 @@ fun InsertRack(
     onApplyPreset: (busIndex: Int, slotIndex: Int, preset: FxPreset) -> Unit = { _, _, _ -> },
     onPluginDryWet: (busIndex: Int, slotIndex: Int, dryWet: Float) -> Unit = { _, _, _ -> },
     onBusInputToggle: (busIndex: Int, enabled: Boolean) -> Unit = { _, _ -> },
+    onSendLevel: (src: Int, dst: Int, level: Float) -> Unit = { _, _, _ -> },
     spreadChannels: Boolean = true,
     onSpreadChannelsChange: (Boolean) -> Unit = {},
     onDismissEditor: () -> Unit,
@@ -170,6 +171,104 @@ fun InsertRack(
                         onApplyPreset    = { preset -> onApplyPreset(busIndex, slotIndex, preset) },
                         onDismiss        = onDismissEditor
                     )
+                }
+            }
+        }
+
+        // ── Output routing (mix buses) ──────────────────────────────
+        // Where this bus goes and how loud. Routes are made with the arrows at
+        // the foot of the strips; here they are levelled and removed, and the
+        // bus's feed from the player is switched.
+        if (bus != null && !bus.isMaster) {
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+                modifier = Modifier.padding(horizontal = MonoDimens.spacingSm, vertical = 4.dp)
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = MonoDimens.spacingSm, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "ROUTING",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .liquidGlass(shape = MonoDimens.shapeSm, tintAlpha = if (bus.inputEnabled) 0.15f else 0.06f)
+                        .clickable { onBusInputToggle(bus.index, !bus.inputEnabled) }
+                        .padding(horizontal = MonoDimens.spacingSm, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Player input", fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        text = if (bus.inputEnabled) "ON" else "OFF",
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (bus.inputEnabled) Color(0xFF4CAF50)
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    )
+                }
+                val sends = bus.sends.entries.filter { it.value > 0f }
+                    .sortedBy { if (it.key == BusConfig.MASTER_INDEX) -1 else BusConfig.numberFor(it.key) }
+                if (sends.isEmpty()) {
+                    Text(
+                        text = "Routed nowhere — this bus is silent. Tap ▲ under a strip or the master to route it.",
+                        fontSize = 9.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                sends.forEach { (dst, level) ->
+                    val dstName = allBuses.firstOrNull { it.index == dst }?.name ?: BusConfig.nameFor(dst)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .liquidGlass(shape = MonoDimens.shapeSm, tintAlpha = 0.10f)
+                            .padding(horizontal = MonoDimens.spacingSm, vertical = 2.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "→ $dstName",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                text = if (level >= 0.995f) "0 dB"
+                                else "%.1f dB".format(20f * kotlin.math.log10(level.coerceAtLeast(0.001f))),
+                                fontSize = 9.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            IconButton(onClick = { onSendLevel(bus.index, dst, 0f) }, modifier = Modifier.size(24.dp)) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Remove route to $dstName",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                        }
+                        // Removing is the × — the slider stops just above
+                        // silence, so dragging it down never deletes the cable.
+                        Slider(
+                            value = level,
+                            onValueChange = { onSendLevel(bus.index, dst, it.coerceAtLeast(0.01f)) },
+                            valueRange = 0.01f..1f,
+                            modifier = Modifier.height(24.dp),
+                            colors = SliderDefaults.colors(
+                                thumbColor = MaterialTheme.colorScheme.primary,
+                                activeTrackColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
                 }
             }
         }
