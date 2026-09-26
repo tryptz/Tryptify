@@ -55,6 +55,13 @@ import tf.monochrome.android.ui.player.playerFrostTint
 import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.player.rememberLiquidGlassAvailable
 
+/**
+ * FL's route arrow at the foot of a strip, relative to the selected strip:
+ * [routed] = the selected strip sends here (at [level]), [allowed] = false when
+ * a route here would loop back into the selected strip.
+ */
+data class StripRoute(val routed: Boolean, val level: Float, val allowed: Boolean)
+
 /** Fixed fader travel so strips stay compact instead of stretching the whole
  *  screen height; the strip is centred in its row and the meters match it. */
 private val FaderTravel = 280.dp
@@ -115,6 +122,9 @@ fun FLChannelStrip(
     onPanChange: (Float) -> Unit,
     onToggleMute: () -> Unit,
     onToggleSolo: () -> Unit,
+    /** Null on the selected strip itself (and when no strip is the source). */
+    route: StripRoute? = null,
+    onRouteTap: () -> Unit = {},
 ) {
     val colors = MaterialTheme.colorScheme
     val isMaster = bus.isMaster
@@ -420,6 +430,34 @@ fun FLChannelStrip(
                 // height, so it reserves exactly what the button would measure
                 // whether or not the touch-target minimum is being enforced.
                 Spacer(modifier = Modifier.minimumInteractiveComponentSize().size(26.dp))
+            }
+        }
+
+        // ── Route arrow (FL's "send to this track") ────────────────────────
+        // Tapping it routes the SELECTED strip here, or unroutes it. Always
+        // holds its space so every strip keeps the same height.
+        val routeModifier = Modifier.minimumInteractiveComponentSize().size(width = 40.dp, height = 20.dp)
+        if (route == null) {
+            Spacer(modifier = routeModifier)
+        } else {
+            val on = route.routed
+            val c = if (on) accent else colors.onSurfaceVariant
+            Box(
+                modifier = routeModifier
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(if (on) accent.copy(alpha = 0.85f) else inactiveButton.copy(alpha = if (route.allowed) 0.88f else 0.35f))
+                    .border(1.dp, if (on) accent else colors.outline.copy(alpha = 0.18f), RoundedCornerShape(5.dp))
+                    .then(if (route.allowed || on) Modifier.bounceClick(onClick = onRouteTap) else Modifier)
+                    .toggleSemantics(label = "Route selected strip to ${bus.name}", checked = on),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (!on) "▲" else if (route.level >= 0.995f) "▲ 0" else "▲ %.0f".format(20f * kotlin.math.log10(route.level.coerceAtLeast(0.001f))),
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (on) onAccent else c.copy(alpha = if (route.allowed) 0.8f else 0.3f),
+                    maxLines = 1
+                )
             }
         }
     }

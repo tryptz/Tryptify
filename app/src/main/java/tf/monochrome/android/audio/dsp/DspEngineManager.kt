@@ -12,15 +12,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.boolean
-import kotlinx.serialization.json.float
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import tf.monochrome.android.audio.dsp.model.BusConfig
 import tf.monochrome.android.audio.dsp.model.BusLevels
 import tf.monochrome.android.audio.dsp.model.FxTapFrame
@@ -141,6 +132,11 @@ class DspEngineManager @Inject constructor(
             setBusMute(default.index, default.muted)
             setBusSolo(default.index, default.soloed)
             setBusInputEnabled(default.index, default.inputEnabled)
+            if (!default.isMaster) {
+                val current = _buses.value.getOrNull(default.index)?.sends.orEmpty()
+                for (dst in current.keys - default.sends.keys) setSend(default.index, dst, 0f)
+                for ((dst, level) in default.sends) setSend(default.index, dst, level)
+            }
         }
     }
 
@@ -202,7 +198,7 @@ class DspEngineManager @Inject constructor(
     }
 
     companion object {
-        private const val TOTAL_BUSES = 5
+        private const val TOTAL_BUSES = BusConfig.TOTAL_BUSES
 
         // Mirrors MAX_PLUGINS_PER_BUS in dsp_engine.h — native refuses inserts past this.
         const val MAX_PLUGINS_PER_BUS = 16
@@ -288,6 +284,44 @@ class DspEngineManager @Inject constructor(
         if (ptr != 0L) processor.nativeSetBusSolo(ptr, busIndex, soloed)
         updateBus(busIndex) { it.copy(soloed = soloed) }
         requestSave()
+    }
+
+    // ── Routing ─────────────────────────────────────────────────────────
+
+    /**
+     * Sends strip [src]'s post-fader output to bus [dst] (a strip or
+     * [BusConfig.MASTER_INDEX]) at linear [level]; 0 removes the route.
+     * Returns false when refused — a route that would feed a strip back into
+     * itself — and the mirror is left untouched.
+     */
+    fun setSend(src: Int, dst: Int, level: Float): Boolean {
+        val clamped = (if (level.isFinite()) level else 0f).coerceIn(0f, 1f)
+        if (src !in 0 until BusConfig.NUM_MIX_STRIPS || dst !in 0 until TOTAL_BUSES || src == dst) return false
+        if (clamped > 0f && dst != BusConfig.MASTER_INDEX && routeReaches(dst, src)) return false
+        val ptr = processor.getEnginePtr()
+        if (ptr != 0L && !processor.nativeSetSend(ptr, src, dst, clamped)) return false
+        updateBus(src) { bus ->
+            bus.copy(sends = if (clamped > 0f) bus.sends + (dst to clamped) else bus.sends - dst)
+        }
+        requestSave()
+        return true
+    }
+
+    /** Whether [from] already feeds [to], directly or through other strips. */
+    fun routeReaches(from: Int, to: Int): Boolean {
+        val buses = _buses.value
+        val seen = BooleanArray(TOTAL_BUSES)
+        val stack = ArrayDeque(listOf(from))
+        while (stack.isNotEmpty()) {
+            val b = stack.removeLast()
+            if (b == to) return true
+            if (seen[b]) continue
+            seen[b] = true
+            buses.getOrNull(b)?.sends?.forEach { (d, lv) ->
+                if (lv > 0f && d != BusConfig.MASTER_INDEX && !seen[d]) stack.addLast(d)
+            }
+        }
+        return false
     }
 
     // ── Plugin chain ────────────────────────────────────────────────────
@@ -428,49 +462,10 @@ class DspEngineManager @Inject constructor(
         }
     }
 
-    private val defaultBusNames = listOf("Bus 1", "Bus 2", "Bus 3", "Bus 4", "Master")
-
-    private fun parseBusConfigsFromJson(json: String): List<BusConfig> {
-        return try {
-            val jsonParser = Json { ignoreUnknownKeys = true }
-            val root = jsonParser.parseToJsonElement(json).jsonObject
-            val busesArray = root["buses"]?.jsonArray ?: return BusConfig.defaultBuses()
-
-            busesArray.mapIndexed { index, element ->
-                val obj = element.jsonObject
-                val plugins = obj["plugins"]?.jsonArray?.mapIndexed { slotIdx, plugEl ->
-                    val plugObj = plugEl.jsonObject
-                    val typeOrd = plugObj["type"]?.jsonPrimitive?.int ?: 0
-                    val bypassed = plugObj["bypassed"]?.jsonPrimitive?.boolean ?: false
-                    val dryWet = (plugObj["dryWet"]?.jsonPrimitive?.float ?: 1f)
-                        .let { if (it.isFinite()) it else 1f }
-                        .coerceIn(MIN_DRY_WET, MAX_DRY_WET)
-                    val params = plugObj["params"]?.jsonArray
-                        ?.mapIndexed { pi, pv -> pi to sanitizeParam(pv.jsonPrimitive.float) }
-                        ?.toMap() ?: emptyMap()
-                    val os = when (plugObj["os"]?.jsonPrimitive?.int ?: 1) {
-                        4 -> 4; 2 -> 2; else -> 1
-                    }
-                    PluginInstance(slotIdx, typeOrd, bypassed, dryWet, params, os)
-                } ?: emptyList()
-
-                val rawGain = obj["gain"]?.jsonPrimitive?.float ?: 0f
-                val rawPan = obj["pan"]?.jsonPrimitive?.float ?: 0f
-                BusConfig(
-                    index = index,
-                    name = defaultBusNames.getOrElse(index) { "Bus ${index + 1}" },
-                    gainDb = (if (rawGain.isFinite()) rawGain else 0f)
-                        .coerceIn(MIN_BUS_GAIN_DB, MAX_BUS_GAIN_DB),
-                    pan = (if (rawPan.isFinite()) rawPan else 0f).coerceIn(MIN_PAN, MAX_PAN),
-                    muted = obj["muted"]?.jsonPrimitive?.boolean ?: false,
-                    soloed = obj["soloed"]?.jsonPrimitive?.boolean ?: false,
-                    inputEnabled = obj["inputEnabled"]?.jsonPrimitive?.boolean ?: (index == 0),
-                    plugins = plugins
-                )
-            }
-        } catch (e: Exception) {
-            Log.w("DspEngineManager", "Failed to parse DSP state JSON, using defaults", e)
+    private fun parseBusConfigsFromJson(json: String): List<BusConfig> =
+        BusStateJson.parse(json) ?: run {
+            Log.w("DspEngineManager", "Failed to parse DSP state JSON, using defaults")
             BusConfig.defaultBuses()
         }
-    }
+
 }

@@ -1,20 +1,20 @@
 package tf.monochrome.android.ui.mixer.fxchain
-import tf.monochrome.android.ui.components.rememberGlassPress
-import tf.monochrome.android.ui.components.glassSqueeze
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -27,11 +27,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -48,7 +48,9 @@ import tf.monochrome.android.audio.dsp.DspEngineManager
 import tf.monochrome.android.audio.dsp.model.BusConfig
 import tf.monochrome.android.audio.dsp.model.FxTapFrame
 import tf.monochrome.android.audio.dsp.model.PluginInstance
+import tf.monochrome.android.ui.components.glassSqueeze
 import tf.monochrome.android.ui.components.liquidGlass
+import tf.monochrome.android.ui.components.rememberGlassPress
 import tf.monochrome.android.ui.theme.MonoDimens
 
 /** One effect in the frozen visual snapshot. [uid] is a stable, unique LazyColumn key. */
@@ -187,7 +189,15 @@ fun FxChainPage(
 
             item(key = "out") {
                 ChainEndCap(
-                    label = if (bus?.isMaster == true) "OUT — Device" else "OUT — Master",
+                    label = when {
+                        bus == null -> "OUT"
+                        bus.isMaster -> "OUT — Device"
+                        else -> bus.sends.filterValues { it > 0f }.keys
+                            .sortedBy { if (it == BusConfig.MASTER_INDEX) Int.MAX_VALUE else it }
+                            .joinToString(", ") { buses.getOrNull(it)?.name ?: BusConfig.defaultName(it) }
+                            .ifEmpty { "nowhere (silent)" }
+                            .let { "OUT — $it" }
+                    },
                     accent = accent,
                     isOutput = true,
                     modifier = Modifier.then(if (!dragState.isDragging) Modifier.animateItem() else Modifier)
@@ -214,18 +224,26 @@ private fun BusSelectorRow(
     busAccent: (Int) -> Color,
     onSelectBus: (Int) -> Unit,
 ) {
-    Row(
+    // 49 buses don't fit as equal-width pills, so the row scrolls and keeps
+    // the selected bus in view.
+    val listState = rememberLazyListState()
+    LaunchedEffect(selectedBusIndex) {
+        if (selectedBusIndex in buses.indices) listState.animateScrollToItem((selectedBusIndex - 1).coerceAtLeast(0))
+    }
+    LazyRow(
+        state = listState,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = MonoDimens.spacingSm, vertical = MonoDimens.spacingXs),
+            .padding(vertical = MonoDimens.spacingXs),
+        contentPadding = PaddingValues(horizontal = MonoDimens.spacingSm),
         horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingXs)
     ) {
-        buses.forEachIndexed { index, bus ->
+        itemsIndexed(buses, key = { _, bus -> bus.index }) { index, bus ->
             val selected = index == selectedBusIndex
             val accent = busAccent(index)
             Box(
                 modifier = Modifier
-                    .weight(1f)
+                    .width(76.dp)
                     .clip(MonoDimens.shapePill)
                     .liquidGlass(
                         shape = MonoDimens.shapePill,

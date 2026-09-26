@@ -155,6 +155,14 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeSetBusInputEnabled(
     if (engine) engine->setBusInputEnabled(busIndex, enabled);
 }
 
+extern "C" JNIEXPORT jboolean JNICALL
+Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeSetSend(
+    JNIEnv* /*env*/, jobject /*thiz*/, jlong enginePtr,
+    jint srcBus, jint dstBus, jfloat level) {
+    auto* engine = getEngine(enginePtr);
+    return (engine && engine->setSend(srcBus, dstBus, level)) ? JNI_TRUE : JNI_FALSE;
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeSetPluginDryWet(
     JNIEnv* /*env*/, jobject /*thiz*/, jlong enginePtr,

@@ -49,7 +49,9 @@ class BuiltInMixPresetsTest {
     fun `every preset is state the engine can load`() {
         for (preset in BuiltInMixPresets.presets) {
             val buses = buses(preset.stateJson)
-            // The engine's state is a fixed four mix buses plus a master.
+            // Built-ins are written in the compact form: four strips plus a
+            // master (last). The engine maps the last bus to its master and
+            // leaves the other 44 strips at their defaults.
             assertEquals("${preset.name} bus count", 5, buses.size)
             for (bus in buses) {
                 val o = bus.jsonObject

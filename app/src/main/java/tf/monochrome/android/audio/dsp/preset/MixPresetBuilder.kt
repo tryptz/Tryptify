@@ -6,7 +6,9 @@ import tf.monochrome.android.audio.dsp.SnapinType
  * Builds DSP-engine state JSON for hard-coded presets.
  *
  * The native engine (`DspEngine::loadStateJson`) consumes a flat structure:
- * `{ "buses": [ {gain,pan,muted,soloed,inputEnabled,plugins:[{type,bypassed,dryWet,params:[...]}]} x5 ] }`.
+ * `{ "buses": [ {gain,pan,muted,soloed,inputEnabled,plugins:[{type,bypassed,dryWet,params:[...]}]} x5 ] }`
+ * — the compact 4-strip form: the engine maps the LAST bus to its master and
+ * leaves the rest of its 48 strips at their defaults (routed to master).
  * `params` is a flat array indexed by each processor's parameter enum, so this
  * builder starts from the processor defaults and applies typed overrides — no
  * hand-counting of array positions.
