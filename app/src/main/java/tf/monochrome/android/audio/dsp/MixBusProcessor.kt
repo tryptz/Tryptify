@@ -78,8 +78,6 @@ class MixBusProcessor @Inject constructor(
     // Per-plugin oversampling factor: 1 (off), 2, or 4
     external fun nativeSetPluginOversampling(enginePtr: Long, busIndex: Int, slotIndex: Int, factor: Int)
     external fun nativeSetBusInputEnabled(enginePtr: Long, busIndex: Int, enabled: Boolean)
-    /** Routes strip [srcBus] to [dstBus] at linear [level] (0 removes); false if refused (would loop). */
-    external fun nativeSetSend(enginePtr: Long, srcBus: Int, dstBus: Int, level: Float): Boolean
     external fun nativeGetBusLevels(enginePtr: Long, outLevels: FloatArray)
     // Per-plugin tap meters for one bus: [slot0_inDb, slot0_outDb, ...] (dB, floor -60)
     external fun nativeGetPluginMeters(enginePtr: Long, busIndex: Int, outMeters: FloatArray)

@@ -7,12 +7,9 @@
 #include <string>
 #include <atomic>
 
-// 48 mix strips + 1 master. Saved state and presets list the buses in order
-// with the master LAST, whatever the count, so older 4-strip saves (5 buses)
-// still load: their last bus lands on MASTER_BUS (see loadStateJson).
-static constexpr int NUM_MIX_BUSES = 48;
-static constexpr int MASTER_BUS = NUM_MIX_BUSES;
-static constexpr int TOTAL_BUSES = NUM_MIX_BUSES + 1;
+static constexpr int NUM_MIX_BUSES = 4;
+static constexpr int MASTER_BUS = 4;
+static constexpr int TOTAL_BUSES = 5;  // 4 mix + 1 master
 static constexpr int MAX_PLUGINS_PER_BUS = 16;
 
 // Per-bus post-fader waveform tap ring size. Power of two (index masking);
@@ -28,15 +25,6 @@ struct Bus {
     std::atomic<bool> muted{false};
     std::atomic<bool> soloed{false};
     std::atomic<bool> inputEnabled{false};
-
-    // Routing (mix strips only): post-fader send level to every other bus,
-    // linear 0..1, indexed by destination bus (MASTER_BUS = the master).
-    // 0 = not routed. Written under chainMutex_ by setSend/loadStateJson, which
-    // keep the graph acyclic; read by the audio thread. Default: master only.
-    std::atomic<float> send[TOTAL_BUSES] = {};
-    // Send level actually applied last block, ramped toward `send` so moving
-    // a send knob doesn't zipper (audio thread only).
-    float sendApplied[TOTAL_BUSES] = {};
 
     // Smoothed gain values (audio thread only)
     float smoothGainL = 1.0f;
@@ -59,9 +47,6 @@ struct Bus {
     // is imperceptible in a scope display.
     float waveTap[WAVE_TAP_SIZE] = {};
     std::atomic<int> waveTapPos{0};
-    // Consecutive silent samples written to waveTap (audio thread only);
-    // lets idle strips skip rewriting an already-silent ring.
-    int waveSilentSamples = 0;
 
     // Meter ballistics (audio thread only)
     float decayL = 0.0f;
@@ -104,14 +89,6 @@ public:
     // plugin at baseRate × factor (resets its state, like a rate change).
     void setPluginOversampling(int busIndex, int slotIndex, int factor);
     void setBusInputEnabled(int busIndex, bool enabled);
-
-    // Route mix strip `src`'s post-fader output to bus `dst` (another strip or
-    // MASTER_BUS) at linear `level` (clamped 0..1; 0 removes the route). A
-    // route that would close a loop (dst already feeds src) is refused and
-    // false returned — every strip must still reach the master eventually or
-    // go silent, never feed itself.
-    bool setSend(int src, int dst, float level);
-    float getSend(int src, int dst) const;
     void setMixBypassed(bool bypassed);
 
     // Metering — returns levels in dB
@@ -143,22 +120,12 @@ private:
     int maxBlockSize_;
     std::mutex chainMutex_;
 
-    // Scratch buffers. sumL_/sumR_ are the master's input; mixInL_/mixInR_
-    // are each strip's input — the playback signal if the strip takes input,
-    // plus whatever other strips send it — processed in place.
+    // Scratch buffers
     std::vector<float> sumL_, sumR_;
-    std::vector<float> mixInL_[NUM_MIX_BUSES], mixInR_[NUM_MIX_BUSES];
     std::vector<float> busL_, busR_;
     std::vector<float> dryBufL_, dryBufR_;  // Pre-allocated for dry/wet blending
 
     bool anySoloed() const;
-
-    // Mix strips in processing order: every strip after all strips that send
-    // to it. Rebuilt under chainMutex_ whenever a route appears or disappears.
-    int order_[NUM_MIX_BUSES];
-    void rebuildOrder();                          // caller holds chainMutex_
-    bool reaches(int from, int to) const;         // along routes with level > 0
-    void resizeScratch(int maxBlockSize);
     void recalcBusGains(float gainDb, float pan, float& targetL, float& targetR);
 
     // Smoothing coefficient for gain changes
@@ -168,7 +135,7 @@ private:
     float meterDecayPerSample_ = 0.0f;  // Computed from sample rate
     int meterHoldSamples_ = 0;          // 1.5 seconds in samples
 
-    // When true, mix strip plugins are bypassed but master bus still processes.
+    // When true, mix bus plugins (0-3) are bypassed but master bus still processes.
     // Allows AutoEQ on master to stay active when user toggles mixer DSP off.
     std::atomic<bool> mixBypassed_{false};
 

@@ -104,29 +104,6 @@ class MixerViewModel @Inject constructor(
         dspManager.setBusSolo(busIndex, !bus.soloed)
     }
 
-    // ── Routing ─────────────────────────────────────────────────────────
-
-    /**
-     * FL's per-strip route button: routes the SELECTED strip to [dstIndex], or
-     * unroutes it if it already goes there. Returns false when the route was
-     * refused because [dstIndex] already feeds the selected strip (a loop).
-     */
-    fun toggleRouteTo(dstIndex: Int): Boolean {
-        val src = _selectedBusIndex.value
-        val bus = buses.value.getOrNull(src) ?: return false
-        if (bus.isMaster || dstIndex == src) return false
-        val routed = (bus.sends[dstIndex] ?: 0f) > 0f
-        return dspManager.setSend(src, dstIndex, if (routed) 0f else 1f)
-    }
-
-    fun setSendLevel(src: Int, dst: Int, level: Float) = dspManager.setSend(src, dst, level)
-
-    /** Whether routing the selected strip to [dstIndex] would create a loop. */
-    fun routeWouldLoop(dstIndex: Int): Boolean {
-        val src = _selectedBusIndex.value
-        return dstIndex != BusConfig.MASTER_INDEX && dspManager.routeReaches(dstIndex, src)
-    }
-
     // ── Plugin chain ────────────────────────────────────────────────────
 
     fun showAddPlugin() { _showPluginPicker.value = true }

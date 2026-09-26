@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -34,52 +33,46 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.SettingsBackupRestore
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PowerSettingsNew
-import androidx.compose.material.icons.filled.SettingsBackupRestore
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -567,7 +560,6 @@ fun MixerScreen(
                                 onBusInputToggle = { busIdx, enabled ->
                                     viewModel.setBusInputEnabled(busIdx, enabled)
                                 },
-                                onSendLevel = { src, dst, level -> viewModel.setSendLevel(src, dst, level) },
                                 onDismissEditor = { viewModel.dismissPluginEditor() },
                                 onClose = { showInsertRack = false }
                             )
@@ -709,122 +701,27 @@ private fun ChannelStripRow(
     modifier: Modifier = Modifier
 ) {
     val busLevels by viewModel.busLevels.collectAsStateWithLifecycle()
-    val listState = rememberLazyListState()
-    val context = LocalContext.current
-    val density = LocalDensity.current
-    // Every mix strip is the same height; the wires need it to find the route
-    // arrows, which sit at the strip's foot.
-    var stripHeightPx by remember { mutableFloatStateOf(0f) }
-    val source = buses.getOrNull(selectedBusIndex)?.takeIf { !it.isMaster }
-    // Strips the selected one may NOT route to (they already feed it). Worked
-    // out once per routing change, not per meter frame.
-    val loopTargets = remember(buses, selectedBusIndex) {
-        if (source == null) emptySet()
-        else buses.indices.filter { it != selectedBusIndex && viewModel.routeWouldLoop(it) }.toSet()
-    }
-    val accentFor = { b: BusConfig -> if (b.isMaster) accent else busAccent(channelDynamicColor, accent, b.index) }
-
-    Box(modifier = modifier.fillMaxHeight()) {
-        LazyRow(
-            state = listState,
-            modifier = Modifier.fillMaxHeight(),
-            contentPadding = PaddingValues(horizontal = MonoDimens.spacingMd, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            itemsIndexed(buses, key = { _, bus -> bus.index }) { index, bus ->
-                val route = if (source == null || index == source.index) null else {
-                    val level = source.sends[index] ?: 0f
-                    StripRoute(
-                        routed = level > 0f,
-                        level = level,
-                        allowed = level > 0f || index !in loopTargets
-                    )
-                }
-                tf.monochrome.android.devedit.DevEditable("channel_strip_$index", Modifier) {
-                    FLChannelStrip(
-                        bus = bus,
-                        isSelected = index == selectedBusIndex,
-                        levels = busLevels.getOrNull(index) ?: BusLevels(),
-                        accentColor = accentFor(bus),
-                        hazeState = hazeState,
-                        onSelect = { onSelectBus(index) },
-                        onGainChange = { viewModel.setBusGain(index, it) },
-                        onPanChange = { viewModel.setBusPan(index, it) },
-                        onToggleMute = { viewModel.toggleMute(index) },
-                        onToggleSolo = { viewModel.toggleSolo(index) },
-                        route = route,
-                        onRouteTap = {
-                            if (!viewModel.toggleRouteTo(index)) {
-                                Toast.makeText(
-                                    context,
-                                    "${bus.name} already feeds ${source?.name} — that route would loop",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        },
-                        modifier = if (!bus.isMaster) Modifier.onSizeChanged { stripHeightPx = it.height.toFloat() } else Modifier
-                    )
-                }
+    LazyRow(
+        modifier = modifier.fillMaxHeight(),
+        contentPadding = PaddingValues(horizontal = MonoDimens.spacingMd, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        itemsIndexed(buses) { index, bus ->
+            tf.monochrome.android.devedit.DevEditable("channel_strip_$index", Modifier) {
+                FLChannelStrip(
+                    bus = bus,
+                    isSelected = index == selectedBusIndex,
+                    levels = busLevels.getOrNull(index) ?: BusLevels(),
+                    accentColor = if (bus.isMaster) accent else busAccent(channelDynamicColor, accent, bus.index),
+                    hazeState = hazeState,
+                    onSelect = { onSelectBus(index) },
+                    onGainChange = { viewModel.setBusGain(index, it) },
+                    onPanChange = { viewModel.setBusPan(index, it) },
+                    onToggleMute = { viewModel.toggleMute(index) },
+                    onToggleSolo = { viewModel.toggleSolo(index) }
+                )
             }
         }
-
-        // ── Routing wires, FL-style ─────────────────────────────────────
-        // One cable per strip-to-strip route, drawn from the source's route
-        // arrow to the destination's, sagging below the strips. Routes into
-        // the master are the default for every strip and would be 48 cables of
-        // noise, so only the selected strip's master cable is drawn. Cables
-        // touching the selected strip are drawn bright, the rest dimmed.
-        //
-        // Everything is read in the draw phase (list scroll included), so a
-        // scroll redraws the cables without recomposing a single strip.
-        val arrowFromBottomPx = with(density) { 32.dp.toPx() }
-        val stroke = with(density) { 2.5.dp.toPx() }
-        val sag = with(density) { 70.dp.toPx() }
-        Spacer(
-            modifier = Modifier
-                .matchParentSize()
-                .drawBehind {
-                    val info = listState.layoutInfo
-                    val visible = info.visibleItemsInfo
-                    if (visible.isEmpty() || stripHeightPx <= 0f) return@drawBehind
-                    // Strip centres for every index, extrapolated off screen
-                    // from the visible stride so cables to hidden strips run
-                    // off the edge in the right direction.
-                    val first = visible.first()
-                    val stride = if (visible.size > 1) {
-                        (visible.last().offset - first.offset).toFloat() / (visible.last().index - first.index)
-                    } else (first.size.toFloat() + 8f)
-                    val originX = -info.viewportStartOffset.toFloat()
-                    fun centerX(i: Int): Float {
-                        val item = visible.firstOrNull { it.index == i }
-                        return if (item != null) originX + item.offset + item.size / 2f
-                        else originX + first.offset + (i - first.index) * stride + first.size / 2f
-                    }
-                    val y = (size.height + stripHeightPx) / 2f - arrowFromBottomPx
-                    for (bus in buses) {
-                        if (bus.isMaster) continue
-                        for ((dst, level) in bus.sends) {
-                            if (level <= 0f) continue
-                            val touchesSelected = bus.index == selectedBusIndex || dst == selectedBusIndex
-                            if (dst == BusConfig.MASTER_INDEX && bus.index != selectedBusIndex) continue
-                            val x0 = centerX(bus.index)
-                            val x1 = centerX(dst)
-                            if ((x0 < 0f && x1 < 0f) || (x0 > size.width && x1 > size.width)) continue
-                            val drop = sag.coerceAtMost(kotlin.math.abs(x1 - x0) * 0.35f + sag * 0.3f)
-                            val path = Path().apply {
-                                moveTo(x0, y)
-                                cubicTo(x0, y + drop, x1, y + drop, x1, y)
-                            }
-                            val color = accentFor(bus)
-                            val alpha = (if (touchesSelected) 0.95f else 0.35f) * (0.45f + 0.55f * level)
-                            // Dark under-stroke so a cable reads over glass and art.
-                            drawPath(path, Color.Black.copy(alpha = alpha * 0.45f), style = Stroke(width = stroke * 2.2f, cap = StrokeCap.Round))
-                            drawPath(path, color.copy(alpha = alpha), style = Stroke(width = stroke, cap = StrokeCap.Round))
-                            drawCircle(color.copy(alpha = alpha), radius = stroke * 1.6f, center = Offset(x1, y))
-                        }
-                    }
-                }
-        )
     }
 }
