@@ -99,6 +99,10 @@ class HiFiApiClient @Inject constructor(
         // a title-only agreement (60) so the artist or the duration must also
         // line up before a track is bridged to a different catalog's id.
         private const val APPLE_MATCH_MIN_SCORE = 70
+
+        // TrypT HiFi checks the Atmos manifest (one HiFi API round trip plus
+        // the manifest fetch) before answering; give it longer than a search.
+        private const val TIDAL_ATMOS_TIMEOUT_MS = 10_000L
     }
 
     private data class CacheEntry(
@@ -955,6 +959,23 @@ class HiFiApiClient @Inject constructor(
             )
         }
 
+        // TIDAL Dolby Atmos: the HiFi API's /track/ only serves stereo, so
+        // when the user prefers Atmos ask the TrypT HiFi instance for the
+        // track's full E-AC-3 JOC mix (bed + objects, untouched). The Atmos
+        // renderer then renders it to binaural or the speaker layout. Falls
+        // through to the stereo stream when the track has no Atmos mix or the
+        // instance isn't set / can't serve it.
+        if (!forDownload && preferences.tidalAtmosPreferred.first()) {
+            tidalAtmosStreamUrl(trackId)?.let { url ->
+                return TrackStream(
+                    track = Track(id = trackId, title = "", duration = 0),
+                    streamUrl = url,
+                    isDash = false,
+                    replayGain = ReplayGainValues()
+                )
+            }
+        }
+
         val body = fetchWithRetry(
             "/track/?id=$trackId&quality=${quality.apiValue}",
             instanceType = InstanceType.STREAMING
@@ -1004,6 +1025,31 @@ class HiFiApiClient @Inject constructor(
                 albumPeakAmplitude = streamResponse.albumPeakAmplitude
             )
         )
+    }
+
+    /**
+     * The TrypT HiFi instance's link to TIDAL track [trackId]'s Dolby Atmos
+     * file (GET /api/tidal/download-music?atmos=true), or null when the
+     * instance is unset, the track has no Atmos mix, or the call fails. The
+     * link is Range-capable once assembled and streams progressively before.
+     */
+    private suspend fun tidalAtmosStreamUrl(trackId: Long): String? {
+        val instance = instanceManager.qobuzInstanceOrNull() ?: return null
+        val base = instance.url.trimEnd('/')
+        return withTimeoutOrNull(TIDAL_ATMOS_TIMEOUT_MS) {
+            runCatching {
+                val res = httpClient.get("$base/api/tidal/download-music?track_id=$trackId&atmos=true")
+                if (!res.status.isSuccess()) return@runCatching null
+                val data = json.parseToJsonElement(res.bodyAsText()) as? JsonObject ?: return@runCatching null
+                val payload = data["data"] as? JsonObject ?: return@runCatching null
+                // Only accept a stream the instance confirms carries JOC objects.
+                val stream = payload["stream"] as? JsonObject
+                val joc = (stream?.get("extensionType") as? JsonPrimitive)?.contentOrNull
+                if (joc != null && !joc.equals("JOC", ignoreCase = true)) return@runCatching null
+                (payload["url"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+                    ?.let { absoluteUrl(it, base) }
+            }.getOrNull()
+        }
     }
 
     // --- Recommendations ---

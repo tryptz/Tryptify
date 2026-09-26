@@ -79,9 +79,11 @@ class MediaStoreSource @Inject constructor(
     )
 
     // MediaFormat.MIMETYPE_AUDIO_EAC3_JOC is API 31; spell both out so this
-    // compiles and behaves identically down to minSdk 26.
+    // compiles and behaves identically down to minSdk 26. AC-4 ("audio/ac4")
+    // is the other Dolby codec Atmos music videos ship with; it plays through
+    // the platform decoder (or HDMI passthrough) rather than the JOC renderer.
     private fun isEac3Mime(mime: String?): Boolean =
-        mime == "audio/eac3" || mime == "audio/eac3-joc"
+        mime == "audio/eac3" || mime == "audio/eac3-joc" || mime == "audio/ac4"
 
     /** Containers that can carry an E-AC-3 track — cheap filter before opening. */
     private fun mayCarryEac3(path: String): Boolean =

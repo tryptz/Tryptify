@@ -14,9 +14,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import tf.monochrome.android.data.preferences.PreferencesManager
+import tf.monochrome.android.domain.model.ChannelLayout
 import tf.monochrome.android.domain.model.RendererMode
 import tf.monochrome.android.domain.model.RendererProfile
 import tf.monochrome.android.domain.model.StereoDownmixMode
+import tf.monochrome.android.domain.model.speakers
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import javax.inject.Inject
@@ -34,6 +36,14 @@ import javax.inject.Singleton
  *
  * Active only for >2-channel input; stereo/mono passes straight through
  * (configure returns NOT_SET), leaving non-Atmos playback untouched.
+ *
+ * Speaker output: when the profile's speaker render is on and the effective
+ * layout is multichannel ([RendererProfile.speakerLayout] — manual, or the
+ * connected HDMI/USB device's channel count via [deviceChannelCount]), the
+ * objects are rendered to that layout instead ([AtmosNative.nativeProcessFrameSpeakers])
+ * and the processor outputs [ChannelLayout.sinkChannelCount] channels in
+ * Android mask order; [activeLayout] tells the AudioTrack provider which mask
+ * to put on the track.
  */
 @Singleton
 @OptIn(UnstableApi::class)
@@ -130,9 +140,16 @@ class AtmosAudioProcessor @Inject constructor(
         } else {
             StereoDownmixMode.LO_RO
         }
+        // The speaker render replaces the stereo paths entirely, so the "HRTF
+        // off = passthrough" lockstep must not switch it off.
+        val mode = if (activeLayout.isMultichannel && cur.mode == RendererMode.PASSTHROUGH) {
+            RendererMode.OBJECT_RENDER
+        } else {
+            cur.mode
+        }
         AtmosNative.nativeSetRenderParams(
             p,
-            cur.mode.ordinal,
+            mode.ordinal,
             downmix.ordinal,
             strength,
             cur.heightVirtualization,
@@ -145,7 +162,7 @@ class AtmosAudioProcessor @Inject constructor(
         applySofa(p)
         android.util.Log.i(
             TAG,
-            "params -> mode=${cur.mode} downmix=$downmix " +
+            "params -> mode=$mode layout=${activeLayout.label} downmix=$downmix " +
                 "strength=$strength height=${cur.heightVirtualization} " +
                 "lfe=${cur.lfeGainDb}dB bass=${cur.bassManagement}@${cur.crossoverHz}Hz " +
                 "drc=${cur.drc} dialnorm=${cur.dialogNormalization} " +
@@ -156,6 +173,21 @@ class AtmosAudioProcessor @Inject constructor(
                 }}",
         )
     }
+
+    /**
+     * Largest channel count the current HDMI/USB output reports, or null for
+     * none / built-in outputs. Pushed by PlaybackService from an
+     * AudioDeviceCallback; read in configure().
+     */
+    @Volatile var deviceChannelCount: Int? = null
+
+    /** The layout the processor currently outputs; STEREO = binaural/fold path. */
+    @Volatile var activeLayout: ChannelLayout = ChannelLayout.STEREO
+        private set
+    private var pendingLayout: ChannelLayout = ChannelLayout.STEREO
+    private var speakerOut = FloatArray(0)      // one frame, layout speaker order
+    private var sinkFrame = FloatArray(0)       // one frame, sink slot order (padded)
+    private var speakerSlots = IntArray(0)
 
     private var pipeline: Long = 0L
     private var pendingFormat = AudioFormat.NOT_SET
@@ -184,16 +216,29 @@ class AtmosAudioProcessor @Inject constructor(
         // Only multichannel (an Atmos bed) is handled; ≤2ch is not Atmos. The
         // profile's PASSTHROUGH mode ("Direct") also drops us out of the
         // pipeline entirely, so the user's choice is honoured bit-perfectly.
+        val speakers = profile.speakerLayout(deviceChannelCount).let {
+            // Before API 32 Media3 rejects a 24-channel sink (no mask for it),
+            // so 9.1.x falls back to the largest layout that still fits.
+            if (android.os.Build.VERSION.SDK_INT < 32 && it.sinkChannelCount == 24) ChannelLayout.ATMOS_7_1_4 else it
+        }
         if (inputAudioFormat.channelCount <= 2 ||
             !AtmosNative.isAvailable ||
-            profile.mode == RendererMode.PASSTHROUGH
+            (profile.mode == RendererMode.PASSTHROUGH && !speakers.isMultichannel)
         ) {
             pendingFormat = AudioFormat.NOT_SET
             inputFormat = AudioFormat.NOT_SET
+            pendingLayout = ChannelLayout.STEREO
+            activeLayout = ChannelLayout.STEREO
             return AudioFormat.NOT_SET
         }
         pendingFormat = inputAudioFormat
-        return AudioFormat(inputAudioFormat.sampleRate, 2, inputAudioFormat.encoding)
+        // Takes effect at flush(), like the format: the previous stream may
+        // still be draining through queueInput until then. DefaultAudioSink
+        // flushes the processors before it builds the new AudioTrack, so the
+        // track provider sees the new layout in time.
+        pendingLayout = speakers
+        val outChannels = if (speakers.isMultichannel) speakers.sinkChannelCount else 2
+        return AudioFormat(inputAudioFormat.sampleRate, outChannels, inputAudioFormat.encoding)
     }
 
     override fun isActive(): Boolean =
@@ -222,6 +267,11 @@ class AtmosAudioProcessor @Inject constructor(
 
         val outFrames = bedSamples / FRAME_SAMPLES
         if (outFrames == 0) { outputBuffer = AudioProcessor.EMPTY_BUFFER; return }
+
+        if (activeLayout.isMultichannel) {
+            queueSpeakerFrames(outFrames, channels, isFloat, bytesPerSample)
+            return
+        }
 
         val outBytes = outFrames * FRAME_SAMPLES * 2 * bytesPerSample
         val out = acquireOutput(outBytes)
@@ -293,14 +343,23 @@ class AtmosAudioProcessor @Inject constructor(
         val formatChanged = inputFormat == AudioFormat.NOT_SET ||
             inputFormat.sampleRate != pendingFormat.sampleRate
         inputFormat = pendingFormat
+        val layout = pendingLayout
+        activeLayout = layout
         if (formatChanged) {
             if (pipeline != 0L) AtmosNative.nativePipelineDestroy(pipeline)
             pipeline = AtmosNative.nativePipelineCreate(inputFormat.sampleRate, MAX_OBJECTS)
             sofaApplied = false  // a fresh pipeline has the baked HRTF; re-apply any custom one
-            pushParams()  // a fresh pipeline starts at defaults — apply the profile
         } else if (pipeline != 0L) {
             AtmosNative.nativePipelineFlush(pipeline)
         }
+        if (layout.isMultichannel) {
+            // Off the per-frame path: sizes the native renderer and our buffers once.
+            if (pipeline != 0L) AtmosNative.nativeSetOutputLayout(pipeline, layout.nativeId)
+            speakerOut = FloatArray(layout.channelCount * FRAME_SAMPLES)
+            sinkFrame = FloatArray(layout.sinkChannelCount * FRAME_SAMPLES)
+            speakerSlots = layout.speakerSlots()
+        }
+        pushParams()  // (re)apply the profile: fresh pipeline, or the mode the layout needs
         pendingFormat = AudioFormat.NOT_SET
     }
 
@@ -309,6 +368,8 @@ class AtmosAudioProcessor @Inject constructor(
         if (pipeline != 0L) { AtmosNative.nativePipelineDestroy(pipeline); pipeline = 0L }
         pendingFormat = AudioFormat.NOT_SET
         inputFormat = AudioFormat.NOT_SET
+        pendingLayout = ChannelLayout.STEREO
+        activeLayout = ChannelLayout.STEREO
         bed = FloatArray(0)
         bedSamples = 0
         renderedFrames = 0L
@@ -368,6 +429,90 @@ class AtmosAudioProcessor @Inject constructor(
         if (entry.bytes === lastRaw) return emptyFrame
         lastRaw = entry.bytes
         return entry.bytes
+    }
+
+    // ── speaker output ───────────────────────────────────────────────────
+
+    /** Renders [outFrames] frames to [activeLayout] and publishes the output. */
+    private fun queueSpeakerFrames(outFrames: Int, channels: Int, isFloat: Boolean, bytesPerSample: Int) {
+        val layout = activeLayout
+        val sinkChannels = layout.sinkChannelCount
+        val out = acquireOutput(outFrames * FRAME_SAMPLES * sinkChannels * bytesPerSample)
+        if (frameScratch.size < FRAME_SAMPLES * channels) frameScratch = FloatArray(FRAME_SAMPLES * channels)
+        for (f in 0 until outFrames) {
+            System.arraycopy(bed, f * FRAME_SAMPLES * channels, frameScratch, 0, FRAME_SAMPLES * channels)
+            val raw = nextRawFrame()
+            val rc = if (pipeline != 0L) {
+                AtmosNative.nativeProcessFrameSpeakers(
+                    pipeline, raw, frameScratch, channels, FRAME_SAMPLES, speakerOut, layout.channelCount,
+                )
+            } else -1
+            if (rc == 1) {
+                if (renderedFrames == 0L) {
+                    android.util.Log.i(TAG, "Atmos render ACTIVE — objects to ${layout.label} speakers (${channels}ch bed)")
+                }
+                renderedFrames++
+            } else {
+                bedToSpeakers(frameScratch, channels, layout)  // no pipeline: play the bed on the layout
+                fallbackFrames++
+            }
+            toSinkOrder(layout)
+            writeFrame(out, isFloat, sinkFrame, sinkChannels * FRAME_SAMPLES)
+        }
+        out.limit(outWritePos)
+        out.position(0)
+        outputBuffer = out
+        val consumed = outFrames * FRAME_SAMPLES
+        val remain = bedSamples - consumed
+        if (remain > 0) System.arraycopy(bed, consumed * channels, bed, 0, remain * channels)
+        bedSamples = remain
+    }
+
+    /** Scatters [speakerOut] (speaker order) into the padded sink frame. */
+    private fun toSinkOrder(layout: ChannelLayout) {
+        val speakers = layout.channelCount
+        val sink = layout.sinkChannelCount
+        if (speakers == sink) {
+            System.arraycopy(speakerOut, 0, sinkFrame, 0, speakers * FRAME_SAMPLES)
+            return
+        }
+        java.util.Arrays.fill(sinkFrame, 0, sink * FRAME_SAMPLES, 0f)
+        for (i in 0 until FRAME_SAMPLES) {
+            val src = i * speakers
+            val dst = i * sink
+            for (c in 0 until speakers) sinkFrame[dst + speakerSlots[c]] = speakerOut[src + c]
+        }
+    }
+
+    /**
+     * Pipeline-less fallback: the decoded bed (FL FR FC LFE SL SR BL BR) placed
+     * on the layout's matching speakers — 7.1 rears onto a 5.x layout's
+     * surrounds, a 5.1 bed's surrounds onto a 7.x layout's sides.
+     */
+    private fun bedToSpeakers(frame: FloatArray, channels: Int, layout: ChannelLayout) {
+        val speakers = layout.channelCount
+        java.util.Arrays.fill(speakerOut, 0, speakers * FRAME_SAMPLES, 0f)
+        val fiveX = layout.speakers().getOrNull(4)?.label == "Ls"
+        // Speaker-order index for each decoder bed channel.
+        val target = intArrayOf(0, 1, 2, 3, if (fiveX) 4 else 6, if (fiveX) 5 else 7, 4, 5)
+        for (i in 0 until FRAME_SAMPLES) {
+            val b = i * channels
+            val o = i * speakers
+            for (c in 0 until minOf(channels, 8)) {
+                speakerOut[o + target[c]] += frame[b + c]
+            }
+        }
+    }
+
+    private fun writeFrame(out: ByteBuffer, isFloat: Boolean, src: FloatArray, count: Int) {
+        if (isFloat) {
+            for (i in 0 until count) { out.putFloat(outWritePos, src[i]); outWritePos += 4 }
+        } else {
+            for (i in 0 until count) {
+                val s = (src[i] * 32768f).toInt().coerceIn(-32768, 32767).toShort()
+                out.putShort(outWritePos, s); outWritePos += 2
+            }
+        }
     }
 
     private var outputScratch: ByteBuffer = AudioProcessor.EMPTY_BUFFER

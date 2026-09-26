@@ -120,6 +120,15 @@ class AtmosRendererViewModel @Inject constructor(
         viewModelScope.launch { preferences.setMultichannelDownmixEnabled(enabled) }
     }
 
+    val tidalAtmosPreferred: StateFlow<Boolean> =
+        preferences.tidalAtmosPreferred.stateIn(
+            viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), false,
+        )
+
+    fun setTidalAtmosPreferred(enabled: Boolean) {
+        viewModelScope.launch { preferences.setTidalAtmosPreferred(enabled) }
+    }
+
     // In-memory working copy so slider drags update the UI instantly; the
     // DataStore write is debounced to the drag's tail (same approach the Player
     // Visuals Studio uses for its glass sliders).
@@ -373,7 +382,7 @@ fun AtmosRendererScreen(
             )
             Spacer(Modifier.height(12.dp))
             SpeakerLayoutMap(
-                layout = profile.layout,
+                layout = if (profile.speakerRender) profile.layout else ChannelLayout.STEREO,
                 detected = d,
                 accent = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
@@ -441,6 +450,71 @@ fun AtmosRendererScreen(
                 checked = profile.lfeLowpass,
                 onCheckedChange = { viewModel.update(profile.copy(lfeLowpass = it)) },
             )
+            Spacer(Modifier.height(20.dp))
+
+            // ── Sources ────────────────────────────────────────────────────
+            SectionHeader("Sources")
+            val tidalAtmos by viewModel.tidalAtmosPreferred.collectAsStateWithLifecycle()
+            SettingSwitchItem(
+                title = "TIDAL Dolby Atmos",
+                subtitle = if (tidalAtmos) {
+                    "TIDAL tracks with an Atmos mix play it (full E-AC-3 JOC, via your " +
+                        "TrypT HiFi instance) instead of stereo."
+                } else {
+                    "Off. TIDAL tracks play their stereo stream."
+                },
+                checked = tidalAtmos,
+                onCheckedChange = { viewModel.setTidalAtmosPreferred(it) },
+            )
+            Spacer(Modifier.height(20.dp))
+
+            // ── Speakers — render objects to a physical layout ───────────
+            // Off (default) leaves every stereo path above and below exactly as
+            // it was. On: Atmos objects render to the layout (auto-detected
+            // from the connected HDMI/USB output, or picked here), the fold is
+            // bypassed, and the track carries the layout's real channel mask.
+            SectionHeader("Speakers")
+            SettingSwitchItem(
+                title = "Render Atmos to speakers",
+                subtitle = if (profile.speakerRender) {
+                    "Objects are placed on your speaker layout (up to 9.1.6) over " +
+                        "HDMI or a multichannel USB interface. DSP/EQ are bypassed."
+                } else {
+                    "Off. Atmos plays binaural or folded to stereo (below)."
+                },
+                checked = profile.speakerRender,
+                onCheckedChange = { viewModel.update(profile.copy(speakerRender = it)) },
+            )
+            if (profile.speakerRender) {
+                SettingSwitchItem(
+                    title = "Detect layout from the output",
+                    subtitle = "Uses the channel count the HDMI/USB device reports. " +
+                        "8 and 10 channels are ambiguous (7.1 / 5.1.2, 5.1.4 / 7.1.2): " +
+                        "turn this off to pick yours.",
+                    checked = profile.autoDetectLayout,
+                    onCheckedChange = { viewModel.update(profile.copy(autoDetectLayout = it)) },
+                )
+                if (!profile.autoDetectLayout) {
+                    ChannelLayout.entries.filter { it.isMultichannel }.forEach { layout ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.update(profile.copy(layout = layout)) },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = profile.layout == layout,
+                                onClick = { viewModel.update(profile.copy(layout = layout)) },
+                            )
+                            Text(
+                                "${layout.label}  ·  ${layout.channelCount} ch",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(20.dp))
 
             // ── Spatial render — the ONE option beyond the fold ───────────

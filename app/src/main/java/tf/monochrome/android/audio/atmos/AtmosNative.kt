@@ -125,4 +125,32 @@ object AtmosNative {
         samples: Int,
         stereoOut: FloatArray,
     ): Int
+
+    /**
+     * Selects the loudspeaker layout for [nativeProcessFrameSpeakers]
+     * (ChannelLayout.nativeId). Allocates — call it when (re)configuring, not
+     * per frame. Returns the layout's speaker count (0 without a pipeline).
+     */
+    external fun nativeSetOutputLayout(pipeline: Long, layoutId: Int): Int
+
+    /**
+     * Renders one E-AC-3 frame's Atmos objects to the loudspeaker layout set by
+     * [nativeSetOutputLayout]: interleaved, [outChannels] wide, speakers in
+     * ChannelLayout.speakers() order (Android mask order). Frames without JOC
+     * come out as the decoded bed mapped onto the layout, latency-aligned with
+     * the object render and crossfaded at every switch.
+     *
+     * @param out receives outChannels*samples floats when the return is 1
+     * @return 1 if [out] was written, -1 if inactive (passthrough, or
+     *   [outChannels] doesn't match the configured layout)
+     */
+    external fun nativeProcessFrameSpeakers(
+        pipeline: Long,
+        frame: ByteArray,
+        bedInterleaved: FloatArray,
+        channels: Int,
+        samples: Int,
+        out: FloatArray,
+        outChannels: Int,
+    ): Int
 }

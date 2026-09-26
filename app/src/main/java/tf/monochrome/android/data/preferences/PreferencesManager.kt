@@ -181,6 +181,7 @@ class PreferencesManager @Inject constructor(
         private val APPLE_WRAPPER_URL = stringPreferencesKey("apple_wrapper_url")
         private val APPLE_WRAPPER_SECRET = stringPreferencesKey("apple_wrapper_secret")
         private val APPLE_ATMOS_PREFERRED = booleanPreferencesKey("apple_atmos_preferred")
+        private val TIDAL_ATMOS_PREFERRED = booleanPreferencesKey("tidal_atmos_preferred")
         private val APPLE_QUALITY = stringPreferencesKey("apple_quality")
         private val DEV_MODE_ENABLED = booleanPreferencesKey("dev_mode_enabled")
         private val SOURCE_MODE = stringPreferencesKey("source_mode")
@@ -916,6 +917,14 @@ class PreferencesManager @Inject constructor(
      * stereo format if the track has no Atmos master.
      */
     val appleAtmosPreferred: Flow<Boolean> = dataStore.data.map { it[APPLE_ATMOS_PREFERRED] ?: false }
+
+    // Play TIDAL tracks' Dolby Atmos mix (via the TrypT HiFi instance) instead
+    // of the stereo stream when one exists.
+    val tidalAtmosPreferred: Flow<Boolean> = dataStore.data.map { it[TIDAL_ATMOS_PREFERRED] ?: false }
+
+    suspend fun setTidalAtmosPreferred(enabled: Boolean) {
+        dataStore.edit { it[TIDAL_ATMOS_PREFERRED] = enabled }
+    }
 
     suspend fun setAppleAtmosPreferred(enabled: Boolean) {
         dataStore.edit { it[APPLE_ATMOS_PREFERRED] = enabled }

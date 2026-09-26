@@ -524,8 +524,20 @@ class PlaybackService : MediaSessionService() {
         // to AudioTrack untouched (the stereo-only processors deactivate
         // themselves for >2 ch). Takes effect on the next pipeline
         // reconfigure (track change / seek), like the other DSP toggles.
+        //
+        // The Atmos speaker render (Atmos page › Speakers) outputs the layout's
+        // channels itself, so while it targets a multichannel layout the fold
+        // must stay out of its way; the connected output's channel count feeds
+        // the layout auto-detect.
+        registerOutputChannelTracking()
         serviceScope.launch {
-            preferences.multichannelDownmixEnabled.collect { enabled ->
+            combine(
+                preferences.multichannelDownmixEnabled,
+                preferences.rendererProfile,
+                outputChannelCount,
+            ) { enabled, profile, channels ->
+                enabled && !profile.speakerLayout(channels).isMultichannel
+            }.distinctUntilChanged().collect { enabled ->
                 downmixProcessor.setEnabled(enabled)
             }
         }
@@ -849,6 +861,13 @@ class PlaybackService : MediaSessionService() {
             ): AudioSink {
                 return try {
                     val defaultSink = DefaultAudioSink.Builder(context)
+                        // Puts the Atmos speaker layout's real channel mask on
+                        // the track (Media3 derives masks from the count only).
+                        .setAudioTrackProvider(
+                            tf.monochrome.android.audio.atmos.AtmosAudioTrackProvider {
+                                atmosAudioProcessor.activeLayout
+                            }
+                        )
                         // Deliberately false, whatever the factory was told.
                         //
                         // DefaultAudioSink.configure builds its pipeline one of
@@ -892,7 +911,7 @@ class PlaybackService : MediaSessionService() {
                             tf.monochrome.android.audio.resample.TryptifyAudioProcessorChain(
                                 arrayOf(
                                 channelDetectorProcessor, // Passive tap: reports source channel count/layout + per-channel activity
-                                atmosAudioProcessor,    // Atmos: multichannel bed → object render → binaural stereo; inactive for ≤2ch
+                                atmosAudioProcessor,    // Atmos: multichannel bed → object render → binaural stereo or speakers; inactive for ≤2ch
                                 downmixProcessor,       // Multichannel→stereo fold-down; inactive (NOT_SET) for mono/stereo
                                 mixBusProcessor,        // DSP engine (mixer/effects)
                                 autoEqProcessor,        // AutoEQ (independent, always-on when enabled)
@@ -1070,7 +1089,46 @@ class PlaybackService : MediaSessionService() {
     }
 
     @OptIn(UnstableApi::class)
+    // Largest channel count an attached HDMI / USB output reports (null: none,
+    // or it lists no counts), for the Atmos speaker layout auto-detect.
+    private val outputChannelCount = kotlinx.coroutines.flow.MutableStateFlow<Int?>(null)
+    private var outputDeviceCallback: android.media.AudioDeviceCallback? = null
+
+    private fun registerOutputChannelTracking() {
+        val audioManager = getSystemService(android.media.AudioManager::class.java) ?: return
+        fun refresh() {
+            val external = setOf(
+                android.media.AudioDeviceInfo.TYPE_HDMI,
+                android.media.AudioDeviceInfo.TYPE_HDMI_ARC,
+                android.media.AudioDeviceInfo.TYPE_USB_DEVICE,
+                android.media.AudioDeviceInfo.TYPE_USB_HEADSET,
+            ) + if (android.os.Build.VERSION.SDK_INT >= 31) {
+                setOf(android.media.AudioDeviceInfo.TYPE_HDMI_EARC)
+            } else {
+                emptySet()
+            }
+            val channels = audioManager.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)
+                .filter { it.type in external }
+                .mapNotNull { it.channelCounts.maxOrNull() }
+                .maxOrNull()
+            outputChannelCount.value = channels
+            atmosAudioProcessor.deviceChannelCount = channels
+        }
+        val callback = object : android.media.AudioDeviceCallback() {
+            override fun onAudioDevicesAdded(added: Array<out android.media.AudioDeviceInfo>?) = refresh()
+            override fun onAudioDevicesRemoved(removed: Array<out android.media.AudioDeviceInfo>?) = refresh()
+        }
+        outputDeviceCallback = callback
+        // Called back on the main looper; fires once immediately with the current set.
+        audioManager.registerAudioDeviceCallback(callback, android.os.Handler(android.os.Looper.getMainLooper()))
+        refresh()
+    }
+
     override fun onDestroy() {
+        outputDeviceCallback?.let {
+            getSystemService(android.media.AudioManager::class.java)?.unregisterAudioDeviceCallback(it)
+        }
+        outputDeviceCallback = null
         // Discord holds a presence until the connection that set it closes, so
         // leaving without this parks the last track on the profile for good.
         // shutdown(), not clear(): the service is going away now, so there is
