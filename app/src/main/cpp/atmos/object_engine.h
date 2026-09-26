@@ -116,21 +116,22 @@ class ObjectEngine {
   // The decoded OAMD frame (object positions), for the HRTF render (P2).
   const cavern::ObjectAudioMetadata& oamd() const { return emdf_.oamd(); }
 
-  // OAMD gain of object `obj` from the frame's last info block, or a negative
-  // value meaning "hold the previous gain" (OAMD's gain_helper==3 sentinel, or
-  // no object element). Decoded gains include Cavern's 3 dB anti-clip
-  // attenuation. The caller keeps the last applied gain per object and ramps.
-  float object_gain(int obj) {
-    cavern::ObjectAudioMetadata& o = emdf_.oamd();
-    for (int e = 0; e < o.element_count(); ++e) {
-      cavern::OAElementMD& el = o.element(e);
-      if (el.is_object_element() && obj >= 0 && obj < el.object_count()) {
-        const int last = el.block_count() - 1;
-        if (last < 0) return -1.0f;
-        return el.info_block(obj, last).gain();
-      }
-    }
-    return -1.0f;
+  // OAMD gain of object `obj`: the resolved state after the last frame's final
+  // info block (ObjectAudioMetadata::resolve — hold, gain_idx 3 and inactive
+  // rules applied), including Cavern's 3 dB anti-clip attenuation. Returns a
+  // negative value ("hold the previous gain") only when no OAMD state exists
+  // for the object yet; the caller keeps the last applied gain and ramps.
+  float object_gain(int obj) const {
+    const cavern::ObjectAudioMetadata& o = emdf_.oamd();
+    if (obj < 0 || obj >= o.state_count()) return -1.0f;
+    return o.state(obj).gain;
+  }
+
+  // Everything the speaker renderer needs about object `obj` (position, size,
+  // zones, snap, divergence, bed channel), or null before any OAMD for it.
+  const cavern::ObjectState* object_state(int obj) const {
+    const cavern::ObjectAudioMetadata& o = emdf_.oamd();
+    return (obj >= 0 && obj < o.state_count()) ? &o.state(obj) : nullptr;
   }
 
   // Applies a per-object gain to the reconstructed PCM in place, ramped
@@ -154,28 +155,14 @@ class ObjectEngine {
   // the renderer sums it to both ears instead of placing it at a point.
   int lfe_object_index() const { return emdf_.oamd().get_lfe_position(); }
 
-  // Render-space position of object `obj` from the last-parsed OAMD (x = left..
-  // right, y = down..up, z = back..front). Returns the origin (center) if the
-  // frame carried no object element for it. Consumed by the HRTF render (P2).
-  //
-  // A frame carries up to 8 info blocks of intra-frame motion; this returns
-  // the LAST block's endpoint — the frame's target position — which the
-  // renderer's motion crossfade then glides toward. Reading block 0 (as this
-  // originally did) lagged the mastered path by a whole frame. Every block is
-  // resolved in order because resolved_position() accumulates differential
-  // updates per block slot.
-  Vec3 object_position(int obj) {
-    cavern::ObjectAudioMetadata& o = emdf_.oamd();
-    for (int e = 0; e < o.element_count(); ++e) {
-      cavern::OAElementMD& el = o.element(e);
-      if (el.is_object_element() && obj >= 0 && obj < el.object_count()) {
-        Vec3 pos{};
-        const int blocks = el.block_count();
-        for (int b = 0; b < blocks; ++b) pos = el.info_block(obj, b).resolved_position();
-        return pos;
-      }
-    }
-    return Vec3{};
+  // Render-space position of object `obj` (x = left..right, y = down..up,
+  // z = back..front), from the resolved OAMD state: the LAST info block's
+  // target — which the renderer's motion crossfade glides toward — after the
+  // spec's differential, distance and screen transforms. Bed objects sit at
+  // their channel's speaker. The origin (center) if there is no state yet.
+  Vec3 object_position(int obj) const {
+    const cavern::ObjectState* st = object_state(obj);
+    return st ? st->render : Vec3{};
   }
 
  private:

@@ -40,11 +40,15 @@ using namespace tf::atmos;
 using namespace tf::atmos::cavern;
 
 void test_read_signed() {
-  std::printf("read_signed (faithful/degenerate)\n");
-  for (uint32_t v : {0u, 1u, 3u, 7u}) {
+  // TS 103 420 5.6.1.1.12-14: diff_pos3D_*_bits is a two's-complement signed
+  // integer. (Cavern's ReadSigned returned 0 for every input, which silently
+  // dropped all differential position updates.)
+  std::printf("read_signed (3-bit two's complement)\n");
+  const int expected[8] = {0, 1, 2, 3, -4, -3, -2, -1};
+  for (uint32_t v = 0; v < 8; ++v) {
     BitWriter bw; bw.put(3, v);
     BitReader br(bw.bytes.data(), bw.bytes.size());
-    CHECK(read_signed(br, 3) == 0);  // Cavern's ReadSigned collapses to 0
+    CHECK(read_signed(br, 3) == expected[v]);
   }
 }
 
