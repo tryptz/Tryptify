@@ -186,6 +186,8 @@ class Capture:
                         'notifications -e visible false',
                         'network -e wifi show -e level 4 -e mobile hide -e satellite hide'):
             self.d.shell('am broadcast -a com.android.systemui.demo -e command ' + command)
+            if command == 'enter':
+                time.sleep(1)  # the clock command was dropped when sent straight after
 
     def home(self):
         try:
@@ -350,8 +352,10 @@ def inventory():
         {'id': 'now-playing', 'player': True},
         {'id': 'mixer', 'player': True, 'steps': [{'tap_at': PLAYER_TAPS['audio_tools'], 'settle': 5},
                                                   {'tap_at': PLAYER_TAPS['mixer_fx'], 'settle': 10}]},
-        {'id': 'audio-tools', 'player': True, 'steps': [{'tap_at': PLAYER_TAPS['audio_tools'], 'settle': 5}]},
-        {'id': 'output-device', 'player': True, 'steps': [{'tap_at': PLAYER_TAPS['output_device'], 'settle': 5}]},
+        # Sheets over the player: given time to finish opening (run 16 caught
+        # both mid-fade, the player showing through).
+        {'id': 'audio-tools', 'player': True, 'steps': [{'tap_at': PLAYER_TAPS['audio_tools'], 'settle': 12}]},
+        {'id': 'output-device', 'player': True, 'steps': [{'tap_at': PLAYER_TAPS['output_device'], 'settle': 12}]},
     ])
     for tab in ('Player', 'UI panels', 'Lyrics', 'Visualizer'):
         targets.append({'id': 'visual-studio-' + tab.lower().replace(' ', '-'),
