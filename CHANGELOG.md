@@ -11,6 +11,21 @@
 
 ### Added
 
+#### Deezer, from the trypt-hifi catalog
+- **Search asks the instance's Deezer routes alongside TIDAL and Qobuz**: `/api/deezer/get-music`, `get-album`, `get-artist` and `preview`, on whichever API serves them. They come back in the Qobuz envelopes, so search and album detail reuse the Qobuz decoding; only the artist payload (object-shaped `releases`, a string `id`) has its own model, `DeezerArtistEnvelope`, with `DeezerModelsTest` pinning real payloads.
+- **Deezer ids travel as their own identity.** They are plain numbers in the range Qobuz and TIDAL use, so a Deezer id handed to either resolves to a different recording. `Track.deezerId`, `PlaybackSource.DeezerPreview`, `SourceType.DEEZER` and three persisted sets in `QobuzIdRegistry` route every path — detail screens, playback, lyrics, recommendations, downloads — before any Qobuz or TIDAL lookup can see the number. Deezer album and artist pages have no fallback: a miss is reported, not resolved elsewhere.
+- **A pick plays, and downloads, from Qobuz when it is the same recording.** `DeezerQobuzMatcher` matches ISRC first — fetched by handing the instance a deezer.com track URL, the one Deezer shape that always carries it — then a strict title, artist and duration match. No match plays the 30-second preview and refuses to download it.
+
+#### One list of APIs under Connections
+- **Settings › Connections is a list of servers, added with +.** Each is probed on the way in: `ApiServerProber` makes every service's own search request at once — `/search/` for a hifi-api TIDAL server, `/api/get-music`, `/api/apple/get-music` and `/api/deezer/get-music` for TrypT HiFi — and a service counts only when it answers with JSON, and for TrypT HiFi with `success: true`. A route that exists but reports an error (an unset Apple token) is not a working service, and the dialog says which reason each missing one had.
+- **Services are detected, never chosen**, which is what retires the catalog-source picker and the Deezer switch: Search asks every catalog, and a catalog no API serves comes back empty. For each service the first server in the list that serves it is used; ↑ reorders.
+- **`InstanceManager` reads the list** (`PreferencesManager.apiServers`); nothing routes from the old per-catalog keys. An install that never saved the list is seeded from them — the Qobuz address as Qobuz, Apple and Deezer, a separate Apple address above it — and saving mirrors the list back onto them for the call sites that only ask whether Qobuz is set, and for a downgrade.
+- **How to set up an API** explains, per service, the server it needs, the request that detects it, and the TrypT HiFi environment variables that turn it on, by their names in `.env.example`.
+
+#### Brand pills on search results
+- **`SourcePill`** puts each catalog's mark and colour on track rows, under album and artist cards and on the source filter chips, with a lifted shade on dark themes where the brand colour is too dark to read. The Qobuz and Deezer marks are cut from the brands' own artwork.
+- **A downloaded track reads as Local**, and the Local filter includes it: `StreamResolver` already plays the file, whichever catalog it came from.
+
 #### Ambient MilkDrop: the visualizer inside the album atmosphere
 - **A second composition of the engine, not a change to the first.** The hero visualizer replaces the artwork — an opaque black surface at the cover's aspect ratio, or fullscreen. Ambient mode draws the same preset *into* the player's background, over the blurred cover and its scrim, under the glass. Both ship; ambient is off until asked for, because it changes what the player looks like and that should not arrive with an update.
 - **Transparency is inferred from the rendered image, never from the preset.** MilkDrop presets assume they own an opaque, usually black framebuffer, and a great many depend on frame feedback — trails, warps, glow accumulation. Make the render target transparent and those break. projectM therefore renders exactly as it always has, and the alpha is derived afterwards from the pixels it produced. That is what makes this work across a whole `.milk` collection without touching a single preset.
@@ -136,6 +151,11 @@
 - **`kind` is nullable and unclassified entries print first, ungrouped**, exactly as the whole list did before. A default of `CHANGED` would have put a confident label on a hundred already-shipped entries that were written as one flat list; only the release being worked on is classified.
 
 ### Changed
+
+#### Search keeps its filter pills
+- **Home never handed the floating search bar's height to the results**, so the bar sat on the type and source pills. It is the list's top `contentPadding` now, as the Search bars invariant asks.
+- **The source row shows for every type** and filters albums and artists too, by catalog tags the view model records as results arrive, rather than disappearing on anything but Tracks.
+- **The pills stay up while a query runs**, instead of the whole list being swapped for a spinner on every keystroke.
 
 #### Play and pause morph instead of swapping
 - **The disc is the only control on the player that changes shape, and it changed it on one frame.** `drawPlayPauseSymbol` branched on `isPlaying` and drew either a triangle or two bars. Everything else about the button moves — the press dome, the bulge, the shader's own liquid — so the one hard cut in the transport was where it read as a set of images rather than an object.

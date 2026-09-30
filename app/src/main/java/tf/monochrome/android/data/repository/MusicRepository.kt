@@ -96,6 +96,25 @@ class MusicRepository @Inject constructor(
             ?: throw IllegalStateException("Apple artist not available: $artistId")
     }
 
+    suspend fun searchDeezer(query: String, offset: Int = 0): Result<SearchResult> = runCatching {
+        apiClient.searchDeezer(query, offset)
+    }
+
+    /** Deezer album detail — served by the Qobuz instance's /api/deezer/get-album. */
+    suspend fun getDeezerAlbum(albumId: Long): Result<AlbumDetail> = runCatching {
+        apiClient.getDeezerAlbum(albumId)
+            ?: throw IllegalStateException("Deezer album not available: $albumId")
+    }
+
+    suspend fun getDeezerArtist(artistId: Long): Result<ArtistDetail> = runCatching {
+        apiClient.getDeezerArtist(artistId)
+            ?: throw IllegalStateException("Deezer artist not available: $artistId")
+    }
+
+    /** Signed URL of a Deezer track's 30-second preview, or null. */
+    suspend fun deezerPreviewUrl(deezerId: Long): String? =
+        runCatching { apiClient.getDeezerPreviewUrl(deezerId) }.getOrNull()
+
     suspend fun searchTracks(query: String, offset: Int = 0, limit: Int = 50): Result<List<Track>> = runCatching {
         apiClient.searchTracks(query, offset, limit)
     }

@@ -125,13 +125,44 @@ fun Track.toAppleUnifiedTrack(): UnifiedTrack = UnifiedTrack(
 )
 
 /**
+ * A Deezer catalog track. Tagged DEEZER for labelling and dedup; the id prefix
+ * keeps it apart from a Qobuz or TIDAL track with the same number. Plays via
+ * PlaybackSource.DeezerPreview, which StreamResolver turns into the same
+ * recording on Qobuz when it can and the 30-second preview when it can't.
+ */
+fun Track.toDeezerUnifiedTrack(): UnifiedTrack = UnifiedTrack(
+    id = "deezer_${deezerId ?: id}",
+    title = title,
+    durationSeconds = duration,
+    trackNumber = trackNumber,
+    discNumber = volumeNumber,
+    explicit = explicit,
+    artistName = displayArtist.ifBlank { DEFAULT_ARTIST_NAME },
+    artistNames = artists.map { it.name }.ifEmpty { listOfNotNull(artist?.name) },
+    albumArtistName = artist?.name,
+    artistId = artist?.id,
+    artists = uiArtistRefs(),
+    albumTitle = album?.title,
+    albumId = album?.id?.toString(),
+    releaseYear = album?.releaseDate?.take(4)?.toIntOrNull(),
+    artworkUri = coverUrl,
+    version = version,
+    source = PlaybackSource.DeezerPreview(deezerId = deezerId ?: id),
+    sourceType = SourceType.DEEZER,
+)
+
+/**
  * Pick the playback source by what the track itself carries first (appleId is
  * authoritative — Apple and Qobuz share no id namespace), then by what the
  * registry knows about this track id, so hearted tracks of any origin play
  * correctly through PlayerViewModel.playUnifiedTrack.
  */
 fun Track.toUnifiedTrackAuto(registry: QobuzIdRegistry): UnifiedTrack = when {
+    deezerId != null -> toDeezerUnifiedTrack()
     appleId != null || registry.isAppleTrack(id) -> toAppleUnifiedTrack()
     registry.isQobuzTrack(id) -> toQobuzUnifiedTrack()
+    // After Qobuz: a registry hit alone is ambiguous when the number is in
+    // both sets, and a Qobuz track played as a preview is the worse mistake.
+    registry.isDeezerTrack(id) -> toDeezerUnifiedTrack()
     else -> toUnifiedTrack()
 }

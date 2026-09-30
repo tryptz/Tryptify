@@ -29,8 +29,8 @@ import tf.monochrome.android.ui.theme.MonoDimens
 
 /**
  * Optional streaming hookups. The catalog sources — TIDAL and Qobuz — both
- * resolve through the self-hosted TrypT HiFi instance (set up in
- * Settings → Instances). Spotify is a separate radio/recommendations connector
+ * resolve through the self-hosted servers added under
+ * Settings → Connections → APIs. Spotify is a separate radio/recommendations connector
  * that runs the PKCE flow in a Custom Tab; its singleTop activity survives the
  * round-trip, so `isConnected` flips live when the callback lands.
  */
@@ -70,7 +70,7 @@ fun StreamingStep(
             iconRes = R.drawable.logo_qobuz,
             title = "Qobuz",
             description = "Lossless & hi-res streaming through your TrypT HiFi instance. " +
-                "Setup happens in Settings → Instances — this finishes onboarding and takes you there.",
+                "Add it under Settings → Connections → APIs — this finishes onboarding and takes you there.",
             connected = false,
             buttonLabel = "Set up in Settings",
             buttonEnabled = true,

@@ -83,6 +83,12 @@ object WhatsNew {
     /** The app's own surfaces — glass, themes, search. */
     private const val LOOK = "Look and feel"
 
+    /** The servers the app talks to, under Settings › Connections. */
+    private const val CONNECTIONS = "Connections"
+
+    /** What Search looks in, and how it shows where each result came from. */
+    private const val SEARCH = "Search and Deezer"
+
     /** The DSP mixer, its buses and the presets that ship with it. */
     private const val MIXER = "Mixer"
 
@@ -106,6 +112,77 @@ object WhatsNew {
 
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
+        WhatsNewRelease(
+            versionCode = 192,
+            versionName = "1.9.2",
+            entries = listOf(
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SEARCH,
+                    title = "Deezer in Search",
+                    body = "Search now finds Deezer's songs, albums and artists when one of " +
+                        "your APIs serves Deezer, and they open as Deezer pages.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SEARCH,
+                    title = "Deezer songs play in full",
+                    body = "A Deezer pick plays from Qobuz when Qobuz has the same recording, in " +
+                        "full and lossless. When it doesn't, you hear Deezer's 30-second preview.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SEARCH,
+                    title = "Every result shows where it's from",
+                    body = "Songs, albums and artists carry a pill with their catalog's logo and " +
+                        "colour: TIDAL, Qobuz, Deezer, Apple Music or Local.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = DOWNLOADS,
+                    title = "Download Deezer songs",
+                    body = "Downloading a Deezer song saves the same recording from Qobuz. If " +
+                        "Qobuz doesn't have it, the download stops instead of saving a preview.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = CONNECTIONS,
+                    title = "One list of APIs",
+                    body = "Settings › Connections has a single list of servers. Tap Add API, " +
+                        "paste an address, and Tryptify finds out whether it serves TIDAL, " +
+                        "Qobuz, Apple Music or Deezer.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = CONNECTIONS,
+                    title = "A setup guide for your server",
+                    body = "How to set up an API, under the list, says what each service needs " +
+                        "on the server and why one didn't show up.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = SEARCH,
+                    title = "Source filters for albums and artists",
+                    body = "The source row sits under Tracks, Albums, Artists and Playlists, and " +
+                        "filters all of them. Songs you have downloaded count as Local.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = SEARCH,
+                    title = "The search bar no longer covers the filters",
+                    body = "On Home, the filter pills start below the search bar instead of under " +
+                        "it, and stay on screen while results load.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.REMOVED,
+                    section = CONNECTIONS,
+                    title = "The catalog picker and URL fields",
+                    body = "Both / TIDAL only / Qobuz only, the Deezer switch and the separate " +
+                        "TIDAL and Qobuz URL boxes are gone. Your addresses moved into the " +
+                        "API list; every catalog they serve is searched.",
+                ),
+            ),
+        ),
         WhatsNewRelease(
             versionCode = 191,
             versionName = "1.9.1",

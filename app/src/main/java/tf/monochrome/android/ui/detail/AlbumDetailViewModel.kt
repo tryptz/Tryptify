@@ -50,6 +50,17 @@ class AlbumDetailViewModel @Inject constructor(
             _isLoading.value = true
             _error.value = null
 
+            // A Deezer album is only ever a Deezer album. Its id is a plain
+            // number that Qobuz or TIDAL would happily resolve to some other
+            // record, so there is no fallback: a miss is reported as a miss.
+            if (qobuzIdRegistry.isDeezerAlbum(albumId)) {
+                repository.getDeezerAlbum(albumId)
+                    .onSuccess { _albumDetail.value = it }
+                    .onFailure { _error.value = it.message ?: "Failed to load album" }
+                _isLoading.value = false
+                return@launch
+            }
+
             // Apple first when this id came out of the Apple catalog: Apple and
             // Qobuz ids share no namespace, so trying Qobuz with an Apple id
             // just wastes a round trip and returns an error.
