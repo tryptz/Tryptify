@@ -17,7 +17,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Delete
@@ -41,7 +40,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -75,7 +73,6 @@ internal fun ApiServersSection(viewModel: SettingsViewModel) {
     val servers by viewModel.apiServers.collectAsStateWithLifecycle()
     val checking by viewModel.apiChecking.collectAsStateWithLifecycle()
     var showAdd by remember { mutableStateOf(false) }
-    var showGuide by remember { mutableStateOf(false) }
     var confirmRemove by remember { mutableStateOf<String?>(null) }
 
     SettingsGroupHeader("APIs")
@@ -115,23 +112,13 @@ internal fun ApiServersSection(viewModel: SettingsViewModel) {
         Spacer(Modifier.size(8.dp))
         Text("Add API")
     }
-    TextButton(
-        onClick = { showGuide = true },
-        modifier = Modifier.settingsAnchor("How to set up an API"),
-    ) {
-        Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = null, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.size(8.dp))
-        Text("How to set up an API")
-    }
 
     if (showAdd) {
         AddApiDialog(
             viewModel = viewModel,
-            onOpenGuide = { showAdd = false; showGuide = true },
             onDismiss = { showAdd = false; viewModel.resetAddApi() },
         )
     }
-    if (showGuide) ApiSetupGuideDialog(onDismiss = { showGuide = false })
     confirmRemove?.let { url ->
         AlertDialog(
             onDismissRequest = { confirmRemove = null },
@@ -180,7 +167,7 @@ private fun ApiServerCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     server.services.isEmpty() -> Text(
-                        "Serves nothing Tryptify can use right now. Re-check, or see How to set up an API.",
+                        "Serves nothing Tryptify can use right now. Check the server, then tap ↻.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.error,
                     )
@@ -213,7 +200,6 @@ private fun ApiServerCard(
 @Composable
 private fun AddApiDialog(
     viewModel: SettingsViewModel,
-    onOpenGuide: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val state by viewModel.addApiState.collectAsStateWithLifecycle()
@@ -270,7 +256,7 @@ private fun AddApiDialog(
         confirmButton = {
             when {
                 added -> TextButton(onClick = onDismiss) { Text("Done") }
-                done != null -> TextButton(onClick = onOpenGuide) { Text("Setup guide") }
+                done != null -> TextButton(onClick = onDismiss) { Text("Close") }
                 else -> TextButton(onClick = { viewModel.addApi(input) }, enabled = !busy && input.isNotBlank()) {
                     Text("Check and add")
                 }
@@ -313,83 +299,4 @@ private fun ProbeResultView(result: ProbeResult) {
             }
         }
     }
-}
-
-/**
- * The setup helper. Says, per service, what kind of server answers for it,
- * the request Tryptify makes to find out, and what that server needs set —
- * the names are the TrypT HiFi server's own environment variables, so they
- * can be searched for in its .env.example as written.
- */
-@Composable
-private fun ApiSetupGuideDialog(onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("How to set up an API") },
-        text = {
-            Column(modifier = Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
-                GuidePara(
-                    "What to enter",
-                    "The server's base address, like https://hifi.example.com. Leave off " +
-                        "/api or /search; https is added if you leave it out.",
-                )
-                GuideService(
-                    ApiService.TIDAL,
-                    "A hifi-api server. Tryptify asks it /search/?s=… and expects JSON back.",
-                )
-                GuideService(
-                    ApiService.QOBUZ,
-                    "A TrypT HiFi server with its Qobuz keys set: QOBUZ_APP_ID, QOBUZ_SECRET " +
-                        "and QOBUZ_AUTH_TOKENS. Checked with /api/get-music. This is also " +
-                        "what downloads come from.",
-                )
-                GuideService(
-                    ApiService.APPLE,
-                    "The same TrypT HiFi server with an Apple Music developer token: " +
-                        "APPLE_DEVELOPER_TOKEN, or APPLE_TEAM_ID, APPLE_KEY_ID and " +
-                        "APPLE_PRIVATE_KEY. Checked with /api/apple/get-music. Playing Apple " +
-                        "tracks also needs the decrypt wrapper that server points at.",
-                )
-                GuideService(
-                    ApiService.DEEZER,
-                    "Any TrypT HiFi server, no key needed: it uses Deezer's public catalog. " +
-                        "Checked with /api/deezer/get-music. Songs play from Qobuz when it has " +
-                        "the same recording, otherwise as 30-second previews.",
-                )
-                GuidePara(
-                    "One server or several",
-                    "One TrypT HiFi server usually covers Qobuz, Apple Music and Deezer; TIDAL " +
-                        "is its own hifi-api server. Add each address once. When two serve the " +
-                        "same catalog the higher one is used, and ↑ moves one up.",
-                )
-                GuidePara(
-                    "When a service is missing",
-                    "\"Answered with a web page\" or \"HTTP 404\": that server doesn't have the " +
-                        "service's routes (an older TrypT HiFi, or the wrong address). " +
-                        "\"Reported an error\": the routes are there but the keys above aren't " +
-                        "set. Fix the server, then tap ↻ on it.",
-                )
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Got it") } },
-    )
-}
-
-@Composable
-private fun GuidePara(title: String, body: String) {
-    Text(
-        title,
-        style = MaterialTheme.typography.titleSmall,
-        fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
-    )
-    Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-}
-
-@Composable
-private fun GuideService(service: ApiService, body: String) {
-    Row(modifier = Modifier.padding(top = 10.dp, bottom = 2.dp)) {
-        SourcePill(service.sourceType())
-    }
-    Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }

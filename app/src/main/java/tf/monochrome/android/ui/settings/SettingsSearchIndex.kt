@@ -186,7 +186,6 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
         listOf("server", "instance", "url", "endpoint", "source", "catalogue", "catalog",
             "tidal", "qobuz", "apple", "deezer", "hifi", "add"),
     ),
-    entry("How to set up an API", "Connections", listOf("help", "guide", "configure", "server", "setup")),
     entry("Show what I'm playing", "Connections", listOf("discord", "presence", "rich", "status", "playing")),
     entry("Spotify", "Connections", listOf("import", "playlist", "account", "transfer")),
 

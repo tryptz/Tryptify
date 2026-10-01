@@ -107,6 +107,9 @@ object WhatsNew {
     /** Talking to a USB DAC directly, over UAC2, instead of through Android. */
     private const val USB_DAC = "Exclusive USB DAC"
 
+    /** Moving from one song to the next: crossfades and gapless. */
+    private const val PLAYBACK = "Playback"
+
     /** The projectM visualizer, its preset browser and its rotation. */
     private const val VISUALIZER = "Visualizer"
 
@@ -153,13 +156,6 @@ object WhatsNew {
                         "Qobuz, Apple Music or Deezer.",
                 ),
                 WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
-                    section = CONNECTIONS,
-                    title = "A setup guide for your server",
-                    body = "How to set up an API, under the list, says what each service needs " +
-                        "on the server and why one didn't show up.",
-                ),
-                WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = SEARCH,
                     title = "Source filters for albums and artists",
@@ -172,6 +168,81 @@ object WhatsNew {
                     title = "The search bar no longer covers the filters",
                     body = "On Home, the filter pills start below the search bar instead of under " +
                         "it, and stay on screen while results load.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Route any bus to any bus",
+                    body = "Up to 48 buses. The arrow under each strip sends the selected bus " +
+                        "there, and cables show where everything goes. A route that would loop " +
+                        "is greyed out.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Send knobs",
+                    body = "Where the selected bus is routed, its arrow becomes a knob: drag it " +
+                        "to set how much goes there, tap it to remove the route.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Atmos Upmix 9.1.6",
+                    body = "A new preset that spreads a stereo song into 9.1.6 surround, one " +
+                        "group of speakers per strip. It starts with the next song, and on " +
+                        "headphones you still hear the whole song.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "Presets rebuilt like a mastering desk",
+                    body = "Every preset keeps the master at 0 dB with a limiter last, and puts " +
+                        "its EQ and effects on buses of their own. Wide Stage plays a little " +
+                        "quieter than before.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "Tap to select, tap again to open",
+                    body = "Tapping a strip selects it. Tapping the selected strip, or double " +
+                        "tapping, opens its effects.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SPEED,
+                    title = "BPM",
+                    body = "Tryptify works out each song's tempo as it plays. Choose Multiplier, " +
+                        "Semitones or BPM; the speed button shows the one you pick, and BPM " +
+                        "steps in whole beats per minute.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = SPEED,
+                    title = "A clearer speed panel",
+                    body = "Every button is the same shape and easier to read, and the value " +
+                        "sits between its − and + buttons.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYBACK,
+                    title = "Smoother crossfades",
+                    body = "The outgoing song no longer cuts out as a crossfade starts, keeps " +
+                        "your speed and pitch, and the next song fades in once it is really " +
+                        "playing, even when it's a different format.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = USB_DAC,
+                    title = "Crossfades on a USB DAC",
+                    body = "Crossfade now works while Tryptify drives your DAC directly, " +
+                        "including between songs at different sample rates.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.REMOVED,
+                    section = SPEED,
+                    title = "The Nightcore button",
+                    body = "Gone from the speed panel. The same sound is 1.10x with Preserve " +
+                        "pitch off.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.REMOVED,
