@@ -2,10 +2,13 @@ package tf.monochrome.android.player
 
 import android.content.Context
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -62,28 +65,63 @@ class CrossfadeController(
     private var tailChain: DspChain? = null
     private var rampJob: Job? = null
 
+    // Set from the tail's analytics when its audio is actually leaving the
+    // device — not when ExoPlayer says it is playing, which is earlier by the
+    // time it takes to fill a fresh AudioTrack.
+    @Volatile private var tailSounding = false
+
     val isRunning: Boolean get() = rampJob?.isActive == true
 
     /**
-     * Starts the blend: [item] resumes on the tail player from [fromPositionMs]
-     * and fades out over [durationMs] while the caller's incoming track fades
-     * in. Returns false if the tail couldn't be started, in which case the
-     * caller should carry on without a crossfade rather than lose the audio.
+     * How the main player is playing right now, so the tail plays the same
+     * way: the outgoing track must not drop back to 1.0x or lose its
+     * transposition the moment the blend begins.
+     */
+    data class Playback(
+        val speed: Float = 1f,
+        val pitch: Float = 1f,
+        val semitones: Float = 0f,
+        val engine: tf.monochrome.android.audio.stretch.PitchEngine? = null,
+        val quality: tf.monochrome.android.audio.stretch.PitchQuality? = null,
+    )
+
+    /**
+     * Starts a blend. It runs in stages, so the outgoing track never stops
+     * before its tail is sounding:
+     *
+     *  1. **Prepare.** The tail player opens [item], seeks to [fadeFromMs] —
+     *     the media position the blend begins at — and waits there, paused,
+     *     while the main player keeps playing the track.
+     *  2. **Hand off.** When the main player reaches [fadeFromMs] the tail
+     *     starts, and once its audio is actually coming out [onHandOff] is
+     *     called: the caller moves the main player on to the next track,
+     *     silent. Until then nothing has changed for the listener.
+     *  3. **Fade.** Held at "tail only" until [incomingSounding] — the next
+     *     track's audio really playing, which after a change of codec, rate
+     *     or channel count is a rebuilt pipeline later than "playing" — then
+     *     equal-power over what is left of the tail, in heard time.
+     *
+     * If the tail cannot get ready before the main player passes the blend
+     * point, the blend is abandoned before the hand-off and the track simply
+     * ends as it would without one: a missed crossfade, never a gap.
+     *
+     * Returns false if the tail could not even be built.
      */
     fun start(
         item: MediaItem,
-        fromPositionMs: Long,
-        durationMs: Long,
+        fadeFromMs: Long,
+        trackDurationMs: Long,
+        crossfadeMs: Long,
         tailVolume: Float,
-        /**
-         * Whether the incoming track is actually sounding yet. The blend waits
-         * on this before it starts moving — see the hold in [start].
-         */
-        incomingReady: () -> Boolean = { true },
+        playback: Playback,
+        /** The main player's position in the outgoing track, media ms. */
+        mainPositionMs: () -> Long,
+        onHandOff: () -> Unit,
+        incomingSounding: () -> Boolean,
     ): Boolean {
         cancel()
         val chain = runCatching { dspChainFactory() }.getOrNull() ?: return false
-        val player = runCatching { buildTailPlayer(chain) }.getOrNull() ?: run {
+        val player = runCatching { buildTailPlayer(chain, playback) }.getOrNull() ?: run {
             chain.release()
             return false
         }
@@ -91,33 +129,70 @@ class CrossfadeController(
         return runCatching {
             tailChain = chain
             tail = player
+            tailSounding = false
+            player.addAnalyticsListener(object : AnalyticsListener {
+                override fun onAudioPositionAdvancing(eventTime: AnalyticsListener.EventTime, playoutStartSystemTimeMs: Long) {
+                    tailSounding = true
+                }
+            })
             player.setMediaItem(item)
-            player.seekTo(fromPositionMs)
+            player.seekTo(fadeFromMs)
             player.volume = tailVolume
+            player.playbackParameters = PlaybackParameters(playback.speed, playback.pitch)
+            player.playWhenReady = false
             player.prepare()
-            player.play()
 
             rampJob = scope.launch {
-                // Hold at "tail only" until the incoming track is actually
-                // sounding. The ramp used to start on a wall clock the instant
-                // the hand-off began, so a track that took a second to resolve
-                // and buffer had the outgoing one fading into a hole — the
-                // blend was over before the next track made any sound, which
-                // reads as the player rushing past it.
-                //
-                // Capped at half the blend: the tail only holds `durationMs` of
-                // audio, so waiting forever would run it out and leave a hard
-                // stop instead of a fade. Half is the point past which a fade
-                // is worth more than a wait.
-                val maxHoldMs = minOf(durationMs / 2, MAX_HOLD_MS)
+                var target = fadeFromMs
+                // ── 1. Ready and waiting at the blend point ─────────────────
+                // One re-seek is allowed: if the tail was slow and the main
+                // player has passed the point, aim a little further on.
+                var retried = false
+                while (true) {
+                    while (isActive && player.playbackState != Player.STATE_READY &&
+                        mainPositionMs() < target + LATE_MS
+                    ) {
+                        delay(ALIGN_TICK_MS)
+                    }
+                    if (player.playbackState == Player.STATE_READY && mainPositionMs() < target + LATE_MS) break
+                    val retarget = mainPositionMs() + CrossfadeRamp.mediaMs(RETRY_LEAD_MS, playback.speed)
+                    if (retried || CrossfadeRamp.heardMs(trackDurationMs - retarget, playback.speed) < CrossfadeRamp.MIN_BLEND_MS) {
+                        abandon()
+                        return@launch
+                    }
+                    retried = true
+                    target = retarget
+                    player.seekTo(target)
+                }
+                while (isActive && mainPositionMs() < target) delay(ALIGN_TICK_MS)
+
+                // ── 2. Tail sounding, then hand the main player on ─────────
+                player.play()
+                var waited = 0L
+                while (isActive && !tailSounding && waited < MAX_TAIL_START_MS) {
+                    delay(ALIGN_TICK_MS)
+                    waited += ALIGN_TICK_MS
+                }
+                onIncomingGain(0f)
+                onHandOff()
+
+                // ── 3. Hold for the incoming track, then fade ─────────────
+                // What is left of the tail in heard time is the most the
+                // blend can last; the setting is the most it should.
+                val tailLeftMs = CrossfadeRamp.heardMs(trackDurationMs - player.currentPosition, playback.speed)
+                val blendMs = minOf(crossfadeMs, tailLeftMs).coerceAtLeast(TICK_MS)
+                // Capped at half the blend: the tail only holds so much
+                // audio, and waiting it out would end in a hard stop. Half is
+                // the point past which a fade is worth more than a wait.
+                val maxHoldMs = minOf(blendMs / 2, MAX_HOLD_MS)
                 var held = 0L
-                while (isActive && held < maxHoldMs && !incomingReady()) {
+                while (isActive && held < maxHoldMs && !incomingSounding()) {
                     delay(TICK_MS)
                     held += TICK_MS
                 }
                 // Whatever the wait cost comes off the ramp, not off the end of
                 // the outgoing track — the blend still lands on its last sample.
-                val rampMs = (durationMs - held).coerceAtLeast(TICK_MS)
+                val rampMs = (blendMs - held).coerceAtLeast(TICK_MS)
                 var elapsed = 0L
                 while (isActive && elapsed < rampMs) {
                     val progress = CrossfadeRamp.progress(elapsed, rampMs)
@@ -136,6 +211,15 @@ class CrossfadeController(
             cancel()
             false
         }
+    }
+
+    /**
+     * Gives up before the hand-off: the main player never moved, so dropping
+     * the tail is all it takes for the track to end the ordinary way.
+     */
+    private fun abandon() {
+        rampJob = null
+        cancel()
     }
 
     /**
@@ -169,9 +253,25 @@ class CrossfadeController(
      * the current track and belong to the main player. The shared data source
      * factory keeps `qobuz://` working, so a tail can be read from the same
      * partially-downloaded cache file.
+     *
+     * The transport stages are the main player's own, not Media3's default:
+     * [TryptifyAudioProcessorChain] with a fresh resampler and time-stretch
+     * engine set to the same transposition. With the default chain a
+     * vinyl-style speed would run through Sonic's linear interpolation and a
+     * transposition would not happen at all, so the outgoing track would
+     * change sound at the instant the blend began.
      */
-    private fun buildTailPlayer(chain: DspChain): ExoPlayer =
-        ExoPlayer.Builder(
+    private fun buildTailPlayer(chain: DspChain, playback: Playback): ExoPlayer {
+        val stretch = tf.monochrome.android.audio.stretch.StretchAudioProcessor().apply {
+            setSemitones(playback.semitones)
+            if (playback.engine != null && playback.quality != null) setEngine(playback.engine, playback.quality)
+        }
+        val transport = tf.monochrome.android.audio.resample.TryptifyAudioProcessorChain(
+            chain.processors,
+            tf.monochrome.android.audio.resample.VariRateAudioProcessor(),
+            stretch,
+        )
+        return ExoPlayer.Builder(
             context,
             object : NextRenderersFactory(context) {
                 override fun buildAudioSink(
@@ -181,7 +281,7 @@ class CrossfadeController(
                 ): AudioSink = DefaultAudioSink.Builder(context)
                     .setEnableFloatOutput(enableFloatOutput)
                     .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-                    .setAudioProcessors(chain.processors)
+                    .setAudioProcessorChain(transport)
                     .build()
             }.setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON),
         )
@@ -191,10 +291,23 @@ class CrossfadeController(
             // request its own and risk being refused mid-blend.
             .setHandleAudioBecomingNoisy(false)
             .build()
+    }
 
     private companion object {
         /** ~25 updates a second: smooth to the ear, negligible to the CPU. */
         const val TICK_MS = 40L
+
+        /** How closely the hand-off follows the main player's position. */
+        const val ALIGN_TICK_MS = 10L
+
+        /** How far past the blend point the main player may get before the tail is too late. */
+        const val LATE_MS = 120L
+
+        /** Head start for the one re-seek, heard time. */
+        const val RETRY_LEAD_MS = 600L
+
+        /** Longest to wait for a started tail to sound before handing off anyway. */
+        const val MAX_TAIL_START_MS = 400L
 
         /**
          * Ceiling on the wait for the incoming track, regardless of blend

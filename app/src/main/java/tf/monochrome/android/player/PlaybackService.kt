@@ -261,6 +261,8 @@ class PlaybackService : MediaSessionService() {
                 // stale — it would keep counting from where the track used to
                 // be. Only seeks: track changes come through the queue watcher.
                 if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                    // A seek is a new run at the end of the track.
+                    crossfadeArmed = true
                     queueManager.currentTrack.value?.let { pushDiscordPresence(it) }
                     playbackState.savePosition(player.currentPosition, player.duration, flush = true)
                 }
@@ -387,6 +389,8 @@ class PlaybackService : MediaSessionService() {
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                // A new track gets its own blend at its own end.
+                crossfadeArmed = true
                 // A gapless hand-off: the player moved to the item we
                 // pre-queued, so it advanced the queue for us. Bring
                 // QueueManager into line *without* re-resolving — calling
@@ -517,6 +521,8 @@ class PlaybackService : MediaSessionService() {
                 preferences.pitchQuality,
             ) { engine, quality -> engine to quality }
                 .collect { (engine, quality) ->
+                    lastPitchEngine = engine
+                    lastPitchQuality = quality
                     stretchProcessor.setEngine(engine, quality)
                     pushAutoEqWarp()
                 }
@@ -730,6 +736,13 @@ class PlaybackService : MediaSessionService() {
      */
     @OptIn(UnstableApi::class)
     private fun audioPipelineAnalytics(): AnalyticsListener = object : AnalyticsListener {
+        // The audio really playing out, after a pause, a seek or a new track —
+        // for a blend, the moment the incoming track can be heard, which a
+        // change of codec, rate or channel count puts well after "playing".
+        override fun onAudioPositionAdvancing(eventTime: AnalyticsListener.EventTime, playoutStartSystemTimeMs: Long) {
+            audioStarts++
+        }
+
         override fun onAudioInputFormatChanged(
             eventTime: AnalyticsListener.EventTime,
             format: androidx.media3.common.Format,
@@ -1428,6 +1441,10 @@ class PlaybackService : MediaSessionService() {
     /** Mirrors the independent transposition, for the same reason. */
     @Volatile private var lastSemitones = 0f
 
+    /** And which engine runs it, so a blend's tail transposes the same way. */
+    @Volatile private var lastPitchEngine: tf.monochrome.android.audio.stretch.PitchEngine? = null
+    @Volatile private var lastPitchQuality: tf.monochrome.android.audio.stretch.PitchQuality? = null
+
     // Volume has two independent inputs — the user slider and the crossfade
     // ramp — and both would otherwise want to own player.volume outright.
     // They're kept apart here: [baseVolume] is the level the track should play
@@ -1518,7 +1535,11 @@ class PlaybackService : MediaSessionService() {
         val autoEq = lastAutoEq
         val paramEq = lastParametricEq
         chain.seedFrom(
-            dspStateJson = runCatching { dspManager.getStateJson() }.getOrNull(),
+            // Without the upmix switch: the tail runs its own chain, which
+            // has no upmix stage, and the engine needs only the buses.
+            dspStateJson = runCatching {
+                tf.monochrome.android.audio.dsp.model.MixUpmix.strip(dspManager.getStateJson())
+            }.getOrNull(),
             autoEqBandsL = autoEq.bandsL,
             autoEqBandsR = autoEq.bandsR,
             autoEqPreamp = autoEq.preamp,
@@ -1565,35 +1586,67 @@ class PlaybackService : MediaSessionService() {
     private fun canCrossfade(): Boolean =
         crossfadeMs > 0L && !libusbDriver.isStreaming.value
 
+    /** Counts [AnalyticsListener.onAudioPositionAdvancing] on the main player. */
+    @Volatile private var audioStarts = 0L
+
     /**
-     * Hands the tail of the current track to the secondary player and starts
-     * the next one on the main player, overlapping the two.
+     * Whether this play-through of the track may still blend. Cleared when a
+     * blend starts — so one abandoned for a slow tail is not retried every
+     * poll — and set again by a new track or a seek.
+     */
+    @Volatile private var crossfadeArmed = true
+
+    /**
+     * Blends the current track into the next one.
+     *
+     * The tail is prepared while the main player is still playing the track,
+     * and the main player only moves on once the tail is audibly carrying it
+     * ([CrossfadeController.start]) — so the outgoing song never drops out at
+     * the start of a blend, however long the tail took to open and seek. It
+     * plays at the main player's speed, pitch and transposition, and the
+     * blend is timed in heard time, so it lasts as long as the setting at any
+     * speed.
      */
     @OptIn(UnstableApi::class)
-    private fun beginCrossfade() {
+    private fun beginCrossfade(fadeFromMs: Long) {
         val item = player.currentMediaItem ?: return
         val outgoing = queueManager.currentTrack.value
-        val started = crossfade.start(
+        val params = player.playbackParameters
+        crossfadeArmed = false
+        crossfade.start(
             item = item,
-            fromPositionMs = player.currentPosition,
-            durationMs = crossfadeMs,
+            fadeFromMs = fadeFromMs,
+            trackDurationMs = player.duration,
+            crossfadeMs = crossfadeMs,
             tailVolume = baseVolume,
-            // The incoming track is resolved and buffered from scratch below;
-            // until the main player is genuinely sounding, there is nothing to
-            // fade in and the blend waits.
-            incomingReady = { player.playbackState == Player.STATE_READY && player.isPlaying },
+            playback = CrossfadeController.Playback(
+                speed = params.speed,
+                pitch = params.pitch,
+                semitones = lastSemitones,
+                engine = lastPitchEngine,
+                quality = lastPitchQuality,
+            ),
+            mainPositionMs = { player.currentPosition },
+            onHandOff = {
+                // The outgoing track never reaches STATE_ENDED on the main
+                // player now — we pre-empt it — so scrobble here instead,
+                // exactly as that handler would have.
+                outgoing?.let { serviceScope.launch { scrobblingService.scrobbleTrack(it) } }
+                incomingStartsAfter = audioStarts
+                // Start the incoming track silent; the ramp brings it up.
+                crossfadeGain = 0f
+                pushVolume()
+                onTrackEnded()
+            },
+            // Until the next track's audio is genuinely leaving the device,
+            // there is nothing to fade in, and the blend waits.
+            incomingSounding = { audioStarts > incomingStartsAfter },
         )
-        if (!started) return // Fall through to the ordinary end-of-track path.
-
-        // The outgoing track never reaches STATE_ENDED on the main player now —
-        // we pre-empt it — so scrobble here instead, exactly as that handler
-        // would have.
-        outgoing?.let { serviceScope.launch { scrobblingService.scrobbleTrack(it) } }
-
-        // Start the incoming track silent; the ramp brings it up.
-        crossfadeGain = 0f
-        onTrackEnded()
+        // If the tail could not be built, the track just ends the ordinary way.
     }
+
+    /** [audioStarts] at the hand-off; the incoming track sounds once it moves past. */
+    @Volatile private var incomingStartsAfter = Long.MAX_VALUE
 
     /**
      * Writes the play head down periodically, so a session that ends without
@@ -1648,16 +1701,19 @@ class PlaybackService : MediaSessionService() {
                     continue
                 }
                 kotlinx.coroutines.delay(CROSSFADE_POLL_MS)
-                if (!canCrossfade() || crossfade.isRunning) continue
+                if (!canCrossfade() || crossfade.isRunning || !crossfadeArmed) continue
                 if (!player.isPlaying) continue
                 if (queueManager.peekNext() == null) continue
-                if (CrossfadeRamp.shouldStart(
-                        positionMs = player.currentPosition,
-                        durationMs = player.duration,
-                        crossfadeMs = crossfadeMs,
-                    )
-                ) {
-                    beginCrossfade()
+                val speed = player.playbackParameters.speed
+                val position = player.currentPosition
+                val duration = player.duration
+                if (CrossfadeRamp.shouldPrepare(position, duration, crossfadeMs, speed, CROSSFADE_LEAD_MS)) {
+                    val fadeFrom = CrossfadeRamp.fadeStartMs(position, duration, crossfadeMs, speed, CROSSFADE_LEAD_MS)
+                    if (fadeFrom == null) {
+                        crossfadeArmed = false // too close to the end to blend at all
+                    } else {
+                        beginCrossfade(fadeFrom)
+                    }
                 }
             }
         }
@@ -1750,6 +1806,13 @@ class PlaybackService : MediaSessionService() {
 
         /** How often the play head is checked against the blend threshold. */
         const val CROSSFADE_POLL_MS = 250L
+
+        /**
+         * How long before the blend point the tail starts preparing, heard
+         * time: enough to open a stream, start a decoder and seek. Shorter
+         * than the poll would miss it, so it is several polls long.
+         */
+        const val CROSSFADE_LEAD_MS = 1_500L
 
         /** How often a running track writes its position down. */
         const val POSITION_PERSIST_INTERVAL_MS = 10_000L
