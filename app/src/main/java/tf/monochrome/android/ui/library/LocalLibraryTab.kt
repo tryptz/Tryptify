@@ -810,6 +810,8 @@ private fun SongRow(
                         onAlbumClick = { navController.openAlbum(track.albumId) },
                         modifier = Modifier.weight(1f, fill = false)
                     )
+                    Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
+                    tf.monochrome.android.ui.components.SourcePill(track.sourceType)
                     track.qualityBadge?.let { badge ->
                         Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
                         Text(

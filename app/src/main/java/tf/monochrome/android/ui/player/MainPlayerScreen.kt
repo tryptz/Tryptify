@@ -1229,6 +1229,15 @@ private fun PlayerTrackInfo(
                     color = Color.White.copy(alpha = 0.6f),
                     linkColor = Color.White.copy(alpha = 0.85f),
                 )
+                // Where it plays from, and "via" when that is another
+                // service or the device — never a silent switch.
+                tf.monochrome.android.ui.components.LocalPlayerSource.current?.let { (picked, via) ->
+                    tf.monochrome.android.ui.components.PlayerSourceTag(
+                        source = picked,
+                        via = via,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
             } else {
                 Text(
                     text = "Unknown",

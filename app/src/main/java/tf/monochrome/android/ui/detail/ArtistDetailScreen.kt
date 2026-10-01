@@ -78,6 +78,7 @@ fun ArtistDetailScreen(
     val artistDetail by viewModel.artistDetail.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
+    val source by viewModel.source.collectAsStateWithLifecycle()
 
     val dlMsgContext = androidx.compose.ui.platform.LocalContext.current
     androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -297,6 +298,11 @@ fun ArtistDetailScreen(
                                 style = MaterialTheme.typography.headlineMedium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
+                            // The catalog this artist page came from.
+                            source?.let {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                tf.monochrome.android.ui.components.SourcePill(it)
+                            }
                         }
                         }
                     }

@@ -314,6 +314,9 @@ private fun LocalTrackRow(
                     onArtistClick = { ref -> ref.id?.let { navController.openArtist(track.sourceType, it) } },
                 )
             }
+            // Where it plays from — on this screen, the device.
+            tf.monochrome.android.ui.components.SourcePill(track.sourceType)
+            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(6.dp))
             if (track.qualityBadge != null) {
                 Surface(
                     shape = RoundedCornerShape(999.dp),

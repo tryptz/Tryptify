@@ -68,6 +68,7 @@ fun AlbumDetailScreen(
     val albumDetail by viewModel.albumDetail.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
+    val source by viewModel.source.collectAsStateWithLifecycle()
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsStateWithLifecycle()
     val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsStateWithLifecycle()
     val playlists by playerViewModel.playlists.collectAsStateWithLifecycle()
@@ -224,8 +225,16 @@ fun AlbumDetailScreen(
                                 cornerRadius = 12.dp
                             )
                             Spacer(modifier = Modifier.height(16.dp))
-                            if (detail.album.isThxSpatialAudio) {
-                                tf.monochrome.android.ui.components.ThxBadgePill()
+                            // The catalog this album came from, beside any THX mark.
+                            if (source != null || detail.album.isThxSpatialAudio) {
+                                androidx.compose.foundation.layout.Row(
+                                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
+                                ) {
+                                    source?.let { tf.monochrome.android.ui.components.SourcePill(it) }
+                                    if (detail.album.isThxSpatialAudio) {
+                                        tf.monochrome.android.ui.components.ThxBadgePill()
+                                    }
+                                }
                                 Spacer(modifier = Modifier.height(6.dp))
                             }
                             Text(

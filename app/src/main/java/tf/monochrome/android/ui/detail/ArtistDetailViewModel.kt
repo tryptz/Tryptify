@@ -52,15 +52,19 @@ class ArtistDetailViewModel @Inject constructor(
     }
 
     /**
-     * Source-agnostic load with a two-way fallback. We try the most likely
-     * source first — Qobuz when the registry has tagged this id as Qobuz (a
-     * search hit / top-track / album row), otherwise the TIDAL pool — then fall
-     * back to the OTHER source if the first fails. This is what fixes the
+     * Catalog-true load. An id registered to a catalog (Deezer, Apple, Qobuz)
+     * loads from it alone; only an unregistered id is looked up across TIDAL,
+     * Qobuz and Apple, and the page is tagged with the one that answered. This is what fixes the
      * "No API instances available" error: on a Qobuz-only setup the TIDAL pool
      * is empty, and an artist reached from a now-playing Qobuz track isn't
      * pre-registered, so it must still resolve via /api/get-artist. Both layers
      * are Result-wrapped so a miss surfaces as a clean error instead of a crash.
      */
+    private val _source = MutableStateFlow<tf.monochrome.android.domain.model.SourceType?>(null)
+
+    /** The catalog this artist was loaded from, for its source tag. */
+    val source: StateFlow<tf.monochrome.android.domain.model.SourceType?> = _source
+
     private fun loadArtist() {
         viewModelScope.launch {
             _isLoading.value = true
@@ -70,7 +74,7 @@ class ArtistDetailViewModel @Inject constructor(
             // anywhere but Deezer — so Deezer only, and a miss stays a miss.
             if (qobuzIdRegistry.isDeezerArtist(artistId)) {
                 repository.getDeezerArtist(artistId)
-                    .onSuccess { _artistDetail.value = it }
+                    .onSuccess { _artistDetail.value = it; _source.value = tf.monochrome.android.domain.model.SourceType.DEEZER }
                     .onFailure { _error.value = it.message ?: "Failed to load artist" }
                 _isLoading.value = false
                 return@launch
@@ -82,23 +86,23 @@ class ArtistDetailViewModel @Inject constructor(
             val qobuzArtistId = aliasQobuzId ?: artistId
             val preferQobuz = aliasQobuzId != null || qobuzIdRegistry.isQobuzArtist(artistId)
 
-            // Try the catalog this id actually belongs to first, then the other
-            // one, then TIDAL. Apple and Qobuz ids share no namespace, so order
-            // matters: querying the wrong catalog returns a clean miss, never
-            // the right artist.
-            val ordered = buildList<suspend () -> Result<ArtistDetail>> {
-                if (qobuzIdRegistry.isAppleArtist(artistId)) {
-                    add { repository.getAppleArtist(artistId) }
-                }
-                if (preferQobuz) {
-                    add { repository.getQobuzArtist(qobuzArtistId) }
-                    add { repository.getArtist(artistId) }
-                } else {
-                    add { repository.getArtist(artistId) }
-                    add { repository.getQobuzArtist(qobuzArtistId) }
-                }
-                if (!qobuzIdRegistry.isAppleArtist(artistId)) {
-                    add { repository.getAppleArtist(artistId) }
+            // An id the registry knows belongs to one catalog loads from that
+            // catalog only: ids overlap across catalogs, so asking another one
+            // for the same number can open somebody else's page. Only an id
+            // nobody has claimed — an artist reached from a row that never
+            // registered it — is looked up across the catalogs, and the page
+            // is tagged with whichever one answered.
+            val ordered = buildList<Pair<tf.monochrome.android.domain.model.SourceType, suspend () -> Result<ArtistDetail>>> {
+                when {
+                    qobuzIdRegistry.isAppleArtist(artistId) ->
+                        add(tf.monochrome.android.domain.model.SourceType.APPLE to { repository.getAppleArtist(artistId) })
+                    preferQobuz ->
+                        add(tf.monochrome.android.domain.model.SourceType.QOBUZ to { repository.getQobuzArtist(qobuzArtistId) })
+                    else -> {
+                        add(tf.monochrome.android.domain.model.SourceType.API to { repository.getArtist(artistId) })
+                        add(tf.monochrome.android.domain.model.SourceType.QOBUZ to { repository.getQobuzArtist(qobuzArtistId) })
+                        add(tf.monochrome.android.domain.model.SourceType.APPLE to { repository.getAppleArtist(artistId) })
+                    }
                 }
             }
 
@@ -125,6 +129,7 @@ class ArtistDetailViewModel @Inject constructor(
                     val recovered = repository.getArtist(found.id)
                     if (recovered.isSuccess) {
                         _artistDetail.value = recovered.getOrThrow()
+                        _source.value = tf.monochrome.android.domain.model.SourceType.API
                         _isLoading.value = false
                         return@launch
                     }
@@ -137,9 +142,9 @@ class ArtistDetailViewModel @Inject constructor(
             var firstFailure: Result<ArtistDetail>? = null
             var realFailure: Result<ArtistDetail>? = null
             var success: Result<ArtistDetail>? = null
-            for (attempt in ordered) {
+            for ((source, attempt) in ordered) {
                 val r = attempt()
-                if (r.isSuccess) { success = r; break }
+                if (r.isSuccess) { success = r; _source.value = source; break }
                 if (firstFailure == null) firstFailure = r
                 if (realFailure == null &&
                     r.exceptionOrNull() !is NoInstancesConfiguredException

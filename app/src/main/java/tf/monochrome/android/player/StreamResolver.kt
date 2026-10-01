@@ -93,7 +93,7 @@ class StreamResolver @Inject constructor(
             // DownloadManager keys downloads by Track.id, not by appleId.
             catalogTrackId = track.id,
         )?.let { local ->
-            return Pair(buildFileMediaItem(track, localUri(local.filePath)), null)
+            return Pair(buildFileMediaItem(track, localUri(local.filePath), playedFrom = PlayedFrom.LOCAL), null)
         }
 
         // Qobuz is its own catalogue, not a TIDAL fallback. Its track ids live
@@ -123,7 +123,7 @@ class StreamResolver @Inject constructor(
                 artist = track.displayArtist,
                 durationSeconds = track.duration,
             ) ?: return Pair(null, null)
-            return Pair(buildFileMediaItem(track, uri, playedFromQobuz = PlayedFrom.isQobuz(uri)), null)
+            return Pair(buildFileMediaItem(track, uri, playedFrom = PlayedFrom.QOBUZ.takeIf { PlayedFrom.isQobuz(uri) }), null)
         }
 
         val streamResult = repository.getTrackStream(track.id)
@@ -224,7 +224,7 @@ class StreamResolver @Inject constructor(
                 isrc = track.isrc,
                 musicBrainzTrackId = track.musicBrainzTrackId,
             )?.let { local ->
-                return resolveLocalFile(track, local)
+                return resolveLocalFile(track, local, downloadedCopy = true)
             }
         }
 
@@ -472,7 +472,7 @@ class StreamResolver @Inject constructor(
      * catalogue's — same title, same artwork — so swapping the stream for the
      * file is invisible in the player; only the loading spinner disappears.
      */
-    private fun buildFileMediaItem(track: Track, uri: Uri, playedFromQobuz: Boolean = false): MediaItem {
+    private fun buildFileMediaItem(track: Track, uri: Uri, playedFrom: String? = null): MediaItem {
         val artworkUri = track.album?.cover?.let { cover -> buildCoverUrl(cover, 640).toUri() }
 
         val metadata = MediaMetadata.Builder()
@@ -482,7 +482,7 @@ class StreamResolver @Inject constructor(
             .setArtworkUri(artworkUri)
             .setTrackNumber(track.trackNumber)
             .setDiscNumber(track.volumeNumber)
-            .apply { if (playedFromQobuz) setExtras(PlayedFrom.extras(PlayedFrom.QOBUZ)) }
+            .apply { playedFrom?.let { setExtras(PlayedFrom.extras(it)) } }
             .build()
 
         return MediaItem.Builder()
@@ -507,7 +507,9 @@ class StreamResolver @Inject constructor(
 
     private fun resolveLocalFile(
         track: UnifiedTrack,
-        source: PlaybackSource.LocalFile
+        source: PlaybackSource.LocalFile,
+        /** A catalog pick played from its on-device copy, which the player tags as Local. */
+        downloadedCopy: Boolean = false,
     ): ResolvedMedia {
         val uri = localUri(source.filePath)
 
@@ -518,6 +520,7 @@ class StreamResolver @Inject constructor(
             .setArtworkUri(normalizeArtworkUri(track.artworkUri))
             .setTrackNumber(track.trackNumber)
             .setDiscNumber(track.discNumber)
+            .apply { if (downloadedCopy) setExtras(PlayedFrom.extras(PlayedFrom.LOCAL)) }
             .build()
 
         val mediaItem = MediaItem.Builder()

@@ -424,6 +424,9 @@ private fun ArtistTrackRow(
                     )
                 }
             }
+            // Where it plays from — on this screen, the device.
+            tf.monochrome.android.ui.components.SourcePill(track.sourceType)
+            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(6.dp))
             val badge = track.qualityBadge
             if (badge != null) {
                 Surface(

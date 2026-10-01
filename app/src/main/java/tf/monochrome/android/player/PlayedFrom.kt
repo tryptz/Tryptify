@@ -7,13 +7,16 @@ import tf.monochrome.android.data.cache.QobuzStreamUri
 
 /**
  * Which service a playing item's audio actually comes from, when that is not
- * the one the song was picked from — a Deezer pick played from Qobuz, or a
- * TIDAL pick the listener let play from Qobuz. Carried in the MediaItem's
+ * the one the song was picked from — a Deezer pick played from Qobuz, a
+ * TIDAL pick the listener let play from Qobuz, or a catalog pick played from
+ * its downloaded copy. Carried in the MediaItem's
  * metadata extras, so the now-playing screen can tag it honestly.
  */
 object PlayedFrom {
     const val KEY = "tryptify.playedFrom"
     const val QOBUZ = "QOBUZ"
+    /** An on-device copy of a song picked from a catalog. */
+    const val LOCAL = "LOCAL"
 
     fun extras(service: String): Bundle = Bundle().apply { putString(KEY, service) }
 

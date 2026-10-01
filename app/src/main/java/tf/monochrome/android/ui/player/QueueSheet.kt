@@ -498,13 +498,20 @@ private fun QueueTrackItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Text(
-                text = track.displayArtist,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Where each queued song plays from, so a mixed queue reads at a glance.
+                tf.monochrome.android.ui.components.LocalTrackSource.current(track)?.let {
+                    tf.monochrome.android.ui.components.SourcePill(it)
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
+                Text(
+                    text = track.displayArtist,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
 
         Text(

@@ -55,6 +55,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var spotifyAuthManager: tf.monochrome.android.data.auth.SpotifyAuthManager
     @Inject lateinit var lastFmAuthManager: tf.monochrome.android.data.auth.LastFmAuthManager
     @Inject lateinit var queueManager: QueueManager
+    @Inject lateinit var trackSourceResolver: tf.monochrome.android.ui.components.TrackSourceResolver
     @Inject lateinit var performanceProfile: PerformanceProfile
     @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
     @Inject lateinit var bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController
@@ -218,6 +219,8 @@ class MainActivity : ComponentActivity() {
                 tf.monochrome.android.performance.LocalLowPerformance provides lowPerformance,
                 tf.monochrome.android.ui.theme.LocalShowExplicitBadges provides showExplicitBadges,
                 LocalImmersiveFullScreen provides immersiveFullScreen,
+                // Every list row's source tag reads its catalog from here.
+                tf.monochrome.android.ui.components.LocalTrackSource provides trackSourceResolver::of,
             ) {
                 MonochromeTheme(
                     themeName = themeName,

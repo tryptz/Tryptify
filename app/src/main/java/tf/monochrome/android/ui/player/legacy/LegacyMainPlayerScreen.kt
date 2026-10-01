@@ -558,6 +558,11 @@ private fun PlayerTrackInfo(
                     onClick = onArtistClick,
                 ),
             )
+            // Where it plays from, and "via" when that is another service
+            // or the device — the same tag as the current player.
+            tf.monochrome.android.ui.components.LocalPlayerSource.current?.let { (picked, via) ->
+                tf.monochrome.android.ui.components.PlayerSourceTag(source = picked, via = via)
+            }
         }
         IconButton(onClick = onToggleLike) {
             Icon(

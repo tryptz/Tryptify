@@ -164,6 +164,14 @@ fun TrackItem(
                     Spacer(modifier = Modifier.width(4.dp))
                     ChannelBadgePill(badge)
                 }
+                // Where it plays from, on every list this row is used in.
+                // Downloaded means the device, as in search.
+                val source = if (isDownloaded) tf.monochrome.android.domain.model.SourceType.LOCAL
+                    else LocalTrackSource.current(track)
+                if (source != null) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    SourcePill(source)
+                }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (effectiveOnArtistClick != null) {

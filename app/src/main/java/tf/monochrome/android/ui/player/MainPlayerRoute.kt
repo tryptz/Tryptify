@@ -954,7 +954,17 @@ fun MainPlayerRoute(
         )
     }
 
+    // The player's source tag: the catalog the song was picked from, and where
+    // its audio actually comes from when that is somewhere else.
+    val playedFrom by playerViewModel.playedFrom.collectAsStateWithLifecycle()
+    val trackSource = tf.monochrome.android.ui.components.LocalTrackSource.current
+    val pickedFrom = currentUnified?.sourceType ?: state.track?.let(trackSource)
+    val playerSource = pickedFrom?.let { it to playedFrom }
+
     Box(modifier = Modifier.fillMaxSize()) {
+    androidx.compose.runtime.CompositionLocalProvider(
+        tf.monochrome.android.ui.components.LocalPlayerSource provides playerSource,
+    ) {
         if (legacyPlayer) {
             // Settings › System › Performance › "Legacy player" — the pre-glass
             // layout, recovered from history. Same state, same slots; no shader,
@@ -1079,6 +1089,7 @@ fun MainPlayerRoute(
                 overlay = playerPanels,
             )
         }
+    }
         // The legacy layout has no `overlay` slot and no haze source of its own,
         // so the same panels hang here instead. LocalPlayerHaze is null on that
         // path and GlassPanel falls back to plain translucent glass — the same

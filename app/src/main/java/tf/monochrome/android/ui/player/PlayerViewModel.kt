@@ -37,6 +37,7 @@ import tf.monochrome.android.data.downloads.DownloadManager
 import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.data.preferences.PreferencesManager
+import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.domain.model.Lyrics
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.NowPlayingViewMode
@@ -608,8 +609,32 @@ class PlayerViewModel @Inject constructor(
                 reason: Int
             ) {
                 syncState()
+                syncPlayedFrom()
+            }
+
+            override fun onMediaMetadataChanged(mediaMetadata: androidx.media3.common.MediaMetadata) {
+                syncPlayedFrom()
             }
         })
+        syncPlayedFrom()
+    }
+
+    private val _playedFrom = MutableStateFlow<SourceType?>(null)
+
+    /**
+     * Where the playing song's audio comes from when that is not the catalog
+     * it was picked from (Qobuz for a Deezer pick, the device for a download),
+     * else null. Shown beside the source tag on the player.
+     */
+    val playedFrom: StateFlow<SourceType?> = _playedFrom.asStateFlow()
+
+    private fun syncPlayedFrom() {
+        val mark = tf.monochrome.android.player.PlayedFrom.of(mediaController?.currentMediaItem?.mediaMetadata)
+        _playedFrom.value = when (mark) {
+            tf.monochrome.android.player.PlayedFrom.QOBUZ -> SourceType.QOBUZ
+            tf.monochrome.android.player.PlayedFrom.LOCAL -> SourceType.LOCAL
+            else -> null
+        }
     }
 
     private fun syncState() {

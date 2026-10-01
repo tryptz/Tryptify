@@ -238,6 +238,35 @@ object WhatsNew {
                         "including between songs at different sample rates.",
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SEARCH,
+                    title = "Source tags everywhere",
+                    body = "Every song, album and artist shows where it comes from: lists, the " +
+                        "queue, album and artist pages, and the player, which also says \"via\" " +
+                        "when a song plays from somewhere else.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYBACK,
+                    title = "TIDAL asks before Qobuz",
+                    body = "When TIDAL can't play a song, Tryptify no longer switches to Qobuz on " +
+                        "its own. It asks, and plays the Qobuz copy only if you say yes.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = SEARCH,
+                    title = "Albums and artists open from their own catalog",
+                    body = "A Qobuz or Apple Music album that can't load says so, instead of " +
+                        "sometimes opening a different album from another service.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LIBRARY,
+                    title = "WAV files play and read properly",
+                    body = "32-bit float WAVs no longer play as static, 8-bit WAVs keep your " +
+                        "effects, and WAV titles, artists, albums and covers now show up.",
+                ),
+                WhatsNewEntry(
                     kind = WhatsNewKind.REMOVED,
                     section = SPEED,
                     title = "The Nightcore button",

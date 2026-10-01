@@ -105,3 +105,31 @@ fun SourcePill(source: SourceType, modifier: Modifier = Modifier) {
         }
     }
 }
+
+/**
+ * The player's source tag: the catalog the song was picked from, and — when
+ * its audio comes from somewhere else — "via" where it does come from, so a
+ * Deezer pick heard from Qobuz, or a TIDAL pick played from its download,
+ * never passes as the catalog it is not.
+ */
+@Composable
+fun PlayerSourceTag(source: SourceType, via: SourceType?, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SourcePill(source)
+        if (via != null && via != source) {
+            Text(
+                text = "via",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            SourcePill(via)
+        }
+    }
+}
+
+/** What the player is playing from: (picked from, heard via). Null hides the tag. */
+val LocalPlayerSource = androidx.compose.runtime.staticCompositionLocalOf<Pair<SourceType, SourceType?>?> { null }
