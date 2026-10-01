@@ -24,6 +24,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import tf.monochrome.android.audio.dsp.model.BusConfig
 import tf.monochrome.android.audio.dsp.model.BusLevels
 import tf.monochrome.android.audio.dsp.model.FxTapFrame
+import tf.monochrome.android.audio.dsp.model.MixUpmix
 import tf.monochrome.android.audio.dsp.model.PluginInstance
 import tf.monochrome.android.data.preferences.PreferencesManager
 import javax.inject.Inject
@@ -32,7 +33,8 @@ import javax.inject.Singleton
 @Singleton
 class DspEngineManager @Inject constructor(
     private val processor: MixBusProcessor,
-    private val preferences: PreferencesManager
+    private val preferences: PreferencesManager,
+    private val upmixProcessor: UpmixProcessor,
 ) {
     private val _enabled = MutableStateFlow(false)
     val enabled: StateFlow<Boolean> = _enabled.asStateFlow()
@@ -46,6 +48,14 @@ class DspEngineManager @Inject constructor(
     private val levelsBuffer = FloatArray(BusConfig.MAX_TOTAL_BUSES * 4)
     private val _busLevels = MutableStateFlow(List(BusConfig.defaultBuses().size) { BusLevels() })
     val busLevels: StateFlow<List<BusLevels>> = _busLevels.asStateFlow()
+
+    /**
+     * The mix's Atmos upmix: stereo spread to 9.1.6 ahead of the mixer
+     * ([UpmixProcessor]). Part of the mix, so it saves and loads with it
+     * ([MixUpmix]); it starts with the next track and stops at once.
+     */
+    private val _upmix = MutableStateFlow(false)
+    val upmix: StateFlow<Boolean> = _upmix.asStateFlow()
 
     private val _clipped = MutableStateFlow(false)
     val clipped: StateFlow<Boolean> = _clipped.asStateFlow()
@@ -139,7 +149,10 @@ class DspEngineManager @Inject constructor(
             if (!json.isNullOrEmpty() && json != "{}" &&
                 processor.getEnginePtr() == 0L && !edited
             ) {
-                _buses.value = labelled(parseBusConfigsFromJson(json))
+                _buses.value = labelled(parseBusConfigsFromJson(MixUpmix.strip(json)))
+                // Before the first track configures the pipeline, or the
+                // first song after launch would play without it.
+                applyUpmix(MixUpmix.isOn(json))
                 if (liveStateJson == null) liveStateJson = json
             }
         }
@@ -187,6 +200,8 @@ class DspEngineManager @Inject constructor(
             for (dst in bus.sends.keys - BusConfig.DEFAULT_SENDS.keys) setSend(bus.index, dst, 0f)
             setSend(bus.index, BusConfig.MASTER_INDEX, 1f)
         }
+        // And plain stereo: a bare mixer has no upmix.
+        if (_upmix.value) setUpmix(false)
     }
 
     // What the meter poll last saw of the engine's processing, for [pollLevels].
@@ -635,16 +650,31 @@ class DspEngineManager @Inject constructor(
      */
     fun getStateJson(): String {
         val ptr = processor.getEnginePtr()
-        if (ptr == 0L) return DspStateJson.encode(_buses.value)
-        return processor.nativeGetStateJson(ptr)
+        val buses = if (ptr == 0L) DspStateJson.encode(_buses.value) else processor.nativeGetStateJson(ptr)
+        return MixUpmix.attach(buses, _upmix.value)
     }
 
     fun loadStateJson(json: String) {
+        // A mix without the key turns the upmix off: loading a preset is
+        // loading all of it.
+        applyUpmix(MixUpmix.isOn(json))
+        val engineJson = MixUpmix.strip(json)
         val ptr = processor.getEnginePtr()
-        if (ptr != 0L) processor.nativeLoadStateJson(ptr, json)
+        if (ptr != 0L) processor.nativeLoadStateJson(ptr, engineJson)
         // Sync Kotlin state from what the engine made of it — which, while a
         // wide stream plays, can be more buses than the JSON had.
-        if (ptr != 0L) syncFromEngine() else _buses.value = labelled(parseBusConfigsFromJson(json))
+        if (ptr != 0L) syncFromEngine() else _buses.value = labelled(parseBusConfigsFromJson(engineJson))
+    }
+
+    /** Turns the Atmos upmix on or off, as an edit to the mix. */
+    fun setUpmix(on: Boolean) {
+        applyUpmix(on)
+        requestSave()
+    }
+
+    private fun applyUpmix(on: Boolean) {
+        _upmix.value = on
+        upmixProcessor.setEnabled(on)
     }
 
     val spreadChannels = preferences.dspSpreadChannels

@@ -511,10 +511,10 @@ class DownmixProcessor @Inject constructor(
         const val MAX_INPUT_CHANNELS = 16
 
         /** −3 dB: the FC (and 6.1 BC) contribution to each side. */
-        private const val CENTER_COEF = 0.70710678f
+        internal const val CENTER_COEF = 0.70710678f
 
         /** LFE contribution to BOTH sides of the fold (~+7.1 dB). */
-        private const val LFE_COEF = 2.26464431f
+        internal const val LFE_COEF = 2.26464431f
 
         /** Frames per trip to the native placer. */
         private const val PLACE_CHUNK = 1024

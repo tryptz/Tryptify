@@ -15,6 +15,7 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import tf.monochrome.android.audio.dsp.SnapinType
+import tf.monochrome.android.audio.dsp.model.MixUpmix
 
 /**
  * The engine reads a preset positionally: entry 4 is the master and the
@@ -98,4 +99,64 @@ class MixPresetBuilderTest {
             assertFalse("entry $i", buses.bus(i)["inputEnabled"]!!.jsonPrimitive.boolean)
         }
     }
+
+    // ── Routes ──────────────────────────────────────────────────────────
+
+    @Test
+    fun `an unrouted bus writes no sends, exactly as the engine saves it`() {
+        val json = MixPresetBuilder.build { bus(0) { plugin(SnapinType.GAIN) } }
+        assertFalse(json.contains("sends"))
+    }
+
+    @Test
+    fun `routes are written as the engine reads them, between input and plugins`() {
+        val json = MixPresetBuilder.build {
+            bus(0) {
+                sendTo(4, 0f)
+                sendTo(2, 0.5f)
+                sendTo(1, 1f)
+                plugin(SnapinType.GAIN)
+            }
+        }
+        val bus0 = buses(json).bus(0)
+        // [dst, level, ...] by destination, the master route gone.
+        assertEquals(listOf(1f, 1f, 2f, 0.5f), bus0["sends"]!!.jsonArray.map { it.jsonPrimitive.float })
+        val text = json.substringBefore("},{")
+        assertTrue(text.indexOf("\"inputEnabled\"") < text.indexOf("\"sends\""))
+        assertTrue(text.indexOf("\"sends\"") < text.indexOf("\"plugins\""))
+    }
+
+    @Test
+    fun `a route the engine would refuse cannot be written`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            MixPresetBuilder.build { bus(1) { sendTo(1, 1f) } }
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            MixPresetBuilder.build { master { sendTo(0, 1f) } }
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            MixPresetBuilder.build { bus(0) { sendTo(2, 1.5f) } }
+        }
+    }
+
+    // ── The upmix key ───────────────────────────────────────────────────
+
+    @Test
+    fun `the upmix key rides after the buses and strips back to plain engine state`() {
+        val plain = MixPresetBuilder.build { bus(0) { plugin(SnapinType.GAIN) } }
+        val upmixed = MixPresetBuilder.build {
+            upmix = true
+            bus(0) { plugin(SnapinType.GAIN) }
+        }
+        assertFalse(MixUpmix.isOn(plain))
+        assertTrue(MixUpmix.isOn(upmixed))
+        // Still valid JSON with the buses intact, and the key last.
+        assertEquals(5, buses(upmixed).size)
+        assertTrue(upmixed.endsWith("\"upmix\":\"9.1.6\"}"))
+        assertEquals(plain, MixUpmix.strip(upmixed))
+        // attach/strip round trip, and attach is idempotent.
+        assertEquals(upmixed, MixUpmix.attach(MixUpmix.attach(plain, true), true))
+        assertEquals(plain, MixUpmix.attach(upmixed, false))
+    }
 }
+

@@ -6,6 +6,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import tf.monochrome.android.audio.dsp.DspEngineManager
 import tf.monochrome.android.audio.dsp.MixBusProcessor
+import tf.monochrome.android.audio.dsp.UpmixProcessor
 import tf.monochrome.android.audio.dsp.crossfeed.CrossfeedEffect
 import tf.monochrome.android.audio.dsp.oxford.CompressorEffect
 import tf.monochrome.android.audio.dsp.oxford.InflatorEffect
@@ -26,6 +27,9 @@ object DspModule {
 
     @Provides
     @Singleton
-    fun provideDspEngineManager(processor: MixBusProcessor, preferences: PreferencesManager): DspEngineManager =
-        DspEngineManager(processor, preferences)
+    fun provideDspEngineManager(
+        processor: MixBusProcessor,
+        preferences: PreferencesManager,
+        upmixProcessor: UpmixProcessor,
+    ): DspEngineManager = DspEngineManager(processor, preferences, upmixProcessor)
 }

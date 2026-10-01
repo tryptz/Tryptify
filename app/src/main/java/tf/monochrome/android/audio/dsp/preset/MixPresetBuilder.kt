@@ -2,6 +2,7 @@ package tf.monochrome.android.audio.dsp.preset
 
 import tf.monochrome.android.audio.dsp.SnapinType
 import tf.monochrome.android.audio.dsp.model.BusConfig
+import tf.monochrome.android.audio.dsp.model.MixUpmix
 
 /**
  * Builds DSP-engine state JSON for hard-coded presets.
@@ -26,6 +27,12 @@ object MixPresetBuilder {
 
 class PresetScope {
     private val buses = sortedMapOf<Int, BusScope>()
+
+    /**
+     * Spread a stereo source to 9.1.6 ahead of the mixer ([MixUpmix]), so its
+     * nine channel groups land on buses 1–9 the way a 9.1.6 bed's would.
+     */
+    var upmix: Boolean = false
 
     /**
      * Configure the bus at engine [index]: 0–3 for buses 1–4, 5–16 for the
@@ -56,7 +63,7 @@ class PresetScope {
             (buses[i] ?: BusScope(i)).appendJson(sb)
         }
         sb.append("]}")
-        return sb.toString()
+        return MixUpmix.attach(sb.toString(), upmix)
     }
 
     private fun java.util.SortedMap<Int, BusScope>.lastKeyOrNull(): Int? =
@@ -76,6 +83,27 @@ class BusScope(private val index: Int) {
      * sum of the buses.
      */
     var inputEnabled: Boolean = index == 0
+
+    // Where this bus goes, as the engine routes it: destination index to
+    // linear level. A mix bus starts at the master alone, as in the mixer.
+    private val sends: MutableMap<Int, Float> =
+        if (index == BusConfig.MASTER_INDEX) mutableMapOf() else mutableMapOf(BusConfig.MASTER_INDEX to 1f)
+
+    /**
+     * Route this bus's post-fader output to [dst] at [level] (linear, 0..1;
+     * 0 removes the route). Sends to the master are routes like any other, so
+     * `sendTo(BusConfig.MASTER_INDEX, 0f)` takes a bus off the master — for a
+     * bus that only feeds other buses.
+     */
+    fun sendTo(dst: Int, level: Float) {
+        require(index != BusConfig.MASTER_INDEX) { "the master sends nowhere" }
+        require(dst != index) { "bus $index cannot send to itself" }
+        require(level in 0f..1f) { "send level $level is outside 0..1" }
+        if (level == 0f) sends.remove(dst) else sends[dst] = level
+    }
+
+    /** The routes as set, for the tests. */
+    val routes: Map<Int, Float> get() = sends.toMap()
 
     private val plugins = mutableListOf<PluginEntry>()
 
@@ -126,7 +154,17 @@ class BusScope(private val index: Int) {
             .append(",\"muted\":").append(muted)
             .append(",\"soloed\":").append(soloed)
             .append(",\"inputEnabled\":").append(inputEnabled && index != BusConfig.MASTER_INDEX)
-            .append(",\"plugins\":[")
+        // Written only when they differ from the master alone, exactly as the
+        // engine saves them, so an unrouted preset is unchanged byte for byte.
+        if (index != BusConfig.MASTER_INDEX && sends != BusConfig.DEFAULT_SENDS) {
+            sb.append(",\"sends\":[")
+            sends.entries.sortedBy { it.key }.forEachIndexed { i, (dst, level) ->
+                if (i > 0) sb.append(',')
+                sb.append(dst).append(',').append(level)
+            }
+            sb.append(']')
+        }
+        sb.append(",\"plugins\":[")
         plugins.forEachIndexed { i, p ->
             if (i > 0) sb.append(',')
             p.appendJson(sb)
@@ -167,6 +205,9 @@ object MixPresetParams {
         SnapinType.STEREO -> floatArrayOf(0f, 0f, 0f)
         SnapinType.LIMITER -> floatArrayOf(0f, 0f, 100f, 5f, 0f)
         SnapinType.GAIN -> floatArrayOf(0f)
+        // The native constructors' values (eq_3band.h, filter.h).
+        SnapinType.EQ_3BAND -> floatArrayOf(100f, 0f, 0.707f, 1000f, 0f, 1f, 8000f, 0f, 0.707f)
+        SnapinType.FILTER -> floatArrayOf(0f, 1000f, 0.707f, 0f, 0f)
         else -> floatArrayOf()
     }
 }
@@ -245,4 +286,37 @@ object LimiterP {
     const val RELEASE = 2
     const val LOOKAHEAD = 3
     const val OUTPUT_GAIN = 4
+}
+
+/** 3-band EQ: low shelf → mid peak → high shelf (eq_3band.h). */
+object Eq3P {
+    const val LOW_FREQ = 0
+    const val LOW_GAIN = 1
+    const val LOW_Q = 2
+    const val MID_FREQ = 3
+    const val MID_GAIN = 4
+    const val MID_Q = 5
+    const val HIGH_FREQ = 6
+    const val HIGH_GAIN = 7
+    const val HIGH_Q = 8
+}
+
+/** Filter (filter.h). SLOPE n is n + 1 cascaded 12 dB/oct stages. */
+object FilterP {
+    const val TYPE = 0
+    const val CUTOFF = 1
+    const val Q = 2
+    const val GAIN_DB = 3
+    const val SLOPE = 4
+
+    const val LOW_PASS = 0f
+    const val BAND_PASS = 1f
+    const val HIGH_PASS = 2f
+    const val NOTCH = 3f
+    const val LOW_SHELF = 4f
+    const val PEAK = 5f
+    const val HIGH_SHELF = 6f
+
+    const val SLOPE_12 = 0f
+    const val SLOPE_24 = 1f
 }

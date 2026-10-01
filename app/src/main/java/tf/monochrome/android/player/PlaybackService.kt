@@ -73,6 +73,8 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var downmixProcessor: tf.monochrome.android.audio.dsp.DownmixProcessor
     @Inject lateinit var spatialPlacement: tf.monochrome.android.audio.dsp.spatial.SpatialPlacementStore
     @Inject lateinit var mixBusProcessor: MixBusProcessor
+    // The mixer's Atmos upmix: stereo → 9.1.6 ahead of the mixer, off unless a mix turns it on.
+    @Inject lateinit var upmixProcessor: tf.monochrome.android.audio.dsp.UpmixProcessor
     // The Oxford post-chain, injected so a blend's DSP copy can be seeded with
     // whatever these are set to right now.
     @Inject lateinit var inflatorEffect: tf.monochrome.android.audio.dsp.oxford.InflatorEffect
@@ -928,6 +930,9 @@ class PlaybackService : MediaSessionService() {
                                 // An Atmos speaker render reaches it as the layout's speakers, so
                                 // up to 7.1.4 is mixed per speaker group; 9.1.4 / 9.1.6 travel as a
                                 // 24-channel frame, past its 16, and it steps aside for those.
+                                // Stereo → 9.1.6 when the mix's Atmos upmix is on, so the mixer gets
+                                // nine channel groups to work on; inactive otherwise and for >2ch.
+                                upmixProcessor,
                                 mixBusProcessor,        // DSP engine (mixer/effects), up to 16 channels
                                 downmixProcessor,       // Multichannel→stereo fold-down; inactive (NOT_SET) for mono/stereo
                                 autoEqProcessor,        // AutoEQ (independent, always-on when enabled)
