@@ -843,11 +843,18 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             preferences.hiddenPages.collect { _hiddenPages.value = it }
         }
+        viewModelScope.launch {
+            preferences.pageOrderRaw.collect { storedPageOrder = it }
+        }
     }
+
+    // The order exactly as stored, legacy ids included — see keepLegacyIds.
+    private var storedPageOrder: List<String>? = null
 
     fun setPageOrder(order: List<String>) {
         _pageOrder.value = order
-        viewModelScope.launch { preferences.setPageOrder(order) }
+        val toStore = tf.monochrome.android.ui.navigation.keepLegacyIds(order, storedPageOrder)
+        viewModelScope.launch { preferences.setPageOrder(toStore) }
     }
 
     /** Move a Library section [by] places among the sections — the switcher's order. */
@@ -867,7 +874,10 @@ class SettingsViewModel @Inject constructor(
         // on read would fight a device that is still syncing an older page list,
         // clearing hidden state this device was only holding on its behalf.
         viewModelScope.launch {
-            preferences.setHiddenPages(next.filterTo(mutableSetOf()) { it in APP_PAGE_TITLES })
+            // Legacy ids stay: an older device syncing this set still has them.
+            preferences.setHiddenPages(next.filterTo(mutableSetOf()) {
+                it in APP_PAGE_TITLES || it in tf.monochrome.android.ui.navigation.LEGACY_PAGE_IDS
+            })
         }
     }
  

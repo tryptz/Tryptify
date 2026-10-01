@@ -110,6 +110,33 @@ class AppPagesTest {
         assertEquals(stored - "overview", resolvePageOrder(stored, legacyDefault))
     }
 
+    // ── Older devices on the same account ───────────────────────────────
+
+    /** A reorder here must not move Overview on a synced device that still has it. */
+    @Test
+    fun `a written order keeps Overview where the stored order had it`() {
+        val stored = listOf("home", "discover", RADIO_PAGE_ID, "local", "overview", "playlists", "favorites", "downloads")
+        val reordered = moveLibrarySection(reconcilePageOrder(stored), "playlists", -1)
+        assertEquals(
+            listOf("home", "discover", RADIO_PAGE_ID, "playlists", "local", "overview", "favorites", "downloads"),
+            keepLegacyIds(reordered, stored),
+        )
+    }
+
+    @Test
+    fun `nothing is added when the stored order had no legacy id`() {
+        assertEquals(DEFAULT_PAGE_ORDER, keepLegacyIds(DEFAULT_PAGE_ORDER, DEFAULT_PAGE_ORDER))
+        assertEquals(DEFAULT_PAGE_ORDER, keepLegacyIds(DEFAULT_PAGE_ORDER, null))
+    }
+
+    /** Kept on write, never shown: reading the written order drops it again. */
+    @Test
+    fun `a kept legacy id is still never a page`() {
+        val written = keepLegacyIds(DEFAULT_PAGE_ORDER, listOf("overview") + DEFAULT_PAGE_ORDER)
+        assertTrue("overview" in written)
+        assertEquals(DEFAULT_PAGE_ORDER, reconcilePageOrder(written))
+    }
+
     // ── Forward compatibility ────────────────────────────────────────────
 
     /**

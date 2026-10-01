@@ -139,6 +139,35 @@ internal fun resolvePageOrder(stored: List<String>?, legacyLibraryOrder: List<St
     reconcilePageOrder(stored ?: migrateLegacyPageOrder(legacyLibraryOrder))
 
 /**
+ * Page ids an older build still has and this one does not — Overview, which
+ * became Home's body.
+ *
+ * Page order and hidden pages sync through Supabase as part of the settings
+ * blob, so a device on an older build reads what this one writes. Dropping
+ * these ids on write would hand that device an order without Overview (it
+ * re-inserts it at its default slot, losing where the user put it) and a hidden
+ * set without it (a hidden Overview comes back). This build never shows them —
+ * [reconcilePageOrder] drops them on read — but it writes them back untouched.
+ */
+internal val LEGACY_PAGE_IDS: Set<String> = setOf("overview")
+
+/**
+ * [order] about to be stored, with the legacy ids from [previous] (the stored
+ * order it replaces) put back where they were: each after the nearest page
+ * before it that is still in [order], or at the front.
+ */
+internal fun keepLegacyIds(order: List<String>, previous: List<String>?): List<String> {
+    if (previous == null) return order
+    val out = order.toMutableList()
+    previous.forEachIndexed { i, id ->
+        if (id !in LEGACY_PAGE_IDS || id in out) return@forEachIndexed
+        val anchor = previous.take(i).lastOrNull { it in out }
+        out.add(anchor?.let { out.indexOf(it) + 1 } ?: 0, id)
+    }
+    return out
+}
+
+/**
  * The pages actually drawn, in order.
  *
  * Home is always among them, whatever the hidden set says: it is where Back
