@@ -53,7 +53,7 @@ import tf.monochrome.android.audio.dsp.crossfeed.CrossfeedState
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 
 @Composable
 fun CrossfeedScreen(
@@ -88,7 +88,7 @@ fun CrossfeedScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(bottom = LocalMiniPlayerInset.current)
+                .padding(bottom = LocalBottomChromeInset.current)
                 .padding(horizontal = 12.dp, vertical = 4.dp),
         ) {
             ElevatedCard(

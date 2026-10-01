@@ -138,7 +138,7 @@ import tf.monochrome.android.ui.player.withLyricFont
 import java.util.Locale
 import javax.inject.Inject
 import kotlin.math.exp
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import androidx.compose.material3.RadioButton
 import kotlinx.coroutines.flow.SharingStarted
 
@@ -498,7 +498,7 @@ fun LyricsFxStudioScreen(
                         start = 16.dp,
                         end = 16.dp,
                         top = 8.dp,
-                        bottom = 8.dp + LocalMiniPlayerInset.current + visualizerNavBar,
+                        bottom = 8.dp + LocalBottomChromeInset.current + visualizerNavBar,
                     ),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -847,7 +847,7 @@ fun LyricsFxStudioScreen(
             contentPadding = PaddingValues(
                 start = 16.dp,
                 end = 16.dp,
-                bottom = 48.dp + LocalMiniPlayerInset.current + navBar,
+                bottom = 48.dp + LocalBottomChromeInset.current + navBar,
             ),
         ) {
             item {
@@ -1460,7 +1460,7 @@ private fun PlayerGlassTab(
         // half-covered.
         Spacer(
             Modifier.height(
-                48.dp + LocalMiniPlayerInset.current +
+                48.dp + LocalBottomChromeInset.current +
                     WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
             ),
         )

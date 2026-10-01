@@ -78,7 +78,7 @@ import tf.monochrome.android.domain.model.FilterType
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
 import kotlin.math.roundToInt
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -231,7 +231,7 @@ fun EqualizerScreen(
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 32.dp + LocalMiniPlayerInset.current)
+            contentPadding = PaddingValues(bottom = 32.dp + LocalBottomChromeInset.current)
         ) {
             // ─── Title Section ───
             item {

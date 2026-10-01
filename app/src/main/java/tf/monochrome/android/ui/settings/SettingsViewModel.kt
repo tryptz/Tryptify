@@ -850,13 +850,11 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferences.setPageOrder(order) }
     }
 
-    fun movePage(fromIndex: Int, toIndex: Int) {
-        val current = _pageOrder.value.toMutableList()
-        if (fromIndex in current.indices && toIndex in current.indices) {
-            val item = current.removeAt(fromIndex)
-            current.add(toIndex, item)
-            setPageOrder(current)
-        }
+    /** Move a Library section [by] places among the sections — the switcher's order. */
+    fun moveLibrarySection(id: String, by: Int) {
+        val current = _pageOrder.value
+        val next = tf.monochrome.android.ui.navigation.moveLibrarySection(current, id, by)
+        if (next != current) setPageOrder(next)
     }
 
     fun setPageVisible(id: String, visible: Boolean) {

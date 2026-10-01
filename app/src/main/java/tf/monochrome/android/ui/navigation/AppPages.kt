@@ -17,12 +17,16 @@ internal data class AppPage(val id: String, val title: String)
  * seven, so the app has been presenting one flat sequence for a while; this is
  * that sequence, made real.
  *
- * **Local sits above Overview on purpose.** The old `library_tab_order` default
- * started with `overview`, but the old `legacyLibrarySections` pinned `local` to
- * the front of whatever it read, so the page everyone actually landed on after
- * Home and Discover was Local. This list reproduces what was on screen, not what
- * the CSV said. Swapping these two would silently move every existing user's
- * landing page.
+ * Pages are reached from the tab bar now (see [AppTab]): Home, Discover and
+ * World radio are tabs of their own, and the Library pages are the sections of
+ * the Library tab, switched from a chip row at its top. Still one pager over one
+ * flat list — the switcher moves this pager, it is not a second one.
+ *
+ * **Local leads the Library sections on purpose.** The old `library_tab_order`
+ * default started with `overview`, but the old `legacyLibrarySections` pinned
+ * `local` to the front of whatever it read, so the section everyone actually
+ * landed on was Local. This list reproduces what was on screen, not what the CSV
+ * said.
  */
 /**
  * The globe's page id.
@@ -34,6 +38,16 @@ internal data class AppPage(val id: String, val title: String)
  */
 internal const val RADIO_PAGE_ID = "radio"
 
+/**
+ * The Search page's id.
+ *
+ * A page of the pager, so a half-typed query and its results are still there
+ * when you come back from an album you opened out of them. It is not in
+ * [APP_PAGES]: Search is the round button beside the tab bar, never hidden and
+ * never reordered, so it has no business in the Settings list.
+ */
+internal const val SEARCH_PAGE_ID = "search"
+
 internal val APP_PAGES: List<AppPage> = listOf(
     AppPage(Screen.Home.route, "Home"),
     AppPage(Screen.Discover.route, "Discover"),
@@ -42,8 +56,10 @@ internal val APP_PAGES: List<AppPage> = listOf(
     // stored (see reconcilePageOrder), so an existing install finds it here
     // rather than at the far end of the list.
     AppPage(RADIO_PAGE_ID, "World radio"),
+    // Overview used to sit here. It is Home's body now — Recently Played and
+    // Liked Songs are what Home shows under the tab bar — and a stored order
+    // that still names it simply drops it (see reconcilePageOrder).
     AppPage("local", "Local"),
-    AppPage("overview", "Overview"),
     AppPage("playlists", "Playlists"),
     AppPage("favorites", "Favorites"),
     AppPage("downloads", "Downloads"),
@@ -125,22 +141,61 @@ internal fun resolvePageOrder(stored: List<String>?, legacyLibraryOrder: List<St
 /**
  * The pages actually drawn, in order.
  *
- * Never empty. Hiding every page would leave a pager with nothing in it: a blank
- * screen with no top bar, and every route into Settings is a top bar. Settings
- * refuses to hide the last visible page and the view model refuses it again;
- * this is the third net, for a hidden set that arrived from another device's
- * settings sync and that no UI on this device ever saw.
+ * Home is always among them, whatever the hidden set says: it is where Back
+ * lands and the tab bar's first tab, and an older build let it be hidden. And
+ * at least one Library section is, or the Library tab would open onto nothing.
+ * Settings refuses both and the view model refuses them again; this is the
+ * third net, for a hidden set that arrived from another device's settings sync
+ * and that no UI on this device ever saw.
  */
-internal fun visiblePages(order: List<String>, hidden: Set<String>): List<String> =
-    order.filter { it !in hidden }
-        .ifEmpty { listOf(order.firstOrNull() ?: APP_PAGE_IDS.first()) }
+internal fun visiblePages(order: List<String>, hidden: Set<String>): List<String> {
+    val shown = order.filter { it == Screen.Home.route || it !in hidden }.toMutableList()
+    if (Screen.Home.route !in shown) shown.add(0, Screen.Home.route)
+    if (shown.none { it in LIBRARY_PAGE_IDS }) {
+        shown += order.firstOrNull { it in LIBRARY_PAGE_IDS } ?: LIBRARY_PAGE_IDS.first()
+    }
+    return shown
+}
 
-/** Whether this page's visibility can be flipped — the last visible one cannot be hidden. */
+/**
+ * Whether this page's visibility can be flipped. Home never can — it is always
+ * there — and the last visible Library section cannot be hidden. Discover and
+ * World radio always can: hiding one just removes its tab.
+ */
 internal fun canTogglePageVisibility(
     order: List<String>,
     hidden: Set<String>,
     id: String,
-): Boolean = id in hidden || order.count { it !in hidden } > 1
+): Boolean = when {
+    id == Screen.Home.route -> false
+    id in hidden -> true
+    id in LIBRARY_PAGE_IDS -> order.count { it in LIBRARY_PAGE_IDS && it !in hidden } > 1
+    else -> true
+}
+
+/**
+ * [order] with Library section [id] moved [by] places among the Library
+ * sections only, by swapping it with the section it passes.
+ *
+ * The stored order still holds every page, but its only visible effect now is
+ * the order of the Library switcher — Home, Discover and Radio are fixed tabs.
+ * Moving within the sections alone means an arrow press always visibly moves
+ * a chip, instead of sometimes stepping past a tab page and doing nothing.
+ */
+internal fun moveLibrarySection(order: List<String>, id: String, by: Int): List<String> {
+    val sections = order.filter { it in LIBRARY_PAGE_IDS }
+    val from = sections.indexOf(id)
+    val to = from + by
+    if (from < 0 || to !in sections.indices) return order
+    val other = sections[to]
+    return order.map {
+        when (it) {
+            id -> other
+            other -> id
+            else -> it
+        }
+    }
+}
 
 /**
  * Where a route handed over by onboarding lands in the page list, or null when it

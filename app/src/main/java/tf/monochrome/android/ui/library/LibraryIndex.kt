@@ -74,11 +74,9 @@ enum class LibraryCategory(
 /**
  * The categories, as tiles.
  *
- * Deliberately the same material and metrics as `PageJumpList`: this is the
- * second list-of-places in the app and the two should not look like they came
- * from different products. That means `headlineMedium` bold on a `liquidGlass`
- * pane, spaced 12dp so they read as separate tiles rather than one striped
- * slab — and, as there, **no hazeState**. This is inside the pager, which is
+ * `headlineMedium` bold on a `liquidGlass` pane — the material the old page
+ * list on Home used, before the tab bar replaced it — spaced 12dp so they read
+ * as separate tiles rather than one striped slab, and **no hazeState**. This is inside the pager, which is
  * inside the app's one hazeSource, and a haze child within its own source is a
  * cycle Haze throws on at draw time.
  *
@@ -95,7 +93,7 @@ fun LibraryIndexList(
         modifier = modifier.fillMaxWidth(),
         contentPadding = PaddingValues(
             top = MonoDimens.spacingSm,
-            bottom = MonoDimens.listBottomPadding,
+            bottom = tf.monochrome.android.ui.navigation.bottomChromePadding,
         ),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -148,7 +146,7 @@ fun FacetTallyList(
     Box(modifier = modifier) {
         LazyColumn(
             state = state,
-            contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding),
+            contentPadding = PaddingValues(bottom = tf.monochrome.android.ui.navigation.bottomChromePadding),
         ) {
             items(tallies, key = { it.name }, contentType = { "facet" }) { tally ->
                 Row(

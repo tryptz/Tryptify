@@ -5,7 +5,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * How much room the floating mini player needs at the bottom of a screen.
+ * How much room the floating bottom chrome — the tab bar, and the mini player
+ * stacked above it while something is loaded — needs at the bottom of a screen.
+ *
+ * Measured from where the reading screen ends. A pager page and a full-bleed
+ * route run under the system navigation bar, so for them this includes it; a
+ * pushed screen stops above it, so for it this does not. A screen that pads the
+ * navigation bar itself as well must consume those insets first, or the bar is
+ * counted twice. The value is the bar *expanded*: folded on scroll it is
+ * shorter, and a padding that followed it would jolt the list mid-scroll.
  *
  * The nav host used to reserve this *outside* every detail screen, which
  * letterboxed them: the strip behind the bar was flat theme background, so the
@@ -18,10 +26,21 @@ import androidx.compose.ui.unit.dp
  * `contentPadding`, or after a `verticalScroll` where it becomes trailing space
  * inside the scrollable content.
  *
- * Zero when nothing is playing, so no screen carries dead space for a bar that
- * is not there.
+ * Zero where no chrome is drawn — the player, the mixer, Oxford, car mode — so
+ * no screen carries dead space for a bar that is not there.
  */
-val LocalMiniPlayerInset = compositionLocalOf<Dp> { 0.dp }
+val LocalBottomChromeInset = compositionLocalOf<Dp> { 0.dp }
+
+/**
+ * A scrolling list's bottom padding: its last row clear of the floating chrome,
+ * with a little air under it. What a page's list should use instead of a
+ * hand-picked number — the old 80dp fell short of the system bar plus the mini
+ * player on every pager page, which run under both.
+ */
+val bottomChromePadding: Dp
+    @androidx.compose.runtime.Composable
+    @androidx.compose.runtime.ReadOnlyComposable
+    get() = LocalBottomChromeInset.current + 16.dp
 
 /**
  * The app's one backdrop layer, for anything that wants to frost what is

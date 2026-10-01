@@ -195,7 +195,13 @@ fun HrtfDatabaseScreen(
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(16.dp),
             )
-            else -> LazyColumn(Modifier.fillMaxSize()) {
+            else -> LazyColumn(
+                Modifier.fillMaxSize(),
+                // The last databases clear the floating tab bar and mini player.
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                    bottom = tf.monochrome.android.ui.navigation.bottomChromePadding,
+                ),
+            ) {
                 items(folders, key = { "d/" + it.href }) { folder ->
                     ListItem(
                         headlineContent = { Text(folder.display) },

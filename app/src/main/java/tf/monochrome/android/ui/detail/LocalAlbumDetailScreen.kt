@@ -62,7 +62,7 @@ import tf.monochrome.android.ui.components.applyUnifiedSearchAndSort
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.components.SearchAction
 
@@ -139,7 +139,7 @@ fun LocalAlbumDetailScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
                         top = searchTopInset,
-                        bottom = 80.dp + LocalMiniPlayerInset.current,
+                        bottom = 80.dp + LocalBottomChromeInset.current,
                     )
                 ) {
                     item {

@@ -5,8 +5,9 @@ this is style preference: every rule is a bug that was found the hard way,
 usually from a screenshot, and reverting one brings the bug back.
 
 The build these describe is commit `5ec5b072` ("Match the search bars to the mini
-player, and undo the player haze"), so the accepted state can be diffed against
-rather than argued about:
+player, and undo the player haze"), plus the glass tab bar that replaced the page
+list on Home (see "Pages and the tab bar"), so the accepted state can be diffed
+against rather than argued about:
 
 ```
 git diff 5ec5b072 -- app/src/main/java/tf/monochrome/android/ui
@@ -144,32 +145,60 @@ width) is for picking one icon out of a row, like the transport and dock.
 List rows keep the quieter scale squeeze; a full dome on a wide text row reads
 heavy.
 
-### Pages
+### Pages and the tab bar
 
-**The app has ONE pager over one flat list of pages** — Home, Discover and the
-five former Library sections — held in `APP_PAGES` (`ui/navigation/AppPages.kt`)
-and ordered by the `page_order` preference. There used to be two nested pagers,
-an outer Home/Discover/Library and an inner one over the Library's sections, and
-the whole indicator existed to fold them onto one axis by hand. Do not
-reintroduce a second pager, and do not pin any page to an index: `local` was
-pinned to page 0 for a long time, which is why moving it in Settings did nothing
-and why its arrows were decorative.
+**The app has ONE pager over one flat list of pages** — Home, Discover, World
+radio and the Library sections — held in `APP_PAGES` (`ui/navigation/AppPages.kt`)
+and ordered by the `page_order` preference, plus Search, which is always there.
+There used to be two nested pagers, an outer Home/Discover/Library and an inner
+one over the Library's sections. Do not reintroduce a second pager, and do not
+pin any page to an index: `local` was pinned to page 0 for a long time, which is
+why moving it in Settings did nothing.
 
-**Every page's top bar is a way into Settings.** Pages can be hidden, so any page
-can be the only visible one — and Settings is the only place to make another
-visible again. Discover shipped without a Settings button, which made "hide
-everything but Discover" a three-tap way to strand yourself with no bottom nav
-and no drawer to fall back on. A new page without that button is the same bug.
+**The tab bar and the Library switcher both drive that one pager.** The bar is
+Home · Discover · Radio · Library in a glass pill, with Search as a round button
+beside it (`GlassTabBar`, `AppTabs.kt`). Library is one tab over every Library
+section; the chip row at the top of the Library page (`LibrarySectionSwitcher`)
+moves the same pager to a section, and is not a pager of its own. A tab tapped
+from a pushed screen pops back to `home` first, because the pager is only drawn
+while the NavHost is there.
 
-**Never let the visible page list reach zero.** Three layers stop it — Settings
-disables the last eye, the view model refuses the write, and `visiblePages()`
-returns one page regardless — because a pager with no pages is a blank screen
-with no top bar and therefore no way back. The third layer is not redundant: a
-hidden set can arrive from another device's settings sync without either of the
-first two ever running on this one.
+**The bar is the mini player's material, built the mini player's way.** It is a
+sibling of the haze source, never inside it; its slab is drawn solid and its
+glyphs are punched out of it, as the player's action dock does; and it asks
+`rememberLiquidGlassAvailable()` before drawing that slab, falling back to the
+frosted pane with ordinary icons, because a solid slab without the shader is an
+opaque block with holes in it. Its titles are plain text, not punched: the
+glyphs are chunky because the bevel needs about 3dp of stroke to read as an
+edge, and an 11sp title's strokes are thinner than the bevel.
 
-**The indicator counts visible pages and nothing else.** One slot per page,
-position straight off the single pager.
+**Scrolling down folds the mini player into the bar; scrolling up unfolds it.**
+It is driven by nested scroll at the nav host, so every list drives it without
+knowing. Lists pad by the bar's *expanded* height even while it is folded — a
+padding that followed the fold would jolt the list mid-scroll.
+
+**The bar is on every screen but four**: the player, the mixer, Oxford and car
+mode, whose own controls run to the bottom edge (`chromeHiddenRoutes`). The
+download pill follows the same list.
+
+**Bottom padding comes from `LocalBottomChromeInset`, never a number.** It is
+measured from where the reading screen ends: pager pages and full-bleed routes
+run under the system bar, so theirs includes it; pushed screens stop above it,
+so theirs does not. Use `bottomChromePadding` for a list's last row. A screen
+that pads the navigation bar itself as well must consume those insets first, as
+the genre map's panel does, or the bar is counted twice. The old flat 80dp fell
+short of the system bar plus the mini player on every page that runs under both.
+
+**Every page's top bar is a way into Settings**, Search's included. The tab bar
+keeps Home reachable from anywhere, which is what makes this hold even with
+pages hidden — but a page without the button is still a page whose own chrome
+cannot reach Settings.
+
+**Home is never hidden, and the Library keeps at least one section.** Settings
+disables those eyes, the view model refuses the write, and `visiblePages()`
+restores them regardless — the third layer is not redundant: a hidden set can
+arrive from another device's settings sync without either of the first two ever
+running on this one. Hiding Discover or Radio removes its tab, nothing more.
 
 ### List rows
 

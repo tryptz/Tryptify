@@ -73,8 +73,9 @@ object MonoDimens {
     val listItemPaddingH = 16.dp
     /** Standard vertical padding for list items */
     val listItemPaddingV = 10.dp
-    /** Bottom padding to clear mini player / nav bar */
-    val listBottomPadding = 80.dp
+    // listBottomPadding (a flat 80dp) lived here. It fell short of the system bar
+    // plus the mini player on every page that runs under both; lists use
+    // ui.navigation.bottomChromePadding now, which knows what floats over them.
     /**
      * Vertical inset on an inline artist/album link's hit box. Lives here
      * rather than in `ClickableArtists` because [listRowHeight] has to budget

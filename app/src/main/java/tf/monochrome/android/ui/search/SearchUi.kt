@@ -111,7 +111,7 @@ fun SearchHistoryContent(
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 80.dp)
+        contentPadding = PaddingValues(bottom = tf.monochrome.android.ui.navigation.bottomChromePadding)
     ) {
         item {
             Text(
@@ -365,7 +365,7 @@ fun SearchResultsContent(
             LazyColumn(
                 state = columnState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = topInset, bottom = 80.dp)
+                contentPadding = PaddingValues(top = topInset, bottom = tf.monochrome.android.ui.navigation.bottomChromePadding)
             ) {
                 item(key = "filters", contentType = "filters") {
                     SearchFilterRow(

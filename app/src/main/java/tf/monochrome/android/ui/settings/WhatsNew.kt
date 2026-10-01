@@ -121,17 +121,18 @@ object WhatsNew {
             entries = listOf(
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
-                    section = SEARCH,
-                    title = "Deezer in Search",
-                    body = "Search now finds Deezer's songs, albums and artists when one of " +
-                        "your APIs serves Deezer, and they open as Deezer pages.",
+                    section = PAGES,
+                    title = "A glass tab bar",
+                    body = "Home, Discover, Radio and Library sit in a glass bar at the bottom, " +
+                        "with Search as its own page beside it. Scroll down and the mini player " +
+                        "folds into the bar. Home now shows Recently Played and Liked Songs.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = SEARCH,
-                    title = "Deezer songs play in full",
-                    body = "A Deezer pick plays from Qobuz when Qobuz has the same recording, in " +
-                        "full and lossless. When it doesn't, you hear Deezer's 30-second preview.",
+                    title = "Deezer in Search",
+                    body = "Search now finds Deezer's songs, albums and artists when one of " +
+                        "your APIs serves Deezer, and they open as Deezer pages.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
@@ -175,8 +176,8 @@ object WhatsNew {
                     kind = WhatsNewKind.CHANGED,
                     section = SEARCH,
                     title = "The search bar no longer covers the filters",
-                    body = "On Home, the filter pills start below the search bar instead of under " +
-                        "it, and stay on screen while results load.",
+                    body = "On the Search page, the filter pills start below the search bar " +
+                        "instead of under it, and stay on screen while results load.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,

@@ -23,7 +23,6 @@ import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -80,6 +79,12 @@ import tf.monochrome.android.ui.components.SearchAction
  * said. Nothing renders from this any more and Local is genuinely movable now —
  * do not reintroduce the pin.
  */
+/**
+ * The Overview section's id. Not a page any more — Home draws it, embedded,
+ * under its banners — but LibraryScreen still renders it, so it keeps an id.
+ */
+internal const val OVERVIEW_SECTION = "overview"
+
 internal fun legacyLibrarySections(order: List<String>): List<String> =
     listOf("local") + order.filter { it != "local" && it in APP_PAGE_TITLES }
 
@@ -149,9 +154,13 @@ fun LibraryScreen(
     // over five. All instances share one LibraryViewModel: the pager sits outside
     // the NavHost, so hiltViewModel() resolves against the Activity store.
     sectionId: String,
-    // The page list and the nav host's way of opening one, for the jump sheet.
+    // The visible pages and the nav host's way of opening one, for the section
+    // switcher: its chips are the Library pages among them.
     pages: List<String>,
     onSelectPage: (String) -> Unit,
+    // Home draws Overview inside its own chrome, so it asks for the section
+    // alone — no Library title, no switcher.
+    embedded: Boolean = false,
     viewModel: LibraryViewModel = hiltViewModel(),
     localLibraryViewModel: LocalLibraryViewModel = hiltViewModel(),
 ) {
@@ -300,43 +309,19 @@ fun LibraryScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        var sectionMenuOpen by remember { mutableStateOf(false) }
-        // The same list Home renders, over this page. It used to be a
-        // DropdownMenu of small rows hung off a three-dot icon, and it existed
-        // on these five pages only.
-        if (sectionMenuOpen) {
-            tf.monochrome.android.ui.navigation.PageJumpSheet(
-                pages = pages,
-                onSelect = onSelectPage,
-                current = sectionId,
-                onDismiss = { sectionMenuOpen = false },
-            )
-        }
-
-        tf.monochrome.android.devedit.DevEditable("library_header", Modifier.fillMaxWidth()) {
+        if (!embedded) tf.monochrome.android.devedit.DevEditable("library_header", Modifier.fillMaxWidth()) {
             TopAppBar(
                 title = {
+                    // One title for every section: they are all the Library
+                    // tab, and the switcher under the bar says which is open.
                     Text(
-                        // The local library keeps calling itself "Library".
-                        // That IS a special case, and a deliberate one — it is
-                        // not a leftover of the old pin that made Local page 0.
-                        // Every other page uses its registry title.
-                        text = if (sectionId == "local") "Library"
-                               else APP_PAGE_TITLES[sectionId] ?: "Library",
+                        text = "Library",
                         style = MaterialTheme.typography.headlineMedium
                     )
                 },
-                // No back arrow: there is no page this one is "inside" any
-                // more. Every page is a peer in one swipe list, and back is the
-                // nav host's — it returns to the first page from any of them.
+                // No back arrow: Library is a tab, not a screen inside one.
+                // Back is the nav host's, and goes to Home.
                 actions = {
-                    IconButton(onClick = { sectionMenuOpen = true }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.List,
-                            contentDescription = "Go to page",
-                            tint = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
                     // Only where there is a list to search. The other sections
                     // are grids of albums and artists with no filter behind
                     // them, and an icon that does nothing is worse than none.
@@ -359,6 +344,12 @@ fun LibraryScreen(
                 )
             )
         }
+
+        if (!embedded) LibrarySectionSwitcher(
+            sections = pages.filter { it in tf.monochrome.android.ui.navigation.LIBRARY_PAGE_IDS },
+            current = sectionId,
+            onSelect = onSelectPage,
+        )
 
         AnimatedVisibility(visible = selection.active) {
             TrackSelectionBar(
@@ -383,10 +374,10 @@ fun LibraryScreen(
         // page, and the nav host's single pager wraps it in the
         // SaveableStateProvider that keeps its scroll position.
         when (sectionId) {
-            "overview" ->
+            OVERVIEW_SECTION ->
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 80.dp)
+                    contentPadding = PaddingValues(bottom = tf.monochrome.android.ui.navigation.bottomChromePadding)
                 ) {
                     if (recentTracks.isNotEmpty()) {
                         item(key = LibraryKeys.header("recent"), contentType = LibraryContentType.HEADER) {
@@ -501,7 +492,7 @@ fun LibraryScreen(
             "playlists" ->
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 80.dp)
+                    contentPadding = PaddingValues(bottom = tf.monochrome.android.ui.navigation.bottomChromePadding)
                 ) {
                     item {
                         Row(
@@ -601,7 +592,7 @@ fun LibraryScreen(
                 ) { searchTopInset ->
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(top = searchTopInset, bottom = 80.dp)
+                    contentPadding = PaddingValues(top = searchTopInset, bottom = tf.monochrome.android.ui.navigation.bottomChromePadding)
                 ) {
                     if (favoriteTracks.isNotEmpty()) {
                         items(
@@ -688,6 +679,37 @@ fun LibraryScreen(
 
             "downloads" ->
                 DownloadsScreen(navController = navController)
+        }
+    }
+}
+
+/**
+ * The Library tab's sections, as a row of glass chips under its title.
+ *
+ * Not a second pager, and it must not become one: each chip moves the nav host's
+ * one pager to that section's page, exactly as the tab bar does for its tabs.
+ * Scrolls sideways rather than squeezing, so a long section name at a large
+ * text size still reads whole.
+ */
+@Composable
+private fun LibrarySectionSwitcher(
+    sections: List<String>,
+    current: String,
+    onSelect: (String) -> Unit,
+) {
+    if (sections.size < 2) return
+    androidx.compose.foundation.lazy.LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+    ) {
+        items(sections, key = { it }) { id ->
+            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                label = APP_PAGE_TITLES[id] ?: id,
+                selected = id == current,
+                accent = MaterialTheme.colorScheme.primary,
+                onClick = { if (id != current) onSelect(id) },
+            )
         }
     }
 }

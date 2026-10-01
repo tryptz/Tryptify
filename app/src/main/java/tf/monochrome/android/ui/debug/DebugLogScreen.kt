@@ -60,7 +60,7 @@ import tf.monochrome.android.debug.DebugLogEntry
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -191,7 +191,7 @@ fun DebugLogScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 12.dp),
-            contentPadding = PaddingValues(bottom = 80.dp + LocalMiniPlayerInset.current),
+            contentPadding = PaddingValues(bottom = 80.dp + LocalBottomChromeInset.current),
         ) {
             items(items = entries) { entry ->
                 LogRow(entry = entry)

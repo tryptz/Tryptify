@@ -59,7 +59,6 @@ import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -181,16 +180,12 @@ import kotlin.math.sin
 @Composable
 fun WorldRadioScreen(
     playerViewModel: PlayerViewModel,
-    // The page list and the pager's way of opening one, for the jump sheet —
-    // the same pair every other page takes. The globe stopped being a nav
-    // destination when it became a page, so there is no back stack to pop and
-    // nothing here needs a NavController.
-    pages: List<String>,
-    onSelectPage: (String) -> Unit,
     viewModel: WorldRadioViewModel = androidx.hilt.navigation.compose.hiltViewModel(),
 ) {
+    // The globe is a tab: the bar is the way off it, and Back leaves it for
+    // Home the way it leaves any tab. Nothing here needs a NavController.
     DynamicColorScope {
-        WorldRadioContent(playerViewModel, pages, onSelectPage, viewModel)
+        WorldRadioContent(playerViewModel, viewModel)
     }
 }
 
@@ -198,19 +193,8 @@ fun WorldRadioScreen(
 @Composable
 private fun WorldRadioContent(
     playerViewModel: PlayerViewModel,
-    pages: List<String>,
-    onSelectPage: (String) -> Unit,
     viewModel: WorldRadioViewModel,
 ) {
-    var pageJumpOpen by remember { mutableStateOf(false) }
-    if (pageJumpOpen) {
-        tf.monochrome.android.ui.navigation.PageJumpSheet(
-            pages = pages,
-            onSelect = onSelectPage,
-            current = tf.monochrome.android.ui.navigation.RADIO_PAGE_ID,
-            onDismiss = { pageJumpOpen = false },
-        )
-    }
     val globe by viewModel.globe.collectAsStateWithLifecycle()
     val selected by viewModel.selected.collectAsStateWithLifecycle()
     val stations by viewModel.stations.collectAsStateWithLifecycle()
@@ -238,8 +222,9 @@ private fun WorldRadioContent(
     val liveScale = rememberUpdatedState(globe.scale)
 
     val mapHaze = rememberHazeState()
-    val playing by playerViewModel.currentTrack.collectAsStateWithLifecycle()
-    val panelBottomInset = if (playing != null) MINI_PLAYER_RESERVE else 0.dp
+    // The tab bar (and the mini player over it) floats on this page, which runs
+    // under the system bar; the station panel has to clear all of it.
+    val panelBottomInset = tf.monochrome.android.ui.navigation.LocalBottomChromeInset.current
     val glassSettings by playerViewModel.miniPlayerGlass.collectAsStateWithLifecycle()
 
     var topBarHeightPx by remember { mutableIntStateOf(0) }
@@ -301,14 +286,6 @@ private fun WorldRadioContent(
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("World radio") },
-            navigationIcon = {
-                // The page list, as on every other page. Back used to pop a
-                // detail screen off the stack; there is no stack now — Back
-                // leaves the globe for Home the way it leaves any page.
-                IconButton(onClick = { pageJumpOpen = true }) {
-                    Icon(Icons.Default.Menu, contentDescription = "Pages")
-                }
-            },
             actions = {
                 IconButton(onClick = { viewModel.toggleSearch() }) {
                     Icon(
@@ -1272,8 +1249,6 @@ private const val PING_TRAVEL = 7f
 private const val PING_RINGS = 2
 
 // ── projection, camera and drawing ──────────────────────────────────────────
-
-private val MINI_PLAYER_RESERVE = 72.dp
 
 /**
  * How long the glow settings sit still before they are written.

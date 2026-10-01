@@ -690,7 +690,7 @@ fun ArtistList(
     Box {
         LazyColumn(
             state = state,
-            contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
+            contentPadding = PaddingValues(bottom = tf.monochrome.android.ui.navigation.bottomChromePadding)
         ) {
             items(artists, key = { it.id }) { artist ->
                 Row(
@@ -862,7 +862,7 @@ fun SongList(
     Box {
         LazyColumn(
             state = state,
-            contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
+            contentPadding = PaddingValues(bottom = tf.monochrome.android.ui.navigation.bottomChromePadding)
         ) {
             items(
                 count = tracks.itemCount,
@@ -907,7 +907,7 @@ fun SongList(
     Box {
         LazyColumn(
             state = state,
-            contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
+            contentPadding = PaddingValues(bottom = tf.monochrome.android.ui.navigation.bottomChromePadding)
         ) {
             items(tracks, key = { it.id }, contentType = { "track" }) { track ->
                 SongRow(
@@ -934,7 +934,7 @@ fun FolderList(
             state = state,
             contentPadding = PaddingValues(
                 top = 8.dp,
-                bottom = MonoDimens.listBottomPadding,
+                bottom = tf.monochrome.android.ui.navigation.bottomChromePadding,
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {

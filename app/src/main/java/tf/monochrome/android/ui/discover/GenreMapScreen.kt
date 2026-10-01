@@ -31,6 +31,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -296,10 +299,11 @@ fun GenreMapScreen(
     // the nav host around everything, not here.)
     val mapHaze = rememberHazeState()
 
-    // The map runs under the mini player so the bar has something to lens, so
-    // the panel has to clear the bar itself.
-    val playing by playerViewModel.currentTrack.collectAsStateWithLifecycle()
-    val panelBottomInset = if (playing != null) MINI_PLAYER_RESERVE else 0.dp
+    // The map runs under the tab bar and mini player so they have something to
+    // lens, so the panel has to clear them itself. The inset includes the
+    // system bar, which this full-bleed route also runs under — the panel's
+    // own navigationBarsPadding is consumed below so it is not counted twice.
+    val panelBottomInset = tf.monochrome.android.ui.navigation.LocalBottomChromeInset.current
 
     // A selected genre swells and springs back — bouncy enough to read as a
     // response to the tap, and it settles larger than it started so the node
@@ -654,7 +658,8 @@ fun GenreMapScreen(
                         // camera centres a genre in what's left of the map, and
                         // the mini player occludes that too.
                         .onSizeChanged { panelHeightPx = it.height }
-                        .padding(bottom = panelBottomInset),
+                        .padding(bottom = panelBottomInset)
+                        .consumeWindowInsets(WindowInsets.navigationBars),
                 )
                 }
             }
@@ -1378,8 +1383,6 @@ private val MIN_HISTORY_HEIGHT = 120.dp
  */
 private const val FLIGHT_HEIGHT_QUANTUM = 96
 
-/** Height the floating mini player needs, matching the nav host's own reserve. */
-private val MINI_PLAYER_RESERVE = 72.dp
 private const val FLIGHT_MILLIS = 620
 
 /**

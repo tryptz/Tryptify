@@ -70,7 +70,7 @@ import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.navigation.navigateSafe
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.components.SearchAction
 
@@ -297,7 +297,7 @@ fun PlaylistScreen(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                         top = searchTopInset,
-                        bottom = 80.dp + LocalMiniPlayerInset.current,
+                        bottom = 80.dp + LocalBottomChromeInset.current,
                     )
         ) {
             item {

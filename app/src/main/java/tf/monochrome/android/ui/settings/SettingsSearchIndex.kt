@@ -167,7 +167,8 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     // Renamed with the header it points at: SettingsSearchIndexTest greps the
     // settings screens for every title here, so the two move together or the
     // build fails. "library" is a keyword now because it left the title.
-    entry("Page order", "Library", listOf("reorder", "tabs", "layout", "hide", "library", "home", "discover")),
+    entry("Tab bar", "Library", listOf("tabs", "navigation", "hide", "discover", "radio", "bottom bar")),
+    entry("Library sections", "Library", listOf("reorder", "order", "hide", "pages", "local", "playlists", "favorites", "downloads")),
     entry("Local folders", "Library", listOf("storage", "saf", "sd card", "path")),
 
     // ── Downloads ───────────────────────────────────────────────────────

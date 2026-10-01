@@ -57,7 +57,6 @@ import tf.monochrome.android.ui.components.TrackSelectionBar
 import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
 import tf.monochrome.android.ui.components.rememberTrackSelectionState
 import tf.monochrome.android.ui.player.PlayerViewModel
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
 
 @Composable
 fun DownloadsScreen(
@@ -189,7 +188,7 @@ fun DownloadsScreen(
     }
 
     LazyColumn(
-        contentPadding = PaddingValues(bottom = 120.dp + LocalMiniPlayerInset.current),
+        contentPadding = PaddingValues(bottom = tf.monochrome.android.ui.navigation.bottomChromePadding),
         modifier = Modifier.fillMaxSize()
     ) {
         if (albumGroups.isNotEmpty()) {

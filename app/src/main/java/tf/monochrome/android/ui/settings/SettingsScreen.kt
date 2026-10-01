@@ -145,7 +145,7 @@ import tf.monochrome.android.ui.theme.themeDisplayNames
 import tf.monochrome.android.visualizer.PresetRotationMode
 import tf.monochrome.android.visualizer.ProjectMAudioBus
 import tf.monochrome.android.ui.navigation.navigateTool
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.components.SearchOverlay
 import androidx.compose.material3.LocalContentColor
@@ -3187,7 +3187,7 @@ private fun SettingsTabContent(content: @Composable () -> Unit) {
             // the bar's glass — giving it something real to frost — instead of
             // stopping at a hard line below it.
             top = 16.dp + LocalSettingsSearchInset.current,
-            bottom = 16.dp + LocalMiniPlayerInset.current + navBar,
+            bottom = 16.dp + LocalBottomChromeInset.current + navBar,
         ),
     ) {
         item { content() }
@@ -3366,11 +3366,13 @@ private fun PageOrderRow(
     title: String,
     visible: Boolean,
     canToggle: Boolean,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
-    onUp: () -> Unit,
-    onDown: () -> Unit,
     onToggleVisible: () -> Unit,
+    // A tab row only shows or hides; its place in the bar is fixed.
+    reorderable: Boolean = true,
+    canMoveUp: Boolean = false,
+    canMoveDown: Boolean = false,
+    onUp: () -> Unit = {},
+    onDown: () -> Unit = {},
 ) {
     val dim = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
     tf.monochrome.android.devedit.DevEditable("page_${devSlug(title)}", Modifier.fillMaxWidth()) {
@@ -3388,21 +3390,20 @@ private fun PageOrderRow(
             IconButton(onClick = onToggleVisible, enabled = canToggle) {
                 Icon(
                     if (visible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                    // Disabled only on the last visible page: hiding it would
-                    // leave a pager with nothing in it, and every way into
-                    // Settings is a page's top bar.
+                    // Disabled on the last visible Library section: hiding it
+                    // would leave the Library tab nothing to open.
                     contentDescription = if (visible) "Hide $title" else "Show $title",
                     tint = if (canToggle) MaterialTheme.colorScheme.onSurface else dim,
                 )
             }
-            IconButton(onClick = onUp, enabled = canMoveUp) {
+            if (reorderable) IconButton(onClick = onUp, enabled = canMoveUp) {
                 Icon(
                     Icons.Default.KeyboardArrowUp,
                     contentDescription = "Move $title up",
                     tint = if (canMoveUp) MaterialTheme.colorScheme.onSurface else dim,
                 )
             }
-            IconButton(onClick = onDown, enabled = canMoveDown) {
+            if (reorderable) IconButton(onClick = onDown, enabled = canMoveDown) {
                 Icon(
                     Icons.Default.KeyboardArrowDown,
                     contentDescription = "Move $title down",
@@ -3494,37 +3495,51 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        // Was "Library Tab Order", when the five Library sections were the only
-        // pages this list could reach. It covers Home and Discover now, neither
-        // of which is a library tab. The entry in SettingsSearchIndex has to be
-        // renamed with it — a test greps these files for every index title.
-        //
-        // It no longer orders a swipe: pages are picked from the list on Home,
-        // and this is that list's order. Which is less than it used to do, and
-        // not nothing — the order here is the order you read there, and a page
-        // grayed out leaves the list altogether.
-        SettingsGroupHeader("Page Order")
+        // This was one "Page Order" list over every page, back when pages were
+        // picked from a list on Home. With the tab bar the stored order does two
+        // separate jobs, so it is shown as two groups. Both titles are entries
+        // in SettingsSearchIndex — a test greps these files for every one.
+        SettingsGroupHeader("Tab Bar")
         Text(
-            "The order of the page list on Home. Gray out the ones you don't use " +
-                "and they leave the list.",
+            "Home, Library and Search are always there. Turn off a tab you don't use.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)
         )
+        listOf(
+            tf.monochrome.android.ui.navigation.Screen.Discover.route,
+            tf.monochrome.android.ui.navigation.RADIO_PAGE_ID,
+        ).forEach { pageId ->
+            PageOrderRow(
+                title = APP_PAGE_TITLES[pageId] ?: pageId,
+                visible = pageId !in hiddenPages,
+                canToggle = canTogglePageVisibility(pageOrder, hiddenPages, pageId),
+                reorderable = false,
+                onToggleVisible = { viewModel.setPageVisible(pageId, pageId in hiddenPages) },
+            )
+        }
 
-        // The FULL order, hidden pages included: the arrows move within this
-        // list, so the indices these rows hand back are the indices the stored
-        // order uses. A hidden page also keeps its slot, so showing it again
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsGroupHeader("Library Sections")
+        Text(
+            "The order of the switcher at the top of Library. Gray out the ones " +
+                "you don't use and they leave it.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        // Hidden sections included and kept in their slot, so showing one again
         // puts it back where it was rather than at the end.
-        pageOrder.forEachIndexed { index, pageId ->
+        val sections = pageOrder.filter { it in tf.monochrome.android.ui.navigation.LIBRARY_PAGE_IDS }
+        sections.forEachIndexed { index, pageId ->
             PageOrderRow(
                 title = APP_PAGE_TITLES[pageId] ?: pageId,
                 visible = pageId !in hiddenPages,
                 canToggle = canTogglePageVisibility(pageOrder, hiddenPages, pageId),
                 canMoveUp = index > 0,
-                canMoveDown = index < pageOrder.lastIndex,
-                onUp = { viewModel.movePage(index, index - 1) },
-                onDown = { viewModel.movePage(index, index + 1) },
+                canMoveDown = index < sections.lastIndex,
+                onUp = { viewModel.moveLibrarySection(pageId, -1) },
+                onDown = { viewModel.moveLibrarySection(pageId, +1) },
                 onToggleVisible = { viewModel.setPageVisible(pageId, pageId in hiddenPages) },
             )
         }
