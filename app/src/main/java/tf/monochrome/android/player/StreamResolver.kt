@@ -47,6 +47,7 @@ class StreamResolver @Inject constructor(
     private val qobuzIdRegistry: QobuzIdRegistry,
     private val localTrackLocator: LocalTrackLocator,
     private val deezerQobuzMatcher: DeezerQobuzMatcher,
+    private val sourceConsent: SourceConsent,
 ) {
     private fun normalizeArtworkUri(raw: String?): Uri? {
         if (raw.isNullOrBlank()) return null
@@ -78,7 +79,11 @@ class StreamResolver @Inject constructor(
     // Legacy method for existing Track model. Returns (null, null) when the
     // stream couldn't be resolved — callers must skip instead of feeding an
     // empty MediaItem to ExoPlayer.
-    suspend fun resolveMediaItem(track: Track): Pair<MediaItem?, TrackStream?> {
+    //
+    // [askForOtherService]: when TIDAL cannot play the track, whether to ask
+    // the listener about the Qobuz copy (SourceConsent). False for background
+    // resolves of an upcoming track, which must not ask while another plays.
+    suspend fun resolveMediaItem(track: Track, askForOtherService: Boolean = true): Pair<MediaItem?, TrackStream?> {
         // On-device copy wins over the stream, whichever screen queued this.
         localFor(
             title = track.title,
@@ -118,7 +123,7 @@ class StreamResolver @Inject constructor(
                 artist = track.displayArtist,
                 durationSeconds = track.duration,
             ) ?: return Pair(null, null)
-            return Pair(buildFileMediaItem(track, uri), null)
+            return Pair(buildFileMediaItem(track, uri, playedFromQobuz = PlayedFrom.isQobuz(uri)), null)
         }
 
         val streamResult = repository.getTrackStream(track.id)
@@ -133,9 +138,10 @@ class StreamResolver @Inject constructor(
         }
 
         // TIDAL is unavailable for this track (instance down, track pulled, no
-        // manifest) — fall back to the same song on Qobuz so a TIDAL-built
-        // playlist keeps playing.
-        val fallback = qobuzFallbackMediaItem(
+        // manifest). The same song on Qobuz plays only if the listener said so
+        // — otherwise they are asked, and the track is skipped meanwhile.
+        val fallback = qobuzWithConsent(
+            ask = askForOtherService,
             tidalId = track.id,
             knownIsrc = null,
             tidalAlbumId = track.album?.id,
@@ -189,7 +195,7 @@ class StreamResolver @Inject constructor(
 
     // New method for UnifiedTrack
     @OptIn(UnstableApi::class)
-    suspend fun resolveUnifiedTrack(track: UnifiedTrack): ResolvedMedia {
+    suspend fun resolveUnifiedTrack(track: UnifiedTrack, askForOtherService: Boolean = true): ResolvedMedia {
         val source = track.source
 
         // Prefer the on-device copy over any remote source. This sits in the
@@ -225,7 +231,7 @@ class StreamResolver @Inject constructor(
         return when (source) {
             is PlaybackSource.LocalFile -> resolveLocalFile(track, source)
             is PlaybackSource.CollectionDirect -> resolveCollectionDirect(track, source)
-            is PlaybackSource.HiFiApi -> resolveHiFiApi(track, source)
+            is PlaybackSource.HiFiApi -> resolveHiFiApi(track, source, askForOtherService)
             is PlaybackSource.QobuzCached -> resolveQobuzCached(track, source)
             is PlaybackSource.AppleCached -> resolveAppleCached(track, source)
             is PlaybackSource.DeezerPreview -> resolveDeezer(track, source)
@@ -341,6 +347,8 @@ class StreamResolver @Inject constructor(
             .setArtworkUri(normalizeArtworkUri(track.artworkUri))
             .setTrackNumber(track.trackNumber)
             .setDiscNumber(track.discNumber)
+            // A Deezer pick heard from Qobuz says so on screen.
+            .apply { if (PlayedFrom.isQobuz(uri)) setExtras(PlayedFrom.extras(PlayedFrom.QOBUZ)) }
             .build()
 
         val mediaItem = MediaItem.Builder()
@@ -464,7 +472,7 @@ class StreamResolver @Inject constructor(
      * catalogue's — same title, same artwork — so swapping the stream for the
      * file is invisible in the player; only the loading spinner disappears.
      */
-    private fun buildFileMediaItem(track: Track, uri: Uri): MediaItem {
+    private fun buildFileMediaItem(track: Track, uri: Uri, playedFromQobuz: Boolean = false): MediaItem {
         val artworkUri = track.album?.cover?.let { cover -> buildCoverUrl(cover, 640).toUri() }
 
         val metadata = MediaMetadata.Builder()
@@ -474,6 +482,7 @@ class StreamResolver @Inject constructor(
             .setArtworkUri(artworkUri)
             .setTrackNumber(track.trackNumber)
             .setDiscNumber(track.volumeNumber)
+            .apply { if (playedFromQobuz) setExtras(PlayedFrom.extras(PlayedFrom.QOBUZ)) }
             .build()
 
         return MediaItem.Builder()
@@ -554,7 +563,8 @@ class StreamResolver @Inject constructor(
 
     private suspend fun resolveHiFiApi(
         track: UnifiedTrack,
-        source: PlaybackSource.HiFiApi
+        source: PlaybackSource.HiFiApi,
+        askForOtherService: Boolean,
     ): ResolvedMedia {
         val streamResult = repository.getTrackStream(source.tidalId)
         val trackStream = streamResult.getOrNull()
@@ -565,9 +575,10 @@ class StreamResolver @Inject constructor(
         val isPlayable = trackStream != null &&
             (isDash || trackStream.streamUrl.isNotBlank())
 
-        // TIDAL unavailable — try the same song on Qobuz before giving up.
+        // TIDAL unavailable — the same song on Qobuz, if the listener agrees.
         if (!isPlayable) {
-            val fallback = qobuzFallbackMediaItem(
+            val fallback = qobuzWithConsent(
+                ask = askForOtherService,
                 tidalId = source.tidalId,
                 knownIsrc = track.isrc,
                 // UnifiedTrack carries no numeric TIDAL album/artist ids, and
@@ -617,7 +628,57 @@ class StreamResolver @Inject constructor(
     }
 
     /**
-     * Last-resort fallback for TIDAL (HiFiApi) tracks: when the TIDAL stream
+     * The Qobuz copy of a TIDAL track TIDAL could not play — only with the
+     * listener's consent. Allowed already ([SourceConsent.isAllowed]): built
+     * and returned, marked as playing from Qobuz. Not yet: when [ask] and
+     * Qobuz really has the recording, the listener is asked, and null is
+     * returned so the track is skipped meanwhile. Never a silent switch.
+     */
+    private suspend fun qobuzWithConsent(
+        ask: Boolean,
+        tidalId: Long,
+        knownIsrc: String?,
+        tidalAlbumId: Long?,
+        tidalArtistId: Long?,
+        mediaId: String,
+        title: String,
+        artist: String,
+        durationSeconds: Int,
+        albumTitle: String?,
+        artworkUri: Uri?,
+        trackNumber: Int?,
+        discNumber: Int?,
+    ): MediaItem? {
+        if (sourceConsent.isAllowed(tidalId)) {
+            return qobuzFallbackMediaItem(
+                tidalId, knownIsrc, tidalAlbumId, tidalArtistId, mediaId, title, artist,
+                durationSeconds, albumTitle, artworkUri, trackNumber, discNumber,
+            )
+        }
+        if (ask) {
+            val hasCopy = runCatching { findQobuzMatch(tidalId, knownIsrc, title, artist, durationSeconds) }
+                .getOrNull() != null
+            if (hasCopy) sourceConsent.post(QobuzOffer(tidalId, title, artist))
+        }
+        return null
+    }
+
+    /** The same recording on Qobuz: by ISRC when there is one, else a strict metadata match. */
+    private suspend fun findQobuzMatch(
+        tidalId: Long,
+        knownIsrc: String?,
+        title: String,
+        artist: String,
+        durationSeconds: Int,
+    ): QobuzTrackMatch? {
+        val isrc = knownIsrc?.takeIf { it.isNotBlank() } ?: repository.getTidalIsrc(tidalId)
+        return isrc?.let { repository.findQobuzByIsrc(it) }
+            ?: metadataMatchQobuz(title, artist, durationSeconds)
+    }
+
+    /**
+     * The Qobuz copy of a TIDAL (HiFiApi) track, once the listener agreed to
+     * it (see [qobuzWithConsent]): when the TIDAL stream
      * can't be resolved (instance down, track pulled, no manifest), find the
      * same recording on Qobuz and play it from the Qobuz cache. This is what
      * lets a playlist built from TIDAL keep playing when TIDAL is down.
@@ -645,10 +706,7 @@ class StreamResolver @Inject constructor(
         trackNumber: Int?,
         discNumber: Int?,
     ): MediaItem? {
-        val isrc = knownIsrc?.takeIf { it.isNotBlank() } ?: repository.getTidalIsrc(tidalId)
-        val match = isrc?.let { repository.findQobuzByIsrc(it) }
-            ?: metadataMatchQobuz(title, artist, durationSeconds)
-            ?: return null
+        val match = findQobuzMatch(tidalId, knownIsrc, title, artist, durationSeconds) ?: return null
 
         // Bridge navigation: make the playing TIDAL album/artist ids resolve to
         // the matched Qobuz release/artist so "Go to album/artist" on the main
@@ -672,6 +730,7 @@ class StreamResolver @Inject constructor(
             .setArtworkUri(artworkUri)
             .setTrackNumber(trackNumber)
             .setDiscNumber(discNumber)
+            .setExtras(PlayedFrom.extras(PlayedFrom.QOBUZ))
             .build()
 
         return MediaItem.Builder()

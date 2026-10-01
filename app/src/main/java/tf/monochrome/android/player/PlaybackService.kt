@@ -1970,9 +1970,11 @@ class PlaybackService : MediaSessionService() {
     private suspend fun resolveGaplessItem(track: tf.monochrome.android.domain.model.Track): MediaItem? {
         val unified = unifiedTrackRegistry[track.id]
         val item = if (unified != null) {
-            streamResolver.resolveUnifiedTrack(unified).takeIf { it.isPlayable }?.mediaItem
+            // An upcoming track: never ask about another service while the
+            // current one is playing; the ask happens when it is reached.
+            streamResolver.resolveUnifiedTrack(unified, askForOtherService = false).takeIf { it.isPlayable }?.mediaItem
         } else {
-            streamResolver.resolveMediaItem(track).first
+            streamResolver.resolveMediaItem(track, askForOtherService = false).first
         } ?: return null
 
         val uri = item.localConfiguration?.uri?.toString()

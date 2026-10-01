@@ -221,6 +221,33 @@ fun MonochromeNavHost(initialRoute: String? = null) {
 
     val playerViewModel: PlayerViewModel = hiltViewModel()
 
+    // TIDAL could not play a song Qobuz has. Asked here, at the root, so the
+    // question reaches the listener wherever they are — the skip that caused
+    // it may have come from the notification or a track ending on its own.
+    val qobuzOffer by playerViewModel.qobuzOffer.collectAsStateWithLifecycle()
+    qobuzOffer?.let { offer ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = playerViewModel::dismissQobuzOffer,
+            title = { androidx.compose.material3.Text("TIDAL couldn't play this") },
+            text = {
+                androidx.compose.material3.Text(
+                    "\"${offer.title}\" by ${offer.artist} isn't available from TIDAL right now. " +
+                        "Qobuz has the same recording. Play it from Qobuz?",
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = playerViewModel::acceptQobuzOffer) {
+                    androidx.compose.material3.Text("Play from Qobuz")
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = playerViewModel::dismissQobuzOffer) {
+                    androidx.compose.material3.Text("Skip")
+                }
+            },
+        )
+    }
+
     val currentTrack by playerViewModel.currentTrack.collectAsStateWithLifecycle()
     val isPlaying by playerViewModel.isPlaying.collectAsStateWithLifecycle()
     // Mini-player glass settings (its own blob; Studio › Mini Player tab).

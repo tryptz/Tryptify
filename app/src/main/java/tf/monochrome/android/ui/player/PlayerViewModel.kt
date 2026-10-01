@@ -78,6 +78,7 @@ class PlayerViewModel @Inject constructor(
     private val nowPlayingLyrics: tf.monochrome.android.player.NowPlayingLyricsHolder,
     private val playbackState: tf.monochrome.android.player.PlaybackStateRepository,
     private val bpmTap: tf.monochrome.android.audio.tempo.BpmTapProcessor,
+    private val sourceConsent: tf.monochrome.android.player.SourceConsent,
 ) : ViewModel() {
 
     /**
@@ -1062,6 +1063,24 @@ class PlayerViewModel @Inject constructor(
         queueManager.skipToIndex(index)
         resolveAndPlay()
     }
+
+    /** A TIDAL track TIDAL could not play, which Qobuz has: waiting for a yes or no. */
+    val qobuzOffer: StateFlow<tf.monochrome.android.player.QobuzOffer?> = sourceConsent.offer
+
+    /**
+     * Yes: play that song from Qobuz. Allowed for the rest of the session, and
+     * played again from its place in the queue — it was skipped while the
+     * question was open.
+     */
+    fun acceptQobuzOffer() {
+        val offer = qobuzOffer.value ?: return
+        sourceConsent.allow(offer.tidalId)
+        val index = queueManager.queue.value.indexOfFirst { it.id == offer.tidalId }
+        if (index >= 0) skipToQueueIndex(index)
+    }
+
+    /** No: it stays skipped. */
+    fun dismissQobuzOffer() = sourceConsent.dismiss()
 
     fun setPlaybackSpeed(speed: Float) {
         viewModelScope.launch { preferences.setPlaybackSpeed(speed) }
