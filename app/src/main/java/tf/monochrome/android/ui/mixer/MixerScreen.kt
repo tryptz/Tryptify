@@ -68,13 +68,16 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
@@ -852,22 +855,43 @@ private fun ChannelStripRow(
     }
 
     // ── Routing cables, FL-style ────────────────────────────────────────
-    // One cable per bus-to-bus route, from the sender's route arrow to the
-    // receiver's, sagging below the strips. Every bus's route into the master
-    // is the default and would be a fan of cables saying nothing, so only the
-    // selected bus's is drawn. Cables touching the selected bus are bright,
-    // the rest dimmed, and a cable is as strong as its send level.
+    // One cable per bus-to-bus route, hanging from the foot of the sender's
+    // route arrow to the foot of the receiver's and sagging below the strips.
+    // Every bus's route into the master is the default and would be a fan of
+    // cables saying nothing, so only the selected bus's is drawn. Cables
+    // touching the selected bus are bright, the rest dimmed, and a cable is as
+    // strong as its send level. It shades from the sender's colour to the
+    // receiver's, with an open jack at the sender and a filled plug at the
+    // receiver, so the direction reads without an arrowhead.
+    //
+    // Anchored to the arrow's BOTTOM edge, not its centre: the arrow is a
+    // 20dp pill centred in a 48dp touch box above the strip's 8dp bottom
+    // padding, so its foot is 8 + (48 - 20) / 2 = 22dp above the strip's
+    // bottom. From the centre, the plug sat on the "▲ -6" level text.
+    //
+    // Clipped to the row, and the sag limited to the room under the strips:
+    // the insert rack opens beside this row, and an unclipped cable to an
+    // off-screen bus was drawn straight across it.
     //
     // All of it is read in the draw phase, list scroll included, so scrolling
-    // redraws the cables without recomposing a strip.
-    val arrowFromBottomPx = with(density) { 32.dp.toPx() }
+    // redraws the cables without recomposing a strip. The path and strokes
+    // are reused across frames rather than allocated per cable per frame.
+    val anchorFromBottomPx = with(density) { 22.dp.toPx() }
     val stroke = with(density) { 2.5.dp.toPx() }
-    val sag = with(density) { 70.dp.toPx() }
+    val maxSagPx = with(density) { 70.dp.toPx() }
+    val minSagPx = with(density) { 14.dp.toPx() }
+    val spacingPx = with(density) { MonoDimens.spacingSm.toPx() }
     val stripHeightPx = with(density) { stripHeight.toPx() }
     val displayPos = remember(ordered) { ordered.withIndex().associate { (pos, b) -> b.index to pos } }
+    val cablePath = remember { Path() }
+    val shadowStroke = remember(stroke) { Stroke(width = stroke * 2.2f, cap = StrokeCap.Round) }
+    val cableStroke = remember(stroke) { Stroke(width = stroke, cap = StrokeCap.Round) }
+    val sheenStroke = remember(stroke) { Stroke(width = stroke * 0.35f, cap = StrokeCap.Round) }
+    val jackStroke = remember(stroke) { Stroke(width = stroke * 0.8f) }
     Spacer(
         modifier = Modifier
             .matchParentSize()
+            .clipToBounds()
             .drawBehind {
                 val info = listState.layoutInfo
                 val visible = info.visibleItemsInfo.filter { it.key is Int }
@@ -880,8 +904,8 @@ private fun ChannelStripRow(
                     val last = visible.last()
                     val lastPos = displayPos[last.key as Int] ?: firstPos
                     if (lastPos != firstPos) (last.offset - first.offset).toFloat() / (lastPos - firstPos)
-                    else first.size.toFloat()
-                } else first.size.toFloat()
+                    else first.size + spacingPx
+                } else first.size + spacingPx
                 val originX = -info.viewportStartOffset.toFloat()
                 fun centerX(busIndex: Int): Float? {
                     val item = visible.firstOrNull { it.key == busIndex }
@@ -889,27 +913,50 @@ private fun ChannelStripRow(
                     val pos = displayPos[busIndex] ?: return null
                     return originX + first.offset + (pos - firstPos) * stride + first.size / 2f
                 }
-                val y = (size.height + stripHeightPx) / 2f - arrowFromBottomPx
+                val y = (size.height + stripHeightPx) / 2f - anchorFromBottomPx
+                val plugRadius = stroke * 1.6f
+                // Lowest the cable may hang and still show its under-stroke.
+                val room = (size.height - y - stroke * 2f).coerceAtLeast(0f)
                 for (bus in buses) {
                     if (bus.isMaster) continue
-                    for ((dst, level) in bus.sends) {
-                        if (level <= 0f) continue
+                    for ((dst, sendLevel) in bus.sends) {
+                        if (sendLevel <= 0f) continue
                         if (dst == BusConfig.MASTER_INDEX && bus.index != selectedBusIndex) continue
                         val x0 = centerX(bus.index) ?: continue
                         val x1 = centerX(dst) ?: continue
                         if ((x0 < 0f && x1 < 0f) || (x0 > size.width && x1 > size.width)) continue
-                        val drop = sag.coerceAtMost(kotlin.math.abs(x1 - x0) * 0.35f + sag * 0.3f)
-                        val path = Path().apply {
-                            moveTo(x0, y)
-                            cubicTo(x0, y + drop, x1, y + drop, x1, y)
-                        }
+                        val level = sendLevel.coerceIn(0f, 1f)
+                        // A cubic with both handles at +h dips to 0.75h, so the
+                        // handles go a third further than the dip we want.
+                        val dip = (kotlin.math.abs(x1 - x0) * 0.3f + minSagPx)
+                            .coerceAtMost(maxSagPx)
+                            .coerceAtMost(room)
+                        val handle = dip / 0.75f
+                        cablePath.reset()
+                        cablePath.moveTo(x0, y)
+                        cablePath.cubicTo(x0, y + handle, x1, y + handle, x1, y)
                         val touchesSelected = bus.index == selectedBusIndex || dst == selectedBusIndex
                         val alpha = (if (touchesSelected) 0.95f else 0.35f) * (0.45f + 0.55f * level)
-                        val color = accentFor(bus)
-                        // A dark under-stroke so a cable reads over glass and art.
-                        drawPath(path, Color.Black.copy(alpha = alpha * 0.45f), style = Stroke(width = stroke * 2.2f, cap = StrokeCap.Round))
-                        drawPath(path, color.copy(alpha = alpha), style = Stroke(width = stroke, cap = StrokeCap.Round))
-                        drawCircle(color.copy(alpha = alpha), radius = stroke * 1.6f, center = Offset(x1, y))
+                        val from = accentFor(bus)
+                        val to = buses.firstOrNull { it.index == dst }?.let(accentFor) ?: from
+                        val brush = Brush.linearGradient(
+                            colors = listOf(from.copy(alpha = alpha), to.copy(alpha = alpha)),
+                            start = Offset(x0, y),
+                            end = Offset(x1, y),
+                        )
+                        // A dark under-stroke so a cable reads over glass and art,
+                        // the cable itself, then a thin sheen along its top so
+                        // it reads as a lead rather than a line.
+                        drawPath(cablePath, Color.Black.copy(alpha = alpha * 0.45f), style = shadowStroke)
+                        drawPath(cablePath, brush, style = cableStroke)
+                        translate(top = -stroke * 0.3f) {
+                            drawPath(cablePath, Color.White.copy(alpha = alpha * 0.35f), style = sheenStroke)
+                        }
+                        // Jack at the sender (open ring), plug at the receiver.
+                        drawCircle(Color.Black.copy(alpha = alpha * 0.45f), radius = plugRadius + stroke * 0.6f, center = Offset(x0, y))
+                        drawCircle(from.copy(alpha = alpha), radius = plugRadius, center = Offset(x0, y), style = jackStroke)
+                        drawCircle(Color.Black.copy(alpha = alpha * 0.45f), radius = plugRadius + stroke * 0.6f, center = Offset(x1, y))
+                        drawCircle(to.copy(alpha = alpha), radius = plugRadius, center = Offset(x1, y))
                     }
                 }
             }
