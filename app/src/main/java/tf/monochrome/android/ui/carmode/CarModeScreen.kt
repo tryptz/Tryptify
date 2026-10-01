@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.carmode
 
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -88,7 +89,7 @@ fun CarModeScreen(
                 ) {
                     // Exit button
                     IconButton(
-                        onClick = { navController.popBackStack() },
+                        onClick = { navController.popBackStackSafe() },
                         modifier = Modifier.align(Alignment.Start)
                     ) {
                         Icon(Icons.Default.Close, "Close car mode", tint = MaterialTheme.colorScheme.primary)

@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.eq
 
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -242,7 +243,7 @@ fun EqualizerScreen(
                         .padding(start = 4.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { navController.popBackStack() }) {
+                        IconButton(onClick = { navController.popBackStackSafe() }) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",

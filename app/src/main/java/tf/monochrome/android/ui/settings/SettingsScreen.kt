@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.settings
 
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import tf.monochrome.android.ui.theme.goToPage
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -249,7 +250,7 @@ fun SettingsScreen(
         TopAppBar(
             title = { Text("Settings") },
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
+                IconButton(onClick = { navController.popBackStackSafe() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
             },

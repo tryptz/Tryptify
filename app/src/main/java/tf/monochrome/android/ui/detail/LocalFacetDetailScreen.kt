@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.detail
 
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -113,7 +114,7 @@ fun LocalFacetDetailScreen(
             },
             title = {},
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
+                IconButton(onClick = { navController.popBackStackSafe() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
             },

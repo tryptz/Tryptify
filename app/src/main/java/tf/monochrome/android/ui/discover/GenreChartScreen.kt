@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.discover
 
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -100,7 +101,7 @@ fun GenreChartScreen(
             TopAppBar(
                 title = { Text(chart?.genreName?.ifBlank { genreName } ?: genreName) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navController.popBackStackSafe() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },

@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.library
 
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -105,7 +106,7 @@ fun FolderBrowserScreen(
                 viewModel.excludeFolder(folder.path)
                 // The folder just left the library; staying on a page that is
                 // now guaranteed empty is not useful.
-                if (folder.path == folderPath) navController.popBackStack()
+                if (folder.path == folderPath) navController.popBackStackSafe()
             },
         )
     }
@@ -140,7 +141,7 @@ fun FolderBrowserScreen(
                 }
             },
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
+                IconButton(onClick = { navController.popBackStackSafe() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
             },

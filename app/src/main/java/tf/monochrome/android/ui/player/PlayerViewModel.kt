@@ -1331,6 +1331,14 @@ class PlayerViewModel @Inject constructor(
      * The registry is rehydrated from history/queue state, so this covers
      * local tracks surfaced through Recently Played and playlists too.
      */
+    /**
+     * Where a legacy [Track] really comes from, when the app knows. Navigation
+     * needs it: a local song's `Track` ids are made up, so "Go to artist"
+     * routes by this rather than by them — see `trackArtistAction`.
+     */
+    fun unifiedFor(track: Track?): tf.monochrome.android.domain.model.UnifiedTrack? =
+        track?.let { unifiedTrackRegistry[it.id] }
+
     fun isLocalTrack(track: Track): Boolean =
         unifiedTrackRegistry[track.id]?.source is tf.monochrome.android.domain.model.PlaybackSource.LocalFile
 

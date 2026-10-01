@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.detail
 
+import tf.monochrome.android.ui.navigation.trackArtistAction
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -101,9 +103,7 @@ fun AlbumDetailScreen(
             onDownloadTrack = { playerViewModel.downloadTrack(track) },
             onShareFile = { playerViewModel.shareTrack(track) },
             onGoToAlbum = null, // Already here
-            onGoToArtist = track.artist?.id?.let { artistId ->
-                { navController.navigateSafe(Screen.ArtistDetail.createRoute(artistId)) }
-            }
+            onGoToArtist = navController.trackArtistAction(track, playerViewModel.unifiedFor(track))
         )
     }
 
@@ -164,7 +164,7 @@ fun AlbumDetailScreen(
             },
             title = {},
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
+                IconButton(onClick = { navController.popBackStackSafe() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
             },

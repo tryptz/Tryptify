@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.settings
 
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
@@ -143,7 +144,7 @@ fun HrtfDatabaseScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     // Hardware back navigates up a folder before leaving the screen.
-    BackHandler(enabled = true) { if (!viewModel.up()) navController.popBackStack() }
+    BackHandler(enabled = true) { if (!viewModel.up()) navController.popBackStackSafe() }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -158,7 +159,7 @@ fun HrtfDatabaseScreen(
                 }
             },
             navigationIcon = {
-                IconButton(onClick = { if (!viewModel.up()) navController.popBackStack() }) {
+                IconButton(onClick = { if (!viewModel.up()) navController.popBackStackSafe() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
             },

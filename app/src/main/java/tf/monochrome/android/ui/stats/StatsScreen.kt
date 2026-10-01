@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.stats
 
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -112,7 +113,7 @@ fun StatsScreen(
         TopAppBar(
             title = { Text("Listening Stats") },
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
+                IconButton(onClick = { navController.popBackStackSafe() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
             },

@@ -1,5 +1,8 @@
 package tf.monochrome.android.ui.player
 
+import tf.monochrome.android.ui.navigation.trackArtistAction
+import tf.monochrome.android.ui.navigation.trackAlbumAction
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -601,7 +604,7 @@ fun MainPlayerRoute(
             repeatMode = repeatMode,
             isDownloaded = isDownloaded,
             downloadState = downloadState,
-            onCollapse = { navController.popBackStack() },
+            onCollapse = { navController.popBackStackSafe() },
             onOutputClick = { showPipelineSheet = true },
             onSpeedClick = { showSpeedSheet = true },
             onToggleShuffle = playerViewModel::toggleShuffle,
@@ -611,12 +614,8 @@ fun MainPlayerRoute(
             onSendFile = { currentTrack?.let { playerViewModel.shareTrack(it) } },
             onOpenLyricsStudio = { navController.navigateTool(Screen.LyricsFxStudio) },
             onOpenSettings = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
-            onGoToArtist = currentTrack?.artist?.id?.let { artistId ->
-                { navController.navigateSafe(Screen.ArtistDetail.createRoute(artistId)) }
-            },
-            onGoToAlbum = currentTrack?.album?.id?.let { albumId ->
-                { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
-            },
+            onGoToArtist = navController.trackArtistAction(currentTrack, playerViewModel.unifiedFor(currentTrack)),
+            onGoToAlbum = navController.trackAlbumAction(currentTrack, playerViewModel.unifiedFor(currentTrack)),
         )
     }
     // Ambient › "Remove album cover": the preset row fades itself out after a

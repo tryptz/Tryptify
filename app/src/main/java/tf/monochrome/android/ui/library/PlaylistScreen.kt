@@ -1,5 +1,9 @@
 package tf.monochrome.android.ui.library
 
+import tf.monochrome.android.ui.navigation.openTrackArtist
+import tf.monochrome.android.ui.navigation.trackArtistAction
+import tf.monochrome.android.ui.navigation.trackAlbumAction
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
@@ -122,12 +126,8 @@ fun PlaylistScreen(
             onDownloadTrack = if (playerViewModel.isLocalTrack(track)) null
             else ({ playerViewModel.downloadTrack(track) }),
             onShareFile = { playerViewModel.shareTrack(track) },
-            onGoToAlbum = track.album?.id?.let { albumId ->
-                { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
-            },
-            onGoToArtist = track.artist?.id?.let { artistId ->
-                { navController.navigateSafe(Screen.ArtistDetail.createRoute(artistId)) }
-            }
+            onGoToAlbum = navController.trackAlbumAction(track, playerViewModel.unifiedFor(track)),
+            onGoToArtist = navController.trackArtistAction(track, playerViewModel.unifiedFor(track))
         )
     }
 
@@ -185,7 +185,7 @@ fun PlaylistScreen(
                 TextButton(onClick = {
                     showDeleteConfirm = false
                     viewModel.deletePlaylist()
-                    navController.popBackStack()
+                    navController.popBackStackSafe()
                 }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
@@ -219,7 +219,7 @@ fun PlaylistScreen(
                 )
             },
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
+                IconButton(onClick = { navController.popBackStackSafe() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
             },
@@ -415,10 +415,8 @@ fun PlaylistScreen(
                         },
                         onLongClick = { selection.toggle(track.id) },
                         onMoreClick = { showContextMenuForTrack = track },
-                        onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
-                        onAlbumClick = track.album?.id?.let { albumId ->
-                            { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
-                        },
+                        onArtistClick = { artistId -> navController.openTrackArtist(track, playerViewModel.unifiedFor(track), artistId) },
+                        onAlbumClick = navController.trackAlbumAction(track, playerViewModel.unifiedFor(track)),
                         downloadState = activeDownloads[track.id],
                         isDownloaded = track.id in downloadedTrackIds,
                         selectionMode = selection.active,

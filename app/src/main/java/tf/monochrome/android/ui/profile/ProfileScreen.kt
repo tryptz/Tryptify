@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.profile
 
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import android.app.Activity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -115,7 +116,7 @@ fun ProfileScreen(
         TopAppBar(
             title = { Text("Account") },
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
+                IconButton(onClick = { navController.popBackStackSafe() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
             },

@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.mixer
 
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -455,7 +456,7 @@ fun MixerScreen(
                         NavIconButton(
                             icon = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            onClick = { navController.popBackStack() }
+                            onClick = { navController.popBackStackSafe() }
                         )
 
                         Text(

@@ -103,16 +103,20 @@ fun MiniPlayer(
 ) {
     if (track == null) return
 
-    // The tunable player glass (AGSL) only exists on API 33+ and when the user
-    // hasn't turned button glass off. Below that, keep the old haze bar + Material
-    // icons — a punched slab with no shader would be an opaque block.
+    // The tunable player glass (AGSL) only exists where the shader really runs.
+    // Elsewhere, keep the old haze bar + Material icons — a punched slab with no
+    // shader would be an opaque block. That means asking
+    // rememberLiquidGlassAvailable(), not just the API level and the glass
+    // switch: "Remove liquid glass" turns the shader off too, and used to leave
+    // this bar a solid block of the accent, its text never contrast-checked
+    // against it and its accent progress line drawn invisibly on top.
     val glass = LocalPlayerGlass.current
     // The progress line is also the bar's top border. With it off the bar
     // must close up, so the height it reserves goes to zero everywhere it is
     // used — including the control-hole centring maths below, which would
     // otherwise punch the play/skip holes 2dp above the icons they reveal.
     val progressHeight = if (glass.miniProgressBar) MiniProgressHeight else 0.dp
-    val useGlass = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && glass.enabled
+    val useGlass = tf.monochrome.android.ui.player.rememberLiquidGlassAvailable()
 
     val swipeGestures = Modifier.pointerInput(Unit) {
         var totalHorizontalDrag = 0f

@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.settings
 
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
@@ -350,7 +351,7 @@ fun AtmosRendererScreen(
         TopAppBar(
             title = { Text("Atmos Renderer Configuration") },
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
+                IconButton(onClick = { navController.popBackStackSafe() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
             },

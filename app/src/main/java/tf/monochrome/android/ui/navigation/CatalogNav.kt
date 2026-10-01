@@ -63,6 +63,23 @@ fun NavController.navigateTool(screen: Screen, filled: String = screen.route) {
     }
 }
 
+/**
+ * Back from a screen's own back arrow — [navigateSafe]'s twin.
+ *
+ * A bare `popBackStack()` from an arrow is two bugs on a fast double tap. The
+ * second tap lands while the first pop is still fading out (the screen it
+ * leaves is still composed, arrow and all) and pops a second entry; and when
+ * the entry under it is `home`, that pop takes the start destination too,
+ * leaving an empty back stack — the pager is drawn only while the NavHost is on
+ * `home`, so the screen goes blank. The screen popped to is not RESUMED until
+ * its transition settles, so [isSettled] drops the second tap; and this never
+ * pops the last entry, whatever the lifecycle says.
+ */
+fun NavController.popBackStackSafe(): Boolean {
+    if (!isSettled() || previousBackStackEntry == null) return false
+    return popBackStack()
+}
+
 private fun NavController.isSettled(): Boolean =
     currentBackStackEntry?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) == true
 
@@ -133,4 +150,71 @@ fun NavController.openCatalogArtist(artistId: Long, artistName: String? = null) 
 /** Catalog-only album navigation (for domain `Track` rows). */
 fun NavController.openCatalogAlbum(albumId: Long) {
     navigateSafe(Screen.AlbumDetail.createRoute(albumId))
+}
+
+/**
+ * "Go to artist" for a song row or menu, or null when there is nowhere to go —
+ * a null action hides the menu entry instead of offering a dead end.
+ *
+ * Routes by where the song really comes from, which [unified] knows and the
+ * legacy [track] does not. A local or collection song turned into a `Track`
+ * carries *made-up* ids — the artist's is a hash of its name, the album's a hash
+ * of its id string — and handing those to the catalogue artist screen opened an
+ * error page, or worse an unrelated artist whose real id the hash happened to
+ * hit. A local song goes to its local artist; a collection or radio song has no
+ * artist screen; everything else goes through [openCatalogArtist], name and
+ * all, so an id of 0 is recovered from the name rather than opening
+ * "artist not available: 0".
+ */
+fun NavController.trackArtistAction(
+    track: tf.monochrome.android.domain.model.Track?,
+    unified: tf.monochrome.android.domain.model.UnifiedTrack?,
+): (() -> Unit)? {
+    if (track == null) return null
+    return when (unified?.sourceType) {
+        SourceType.LOCAL -> unified.artistId?.takeIf { it > 0L }
+            ?.let { id -> { navigateSafe(Screen.LocalArtistDetail.createRoute(id)) } }
+        SourceType.COLLECTION, SourceType.LIVE_RADIO -> null
+        else -> {
+            val id = track.artist?.id ?: 0L
+            val name = track.artist?.name?.takeIf { it.isNotBlank() } ?: track.displayArtist
+            if (id <= 0L && name.isBlank()) null else ({ openCatalogArtist(id, name) })
+        }
+    }
+}
+
+/** "Go to album" — the album twin of [trackArtistAction], by the same rules. */
+fun NavController.trackAlbumAction(
+    track: tf.monochrome.android.domain.model.Track?,
+    unified: tf.monochrome.android.domain.model.UnifiedTrack?,
+): (() -> Unit)? {
+    if (track == null) return null
+    return when (unified?.sourceType) {
+        SourceType.LOCAL, SourceType.COLLECTION ->
+            unified.albumId?.takeIf { isNavigableAlbumId(it) }?.let { id -> { openAlbum(id) } }
+        SourceType.LIVE_RADIO -> null
+        else -> track.album?.id?.takeIf { it > 0L }?.let { id -> { openCatalogAlbum(id) } }
+    }
+}
+
+/**
+ * A tap on one artist name in a song row. The row hands over the id of the
+ * name tapped, since a song can credit several; that id is trusted only for a
+ * catalogue song. A local or collection song's ids are made up, so it goes
+ * where [trackArtistAction] says instead.
+ */
+fun NavController.openTrackArtist(
+    track: tf.monochrome.android.domain.model.Track,
+    unified: tf.monochrome.android.domain.model.UnifiedTrack?,
+    tappedArtistId: Long,
+) {
+    when (unified?.sourceType) {
+        SourceType.LOCAL, SourceType.COLLECTION, SourceType.LIVE_RADIO ->
+            trackArtistAction(track, unified)?.invoke()
+        else -> {
+            val name = track.artists.firstOrNull { it.id == tappedArtistId }?.name
+                ?: track.artist?.takeIf { it.id == tappedArtistId }?.name
+            openCatalogArtist(tappedArtistId, name)
+        }
+    }
 }

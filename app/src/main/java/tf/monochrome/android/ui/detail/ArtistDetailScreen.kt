@@ -1,5 +1,8 @@
 package tf.monochrome.android.ui.detail
 
+import tf.monochrome.android.ui.navigation.openTrackArtist
+import tf.monochrome.android.ui.navigation.trackAlbumAction
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -146,9 +149,7 @@ fun ArtistDetailScreen(
             onAddToPlaylist = { showAddToPlaylistForTrack = track },
             onDownloadTrack = { playerViewModel.downloadTrack(track) },
             onShareFile = { playerViewModel.shareTrack(track) },
-            onGoToAlbum = track.album?.id?.let { albumId ->
-                { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
-            },
+            onGoToAlbum = navController.trackAlbumAction(track, playerViewModel.unifiedFor(track)),
             onGoToArtist = null // Already here
         )
     }
@@ -205,7 +206,7 @@ fun ArtistDetailScreen(
         TopAppBar(
             title = {},
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
+                IconButton(onClick = { navController.popBackStackSafe() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
             },
@@ -339,10 +340,8 @@ fun ArtistDetailScreen(
                                 },
                                 onLongClick = { selection.toggle(track.id) },
                                 onMoreClick = { showContextMenuForTrack = track },
-                                onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
-                                onAlbumClick = track.album?.id?.let { albumId ->
-                                    { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
-                                },
+                                onArtistClick = { artistId -> navController.openTrackArtist(track, playerViewModel.unifiedFor(track), artistId) },
+                                onAlbumClick = navController.trackAlbumAction(track, playerViewModel.unifiedFor(track)),
                                 isDownloaded = track.id in downloadedTrackIds,
                                 selectionMode = selection.active,
                                 selected = track.id in selection.selectedIds

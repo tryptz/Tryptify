@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.debug
 
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -136,7 +137,7 @@ fun DebugLogScreen(
                 }
             },
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
+                IconButton(onClick = { navController.popBackStackSafe() }) {
                     Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                 }
             },

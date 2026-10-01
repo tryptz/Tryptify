@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.eq
 
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -94,7 +95,7 @@ fun ParametricEqEditScreen(
                 .padding(start = 4.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { navController.popBackStack() }) {
+            IconButton(onClick = { navController.popBackStackSafe() }) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",

@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.discover
 
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import android.os.Build
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
@@ -422,7 +423,7 @@ fun GenreMapScreen(
             // actions, and a wrapped title crowds the first row of labels.
             title = { Text("Genres") },
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
+                IconButton(onClick = { navController.popBackStackSafe() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
             },
@@ -642,7 +643,7 @@ fun GenreMapScreen(
                     onPlayChartEntry = { viewModel.playChartEntry(it, playerViewModel) },
                     onExplore = {
                         viewModel.selectGenre(node.id)
-                        navController.popBackStack()
+                        navController.popBackStackSafe()
                     },
                     onRelated = { child ->
                         // A subgenre under a folded branch is not on the map, so

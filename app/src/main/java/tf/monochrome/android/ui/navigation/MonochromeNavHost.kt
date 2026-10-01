@@ -766,7 +766,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             inflator = vm.inflator,
                             compressor = vm.compressor,
                             initialTab = tab,
-                            onBack = { navController.popBackStack() },
+                            onBack = { navController.popBackStackSafe() },
                             modifier = Modifier.fillMaxSize().padding(top = statusBarHeight),
                         )
                     }
@@ -776,7 +776,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                     tf.monochrome.android.devedit.DevEditScreen("crossfeed") {
                         CrossfeedScreen(
                             effect = vm.crossfeed,
-                            onBack = { navController.popBackStack() },
+                            onBack = { navController.popBackStackSafe() },
                             modifier = Modifier.fillMaxSize().padding(top = statusBarHeight),
                         )
                     }
@@ -798,7 +798,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 }
                 composable(Screen.ListeningStats.route) {
                     tf.monochrome.android.devedit.DevEditScreen("listening_stats") {
-                        ListeningStatsScreen(onBack = { navController.popBackStack() })
+                        ListeningStatsScreen(onBack = { navController.popBackStackSafe() })
                     }
                 }
                 composable(
