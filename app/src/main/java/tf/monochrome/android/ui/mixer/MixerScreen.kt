@@ -829,6 +829,8 @@ private fun ChannelStripRow(
                     onToggleMute = { viewModel.toggleMute(index) },
                     onToggleSolo = { viewModel.toggleSolo(index) },
                     route = route,
+                    isRouteSource = source != null && index == source.index,
+                    onSendLevel = { level -> source?.let { viewModel.setSendLevel(it.index, index, level) } },
                     onRouteTap = {
                         if (!viewModel.toggleRouteTo(index)) {
                             Toast.makeText(
@@ -855,19 +857,22 @@ private fun ChannelStripRow(
     }
 
     // ── Routing cables, FL-style ────────────────────────────────────────
-    // One cable per bus-to-bus route, hanging from the foot of the sender's
-    // route arrow to the foot of the receiver's and sagging below the strips.
+    // One cable per bus-to-bus route, hanging from the foot of whatever sits
+    // in the sender's route slot to the foot of the receiver's, and sagging
+    // below the strips: out of the selected bus's ↓, into each send knob.
     // Every bus's route into the master is the default and would be a fan of
     // cables saying nothing, so only the selected bus's is drawn. Cables
     // touching the selected bus are bright, the rest dimmed, and a cable is as
     // strong as its send level. It shades from the sender's colour to the
-    // receiver's, with an open jack at the sender and a filled plug at the
-    // receiver, so the direction reads without an arrowhead.
+    // receiver's. Where an end has no ↓ or knob to plug into (a dimmed cable
+    // between two other buses lands on their ▲ pills) it gets an open jack at
+    // the sender and a filled plug at the receiver, so the direction reads.
     //
-    // Anchored to the arrow's BOTTOM edge, not its centre: the arrow is a
-    // 20dp pill centred in a 48dp touch box above the strip's 8dp bottom
-    // padding, so its foot is 8 + (48 - 20) / 2 = 22dp above the strip's
-    // bottom. From the centre, the plug sat on the "▲ -6" level text.
+    // Anchored to each slot's BOTTOM edge, not its centre, or a plug would sit
+    // on the control. The slot is a 48dp touch box above the strip's 8dp
+    // bottom padding, so a control of height h has its foot at
+    // 8 + 24 - h / 2 above the strip's bottom: 22dp for the ▲ pill, 18dp for
+    // the knob, 20dp for the ↓'s tip.
     //
     // Clipped to the row, and the sag limited to the room under the strips:
     // the insert rack opens beside this row, and an unclipped cable to an
@@ -876,7 +881,10 @@ private fun ChannelStripRow(
     // All of it is read in the draw phase, list scroll included, so scrolling
     // redraws the cables without recomposing a strip. The path and strokes
     // are reused across frames rather than allocated per cable per frame.
-    val anchorFromBottomPx = with(density) { 22.dp.toPx() }
+    fun footPx(controlHeight: Dp) = with(density) { (8.dp + 24.dp - controlHeight / 2).toPx() }
+    val pillFootPx = footPx(RouteArrowHeight)
+    val knobFootPx = footPx(SendKnobSize)
+    val sourceFootPx = footPx(RouteSourceArrowSize)
     val stroke = with(density) { 2.5.dp.toPx() }
     val maxSagPx = with(density) { 70.dp.toPx() }
     val minSagPx = with(density) { 14.dp.toPx() }
@@ -913,10 +921,16 @@ private fun ChannelStripRow(
                     val pos = displayPos[busIndex] ?: return null
                     return originX + first.offset + (pos - firstPos) * stride + first.size / 2f
                 }
-                val y = (size.height + stripHeightPx) / 2f - anchorFromBottomPx
+                val stripBottom = (size.height + stripHeightPx) / 2f
+                // What the bus's route slot shows: the ↓, a knob, or a pill.
+                val sourceIndex = source?.index
+                fun isKnob(busIndex: Int) = (source?.sends?.get(busIndex) ?: 0f) > 0f
+                fun footY(busIndex: Int) = stripBottom - when {
+                    busIndex == sourceIndex -> sourceFootPx
+                    isKnob(busIndex) -> knobFootPx
+                    else -> pillFootPx
+                }
                 val plugRadius = stroke * 1.6f
-                // Lowest the cable may hang and still show its under-stroke.
-                val room = (size.height - y - stroke * 2f).coerceAtLeast(0f)
                 for (bus in buses) {
                     if (bus.isMaster) continue
                     for ((dst, sendLevel) in bus.sends) {
@@ -926,6 +940,11 @@ private fun ChannelStripRow(
                         val x1 = centerX(dst) ?: continue
                         if ((x0 < 0f && x1 < 0f) || (x0 > size.width && x1 > size.width)) continue
                         val level = sendLevel.coerceIn(0f, 1f)
+                        val y0 = footY(bus.index)
+                        val y1 = footY(dst)
+                        val low = maxOf(y0, y1)
+                        // Lowest the cable may hang and still show its under-stroke.
+                        val room = (size.height - low - stroke * 2f).coerceAtLeast(0f)
                         // A cubic with both handles at +h dips to 0.75h, so the
                         // handles go a third further than the dip we want.
                         val dip = (kotlin.math.abs(x1 - x0) * 0.3f + minSagPx)
@@ -933,16 +952,16 @@ private fun ChannelStripRow(
                             .coerceAtMost(room)
                         val handle = dip / 0.75f
                         cablePath.reset()
-                        cablePath.moveTo(x0, y)
-                        cablePath.cubicTo(x0, y + handle, x1, y + handle, x1, y)
+                        cablePath.moveTo(x0, y0)
+                        cablePath.cubicTo(x0, low + handle, x1, low + handle, x1, y1)
                         val touchesSelected = bus.index == selectedBusIndex || dst == selectedBusIndex
                         val alpha = (if (touchesSelected) 0.95f else 0.35f) * (0.45f + 0.55f * level)
                         val from = accentFor(bus)
                         val to = buses.firstOrNull { it.index == dst }?.let(accentFor) ?: from
                         val brush = Brush.linearGradient(
                             colors = listOf(from.copy(alpha = alpha), to.copy(alpha = alpha)),
-                            start = Offset(x0, y),
-                            end = Offset(x1, y),
+                            start = Offset(x0, y0),
+                            end = Offset(x1, y1),
                         )
                         // A dark under-stroke so a cable reads over glass and art,
                         // the cable itself, then a thin sheen along its top so
@@ -952,11 +971,16 @@ private fun ChannelStripRow(
                         translate(top = -stroke * 0.3f) {
                             drawPath(cablePath, Color.White.copy(alpha = alpha * 0.35f), style = sheenStroke)
                         }
-                        // Jack at the sender (open ring), plug at the receiver.
-                        drawCircle(Color.Black.copy(alpha = alpha * 0.45f), radius = plugRadius + stroke * 0.6f, center = Offset(x0, y))
-                        drawCircle(from.copy(alpha = alpha), radius = plugRadius, center = Offset(x0, y), style = jackStroke)
-                        drawCircle(Color.Black.copy(alpha = alpha * 0.45f), radius = plugRadius + stroke * 0.6f, center = Offset(x1, y))
-                        drawCircle(to.copy(alpha = alpha), radius = plugRadius, center = Offset(x1, y))
+                        // Jack at a sender pill (open ring), plug at a receiver
+                        // pill. The ↓ and the knobs are their own ends.
+                        if (bus.index != sourceIndex) {
+                            drawCircle(Color.Black.copy(alpha = alpha * 0.45f), radius = plugRadius + stroke * 0.6f, center = Offset(x0, y0))
+                            drawCircle(from.copy(alpha = alpha), radius = plugRadius, center = Offset(x0, y0), style = jackStroke)
+                        }
+                        if (dst != sourceIndex && !isKnob(dst)) {
+                            drawCircle(Color.Black.copy(alpha = alpha * 0.45f), radius = plugRadius + stroke * 0.6f, center = Offset(x1, y1))
+                            drawCircle(to.copy(alpha = alpha), radius = plugRadius, center = Offset(x1, y1))
+                        }
                     }
                 }
             }

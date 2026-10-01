@@ -27,6 +27,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
@@ -66,6 +70,40 @@ private val FaderTravel = 280.dp
  * a route here would loop back into the selected bus.
  */
 data class StripRoute(val routed: Boolean, val level: Float, val allowed: Boolean)
+
+/** The unrouted ▲ pill's height; the route-source ↓'s size. */
+internal val RouteArrowHeight = 20.dp
+internal val RouteSourceArrowSize = 24.dp
+
+/**
+ * FL's ↓ on the selected strip: the bus the route arrows and send knobs act
+ * for, and where its cables leave from. A block arrow rather than a glyph so
+ * it reads at strip size and its tip sits exactly where the cables start.
+ */
+@Composable
+private fun RouteSourceArrow(color: Color, busName: String) {
+    Canvas(
+        modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .size(RouteSourceArrowSize)
+            .semantics { contentDescription = "Routing from $busName" }
+    ) {
+        val w = size.width
+        val h = size.height
+        val arrow = Path().apply {
+            moveTo(w * 0.34f, 0f)
+            lineTo(w * 0.66f, 0f)
+            lineTo(w * 0.66f, h * 0.45f)
+            lineTo(w * 0.96f, h * 0.45f)
+            lineTo(w * 0.5f, h)
+            lineTo(w * 0.04f, h * 0.45f)
+            lineTo(w * 0.34f, h * 0.45f)
+            close()
+        }
+        drawPath(arrow, Color.Black.copy(alpha = 0.35f), style = Stroke(width = 2.dp.toPx()))
+        drawPath(arrow, color)
+    }
+}
 
 /**
  * Compact DAW channel strip cut from the app's own liquid glass: the AGSL
@@ -128,6 +166,10 @@ fun FLChannelStrip(
     /** Null on the selected strip itself, and when the master is selected. */
     route: StripRoute? = null,
     onRouteTap: () -> Unit = {},
+    /** This is the selected bus, the one the route arrows act for: FL's ↓. */
+    isRouteSource: Boolean = false,
+    /** Turns the send knob shown where [route] is routed. */
+    onSendLevel: (Float) -> Unit = {},
 ) {
     val colors = MaterialTheme.colorScheme
     val isMaster = bus.isMaster
@@ -436,37 +478,40 @@ fun FLChannelStrip(
             }
         }
 
-        // ── Route arrow (FL's "send to this track") ────────────────────────
-        // Routes the SELECTED bus here, or unroutes it. Always holds its space
-        // so every strip keeps the same height and the faders stay level.
+        // ── Route arrow / send knob (FL's "send to this track") ────────────
+        // Unrouted: the ▲ arrow, which routes the SELECTED bus here (dimmed
+        // where that would loop). Routed: FL's send knob, which sets how much
+        // of the selected bus arrives here, and a tap on it unroutes. On the
+        // selected strip itself, FL's ↓ marks where the cables leave from.
+        // Every state holds the same 48dp slot, so every strip keeps the same
+        // height and the faders stay level; the cable anchors in MixerScreen
+        // are measured from these sizes.
         val routeShape = RoundedCornerShape(5.dp)
-        val routeModifier = Modifier.minimumInteractiveComponentSize().size(width = 40.dp, height = 20.dp)
-        if (route == null) {
-            Spacer(modifier = routeModifier)
-        } else {
-            val on = route.routed
-            Box(
+        val routeModifier = Modifier.minimumInteractiveComponentSize().size(width = 40.dp, height = RouteArrowHeight)
+        when {
+            isRouteSource -> RouteSourceArrow(color = accent, busName = bus.name)
+            route == null -> Spacer(modifier = routeModifier)
+            route.routed -> SendKnob(
+                level = route.level,
+                destinationName = bus.name,
+                accentColor = accent,
+                onLevelChange = onSendLevel,
+                onRemove = onRouteTap,
+            )
+            else -> Box(
                 modifier = routeModifier
                     .clip(routeShape)
-                    .background(
-                        if (on) accent.copy(alpha = 0.85f)
-                        else inactiveButton.copy(alpha = if (route.allowed) 0.88f else 0.35f)
-                    )
-                    .border(1.dp, if (on) accent else colors.outline.copy(alpha = 0.18f), routeShape)
-                    .then(if (route.allowed || on) Modifier.bounceClick(onClick = onRouteTap) else Modifier)
-                    .toggleSemantics(label = "Route the selected bus to ${bus.name}", checked = on),
+                    .background(inactiveButton.copy(alpha = if (route.allowed) 0.88f else 0.35f))
+                    .border(1.dp, colors.outline.copy(alpha = 0.18f), routeShape)
+                    .then(if (route.allowed) Modifier.bounceClick(onClick = onRouteTap) else Modifier)
+                    .toggleSemantics(label = "Route the selected bus to ${bus.name}", checked = false),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = when {
-                        !on -> "▲"
-                        route.level >= 0.995f -> "▲ 0"
-                        else -> "▲ %.0f".format(20f * kotlin.math.log10(route.level.coerceAtLeast(0.001f)))
-                    },
+                    text = "▲",
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (on) onAccent
-                            else colors.onSurfaceVariant.copy(alpha = if (route.allowed) 0.8f else 0.3f),
+                    color = colors.onSurfaceVariant.copy(alpha = if (route.allowed) 0.8f else 0.3f),
                     maxLines = 1
                 )
             }
