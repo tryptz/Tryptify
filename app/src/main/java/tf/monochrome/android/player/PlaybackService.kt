@@ -1051,6 +1051,9 @@ class PlaybackService : MediaSessionService() {
                         ),
                         resampler = variRateProcessor,
                         timeStretch = timeStretch,
+                        // A crossfade's tail mixes in here while the DAC is
+                        // ours (see CrossfadeController / MixFeedAudioSink).
+                        crossfadeMix = usbCrossfadeMix,
                         // The hi-res HAL path: the same DSP, run here in float
                         // and handed to defaultSink finished (see the note on
                         // setEnableFloatOutput). Speed included, with the
@@ -1491,6 +1494,10 @@ class PlaybackService : MediaSessionService() {
 
     @Volatile private var crossfadeMs = 0L
 
+    /** Where a blend's tail joins the exclusive USB stream. */
+    @OptIn(UnstableApi::class)
+    private val usbCrossfadeMix = tf.monochrome.android.audio.usb.UsbCrossfadeMix()
+
     /**
      * Mirrors [player]'s playing state as something suspendable. Player.Listener
      * is a callback, and the blend watcher needs to *wait* for playback rather
@@ -1576,23 +1583,22 @@ class PlaybackService : MediaSessionService() {
             scope = serviceScope,
             dataSourceFactory = buildDataSourceFactory(),
             dspChainFactory = ::buildSeededDspChain,
+            // While the DAC is exclusively ours, the tail is mixed into the
+            // main stream instead of playing through Android.
+            usbMix = { usbCrossfadeMix.takeIf { libusbDriver.isStreaming.value } },
         ) { gain ->
             crossfadeGain = gain
             pushVolume()
         }
 
     /**
-     * Whether a blend can run right now.
-     *
-     * The exclusive libusb path is the hard stop: it claims the USB device for
-     * one stream, and the tail player uses the ordinary Android sink, so during
-     * a blend its audio would come out of a different device entirely. Skipping
-     * the blend is the honest outcome — bit-perfect output is the reason
-     * someone plugs in that DAC, and a gap is a smaller price than the tail
-     * playing out of the phone speaker.
+     * Whether a blend can run right now. On the exclusive USB path too: the
+     * tail is mixed into the main stream before it reaches the DAC
+     * (UsbCrossfadeMix), so there is still one stream and one owner.
      */
-    private fun canCrossfade(): Boolean =
-        crossfadeMs > 0L && !libusbDriver.isStreaming.value
+    @OptIn(UnstableApi::class)
+    private fun canCrossfade(): Boolean = crossfadeMs > 0L
+
 
     /** Counts [AnalyticsListener.onAudioPositionAdvancing] on the main player. */
     @Volatile private var audioStarts = 0L

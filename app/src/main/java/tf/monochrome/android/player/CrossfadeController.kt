@@ -43,10 +43,10 @@ import kotlinx.coroutines.launch
  * holds per-stream filter state and the native engine holds one sample rate,
  * so two streams through one chain would corrupt both.
  *
- * One consequence remains: this player uses the ordinary Android audio sink,
- * so [PlaybackService] skips crossfading entirely while the exclusive libusb
- * bit-perfect path is streaming — two sinks cannot share that device, and
- * switching it mid-track would be worse than the gap.
+ * On the exclusive libusb path two sinks cannot share the DAC, so there the
+ * tail does not play at all: it is processed into a mix point the main
+ * stream adds into its own audio before packing it for the device
+ * ([tf.monochrome.android.audio.usb.UsbCrossfadeMix]).
  */
 @UnstableApi
 class CrossfadeController(
@@ -58,11 +58,19 @@ class CrossfadeController(
      * settings. Called once per blend; the result is released with the blend.
      */
     private val dspChainFactory: () -> DspChain,
+    /**
+     * The exclusive USB stream's mix point while the DAC is ours, else null.
+     * With one, the tail plays into it ([tf.monochrome.android.audio.usb.MixFeedAudioSink])
+     * and the main stream mixes it in; without, the tail plays through
+     * Android like any player.
+     */
+    private val usbMix: () -> tf.monochrome.android.audio.usb.UsbCrossfadeMix? = { null },
     /** Gain for the *incoming* track on the main player, 0f..1f. */
     private val onIncomingGain: (Float) -> Unit,
 ) {
     private var tail: ExoPlayer? = null
     private var tailChain: DspChain? = null
+    private var tailMix: tf.monochrome.android.audio.usb.UsbCrossfadeMix? = null
     private var rampJob: Job? = null
 
     // Set from the tail's analytics when its audio is actually leaving the
@@ -168,7 +176,13 @@ class CrossfadeController(
 
                 // ── 2. Tail sounding, then hand the main player on ─────────
                 player.play()
-                var waited = 0L
+                // Through Android the tail is its own output and takes a
+                // moment to start, so the main player waits for it. Over USB
+                // it is mixed into the main stream — there is nothing to
+                // start — and the main player's queued audio past this point
+                // is exactly what the hand-off's flush drops, so it hands off
+                // at once.
+                var waited = if (tailMix != null) MAX_TAIL_START_MS else 0L
                 while (isActive && !tailSounding && waited < MAX_TAIL_START_MS) {
                     delay(ALIGN_TICK_MS)
                     waited += ALIGN_TICK_MS
@@ -239,6 +253,9 @@ class CrossfadeController(
         tail = null
         tailChain?.let { chain -> runCatching { chain.release() } }
         tailChain = null
+        // Whatever the tail left unplayed must not be mixed into the next song.
+        tailMix?.close()
+        tailMix = null
         onIncomingGain(1f)
     }
 
@@ -262,10 +279,33 @@ class CrossfadeController(
      * change sound at the instant the blend began.
      */
     private fun buildTailPlayer(chain: DspChain, playback: Playback): ExoPlayer {
-        val stretch = tf.monochrome.android.audio.stretch.StretchAudioProcessor().apply {
+        fun transposer() = tf.monochrome.android.audio.stretch.StretchAudioProcessor().apply {
             setSemitones(playback.semitones)
             if (playback.engine != null && playback.quality != null) setEngine(playback.engine, playback.quality)
         }
+        val mix = usbMix()
+        tailMix = mix
+        if (mix != null) {
+            return ExoPlayer.Builder(
+                context,
+                object : NextRenderersFactory(context) {
+                    override fun buildAudioSink(
+                        context: android.content.Context,
+                        enableFloatOutput: Boolean,
+                        enableAudioTrackPlaybackParams: Boolean,
+                    ): AudioSink = tf.monochrome.android.audio.usb.MixFeedAudioSink(
+                        delegate = DefaultAudioSink.Builder(context).build(),
+                        mix = mix,
+                        dspProcessors = chain.processors.toList(),
+                        transposer = transposer(),
+                    )
+                }.setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON),
+            )
+                .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+                .setHandleAudioBecomingNoisy(false)
+                .build()
+        }
+        val stretch = transposer()
         val transport = tf.monochrome.android.audio.resample.TryptifyAudioProcessorChain(
             chain.processors,
             tf.monochrome.android.audio.resample.VariRateAudioProcessor(),

@@ -58,6 +58,12 @@ class LibusbAudioSink(
     halProcessors: List<AudioProcessor> = emptyList(),
     /** The user's "Hi-res output" setting, read at configure time. */
     private val hiResHalEnabled: () -> Boolean = { false },
+    /**
+     * A crossfade's outgoing tail, mixed into this stream while one runs
+     * ([UsbCrossfadeMix]). The DAC takes one stream, so a blend on this path
+     * is mixed here rather than by Android.
+     */
+    private val crossfadeMix: UsbCrossfadeMix? = null,
 ) : ForwardingAudioSink(delegate) {
 
     private val chain = AudioProcessorChain(processors)
@@ -201,6 +207,76 @@ class LibusbAudioSink(
     private var configuredBufferSize = 0
     private var configuredOutputChannels: IntArray? = null
 
+    private var sinkListener: AudioSink.Listener? = null
+
+    // Whether onPositionAdvancing has been reported since the last start or
+    // flush. DefaultAudioSink reports it when its AudioTrack starts moving;
+    // in bypass that sink plays nothing, so this one has to — it is how a
+    // crossfade knows the incoming track is actually reaching the DAC.
+    private var advancingReported = false
+
+    // The tail's frames for one write, peeked from [crossfadeMix].
+    private var tailScratch = FloatArray(0)
+    private var tailPeeked = 0
+
+    // Every DAC write — the main stream's and the tail's on its own — goes
+    // through this, since they share the pack scratch and the driver, and
+    // the tail writes from its own player's thread.
+    private val writeLock = Any()
+
+    // When the renderer last handed this stream audio. While it is recent
+    // the main stream is writing and mixes the tail in itself.
+    @Volatile private var lastMainActivityNs = 0L
+
+    // Tail-only audio queued at the DAC since the last reset, which the next
+    // song's position must not count as its own.
+    private var tailOnlyQueued = false
+
+    private var silence: ByteBuffer = AudioProcessor.EMPTY_BUFFER
+
+    init {
+        crossfadeMix?.idlePump = ::pumpTailOnly
+    }
+
+    /**
+     * Writes a crossfade's tail to the DAC by itself while the main stream is
+     * idle — after the hand-off flushed it and before the next song's first
+     * buffer. Without this the outgoing song, which only reaches the DAC
+     * mixed into the main stream, would stop for exactly the load gap a
+     * crossfade is meant to cover. Keeps the DAC queue shallow so the next
+     * song is not held behind a long run of tail.
+     */
+    private fun pumpTailOnly() {
+        val mix = crossfadeMix ?: return
+        if (!bypassActive || paused || !mix.isOpen || !mix.playing) return
+        if (System.nanoTime() - lastMainActivityNs < MAIN_ACTIVE_NS) return
+        synchronized(writeLock) {
+            if (!bypassActive || !sourceIsFloat || outChannels <= 0 || usbBytesPerSample <= 0) return
+            val rate = chain.outputFormat().sampleRate
+            if (rate <= 0 || driver.pendingFrames() > rate / 10) return
+            val frames = minOf(mix.pending(), TAIL_PUMP_FRAMES)
+            if (frames <= 0) return
+            val bytes = frames * outChannels * 4
+            if (silence.capacity() < bytes) {
+                silence = ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder())
+            }
+            silence.clear()
+            silence.limit(bytes)
+            val packed = packFloatForUsb(silence, frames, 0f)
+            val written = driver.write(packed.slice().order(ByteOrder.nativeOrder()), frames)
+            if (tailPeeked > 0) {
+                if (written > 0) mix.consume(minOf(written, tailPeeked), rate)
+                tailPeeked = 0
+            }
+            if (written > 0) tailOnlyQueued = true
+        }
+    }
+
+    override fun setListener(listener: AudioSink.Listener) {
+        sinkListener = listener
+        super.setListener(listener)
+    }
+
     override fun configure(
         inputFormat: Format,
         specifiedBufferSize: Int,
@@ -280,7 +356,9 @@ class LibusbAudioSink(
         }
 
         val driverOpen = driver.isOpen.value
-        bypassActive = driverOpen && engageDriver(out.sampleRate, out.channelCount, out.encoding)
+        bypassActive = driverOpen && synchronized(writeLock) {
+            engageDriver(out.sampleRate, out.channelCount, out.encoding)
+        }
         if (!bypassActive) {
             Log.w(
                 TAG,
@@ -303,6 +381,7 @@ class LibusbAudioSink(
                     "${usbBytesPerSample}-byte subslots)",
             )
             resetStreamAccounting()
+            crossfadeMix?.setConsumer(out.sampleRate, out.channelCount)
         }
     }
 
@@ -378,6 +457,8 @@ class LibusbAudioSink(
         // pause(); a buffer accepted now would play through the iso pump.
         if (paused) return false
 
+        lastMainActivityNs = System.nanoTime()
+
         endOfStreamRequested = false
 
         // Drain processor output retained from a previous partial USB write
@@ -394,6 +475,11 @@ class LibusbAudioSink(
         if (startTimeUs == C.TIME_UNSET) {
             startTimeUs = presentationTimeUs
             positionPlayedBaseFrames = driver.playedFrames()
+            // Tail written on its own is still queued ahead of this song.
+            if (tailOnlyQueued) {
+                positionPlayedBaseFrames += driver.pendingFrames()
+                tailOnlyQueued = false
+            }
             usbTimeline.reset(presentationTimeUs, speedRatio.toDouble())
         }
 
@@ -432,7 +518,11 @@ class LibusbAudioSink(
      * current PCM position, so a partial USB write resumes at the correct frame
      * instead of replaying the beginning of the chunk.
      */
-    private fun writeProcessedBuffer(processed: ByteBuffer): Int {
+    private fun writeProcessedBuffer(processed: ByteBuffer): Int = synchronized(writeLock) {
+        writeProcessedBufferLocked(processed)
+    }
+
+    private fun writeProcessedBufferLocked(processed: ByteBuffer): Int {
         if (!processed.hasRemaining() || sourceBytesPerFrame <= 0) return 0
 
         val direct = if (processed.isDirect) processed else copyIntoScratch(processed)
@@ -452,6 +542,18 @@ class LibusbAudioSink(
 
         val positionedView = toWrite.slice().order(ByteOrder.nativeOrder())
         val written = driver.write(positionedView, framesAvailable)
+
+        // Only what the DAC took: the rest of the tail is mixed again with
+        // the rest of this buffer on the next try.
+        if (tailPeeked > 0) {
+            if (written > 0) crossfadeMix?.consume(minOf(written, tailPeeked), chain.outputFormat().sampleRate)
+            tailPeeked = 0
+        }
+
+        if (written > 0 && !advancingReported) {
+            advancingReported = true
+            sinkListener?.onPositionAdvancing(System.currentTimeMillis())
+        }
 
         if (written > 0) {
             // Source stride, not USB stride: this advances the Media3 buffer,
@@ -897,6 +999,7 @@ class LibusbAudioSink(
         // Unconditional, for the same reason as pause(): the gate must come
         // down even if bypass happened to be off when the user hit play.
         paused = false
+        advancingReported = false
         if (bypassActive) {
             resetWatchdog()
             startTimeUs = C.TIME_UNSET
@@ -1045,8 +1148,12 @@ class LibusbAudioSink(
 
         pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
         endOfStreamRequested = false
+        advancingReported = false
         if (bypassActive) {
-            driver.flushRing()
+            synchronized(writeLock) {
+                driver.flushRing()
+                tailOnlyQueued = false
+            }
             framesWritten = 0L
             startTimeUs = C.TIME_UNSET
             positionPlayedBaseFrames = 0L
@@ -1109,6 +1216,7 @@ class LibusbAudioSink(
     }
 
     private fun resetStreamAccounting() {
+        advancingReported = false
         framesWritten = 0L
         startTimeUs = C.TIME_UNSET
         positionPlayedBaseFrames = 0L
@@ -1161,12 +1269,23 @@ class LibusbAudioSink(
         val out = ensurePackScratch(samples * bytesPerSample)
         val srcPos = src.position()
 
+        // A crossfade's tail, if one is running: peeked, not taken, until the
+        // DAC says how much of this it accepted (see writeProcessedBuffer).
+        val mix = crossfadeMix
+        tailPeeked = 0
+        var tailGain = 0f
+        if (mix != null && mix.isOpen) {
+            if (tailScratch.size < samples) tailScratch = FloatArray(samples)
+            tailPeeked = mix.peek(tailScratch, frames, outChannels)
+            tailGain = mix.gain
+        }
+        val mixing = tailPeeked > 0
+
         var o = 0
         for (i in 0 until samples) {
-            val sample = floatToSubslotSample(
-                src.getFloat(srcPos + (i shl 2)) * gain,
-                bytesPerSample,
-            )
+            var v = src.getFloat(srcPos + (i shl 2)) * gain
+            if (mixing) v += tailScratch[i] * tailGain
+            val sample = floatToSubslotSample(v, bytesPerSample)
             out.put(o, sample.toByte())
             if (bytesPerSample > 1) out.put(o + 1, (sample shr 8).toByte())
             if (bytesPerSample > 2) out.put(o + 2, (sample shr 16).toByte())
@@ -1241,6 +1360,12 @@ class LibusbAudioSink(
         if (encoding == C.ENCODING_PCM_FLOAT) "float" else "${pcmBitsFromEncoding(encoding)}b"
 
     companion object {
+        /** The main stream counts as writing for this long after it last did. */
+        private const val MAIN_ACTIVE_NS = 50_000_000L
+
+        /** Most tail frames written alone at a time. */
+        private const val TAIL_PUMP_FRAMES = 1024
+
         private const val TAG = "LibusbAudioSink"
         /** Steps allowed for the hi-res chain to give up its tail at end of stream. */
         private const val MAX_DRAIN_STEPS = 64

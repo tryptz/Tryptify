@@ -560,9 +560,17 @@ fun MixerScreen(
                         accent = accent,
                         channelDynamicColor = channelDynamicColor,
                         hazeState = mixerHaze,
+                        // First tap selects (so the route arrows and knobs act
+                        // for that bus); a tap on the bus already selected —
+                        // which a double tap is — opens its insert rack. Not a
+                        // double-tap detector: that holds every single tap back
+                        // ~300 ms to rule out a second, and selecting would lag.
                         onSelectBus = { index ->
-                            viewModel.selectBus(index)
-                            showInsertRack = true
+                            if (index == selectedBusIndex) {
+                                showInsertRack = true
+                            } else {
+                                viewModel.selectBus(index)
+                            }
                         },
                         modifier = Modifier.weight(1f)
                     )
