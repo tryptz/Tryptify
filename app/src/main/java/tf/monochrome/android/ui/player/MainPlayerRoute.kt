@@ -9,18 +9,11 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -1373,42 +1366,29 @@ private fun BoxScope.SpeedPanel(
             // segmented buttons drop their selected-state checkmark to make
             // room — the filled segment already says which unit is live, and
             // the check was 24dp of nothing on a row that now has to fit
-            // three controls on a 360dp screen.
+            // three controls on a 360dp screen. Both are the panel's own
+            // capsules (SpeedControls.kt) so they match everything below.
             val nightcoreActive = abs(speed - 1.10f) < 0.01f && !preservePitch
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.weight(1f)) {
-                    SegmentedButton(
-                        selected = !speedUnitSemitones,
-                        onClick = { onSpeedUnitChange(false) },
-                        shape = SegmentedButtonDefaults.itemShape(0, 2),
-                        icon = {},
-                        label = { Text("Multiplier", maxLines = 1) },
-                    )
-                    SegmentedButton(
-                        selected = speedUnitSemitones,
-                        onClick = { onSpeedUnitChange(true) },
-                        shape = SegmentedButtonDefaults.itemShape(1, 2),
-                        icon = {},
-                        label = { Text("Semitones", maxLines = 1) },
-                    )
-                }
-                FilterChip(
-                    selected = nightcoreActive,
+                SpeedSegmented(
+                    options = listOf("Multiplier", "Semitones"),
+                    selectedIndex = if (speedUnitSemitones) 1 else 0,
+                    accent = speedAccent,
+                    onSelect = { onSpeedUnitChange(it == 1) },
+                    modifier = Modifier.weight(1f),
+                )
+                SpeedKey(
+                    label = "Nightcore",
+                    icon = Icons.Default.AutoAwesome,
+                    accent = speedAccent,
+                    active = nightcoreActive,
                     onClick = {
                         onSpeedChange(1.10f)
                         onPreservePitchChange(false)
-                    },
-                    label = { Text("Nightcore", maxLines = 1) },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                        )
                     },
                 )
             }
@@ -1418,23 +1398,19 @@ private fun BoxScope.SpeedPanel(
             // slides, because every value between two intervals is a real
             // speed there.
             if (speedUnitSemitones) {
-                Row(
+                // One capsule with the value between its buttons, where it
+                // used to be two wide pills that never showed what they moved.
+                SpeedStepper(
+                    value = PitchRatio.formatSpeed(speed, semitoneUnit = true),
+                    accent = speedAccent,
+                    onDecrement = { onSpeedChange(PitchRatio.step(speed, -1)) },
+                    onIncrement = { onSpeedChange(PitchRatio.step(speed, 1)) },
+                    decrementLabel = "Down one semitone",
+                    incrementLabel = "Up one semitone",
+                    canDecrement = PitchRatio.step(speed, -1) < speed - 0.0001f,
+                    canIncrement = PitchRatio.step(speed, 1) > speed + 0.0001f,
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    StepButton(
-                        label = "-1 st",
-                        accent = speedAccent,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onSpeedChange(PitchRatio.step(speed, -1)) },
-                    )
-                    StepButton(
-                        label = "+1 st",
-                        accent = speedAccent,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onSpeedChange(PitchRatio.step(speed, 1)) },
-                    )
-                }
+                )
             } else {
                 Slider(
                     value = speed,
@@ -1505,25 +1481,20 @@ private fun BoxScope.SpeedPanel(
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Spacer(Modifier.weight(1f))
-                Text(
-                    text = "${PitchRatio.formatSemitones(pitchSemitones.roundToInt())} st",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = speedAccent,
-                )
-                StepButton(
-                    label = "-1 st",
+                SpeedStepper(
+                    value = "${PitchRatio.formatSemitones(pitchSemitones.roundToInt())} st",
                     accent = speedAccent,
-                    onClick = {
+                    onDecrement = {
                         onPitchSemitonesChange((pitchSemitones.roundToInt() - 1).coerceAtLeast(-24).toFloat())
                     },
-                )
-                StepButton(
-                    label = "+1 st",
-                    accent = speedAccent,
-                    onClick = {
+                    onIncrement = {
                         onPitchSemitonesChange((pitchSemitones.roundToInt() + 1).coerceAtMost(24).toFloat())
                     },
+                    decrementLabel = "Pitch down one semitone",
+                    incrementLabel = "Pitch up one semitone",
+                    canDecrement = pitchSemitones.roundToInt() > -24,
+                    canIncrement = pitchSemitones.roundToInt() < 24,
+                    compact = true,
                 )
                 IconButton(
                     onClick = { onPitchSemitonesChange(0f) },
@@ -1554,19 +1525,13 @@ private fun BoxScope.SpeedPanel(
                 exit = fadeOut() + shrinkVertically(),
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        PitchEngine.entries.forEachIndexed { index, engine ->
-                            SegmentedButton(
-                                selected = pitchEngine == engine,
-                                onClick = { onPitchEngineChange(engine) },
-                                shape = SegmentedButtonDefaults.itemShape(
-                                    index = index,
-                                    count = PitchEngine.entries.size,
-                                ),
-                                label = { Text(engine.label, maxLines = 1) },
-                            )
-                        }
-                    }
+                    SpeedSegmented(
+                        options = PitchEngine.entries.map { it.label },
+                        selectedIndex = PitchEngine.entries.indexOf(pitchEngine),
+                        accent = speedAccent,
+                        onSelect = { onPitchEngineChange(PitchEngine.entries[it]) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     Text(
                         text = pitchEngine.summary,
                         style = MaterialTheme.typography.bodySmall,
@@ -1579,19 +1544,13 @@ private fun BoxScope.SpeedPanel(
                     // reason it is reachable rather than a constant -- the
                     // vocoder's block was chosen for accuracy alone and drops
                     // out on real hardware at the top setting.
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        PitchQuality.entries.forEachIndexed { index, quality ->
-                            SegmentedButton(
-                                selected = pitchQuality == quality,
-                                onClick = { onPitchQualityChange(quality) },
-                                shape = SegmentedButtonDefaults.itemShape(
-                                    index = index,
-                                    count = PitchQuality.entries.size,
-                                ),
-                                label = { Text(quality.label, maxLines = 1) },
-                            )
-                        }
-                    }
+                    SpeedSegmented(
+                        options = PitchQuality.entries.map { it.label },
+                        selectedIndex = PitchQuality.entries.indexOf(pitchQuality),
+                        accent = speedAccent,
+                        onSelect = { onPitchQualityChange(PitchQuality.entries[it]) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     // The number that actually decides it, which is not the
                     // same number for the two engines.
                     Text(
@@ -1610,36 +1569,6 @@ private fun BoxScope.SpeedPanel(
         }
         }
         }
-    }
-}
-
-/**
- * One press of the semitone steppers, on both engines.
- *
- * A bordered pill rather than the bare [TextButton] these were: as plain text
- * they read as links in a panel that already had several, with nothing to say
- * they were the buttons that move the value. The border is the accent at low
- * alpha so they belong to the control above them without competing with it.
- *
- * The speed pair takes a weight so the two of them split the row; the pitch
- * pair sits at its intrinsic width beside the readout.
- */
-@Composable
-private fun StepButton(
-    label: String,
-    accent: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    OutlinedButton(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(percent = 50),
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 6.dp),
-        border = BorderStroke(1.dp, accent.copy(alpha = 0.45f)),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = accent),
-    ) {
-        Text(text = label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
     }
 }
 
