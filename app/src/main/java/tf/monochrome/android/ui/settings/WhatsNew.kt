@@ -142,6 +142,14 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
+                    section = SEARCH,
+                    title = "Source tags everywhere",
+                    body = "Every song, album and artist shows where it comes from: lists, the " +
+                        "queue, album and artist pages, and the player, which also says \"via\" " +
+                        "when a song plays from somewhere else.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = DOWNLOADS,
                     title = "Download Deezer songs",
                     body = "Downloading a Deezer song saves the same recording from Qobuz. If " +
@@ -168,6 +176,13 @@ object WhatsNew {
                     title = "The search bar no longer covers the filters",
                     body = "On Home, the filter pills start below the search bar instead of under " +
                         "it, and stay on screen while results load.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = SEARCH,
+                    title = "Albums and artists open from their own catalog",
+                    body = "A Qobuz or Apple Music album that can't load says so, instead of " +
+                        "sometimes opening a different album from another service.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
@@ -231,21 +246,6 @@ object WhatsNew {
                         "playing, even when it's a different format.",
                 ),
                 WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
-                    section = USB_DAC,
-                    title = "Crossfades on a USB DAC",
-                    body = "Crossfade now works while Tryptify drives your DAC directly, " +
-                        "including between songs at different sample rates.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
-                    section = SEARCH,
-                    title = "Source tags everywhere",
-                    body = "Every song, album and artist shows where it comes from: lists, the " +
-                        "queue, album and artist pages, and the player, which also says \"via\" " +
-                        "when a song plays from somewhere else.",
-                ),
-                WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = PLAYBACK,
                     title = "TIDAL asks before Qobuz",
@@ -253,11 +253,11 @@ object WhatsNew {
                         "its own. It asks, and plays the Qobuz copy only if you say yes.",
                 ),
                 WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = SEARCH,
-                    title = "Albums and artists open from their own catalog",
-                    body = "A Qobuz or Apple Music album that can't load says so, instead of " +
-                        "sometimes opening a different album from another service.",
+                    kind = WhatsNewKind.NEW,
+                    section = USB_DAC,
+                    title = "Crossfades on a USB DAC",
+                    body = "Crossfade now works while Tryptify drives your DAC directly, " +
+                        "including between songs at different sample rates.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
