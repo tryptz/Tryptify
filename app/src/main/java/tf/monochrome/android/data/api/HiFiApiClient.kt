@@ -492,27 +492,38 @@ class HiFiApiClient @Inject constructor(
     // whichever added API answers /api/deezer/*; every call fails soft so it
     // never blocks another catalog.
 
-    // ISRCs seen in Deezer payloads, so the Qobuz match needs no extra lookup.
+    // ISRCs seen in Deezer payloads, so an ISRC lookup needs no extra request.
     // Search results usually have none (Deezer's /search omits it); a pasted
     // track URL and album tracks sometimes do.
     private val deezerIsrcs = java.util.concurrent.ConcurrentHashMap<Long, String>()
 
+    // Deezer ids whose catalogue item claimed hi-res. Only these are asked for
+    // the top quality codes; everything else tops out at CD FLAC.
+    private val deezerHiRes: MutableSet<Long> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
     private suspend fun deezerBaseOrNull(): String? =
         instanceManager.deezerInstanceOrNull()?.url?.trimEnd('/')
 
-    /** Map a Deezer track item: Deezer identity, and no lossless claim — it is a preview until matched. */
+    /**
+     * Map a Deezer track item: Deezer identity, and the quality its catalogue
+     * flags claim — /api/deezer/download serves the full file in that tier.
+     */
     private fun QobuzTrackItem.toDeezerTrack(
         fallbackAlbum: tf.monochrome.android.domain.model.Album? = null,
     ): Track {
         val trackId = id ?: 0L
         registerDeezerTrackItem(this)
-        return toDomainTrack(fallbackAlbum).copy(deezerId = trackId, audioQuality = null)
+        return toDomainTrack(fallbackAlbum).copy(
+            deezerId = trackId,
+            audioQuality = DeezerQuality.badgeFor(hires, maximumBitDepth),
+        )
     }
 
     private fun registerDeezerTrackItem(item: QobuzTrackItem) {
         val trackId = item.id ?: return
         qobuzIdRegistry.registerDeezerTrack(trackId)
         item.isrc?.takeIf { it.isNotBlank() }?.let { deezerIsrcs[trackId] = it }
+        if (item.hires) deezerHiRes.add(trackId)
         item.album?.qobuzId?.let { qobuzIdRegistry.registerDeezerAlbum(it) }
         item.performer?.id?.let { qobuzIdRegistry.registerDeezerArtist(it) }
         item.album?.artist?.id?.let { qobuzIdRegistry.registerDeezerArtist(it) }
@@ -645,6 +656,37 @@ class HiFiApiClient @Inject constructor(
         deezerIsrcs[deezerId] = isrc
         return isrc
     }
+
+    /**
+     * Full-length file URL for a Deezer track — GET
+     * /api/deezer/download?track_id=<id>&quality=<code>, the Deezer twin of
+     * Qobuz's /api/download-music. Same quality codes, same envelope
+     * (`{ success, data: { url } }`, a signed /api/file link), so it is read
+     * with the same parsers. See [DeezerQuality] for what each code serves.
+     *
+     * Null when no instance serves Deezer or the instance refuses the track —
+     * it answers 403 "not available for download with current ARL cookie"
+     * when its Deezer account can't serve it. A refused FLAC request is
+     * retried once as MP3 320, the way Hi-Res falls back on Qobuz.
+     */
+    suspend fun getDeezerDownloadUrl(deezerId: Long, quality: AudioQuality): String? {
+        val base = deezerBaseOrNull() ?: return null
+        val tier = DeezerQuality.tierFor(quality, hires = deezerId in deezerHiRes)
+        return resolveDeezerDownloadUrl(base, deezerId, tier)
+            ?: tier.takeIf { it.codec == "FLAC" }?.let {
+                resolveDeezerDownloadUrl(base, deezerId, DeezerQuality.Tier.MP3_320)
+            }
+    }
+
+    private suspend fun resolveDeezerDownloadUrl(base: String, deezerId: Long, tier: DeezerQuality.Tier): String? =
+        withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
+            runCatching {
+                val res = httpClient.get("$base/api/deezer/download?track_id=$deezerId&quality=${tier.code}")
+                if (!res.status.isSuccess()) return@runCatching null
+                val body = res.bodyAsText()
+                extractQobuzFileUrlFromEnvelope(body, base) ?: extractQobuzFileUrl(body, base)
+            }.getOrNull()
+        }
 
     /**
      * Playable URL of a Deezer track's 30-second preview — a signed /api/file
@@ -1118,7 +1160,7 @@ class HiFiApiClient @Inject constructor(
         // /api/file?... URL we then stream the bytes from.
         // A Deezer id means nothing to Qobuz or TIDAL — both would answer with
         // whatever recording happens to have that number. Deezer picks are
-        // matched to Qobuz by recording (domain.usecase.DeezerQobuzMatcher) before they get
+        // served by /api/deezer/download (getDeezerDownloadUrl) and never get
         // here; a bare Deezer id arriving at this point has no stream.
         if (qobuzIdRegistry.isDeezerTrack(trackId) && !qobuzIdRegistry.isQobuzTrack(trackId)) {
             throw IllegalStateException(

@@ -389,18 +389,18 @@ sealed class PlaybackSource {
     /**
      * Deezer catalog pick, from the instance's /api/deezer routes.
      *
-     * The public Deezer API only serves 30-second MP3 previews, so
-     * StreamResolver first looks for the same recording on Qobuz (ISRC, then a
-     * strict title + artist match) and plays that in full; only when Qobuz has
-     * nothing does it fall back to the preview from /api/deezer/preview.
-     * [isrc] is carried when the catalog response had one, which saves the
-     * lookup round trip.
+     * Played like [QobuzCached]: StreamResolver fetches the full file from
+     * /api/deezer/download into the Deezer cache, and only when the instance
+     * can't serve it falls back to the 30-second preview from
+     * /api/deezer/preview. The name predates full playback and stays, because
+     * it is the serialized type tag of saved queues.
      */
     @Serializable
     @SerialName("DeezerPreview")
     data class DeezerPreview(
         val deezerId: Long,
         val isrc: String? = null,
+        val preferredQuality: AudioQuality = AudioQuality.LOSSLESS,
     ) : PlaybackSource()
 
     /**

@@ -95,6 +95,7 @@ class PlaybackService : MediaSessionService() {
     // MediaController, which carries neither one nor any decoder identity.
     @Inject lateinit var audioPipelineMonitor: tf.monochrome.android.audio.pipeline.AudioPipelineMonitor
     @Inject lateinit var qobuzCache: tf.monochrome.android.data.cache.QobuzStreamCacheManager
+    @Inject lateinit var deezerCache: tf.monochrome.android.data.cache.DeezerStreamCacheManager
     @Inject lateinit var usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter
     @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
     @Inject lateinit var bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController
@@ -139,10 +140,12 @@ class PlaybackService : MediaSessionService() {
             .setReadTimeoutMs(15_000)
         val default = androidx.media3.datasource.DefaultDataSource.Factory(this, http)
         val qobuz = tf.monochrome.android.data.cache.QobuzPartialDataSource.Factory(qobuzCache)
+        val deezer = tf.monochrome.android.data.cache.DeezerPartialDataSource.Factory(deezerCache)
         return androidx.media3.datasource.DataSource.Factory {
             tf.monochrome.android.data.cache.SchemeRoutingDataSource(
                 default.createDataSource(),
                 qobuz.createDataSource(),
+                deezer.createDataSource(),
             )
         }
     }

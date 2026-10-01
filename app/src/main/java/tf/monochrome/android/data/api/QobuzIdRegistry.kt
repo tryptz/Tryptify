@@ -79,10 +79,6 @@ class QobuzIdRegistry @Inject constructor(
     private val deezerTrackIds: MutableSet<Long> = ConcurrentHashMap.newKeySet()
     private val deezerAlbumIds: MutableSet<Long> = ConcurrentHashMap.newKeySet()
     private val deezerArtistIds: MutableSet<Long> = ConcurrentHashMap.newKeySet()
-    // Deezer track id -> the Qobuz track id of the same recording, so a Deezer
-    // pick plays in full. Session-scoped like artistAliases: rebuilding it is
-    // one search, and a miss is worth retrying once Qobuz is configured.
-    private val qobuzIdByDeezerTrack = ConcurrentHashMap<Long, Long>()
     // Foreign (TIDAL) artist id -> Qobuz artist id, from the playback fallback.
     // Session-scoped (cheap to rebuild) — not persisted.
     private val artistAliases = ConcurrentHashMap<Long, Long>()
@@ -156,14 +152,6 @@ class QobuzIdRegistry @Inject constructor(
     }
 
     fun isDeezerArtist(id: Long): Boolean = id in deezerArtistIds
-
-    /** Remember the Qobuz track that is the same recording as a Deezer track. */
-    fun registerQobuzForDeezer(deezerId: Long, qobuzId: Long) {
-        if (deezerId != 0L && qobuzId != 0L) qobuzIdByDeezerTrack[deezerId] = qobuzId
-    }
-
-    /** The Qobuz track id matched to this Deezer track, if one was found. */
-    fun qobuzIdForDeezer(deezerId: Long): Long? = qobuzIdByDeezerTrack[deezerId]
 
     /** Remember the Apple adamId that matches a foreign (Qobuz/TIDAL/local) track id. */
     fun registerAppleIdFor(trackId: Long, adamId: Long) {

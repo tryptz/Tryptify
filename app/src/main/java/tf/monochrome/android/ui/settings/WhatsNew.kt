@@ -151,9 +151,10 @@ object WhatsNew {
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = DOWNLOADS,
-                    title = "Download Deezer songs",
-                    body = "Downloading a Deezer song saves the same recording from Qobuz. If " +
-                        "Qobuz doesn't have it, the download stops instead of saving a preview.",
+                    title = "Play and download Deezer songs in full",
+                    body = "Deezer songs play and download from Deezer itself in FLAC or MP3 " +
+                        "320 kbps, cached like Qobuz so the next track starts without a gap. If " +
+                        "the full song isn't available you hear the preview, and downloads stop.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,

@@ -109,8 +109,7 @@ fun SourcePill(source: SourceType, modifier: Modifier = Modifier) {
 /**
  * The player's source tag: the catalog the song was picked from, and — when
  * its audio comes from somewhere else — "via" where it does come from, so a
- * Deezer pick heard from Qobuz, or a TIDAL pick played from its download,
- * never passes as the catalog it is not.
+ * TIDAL pick heard from Qobuz, or one played from its download, never passes as the catalog it is not.
  */
 @Composable
 fun PlayerSourceTag(source: SourceType, via: SourceType?, modifier: Modifier = Modifier) {

@@ -3,6 +3,7 @@ package tf.monochrome.android.player
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import tf.monochrome.android.data.cache.DeezerStreamUri
 import tf.monochrome.android.data.cache.QobuzStreamUri
 import tf.monochrome.android.domain.model.AudioQuality
 
@@ -29,6 +30,11 @@ class GaplessEligibilityTest {
     @Test
     fun `qobuz uris may be pre-queued because they resolve at open time`() {
         assertTrue(GaplessEligibility.isStableUri(QobuzStreamUri.build(11, AudioQuality.LOSSLESS)))
+    }
+
+    @Test
+    fun `deezer uris may be pre-queued because they resolve at open time`() {
+        assertTrue(GaplessEligibility.isStableUri(DeezerStreamUri.build(3135556, AudioQuality.LOSSLESS)))
     }
 
     @Test

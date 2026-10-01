@@ -7,8 +7,8 @@ import tf.monochrome.android.data.cache.QobuzStreamUri
 
 /**
  * Which service a playing item's audio actually comes from, when that is not
- * the one the song was picked from — a Deezer pick played from Qobuz, a
- * TIDAL pick the listener let play from Qobuz, or a catalog pick played from
+ * the one the song was picked from — a TIDAL pick the listener let play from
+ * Qobuz, or a catalog pick played from
  * its downloaded copy. Carried in the MediaItem's
  * metadata extras, so the now-playing screen can tag it honestly.
  */
