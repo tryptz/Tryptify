@@ -70,6 +70,37 @@ Several tests exist specifically to hold the invariants above — `LightSchemesT
 guarantee, not a formality. If one fails, fix the code; do not loosen the
 threshold.
 
+## Fresh cloud container setup
+
+A cloud session starts with no Android SDK, so even `compileDebugKotlin` fails
+with "SDK location not found". This is everything a release APK needs:
+
+```
+export ANDROID_HOME=/root/android-sdk
+mkdir -p $ANDROID_HOME/cmdline-tools && cd $ANDROID_HOME/cmdline-tools
+curl -sSo t.zip https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
+unzip -q t.zip && mv cmdline-tools latest && cd -
+yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" \
+    "build-tools;36.0.0" "platform-tools" "ndk;29.0.14206865" "cmake;3.22.1"
+echo "sdk.dir=$ANDROID_HOME" > local.properties   # gitignored
+git submodule update --init --recursive --depth 1
+```
+
+The platform and build tools are enough for compiling and unit tests. The
+NDK, CMake and submodules are needed for anything that assembles an APK. Keep
+the versions in step with `compileSdk`, `ndkVersion` and the `cmake` block in
+`app/build.gradle.kts`.
+
+Release signing needs the keystore, which is never committed. The owner
+uploads `tryptify-release.jks` and its password note into the session; copy
+the `.jks` outside the repo and write a `keystore.properties` in the repo root
+(gitignored) with `storeFile`, `storePassword`, `keyAlias=tryptify` and
+`keyPassword`. Without that file `assembleRelease` does not fail: it builds an
+APK signed with the debug key, which will not install over a released build.
+Check that the signing certificate's SHA-256 starts `70:96:05:04` before handing
+an APK over.
+
 ## Baseline profile
 
 `:app` ships `androidx.profileinstaller`, and until now the only profiles it had
