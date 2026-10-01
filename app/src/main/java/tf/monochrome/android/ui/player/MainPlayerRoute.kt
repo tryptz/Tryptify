@@ -46,7 +46,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tune
@@ -101,6 +100,7 @@ import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.theme.ColorBlend
 import tf.monochrome.android.audio.PitchRatio
+import tf.monochrome.android.audio.SpeedUnit
 import kotlin.math.roundToInt
 import java.util.Locale
 import tf.monochrome.android.ui.navigation.navigateSafe
@@ -148,7 +148,8 @@ fun MainPlayerRoute(
     val pitchSemitones by playerViewModel.pitchSemitones.collectAsStateWithLifecycle()
     val pitchEngine by playerViewModel.pitchEngine.collectAsStateWithLifecycle()
     val pitchQuality by playerViewModel.pitchQuality.collectAsStateWithLifecycle()
-    val speedUnitSemitones by playerViewModel.speedUnitSemitones.collectAsStateWithLifecycle()
+    val speedUnit by playerViewModel.speedUnit.collectAsStateWithLifecycle()
+    val trackBpm by playerViewModel.trackBpm.collectAsStateWithLifecycle()
     val compressorEnabled by playerViewModel.compressorEnabled.collectAsStateWithLifecycle()
     val inflatorEnabled by playerViewModel.inflatorEnabled.collectAsStateWithLifecycle()
     val crossfeedEnabled by playerViewModel.crossfeedEnabled.collectAsStateWithLifecycle()
@@ -493,7 +494,7 @@ fun MainPlayerRoute(
         soundLabel = "AutoEQ",
         // In the listener's own unit. This was the raw ratio, so a speed set
         // in semitones read as "+3 st" in the panel and "1.19x" here.
-        speedLabel = PitchRatio.formatSpeed(playbackSpeed, speedUnitSemitones),
+        speedLabel = speedUnit.format(playbackSpeed, trackBpm),
         sleepTimerLabel = if (sleepMinutes > 0) "$sleepRemainingMinutes min" else "Off",
         sleepTimerActive = sleepMinutes > 0,
         queueLabel = queueLabel,
@@ -944,8 +945,9 @@ fun MainPlayerRoute(
             onPitchEngineChange = playerViewModel::setPitchEngine,
             pitchQuality = pitchQuality,
             onPitchQualityChange = playerViewModel::setPitchQuality,
-            speedUnitSemitones = speedUnitSemitones,
-            onSpeedUnitChange = playerViewModel::setSpeedUnitSemitones,
+            speedUnit = speedUnit,
+            trackBpm = trackBpm,
+            onSpeedUnitChange = playerViewModel::setSpeedUnit,
             onSpeedChange = playerViewModel::setPlaybackSpeed,
             onPreservePitchChange = playerViewModel::setPreservePitch,
             onDismiss = { showSpeedSheet = false },
@@ -1176,8 +1178,10 @@ private fun BoxScope.SpeedPanel(
     onPitchEngineChange: (PitchEngine) -> Unit,
     pitchQuality: PitchQuality,
     onPitchQualityChange: (PitchQuality) -> Unit,
-    speedUnitSemitones: Boolean,
-    onSpeedUnitChange: (Boolean) -> Unit,
+    speedUnit: SpeedUnit,
+    /** The track's own tempo, or null while it is being detected. */
+    trackBpm: Float?,
+    onSpeedUnitChange: (SpeedUnit) -> Unit,
     onSpeedChange: (Float) -> Unit,
     onPreservePitchChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
@@ -1316,18 +1320,23 @@ private fun BoxScope.SpeedPanel(
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Spacer(Modifier.weight(1f))
-                // Whichever unit is selected leads; the other trails in small
-                // type, because the two answer different questions — "how much
-                // faster" and "how much higher" — and one control drives both.
+                // Whichever unit is selected leads; another trails in small
+                // type, because they answer different questions — "how much
+                // faster", "how much higher", "how fast is the music now" —
+                // and one control drives them all.
+                val playedBpm = SpeedUnit.playedBpm(speed, trackBpm)
                 Text(
-                    text = PitchRatio.formatSpeed(speed, speedUnitSemitones),
+                    text = when (speedUnit) {
+                        SpeedUnit.BPM -> playedBpm?.let { SpeedUnit.formatBpm(it) } ?: "Detecting…"
+                        else -> speedUnit.format(speed, trackBpm)
+                    },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = speedAccent,
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    text = if (speedUnitSemitones) {
+                    text = if (speedUnit != SpeedUnit.MULTIPLIER) {
                         String.format(Locale.US, "%.2fx", speed)
                     } else if (PitchRatio.isOnSemitone(speed)) {
                         "${PitchRatio.formatSemitones(PitchRatio.nearestSemitone(speed))} st"
@@ -1355,52 +1364,28 @@ private fun BoxScope.SpeedPanel(
                 }
             }
 
-            // Unit toggle, and the one preset worth a button. Not just a
-            // relabelling: in semitones the panel steps whole intervals at
-            // exact 2^(n/12) ratios, so every value it can reach is in tune;
-            // in multiplier units the slider stays continuous, for the speeds
-            // that are not intervals at all.
-            //
-            // Nightcore rides on the same line rather than filling one with a
-            // glowing pill: 1.10x with pitch following the tempo. The
-            // segmented buttons drop their selected-state checkmark to make
-            // room — the filled segment already says which unit is live, and
-            // the check was 24dp of nothing on a row that now has to fit
-            // three controls on a 360dp screen. Both are the panel's own
-            // capsules (SpeedControls.kt) so they match everything below.
-            val nightcoreActive = abs(speed - 1.10f) < 0.01f && !preservePitch
-            Row(
+            // Unit toggle. Not just a relabelling: in semitones the panel
+            // steps whole intervals at exact 2^(n/12) ratios, so every value it
+            // can reach is in tune; in BPM it steps whole beats per minute of
+            // the track's detected tempo; in multiplier units the slider stays
+            // continuous, for the speeds that are neither. The panel's own
+            // capsule (SpeedControls.kt), like everything below it.
+            SpeedSegmented(
+                options = listOf("Multiplier", "Semitones", "BPM"),
+                selectedIndex = speedUnit.ordinal,
+                accent = speedAccent,
+                onSelect = { onSpeedUnitChange(SpeedUnit.entries[it]) },
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                SpeedSegmented(
-                    options = listOf("Multiplier", "Semitones"),
-                    selectedIndex = if (speedUnitSemitones) 1 else 0,
-                    accent = speedAccent,
-                    onSelect = { onSpeedUnitChange(it == 1) },
-                    modifier = Modifier.weight(1f),
-                )
-                SpeedKey(
-                    label = "Nightcore",
-                    icon = Icons.Default.AutoAwesome,
-                    accent = speedAccent,
-                    active = nightcoreActive,
-                    onClick = {
-                        onSpeedChange(1.10f)
-                        onPreservePitchChange(false)
-                    },
-                )
-            }
+            )
 
-            // One control, chosen by the unit. Semitones step exactly, because
-            // that is the only way to hit an interval by hand; the multiplier
-            // slides, because every value between two intervals is a real
-            // speed there.
-            if (speedUnitSemitones) {
-                // One capsule with the value between its buttons, where it
-                // used to be two wide pills that never showed what they moved.
-                SpeedStepper(
+            // One control, chosen by the unit.
+            // Semitones step exactly, because that is the only way to hit an
+            // interval by hand; BPM steps to whole beats per minute, because
+            // that is how a tempo is matched; the multiplier slides, because
+            // every value between is a real speed there.
+            val controlModifier = Modifier.fillMaxWidth()
+            when (speedUnit) {
+                SpeedUnit.SEMITONES -> SpeedStepper(
                     value = PitchRatio.formatSpeed(speed, semitoneUnit = true),
                     accent = speedAccent,
                     onDecrement = { onSpeedChange(PitchRatio.step(speed, -1)) },
@@ -1409,21 +1394,40 @@ private fun BoxScope.SpeedPanel(
                     incrementLabel = "Up one semitone",
                     canDecrement = PitchRatio.step(speed, -1) < speed - 0.0001f,
                     canIncrement = PitchRatio.step(speed, 1) > speed + 0.0001f,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = controlModifier,
                 )
-            } else {
-                Slider(
+                SpeedUnit.BPM -> {
+                    val played = SpeedUnit.playedBpm(speed, trackBpm)
+                    val source = trackBpm
+                    fun stepTo(direction: Int): Float? =
+                        if (played == null || source == null) null
+                        else SpeedUnit.speedFor(SpeedUnit.stepBpm(played, direction), source)
+                    val down = stepTo(-1)
+                    val up = stepTo(1)
+                    SpeedStepper(
+                        value = played?.let { "${it.roundToInt()} BPM" } ?: "Detecting…",
+                        accent = speedAccent,
+                        onDecrement = { down?.let(onSpeedChange) },
+                        onIncrement = { up?.let(onSpeedChange) },
+                        decrementLabel = "One BPM slower",
+                        incrementLabel = "One BPM faster",
+                        canDecrement = down != null && down < speed - 0.0001f,
+                        canIncrement = up != null && up > speed + 0.0001f,
+                        modifier = controlModifier,
+                    )
+                }
+                SpeedUnit.MULTIPLIER -> Slider(
                     value = speed,
-                    // Was Math.round(it * 100f) / 100f, which quantised the ratio
-                    // to a 0.01 grid — up to 13.5 cents off an equal-tempered
-                    // interval. Full precision now, snapped onto an exact
-                    // semitone only when the drag already lands near one.
+                    // Full precision, snapped onto an exact semitone only
+                    // when the drag already lands near one (a 0.01 grid was
+                    // up to 13.5 cents off an equal-tempered interval).
                     onValueChange = { onSpeedChange(PitchRatio.snap(it)) },
                     valueRange = PitchRatio.MIN_SPEED..PitchRatio.MAX_SPEED,
                     colors = SliderDefaults.colors(
                         thumbColor = speedAccent,
                         activeTrackColor = speedAccent,
                     ),
+                    modifier = controlModifier,
                 )
             }
 

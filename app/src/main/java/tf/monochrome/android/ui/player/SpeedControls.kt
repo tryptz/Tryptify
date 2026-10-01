@@ -6,12 +6,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,15 +41,15 @@ import tf.monochrome.android.ui.components.bounceClick
 
 // The speed panel's one button family. The panel used to mix four kinds of
 // control — Material's segmented row (grey when selected, whatever the
-// theme), a square-cornered FilterChip, and two sizes of outlined pill whose
+// theme), a square-cornered chip, and two sizes of outlined pill whose
 // accent-coloured labels sat accent-on-accent on a tinted panel — so nothing
 // in it read as belonging together and the steppers barely read at all.
 //
 // Here every control is the same capsule at the same height: a quiet tonal
 // fill that sits on the glass rather than being more glass (a button on the
 // pane, not a pane), labels in the panel's own content colour for contrast,
-// and the accent kept for what is live — the selected segment, an active
-// preset, the stepper's signs. Press feedback is bounceClick, the app's squeeze
+// and the accent kept for what is live — the selected segment, the stepper's
+// signs. Press feedback is bounceClick, the app's squeeze
 // for controls that aren't glass themselves.
 
 /** Height of every control in the panel: the 48dp touch minimum, less a hair. */
@@ -121,55 +119,6 @@ internal fun SpeedSegmented(
                 )
             }
         }
-    }
-}
-
-/**
- * A single capsule button: a preset like Nightcore. [active] fills it with the
- * accent, the same language as the selected segment beside it.
- */
-@Composable
-internal fun SpeedKey(
-    label: String,
-    accent: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    icon: ImageVector? = null,
-    active: Boolean = false,
-) {
-    val fill by animateColorAsState(if (active) accent else tonalFill(), label = "keyFill")
-    val content = if (active) onAccent(accent) else MaterialTheme.colorScheme.onSurface
-    Row(
-        modifier = modifier
-            .height(SpeedControlHeight)
-            .clip(Capsule)
-            .background(fill)
-            .border(1.dp, if (active) accent else tonalBorder(), Capsule)
-            .bounceClick { onClick() }
-            .semantics {
-                role = Role.Button
-                selected = active
-            }
-            .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
-    ) {
-        if (icon != null) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (active) content else accent,
-                modifier = Modifier.size(16.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-        }
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = content,
-            maxLines = 1,
-        )
     }
 }
 

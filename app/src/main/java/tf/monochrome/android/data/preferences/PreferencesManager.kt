@@ -273,6 +273,10 @@ class PreferencesManager @Inject constructor(
         private val PITCH_ENGINE = stringPreferencesKey("pitch_engine")
         private val PITCH_QUALITY = stringPreferencesKey("pitch_quality")
         private val SPEED_UNIT_SEMITONES = booleanPreferencesKey("speed_unit_semitones")
+        // BPM as the speed unit. A key of its own beside the semitone one rather
+        // than widening that to three values: a build from before it reads the
+        // semitone key alone and falls back cleanly.
+        private val SPEED_UNIT_BPM = booleanPreferencesKey("speed_unit_bpm")
 
         // Appearance extras
         private val FONT_SCALE = floatPreferencesKey("font_scale")
@@ -470,7 +474,7 @@ class PreferencesManager @Inject constructor(
             FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
             GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, SHOW_EXPLICIT_BADGES,
             NORMALIZATION_ENABLED, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
-            PLAYBACK_SPEED, PRESERVE_PITCH, PITCH_SEMITONES, SPEED_UNIT_SEMITONES,
+            PLAYBACK_SPEED, PRESERVE_PITCH, PITCH_SEMITONES, SPEED_UNIT_SEMITONES, SPEED_UNIT_BPM,
             PITCH_ENGINE, PITCH_QUALITY,
             DOWNLOAD_QUALITY, DOWNLOAD_LYRICS, AUTO_DOWNLOAD_LIKED,
             LASTFM_ENABLED, LASTFM_USERNAME, LISTENBRAINZ_ENABLED,
@@ -1220,6 +1224,20 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setSpeedUnitSemitones(enabled: Boolean) {
         dataStore.edit { it[SPEED_UNIT_SEMITONES] = enabled }
+    }
+
+    /** Which unit the speed control reads in: BPM wins over semitones. */
+    val speedUnit: Flow<tf.monochrome.android.audio.SpeedUnit> = dataStore.data.map { prefs ->
+        tf.monochrome.android.audio.SpeedUnit.of(
+            semitones = prefs[SPEED_UNIT_SEMITONES] ?: false,
+            bpm = prefs[SPEED_UNIT_BPM] ?: false,
+        )
+    }
+    suspend fun setSpeedUnit(unit: tf.monochrome.android.audio.SpeedUnit) {
+        dataStore.edit {
+            it[SPEED_UNIT_SEMITONES] = unit == tf.monochrome.android.audio.SpeedUnit.SEMITONES
+            it[SPEED_UNIT_BPM] = unit == tf.monochrome.android.audio.SpeedUnit.BPM
+        }
     }
     suspend fun setPreservePitch(enabled: Boolean) {
         dataStore.edit { it[PRESERVE_PITCH] = enabled }

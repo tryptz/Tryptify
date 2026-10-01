@@ -75,6 +75,8 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var mixBusProcessor: MixBusProcessor
     // The mixer's Atmos upmix: stereo → 9.1.6 ahead of the mixer, off unless a mix turns it on.
     @Inject lateinit var upmixProcessor: tf.monochrome.android.audio.dsp.UpmixProcessor
+    // The playing track's tempo, for the speed control's BPM unit.
+    @Inject lateinit var bpmTap: tf.monochrome.android.audio.tempo.BpmTapProcessor
     // The Oxford post-chain, injected so a blend's DSP copy can be seeded with
     // whatever these are set to right now.
     @Inject lateinit var inflatorEffect: tf.monochrome.android.audio.dsp.oxford.InflatorEffect
@@ -389,8 +391,9 @@ class PlaybackService : MediaSessionService() {
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                // A new track gets its own blend at its own end.
+                // A new track gets its own blend at its own end, and its own tempo.
                 crossfadeArmed = true
+                bpmTap.newTrack()
                 // A gapless hand-off: the player moved to the item we
                 // pre-queued, so it advanced the queue for us. Bring
                 // QueueManager into line *without* re-resolving — calling
@@ -935,6 +938,7 @@ class PlaybackService : MediaSessionService() {
                             tf.monochrome.android.audio.resample.TryptifyAudioProcessorChain(
                                 arrayOf(
                                 channelDetectorProcessor, // Passive tap: reports source channel count/layout + per-channel activity
+                                bpmTap,                 // Passive tap: the track's own tempo, before the mixer and the speed change
                                 atmosAudioProcessor,    // Atmos: multichannel bed → object render → binaural stereo or speakers; inactive for ≤2ch
                                 // The mixer before the fold, so it sees the song's own layout: a
                                 // 9.1.6 bed spreads one channel group per bus (nine of them), and
@@ -999,7 +1003,9 @@ class PlaybackService : MediaSessionService() {
                             // feed.
                             tf.monochrome.android.audio.usb.ToFloatPcmAudioProcessor(),
                             channelDetectorProcessor,
+                            bpmTap,
                             atmosAudioProcessor,
+                            upmixProcessor,
                             // Mixer before the fold, as in the chain above.
                             mixBusProcessor,
                             downmixProcessor,
@@ -1055,7 +1061,9 @@ class PlaybackService : MediaSessionService() {
                         halProcessors = listOf(
                             tf.monochrome.android.audio.usb.ToFloatPcmAudioProcessor(),
                             channelDetectorProcessor,
+                            bpmTap,
                             atmosAudioProcessor,
+                            upmixProcessor,
                             // Mixer before the fold, as in the chain above.
                             mixBusProcessor,
                             downmixProcessor,

@@ -77,6 +77,7 @@ class PlayerViewModel @Inject constructor(
     private val crossfeedEffect: tf.monochrome.android.audio.dsp.crossfeed.CrossfeedEffect,
     private val nowPlayingLyrics: tf.monochrome.android.player.NowPlayingLyricsHolder,
     private val playbackState: tf.monochrome.android.player.PlaybackStateRepository,
+    private val bpmTap: tf.monochrome.android.audio.tempo.BpmTapProcessor,
 ) : ViewModel() {
 
     /**
@@ -333,13 +334,16 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch { preferences.setPitchQuality(quality) }
     }
 
-    // Whether the speed control reads in semitones or as a multiplier.
-    val speedUnitSemitones: StateFlow<Boolean> = preferences.speedUnitSemitones
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    // What the speed control reads in: a multiplier, semitones, or BPM.
+    val speedUnit: StateFlow<tf.monochrome.android.audio.SpeedUnit> = preferences.speedUnit
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.audio.SpeedUnit.MULTIPLIER)
 
-    fun setSpeedUnitSemitones(enabled: Boolean) {
-        viewModelScope.launch { preferences.setSpeedUnitSemitones(enabled) }
+    fun setSpeedUnit(unit: tf.monochrome.android.audio.SpeedUnit) {
+        viewModelScope.launch { preferences.setSpeedUnit(unit) }
     }
+
+    /** The playing track's own tempo, detected as it plays; null until known. */
+    val trackBpm: StateFlow<Float?> = bpmTap.bpm
 
     // --- Oxford DSP effect toggles (compressor / inflator) ---
     // The effects are @Singleton, so these flows stay in sync with the Oxford
