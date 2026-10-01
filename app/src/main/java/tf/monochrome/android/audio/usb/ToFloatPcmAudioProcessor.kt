@@ -9,7 +9,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Widens 24- and 32-bit integer PCM to float at the head of the exclusive
+ * Widens 8-, 24- and 32-bit integer PCM to float at the head of the exclusive
  * chain, so the DSP stages behind it are willing to run.
  *
  * Every processor in this chain accepts 16-bit or float and nothing else —
@@ -131,6 +131,9 @@ internal class ToFloatPcmAudioProcessor : AudioProcessor {
  */
 @OptIn(UnstableApi::class)
 internal fun bytesPerSample(encoding: Int): Int = when (encoding) {
+    // 8-bit WAV: as unsupported by the chain as 24-bit, and skipped it the
+    // same way, so it is widened too.
+    C.ENCODING_PCM_8BIT -> 1
     C.ENCODING_PCM_24BIT -> 3
     C.ENCODING_PCM_32BIT -> 4
     else -> 0
@@ -149,6 +152,8 @@ internal fun bytesPerSample(encoding: Int): Int = when (encoding) {
  * without drifting by a bit.
  */
 internal fun readSample(input: ByteBuffer, stride: Int): Float = when (stride) {
+    // 8-bit PCM is unsigned, centred on 128 (the WAV convention).
+    1 -> ((input.get().toInt() and 0xFF) - 128) / 128f
     3 -> {
         val b0 = input.get().toInt() and 0xFF
         val b1 = input.get().toInt() and 0xFF

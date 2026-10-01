@@ -113,7 +113,7 @@ class PlaybackService : MediaSessionService() {
     @OptIn(UnstableApi::class)
     private fun buildAtmosTapFactory() =
         tf.monochrome.android.audio.atmos.AtmosTapMediaSourceFactory(
-            DefaultMediaSourceFactory(buildDataSourceFactory()), atmosFrameBuffer)
+            DefaultMediaSourceFactory(buildDataSourceFactory(), tf.monochrome.android.audio.wav.TryptifyExtractors.factory), atmosFrameBuffer)
 
     /**
      * Everything DefaultDataSource handles (file / content / asset / http),
@@ -1303,7 +1303,7 @@ class PlaybackService : MediaSessionService() {
                         DashMediaSource.Factory(dataSourceFactory)
                             .createMediaSource(MediaItem.fromUri(mpdUri))
                     } else {
-                        ProgressiveMediaSource.Factory(dataSourceFactory)
+                        ProgressiveMediaSource.Factory(dataSourceFactory, tf.monochrome.android.audio.wav.TryptifyExtractors.factory)
                             .createMediaSource(mediaItem)
                     }
 

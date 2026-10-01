@@ -125,28 +125,54 @@ class TagReader @Inject constructor(
         lastModified: Long,
         folderArtCache: MutableMap<String, String?>? = null
     ): AudioTags {
-        val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
-        val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
-        val albumArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)
-        val album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
-        val genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE)
-        val composer = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_COMPOSER)
-        val yearStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)
-        val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0
+        var title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+        var artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+        var albumArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)
+        var album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
+        var genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE)
+        var composer = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_COMPOSER)
+        var yearStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)
+        var durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0
         val bitRateStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)
         val mimeType = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE)
-        val numChannels = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_NUM_TRACKS)
-        val sampleRateStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_SAMPLERATE)
-        val bitsPerSample = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITS_PER_SAMPLE)
+        var numChannels = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_NUM_TRACKS)
+        var sampleRateStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_SAMPLERATE)
+        var bitsPerSample = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITS_PER_SAMPLE)
 
         // Parse track number (handles "3/12" format)
         val trackInfo = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)
-        val (trackNumber, trackTotal) = parseTrackNumber(trackInfo)
+        var (trackNumber, trackTotal) = parseTrackNumber(trackInfo)
         val discInfo = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER)
-        val (discNumber, discTotal) = parseTrackNumber(discInfo)
+        var (discNumber, discTotal) = parseTrackNumber(discInfo)
 
         // Determine codec
         val codec = detectCodec(mimeType, filePath)
+
+        // WAV keeps its tags where MediaMetadataRetriever does not look: a
+        // LIST/INFO chunk or an embedded ID3 chunk. The platform's WAV parser
+        // reads neither, so every tagged WAV arrived as its file name, by
+        // "Unknown Artist", with no cover. Read them here and fill what the
+        // retriever left empty.
+        val wav = if (codec == AudioCodec.WAV) readWavTags(filePath) else null
+        if (wav != null) {
+            fun String?.orWav(v: String?) = this?.takeIf { it.isNotBlank() } ?: v
+            title = title.orWav(wav.title)
+            artist = artist.orWav(wav.artist)
+            albumArtist = albumArtist.orWav(wav.albumArtist)
+            album = album.orWav(wav.album)
+            genre = genre.orWav(wav.genre)
+            composer = composer.orWav(wav.composer)
+            yearStr = yearStr.orWav(wav.year)
+            if (trackNumber == null) { trackNumber = wav.track; trackTotal = trackTotal ?: wav.trackTotal }
+            if (discNumber == null) { discNumber = wav.disc; discTotal = discTotal ?: wav.discTotal }
+            // The format comes from the fmt chunk itself, which outranks the
+            // retriever: its "channels" here is METADATA_KEY_NUM_TRACKS — the
+            // count of tracks, 1 for any WAV — so a stereo WAV read as mono.
+            wav.sampleRate?.let { sampleRateStr = it.toString() }
+            wav.bitsPerSample?.let { bitsPerSample = it.toString() }
+            wav.channels?.let { numChannels = it.toString() }
+            if (durationMs <= 0L && wav.durationSeconds != null) durationMs = wav.durationSeconds * 1000L
+        }
 
         // THX Spatial Audio detection. Cheap first: the phrase in title/album
         // (covers sideloaded releases named that way). For FLAC, fall back to a
@@ -176,7 +202,7 @@ class TagReader @Inject constructor(
         // for FLAC/Vorbis/Opus this reads the METADATA_BLOCK_PICTURE/coverart;
         // for ID3v2 this reads APIC. If nothing is embedded, fall back to a
         // sidecar image in the track's folder (cover.jpg, folder.jpg, etc.).
-        val artworkBytes = retriever.embeddedPicture
+        val artworkBytes = retriever.embeddedPicture ?: wav?.artwork
         val hasArt = artworkBytes != null
         val artworkCacheKey = when {
             hasArt && artworkBytes != null -> artworkStore.put(artworkBytes, filePath)
@@ -258,6 +284,58 @@ class TagReader @Inject constructor(
         }
     } catch (_: Exception) {
         false
+    }
+
+    /** What a WAV file's own tags say; null fields where they say nothing. */
+    private class WavTags(
+        val title: String?, val artist: String?, val albumArtist: String?, val album: String?,
+        val genre: String?, val composer: String?, val year: String?,
+        val track: Int?, val trackTotal: Int?, val disc: Int?, val discTotal: Int?,
+        val artwork: ByteArray?,
+        val sampleRate: Int?, val bitsPerSample: Int?, val channels: Int?, val durationSeconds: Int?,
+    )
+
+    /**
+     * A WAV's LIST/INFO and ID3 tags, its cover, and its real format, via
+     * jaudiotagger (which reads both tag chunks, ID3 preferred). Only the
+     * chunk headers and the tag chunks are read — the audio is skipped — and
+     * any failure yields null, so a malformed file never breaks a scan.
+     */
+    private fun readWavTags(filePath: String): WavTags? = try {
+        val file = File(filePath)
+        if (!file.isFile) {
+            null
+        } else {
+            val audio = org.jaudiotagger.audio.AudioFileIO.read(file)
+            val tag = audio.tag
+            fun get(key: org.jaudiotagger.tag.FieldKey): String? =
+                runCatching { tag?.getFirst(key) }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
+            fun num(key: org.jaudiotagger.tag.FieldKey): Int? =
+                get(key)?.substringBefore('/')?.trim()?.toIntOrNull()
+            val header = audio.audioHeader
+            WavTags(
+                title = get(org.jaudiotagger.tag.FieldKey.TITLE),
+                artist = get(org.jaudiotagger.tag.FieldKey.ARTIST),
+                albumArtist = get(org.jaudiotagger.tag.FieldKey.ALBUM_ARTIST),
+                album = get(org.jaudiotagger.tag.FieldKey.ALBUM),
+                genre = get(org.jaudiotagger.tag.FieldKey.GENRE),
+                composer = get(org.jaudiotagger.tag.FieldKey.COMPOSER),
+                year = get(org.jaudiotagger.tag.FieldKey.YEAR),
+                track = num(org.jaudiotagger.tag.FieldKey.TRACK),
+                trackTotal = num(org.jaudiotagger.tag.FieldKey.TRACK_TOTAL),
+                disc = num(org.jaudiotagger.tag.FieldKey.DISC_NO),
+                discTotal = num(org.jaudiotagger.tag.FieldKey.DISC_TOTAL),
+                artwork = runCatching { tag?.firstArtwork?.binaryData }.getOrNull(),
+                sampleRate = runCatching { header?.sampleRateAsNumber }.getOrNull()?.takeIf { it > 0 },
+                bitsPerSample = runCatching { header?.bitsPerSample }.getOrNull()?.takeIf { it > 0 },
+                channels = runCatching { header?.channels?.trim()?.toIntOrNull() }.getOrNull()?.takeIf { it > 0 },
+                durationSeconds = runCatching { header?.trackLength }.getOrNull()?.takeIf { it > 0 },
+            )
+        }
+    } catch (_: Exception) {
+        null
+    } catch (_: OutOfMemoryError) {
+        null
     }
 
     /**

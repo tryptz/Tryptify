@@ -301,7 +301,7 @@ class CrossfadeController(
                     )
                 }.setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON),
             )
-                .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+                .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory, tf.monochrome.android.audio.wav.TryptifyExtractors.factory))
                 .setHandleAudioBecomingNoisy(false)
                 .build()
         }
@@ -325,7 +325,7 @@ class CrossfadeController(
                     .build()
             }.setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON),
         )
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory, tf.monochrome.android.audio.wav.TryptifyExtractors.factory))
             // The main player owns audio focus for the session; the tail is a
             // few seconds of the track that already had it, so it must not
             // request its own and risk being refused mid-blend.

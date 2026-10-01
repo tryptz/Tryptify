@@ -79,4 +79,13 @@ class ToFloatPcmTest {
         assertEquals(0.5f, readSample(two, 3), 0f)
         assertEquals(-0.5f, readSample(two, 3), 0f)
     }
+
+    @Test
+    fun `8-bit PCM is unsigned around 128`() {
+        assertEquals(1, bytesPerSample(androidx.media3.common.C.ENCODING_PCM_8BIT))
+        assertEquals(0f, readSample(le(0x80), 1), 0f)
+        assertEquals(-1f, readSample(le(0x00), 1), 0f)
+        assertEquals(127f / 128f, readSample(le(0xFF), 1), 0f)
+    }
 }
+

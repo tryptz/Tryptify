@@ -1334,6 +1334,10 @@ class LibusbAudioSink(
     }
 
     private fun pcmBitsFromEncoding(encoding: Int): Int = when (encoding) {
+        // 8-bit WAV: the chain's ToFloatPcmAudioProcessor widens it to float,
+        // so it reaches the DAC like any other source instead of being
+        // declined to Android's output.
+        C.ENCODING_PCM_8BIT -> 8
         C.ENCODING_PCM_16BIT -> 16
         C.ENCODING_PCM_24BIT -> 24
         C.ENCODING_PCM_32BIT -> 32
