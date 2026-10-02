@@ -1172,6 +1172,10 @@ internal fun VisualizerSettings(
         // depth, fade and angle beside it, a second, smaller copy above would
         // be the same picture without the explanation.
         Spacer(modifier = Modifier.height(16.dp))
+        // One arbiter for the two live previews below, so only the one most
+        // on screen runs. See PreviewArbiter.
+        val previewArbiter = remember { PreviewArbiter() }
+        androidx.compose.runtime.CompositionLocalProvider(LocalPreviewArbiter provides previewArbiter) {
         val waterfall by viewModel.spectrumWaterfall.collectAsStateWithLifecycle()
         SpectrumWaterfallSettingsSection(
             settings = waterfall,
@@ -1187,6 +1191,7 @@ internal fun VisualizerSettings(
             // Drawn from the same analyzer, so it previews while that runs.
             preview = spectrumEnabled,
         )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Audio Visualizer")

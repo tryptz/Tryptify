@@ -120,6 +120,23 @@ int main() {
                    SpectrumWaterfall::amplitude(high) < SpectrumWaterfall::amplitude(low));
     }
 
+    // Dragging a guide: the depth under the finger is the depth that moved.
+    {
+        bool roundTrips = true;
+        for (float angle = 5.f; angle <= 75.f; angle += 10.f) {
+            SpectrumWaterfall::Params q = p;
+            q.angleDeg = angle;
+            for (float t = 0.f; t <= 1.f; t += 0.05f) {
+                const float back = SpectrumWaterfall::depthAtBaseline(SpectrumWaterfall::baselineAt(t, q), q);
+                if (std::fabs(back - t) > 1e-3f) roundTrips = false;
+            }
+        }
+        expectTrue("depthAtBaseline inverts baselineAt", roundTrips);
+        expectTrue("below the front clamps to 0", SpectrumWaterfall::depthAtBaseline(p.height * 2, p) == 0.f);
+        expectTrue("above the back clamps to 1",
+                   std::fabs(SpectrumWaterfall::depthAtBaseline(-p.height, p) - 1.f) < 1e-4f);
+    }
+
     // Depth sets how long a line lives, not how many there are.
     {
         SpectrumWaterfall shortW, longW;

@@ -79,4 +79,15 @@ Java_tf_monochrome_android_audio_eq_WaterfallNative_nativeGuides(
     env->SetFloatArrayRegion(out, 0, 3, v);
 }
 
+// The preview's fade guide under a finger: the depth whose baseline is at [y].
+JNIEXPORT jfloat JNICALL
+Java_tf_monochrome_android_audio_eq_WaterfallNative_nativeDepthAt(
+        JNIEnv*, jclass, jfloat y, jfloat width, jfloat height, jfloat angleDeg) {
+    SpectrumWaterfall::Params p;
+    p.width = width;
+    p.height = height;
+    p.angleDeg = angleDeg;
+    return SpectrumWaterfall::depthAtBaseline(y, p);
+}
+
 }  // extern "C"

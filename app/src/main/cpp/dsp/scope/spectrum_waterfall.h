@@ -108,6 +108,22 @@ public:
         return p.height * kBottom - d * rise(p) * p.height;
     }
 
+    /**
+     * The inverse of [baselineAt]: which depth (0 front … 1 back) has its
+     * baseline at [y]. For dragging a guide in the preview, so the line under
+     * the finger is the line that moves; clamped to 0 … 1.
+     */
+    static float depthAtBaseline(float y, const Params& raw) {
+        const Params p = clamp(raw);
+        const float r = rise(p) * p.height;
+        if (!(r > 1e-3f)) return 0.f;
+        float d = (p.height * kBottom - y) / r;           // 0 … 1 of the rise
+        if (!(d > 0.f)) return 0.f;
+        if (d > 1.f) d = 1.f;
+        const float s = 1.f - d * (1.f - scaleAt(1.f));   // the scale at that depth
+        return (1.f / s - 1.f) / kPerspective;
+    }
+
     /** A line's strength at depth [t]: full until fadeStart, then easing to nothing. */
     static float alphaAt(float t, float fadeStart) {
         if (fadeStart < 0.f) fadeStart = 0.f;

@@ -43,15 +43,28 @@ internal fun WaveCandySettingsSection(
         modifier = Modifier.padding(bottom = 8.dp),
     )
     if (preview) {
-        tf.monochrome.android.ui.player.WaveCandyOverlay(
-            settings = settings,
-            accent = MaterialTheme.colorScheme.primary,
+        // Runs only while it is the preview most on screen: the waterfall's
+        // sits a scroll above it on the same tab, and two live previews at
+        // once was two full-rate frame loops for one pair of eyes.
+        val (running, reportVisibility) = previewGate("waveCandy")
+        androidx.compose.foundation.layout.Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(120.dp)
+                .then(reportVisibility)
                 .clip(RoundedCornerShape(12.dp))
                 .background(Color.Black.copy(alpha = 0.35f)),
-        )
+        ) {
+            if (running) {
+                tf.monochrome.android.ui.player.WaveCandyOverlay(
+                    settings = settings,
+                    accent = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.matchParentSize(),
+                )
+            } else {
+                PreviewPaused(Modifier.align(androidx.compose.ui.Alignment.Center))
+            }
+        }
     }
     SettingSwitchItem(
         title = "Stereo waveform",

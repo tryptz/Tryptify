@@ -33,6 +33,9 @@ object WaterfallNative {
         floorDb: Float, headroomDb: Float, segs: FloatArray, meta: FloatArray,
     ): Int
 
+    /** The depth (0 front … 1 back) whose baseline is at [y]: the inverse of the guides. */
+    @JvmStatic external fun nativeDepthAt(y: Float, width: Float, height: Float, angleDeg: Float): Float
+
     /** Baselines of the front line, the fade's start and the last line, into [out][0..2]. */
     @JvmStatic external fun nativeGuides(
         width: Float, height: Float, fadeStart: Float, angleDeg: Float, out: FloatArray,

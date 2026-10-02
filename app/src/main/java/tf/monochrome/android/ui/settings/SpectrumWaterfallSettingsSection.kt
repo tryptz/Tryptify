@@ -48,6 +48,17 @@ import tf.monochrome.android.ui.player.SpectrumOverlay
 import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.abs
+import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 
 /**
  * Settings › Spectrum waterfall: how far back the lines run, where they start
@@ -81,7 +92,14 @@ internal fun SpectrumWaterfallSettingsSection(
         modifier = Modifier.padding(bottom = 8.dp),
     )
 
-    WaterfallPreview(preview, liveBins)
+    WaterfallPreview(
+        settings = preview,
+        liveBins = liveBins,
+        // The preview's own gestures move the draft like a slider does, and
+        // save once on release.
+        onAdjust = { draft = it },
+        onAdjustDone = { onChange(it) },
+    )
 
     Text(
         "Style",
@@ -144,6 +162,49 @@ internal fun SpectrumWaterfallSettingsSection(
         onDrag = { draft = draft.copy(lineWidthDp = it) },
         onCommit = { onChange(draft) },
     )
+
+    Text(
+        "Frame rate",
+        style = MaterialTheme.typography.bodyLarge,
+        modifier = Modifier.settingsAnchor("Waterfall frame rate").padding(top = 8.dp, bottom = 2.dp),
+    )
+    Text(
+        "How often the waterfall is drawn. Lower saves GPU and battery; Max is every refresh " +
+            "the display gives.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 6.dp),
+    )
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        (listOf(SpectrumWaterfallSettings.FPS_DISPLAY) + SpectrumWaterfallSettings.FPS_CHOICES).forEach { fps ->
+            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                label = if (fps == SpectrumWaterfallSettings.FPS_DISPLAY) "Max" else "$fps",
+                selected = draft.targetFps == fps,
+                accent = MaterialTheme.colorScheme.primary,
+                onClick = { onChange(draft.copy(targetFps = fps)) },
+                modifier = Modifier.width(if (fps == SpectrumWaterfallSettings.FPS_DISPLAY) 64.dp else 52.dp),
+                description = if (fps == SpectrumWaterfallSettings.FPS_DISPLAY) {
+                    "Every display refresh"
+                } else {
+                    "$fps frames a second"
+                },
+            )
+        }
+    }
+    SettingSwitchItem(
+        title = "Vsync",
+        subtitle = if (draft.vsync) {
+            "Snap the frame rate to an even step of the display's refresh: smooth, evenly spaced frames"
+        } else {
+            "Hold the exact frame rate by the clock: the number you picked, spaced slightly unevenly"
+        },
+        checked = draft.vsync,
+        onCheckedChange = { onChange(draft.copy(vsync = it)) },
+    )
+
     if (settings != SpectrumWaterfallSettings.DEFAULT) {
         TextButton(onClick = { onChange(SpectrumWaterfallSettings.DEFAULT) }) {
             Text("Reset to default")
@@ -152,9 +213,20 @@ internal fun SpectrumWaterfallSettingsSection(
 }
 
 @Composable
-private fun WaterfallPreview(settings: SpectrumWaterfallSettings, liveBins: (() -> FloatArray)?) {
+private fun WaterfallPreview(
+    settings: SpectrumWaterfallSettings,
+    liveBins: (() -> FloatArray)?,
+    onAdjust: (SpectrumWaterfallSettings) -> Unit,
+    onAdjustDone: (SpectrumWaterfallSettings) -> Unit,
+) {
     val accent = MaterialTheme.colorScheme.primary
     val live by rememberUpdatedState(liveBins)
+    // The gesture loop below is started once and outlives recompositions, so
+    // it reads these through State rather than capturing their first values.
+    val current by rememberUpdatedState(settings)
+    val adjust by rememberUpdatedState(onAdjust)
+    val adjustDone by rememberUpdatedState(onAdjustDone)
+    val (running, reportVisibility) = previewGate("waterfall")
 
     // When the last new array arrived from the analyzer. Not state: the
     // provider below reads it from the overlay's frame loop.
@@ -188,21 +260,90 @@ private fun WaterfallPreview(settings: SpectrumWaterfallSettings, liveBins: (() 
         Modifier
             .fillMaxWidth()
             .height(220.dp)
+            .then(reportVisibility)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF07090D)),
+            .background(Color(0xFF07090D))
+            .pointerInput(Unit) {
+                // Touch control. One finger: up and down tilt the angle, left
+                // and right set the depth. Two: pinch for line weight. A
+                // finger that lands on the dashed fade line drags that line.
+                // Moves are consumed, so the page does not scroll under a
+                // drag that started here.
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val grab = 28.dp.toPx()
+                    val onFadeLine = abs(down.position.y - guides[1]) < grab
+                    var s = current
+                    var changed = false
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val pressed = event.changes.filter { it.pressed }
+                        if (pressed.isEmpty()) break
+                        val next = when {
+                            pressed.size >= 2 -> {
+                                val zoom = event.calculateZoom()
+                                s.copy(
+                                    lineWidthDp = (s.lineWidthDp * zoom).coerceIn(
+                                        SpectrumWaterfallSettings.MIN_LINE_WIDTH_DP,
+                                        SpectrumWaterfallSettings.MAX_LINE_WIDTH_DP,
+                                    ),
+                                )
+                            }
+                            onFadeLine -> s.copy(
+                                fadeStart = WaterfallNative.nativeDepthAt(
+                                    pressed[0].position.y, size.width.toFloat(), size.height.toFloat(), s.angleDeg,
+                                ).coerceIn(0f, SpectrumWaterfallSettings.MAX_FADE_START),
+                            )
+                            else -> {
+                                val pan = event.calculatePan()
+                                s.copy(
+                                    // A full-height drag sweeps most of the
+                                    // angle range; a full-width one, most of
+                                    // the depth.
+                                    angleDeg = (s.angleDeg - pan.y / size.height * 90f).coerceIn(
+                                        SpectrumWaterfallSettings.MIN_ANGLE_DEG,
+                                        SpectrumWaterfallSettings.MAX_ANGLE_DEG,
+                                    ),
+                                    depthSeconds = (s.depthSeconds + pan.x / size.width * 6f).coerceIn(
+                                        SpectrumWaterfallSettings.MIN_DEPTH_SECONDS,
+                                        SpectrumWaterfallSettings.MAX_DEPTH_SECONDS,
+                                    ),
+                                )
+                            }
+                        }
+                        event.changes.forEach { if (it.positionChanged()) it.consume() }
+                        if (next != s) {
+                            s = next
+                            changed = true
+                            adjust(s)
+                        }
+                    }
+                    if (changed) adjustDone(s)
+                }
+            },
     ) {
-        SpectrumOverlay(
-            bins = provider,
-            color = accent,
-            modifier = Modifier.fillMaxSize(),
-            height = 220.dp,
-            waterfall = settings,
-        )
+        if (running) {
+            SpectrumOverlay(
+                bins = provider,
+                color = accent,
+                modifier = Modifier.fillMaxSize(),
+                height = 220.dp,
+                waterfall = settings,
+            )
+        } else {
+            PreviewPaused(Modifier.align(Alignment.Center))
+        }
         // The annotations, from the same projection the lines are drawn with.
         Canvas(Modifier.fillMaxSize()) {
             WaterfallNative.nativeGuides(size.width, size.height, settings.fadeStart, settings.angleDeg, guides)
             drawGuides(textMeasurer, settings, guides, accent)
         }
+        Text(
+            "↕ angle · ↔ depth · pinch weight · drag the fade line",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White.copy(alpha = 0.6f),
+            modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
+        )
     }
 
     // The settings in words, so each number says what it does to the picture.
@@ -218,10 +359,15 @@ private fun WaterfallPreview(settings: SpectrumWaterfallSettings, liveBins: (() 
         Text(
             String.format(
                 Locale.US,
-                "%s, %.1f dp. %d lines, one every %d ms. Full strength for %.1f s, then fading " +
-                    "over %.1f s; gone %.1f s after it was heard. Rising at %d°.",
+                "%s, %.1f dp, %s. %d lines, one every %d ms. Full strength for %.1f s, then " +
+                    "fading over %.1f s; gone %.1f s after it was heard. Rising at %d°.",
                 settings.style.label,
                 settings.lineWidthDp,
+                when {
+                    settings.targetFps == SpectrumWaterfallSettings.FPS_DISPLAY -> "every refresh"
+                    settings.vsync -> "${settings.targetFps} fps, vsync"
+                    else -> "${settings.targetFps} fps by the clock"
+                },
                 SpectrumWaterfallSettings.LINES,
                 (period * 1000).toInt(),
                 settings.solidSeconds,
@@ -316,6 +462,17 @@ internal fun fillDemoSpectrum(out: FloatArray, t: Double) {
         }
         out[i] = db.toFloat()
     }
+}
+
+/** What a preview shows while the other one on the screen is the one running. */
+@Composable
+internal fun PreviewPaused(modifier: Modifier = Modifier) {
+    Text(
+        "Preview paused while the other one is on screen",
+        style = MaterialTheme.typography.labelMedium,
+        color = Color.White.copy(alpha = 0.55f),
+        modifier = modifier.padding(16.dp),
+    )
 }
 
 /** Analyzer silence for this long and the preview switches to the demo. */

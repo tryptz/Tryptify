@@ -94,12 +94,21 @@ fun SpectrumOverlay(
     LaunchedEffect(Unit) {
         var lastFrameNanos = 0L
         var settledSince = -1L
+        // The display's refresh period, learned from the frames themselves:
+        // a panel with a dynamic rate (120 Hz while touched, 60 at rest) moves
+        // under the cap, and the cap has to follow it.
+        var refreshNanos = 1_000_000_000.0 / 60.0
+        var frameCount = 0L
+        var nextDueNanos = 0L
         while (isActive) {
             val now = androidx.compose.runtime.withFrameNanos { it }
             if (draw.epochNanos < 0L) draw.epochNanos = now
             draw.nowNanos = now
             val dt = if (lastFrameNanos == 0L) (1f / 60f)
                 else ((now - lastFrameNanos) / 1_000_000_000f).coerceIn(0.001f, 0.1f)
+            if (lastFrameNanos != 0L && now - lastFrameNanos < 100_000_000L) {
+                refreshNanos += ((now - lastFrameNanos) - refreshNanos) * 0.05
+            }
             lastFrameNanos = now
 
             val src = currentBins()
@@ -121,7 +130,13 @@ fun SpectrumOverlay(
                 smoothed[i] = cur + step
                 largestStep = max(largestStep, kotlin.math.abs(step))
             }
-            tick.intValue++
+            // The smoothing above runs every frame — it is 256 additions and
+            // wants the true dt. The draw is what the cap skips.
+            val w = currentWaterfall
+            if (waterfallFrameDue(frameCount++, now, nextDueNanos, refreshNanos, w.targetFps, w.vsync)) {
+                nextDueNanos = waterfallNextDue(now, nextDueNanos, w.targetFps)
+                tick.intValue++
+            }
 
             // Settled on these bins, and held there long enough for the whole
             // history to be this same picture: every further frame would draw
@@ -278,6 +293,49 @@ private class WaterfallDrawState {
         fillPaint.alpha = (alpha * RIDGE_GROUND_ALPHA * 255f).toInt().coerceIn(0, 255)
         return p
     }
+}
+
+/**
+ * Whether this display frame should be drawn under a [targetFps] cap.
+ *
+ * With [vsync] the cap snaps to an even step of the refresh rate: every Nth
+ * frame, N = refresh ÷ target rounded, so 60 on a 120 Hz panel is every second
+ * refresh and evenly spaced, and 45 on 120 Hz becomes every third (40 fps).
+ * Without it the clock decides: each draw is due a target interval after the
+ * last one was *due* — not after it happened — and taken on the refresh
+ * nearest that time. Measuring from the draw itself rounded every interval up
+ * to whole refreshes, so 45 on 120 Hz came out at 40, the same as with vsync;
+ * scheduling against the due time lets those roundings cancel, so the average
+ * is the rate asked for and only the spacing is uneven. 0 draws every frame.
+ */
+internal fun waterfallFrameDue(
+    frameIndex: Long,
+    nowNanos: Long,
+    nextDueNanos: Long,
+    refreshNanos: Double,
+    targetFps: Int,
+    vsync: Boolean,
+): Boolean {
+    if (targetFps <= 0) return true
+    if (vsync) {
+        val refreshHz = 1_000_000_000.0 / refreshNanos.coerceAtLeast(1.0)
+        val every = kotlin.math.round(refreshHz / targetFps).toLong().coerceAtLeast(1L)
+        return frameIndex % every == 0L
+    }
+    if (nextDueNanos == 0L) return true
+    return nowNanos >= nextDueNanos - refreshNanos * 0.5
+}
+
+/**
+ * When the draw after one taken at [nowNanos] is due. A stall (the screen was
+ * off, the overlay slept) restarts the schedule rather than leaving a backlog
+ * of overdue frames to be drawn back to back.
+ */
+internal fun waterfallNextDue(nowNanos: Long, previousDueNanos: Long, targetFps: Int): Long {
+    if (targetFps <= 0) return 0L
+    val interval = (1_000_000_000.0 / targetFps).toLong()
+    val next = if (previousDueNanos == 0L) nowNanos + interval else previousDueNanos + interval
+    return if (next < nowNanos) nowNanos + interval else next
 }
 
 /** Ridgeline's ground colour; its alpha comes from the line it sits under. */

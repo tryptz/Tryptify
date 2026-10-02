@@ -32,12 +32,27 @@ data class SpectrumWaterfallSettings(
     val style: WaterfallStyle = WaterfallStyle.LINES,
     /** Stroke of the front line in dp; lines further back are thinner in proportion. */
     val lineWidthDp: Float = 1.6f,
+    /**
+     * Frames a second the waterfall is drawn at; [FPS_DISPLAY] is every refresh
+     * the display gives it. A cap skips the draw, which is the expensive part.
+     */
+    val targetFps: Int = FPS_DISPLAY,
+    /**
+     * Whether a cap snaps to an even step of the display's refresh (60 on a
+     * 120 Hz panel is every second refresh, evenly spaced) or is held by the
+     * clock (exactly the number asked for, at the cost of uneven spacing).
+     *
+     * Not a swap-interval switch like projectM's: the waterfall is drawn by
+     * the UI renderer, which never presents faster than the display refreshes.
+     */
+    val vsync: Boolean = true,
 ) {
     fun clamped() = copy(
         depthSeconds = depthSeconds.coerceIn(MIN_DEPTH_SECONDS, MAX_DEPTH_SECONDS),
         fadeStart = fadeStart.coerceIn(0f, MAX_FADE_START),
         angleDeg = angleDeg.coerceIn(MIN_ANGLE_DEG, MAX_ANGLE_DEG),
         lineWidthDp = lineWidthDp.coerceIn(MIN_LINE_WIDTH_DP, MAX_LINE_WIDTH_DP),
+        targetFps = if (targetFps <= FPS_DISPLAY) FPS_DISPLAY else targetFps.coerceIn(MIN_FPS, MAX_FPS),
     )
 
     /** Seconds a line keeps full strength before it starts to fade. */
@@ -51,6 +66,14 @@ data class SpectrumWaterfallSettings(
         const val MAX_ANGLE_DEG = 75f
         const val MIN_LINE_WIDTH_DP = 0.5f
         const val MAX_LINE_WIDTH_DP = 3f
+
+        /** No cap: every refresh the display gives. */
+        const val FPS_DISPLAY = 0
+        const val MIN_FPS = 10
+        const val MAX_FPS = 240
+
+        /** The caps the Studio offers, after Max. */
+        val FPS_CHOICES = listOf(15, 24, 30, 45, 60, 90, 120)
 
         /** History lines; cpp's SpectrumWaterfall::kRows. */
         const val LINES = 48
