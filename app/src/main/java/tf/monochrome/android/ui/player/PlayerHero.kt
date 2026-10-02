@@ -128,6 +128,7 @@ fun PlayerHero(
      */
     spectrumBins: (() -> FloatArray)? = null,
     spectrumColor: Color = PlayerGlowBlue,
+    waterfall: tf.monochrome.android.domain.model.SpectrumWaterfallSettings = tf.monochrome.android.domain.model.SpectrumWaterfallSettings.DEFAULT,
     waveSettings: tf.monochrome.android.domain.model.WaveCandySettings? = null,
     onWaveSettings: (tf.monochrome.android.domain.model.WaveCandySettings) -> Unit = {},
     showSpectrum: Boolean = true,
@@ -194,6 +195,7 @@ fun PlayerHero(
                 isPlaying = isPlaying,
                 spectrumBins = spectrumBins,
                 spectrumColor = spectrumColor,
+                waterfall = waterfall,
                 waveSettings = waveSettings,
             onWaveSettings = onWaveSettings,
                 showSpectrum = showSpectrum,
@@ -214,6 +216,7 @@ private fun SquareArtHero(
     isPlaying: Boolean,
     spectrumBins: (() -> FloatArray)?,
     spectrumColor: Color,
+    waterfall: tf.monochrome.android.domain.model.SpectrumWaterfallSettings,
     waveSettings: tf.monochrome.android.domain.model.WaveCandySettings? = null,
     onWaveSettings: (tf.monochrome.android.domain.model.WaveCandySettings) -> Unit = {},
     showSpectrum: Boolean,
@@ -242,6 +245,7 @@ private fun SquareArtHero(
             isPlaying = isPlaying,
             spectrumBins = spectrumBins,
             spectrumColor = spectrumColor,
+            waterfall = waterfall,
             waveSettings = waveSettings,
             onWaveSettings = onWaveSettings,
             showSpectrum = showSpectrum,
@@ -713,6 +717,7 @@ private fun HeroCoverArt(
     isPlaying: Boolean,
     spectrumBins: (() -> FloatArray)? = null,
     spectrumColor: Color = PlayerGlowBlue,
+    waterfall: tf.monochrome.android.domain.model.SpectrumWaterfallSettings = tf.monochrome.android.domain.model.SpectrumWaterfallSettings.DEFAULT,
     waveSettings: tf.monochrome.android.domain.model.WaveCandySettings? = null,
     onWaveSettings: (tf.monochrome.android.domain.model.WaveCandySettings) -> Unit = {},
     showSpectrum: Boolean = true,
@@ -828,6 +833,7 @@ private fun HeroCoverArt(
                     height = maxHeight * 0.35f,
                     attack = spectrumSpeed.attack,
                     release = spectrumSpeed.release,
+                    waterfall = waterfall,
                 )
             }
         }

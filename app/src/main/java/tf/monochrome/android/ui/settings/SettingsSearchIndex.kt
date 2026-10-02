@@ -165,6 +165,12 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
 
     entry("Wave Candy", "Equalizer", listOf("waveform", "oscilloscope", "scope", "kick", "punch", "stereo", "mono")),
 
+    entry(
+        "Spectrum waterfall",
+        "Equalizer",
+        listOf("waterfall", "depth", "fade", "angle", "perspective", "ridgeline", "3d", "history", "spectrogram"),
+    ),
+
     // ── Library ─────────────────────────────────────────────────────────
     // Renamed with the header it points at: SettingsSearchIndexTest greps the
     // settings screens for every title here, so the two move together or the

@@ -42,7 +42,7 @@ class AudioPipelineSnapshotTest {
     }
 
     @Test
-    fun `all five stages are always present, even when empty`() {
+    fun `every stage is always present, even when empty`() {
         val snapshot = buildAudioPipelineSnapshot(AudioPipelineInputs())
         assertEquals(PipelineStage.entries.toList(), snapshot.sections.map { it.stage })
     }

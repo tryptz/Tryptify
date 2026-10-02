@@ -59,7 +59,8 @@ pack the visualizer ships; it comes down with the same command.
 
 The native DSP has host tests that build with the desktop compiler, no
 device or NDK needed — the multichannel mixer, the Oxford stages at Atmos
-widths, and the WSOLA shifter:
+widths, the WSOLA shifter, the EBU R128 loudness meter (against EBU Tech
+3341/3342's reference signals) and the spectrum waterfall's geometry:
 
 ```
 app/src/main/cpp/dsp/tests/run_host_tests.sh

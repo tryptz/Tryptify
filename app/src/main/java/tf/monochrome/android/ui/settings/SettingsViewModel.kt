@@ -114,6 +114,11 @@ class SettingsViewModel @Inject constructor(
     fun setWaveCandy(settings: tf.monochrome.android.domain.model.WaveCandySettings) {
         viewModelScope.launch { preferences.setWaveCandy(settings) }
     }
+    val spectrumWaterfall: StateFlow<tf.monochrome.android.domain.model.SpectrumWaterfallSettings> = preferences.spectrumWaterfall
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.SpectrumWaterfallSettings.DEFAULT)
+    fun setSpectrumWaterfall(settings: tf.monochrome.android.domain.model.SpectrumWaterfallSettings) {
+        viewModelScope.launch { preferences.setSpectrumWaterfall(settings) }
+    }
     fun acquireSpectrum() = spectrumAnalyzerTap.acquire()
     fun releaseSpectrum() = spectrumAnalyzerTap.release()
 

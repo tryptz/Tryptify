@@ -51,6 +51,18 @@ echo "== oversampler_test"
 $cxx $flags "$here/oversampler_test.cpp" -o "$out/oversampler_test"
 "$out/oversampler_test"
 
+# The loudness meter against EBU Tech 3341 / 3342's reference signals, with
+# -ffast-math as on the phone: its no-reading and silence values must survive it.
+echo "== loudness_meter_test"
+$cxx $flags -ffast-math "$here/loudness_meter_test.cpp" -o "$out/loudness_meter_test"
+"$out/loudness_meter_test"
+
+# The spectrum waterfall's geometry: inside the box at every angle, the fade
+# where it was set, a fixed line count whatever the depth.
+echo "== spectrum_waterfall_test"
+$cxx $flags -ffast-math "$here/spectrum_waterfall_test.cpp" -o "$out/spectrum_waterfall_test"
+"$out/spectrum_waterfall_test"
+
 # Everything that could break the engine, under AddressSanitizer and
 # UndefinedBehaviorSanitizer, with -ffast-math as on the phone (a NaN guard
 # the flag would delete must fail here). Then the control-vs-audio thread

@@ -57,6 +57,10 @@ add_library(monochrome_dsp SHARED
     dsp/oxford/oxford_jni.cpp
     # Wave Candy scope on the artwork: ring + per-frame segment render.
     dsp/scope/wave_scope.cpp
+    # The spectrum waterfall on the artwork: history + perspective segments.
+    dsp/scope/spectrum_waterfall_jni.cpp
+    # EBU R128 loudness for the Audio Pipeline panel and the master strip.
+    dsp/meter/loudness_jni.cpp
 )
 
 target_include_directories(monochrome_dsp PRIVATE

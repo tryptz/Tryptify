@@ -26,6 +26,8 @@ enum class PipelineStage(val title: String) {
     DECODER("Decoder"),
     RESAMPLER("Resampler"),
     DSP("DSP"),
+    /** Measured after the DSP chain, so it sits between it and the device. */
+    LOUDNESS("Loudness"),
     OUTPUT("Output Device"),
 }
 
@@ -201,6 +203,8 @@ data class AudioPipelineInputs(
     val atmos: AtmosStage? = null,
     /** Channels leaving the chain for the platform; null before a stream. */
     val outputChannels: Int? = null,
+    /** The EBU R128 meter at the end of the chain; null before it has measured anything. */
+    val loudness: tf.monochrome.android.audio.eq.LoudnessReading? = null,
 )
 
 // ── Formatting ──────────────────────────────────────────────────────────
@@ -280,6 +284,26 @@ internal fun latencyMs(frames: Int?, sampleRate: Int?): Double? {
     if (frames == null || frames <= 0) return null
     if (sampleRate == null || sampleRate <= 0) return null
     return frames * 1000.0 / sampleRate
+}
+
+/**
+ * A loudness in LUFS. Digital silence is a reading, so it says so rather than
+ * printing the meter's floor as though it were a level.
+ */
+internal fun lufs(value: Float?): String? = value?.let {
+    if (it <= tf.monochrome.android.audio.eq.LoudnessReading.SILENCE + 0.05f) {
+        "Silence"
+    } else {
+        String.format(java.util.Locale.ROOT, "%.1f LUFS", it)
+    }
+}
+
+internal fun dbtp(value: Float?): String? = value?.let {
+    if (it <= tf.monochrome.android.audio.eq.LoudnessReading.SILENCE + 0.05f) {
+        "Silence"
+    } else {
+        String.format(java.util.Locale.ROOT, "%.1f dBTP", it)
+    }
 }
 
 // ── The builder ─────────────────────────────────────────────────────────
@@ -497,5 +521,29 @@ fun buildAudioPipelineSnapshot(input: AudioPipelineInputs): AudioPipelineSnapsho
         },
     )
 
-    return AudioPipelineSnapshot(listOf(track, decoder, resampler, dsp, output))
+    val reading = input.loudness
+    val loudness = PipelineSection(
+        PipelineStage.LOUDNESS,
+        listOf(
+            PipelineField("Momentary", lufs(reading?.momentary)),
+            PipelineField("Short-term", lufs(reading?.shortTerm)),
+            PipelineField("Integrated", lufs(reading?.integrated)),
+            PipelineField(
+                "Loudness Range",
+                reading?.range?.let { String.format(java.util.Locale.ROOT, "%.1f LU", it) },
+            ),
+            PipelineField("True Peak", dbtp(reading?.truePeak)),
+        ),
+        note = if (reading == null) {
+            "Measuring starts when audio plays. Momentary needs 400 ms of it, " +
+                "Short-term and Range 3 s."
+        } else {
+            "EBU R128, measured after the mixer, fold-down and EQ, before the speed " +
+                "stages. Integrated, Range and True Peak count from the start of this " +
+                "track or from opening this panel, whichever came later."
+        },
+        engaged = reading?.momentary?.let { it > tf.monochrome.android.audio.eq.LoudnessReading.SILENCE + 0.05f } == true,
+    )
+
+    return AudioPipelineSnapshot(listOf(track, decoder, resampler, dsp, loudness, output))
 }

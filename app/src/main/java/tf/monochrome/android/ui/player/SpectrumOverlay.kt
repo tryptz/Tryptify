@@ -1,47 +1,57 @@
 package tf.monochrome.android.ui.player
 
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Shader
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
+import tf.monochrome.android.audio.eq.WaterfallNative
+import tf.monochrome.android.domain.model.SpectrumWaterfallSettings
+import tf.monochrome.android.domain.model.WaterfallStyle
 import kotlin.math.exp
 import kotlin.math.max
 
 /**
- * FabFilter-style smoothed spectrum waveform overlay for the Now Playing
- * screen. Renders the live FFT bins from [SpectrumAnalyzerTap] as a flowing
- * envelope filled to the baseline.
+ * The spectrum over the artwork as a receding waterfall: the live spectrum is
+ * the bright line at the front, and every fraction of a second a copy of it is
+ * laid down and falls back — narrowing toward the centre, rising toward the top
+ * and fading out — so the last few seconds of the song stand behind it as a
+ * ridgeline. [waterfall] sets how far back that runs, where the fade begins
+ * and the angle the lines rise at.
  *
  * Implementation notes:
- *  - The smoothing buffer is allocated once and mutated in place inside the
- *    per-frame coroutine, so we don't churn the GC at 60 fps. A monotonic
- *    counter inside a `mutableIntStateOf` is the only Compose state we
- *    write to — that's enough to invalidate the Canvas without recomposing
- *    anything else on the screen.
- *  - Separate attack/release time constants give the envelope a snappy
- *    response on transients and a longer tail on decays, matching the
- *    "Pro-Q" look the reference EQ editor uses.
- *  - If the audio falls silent the bins decay naturally toward the floor and
- *    the envelope flattens. Once it has caught up with the bins it is
- *    showing, the loop sleeps until the analyzer publishes a new frame: a
- *    paused track otherwise redrew an identical envelope every vsync.
+ *  - The history and the perspective are native (cpp/dsp/scope/
+ *    spectrum_waterfall.h), which hands back ready-to-draw segments and one
+ *    alpha per line. This side smooths the bins and draws: one `drawLines` per
+ *    line on reused arrays and one reused Paint, nothing allocated per frame.
+ *    The line count is fixed, so depth and angle cost nothing to change.
+ *  - Separate attack/release time constants give the front line a snappy
+ *    response on transients and a longer tail on decays.
+ *  - Once the front line has caught up with the bins *and* every older line
+ *    has had time to become the same picture, the loop sleeps until the
+ *    analyzer publishes a new frame: a paused track otherwise redrew an
+ *    identical waterfall every vsync. Until then it keeps running, because the
+ *    lines are still receding even when the spectrum has stopped moving.
  *  - [bins] is a provider, not the array, and is only ever invoked from the
  *    frame loop. The analyzer publishes a fresh array every FFT frame, so a
  *    caller that read it during composition to pass it down recomposed itself
@@ -54,7 +64,7 @@ fun SpectrumOverlay(
     color: Color,
     modifier: Modifier = Modifier,
     height: Dp = 240.dp,
-    /** dB above 0 (pink-noise reference) that maps to the top of the canvas. */
+    /** dB above 0 (pink-noise reference) that maps to the top of a front line. */
     headroomDb: Float = 36f,
     /** dB below 0 that maps to the baseline. */
     floorDb: Float = -24f,
@@ -62,6 +72,7 @@ fun SpectrumOverlay(
     attack: Float = 0.55f,
     /** Approach factor per 60 fps frame for falling bins. */
     release: Float = 0.12f,
+    waterfall: SpectrumWaterfallSettings = SpectrumWaterfallSettings.DEFAULT,
 ) {
     // Persistent in-place smoothing buffer — never replaced.
     val smoothed = remember {
@@ -69,20 +80,24 @@ fun SpectrumOverlay(
     }
     // Bumped once per frame to invalidate the Canvas without allocating.
     val tick = remember { mutableIntStateOf(0) }
-    // The parent re-emits a fresh FloatArray on every FFT frame; without
-    // rememberUpdatedState the LaunchedEffect would forever read the array
-    // captured at first composition and the envelope would never animate.
-    // rememberUpdatedState so the long-lived LaunchedEffect(Unit) coroutine
-    // always reads the latest values even though it never restarts.
     val currentBins by rememberUpdatedState(bins)
     val currentAttack by rememberUpdatedState(attack)
     val currentRelease by rememberUpdatedState(release)
     val currentColor by rememberUpdatedState(color)
+    val currentWaterfall by rememberUpdatedState(waterfall.clamped())
+
+    // The native history, freed with the overlay.
+    val handle = remember { WaterfallNative.nativeCreate() }
+    DisposableEffect(handle) { onDispose { WaterfallNative.nativeDestroy(handle) } }
+    val draw = remember { WaterfallDrawState() }
 
     LaunchedEffect(Unit) {
         var lastFrameNanos = 0L
+        var settledSince = -1L
         while (isActive) {
-            val now = withFrameNanos { it }
+            val now = androidx.compose.runtime.withFrameNanos { it }
+            if (draw.epochNanos < 0L) draw.epochNanos = now
+            draw.nowNanos = now
             val dt = if (lastFrameNanos == 0L) (1f / 60f)
                 else ((now - lastFrameNanos) / 1_000_000_000f).coerceIn(0.001f, 0.1f)
             lastFrameNanos = now
@@ -108,12 +123,21 @@ fun SpectrumOverlay(
             }
             tick.intValue++
 
-            // Settled on these bins: every further frame would draw the same
-            // envelope. Wait for the next array instead. snapshotFlow sees the
-            // read through the provider, so a new FFT frame wakes it.
+            // Settled on these bins, and held there long enough for the whole
+            // history to be this same picture: every further frame would draw
+            // the same waterfall. Wait for the next array instead.
+            // snapshotFlow sees the read through the provider, so a new FFT
+            // frame wakes it.
             if (largestStep < SETTLED_DB) {
-                snapshotFlow { currentBins() }.first { it !== src }
-                lastFrameNanos = 0L
+                if (settledSince < 0L) settledSince = now
+                val heldNanos = ((currentWaterfall.depthSeconds + 0.1f) * 1e9f).toLong()
+                if (now - settledSince >= heldNanos) {
+                    snapshotFlow { currentBins() }.first { it !== src }
+                    lastFrameNanos = 0L
+                    settledSince = -1L
+                }
+            } else {
+                settledSince = -1L
             }
         }
     }
@@ -126,79 +150,146 @@ fun SpectrumOverlay(
         // Subscribe to the per-frame tick so the Canvas redraws.
         @Suppress("UNUSED_VARIABLE")
         val t = tick.intValue
+        if (size.width <= 0f || size.height <= 0f || draw.epochNanos < 0L) return@Canvas
 
-        val n = smoothed.size
-        if (n < 2) return@Canvas
-        val w = size.width
-        val h = size.height
-        val span = max(0.001f, headroomDb - floorDb)
+        val w = currentWaterfall
+        val nowSec = (draw.nowNanos - draw.epochNanos) / 1e9
+        val lines = WaterfallNative.nativeRender(
+            handle, smoothed, nowSec,
+            size.width, size.height, w.depthSeconds, w.fadeStart, w.angleDeg,
+            floorDb, headroomDb, draw.segs, draw.meta,
+        )
+        if (lines <= 0) return@Canvas
 
-        // Map bin index -> x (linear; bins are already log-spaced in
-        // frequency by SpectrumAnalyzerTap), magnitude -> y (inverted).
-        val xs = FloatArray(n)
-        val ys = FloatArray(n)
-        for (i in 0 until n) {
-            xs[i] = i.toFloat() / (n - 1).toFloat() * w
-            val db = smoothed[i].coerceIn(floorDb, headroomDb)
-            val tNorm = (db - floorDb) / span
-            ys[i] = h - tNorm * h
-        }
-
-        // Catmull-Rom -> cubic Bézier for the flowing FabFilter envelope.
-        val envelope = Path().apply {
-            moveTo(xs[0], ys[0])
-            for (i in 0 until n - 1) {
-                val p0x = xs[(i - 1).coerceAtLeast(0)]; val p0y = ys[(i - 1).coerceAtLeast(0)]
-                val p1x = xs[i]; val p1y = ys[i]
-                val p2x = xs[i + 1]; val p2y = ys[i + 1]
-                val p3x = xs[(i + 2).coerceAtMost(n - 1)]; val p3y = ys[(i + 2).coerceAtMost(n - 1)]
-                val c1x = p1x + (p2x - p0x) / 6f
-                val c1y = p1y + (p2y - p0y) / 6f
-                val c2x = p2x - (p3x - p1x) / 6f
-                val c2y = p2y - (p3y - p1y) / 6f
-                cubicTo(c1x, c1y, c2x, c2y, p2x, p2y)
+        val style = w.style
+        val paint = draw.paintFor(currentColor, size.height, style)
+        val stroke = w.lineWidthDp.dp.toPx() * if (style == WaterfallStyle.NEON) 1.3f else 1f
+        val glow = 7.dp.toPx()
+        drawIntoCanvas { canvas ->
+            val native = canvas.nativeCanvas
+            for (i in 0 until lines) {
+                val m = i * WaterfallNative.META_PER_LINE
+                val alpha = draw.meta[m]
+                if (alpha <= 0.004f) continue
+                val scale = draw.meta[m + 1]
+                val offset = i * WaterfallNative.FLOATS_PER_LINE
+                if (style == WaterfallStyle.RIDGELINE) {
+                    // The ground under the line, down to its own baseline, in
+                    // the dark the lines sit on: drawn back to front, each
+                    // line's fill covers whatever of the older lines falls
+                    // behind it. It fades with its line, so a line on its way
+                    // out stops hiding the ones behind it as it goes.
+                    native.drawPath(draw.ridgeFill(offset, draw.meta[m + 2], alpha), draw.fillPaint)
+                }
+                val front = i == lines - 1
+                paint.alpha = (alpha * LINE_ALPHA * 255f).toInt().coerceIn(0, 255)
+                paint.strokeWidth = stroke * (0.45f + 0.55f * scale)
+                // Neon's halo on the live line only: a shadow layer is a blur
+                // per draw, and one is the price of the effect, not 49.
+                if (style == WaterfallStyle.NEON && front) {
+                    paint.setShadowLayer(glow, 0f, 0f, currentColor.toArgb())
+                }
+                native.drawLines(draw.segs, offset, WaterfallNative.FLOATS_PER_LINE, paint)
+                if (style == WaterfallStyle.NEON && front) paint.clearShadowLayer()
             }
         }
-
-        // Filled body: bright at the envelope peak, fading to transparent
-        // at the baseline so the album art still shows through.
-        val fill = Path().apply {
-            addPath(envelope)
-            lineTo(xs[n - 1], h)
-            lineTo(xs[0], h)
-            close()
-        }
-        drawPath(
-            path = fill,
-            brush = Brush.verticalGradient(
-                colors = listOf(
-                    currentColor.copy(alpha = 0.75f),
-                    currentColor.copy(alpha = 0.35f),
-                    currentColor.copy(alpha = 0.10f),
-                    Color.Transparent
-                ),
-                startY = 0f,
-                endY = h
-            )
-        )
-
-        // Crisp envelope outline for definition over busy artwork.
-        drawPath(
-            path = envelope,
-            color = Color.White.copy(alpha = 0.92f),
-            style = Stroke(width = 2.5f)
-        )
-        drawPath(
-            path = envelope,
-            color = currentColor.copy(alpha = 0.55f),
-            style = Stroke(width = 5f)
-        )
     }
 }
 
 /**
- * Largest per-frame move, in dB, below which the envelope counts as caught up.
- * At the overlay's 60 dB span on a ~300 px band that is well under a tenth of
- * a pixel, so the frame it stops on is the frame it would have kept drawing.
+ * Everything the draw reuses from frame to frame: the segment and metadata
+ * arrays the native side fills, the clock the loop stamps, and a Paint whose
+ * gradient is rebuilt only when the colour or the height changes.
+ */
+private class WaterfallDrawState {
+    val segs = FloatArray(WaterfallNative.MAX_LINES * WaterfallNative.FLOATS_PER_LINE)
+    val meta = FloatArray(WaterfallNative.MAX_LINES * WaterfallNative.META_PER_LINE)
+    var epochNanos = -1L
+    var nowNanos = 0L
+
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+    private var shaderColor = Color.Unspecified
+    private var shaderHeight = -1f
+    private var shaderStyle: WaterfallStyle? = null
+
+    /** Ridgeline's ground: the dark the lines sit on, alpha set per line. */
+    val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val fillPath = android.graphics.Path()
+
+    /**
+     * The line paint for [style]. Every style colours by a screen-space
+     * gradient, so a line's colour follows how high it reaches rather than
+     * which line it is — the peaks catch the light the way the reference's
+     * ridges do.
+     */
+    fun paintFor(color: Color, height: Float, style: WaterfallStyle): Paint {
+        if (color != shaderColor || height != shaderHeight || style != shaderStyle) {
+            shaderColor = color
+            shaderHeight = height
+            shaderStyle = style
+            paint.shader = when (style) {
+                // The reference's own palette, whatever the album: deep green
+                // on the floor, lime through the body, yellow-white at the top.
+                WaterfallStyle.HEAT -> LinearGradient(
+                    0f, 0f, 0f, height,
+                    intArrayOf(0xFFFFF6C8.toInt(), 0xFFE4F55A.toInt(), 0xFF7BD85A.toInt(), 0xFF1F8F5A.toInt()),
+                    floatArrayOf(0f, 0.3f, 0.6f, 1f),
+                    Shader.TileMode.CLAMP,
+                )
+                else -> LinearGradient(
+                    0f, 0f, 0f, height,
+                    lerp(color, Color.White, 0.55f).toArgb(),
+                    color.toArgb(),
+                    Shader.TileMode.CLAMP,
+                )
+            }
+            // Additive: where lines cross or crowd, the light adds up.
+            paint.xfermode = if (style == WaterfallStyle.NEON) {
+                android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.ADD)
+            } else {
+                null
+            }
+            fillPaint.color = RIDGE_GROUND
+        }
+        return paint
+    }
+
+    /**
+     * The area under one line, down to its baseline, built into a reused
+     * Path from the segments the native side wrote at [offset].
+     */
+    fun ridgeFill(offset: Int, baseline: Float, alpha: Float): android.graphics.Path {
+        val p = fillPath
+        p.rewind()
+        p.moveTo(segs[offset], baseline)
+        p.lineTo(segs[offset], segs[offset + 1])
+        var k = offset
+        val end = offset + WaterfallNative.FLOATS_PER_LINE
+        while (k < end) {
+            p.lineTo(segs[k + 2], segs[k + 3])
+            k += 4
+        }
+        p.lineTo(segs[end - 2], baseline)
+        p.close()
+        fillPaint.alpha = (alpha * RIDGE_GROUND_ALPHA * 255f).toInt().coerceIn(0, 255)
+        return p
+    }
+}
+
+/** Ridgeline's ground colour; its alpha comes from the line it sits under. */
+private val RIDGE_GROUND = 0xFF07090D.toInt()
+private const val RIDGE_GROUND_ALPHA = 0.94f
+
+/** Overall strength of a line at full alpha; the front line is never pure white. */
+private const val LINE_ALPHA = 0.92f
+
+/**
+ * Largest per-frame move, in dB, below which the front line counts as caught
+ * up. At the overlay's 60 dB span on a ~300 px band that is well under a tenth
+ * of a pixel, so the frame it stops on is the frame it would have kept drawing.
  */
 private const val SETTLED_DB = 0.005f

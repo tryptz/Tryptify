@@ -64,6 +64,9 @@ class SpectrumAnalyzerTap @Inject constructor(
         // Largest per-frame move, in dB, below which an idle ring's output
         // counts as landed: far under a pixel on any of the spectrum views.
         private const val SETTLED_DB = 0.005f
+        private const val LOUDNESS_CHUNK_FRAMES = 1024
+        // cpp/dsp/meter/loudness_meter.h: LoudnessMeter::kMaxChannels.
+        private const val LOUDNESS_MAX_CHANNELS = 24
     }
 
     // Frame cadence picked from the device tier: LOW=15 fps, MID=30 fps, HIGH=60 fps.
@@ -95,6 +98,11 @@ class SpectrumAnalyzerTap @Inject constructor(
     // summed the channels away. Preallocated: nothing here allocates on the
     // audio thread.
     private val scopeChunk = FloatArray(SCOPE_CHUNK * 2)
+
+    // Every channel, interleaved, for the loudness meter. Sized for the widest
+    // frame the tap sees (24 channels) at a 1024-frame chunk; preallocated for
+    // the same reason as the scope's.
+    private val loudnessChunk = FloatArray(LOUDNESS_CHUNK_FRAMES * LOUDNESS_MAX_CHANNELS)
 
     @Volatile var fftSize: Int = FFT_SIZE_8K
         set(value) {
@@ -406,6 +414,10 @@ class SpectrumAnalyzerTap @Inject constructor(
             if (cn > 0) WaveScopeNative.nativePush(scopeChunk, cn, sampleRate)
         }
 
+        if (LoudnessNative.active) {
+            pushLoudness(inputBuffer, startPos, numFrames, channels, encoding == C.ENCODING_PCM_FLOAT)
+        }
+
         // Pass through without allocating a duplicate ByteBuffer wrapper.
         // Temporarily narrow the source limit so put(src) copies exactly the
         // slice we want, then restore. The relative `put(ByteBuffer)` call
@@ -454,6 +466,38 @@ class SpectrumAnalyzerTap @Inject constructor(
         flush()
         pendingFormat = AudioFormat.NOT_SET
         inputFormat = AudioFormat.NOT_SET
+    }
+
+    /**
+     * Hands the buffer to the loudness meter, every channel of it — loudness is
+     * weighted per channel (the LFE left out, the surrounds lifted), so the
+     * mono sum above and the scope's stereo pair are not enough. Absolute reads
+     * into one preallocated chunk; a stream wider than the meter takes is
+     * skipped rather than half-measured.
+     */
+    private fun pushLoudness(
+        buffer: ByteBuffer,
+        startPos: Int,
+        numFrames: Int,
+        channels: Int,
+        isFloat: Boolean,
+    ) {
+        if (channels <= 0 || channels > LOUDNESS_MAX_CHANNELS) return
+        val chunkFrames = loudnessChunk.size / channels
+        val bytesPerSample = if (isFloat) 4 else 2
+        var frame = 0
+        while (frame < numFrames) {
+            val n = minOf(chunkFrames, numFrames - frame)
+            val count = n * channels
+            var pos = startPos + frame * channels * bytesPerSample
+            if (isFloat) {
+                for (i in 0 until count) { loudnessChunk[i] = buffer.getFloat(pos); pos += 4 }
+            } else {
+                for (i in 0 until count) { loudnessChunk[i] = buffer.getShort(pos) / 32768f; pos += 2 }
+            }
+            LoudnessNative.nativePush(loudnessChunk, n, channels, sampleRate)
+            frame += n
+        }
     }
 
     // --- Helpers ---

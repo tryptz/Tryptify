@@ -1163,13 +1163,18 @@ internal fun VisualizerSettings(viewModel: SettingsViewModel) {
                 viewModel.acquireSpectrum()
                 onDispose { viewModel.releaseSpectrum() }
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            tf.monochrome.android.ui.player.SpectrumOverlay(
-                bins = { spectrumBins },
-                color = MaterialTheme.colorScheme.primary,
-                height = 96.dp
-            )
         }
+
+        // The spectrum's own preview lives in the waterfall section now: with
+        // depth, fade and angle beside it, a second, smaller copy above would
+        // be the same picture without the explanation.
+        Spacer(modifier = Modifier.height(16.dp))
+        val waterfall by viewModel.spectrumWaterfall.collectAsStateWithLifecycle()
+        SpectrumWaterfallSettingsSection(
+            settings = waterfall,
+            onChange = viewModel::setSpectrumWaterfall,
+            liveBins = if (spectrumEnabled) ({ spectrumBins }) else null,
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
         val waveCandy by viewModel.waveCandy.collectAsStateWithLifecycle()

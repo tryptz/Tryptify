@@ -18,6 +18,8 @@ import tf.monochrome.android.audio.atmos.AtmosAudioProcessor
 import tf.monochrome.android.audio.dsp.DspEngineManager
 import tf.monochrome.android.audio.dsp.ChannelDetectorProcessor
 import tf.monochrome.android.audio.dsp.SnapinType
+import tf.monochrome.android.audio.eq.LoudnessNative
+import tf.monochrome.android.audio.eq.LoudnessReading
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.audio.pipeline.AudioPipelineInputs
 import tf.monochrome.android.audio.pipeline.AtmosStage
@@ -183,7 +185,25 @@ class AudioPipelineViewModel @Inject constructor(
         }
     }
 
-    val inputs: StateFlow<AudioPipelineInputs> = combine(
+    /**
+     * The loudness meter, which runs only while something reads it: acquired
+     * when the panel subscribes and released when it stops, so opening the
+     * panel is what starts Integrated and Range counting. Faster than the
+     * one-second tick — Momentary is a 400 ms window and reads as frozen at 1 Hz.
+     */
+    private val loudness: Flow<LoudnessReading?> = flow {
+        LoudnessNative.acquire()
+        try {
+            while (true) {
+                emit(LoudnessNative.read())
+                delay(LOUDNESS_INTERVAL_MS)
+            }
+        } finally {
+            LoudnessNative.release()
+        }
+    }
+
+    private val chainInputs: Flow<AudioPipelineInputs> = combine(
         combine(monitor.stream, monitor.decoderName, chain, atmosProcessor.outcome) { stream, decoder, chainInput, atmos ->
             Live(stream, decoder, chainInput, atmos)
         },
@@ -217,6 +237,10 @@ class AudioPipelineViewModel @Inject constructor(
             atmos = atmosStage(live.chain?.channelCount, live.atmos),
             outputChannels = poll.outputChannels,
         )
+    }
+
+    val inputs: StateFlow<AudioPipelineInputs> = combine(chainInputs, loudness) { chainInput, reading ->
+        chainInput.copy(loudness = reading)
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(POLL_INTERVAL_MS),
@@ -227,5 +251,6 @@ class AudioPipelineViewModel @Inject constructor(
         /** The Stereo snapin's second parameter — see `getParamDefs`. */
         const val STEREO_WIDTH_PARAM = 1
         const val POLL_INTERVAL_MS = 1000L
+        const val LOUDNESS_INTERVAL_MS = 200L
     }
 }

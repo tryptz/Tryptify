@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Memory
@@ -161,6 +162,7 @@ private fun iconFor(stage: PipelineStage): ImageVector = when (stage) {
     PipelineStage.DECODER -> Icons.Default.Memory
     PipelineStage.RESAMPLER -> Icons.Default.Tune
     PipelineStage.DSP -> Icons.Default.GraphicEq
+    PipelineStage.LOUDNESS -> Icons.Default.BarChart
     PipelineStage.OUTPUT -> Icons.Default.Headphones
 }
 

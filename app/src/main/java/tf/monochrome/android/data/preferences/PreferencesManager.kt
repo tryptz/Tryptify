@@ -202,6 +202,7 @@ class PreferencesManager @Inject constructor(
         // tuned independently (Player Visuals Studio › "Mini Player" tab).
         private val MINI_PLAYER_GLASS_JSON = stringPreferencesKey("mini_player_glass_json")
         private val WAVE_CANDY_JSON = stringPreferencesKey("wave_candy_json")
+        private val SPECTRUM_WATERFALL_JSON = stringPreferencesKey("spectrum_waterfall_json")
 
         // Atmos renderer profile (mode / target layout / HRTF profile). Kept
         // device-local — the layout tracks the connected DAC and the HRTF is a
@@ -484,6 +485,7 @@ class PreferencesManager @Inject constructor(
             ROMAJI_LYRICS, LYRICS_WORD_PROVIDER,
             LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON, GLOBE_FX_JSON, PLAYER_GLASS_JSON,
             PLAYER_GLASS_CUSTOM_PRESETS_JSON, MINI_PLAYER_GLASS_JSON, WAVE_CANDY_JSON,
+            SPECTRUM_WATERFALL_JSON,
             VISUALIZER_SENSITIVITY, VISUALIZER_BRIGHTNESS, VISUALIZER_AUDIO_DELAY_MS,
             VISUALIZER_ENGINE_ENABLED, VISUALIZER_PRESET_ID,
             VISUALIZER_ROTATION_SECONDS, VISUALIZER_PRESET_ROTATION_MODE,
@@ -2277,6 +2279,21 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setWaveCandy(settings: tf.monochrome.android.domain.model.WaveCandySettings) {
         dataStore.edit { it[WAVE_CANDY_JSON] = json.encodeToString(settings.clamped()) }
+    }
+
+    /** The spectrum waterfall over the artwork: its depth, fade and angle. */
+    val spectrumWaterfall: Flow<tf.monochrome.android.domain.model.SpectrumWaterfallSettings> = dataStore.data
+        .map { it[SPECTRUM_WATERFALL_JSON] }
+        .distinctUntilChanged()
+        .map { raw ->
+            raw
+                ?.let { s -> runCatching { json.decodeFromString<tf.monochrome.android.domain.model.SpectrumWaterfallSettings>(s) }.getOrNull() }
+                ?.clamped()
+                ?: tf.monochrome.android.domain.model.SpectrumWaterfallSettings.DEFAULT
+        }
+
+    suspend fun setSpectrumWaterfall(settings: tf.monochrome.android.domain.model.SpectrumWaterfallSettings) {
+        dataStore.edit { it[SPECTRUM_WATERFALL_JSON] = json.encodeToString(settings.clamped()) }
     }
 
     /** Atmos renderer profile (mode / target layout / HRTF profile id). */

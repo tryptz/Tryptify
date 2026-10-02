@@ -474,7 +474,12 @@ fun FLChannelStrip(
                 // level. Same modifiers as the button rather than a hardcoded
                 // height, so it reserves exactly what the button would measure
                 // whether or not the touch-target minimum is being enforced.
-                Spacer(modifier = Modifier.minimumInteractiveComponentSize().size(26.dp))
+                // The master's loudness readout fills that space: the Spacer
+                // still sets the height, the readout only matches it.
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Spacer(modifier = Modifier.minimumInteractiveComponentSize().size(26.dp))
+                    MasterLoudnessReadout(accent = accent, modifier = Modifier.matchParentSize())
+                }
             }
         }
 

@@ -397,6 +397,11 @@ class PlaybackService : MediaSessionService() {
                 // A new track gets its own blend at its own end, and its own tempo.
                 crossfadeArmed = true
                 bpmTap.newTrack()
+                // Integrated loudness and range are per track. The tap runs a
+                // buffer ahead of what is heard, so this lands a moment into
+                // the new track rather than exactly on it — a few hundred ms of
+                // intro, which the gate would mostly discard anyway.
+                tf.monochrome.android.audio.eq.LoudnessNative.reset()
                 // A gapless hand-off: the player moved to the item we
                 // pre-queued, so it advanced the queue for us. Bring
                 // QueueManager into line *without* re-resolving — calling
