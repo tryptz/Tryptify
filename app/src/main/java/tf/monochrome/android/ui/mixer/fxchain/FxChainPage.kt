@@ -53,6 +53,8 @@ import tf.monochrome.android.audio.dsp.model.FxTapFrame
 import tf.monochrome.android.audio.dsp.model.PluginInstance
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /** One effect in the frozen visual snapshot. [uid] is a stable, unique LazyColumn key. */
 private class ChainItem(val uid: Long, val plugin: PluginInstance)
@@ -80,6 +82,7 @@ fun FxChainPage(
     onPreset: (busIndex: Int, slotIndex: Int, preset: FxPreset) -> Unit,
     onMove: (busIndex: Int, from: Int, to: Int) -> Unit,
 ) {
+    val nowhere = stringResource(R.string.mixer_out_nowhere)
     val bus = buses.getOrNull(selectedBusIndex)
     val plugins = bus?.plugins ?: emptyList()
     val accent = busAccent(selectedBusIndex)
@@ -196,11 +199,11 @@ fun FxChainPage(
                     // else every bus this one is routed to.
                     label = when {
                         bus == null -> "OUT"
-                        bus.isMaster -> "OUT — Device"
+                        bus.isMaster -> stringResource(R.string.mixer_out_device)
                         else -> bus.sends.filterValues { it > 0f }.keys
                             .sortedBy { if (it == BusConfig.MASTER_INDEX) Int.MAX_VALUE else BusConfig.numberFor(it) }
                             .joinToString(", ") { dst -> buses.firstOrNull { it.index == dst }?.name ?: BusConfig.nameFor(dst) }
-                            .ifEmpty { "nowhere (silent)" }
+                            .ifEmpty { nowhere }
                             .let { "OUT — $it" }
                     },
                     accent = accent,
@@ -342,7 +345,7 @@ private fun AddEffectBar(
             modifier = Modifier.size(18.dp)
         )
         Text(
-            text = if (atMax) "Chain full" else "Add Effect",
+            text = if (atMax) stringResource(R.string.mixer_chain_full) else stringResource(R.string.mixer_add_effect),
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,

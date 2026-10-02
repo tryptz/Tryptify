@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.sp
 import tf.monochrome.android.audio.dsp.model.BusConfig
 import tf.monochrome.android.audio.dsp.model.BusLevels
 import tf.monochrome.android.ui.components.liquidGlass
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 @Composable
 fun BusStrip(
@@ -78,7 +80,7 @@ fun BusStrip(
         Spacer(modifier = Modifier.height(4.dp))
 
         // Pan knob (simplified as slider)
-        Text(text = "Pan", style = MaterialTheme.typography.labelSmall, fontSize = 9.sp)
+        Text(text = stringResource(R.string.mixer_pan), style = MaterialTheme.typography.labelSmall, fontSize = 9.sp)
         Slider(
             value = bus.pan,
             onValueChange = onPanChange,

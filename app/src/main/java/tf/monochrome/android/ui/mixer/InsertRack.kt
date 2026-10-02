@@ -51,6 +51,8 @@ import tf.monochrome.android.audio.dsp.model.BusConfig
 import tf.monochrome.android.audio.dsp.model.PluginInstance
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * FL Studio-style insert effect rack — right-side panel.
@@ -106,7 +108,7 @@ fun InsertRack(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text       = "Mixer – ${bus?.name ?: "Insert"}",
+                text       = stringResource(R.string.mixer_rack_title, bus?.name ?: stringResource(R.string.mixer_insert)),
                 style      = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 maxLines   = 1,
@@ -119,7 +121,7 @@ fun InsertRack(
             ) {
                 Icon(
                     Icons.Default.Close,
-                    contentDescription = "Close",
+                    contentDescription = stringResource(R.string.action_close),
                     tint     = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                 )
@@ -191,7 +193,7 @@ fun InsertRack(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = "ROUTING",
+                    text = stringResource(R.string.mixer_routing_caps),
                     style = MaterialTheme.typography.labelSmall,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
@@ -206,7 +208,7 @@ fun InsertRack(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Player input", fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.mixer_player_input), fontSize = 10.sp, fontWeight = FontWeight.Medium)
                     Text(
                         text = if (bus.inputEnabled) "ON" else "OFF",
                         fontSize = 8.sp,
@@ -219,7 +221,7 @@ fun InsertRack(
                     .sortedBy { if (it.key == BusConfig.MASTER_INDEX) -1 else BusConfig.numberFor(it.key) }
                 if (sends.isEmpty()) {
                     Text(
-                        text = "Routed nowhere — this bus is silent. Tap ▲ under a strip or the master to route it.",
+                        text = stringResource(R.string.mixer_routed_nowhere),
                         fontSize = 9.sp,
                         color = MaterialTheme.colorScheme.error
                     )
@@ -250,7 +252,7 @@ fun InsertRack(
                             IconButton(onClick = { onSendLevel(bus.index, dst, 0f) }, modifier = Modifier.size(24.dp)) {
                                 Icon(
                                     Icons.Default.Close,
-                                    contentDescription = "Remove route to $dstName",
+                                    contentDescription = stringResource(R.string.mixer_remove_route_to, dstName),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(12.dp)
                                 )
@@ -286,7 +288,7 @@ fun InsertRack(
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
-                    text = "INPUT ROUTING",
+                    text = stringResource(R.string.mixer_input_routing_caps),
                     style = MaterialTheme.typography.labelSmall,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
@@ -341,7 +343,7 @@ fun InsertRack(
                         }
                         Text(
                             text = when {
-                                routed -> "CHANNELS"
+                                routed -> stringResource(R.string.mixer_channels_caps)
                                 mixBus.inputEnabled -> "ON"
                                 else -> "OFF"
                             },
@@ -373,7 +375,7 @@ private fun MultichannelModeRow(spread: Boolean, onChange: (Boolean) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text(
-            text = "Multichannel",
+            text = stringResource(R.string.mixer_multichannel),
             style = MaterialTheme.typography.labelSmall,
             fontSize = 10.sp,
             fontWeight = FontWeight.Medium,
@@ -385,20 +387,20 @@ private fun MultichannelModeRow(spread: Boolean, onChange: (Boolean) -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            listOf(true to "Spread", false to "One bus").forEach { (value, label) ->
+            listOf(true to stringResource(R.string.mixer_spread), false to stringResource(R.string.mixer_one_bus)).forEach { (value, label) ->
                 GlassChoiceChip(
                     label = label,
                     selected = spread == value,
                     accent = colors.primary,
                     onClick = { if (spread != value) onChange(value) },
                     modifier = Modifier.weight(1f),
-                    description = if (value) "Spread channels across buses" else "Run all channels through one bus",
+                    description = if (value) stringResource(R.string.mixer_spread_desc) else stringResource(R.string.mixer_one_bus_desc),
                 )
             }
         }
         Text(
-            text = if (spread) "5.1 and Atmos: front, centre, LFE, surrounds and heights each get a bus."
-                   else "5.1 and Atmos run whole through the buses switched on below.",
+            text = if (spread) stringResource(R.string.mixer_spread_on)
+                   else stringResource(R.string.mixer_spread_off),
             style = MaterialTheme.typography.labelSmall,
             fontSize = 9.sp,
             color = colors.onSurfaceVariant
@@ -461,7 +463,7 @@ private fun InsertSlot(
 
             // Slot label / plugin name
             Text(
-                text       = plugin?.displayName ?: "Slot ${slotIndex + 1}",
+                text       = plugin?.displayName ?: stringResource(R.string.mixer_slot_n, slotIndex + 1),
                 style      = MaterialTheme.typography.labelSmall,
                 fontSize   = 10.sp,
                 fontWeight = if (plugin != null) FontWeight.Medium else FontWeight.Normal,
@@ -480,7 +482,7 @@ private fun InsertSlot(
                 ) {
                     Icon(
                         Icons.Default.PowerSettingsNew,
-                        contentDescription = "Bypass",
+                        contentDescription = stringResource(R.string.mixer_bypass),
                         tint     = if (plugin.bypassed)
                             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                         else MaterialTheme.colorScheme.primary,
@@ -491,7 +493,7 @@ private fun InsertSlot(
                 // Add hint for empty slots
                 Icon(
                     Icons.Default.Add,
-                    contentDescription = "Add Plugin",
+                    contentDescription = stringResource(R.string.mixer_add_plugin),
                     tint     = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
                     modifier = Modifier.size(14.dp)
                 )
@@ -504,7 +506,7 @@ private fun InsertSlot(
                 onDismissRequest = { showContextMenu = false }
             ) {
                 DropdownMenuItem(
-                    text = { Text("Replace") },
+                    text = { Text(stringResource(R.string.mixer_replace)) },
                     onClick = {
                         showContextMenu = false
                         // Defer removal to the picker's confirm — cancelling
@@ -513,7 +515,7 @@ private fun InsertSlot(
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("Remove") },
+                    text = { Text(stringResource(R.string.api_remove)) },
                     onClick = {
                         showContextMenu = false
                         onRemove()
@@ -600,7 +602,7 @@ private fun InlinePluginEditor(
             ) {
                 Icon(
                     Icons.Default.Close,
-                    contentDescription = "Close",
+                    contentDescription = stringResource(R.string.action_close),
                     tint     = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(14.dp)
                 )

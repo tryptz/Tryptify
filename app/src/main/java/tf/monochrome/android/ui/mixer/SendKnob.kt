@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import tf.monochrome.android.ui.components.adjustableSemantics
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /** The send knob's visual diameter; its touch target is the 48dp minimum. */
 internal val SendKnobSize: Dp = 28.dp
@@ -67,6 +69,7 @@ internal fun SendKnob(
     val latestLevel by rememberUpdatedState(level)
     val latestOnLevelChange by rememberUpdatedState(onLevelChange)
     val latestOnRemove by rememberUpdatedState(onRemove)
+    val removeRouteLabel = stringResource(R.string.mixer_remove_route)
     var dragging by remember { mutableStateOf(false) }
 
     Box(
@@ -74,7 +77,7 @@ internal fun SendKnob(
             .minimumInteractiveComponentSize()
             .size(SendKnobSize)
             .adjustableSemantics(
-                label = "Send to $destinationName",
+                label = stringResource(R.string.mixer_send_to, destinationName),
                 value = level,
                 range = MinSend..1f,
                 stateText = { "${sendDbLabel(it)} dB" },
@@ -82,7 +85,7 @@ internal fun SendKnob(
             )
             .semantics {
                 customActions = listOf(
-                    CustomAccessibilityAction("Remove route") { latestOnRemove(); true }
+                    CustomAccessibilityAction(removeRouteLabel) { latestOnRemove(); true }
                 )
             }
             .pointerInput(Unit) {

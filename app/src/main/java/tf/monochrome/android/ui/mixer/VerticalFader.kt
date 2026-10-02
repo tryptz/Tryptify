@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.mixer
 
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -23,6 +24,8 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.ui.components.adjustableSemantics
 import kotlin.math.absoluteValue
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * Vertical gain fader with a logarithmic-feel scale.
@@ -67,10 +70,10 @@ fun VerticalFader(
         modifier = modifier
             .fillMaxHeight()
             .adjustableSemantics(
-                label = "Gain fader",
+                label = stringResource(R.string.mixer_gain_fader),
                 value = gainDb,
                 range = -60f..24f,
-                stateText = { "%.1f dB".format(it) },
+                stateText = LocalContext.current.let { ctx -> { v: Float -> ctx.getString(R.string.mixer_db_value, v) } },
                 onValueChange = onGainChange,
             )
             .pointerInput(Unit) {

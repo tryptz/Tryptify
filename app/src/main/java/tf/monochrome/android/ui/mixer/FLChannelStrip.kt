@@ -59,6 +59,8 @@ import tf.monochrome.android.ui.player.LocalPlayerGlassGround
 import tf.monochrome.android.ui.player.playerFrostTint
 import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.player.rememberLiquidGlassAvailable
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /** Fixed fader travel so strips stay compact instead of stretching the whole
  *  screen height; the strip is centred in its row and the meters match it. */
@@ -82,11 +84,12 @@ internal val RouteSourceArrowSize = 24.dp
  */
 @Composable
 private fun RouteSourceArrow(color: Color, busName: String) {
+    val routingFromLabel = stringResource(R.string.mixer_routing_from, busName)
     Canvas(
         modifier = Modifier
             .minimumInteractiveComponentSize()
             .size(RouteSourceArrowSize)
-            .semantics { contentDescription = "Routing from $busName" }
+            .semantics { contentDescription = routingFromLabel }
     ) {
         val w = size.width
         val h = size.height
@@ -434,7 +437,7 @@ fun FLChannelStrip(
                         shape = CircleShape
                     )
                     .bounceClick(onClick = onToggleMute)
-                    .toggleSemantics(label = "Mute", checked = bus.muted),
+                    .toggleSemantics(label = stringResource(R.string.mixer_mute), checked = bus.muted),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -458,7 +461,7 @@ fun FLChannelStrip(
                             shape = CircleShape
                         )
                         .bounceClick(onClick = onToggleSolo)
-                        .toggleSemantics(label = "Solo", checked = bus.soloed),
+                        .toggleSemantics(label = stringResource(R.string.mixer_solo), checked = bus.soloed),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -509,7 +512,7 @@ fun FLChannelStrip(
                     .background(inactiveButton.copy(alpha = if (route.allowed) 0.88f else 0.35f))
                     .border(1.dp, colors.outline.copy(alpha = 0.18f), routeShape)
                     .then(if (route.allowed) Modifier.bounceClick(onClick = onRouteTap) else Modifier)
-                    .toggleSemantics(label = "Route the selected bus to ${bus.name}", checked = false),
+                    .toggleSemantics(label = stringResource(R.string.mixer_route_selected_to, bus.name), checked = false),
                 contentAlignment = Alignment.Center
             ) {
                 Text(

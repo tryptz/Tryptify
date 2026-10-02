@@ -114,6 +114,8 @@ import tf.monochrome.android.ui.player.dynamicPlayerBackground
 import tf.monochrome.android.ui.player.rememberAlbumColors
 import tf.monochrome.android.ui.theme.ColorBlend
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /** Curated per-bus channel colours (master keeps the album-derived primary).
  *  Replaces the muted theme `secondary`, which rendered bus strips as washed
@@ -299,9 +301,9 @@ fun MixerScreen(
                 context.contentResolver.openOutputStream(uri)?.use { out ->
                     out.write(viewModel.exportPayload(preset).toByteArray())
                 }
-                Toast.makeText(context, "Exported \"${preset.name}\"", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.mixer_exported, preset.name), Toast.LENGTH_SHORT).show()
             }.onFailure {
-                Toast.makeText(context, "Export failed: ${it.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, context.getString(R.string.mixer_export_failed, it.message.orEmpty()), Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -317,12 +319,12 @@ fun MixerScreen(
                 viewModel.importPreset(text) { ok ->
                     Toast.makeText(
                         context,
-                        if (ok) "Preset imported" else "Import failed: not a valid preset file",
+                        context.getString(if (ok) R.string.mixer_preset_imported else R.string.mixer_import_invalid),
                         if (ok) Toast.LENGTH_SHORT else Toast.LENGTH_LONG
                     ).show()
                 }
             }.onFailure {
-                Toast.makeText(context, "Import failed: ${it.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, context.getString(R.string.mixer_import_failed, it.message.orEmpty()), Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -385,9 +387,9 @@ fun MixerScreen(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { animateProgressTo(0f, 0f) }, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = colorScheme.onSurface, modifier = Modifier.size(20.dp))
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.settings_back), tint = colorScheme.onSurface, modifier = Modifier.size(20.dp))
                         }
-                        Text("FX Chain", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = colorScheme.onSurface)
+                        Text(stringResource(R.string.mixer_fx_chain), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = colorScheme.onSurface)
                     }
                 }
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -455,12 +457,12 @@ fun MixerScreen(
                     ) {
                         NavIconButton(
                             icon = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.settings_back),
                             onClick = { navController.popBackStackSafe() }
                         )
 
                         Text(
-                            text = "Mixer",
+                            text = stringResource(R.string.mixer_title),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = colorScheme.onSurface,
@@ -472,33 +474,33 @@ fun MixerScreen(
                         // The spatial map: lit while it is open or placing.
                         NavIconButton(
                             icon = Icons.Default.SpatialAudio,
-                            contentDescription = "Spatial map",
+                            contentDescription = stringResource(R.string.mixer_spatial_map),
                             active = showSpatialMap || spatialPlacement.enabled,
                             accent = accent,
                             onClick = { showSpatialMap = !showSpatialMap }
                         )
                         NavIconButton(
                             icon = Icons.Default.Tune,
-                            contentDescription = "Insert Rack",
+                            contentDescription = stringResource(R.string.mixer_insert_rack),
                             active = showInsertRack,
                             accent = accent,
                             onClick = { showInsertRack = !showInsertRack }
                         )
                         NavIconButton(
                             icon = Icons.Default.Palette,
-                            contentDescription = if (channelDynamicColor) "Channel color: dynamic" else "Channel color: palette",
+                            contentDescription = if (channelDynamicColor) stringResource(R.string.mixer_channel_color_dynamic) else stringResource(R.string.mixer_channel_color_palette),
                             active = channelDynamicColor,
                             accent = accent,
                             onClick = { viewModel.setChannelDynamicColor(!channelDynamicColor) }
                         )
                         NavIconButton(
                             icon = Icons.Default.AccountTree,
-                            contentDescription = "FX Chain",
+                            contentDescription = stringResource(R.string.mixer_fx_chain),
                             onClick = { animateProgressTo(1f, 0f) }
                         )
                         NavIconButton(
                             icon = Icons.Default.SettingsBackupRestore,
-                            contentDescription = "Reset mixer to defaults",
+                            contentDescription = stringResource(R.string.mixer_reset_to_defaults),
                             onClick = { showResetConfirm = true }
                         )
 
@@ -667,22 +669,20 @@ fun MixerScreen(
     if (showResetConfirm) {
         AlertDialog(
             onDismissRequest = { showResetConfirm = false },
-            title = { Text("Reset the mixer?") },
+            title = { Text(stringResource(R.string.mixer_reset_title)) },
             text = {
                 Text(
-                    "Removes every plugin and every bus after Bus 4, and returns " +
-                        "the rest to unity gain, centred, unmuted. Saved presets " +
-                        "are untouched."
+                    stringResource(R.string.mixer_reset_body)
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.resetToDefaults()
                     showResetConfirm = false
-                }) { Text("Reset") }
+                }) { Text(stringResource(R.string.action_reset)) }
             },
             dismissButton = {
-                TextButton(onClick = { showResetConfirm = false }) { Text("Cancel") }
+                TextButton(onClick = { showResetConfirm = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -844,7 +844,7 @@ private fun ChannelStripRow(
                         if (!viewModel.toggleRouteTo(index)) {
                             Toast.makeText(
                                 context,
-                                "${bus.name} already feeds ${source?.name} — that route would loop",
+                                context.getString(R.string.mixer_route_would_loop, bus.name, source?.name.orEmpty()),
                                 Toast.LENGTH_SHORT
                             ).show()
                         }
@@ -999,21 +999,20 @@ private fun ChannelStripRow(
     pendingRemoval?.let { bus ->
         AlertDialog(
             onDismissRequest = { pendingRemoval = null },
-            title = { Text("Remove ${bus.name}?") },
+            title = { Text(stringResource(R.string.mixer_remove_bus_title, bus.name)) },
             text = {
                 Text(
-                    "Its effects and settings go with it. Buses after it move " +
-                        "down one number. Saved presets are untouched."
+                    stringResource(R.string.mixer_remove_bus_body)
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.removeBus(bus.index)
                     pendingRemoval = null
-                }) { Text("Remove") }
+                }) { Text(stringResource(R.string.api_remove)) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingRemoval = null }) { Text("Cancel") }
+                TextButton(onClick = { pendingRemoval = null }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -1028,6 +1027,7 @@ private fun AddBusTile(
 ) {
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(PlayerDesignTokens.GlassCornerSmall)
+    val addBusLabel = stringResource(R.string.mixer_add_bus)
     Box(
         modifier = Modifier
             .width(60.dp)
@@ -1035,7 +1035,7 @@ private fun AddBusTile(
             .clip(shape)
             .border(1.dp, colors.outline.copy(alpha = 0.30f), shape)
             .bounceClick(onClick = onClick)
-            .semantics { contentDescription = "Add bus" },
+            .semantics { contentDescription = addBusLabel },
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -1049,7 +1049,7 @@ private fun AddBusTile(
                 modifier = Modifier.size(28.dp)
             )
             Text(
-                text = "Add bus",
+                text = addBusLabel,
                 style = MaterialTheme.typography.labelSmall,
                 color = colors.onSurfaceVariant
             )

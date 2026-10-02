@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.mixer.fxchain
 
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -58,6 +59,8 @@ import tf.monochrome.android.ui.mixer.FLKnobControl
 import tf.monochrome.android.ui.mixer.ParamDef
 import tf.monochrome.android.ui.mixer.getParamDefs
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * One Serum-style stackable effect module in the FX chain.
@@ -121,7 +124,7 @@ fun FxCard(
             Box(modifier = dragHandle.padding(horizontal = 4.dp)) {
                 Icon(
                     Icons.Default.DragHandle,
-                    contentDescription = "Reorder",
+                    contentDescription = stringResource(R.string.mixer_reorder),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )
@@ -154,7 +157,7 @@ fun FxCard(
             IconButton(onClick = onBypass, modifier = Modifier.size(32.dp)) {
                 Icon(
                     Icons.Default.PowerSettingsNew,
-                    contentDescription = if (bypassed) "Enable" else "Bypass",
+                    contentDescription = if (bypassed) stringResource(R.string.mixer_enable) else stringResource(R.string.mixer_bypass),
                     tint = if (bypassed) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                            else accent,
                     modifier = Modifier.size(16.dp)
@@ -165,7 +168,7 @@ fun FxCard(
             IconButton(onClick = onToggleExpand, modifier = Modifier.size(32.dp)) {
                 Icon(
                     Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    contentDescription = if (expanded) stringResource(R.string.mixer_collapse) else stringResource(R.string.mixer_expand),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .size(20.dp)
@@ -177,7 +180,7 @@ fun FxCard(
             IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
                 Icon(
                     Icons.Default.Close,
-                    contentDescription = "Remove",
+                    contentDescription = stringResource(R.string.api_remove),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.size(16.dp)
                 )
@@ -251,7 +254,7 @@ private fun OversampleRow(
                     .padding(horizontal = 10.dp, vertical = 3.dp)
             ) {
                 Text(
-                    text = if (factor == 1) "Off" else "${factor}x",
+                    text = if (factor == 1) stringResource(R.string.state_off) else "${factor}x",
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (selected) accent
@@ -261,7 +264,7 @@ private fun OversampleRow(
         }
         if (current > 1) {
             Text(
-                text = "up to 192 kHz",
+                text = stringResource(R.string.mixer_up_to_192),
                 fontSize = 8.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 maxLines = 1,
@@ -342,7 +345,7 @@ private fun Eq10BandKnobs(
     for (band in 0 until bandCount) {
         val base = 1 + band * 5
         Text(
-            text = "Band ${band + 1}",
+            text = stringResource(R.string.mixer_band_n, band + 1),
             fontSize = 9.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -414,10 +417,10 @@ private fun MixSlider(
         modifier = modifier
             .height(28.dp)
             .adjustableSemantics(
-                label = "Mix",
+                label = stringResource(R.string.mixer_mix),
                 value = value,
                 range = 0f..1f,
-                stateText = { "${(it * 100).roundToInt()}%" },
+                stateText = LocalContext.current.let { ctx -> { v: Float -> ctx.getString(R.string.mixer_percent, (v * 100).roundToInt()) } },
                 onValueChange = { latest(it.coerceIn(0f, 1f)) },
             )
             .pointerInput(Unit) {

@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.dp
 import tf.monochrome.android.audio.dsp.model.PluginInstance
 import tf.monochrome.android.ui.mixer.GlassChoiceChip
 import tf.monochrome.android.ui.mixer.getParamDefs
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * The effect's five presets as a row of chips: the ones safe on a finished
@@ -64,7 +66,7 @@ internal fun FxPresetRow(
                 selected = preset.matches(defs, plugin.parameters, plugin.dryWet),
                 accent = accent,
                 onClick = { onApply(preset) },
-                description = "${preset.name} preset" + if (preset.mastering) "" else ", creative",
+                description = if (preset.mastering) stringResource(R.string.mixer_preset_desc, preset.name) else stringResource(R.string.mixer_preset_desc_creative, preset.name),
             )
         }
     }

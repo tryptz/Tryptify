@@ -71,6 +71,8 @@ import kotlin.math.log10
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * The spatial map: a room seen from above with you in the middle, facing up,
@@ -125,22 +127,22 @@ fun SpatialMapPanel(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Spatial map",
+                    text = stringResource(R.string.mixer_spatial_map),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = if (live != null) "${SpatialLayout.layoutName(count)} · playing now"
-                    else "${SpatialLayout.layoutName(count)} · nothing multichannel playing",
+                    text = if (live != null) stringResource(R.string.mixer_playing_now, SpatialLayout.layoutName(count))
+                    else stringResource(R.string.mixer_nothing_multichannel, SpatialLayout.layoutName(count)),
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.onSurfaceVariant,
                 )
             }
             if (placement.isMoved(count)) {
-                TextButton(onClick = { onResetLayout(count) }) { Text("Reset") }
+                TextButton(onClick = { onResetLayout(count) }) { Text(stringResource(R.string.action_reset)) }
             }
             IconButton(onClick = onClose, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Close spatial map", tint = colors.onSurfaceVariant)
+                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.mixer_close_spatial_map), tint = colors.onSurfaceVariant)
             }
         }
 
@@ -164,7 +166,7 @@ fun SpatialMapPanel(
         // ── On/off and what it plays through ───────────────────────────
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = "Place channels",
+                text = stringResource(R.string.mixer_place_channels),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.weight(1f),
             )
@@ -176,20 +178,20 @@ fun SpatialMapPanel(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             GlassChoiceChip(
-                label = "Headphones",
+                label = stringResource(R.string.mixer_headphones),
                 selected = placement.binaural,
                 accent = accent,
                 onClick = { onBinauralChange(true) },
                 modifier = Modifier.weight(1f),
-                description = "Headphones: binaural, heard where placed",
+                description = stringResource(R.string.mixer_headphones_desc),
             )
             GlassChoiceChip(
-                label = "Speakers",
+                label = stringResource(R.string.mixer_speakers),
                 selected = !placement.binaural,
                 accent = accent,
                 onClick = { onBinauralChange(false) },
                 modifier = Modifier.weight(1f),
-                description = "Speakers: panned left to right",
+                description = stringResource(R.string.mixer_speakers_desc),
             )
         }
 
@@ -201,7 +203,7 @@ fun SpatialMapPanel(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Target",
+                    text = stringResource(R.string.mixer_target),
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.onSurfaceVariant,
                 )
@@ -211,7 +213,7 @@ fun SpatialMapPanel(
                         selected = placement.targetId == id,
                         accent = accent,
                         onClick = { onTargetChange(id) },
-                        description = "Headphone target: $label",
+                        description = stringResource(R.string.mixer_headphone_target, label),
                     )
                 }
             }
@@ -261,6 +263,7 @@ fun SpatialMapPanel(
 }
 
 /** What the map is doing, or why it is not, in one or two lines. */
+@Composable
 private fun spatialNote(
     placement: SpatialPlacement,
     state: ChannelDetectorProcessor.ChannelState?,
@@ -268,24 +271,25 @@ private fun spatialNote(
     atmosObjects: Boolean,
 ): String = when {
     atmosObjects ->
-        "This Atmos track's objects are placed by the Atmos renderer. The map applies in Direct mode and to multichannel files."
+        stringResource(R.string.mixer_note_atmos)
     !stereoFold ->
-        "Multichannel is going to Android unfolded. Turn the stereo fold on in audio settings for the map to play."
+        stringResource(R.string.mixer_note_unfolded)
     !placement.enabled ->
-        "Off: the song folds to stereo as mixed. Drag a channel to start."
+        stringResource(R.string.mixer_note_off)
     placement.binaural && (state?.sampleRate ?: 0) > 48000 ->
-        "Binaural needs 48 kHz or less; this ${state!!.sampleRate / 1000} kHz stream is panned instead."
-    placement.binaural -> "Drag a channel to move it. Double-tap one to put it back."
-    else -> "Speakers: channels are panned left to right; front and back fold together."
+        stringResource(R.string.mixer_note_binaural_rate, state!!.sampleRate / 1000)
+    placement.binaural -> stringResource(R.string.mixer_note_binaural)
+    else -> stringResource(R.string.mixer_note_speakers)
 }
 
+@Composable
 private fun angleText(az: Float): String {
     val a = az.roundToInt()
     return when {
-        a == 0 -> "ahead"
-        abs(a) == 180 -> "behind"
-        a < 0 -> "${-a}° left"
-        else -> "$a° right"
+        a == 0 -> stringResource(R.string.mixer_angle_ahead)
+        abs(a) == 180 -> stringResource(R.string.mixer_angle_behind)
+        a < 0 -> stringResource(R.string.mixer_angle_left, -a)
+        else -> stringResource(R.string.mixer_angle_right, a)
     }
 }
 
@@ -319,14 +323,17 @@ private fun SpatialMapCanvas(
     val currentMove by rememberUpdatedState(onMove)
     val currentDragging by rememberUpdatedState(onDragging)
 
-    val description = speakers.mapIndexedNotNull { i, s ->
-        if (s.isLfe) null else "${s.label} ${angleText(placed[i].azimuthDeg)}"
-    }.joinToString(", ")
+    val description = stringResource(
+        R.string.mixer_map_description,
+        speakers.mapIndexedNotNull { i, s ->
+            if (s.isLfe) null else "${s.label} ${angleText(placed[i].azimuthDeg)}"
+        }.joinToString(", "),
+    )
 
     Canvas(
         modifier = Modifier
             .fillMaxSize()
-            .semantics { contentDescription = "Spatial map: $description" }
+            .semantics { contentDescription = description }
             .pointerInput(count) {
                 var picked = -1
                 detectDragGestures(

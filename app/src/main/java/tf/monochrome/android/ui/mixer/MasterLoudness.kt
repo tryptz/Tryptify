@@ -25,6 +25,8 @@ import tf.monochrome.android.audio.eq.LoudnessNative
 import tf.monochrome.android.audio.eq.LoudnessReading
 import tf.monochrome.android.ui.components.bounceClick
 import java.util.Locale
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * The master strip's loudness: Short-term large, Integrated under it, in LUFS
@@ -50,12 +52,12 @@ internal fun MasterLoudnessReadout(accent: Color, modifier: Modifier = Modifier)
     }
     val shortTerm = reading?.shortTerm ?: reading?.momentary
     val integrated = reading?.integrated
-    val description = buildString {
-        append("Master loudness: ")
-        append(shortTerm?.let { "short-term ${number(it)} LUFS" } ?: "measuring")
-        integrated?.let { append(", integrated ${number(it)} LUFS") }
-        append(". Tap to restart the integrated reading.")
-    }
+    val description = stringResource(
+        R.string.mixer_loudness_label,
+        (shortTerm?.let { stringResource(R.string.mixer_loudness_short, number(it)) }
+            ?: stringResource(R.string.mixer_loudness_measuring)) +
+            (integrated?.let { stringResource(R.string.mixer_loudness_integrated, number(it)) } ?: ""),
+    )
 
     Box(
         modifier = modifier

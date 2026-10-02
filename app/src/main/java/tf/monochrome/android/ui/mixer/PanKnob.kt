@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.mixer
 
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.size
@@ -23,6 +24,8 @@ import tf.monochrome.android.ui.components.adjustableSemantics
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * Compact arc-style pan knob control (270-degree sweep).
@@ -63,14 +66,18 @@ fun PanKnob(
             .minimumInteractiveComponentSize()
             .size(28.dp)
             .adjustableSemantics(
-                label = "Pan",
+                label = stringResource(R.string.mixer_pan),
                 value = value,
                 range = -1f..1f,
-                stateText = { v ->
-                    when {
-                        v < -0.02f -> "${(-v * 100).roundToInt()}% left"
-                        v > 0.02f -> "${(v * 100).roundToInt()}% right"
-                        else -> "Center"
+                // Read in the semantics pass, outside composition: resolved
+                // through the activity's context, which carries the app language.
+                stateText = LocalContext.current.let { ctx ->
+                    { v: Float ->
+                        when {
+                            v < -0.02f -> ctx.getString(R.string.mixer_pan_left, (-v * 100).roundToInt())
+                            v > 0.02f -> ctx.getString(R.string.mixer_pan_right, (v * 100).roundToInt())
+                            else -> ctx.getString(R.string.mixer_pan_center)
+                        }
                     }
                 },
                 onValueChange = onValueChange,

@@ -50,6 +50,8 @@ import tf.monochrome.android.ui.components.adjustableSemantics
 import kotlin.math.cos
 import kotlin.math.round
 import kotlin.math.sin
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 // ── FL Studio Mobile color palette (shared by the plugin editor + FX chain) ──
 internal object FLPluginColors {
@@ -426,7 +428,7 @@ internal fun FLKnobControl(
             maxLines = 1,
             modifier = Modifier
                 .clip(RoundedCornerShape(6.dp))
-                .clickable(onClickLabel = "Type a value") { typing = true }
+                .clickable(onClickLabel = stringResource(R.string.mixer_type_a_value)) { typing = true }
                 .padding(horizontal = 4.dp, vertical = 1.dp)
         )
     }
@@ -470,14 +472,14 @@ private fun ValueEntryDialog(
                 singleLine = true,
                 isError = parsed == null,
                 suffix = if (unit.isNotEmpty()) ({ Text(unit) }) else null,
-                supportingText = { Text("${trimFloat(min)} to ${trimFloat(max)}") },
+                supportingText = { Text(stringResource(R.string.mixer_value_range, trimFloat(min), trimFloat(max))) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             )
         },
         confirmButton = {
-            TextButton(onClick = { parsed?.let(onConfirm) }, enabled = parsed != null) { Text("Set") }
+            TextButton(onClick = { parsed?.let(onConfirm) }, enabled = parsed != null) { Text(stringResource(R.string.mixer_set)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } }
     )
 }
 
