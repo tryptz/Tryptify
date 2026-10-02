@@ -38,6 +38,12 @@ Broadcast-standard loudness (EBU R128) for what Tryptify actually sends out.
 - **New Home, Library and Search** — Recently Played and Liked Songs on Home,
   Library sections on chips, and Search as its own page.
 
+| | | |
+|:---:|:---:|:---:|
+| ![Glass tab bar and mini player over the song list, tinted teal by the album](docs/releases/1.9.2/tab-bar-teal.jpg) | ![Glass tab bar and mini player tinted violet by the album](docs/releases/1.9.2/tab-bar-violet.jpg) | ![Glass tab bar and mini player over the song list, tinted blue by the album](docs/releases/1.9.2/tab-bar-blue.jpg) |
+
+<sub>The tab bar and mini player are one sheet of glass, tinted by whatever is playing.</sub>
+
 ### 🎧 Deezer
 Search Deezer's songs, albums and artists, and play and download them in full —
 FLAC or MP3 320.
