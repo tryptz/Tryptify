@@ -20,6 +20,8 @@ import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.data.api.NoInstancesConfiguredException
 import tf.monochrome.android.domain.model.ArtistDetail
 import javax.inject.Inject
+import tf.monochrome.android.R
+import tf.monochrome.android.ui.components.errorText
 
 @HiltViewModel
 class ArtistDetailViewModel @Inject constructor(
@@ -40,12 +42,12 @@ class ArtistDetailViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
+    private val _error = MutableStateFlow<tf.monochrome.android.ui.components.UiText?>(null)
+    val error: StateFlow<tf.monochrome.android.ui.components.UiText?> = _error.asStateFlow()
 
     /** One-shot messages for the artist screen (download-all outcome). */
-    private val _downloadMessage = MutableSharedFlow<String>(extraBufferCapacity = 2)
-    val downloadMessage: SharedFlow<String> = _downloadMessage.asSharedFlow()
+    private val _downloadMessage = MutableSharedFlow<tf.monochrome.android.ui.components.UiText>(extraBufferCapacity = 2)
+    val downloadMessage: SharedFlow<tf.monochrome.android.ui.components.UiText> = _downloadMessage.asSharedFlow()
 
     init {
         loadArtist()
@@ -75,7 +77,7 @@ class ArtistDetailViewModel @Inject constructor(
             if (qobuzIdRegistry.isDeezerArtist(artistId)) {
                 repository.getDeezerArtist(artistId)
                     .onSuccess { _artistDetail.value = it; _source.value = tf.monochrome.android.domain.model.SourceType.DEEZER }
-                    .onFailure { _error.value = it.message ?: "Failed to load artist" }
+                    .onFailure { _error.value = errorText(it, R.string.error_load_artist) }
                 _isLoading.value = false
                 return@launch
             }
@@ -134,7 +136,7 @@ class ArtistDetailViewModel @Inject constructor(
                         return@launch
                     }
                 }
-                _error.value = "Couldn't find \"$artistName\" in your catalogues."
+                _error.value = tf.monochrome.android.ui.components.UiText.Res(R.string.error_artist_not_in_catalogues, listOf(artistName))
                 _isLoading.value = false
                 return@launch
             }
@@ -159,7 +161,7 @@ class ArtistDetailViewModel @Inject constructor(
 
             finalResult
                 .onSuccess { _artistDetail.value = it }
-                .onFailure { _error.value = it.message ?: "Failed to load artist" }
+                .onFailure { _error.value = errorText(it, R.string.error_load_artist) }
             _isLoading.value = false
         }
     }
@@ -200,12 +202,19 @@ class ArtistDetailViewModel @Inject constructor(
                 when {
                     tracks.isNotEmpty() -> {
                         downloadManager.downloadTracks(tracks)
+                        val downloading = tf.monochrome.android.ui.components.UiText.Plural(R.plurals.downloading_tracks, tracks.size)
                         _downloadMessage.tryEmit(
-                            if (failed > 0) "Downloading ${tracks.size} tracks (couldn't fetch $failed release${if (failed == 1) "" else "s"})"
-                            else "Downloading ${tracks.size} tracks"
+                            if (failed > 0) {
+                                tf.monochrome.android.ui.components.UiText.Res(
+                                    R.string.downloading_with_failures,
+                                    listOf(downloading, tf.monochrome.android.ui.components.UiText.Plural(R.plurals.releases_count, failed)),
+                                )
+                            } else {
+                                downloading
+                            }
                         )
                     }
-                    else -> _downloadMessage.tryEmit("Couldn't fetch releases. Check your connection.")
+                    else -> _downloadMessage.tryEmit(tf.monochrome.android.ui.components.UiText.Res(R.string.error_fetch_releases))
                 }
             } finally {
                 _isDownloadingAll.value = false

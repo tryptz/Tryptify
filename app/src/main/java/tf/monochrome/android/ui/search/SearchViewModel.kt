@@ -32,6 +32,7 @@ import tf.monochrome.android.domain.usecase.SearchUnifiedLibraryUseCase
 import tf.monochrome.android.domain.usecase.toDeezerUnifiedTrack
 import tf.monochrome.android.domain.usecase.toQobuzUnifiedTrack
 import tf.monochrome.android.domain.usecase.toUnifiedTrack
+import tf.monochrome.android.R
 
 @HiltViewModel
 class SearchViewModel @Inject constructor(
@@ -71,21 +72,26 @@ class SearchViewModel @Inject constructor(
         private const val SOURCE_BOOST_API = 50
     }
 
-    enum class SearchTypeFilter(val label: String) {
-        ALL("All"),
-        TRACKS("Tracks"),
-        ALBUMS("Albums"),
-        ARTISTS("Artists"),
-        PLAYLISTS("Playlists")
+    enum class SearchTypeFilter(@androidx.annotation.StringRes val label: Int) {
+        ALL(R.string.filter_all),
+        TRACKS(R.string.filter_tracks),
+        ALBUMS(R.string.filter_albums),
+        ARTISTS(R.string.filter_artists),
+        PLAYLISTS(R.string.filter_playlists)
     }
 
-    enum class SearchSourceFilter(val label: String, val sourceType: SourceType?) {
-        ALL("All", null),
+    /** [label] is a brand name, shown as is; [labelRes] is for the entries that are words. */
+    enum class SearchSourceFilter(
+        val label: String,
+        val sourceType: SourceType?,
+        @androidx.annotation.StringRes val labelRes: Int? = null,
+    ) {
+        ALL("All", null, R.string.filter_all),
         TIDAL("TIDAL", SourceType.API),
         QOBUZ("Qobuz", SourceType.QOBUZ),
         DEEZER("Deezer", SourceType.DEEZER),
-        LOCAL("Local", SourceType.LOCAL),
-        COLLECTION("Collection", SourceType.COLLECTION)
+        LOCAL("Local", SourceType.LOCAL, R.string.source_local),
+        COLLECTION("Collection", SourceType.COLLECTION, R.string.source_collection)
     }
 
     /** What the UI prefetch trigger is asking for more of. */

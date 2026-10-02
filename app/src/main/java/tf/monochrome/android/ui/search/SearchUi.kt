@@ -98,6 +98,9 @@ import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.navigation.navigateSafe
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 // SearchQueryField is gone. It was a one-line forward to GlassSearchBar that
 // existed to keep Home and the search screen agreeing on a placeholder, and both
@@ -117,7 +120,7 @@ fun SearchHistoryContent(
     ) {
         item {
             Text(
-                text = "Search for your favorite music",
+                text = stringResource(R.string.search_empty_prompt),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
@@ -132,9 +135,9 @@ fun SearchHistoryContent(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    SectionHeader(title = "Recent searches")
+                    SectionHeader(title = stringResource(R.string.recent_searches))
                     TextButton(onClick = onClearHistory) {
-                        Text("Clear")
+                        Text(stringResource(R.string.action_clear))
                     }
                 }
             }
@@ -259,7 +262,7 @@ fun SearchResultsContent(
 
     if (showAddToPlaylistForSelection) {
         AddToPlaylistSheet(
-            title = "Add ${selection.count} tracks to playlist",
+            title = pluralStringResource(R.plurals.add_n_tracks_to_playlist, selection.count, selection.count),
             playlists = libraryPlaylists,
             onDismiss = { showAddToPlaylistForSelection = false },
             onPlaylistSelected = { playlist ->
@@ -510,15 +513,15 @@ fun SearchResultsContent(
                                 verticalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
                                 Text(
-                                    text = "Couldn't reach search. Check your connection and try again.",
+                                    text = stringResource(R.string.search_unreachable),
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
-                                TextButton(onClick = onRetry) { Text("Retry") }
+                                TextButton(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
                             }
                         } else {
                             Text(
-                                text = "No results found",
+                                text = stringResource(R.string.no_results),
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(24.dp)
@@ -591,7 +594,7 @@ private fun SearchFilterRow(
                 FilterChip(
                     selected = selectedType == type,
                     onClick = { onTypeSelected(type) },
-                    label = { Text(type.label) }
+                    label = { Text(stringResource(type.label)) }
                 )
             }
         }
@@ -606,7 +609,7 @@ private fun SearchFilterRow(
                     FilterChip(
                         selected = selectedSource == source,
                         onClick = { onSourceSelected(source) },
-                        label = { Text(source.label) },
+                        label = { Text(source.labelRes?.let { stringResource(it) } ?: source.label) },
                         leadingIcon = brand?.let { { SourceBrandMark(it, size = FilterChipDefaults.IconSize) } },
                         colors = if (brandColor != null) {
                             FilterChipDefaults.filterChipColors(
@@ -659,7 +662,7 @@ private fun UnifiedSearchTrackItem(
             if (selectionMode) {
                 Icon(
                     imageVector = if (selected) Icons.Default.CheckCircle else Icons.Outlined.Circle,
-                    contentDescription = if (selected) "Selected" else "Not selected",
+                    contentDescription = if (selected) stringResource(R.string.state_selected) else stringResource(R.string.state_not_selected),
                     tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.width(MonoDimens.spacingMd))
@@ -718,7 +721,7 @@ private fun UnifiedSearchTrackItem(
                 IconButton(onClick = effectiveOnLikeClick) {
                     Icon(
                         imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                        contentDescription = if (isLiked) "Unlike" else "Like",
+                        contentDescription = if (isLiked) stringResource(R.string.action_unlike) else stringResource(R.string.action_like),
                         tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -736,7 +739,7 @@ private fun UnifiedSearchTrackItem(
                 IconButton(onClick = effectiveOnMoreClick) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
-                        contentDescription = "More options",
+                        contentDescription = stringResource(R.string.action_more_options),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -797,7 +800,7 @@ private fun PlaylistSearchItem(
                 )
                 Text(
                     text = buildString {
-                        append(playlist.creator?.name ?: "Playlist")
+                        append(playlist.creator?.name ?: stringResource(R.string.playlist))
                         playlist.numberOfTracks?.let { append(" • $it tracks") }
                     },
                     style = MaterialTheme.typography.bodySmall,

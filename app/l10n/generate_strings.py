@@ -60,10 +60,18 @@ def main():
                 if want != got:
                     errors.append(f'{key}: {lang} placeholders {got} != en {want}')
     for base, forms in plurals.items():
+        want = sorted(re.findall(r'%\d+\$[sdf]', forms['other']['en']))
         for lang, needed in PLURAL_FORMS.items():
             for q in needed:
                 if q not in forms or not (forms[q].get(lang) or '').strip():
                     errors.append(f'{base}: {lang} plural "{q}" missing')
+                    continue
+                got = sorted(re.findall(r'%\d+\$[sdf]', forms[q][lang]))
+                # "one" may leave the number out ("Afficher le titre"); no
+                # form may invent a placeholder or drop one in "other".
+                ok = set(got) <= set(want) if q == 'one' else got == want
+                if not ok:
+                    errors.append(f'{base}: {lang} plural "{q}" placeholders {got} != {want}')
     if errors:
         print('\n'.join(errors), file=sys.stderr)
         sys.exit(1)

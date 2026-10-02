@@ -67,6 +67,9 @@ import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.navigation.navigateTool
 import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.components.SearchAction
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 // LOCAL_SECTION and LIBRARY_SECTION_NAMES used to live here. Page identity and
 // page names belong to APP_PAGES in ui/navigation now, because Home and Discover
@@ -245,13 +248,18 @@ fun LibraryScreen(
             is tf.monochrome.android.data.import_.ImportProgress.Done -> {
                 android.widget.Toast.makeText(
                     importMsgContext,
-                    "Imported ${p.matched}/${p.total} tracks into \"${p.playlistName}\"",
+                    importMsgContext.getString(
+                        R.string.import_done_toast,
+                        importMsgContext.resources.getQuantityString(R.plurals.tracks_of_total, p.total, p.matched, p.total),
+                        p.playlistName,
+                    ),
                     android.widget.Toast.LENGTH_LONG
                 ).show()
                 viewModel.resetImportProgress()
             }
             is tf.monochrome.android.data.import_.ImportProgress.Failed -> {
-                android.widget.Toast.makeText(importMsgContext, "Import failed: ${p.message}", android.widget.Toast.LENGTH_LONG).show()
+                val reason = p.message.ifBlank { importMsgContext.getString(R.string.playlist_file_unreadable) }
+                android.widget.Toast.makeText(importMsgContext, importMsgContext.getString(R.string.import_failed_toast, reason), android.widget.Toast.LENGTH_LONG).show()
                 viewModel.resetImportProgress()
             }
             else -> {}
@@ -289,7 +297,7 @@ fun LibraryScreen(
 
     if (showAddToPlaylistForSelection) {
         AddToPlaylistSheet(
-            title = "Add ${selection.count} tracks to playlist",
+            title = pluralStringResource(R.plurals.add_n_tracks_to_playlist, selection.count, selection.count),
             playlists = playlists,
             onDismiss = { showAddToPlaylistForSelection = false },
             onPlaylistSelected = { playlist ->
@@ -314,7 +322,7 @@ fun LibraryScreen(
                     // One title for every section: they are all the Library
                     // tab, and the switcher under the bar says which is open.
                     Text(
-                        text = "Library",
+                        text = stringResource(R.string.tab_library),
                         style = MaterialTheme.typography.headlineMedium
                     )
                 },
@@ -333,7 +341,7 @@ fun LibraryScreen(
                     IconButton(onClick = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) }) {
                         Icon(
                             Icons.Default.Settings,
-                            contentDescription = "Settings",
+                            contentDescription = stringResource(R.string.settings),
                             tint = MaterialTheme.colorScheme.onBackground
                         )
                     }
@@ -365,7 +373,7 @@ fun LibraryScreen(
                         selection.clear()
                     }
                 } else null,
-                deleteContentDescription = "Unlike"
+                deleteContentDescription = stringResource(R.string.action_unlike)
             )
         }
 
@@ -381,7 +389,7 @@ fun LibraryScreen(
                     if (recentTracks.isNotEmpty()) {
                         item(key = LibraryKeys.header("recent"), contentType = LibraryContentType.HEADER) {
                             SectionHeader(
-                                title = "Recently Played",
+                                title = stringResource(R.string.recently_played),
                                 // Home used to carry the full history; it is
                                 // the page list now, and five rows here was
                                 // all that was left of it. Rather than a
@@ -391,7 +399,7 @@ fun LibraryScreen(
                                 onSeeAllClick = if (recentTracks.size > RECENT_PREVIEW) {
                                     { allRecentShown = !allRecentShown }
                                 } else null,
-                                seeAllLabel = if (allRecentShown) "Show less" else "See All",
+                                seeAllLabel = if (allRecentShown) stringResource(R.string.action_show_less) else stringResource(R.string.action_see_all),
                             )
                         }
                         items(
@@ -421,7 +429,7 @@ fun LibraryScreen(
 
                     if (favoriteTracks.isNotEmpty()) {
                         item(key = LibraryKeys.header("liked"), contentType = LibraryContentType.HEADER) {
-                            SectionHeader(title = "Liked Songs")
+                            SectionHeader(title = stringResource(R.string.liked_songs))
                         }
                         items(
                             favoriteTracks.take(5),
@@ -449,7 +457,7 @@ fun LibraryScreen(
                     }
 
                     if (favoriteTracks.isEmpty() && recentTracks.isEmpty()) {
-                        item { EmptyState("Start playing music to build your library.") }
+                        item { EmptyState(stringResource(R.string.library_empty)) }
                     }
                 }
 
@@ -499,20 +507,20 @@ fun LibraryScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Add,
-                                contentDescription = "New Playlist",
+                                contentDescription = stringResource(R.string.new_playlist),
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(32.dp)
                             )
                             Spacer(modifier = Modifier.width(16.dp))
                             Text(
-                                text = "Create Playlist",
+                                text = stringResource(R.string.create_playlist_title),
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
                     if (playlists.isEmpty()) {
-                        item { EmptyState("Create a playlist to organize your music.") }
+                        item { EmptyState(stringResource(R.string.playlists_empty)) }
                     } else {
                         items(playlists, key = { it.id }) { playlist ->
                             Row(
@@ -524,7 +532,7 @@ fun LibraryScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.PlaylistPlay,
-                                    contentDescription = "Playlist",
+                                    contentDescription = stringResource(R.string.playlist),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(48.dp)
                                 )
@@ -571,7 +579,7 @@ fun LibraryScreen(
                                 }) {
                                     Icon(
                                         Icons.Default.Download,
-                                        contentDescription = "Download All",
+                                        contentDescription = stringResource(R.string.download_all),
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 }
@@ -582,7 +590,7 @@ fun LibraryScreen(
                     open = likedSearchOpen,
                     query = likedQuery,
                     onQueryChange = { likedQuery = it },
-                    placeholder = "Search liked songs",
+                    placeholder = stringResource(R.string.search_liked_songs),
                     onClose = { likedSearchOpen = false; likedQuery = "" },
                 ) { searchTopInset ->
                 LazyColumn(
@@ -620,7 +628,7 @@ fun LibraryScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                         }
                         item(key = LibraryKeys.header("albums"), contentType = LibraryContentType.HEADER) {
-                            SectionHeader(title = "Liked Albums")
+                            SectionHeader(title = stringResource(R.string.liked_albums))
                         }
                         items(
                             favoriteAlbums,
@@ -643,7 +651,7 @@ fun LibraryScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                         }
                         item(key = LibraryKeys.header("artists"), contentType = LibraryContentType.HEADER) {
-                            SectionHeader(title = "Liked Artists")
+                            SectionHeader(title = stringResource(R.string.liked_artists))
                         }
                         items(
                             favoriteArtists,
@@ -663,7 +671,7 @@ fun LibraryScreen(
 
                     if (favoriteTracks.isEmpty() && favoriteAlbums.isEmpty() && favoriteArtists.isEmpty()) {
                         item(key = LibraryKeys.EMPTY, contentType = LibraryContentType.EMPTY) {
-                            EmptyState("Like tracks, albums, and artists to see them here.")
+                            EmptyState(stringResource(R.string.favorites_empty))
                         }
                     }
                 }

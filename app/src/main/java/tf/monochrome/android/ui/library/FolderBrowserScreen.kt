@@ -71,6 +71,9 @@ import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import tf.monochrome.android.ui.navigation.LocalNowPlayingTrackId
 import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.components.SearchAction
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -142,7 +145,7 @@ fun FolderBrowserScreen(
             },
             navigationIcon = {
                 IconButton(onClick = { navController.popBackStackSafe() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
             },
             actions = {
@@ -155,7 +158,7 @@ fun FolderBrowserScreen(
 
                 if (visibleTracks.isNotEmpty()) {
                     IconButton(onClick = { onPlayAll(visibleTracks) }) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = "Play All")
+                        Icon(Icons.Default.PlayArrow, contentDescription = stringResource(R.string.action_play_all))
                     }
                 }
             },
@@ -168,7 +171,7 @@ fun FolderBrowserScreen(
             open = searchOpen,
             query = listQuery,
             onQueryChange = { listQuery = it },
-            placeholder = "Search this folder",
+            placeholder = stringResource(R.string.search_this_folder),
             onClose = { searchOpen = false; listQuery = "" },
         ) { searchTopInset ->
         val listState = rememberLazyListState()
@@ -229,7 +232,7 @@ fun FolderBrowserScreen(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            "${folder.trackCount} tracks",
+                            pluralStringResource(R.plurals.track_count, folder.trackCount, folder.trackCount),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -317,7 +320,7 @@ fun FolderBrowserScreen(
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.PlaylistAdd,
-                            contentDescription = "Add to queue",
+                            contentDescription = stringResource(R.string.action_add_to_queue),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
@@ -328,7 +331,7 @@ fun FolderBrowserScreen(
                     ) {
                         Icon(
                             Icons.Default.MoreVert,
-                            contentDescription = "More options",
+                            contentDescription = stringResource(R.string.action_more_options),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
@@ -347,19 +350,18 @@ fun FolderBrowserScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    "No music here",
+                    stringResource(R.string.folder_empty),
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    "Nothing under this folder has been added to your library. " +
-                        "If you have put music here since the last scan, scan again.",
+                    stringResource(R.string.folder_empty_detail),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                TextButton(onClick = { viewModel.startFullScan() }) { Text("Scan again") }
+                TextButton(onClick = { viewModel.startFullScan() }) { Text(stringResource(R.string.scan_again)) }
             }
         }
         FastScroller(state = listState)

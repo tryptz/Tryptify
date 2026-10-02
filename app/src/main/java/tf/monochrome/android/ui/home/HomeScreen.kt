@@ -62,6 +62,8 @@ import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.navigation.navigateTool
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -138,14 +140,14 @@ fun HomeScreen(
                     IconButton(onClick = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) }) {
                         Icon(
                             Icons.Default.Settings,
-                            contentDescription = "Settings",
+                            contentDescription = stringResource(R.string.settings),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     IconButton(onClick = { navController.navigateTool(Screen.Profile) }) {
                         Icon(
                             Icons.Default.AccountCircle,
-                            contentDescription = "Profile",
+                            contentDescription = stringResource(R.string.profile),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -172,8 +174,8 @@ fun HomeScreen(
                 val update = availableUpdate
                 if (showUpdateBar && update != null) {
                     tf.monochrome.android.ui.components.WhatsNewBar(
-                        title = "Version ${update.versionName} is available",
-                        subtitle = "Tap to see the release on GitHub",
+                        title = stringResource(R.string.update_available, update.versionName),
+                        subtitle = stringResource(R.string.update_available_detail),
                         onOpen = {
                             settingsViewModel.dismissUpdate()
                             runCatching {
@@ -190,8 +192,8 @@ fun HomeScreen(
                     )
                 } else if (showWhatsNew) {
                     tf.monochrome.android.ui.components.WhatsNewBar(
-                        title = "Updated to $whatsNewVersionName",
-                        subtitle = "See what's new",
+                        title = stringResource(R.string.updated_to, whatsNewVersionName),
+                        subtitle = stringResource(R.string.see_whats_new),
                         onOpen = {
                             settingsViewModel.markWhatsNewSeen()
                             navController.navigateSafe(

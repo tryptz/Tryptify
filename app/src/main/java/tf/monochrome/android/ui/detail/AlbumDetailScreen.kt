@@ -59,6 +59,10 @@ import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.components.SearchAction
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -134,7 +138,7 @@ fun AlbumDetailScreen(
 
     if (showAddToPlaylistForSelection) {
         AddToPlaylistSheet(
-            title = "Add ${selection.count} tracks to playlist",
+            title = pluralStringResource(R.plurals.add_n_tracks_to_playlist, selection.count, selection.count),
             playlists = playlists,
             onDismiss = { showAddToPlaylistForSelection = false },
             onPlaylistSelected = { playlist ->
@@ -165,7 +169,7 @@ fun AlbumDetailScreen(
             title = {},
             navigationIcon = {
                 IconButton(onClick = { navController.popBackStackSafe() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -176,7 +180,7 @@ fun AlbumDetailScreen(
         when {
             isLoading -> LoadingScreen()
             error != null -> ErrorScreen(
-                message = error ?: "Unknown error",
+                message = error?.resolve(LocalContext.current) ?: stringResource(R.string.unknown_error),
                 onRetry = { viewModel.retry() }
             )
             albumDetail != null -> {
@@ -202,7 +206,7 @@ fun AlbumDetailScreen(
                     open = searchOpen,
                     query = listQuery,
                     onQueryChange = { listQuery = it },
-                    placeholder = "Search this album",
+                    placeholder = stringResource(R.string.search_this_album),
                     onClose = { searchOpen = false; listQuery = "" },
                 ) { searchTopInset ->
                 LazyColumn(
@@ -257,7 +261,7 @@ fun AlbumDetailScreen(
                             )
                             detail.album.releaseYear?.let { year ->
                                 Text(
-                                    text = "${detail.album.type ?: "Album"} · $year",
+                                    text = stringResource(R.string.separator_dot, albumTypeLabel(detail.album.type), year.toString()),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -274,7 +278,7 @@ fun AlbumDetailScreen(
                                 ) {
                                     Icon(
                                         Icons.Default.PlayArrow,
-                                        contentDescription = "Play",
+                                        contentDescription = stringResource(R.string.action_play),
                                         tint = MaterialTheme.colorScheme.onPrimary
                                     )
                                 }
@@ -287,7 +291,7 @@ fun AlbumDetailScreen(
                                 ) {
                                     Icon(
                                         Icons.Default.Shuffle,
-                                        contentDescription = "Shuffle",
+                                        contentDescription = stringResource(R.string.visualizer_shuffle),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
@@ -300,7 +304,7 @@ fun AlbumDetailScreen(
                                 ) {
                                     Icon(
                                         Icons.Default.Download,
-                                        contentDescription = "Download album",
+                                        contentDescription = stringResource(R.string.download_album),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
@@ -357,4 +361,16 @@ fun AlbumDetailScreen(
             }
         }
     }
+}
+
+/**
+ * The catalogue's release type in the reader's language. The API sends it as
+ * an upper-case token; one this does not know is shown as it came.
+ */
+@Composable
+private fun albumTypeLabel(type: String?): String = when (type?.uppercase()) {
+    null, "ALBUM" -> stringResource(R.string.album_type_album)
+    "SINGLE" -> stringResource(R.string.album_type_single)
+    "COMPILATION" -> stringResource(R.string.album_type_compilation)
+    else -> type
 }

@@ -65,9 +65,10 @@ class LibraryCategoryTest {
     fun `the index still offers everything the swipeable tabs did`() {
         // The five sub-tabs this list replaced. Dropping one would be a
         // regression that nothing else would catch.
-        val labels = LibraryCategory.entries.map { it.label }
-        listOf("Songs", "Albums", "Artists", "Genres", "Folders").forEach {
-            assert(it in labels) { "$it was a Local sub-tab and is missing from the index" }
+        // By id: the labels are translated, the ids are what stays put.
+        val ids = LibraryCategory.entries.map { it.id }
+        listOf("songs", "albums", "artists", "genres", "folders").forEach {
+            assert(it in ids) { "$it was a Local sub-tab and is missing from the index" }
         }
     }
 

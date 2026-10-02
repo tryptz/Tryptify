@@ -14,6 +14,8 @@ import tf.monochrome.android.data.local.repository.LocalMediaRepository
 import tf.monochrome.android.domain.model.UnifiedAlbum
 import tf.monochrome.android.domain.model.UnifiedTrack
 import javax.inject.Inject
+import tf.monochrome.android.R
+import tf.monochrome.android.ui.components.errorText
 
 @HiltViewModel
 class LocalAlbumDetailViewModel @Inject constructor(
@@ -29,8 +31,8 @@ class LocalAlbumDetailViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
+    private val _error = MutableStateFlow<tf.monochrome.android.ui.components.UiText?>(null)
+    val error: StateFlow<tf.monochrome.android.ui.components.UiText?> = _error.asStateFlow()
 
     val tracks: StateFlow<List<UnifiedTrack>> = localMediaRepository.getTracksByAlbum(albumId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -48,10 +50,10 @@ class LocalAlbumDetailViewModel @Inject constructor(
                 if (result != null) {
                     _album.value = result
                 } else {
-                    _error.value = "Album not found"
+                    _error.value = tf.monochrome.android.ui.components.UiText.Res(R.string.error_album_not_found)
                 }
             } catch (e: Exception) {
-                _error.value = e.message ?: "Failed to load album"
+                _error.value = errorText(e, R.string.error_load_album)
             }
             _isLoading.value = false
         }

@@ -13,6 +13,8 @@ import tf.monochrome.android.data.downloads.DownloadManager
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.domain.model.AlbumDetail
 import javax.inject.Inject
+import tf.monochrome.android.R
+import tf.monochrome.android.ui.components.errorText
 
 @HiltViewModel
 class AlbumDetailViewModel @Inject constructor(
@@ -30,8 +32,8 @@ class AlbumDetailViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
+    private val _error = MutableStateFlow<tf.monochrome.android.ui.components.UiText?>(null)
+    val error: StateFlow<tf.monochrome.android.ui.components.UiText?> = _error.asStateFlow()
 
     init {
         loadAlbum()
@@ -59,7 +61,7 @@ class AlbumDetailViewModel @Inject constructor(
             if (qobuzIdRegistry.isDeezerAlbum(albumId)) {
                 repository.getDeezerAlbum(albumId)
                     .onSuccess { _albumDetail.value = it; _source.value = tf.monochrome.android.domain.model.SourceType.DEEZER }
-                    .onFailure { _error.value = it.message ?: "Failed to load album" }
+                    .onFailure { _error.value = errorText(it, R.string.error_load_album) }
                 _isLoading.value = false
                 return@launch
             }
@@ -82,7 +84,7 @@ class AlbumDetailViewModel @Inject constructor(
 
             finalResult
                 .onSuccess { _albumDetail.value = it; _source.value = source }
-                .onFailure { _error.value = it.message ?: "Failed to load album" }
+                .onFailure { _error.value = errorText(it, R.string.error_load_album) }
             _isLoading.value = false
         }
     }

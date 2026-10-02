@@ -63,6 +63,9 @@ import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.components.SearchAction
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -115,7 +118,7 @@ fun LocalFacetDetailScreen(
             title = {},
             navigationIcon = {
                 IconButton(onClick = { navController.popBackStackSafe() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -127,7 +130,7 @@ fun LocalFacetDetailScreen(
             open = searchOpen,
             query = listQuery,
             onQueryChange = { listQuery = it },
-            placeholder = "Search this ${facet.noun}",
+            placeholder = stringResource(facet.searchHint),
             onClose = { searchOpen = false; listQuery = "" },
         ) { searchTopInset ->
         LazyColumn(
@@ -160,14 +163,14 @@ fun LocalFacetDetailScreen(
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = facetValue.ifBlank { "Unknown ${facet.noun}" },
+                        text = facetValue.ifBlank { stringResource(facet.unknownLabel) },
                         style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "${visibleTracks.size} tracks",
+                        text = pluralStringResource(R.plurals.track_count, visibleTracks.size, visibleTracks.size),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -182,7 +185,7 @@ fun LocalFacetDetailScreen(
                         ) {
                             Icon(
                                 Icons.Default.PlayArrow,
-                                contentDescription = "Play All",
+                                contentDescription = stringResource(R.string.action_play_all),
                                 tint = MaterialTheme.colorScheme.onPrimary
                             )
                         }
@@ -195,7 +198,7 @@ fun LocalFacetDetailScreen(
                         ) {
                             Icon(
                                 Icons.Default.Shuffle,
-                                contentDescription = "Shuffle",
+                                contentDescription = stringResource(R.string.visualizer_shuffle),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -316,7 +319,7 @@ private fun FacetTrackRow(
             IconButton(onClick = onAddToQueue, modifier = Modifier.size(32.dp)) {
                 Icon(
                     Icons.AutoMirrored.Filled.PlaylistAdd,
-                    contentDescription = "Add to queue",
+                    contentDescription = stringResource(R.string.action_add_to_queue),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )
@@ -324,7 +327,7 @@ private fun FacetTrackRow(
             IconButton(onClick = onMoreClick, modifier = Modifier.size(32.dp)) {
                 Icon(
                     Icons.Default.MoreVert,
-                    contentDescription = "More options",
+                    contentDescription = stringResource(R.string.action_more_options),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )

@@ -70,6 +70,10 @@ import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.components.SearchAction
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,7 +90,7 @@ fun ArtistDetailScreen(
     val dlMsgContext = androidx.compose.ui.platform.LocalContext.current
     androidx.compose.runtime.LaunchedEffect(Unit) {
         viewModel.downloadMessage.collect { msg ->
-            android.widget.Toast.makeText(dlMsgContext, msg, android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(dlMsgContext, msg.resolve(dlMsgContext), android.widget.Toast.LENGTH_SHORT).show()
         }
     }
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsStateWithLifecycle()
@@ -117,23 +121,26 @@ fun ArtistDetailScreen(
         AlertDialog(
             onDismissRequest = { showDownloadConfirm = false },
             icon = { Icon(Icons.Default.Download, contentDescription = null) },
-            title = { Text("Download all releases?") },
+            title = { Text(stringResource(R.string.download_all_releases_title)) },
             text = {
+                val releases = pluralStringResource(R.plurals.releases_count, releaseCount, releaseCount)
+                val artistName = detail?.artist?.name
                 Text(
-                    "This will download every track from $releaseCount " +
-                        (if (releaseCount == 1) "release" else "releases") +
-                        " by ${detail?.artist?.name ?: "this artist"}. " +
-                        "Large discographies can use significant storage and data."
+                    if (artistName != null) {
+                        stringResource(R.string.download_all_releases_body, releases, artistName)
+                    } else {
+                        stringResource(R.string.download_all_releases_body_unknown, releases)
+                    }
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     showDownloadConfirm = false
                     viewModel.downloadAllReleases()
-                }) { Text("Download") }
+                }) { Text(stringResource(R.string.action_download)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDownloadConfirm = false }) { Text("Cancel") }
+                TextButton(onClick = { showDownloadConfirm = false }) { Text(stringResource(R.string.action_cancel)) }
             },
         )
     }
@@ -181,7 +188,7 @@ fun ArtistDetailScreen(
 
     if (showAddToPlaylistForSelection) {
         AddToPlaylistSheet(
-            title = "Add ${selection.count} tracks to playlist",
+            title = pluralStringResource(R.plurals.add_n_tracks_to_playlist, selection.count, selection.count),
             playlists = playlists,
             onDismiss = { showAddToPlaylistForSelection = false },
             onPlaylistSelected = { playlist ->
@@ -207,7 +214,7 @@ fun ArtistDetailScreen(
             title = {},
             navigationIcon = {
                 IconButton(onClick = { navController.popBackStackSafe() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
             },
             actions = {
@@ -229,7 +236,7 @@ fun ArtistDetailScreen(
                                 strokeWidth = 2.dp,
                             )
                         } else {
-                            Icon(Icons.Default.Download, contentDescription = "Download all releases")
+                            Icon(Icons.Default.Download, contentDescription = stringResource(R.string.download_all_releases))
                         }
                     }
                 }
@@ -242,7 +249,7 @@ fun ArtistDetailScreen(
         when {
             isLoading -> LoadingScreen()
             error != null -> ErrorScreen(
-                message = error ?: "Unknown error",
+                message = error?.resolve(LocalContext.current) ?: stringResource(R.string.unknown_error),
                 onRetry = { viewModel.retry() }
             )
             artistDetail != null -> {
@@ -262,7 +269,7 @@ fun ArtistDetailScreen(
                     open = searchOpen,
                     query = listQuery,
                     onQueryChange = { listQuery = it },
-                    placeholder = "Search this artist",
+                    placeholder = stringResource(R.string.search_this_artist),
                     onClose = { searchOpen = false; listQuery = "" },
                 ) { searchTopInset ->
                 LazyColumn(
@@ -309,7 +316,7 @@ fun ArtistDetailScreen(
                     }
 
                     if (detail.topTracks.isNotEmpty()) {
-                        item { tf.monochrome.android.devedit.DevEditable("artist_section_top_tracks", Modifier.fillMaxWidth()) { SectionHeader(title = "Top Tracks") } }
+                        item { tf.monochrome.android.devedit.DevEditable("artist_section_top_tracks", Modifier.fillMaxWidth()) { SectionHeader(title = stringResource(R.string.top_tracks)) } }
                         stickyHeader {
                             TrackListToolbar(
                                 sort = listSort,
@@ -359,7 +366,7 @@ fun ArtistDetailScreen(
                     }
 
                     if (detail.albums.isNotEmpty()) {
-                        item { tf.monochrome.android.devedit.DevEditable("artist_section_albums", Modifier.fillMaxWidth()) { SectionHeader(title = "Albums") } }
+                        item { tf.monochrome.android.devedit.DevEditable("artist_section_albums", Modifier.fillMaxWidth()) { SectionHeader(title = stringResource(R.string.filter_albums)) } }
                         item {
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
@@ -379,7 +386,7 @@ fun ArtistDetailScreen(
 
                     val epSingles = detail.eps + detail.singles
                     if (epSingles.isNotEmpty()) {
-                        item { tf.monochrome.android.devedit.DevEditable("artist_section_singles_eps", Modifier.fillMaxWidth()) { SectionHeader(title = "Singles & EPs") } }
+                        item { tf.monochrome.android.devedit.DevEditable("artist_section_singles_eps", Modifier.fillMaxWidth()) { SectionHeader(title = stringResource(R.string.singles_and_eps)) } }
                         item {
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
@@ -398,7 +405,7 @@ fun ArtistDetailScreen(
                     }
 
                     if (detail.unreleasedTracks.isNotEmpty()) {
-                        item { tf.monochrome.android.devedit.DevEditable("artist_section_unreleased", Modifier.fillMaxWidth()) { SectionHeader(title = "Unreleased (ArtistGrid)") } }
+                        item { tf.monochrome.android.devedit.DevEditable("artist_section_unreleased", Modifier.fillMaxWidth()) { SectionHeader(title = stringResource(R.string.unreleased_artistgrid)) } }
                         item {
                             androidx.compose.foundation.lazy.grid.LazyHorizontalGrid(
                                 rows = androidx.compose.foundation.lazy.grid.GridCells.Fixed(2),
@@ -420,7 +427,7 @@ fun ArtistDetailScreen(
                     }
 
                     if (detail.similarArtists.isNotEmpty()) {
-                        item { tf.monochrome.android.devedit.DevEditable("artist_section_similar_artists", Modifier.fillMaxWidth()) { SectionHeader(title = "Similar Artists") } }
+                        item { tf.monochrome.android.devedit.DevEditable("artist_section_similar_artists", Modifier.fillMaxWidth()) { SectionHeader(title = stringResource(R.string.similar_artists)) } }
                         item {
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
@@ -465,7 +472,7 @@ private fun ShowAllTracksRow(
         horizontalArrangement = Arrangement.Center,
     ) {
         Text(
-            text = if (expanded) "Show less" else "Show all $totalCount tracks",
+            text = if (expanded) stringResource(R.string.action_show_less) else pluralStringResource(R.plurals.show_all_tracks, totalCount, totalCount),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
         )

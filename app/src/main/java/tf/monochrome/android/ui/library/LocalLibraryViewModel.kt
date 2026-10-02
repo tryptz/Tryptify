@@ -310,7 +310,8 @@ class LocalLibraryViewModel @Inject constructor(
                 if (result.isSuccess) {
                     _importResult.value = Result.success("Library Backup imported successfully")
                 } else {
-                    _importResult.value = Result.failure(result.exceptionOrNull() ?: Exception("Unknown backup import error"))
+                    // No message of our own: the dialog says "Unknown error" in the reader's language.
+                    _importResult.value = Result.failure(result.exceptionOrNull() ?: IllegalStateException())
                 }
             } else {
                 _importResult.value = importCollectionUseCase.import(manifestJson)

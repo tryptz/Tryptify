@@ -77,6 +77,10 @@ import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.components.SearchAction
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -131,7 +135,7 @@ fun LocalArtistDetailScreen(
             title = {},
             navigationIcon = {
                 IconButton(onClick = { navController.popBackStackSafe() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -143,7 +147,7 @@ fun LocalArtistDetailScreen(
         when {
             isLoading -> LoadingScreen()
             error != null -> ErrorScreen(
-                message = error ?: "Unknown error",
+                message = error?.resolve(LocalContext.current) ?: stringResource(R.string.unknown_error),
                 onRetry = { viewModel.retry() }
             )
             artistData != null -> {
@@ -151,7 +155,7 @@ fun LocalArtistDetailScreen(
                     open = searchOpen,
                     query = listQuery,
                     onQueryChange = { listQuery = it },
-                    placeholder = "Search this artist",
+                    placeholder = stringResource(R.string.search_this_artist),
                     onClose = { searchOpen = false; listQuery = "" },
                 ) { searchTopInset ->
                 LazyColumn(
@@ -199,7 +203,7 @@ fun LocalArtistDetailScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "${artistData.albumCount} albums · ${artistData.trackCount} tracks",
+                                text = stringResource(R.string.separator_dot, pluralStringResource(R.plurals.albums_count, artistData.albumCount, artistData.albumCount), pluralStringResource(R.plurals.track_count, artistData.trackCount, artistData.trackCount)),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -214,7 +218,7 @@ fun LocalArtistDetailScreen(
                                 ) {
                                     Icon(
                                         Icons.Default.PlayArrow,
-                                        contentDescription = "Play All",
+                                        contentDescription = stringResource(R.string.action_play_all),
                                         tint = MaterialTheme.colorScheme.onPrimary
                                     )
                                 }
@@ -227,7 +231,7 @@ fun LocalArtistDetailScreen(
                                 ) {
                                     Icon(
                                         Icons.Default.Shuffle,
-                                        contentDescription = "Shuffle",
+                                        contentDescription = stringResource(R.string.visualizer_shuffle),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
@@ -238,7 +242,7 @@ fun LocalArtistDetailScreen(
 
                     // Albums section
                     if (albums.isNotEmpty()) {
-                        item { tf.monochrome.android.devedit.DevEditable("artist_albums_header", Modifier.fillMaxWidth()) { SectionHeader(title = "Albums") } }
+                        item { tf.monochrome.android.devedit.DevEditable("artist_albums_header", Modifier.fillMaxWidth()) { SectionHeader(title = stringResource(R.string.filter_albums)) } }
                         item {
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
@@ -261,7 +265,7 @@ fun LocalArtistDetailScreen(
 
                     // All tracks
                     if (sortedTracks.isNotEmpty()) {
-                        item { tf.monochrome.android.devedit.DevEditable("artist_tracks_header", Modifier.fillMaxWidth()) { SectionHeader(title = "All Tracks") } }
+                        item { tf.monochrome.android.devedit.DevEditable("artist_tracks_header", Modifier.fillMaxWidth()) { SectionHeader(title = stringResource(R.string.all_tracks)) } }
                         stickyHeader {
                             TrackListToolbar(
                                 sort = listSort,
@@ -341,7 +345,7 @@ private fun LocalAlbumCard(
                 )
                 val subtitle = listOfNotNull(
                     album.year?.toString(),
-                    "${album.trackCount} tracks"
+                    pluralStringResource(R.plurals.track_count, album.trackCount, album.trackCount)
                 ).joinToString(" · ")
                 Text(
                     subtitle,
@@ -451,7 +455,7 @@ private fun ArtistTrackRow(
             IconButton(onClick = onAddToQueue, modifier = Modifier.size(32.dp)) {
                 Icon(
                     Icons.AutoMirrored.Filled.PlaylistAdd,
-                    contentDescription = "Add to queue",
+                    contentDescription = stringResource(R.string.action_add_to_queue),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )
@@ -459,7 +463,7 @@ private fun ArtistTrackRow(
             IconButton(onClick = onMoreClick, modifier = Modifier.size(32.dp)) {
                 Icon(
                     Icons.Default.MoreVert,
-                    contentDescription = "More options",
+                    contentDescription = stringResource(R.string.action_more_options),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )

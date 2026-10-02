@@ -44,6 +44,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tf.monochrome.android.data.collections.db.CollectionEntity
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,10 +72,10 @@ fun CollectionsTab(
         if (result.isFailure) {
             AlertDialog(
                 onDismissRequest = { viewModel.clearImportResult() },
-                title = { Text("Import Failed") },
-                text = { Text(result.exceptionOrNull()?.message ?: "Unknown error") },
+                title = { Text(stringResource(R.string.import_failed)) },
+                text = { Text(result.exceptionOrNull()?.message ?: stringResource(R.string.unknown_error)) },
                 confirmButton = {
-                    TextButton(onClick = { viewModel.clearImportResult() }) { Text("OK") }
+                    TextButton(onClick = { viewModel.clearImportResult() }) { Text(stringResource(R.string.action_ok)) }
                 }
             )
         }
@@ -95,13 +97,13 @@ fun CollectionsTab(
             ) {
                 Icon(
                     Icons.Default.Add,
-                    contentDescription = "Import",
+                    contentDescription = stringResource(R.string.action_import),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(32.dp)
                 )
                 Spacer(modifier = Modifier.width(16.dp))
                 Text(
-                    "Import Collection",
+                    stringResource(R.string.import_collection),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -124,12 +126,12 @@ fun CollectionsTab(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        "No collections imported",
+                        stringResource(R.string.collections_empty),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        "Import a collection manifest to get started",
+                        stringResource(R.string.collections_empty_detail),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
@@ -176,7 +178,7 @@ private fun CollectionCard(
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "Collection",
+                    stringResource(R.string.source_collection),
                     style = MaterialTheme.typography.titleMedium
                 )
                 Text(
@@ -193,7 +195,7 @@ private fun CollectionCard(
             IconButton(onClick = onDelete) {
                 Icon(
                     Icons.Default.Delete,
-                    contentDescription = "Delete",
+                    contentDescription = stringResource(R.string.action_delete),
                     tint = MaterialTheme.colorScheme.error
                 )
             }
@@ -238,28 +240,28 @@ private fun ImportCollectionDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Import Collection") },
+        title = { Text(stringResource(R.string.import_collection)) },
         text = {
             Column {
                 if (isReadingFile) {
-                    Text("Reading file...", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.reading_file), style = MaterialTheme.typography.bodyMedium)
                 } else {
                     OutlinedButton(
                         onClick = { filePickerLauncher.launch(arrayOf("application/json", "*/*")) },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Select .json File")
+                        Text(stringResource(R.string.select_json_file))
                     }
                     
                     Text(
-                        "Or paste the manifest JSON below:",
+                        stringResource(R.string.paste_manifest),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
                     )
                     OutlinedTextField(
                         value = manifestJson,
                         onValueChange = { manifestJson = it },
-                        label = { Text("Manifest JSON") },
+                        label = { Text(stringResource(R.string.manifest_json)) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(160.dp),
@@ -273,11 +275,11 @@ private fun ImportCollectionDialog(
                 TextButton(
                     onClick = { onImport(manifestJson) },
                     enabled = manifestJson.isNotBlank()
-                ) { Text("Import") }
+                ) { Text(stringResource(R.string.action_import)) }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !isReadingFile) { Text("Cancel") }
+            TextButton(onClick = onDismiss, enabled = !isReadingFile) { Text(stringResource(R.string.action_cancel)) }
         }
     )
 }

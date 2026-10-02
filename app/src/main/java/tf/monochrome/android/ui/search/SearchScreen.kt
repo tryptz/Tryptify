@@ -12,6 +12,8 @@ import androidx.compose.material.icons.filled.Settings
 import tf.monochrome.android.ui.navigation.navigateTool
 import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.player.PlayerViewModel
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * The Search tab: the catalogue search, and its history while the field is
@@ -53,7 +55,7 @@ fun SearchScreen(
         androidx.compose.material3.TopAppBar(
             title = {
                 androidx.compose.material3.Text(
-                    text = "Search",
+                    text = stringResource(R.string.tab_search),
                     style = androidx.compose.material3.MaterialTheme.typography.headlineMedium,
                 )
             },
@@ -66,7 +68,7 @@ fun SearchScreen(
                 }) {
                     androidx.compose.material3.Icon(
                         androidx.compose.material.icons.Icons.Default.Settings,
-                        contentDescription = "Settings",
+                        contentDescription = stringResource(R.string.settings),
                     )
                 }
             },
@@ -83,7 +85,7 @@ fun SearchScreen(
             open = true,
             query = query,
             onQueryChange = viewModel::onQueryChange,
-            placeholder = "Search tracks, albums, artists, playlists…",
+            placeholder = stringResource(R.string.search_hint),
             onClose = null,
             autoFocus = autoFocus,
             onSubmit = viewModel::submitSearch,
