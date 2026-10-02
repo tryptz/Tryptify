@@ -43,6 +43,8 @@ import kotlin.math.roundToInt
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * Scrubber plus elapsed / center-label / total time. The center label carries
@@ -148,10 +150,10 @@ internal fun GlassProgressTube(
             .fillMaxWidth()
             .height(34.dp)
             .adjustableSemantics(
-                label = "Seek",
+                label = stringResource(R.string.action_seek),
                 value = frac,
                 range = 0f..1f,
-                stateText = { "${(it * 100).roundToInt()}%" },
+                stateText = { java.text.NumberFormat.getPercentInstance().format(it) },
                 onValueChange = { onSeek(it); onSeekFinished(it) },
             )
             .pointerInput(Unit) {

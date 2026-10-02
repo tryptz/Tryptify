@@ -16,6 +16,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.domain.model.Track
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 @Composable
 internal fun QueueHeroPanel(queuePreview: List<Track>) {
@@ -38,13 +40,13 @@ internal fun QueueHeroPanel(queuePreview: List<Track>) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = "Up Next",
+                text = stringResource(R.string.up_next),
                 style = MaterialTheme.typography.labelLarge,
                 color = Color.White.copy(alpha = 0.7f)
             )
             if (queuePreview.isEmpty()) {
                 Text(
-                    text = "Queue is empty.",
+                    text = stringResource(R.string.queue_empty_short),
                     style = MaterialTheme.typography.headlineSmall,
                     color = Color.White
                 )
@@ -61,7 +63,7 @@ internal fun QueueHeroPanel(queuePreview: List<Track>) {
                             color = Color.White
                         )
                         Text(
-                            text = track.displayArtist.ifBlank { "Unknown artist" },
+                            text = track.displayArtist.ifBlank { stringResource(R.string.unknown_artist) },
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.White.copy(alpha = 0.66f),
                             maxLines = 1,

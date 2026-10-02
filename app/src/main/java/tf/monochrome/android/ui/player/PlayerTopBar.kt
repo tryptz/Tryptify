@@ -45,6 +45,8 @@ import tf.monochrome.android.data.downloads.DownloadStatus
 import tf.monochrome.android.data.downloads.TrackDownloadState
 import tf.monochrome.android.domain.model.RepeatMode
 import tf.monochrome.android.ui.components.liquidGlass
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * Utility top bar for the main player: collapse handle on the left, then an
@@ -84,7 +86,7 @@ fun PlayerTopBar(
         IconButton(onClick = onCollapse) {
             Icon(
                 imageVector = Icons.Default.KeyboardArrowDown,
-                contentDescription = "Collapse",
+                contentDescription = stringResource(R.string.action_collapse),
                 tint = Color.White,
             )
         }
@@ -96,7 +98,7 @@ fun PlayerTopBar(
             IconButton(onClick = onOutputClick) {
                 Icon(
                     imageVector = Icons.Default.Headphones,
-                    contentDescription = "Output device",
+                    contentDescription = stringResource(R.string.output_device),
                     tint = Color.White,
                 )
             }
@@ -128,7 +130,7 @@ fun PlayerTopBar(
                 IconButton(onClick = { menuExpanded = true }) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
-                        contentDescription = "More",
+                        contentDescription = stringResource(R.string.action_more),
                         tint = Color.White,
                     )
                 }
@@ -138,25 +140,25 @@ fun PlayerTopBar(
                 ) {
                     if (onGoToArtist != null) {
                         DropdownMenuItem(
-                            text = { Text("Go to artist") },
+                            text = { Text(stringResource(R.string.action_go_to_artist)) },
                             onClick = { onGoToArtist(); menuExpanded = false },
                             leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
                         )
                     }
                     if (onGoToAlbum != null) {
                         DropdownMenuItem(
-                            text = { Text("Go to album") },
+                            text = { Text(stringResource(R.string.action_go_to_album)) },
                             onClick = { onGoToAlbum(); menuExpanded = false },
                             leadingIcon = { Icon(Icons.Default.Album, contentDescription = null) },
                         )
                     }
                     DropdownMenuItem(
-                        text = { Text("Add to playlist") },
+                        text = { Text(stringResource(R.string.action_add_to_playlist)) },
                         onClick = { onAddToPlaylist(); menuExpanded = false },
                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null) },
                     )
                     DropdownMenuItem(
-                        text = { Text(if (shuffleEnabled) "Shuffle: On" else "Shuffle: Off") },
+                        text = { Text(if (shuffleEnabled) stringResource(R.string.shuffle_on) else stringResource(R.string.shuffle_off)) },
                         onClick = { onToggleShuffle(); menuExpanded = false },
                         leadingIcon = {
                             Icon(
@@ -170,9 +172,9 @@ fun PlayerTopBar(
                         text = {
                             Text(
                                 when (repeatMode) {
-                                    RepeatMode.OFF -> "Repeat: Off"
-                                    RepeatMode.ONE -> "Repeat: One"
-                                    RepeatMode.ALL -> "Repeat: All"
+                                    RepeatMode.OFF -> stringResource(R.string.repeat_off)
+                                    RepeatMode.ONE -> stringResource(R.string.repeat_one)
+                                    RepeatMode.ALL -> stringResource(R.string.repeat_all)
                                 }
                             )
                         },
@@ -202,17 +204,17 @@ fun PlayerTopBar(
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("Send file") },
+                        text = { Text(stringResource(R.string.action_send_file)) },
                         onClick = { onSendFile(); menuExpanded = false },
                         leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
                     )
                     DropdownMenuItem(
-                        text = { Text("Player Visuals Studio") },
+                        text = { Text(stringResource(R.string.player_visuals_studio)) },
                         onClick = { onOpenLyricsStudio(); menuExpanded = false },
                         leadingIcon = { Icon(Icons.Default.AutoAwesome, contentDescription = null) },
                     )
                     DropdownMenuItem(
-                        text = { Text("Settings") },
+                        text = { Text(stringResource(R.string.settings)) },
                         onClick = { onOpenSettings(); menuExpanded = false },
                         leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
                     )
@@ -222,10 +224,11 @@ fun PlayerTopBar(
     }
 }
 
+@androidx.compose.runtime.Composable
 private fun downloadMenuLabel(state: TrackDownloadState, isDownloaded: Boolean): String = when {
-    isDownloaded || state.status == DownloadStatus.COMPLETED -> "Downloaded"
-    state.status == DownloadStatus.DOWNLOADING -> "Downloading ${(state.progress.coerceIn(0f, 1f) * 100f).toInt()}%"
-    state.status == DownloadStatus.QUEUED -> "Queued"
-    state.status == DownloadStatus.FAILED -> "Download failed — retry"
-    else -> "Download"
+    isDownloaded || state.status == DownloadStatus.COMPLETED -> stringResource(R.string.download_done)
+    state.status == DownloadStatus.DOWNLOADING -> stringResource(R.string.download_progress, (state.progress.coerceIn(0f, 1f) * 100f).toInt())
+    state.status == DownloadStatus.QUEUED -> stringResource(R.string.download_queued)
+    state.status == DownloadStatus.FAILED -> stringResource(R.string.download_failed_retry)
+    else -> stringResource(R.string.action_download)
 }

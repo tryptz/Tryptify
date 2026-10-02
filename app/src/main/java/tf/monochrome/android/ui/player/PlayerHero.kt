@@ -72,12 +72,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.takeOrElse
 import kotlinx.coroutines.delay
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.domain.model.VisualizerEngineStatus
 import tf.monochrome.android.domain.model.VisualizerPreset
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /** Visual treatment of the hero artwork area. */
 enum class PlayerHeroStyle { Square, CircularProgress, Visualizer }
@@ -287,7 +290,7 @@ private fun CircularProgressHero(
             MorphingCoverArt(
                 trackKey = track?.id,
                 coverUrl = track?.coverUrl,
-                contentDescription = track?.title ?: "Album Art",
+                contentDescription = track?.title ?: stringResource(R.string.album_art),
                 blendMillis = blendMillis,
                 userTrackChanges = userTrackChanges,
                 modifier = Modifier.fillMaxSize(),
@@ -408,7 +411,7 @@ private fun VisualizerHero(
                     ) {
                         Icon(
                             imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                            contentDescription = if (isFullscreen) "Exit Fullscreen" else "Fullscreen",
+                            contentDescription = if (isFullscreen) stringResource(R.string.action_exit_fullscreen) else stringResource(R.string.action_fullscreen),
                             tint = Color.White,
                         )
                     }
@@ -419,7 +422,7 @@ private fun VisualizerHero(
                             .padding(16.dp)
                             .background(Color.Black.copy(alpha = 0.3f), shape = RoundedCornerShape(999.dp)),
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = "Exit Visualizer", tint = Color.White)
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_exit_visualizer), tint = Color.White)
                     }
 
                     VisualizerHeroOverlay(
@@ -472,7 +475,7 @@ private fun VisualizerHeroOverlay(
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     Text(
-                        text = currentPreset?.displayName ?: "Bundled projectM presets",
+                        text = currentPreset?.displayName ?: stringResource(R.string.visualizer_bundled_presets),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White,
@@ -491,7 +494,7 @@ private fun VisualizerHeroOverlay(
                     contentColor = if (autoShuffle) PlayerGlowMint else Color.White.copy(alpha = 0.72f),
                 ) {
                     Text(
-                        text = if (autoShuffle) "Shuffle" else "Manual",
+                        text = if (autoShuffle) stringResource(R.string.visualizer_shuffle) else stringResource(R.string.visualizer_manual),
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                         style = MaterialTheme.typography.labelSmall,
                     )
@@ -505,28 +508,28 @@ private fun VisualizerHeroOverlay(
                 VisualizerActionPill(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Default.Shuffle,
-                    label = if (autoShuffle) "Shuffle" else "Manual",
+                    label = if (autoShuffle) stringResource(R.string.visualizer_shuffle) else stringResource(R.string.visualizer_manual),
                     accent = if (autoShuffle) PlayerGlowMint else Color.White,
                     onClick = { onToggleShuffle(!autoShuffle) },
                 )
                 VisualizerActionPill(
                     modifier = Modifier.weight(1f),
                     icon = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    label = if (isFavorite) "Liked" else "Like",
+                    label = if (isFavorite) stringResource(R.string.preset_saved) else stringResource(R.string.preset_save),
                     accent = if (isFavorite) PlayerGlowPink else Color.White,
                     onClick = onToggleFavorite,
                 )
                 VisualizerActionPill(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Default.SkipNext,
-                    label = "Next",
+                    label = stringResource(R.string.action_next),
                     accent = PlayerGlowBlue,
                     onClick = onNextPreset,
                 )
                 VisualizerActionPill(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Default.LibraryMusic,
-                    label = "Presets",
+                    label = stringResource(R.string.visualizer_presets),
                     accent = PlayerGlowGold,
                     onClick = onOpenPresetBrowser,
                 )
@@ -627,14 +630,14 @@ internal fun AmbientPresetControls(
         ) {
             AmbientPresetButton(
                 icon = Icons.Default.SkipPrevious,
-                label = "Previous preset",
+                label = stringResource(R.string.preset_previous),
                 enabled = canGoBack,
                 onClick = { selfPoke++; onPreviousPreset() },
                 modifier = Modifier.align(Alignment.CenterStart),
             )
             AmbientPresetButton(
                 icon = Icons.Default.LibraryMusic,
-                label = "Preset browser",
+                label = stringResource(R.string.preset_browser),
                 accent = PlayerGlowGold,
                 onClick = { selfPoke++; onOpenPresetBrowser() },
                 modifier = Modifier.align(Alignment.Center),
@@ -648,13 +651,13 @@ internal fun AmbientPresetControls(
                 // preset is liked, outline and white until then.
                 AmbientPresetButton(
                     icon = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    label = if (isFavorite) "Unlike preset" else "Like preset",
+                    label = if (isFavorite) stringResource(R.string.preset_unlike) else stringResource(R.string.preset_like),
                     accent = if (isFavorite) PlayerGlowPink else Color.White,
                     onClick = { selfPoke++; onToggleFavorite() },
                 )
                 AmbientPresetButton(
                     icon = Icons.Default.SkipNext,
-                    label = "Next preset",
+                    label = stringResource(R.string.preset_next),
                     onClick = { selfPoke++; onNextPreset() },
                 )
             }
@@ -791,7 +794,7 @@ private fun HeroCoverArt(
         MorphingCoverArt(
             trackKey = track?.id,
             coverUrl = track?.coverUrl,
-            contentDescription = track?.title ?: "Album Art",
+            contentDescription = track?.title ?: stringResource(R.string.album_art),
             blendMillis = blendMillis,
             userTrackChanges = userTrackChanges,
             // Punches in on each kick. Read in the layer block, so the 60 fps
@@ -865,14 +868,14 @@ private fun HeroCoverArt(
             ) {
                 HeroIconButton(
                     icon = if (spectrumEnabled) Icons.Default.Equalizer else Icons.Default.Album,
-                    contentDescription = if (spectrumEnabled) "Show album art" else "Show spectrum",
+                    contentDescription = if (spectrumEnabled) stringResource(R.string.hero_show_album_art) else stringResource(R.string.hero_show_spectrum),
                     enabled = interactive,
                     onClick = { onToggleShowSpectrum(); showControls() },
                 )
                 if (spectrumEnabled && waveSettings != null) {
                     HeroIconButton(
                         icon = if (waveCandy) Icons.Default.Equalizer else Icons.Default.GraphicEq,
-                        contentDescription = if (waveCandy) "Switch to spectrum" else "Switch to Wave Candy scope",
+                        contentDescription = if (waveCandy) stringResource(R.string.hero_switch_to_spectrum) else stringResource(R.string.hero_switch_to_wave_candy),
                         enabled = interactive,
                         onClick = { waveCandy = !waveCandy; showControls() },
                     )
@@ -880,7 +883,7 @@ private fun HeroCoverArt(
                 if (spectrumEnabled && waveCandy && waveSettings != null) {
                     HeroIconButton(
                         icon = if (waveSettings.stereo) Icons.Default.SurroundSound else Icons.Default.GraphicEq,
-                        contentDescription = if (waveSettings.stereo) "Switch waveform to mono" else "Switch waveform to stereo",
+                        contentDescription = if (waveSettings.stereo) stringResource(R.string.hero_waveform_mono) else stringResource(R.string.hero_waveform_stereo),
                         enabled = interactive,
                         onClick = { onWaveSettings(waveSettings.copy(stereo = !waveSettings.stereo)); showControls() },
                     )
@@ -888,7 +891,7 @@ private fun HeroCoverArt(
                 if (spectrumEnabled && !(waveCandy && waveSettings != null)) {
                     HeroIconButton(
                         icon = Icons.Default.Speed,
-                        contentDescription = "Spectrum speed",
+                        contentDescription = stringResource(R.string.hero_spectrum_speed),
                         enabled = interactive,
                         onClick = { spectrumSpeed = spectrumSpeed.next(); showControls() },
                     )
@@ -896,7 +899,7 @@ private fun HeroCoverArt(
                 if (onEnterVisualizer != null && displaceVisualizerEntry) {
                     HeroIconButton(
                         icon = Icons.Default.GraphicEq,
-                        contentDescription = "Open visualizer",
+                        contentDescription = stringResource(R.string.action_open_visualizer),
                         enabled = interactive,
                         onClick = { onEnterVisualizer(); showControls() },
                     )
@@ -932,7 +935,7 @@ private fun HeroCoverArt(
                 HeroIconButton(
                     modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
                     icon = Icons.Default.GraphicEq,
-                    contentDescription = "Open visualizer",
+                    contentDescription = stringResource(R.string.action_open_visualizer),
                     enabled = interactive,
                     onClick = { onEnterVisualizer(); showControls() },
                 )
@@ -1025,11 +1028,22 @@ private fun VisualizerActionPill(
             verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(15.dp))
-            Text(
+            // Auto-sized rather than ellipsised: four pills share one row,
+            // and a translation cut to "Préré…" says nothing.
+            val pillStyle = MaterialTheme.typography.labelSmall
+            androidx.compose.foundation.text.BasicText(
                 text = label,
-                style = MaterialTheme.typography.labelSmall,
+                style = pillStyle.copy(
+                    color = pillStyle.color.takeOrElse { androidx.compose.material3.LocalContentColor.current },
+                ),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                softWrap = false,
+                overflow = TextOverflow.Clip,
+                autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(
+                    minFontSize = 8.sp,
+                    maxFontSize = pillStyle.fontSize,
+                    stepSize = 0.5.sp,
+                ),
             )
         }
     }

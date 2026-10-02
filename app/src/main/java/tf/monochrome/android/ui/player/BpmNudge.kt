@@ -39,6 +39,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.sign
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * A spring-loaded BPM nudge — a DJ's pitch bend, laid out like the stepper
@@ -112,13 +114,14 @@ fun BpmNudge(
     }
 
     val shape = RoundedCornerShape(50)
+    val nudgeDescription = stringResource(R.string.bpm_nudge_description)
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(48.dp)
             .clip(shape)
             .border(1.dp, Color.White.copy(alpha = 0.18f), shape)
-            .semantics { contentDescription = "Nudge tempo: push left to slow down, right to speed up" }
+            .semantics { contentDescription = nudgeDescription }
             .pointerInput(Unit) {
                 widthPx = size.width.toFloat()
                 detectHorizontalDragGestures(
@@ -203,7 +206,7 @@ fun BpmEntryDialog(current: Float, onDismiss: () -> Unit, onSet: (Float) -> Unit
     LaunchedEffect(Unit) { focus.requestFocus() }
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Set BPM") },
+        title = { Text(stringResource(R.string.bpm_set_title)) },
         text = {
             androidx.compose.material3.OutlinedTextField(
                 value = text,
@@ -222,8 +225,8 @@ fun BpmEntryDialog(current: Float, onDismiss: () -> Unit, onSet: (Float) -> Unit
             )
         },
         confirmButton = {
-            androidx.compose.material3.TextButton(onClick = { parsed?.let(onSet) }, enabled = parsed != null) { Text("Set") }
+            androidx.compose.material3.TextButton(onClick = { parsed?.let(onSet) }, enabled = parsed != null) { Text(stringResource(R.string.action_set)) }
         },
-        dismissButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
     )
 }

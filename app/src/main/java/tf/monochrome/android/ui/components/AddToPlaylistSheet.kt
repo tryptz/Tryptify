@@ -27,6 +27,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.data.db.entity.UserPlaylistEntity
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,7 +37,7 @@ fun AddToPlaylistSheet(
     onDismiss: () -> Unit,
     onPlaylistSelected: (UserPlaylistEntity) -> Unit,
     onCreateNew: () -> Unit,
-    title: String = "Add to Playlist"
+    title: String = stringResource(R.string.add_to_playlist_title)
 ) {
     val sheetState = rememberModalBottomSheetState()
 
@@ -68,13 +70,13 @@ fun AddToPlaylistSheet(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = "New Playlist",
+                            contentDescription = stringResource(R.string.new_playlist),
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(28.dp)
                         )
                         Spacer(modifier = Modifier.width(16.dp))
                         Text(
-                            text = "New Playlist",
+                            text = stringResource(R.string.new_playlist),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
@@ -95,7 +97,7 @@ fun AddToPlaylistSheet(
                     ) {
                         Icon(
                             imageVector = Icons.Default.PlaylistPlay,
-                            contentDescription = "Playlist",
+                            contentDescription = stringResource(R.string.playlist),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(28.dp)
                         )

@@ -109,6 +109,9 @@ import kotlin.math.roundToInt
 import java.util.Locale
 import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.navigation.navigateTool
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 /**
  * Stateful entry point for the main player. Collects every flow from
@@ -235,7 +238,7 @@ fun MainPlayerRoute(
     val playbackErrorContext = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(playbackError) {
         playbackError?.let {
-            android.widget.Toast.makeText(playbackErrorContext, it, android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(playbackErrorContext, playbackErrorContext.getString(it), android.widget.Toast.LENGTH_SHORT).show()
             playerViewModel.clearPlaybackError()
         }
     }
@@ -496,12 +499,12 @@ fun MainPlayerRoute(
         repeatMode = repeatMode,
         viewMode = viewMode,
         audioQuality = currentTrack?.audioQuality,
-        outputLabel = "Default",
+        outputLabel = stringResource(R.string.output_default),
         soundLabel = "AutoEQ",
         // In the listener's own unit. This was the raw ratio, so a speed set
         // in semitones read as "+3 st" in the panel and "1.19x" here.
         speedLabel = speedUnit.format(playbackSpeed, trackBpm),
-        sleepTimerLabel = if (sleepMinutes > 0) "$sleepRemainingMinutes min" else "Off",
+        sleepTimerLabel = if (sleepMinutes > 0) stringResource(R.string.minutes_short, sleepRemainingMinutes) else stringResource(R.string.state_off),
         sleepTimerActive = sleepMinutes > 0,
         queueLabel = queueLabel,
         albumColors = blendedColors,
@@ -1332,7 +1335,7 @@ private fun BoxScope.SpeedPanel(
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "Speed",
+                    text = stringResource(R.string.speed),
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Spacer(Modifier.weight(1f))
@@ -1343,7 +1346,7 @@ private fun BoxScope.SpeedPanel(
                 val playedBpm = SpeedUnit.playedBpm(speed, trackBpm)
                 Text(
                     text = when (speedUnit) {
-                        SpeedUnit.BPM -> playedBpm?.let { SpeedUnit.formatBpm(it) } ?: "Detecting…"
+                        SpeedUnit.BPM -> playedBpm?.let { SpeedUnit.formatBpm(it) } ?: stringResource(R.string.detecting)
                         else -> speedUnit.format(speed, trackBpm)
                     },
                     style = MaterialTheme.typography.titleMedium,
@@ -1373,7 +1376,7 @@ private fun BoxScope.SpeedPanel(
                 ) {
                     Icon(
                         Icons.Default.Refresh,
-                        contentDescription = "Reset speed to 1.0x",
+                        contentDescription = stringResource(R.string.speed_reset),
                         tint = speedAccent,
                         modifier = Modifier.size(18.dp),
                     )
@@ -1387,7 +1390,7 @@ private fun BoxScope.SpeedPanel(
             // continuous, for the speeds that are neither. The panel's own
             // capsule (SpeedControls.kt), like everything below it.
             SpeedSegmented(
-                options = listOf("Multiplier", "Semitones", "BPM"),
+                options = listOf(stringResource(R.string.speed_unit_multiplier), stringResource(R.string.speed_unit_semitones), "BPM"),
                 selectedIndex = speedUnit.ordinal,
                 accent = speedAccent,
                 onSelect = { onSpeedUnitChange(SpeedUnit.entries[it]) },
@@ -1406,8 +1409,8 @@ private fun BoxScope.SpeedPanel(
                     accent = speedAccent,
                     onDecrement = { onSpeedChange(PitchRatio.step(speed, -1)) },
                     onIncrement = { onSpeedChange(PitchRatio.step(speed, 1)) },
-                    decrementLabel = "Down one semitone",
-                    incrementLabel = "Up one semitone",
+                    decrementLabel = stringResource(R.string.semitone_down),
+                    incrementLabel = stringResource(R.string.semitone_up),
                     canDecrement = PitchRatio.step(speed, -1) < speed - 0.0001f,
                     canIncrement = PitchRatio.step(speed, 1) > speed + 0.0001f,
                     modifier = controlModifier,
@@ -1434,12 +1437,12 @@ private fun BoxScope.SpeedPanel(
                     }
                     SpeedStepper(
                         onValueLongPress = if (played != null && source != null) ({ editingBpm = true }) else null,
-                        value = played?.let { "${it.roundToInt()} BPM" } ?: "Detecting…",
+                        value = played?.let { "${it.roundToInt()} BPM" } ?: stringResource(R.string.detecting),
                         accent = speedAccent,
                         onDecrement = { down?.let(onSpeedChange) },
                         onIncrement = { up?.let(onSpeedChange) },
-                        decrementLabel = "One BPM slower",
-                        incrementLabel = "One BPM faster",
+                        decrementLabel = stringResource(R.string.bpm_slower),
+                        incrementLabel = stringResource(R.string.bpm_faster),
                         canDecrement = down != null && down < speed - 0.0001f,
                         canIncrement = up != null && up > speed + 0.0001f,
                         modifier = controlModifier,
@@ -1476,12 +1479,12 @@ private fun BoxScope.SpeedPanel(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(text = "Preserve pitch", style = MaterialTheme.typography.bodyLarge)
+                    Text(text = stringResource(R.string.preserve_pitch), style = MaterialTheme.typography.bodyLarge)
                     Text(
                         text = if (preservePitch) {
-                            "Tempo changes, pitch stays natural"
+                            stringResource(R.string.preserve_pitch_on)
                         } else {
-                            "Pitch shifts with speed (vinyl-style)"
+                            stringResource(R.string.preserve_pitch_off)
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = muted,
@@ -1520,7 +1523,7 @@ private fun BoxScope.SpeedPanel(
                     modifier = Modifier.size(20.dp),
                 )
                 Text(
-                    text = "Pitch",
+                    text = stringResource(R.string.pitch),
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Spacer(Modifier.weight(1f))
@@ -1533,8 +1536,8 @@ private fun BoxScope.SpeedPanel(
                     onIncrement = {
                         onPitchSemitonesChange((pitchSemitones.roundToInt() + 1).coerceAtMost(24).toFloat())
                     },
-                    decrementLabel = "Pitch down one semitone",
-                    incrementLabel = "Pitch up one semitone",
+                    decrementLabel = stringResource(R.string.pitch_down),
+                    incrementLabel = stringResource(R.string.pitch_up),
                     canDecrement = pitchSemitones.roundToInt() > -24,
                     canIncrement = pitchSemitones.roundToInt() < 24,
                     compact = true,
@@ -1546,7 +1549,7 @@ private fun BoxScope.SpeedPanel(
                 ) {
                     Icon(
                         Icons.Default.Refresh,
-                        contentDescription = "Reset pitch",
+                        contentDescription = stringResource(R.string.pitch_reset),
                         tint = speedAccent,
                         modifier = Modifier.size(18.dp),
                     )
@@ -1599,10 +1602,9 @@ private fun BoxScope.SpeedPanel(
                     Text(
                         text = when (pitchEngine) {
                             PitchEngine.WSOLA ->
-                                "Holds bass down to ${pitchQuality.bassFloorHz} Hz"
+                                stringResource(R.string.pitch_wsola_floor, pitchQuality.bassFloorHz.toString())
                             PitchEngine.VOCODER ->
-                                "Within ${pitchQuality.vocoderErrorHz}. Lower settings " +
-                                    "are lighter work and less likely to stutter."
+                                stringResource(R.string.pitch_vocoder_error, pitchQuality.vocoderErrorHz.toString())
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = muted,
@@ -1632,21 +1634,21 @@ private fun SleepTimerSheet(
                 .padding(horizontal = 24.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(text = "Sleep timer", style = MaterialTheme.typography.titleMedium)
+            Text(text = stringResource(R.string.sleep_timer), style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(0, 15, 30, 45, 60).forEach { minutes ->
                     FilterChip(
                         selected = activeMinutes == minutes,
                         onClick = { onSelect(minutes); onDismiss() },
-                        label = { Text(if (minutes == 0) "Off" else "$minutes min") },
+                        label = { Text(if (minutes == 0) stringResource(R.string.state_off) else stringResource(R.string.minutes_short, minutes)) },
                     )
                 }
             }
             Text(
                 text = if (activeMinutes > 0) {
-                    "Playback will pause in $remainingMinutes minute${if (remainingMinutes == 1) "" else "s"}."
+                    pluralStringResource(R.plurals.sleep_timer_pauses_in, remainingMinutes, remainingMinutes)
                 } else {
-                    "Sleep timer is off."
+                    stringResource(R.string.sleep_timer_off)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

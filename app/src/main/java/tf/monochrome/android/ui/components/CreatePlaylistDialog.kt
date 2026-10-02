@@ -43,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * The exports this dialog can read, and how to get one out of each service.
@@ -52,21 +54,18 @@ import tf.monochrome.android.ui.theme.MonoDimens
  * are — the instructions for getting a file this app can read — and the parser
  * behind them reads all three.
  */
-private enum class ImportSource(val label: String, val instructions: String) {
+private enum class ImportSource(val label: String, @androidx.annotation.StringRes val instructions: Int) {
     SPOTIFY(
         "Spotify",
-        "Open exportify.net, sign in, and export the playlist as CSV. Or connect " +
-            "Spotify in Settings › System to import without a file at all.",
+        R.string.import_spotify_instructions,
     ),
     APPLE_MUSIC(
         "Apple Music",
-        "In the Music app on a Mac: File › Library › Export Playlist, with Format " +
-            "set to Text. The .txt it writes is read here as-is.",
+        R.string.import_apple_music_instructions,
     ),
     YOUTUBE_MUSIC(
         "YouTube Music",
-        "Export the playlist with Google Takeout, or a converter like TuneMyMusic, " +
-            "and pick the .csv it produces.",
+        R.string.import_youtube_music_instructions,
     ),
 }
 
@@ -79,8 +78,8 @@ fun CreatePlaylistDialog(
     onImportCsv: ((uri: Uri, strictMatch: Boolean, name: String, description: String) -> Unit)? = null,
     initialName: String = "",
     initialDescription: String = "",
-    title: String = "Create Playlist",
-    confirmLabel: String = "Create",
+    title: String = stringResource(R.string.create_playlist_title),
+    confirmLabel: String = stringResource(R.string.action_create),
 ) {
     // Seed from the initial values so the "Edit playlist" reuse of this dialog
     // shows the existing name/description instead of blanks (submitting blank
@@ -129,14 +128,14 @@ fun CreatePlaylistDialog(
             DialogField(
                 value = name,
                 onValueChange = { name = it },
-                placeholder = "Playlist name",
+                placeholder = stringResource(R.string.playlist_name_hint),
                 singleLine = true,
             )
 
             DialogField(
                 value = description,
                 onValueChange = { description = it },
-                placeholder = "Description (optional)",
+                placeholder = stringResource(R.string.playlist_description_hint),
                 singleLine = false,
                 modifier = Modifier.heightIn(min = 88.dp),
             )
@@ -175,7 +174,7 @@ fun CreatePlaylistDialog(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
                 Spacer(Modifier.width(8.dp))
                 // Only the CSV format actually imports; a file picked while
                 // an unsupported format is selected must not silently run
@@ -197,7 +196,7 @@ fun CreatePlaylistDialog(
                     // plainly-named playlist in the default (upload) mode.
                     enabled = name.isNotBlank(),
                 ) {
-                    Text(if (canImport) "Import" else confirmLabel)
+                    Text(if (canImport) stringResource(R.string.action_import) else confirmLabel)
                 }
             }
         }
@@ -248,7 +247,7 @@ private fun ImportPanel(
 ) {
     DialogPanel {
         Text(
-            text = "Import tracks",
+            text = stringResource(R.string.import_tracks_title),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
@@ -269,7 +268,7 @@ private fun ImportPanel(
 
         if (selectedFormat != "CSV") {
             Text(
-                text = "$selectedFormat files aren't supported yet — export as CSV instead.",
+                text = stringResource(R.string.import_format_unsupported, selectedFormat),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
@@ -295,7 +294,7 @@ private fun ImportPanel(
         }
 
         Text(
-            text = selectedSource.instructions,
+            text = stringResource(selectedSource.instructions),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -311,7 +310,7 @@ private fun ImportPanel(
             shape = MonoDimens.shapeSm,
         ) {
             Text(
-                text = pickedName ?: "Choose a file",
+                text = pickedName ?: stringResource(R.string.action_choose_file),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -319,8 +318,7 @@ private fun ImportPanel(
 
         if (pickedName != null) {
             Text(
-                text = "Any column naming these exports use is understood, in any of " +
-                    "the encodings they write.",
+                text = stringResource(R.string.import_any_columns),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -333,13 +331,12 @@ private fun ImportPanel(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Strict album matching",
+                    text = stringResource(R.string.strict_album_matching),
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    text = "Only accept a match from the same album. Off finds more, " +
-                        "but sometimes the wrong recording.",
+                    text = stringResource(R.string.strict_album_matching_detail),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

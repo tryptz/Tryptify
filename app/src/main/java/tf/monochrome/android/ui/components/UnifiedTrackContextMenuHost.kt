@@ -12,6 +12,8 @@ import tf.monochrome.android.ui.navigation.isNavigableAlbumId
 import tf.monochrome.android.ui.navigation.openAlbum
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * The ⋮ sheet for a [UnifiedTrack], with the add-to-playlist and
@@ -50,7 +52,7 @@ fun UnifiedTrackContextMenuHost(
     navController: NavController,
     playerViewModel: PlayerViewModel,
     onRemove: (() -> Unit)? = null,
-    removeLabel: String = "Remove from playlist",
+    removeLabel: String = stringResource(R.string.action_remove_from_playlist),
 ) {
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsStateWithLifecycle()
     val playlists by playerViewModel.playlists.collectAsStateWithLifecycle()

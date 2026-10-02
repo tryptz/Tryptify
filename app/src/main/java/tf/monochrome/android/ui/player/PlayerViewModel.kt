@@ -55,6 +55,7 @@ import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.visualizer.AmbientVisualizerSettings
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
 import javax.inject.Inject
+import tf.monochrome.android.R
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
@@ -169,8 +170,10 @@ class PlayerViewModel @Inject constructor(
     // Surfaced to the player UI when a track can't be resolved/streamed. Also
     // used to break the resolve→fail→skip→resolve loop that otherwise ran
     // forever under repeat modes (offline / dead instance).
-    private val _playbackError = MutableStateFlow<String?>(null)
-    val playbackError: StateFlow<String?> = _playbackError.asStateFlow()
+    // A string resource, not text: the toast resolves it with the activity's
+    // context, which is in the app's chosen language; this one's may not be.
+    private val _playbackError = MutableStateFlow<Int?>(null)
+    val playbackError: StateFlow<Int?> = _playbackError.asStateFlow()
     private var consecutiveResolveFailures = 0
     fun clearPlaybackError() { _playbackError.value = null }
 
@@ -1256,12 +1259,12 @@ class PlayerViewModel @Inject constructor(
         playbackState.clearPendingStart()
         val queueSize = queueManager.queue.value.size.coerceAtLeast(1)
         if (repeatMode.value == RepeatMode.ONE) {
-            _playbackError.value = "Couldn't play this track."
+            _playbackError.value = R.string.error_play_track
             consecutiveResolveFailures = 0
             return
         }
         if (consecutiveResolveFailures >= queueSize) {
-            _playbackError.value = "Couldn't play these tracks. Check your connection."
+            _playbackError.value = R.string.error_play_tracks
             consecutiveResolveFailures = 0
             return
         }

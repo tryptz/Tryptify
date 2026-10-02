@@ -75,6 +75,7 @@ import tf.monochrome.android.ui.player.BackdropArtFit
 import tf.monochrome.android.ui.player.LocalPlayerBackdrop
 import tf.monochrome.android.ui.player.PlayerBackdrop
 import tf.monochrome.android.ui.player.rememberBackdropArt
+import androidx.compose.ui.res.stringResource
 
 // Geometry shared between the punched holes and the tap-target overlay so they
 // stay aligned across DPI. The two controls are the rightmost fixed-size cells
@@ -162,14 +163,14 @@ fun MiniPlayer(
                 IconButton(onClick = onPlayPauseClick) {
                     Icon(
                         imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        contentDescription = if (isPlaying) stringResource(R.string.action_pause) else stringResource(R.string.action_play),
                         tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
                 IconButton(onClick = onSkipNextClick) {
                     Icon(
                         imageVector = Icons.Default.SkipNext,
-                        contentDescription = "Skip next",
+                        contentDescription = stringResource(R.string.action_skip_next),
                         tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
@@ -353,7 +354,7 @@ fun MiniPlayer(
                     .clickable(
                         interactionSource = playSource,
                         indication = null,
-                        onClickLabel = if (isPlaying) "Pause" else "Play",
+                        onClickLabel = if (isPlaying) stringResource(R.string.action_pause) else stringResource(R.string.action_play),
                         onClick = onPlayPauseClick,
                     )
             )
@@ -363,7 +364,7 @@ fun MiniPlayer(
                     .clickable(
                         interactionSource = skipSource,
                         indication = null,
-                        onClickLabel = "Skip next",
+                        onClickLabel = stringResource(R.string.action_skip_next),
                         onClick = onSkipNextClick,
                     )
             )

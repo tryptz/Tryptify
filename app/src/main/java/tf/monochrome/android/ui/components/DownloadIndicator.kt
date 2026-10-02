@@ -30,6 +30,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.data.downloads.DownloadStatus
 import tf.monochrome.android.data.downloads.TrackDownloadState
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 @Composable
 fun DownloadIndicator(
@@ -241,10 +243,11 @@ fun DownloadedBadge(
     size: Float = 18f,
     tint: Color = MaterialTheme.colorScheme.primary,
 ) {
+    val downloadedLabel = stringResource(R.string.download_done)
     Canvas(
         modifier = modifier
             .size(size.dp)
-            .semantics { contentDescription = "Downloaded" }
+            .semantics { contentDescription = downloadedLabel }
     ) {
         val strokeWidth = this.size.width * 0.1f
         val padding = strokeWidth

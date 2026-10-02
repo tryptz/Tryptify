@@ -44,6 +44,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import tf.monochrome.android.ui.theme.MonoDimens
 import kotlin.math.roundToInt
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * Pick one colour, by hue and by a saturation/value square.
@@ -141,9 +143,9 @@ fun ColorPickerDialog(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
                 Spacer(Modifier.size(8.dp))
-                TextButton(onClick = { onConfirm(current) }) { Text("Select") }
+                TextButton(onClick = { onConfirm(current) }) { Text(stringResource(R.string.action_select)) }
             }
         }
     }
@@ -273,7 +275,7 @@ private fun HexField(
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { commit() }),
             modifier = Modifier.weight(1f),
         )
-        TextButton(onClick = { commit() }) { Text("Set") }
+        TextButton(onClick = { commit() }) { Text(stringResource(R.string.action_set)) }
     }
 }
 

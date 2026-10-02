@@ -55,6 +55,9 @@ import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.ui.components.CoverImage
 import tf.monochrome.android.ui.theme.MonoDimens
 import kotlin.math.abs
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 private val QueueRowHeight = 64.dp
 
@@ -149,12 +152,12 @@ fun QueueSheet(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Queue",
+                        text = stringResource(R.string.queue),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "${queue.size} tracks",
+                        text = pluralStringResource(R.plurals.track_count, queue.size, queue.size),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -183,7 +186,7 @@ fun QueueSheet(
                         )
                     }
                     Spacer(Modifier.width(6.dp))
-                    Text(if (isRadioActive) "Radio on" else "Radio")
+                    Text(if (isRadioActive) stringResource(R.string.radio_on) else stringResource(R.string.tab_radio))
                 }
 
                 TextButton(
@@ -196,7 +199,7 @@ fun QueueSheet(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text("Reset")
+                    Text(stringResource(R.string.action_reset))
                 }
             }
 
@@ -217,13 +220,13 @@ fun QueueSheet(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "${selectedIndices.size} selected",
+                        text = pluralStringResource(R.plurals.selected_count, selectedIndices.size, selectedIndices.size),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.weight(1f)
                     )
                     TextButton(onClick = { exitSelection() }) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.action_cancel))
                     }
                     TextButton(
                         onClick = {
@@ -232,7 +235,7 @@ fun QueueSheet(
                         },
                         enabled = selectedIndices.isNotEmpty()
                     ) {
-                        Text("Delete")
+                        Text(stringResource(R.string.action_delete))
                     }
                 }
             } else {
@@ -241,7 +244,7 @@ fun QueueSheet(
 
             if (queue.isEmpty()) {
                 Text(
-                    text = "Queue is empty.\nPlay some music to get started.",
+                    text = stringResource(R.string.queue_empty),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(24.dp)
@@ -262,7 +265,7 @@ fun QueueSheet(
                             // track wasn't the first one.
                             if (isCurrent) {
                                 Text(
-                                    text = "Now Playing",
+                                    text = stringResource(R.string.now_playing),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.padding(bottom = 8.dp)
@@ -348,7 +351,7 @@ fun QueueSheet(
                             if (isCurrent && index < queue.size - 1) {
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "Up Next",
+                                    text = stringResource(R.string.up_next),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(vertical = 8.dp)
@@ -364,9 +367,9 @@ fun QueueSheet(
     if (showResetConfirm) {
         AlertDialog(
             onDismissRequest = { showResetConfirm = false },
-            title = { Text("Reset queue?") },
+            title = { Text(stringResource(R.string.queue_reset_title)) },
             text = {
-                Text("This will remove all upcoming tracks from the queue. The current track will keep playing.")
+                Text(stringResource(R.string.queue_reset_body))
             },
             confirmButton = {
                 TextButton(
@@ -376,12 +379,12 @@ fun QueueSheet(
                         showResetConfirm = false
                     }
                 ) {
-                    Text("Reset")
+                    Text(stringResource(R.string.action_reset))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showResetConfirm = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )
@@ -402,28 +405,28 @@ private fun QueueTrackMenu(
         onDismissRequest = onDismiss
     ) {
         DropdownMenuItem(
-            text = { Text("Play next") },
+            text = { Text(stringResource(R.string.action_play_next)) },
             onClick = {
                 onDismiss()
                 onPlayNext()
             }
         )
         DropdownMenuItem(
-            text = { Text("Start radio from this song") },
+            text = { Text(stringResource(R.string.start_radio_from_song)) },
             onClick = {
                 onDismiss()
                 onStartRadio()
             }
         )
         DropdownMenuItem(
-            text = { Text("Select") },
+            text = { Text(stringResource(R.string.action_select)) },
             onClick = {
                 onDismiss()
                 onSelect()
             }
         )
         DropdownMenuItem(
-            text = { Text("Delete") },
+            text = { Text(stringResource(R.string.action_delete)) },
             onClick = {
                 onDismiss()
                 onDelete()
@@ -461,7 +464,7 @@ private fun QueueTrackItem(
                 Icon(
                     imageVector = if (isSelected) Icons.Default.CheckCircle
                     else Icons.Default.RadioButtonUnchecked,
-                    contentDescription = if (isSelected) "Selected" else "Not selected",
+                    contentDescription = if (isSelected) stringResource(R.string.state_selected) else stringResource(R.string.state_not_selected),
                     tint = if (isSelected) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(40.dp).padding(8.dp)
@@ -470,7 +473,7 @@ private fun QueueTrackItem(
             isCurrentTrack -> {
                 Icon(
                     Icons.Default.PlayArrow,
-                    contentDescription = "Now playing",
+                    contentDescription = stringResource(R.string.now_playing),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(40.dp).padding(8.dp)
                 )
@@ -522,7 +525,7 @@ private fun QueueTrackItem(
 
         Icon(
             imageVector = Icons.Default.DragHandle,
-            contentDescription = "Reorder",
+            contentDescription = stringResource(R.string.action_reorder),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             // 24dp glyph, but the drag pointer node wraps the 48dp minimum
             // touch target — this is the sheet's only reorder affordance.

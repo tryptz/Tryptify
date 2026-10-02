@@ -31,6 +31,8 @@ import androidx.compose.ui.window.DialogProperties
 import dev.chrisbanes.haze.HazeState
 import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * Where a floating pane goes when it has to be made of glass.
@@ -155,7 +157,7 @@ fun BoxScope.GlassOverlayLayer(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClickLabel = "Dismiss",
+                onClickLabel = stringResource(R.string.action_dismiss),
                 onClick = { entry.onDismiss() },
             ),
     )

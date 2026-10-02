@@ -72,6 +72,8 @@ import tf.monochrome.android.audio.pipeline.PipelineField
 import tf.monochrome.android.audio.pipeline.PipelineSection
 import tf.monochrome.android.audio.pipeline.PipelineStage
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * The signal path, stage by stage, for the track that is playing.
@@ -452,7 +454,7 @@ internal fun BoxScope.AudioPipelinePanel(
                             ) {}
                             Spacer(Modifier.height(10.dp))
                             Text(
-                                "Audio Pipeline",
+                                stringResource(R.string.audio_pipeline),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                             )

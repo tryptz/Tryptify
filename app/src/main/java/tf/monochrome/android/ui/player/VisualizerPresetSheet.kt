@@ -71,6 +71,9 @@ import tf.monochrome.android.ui.components.rememberGlassPress
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.visualizer.VisualizerPresetIndex
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 /**
  * Where the browser is looking. A path, not a filter, so Back walks it.
@@ -87,7 +90,10 @@ private sealed interface PresetScope {
     data object Favorites : PresetScope
 }
 
-private enum class BrowseAxis(val label: String) { Category("Category"), Author("Author") }
+private enum class BrowseAxis(@androidx.annotation.StringRes val label: Int) {
+    Category(R.string.browse_by_category),
+    Author(R.string.browse_by_author),
+}
 
 /**
  * The preset browser, drawn in the player's own window.
@@ -131,7 +137,7 @@ fun BoxScope.VisualizerPresetPanel(
      * sibling of — never one it is drawn inside (see docs/ui-invariants.md).
      */
     hazeState: dev.chrisbanes.haze.HazeState? = LocalPlayerHaze.current,
-    title: String = "Visualizer Presets",
+    title: String = stringResource(R.string.visualizer_presets_title),
     /**
      * A row above everything for "no preset chosen", for a setting where null
      * means something — Settings' default preset, where it means "let the app
@@ -228,7 +234,7 @@ fun BoxScope.VisualizerPresetPanel(
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClickLabel = "Dismiss",
+                    onClickLabel = stringResource(R.string.action_dismiss),
                     onClick = onDismiss,
                 ),
         )
@@ -333,7 +339,7 @@ fun BoxScope.VisualizerPresetPanel(
                             }
                             item {
                                 FacetRow(
-                                    label = "Favourites",
+                                    label = stringResource(R.string.favourites),
                                     count = favoritePresetIds.size,
                                     onClick = { scope = PresetScope.Favorites },
                                 )
@@ -371,11 +377,10 @@ fun BoxScope.VisualizerPresetPanel(
                                 item(key = "empty") {
                                     EmptyPresetList(
                                         when {
-                                            searching -> "No presets match \u201c${query.trim()}\u201d. " +
-                                                "Search looks at names across all ${index.presets.size}."
+                                            searching -> stringResource(R.string.presets_no_match, query.trim(), index.presets.size)
                                             scope is PresetScope.Favorites ->
-                                                "No favourites yet. Tap the heart on any preset to keep it here."
-                                            else -> "Nothing here."
+                                                stringResource(R.string.favourites_empty)
+                                            else -> stringResource(R.string.nothing_here)
                                         },
                                     )
                                 }
@@ -400,7 +405,7 @@ fun BoxScope.VisualizerPresetPanel(
                     GlassSearchBar(
                         query = query,
                         onQueryChange = { query = it },
-                        placeholder = "Search ${index.presets.size} presets",
+                        placeholder = pluralStringResource(R.plurals.presets_search_hint, index.presets.size, index.presets.size),
                         hazeState = haze,
                         // Permanent chrome of this panel, so the trailing
                         // button has nothing to dismiss once the field is
@@ -435,7 +440,7 @@ fun BoxScope.VisualizerPresetPanel(
                                             index = i,
                                             count = BrowseAxis.entries.size,
                                         ),
-                                        label = { Text(option.label, maxLines = 1) },
+                                        label = { Text(stringResource(option.label), maxLines = 1) },
                                     )
                                 }
                             }
@@ -473,7 +478,7 @@ private fun PresetAutoRow(option: PresetAutoOption, selected: Boolean, onClick: 
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (selected) Icon(Icons.Default.Check, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary)
+        if (selected) Icon(Icons.Default.Check, contentDescription = stringResource(R.string.state_selected), tint = MaterialTheme.colorScheme.primary)
     }
 }
 
@@ -486,7 +491,7 @@ private fun CurrentPresetCard(title: String, where: String, onClick: () -> Unit)
     PresetCard(selected = true, onClick = onClick) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                "Current",
+                stringResource(R.string.current),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold,
@@ -502,7 +507,7 @@ private fun CurrentPresetCard(title: String, where: String, onClick: () -> Unit)
         }
         Icon(
             Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = "Show its group",
+            contentDescription = stringResource(R.string.show_its_group),
             tint = LocalContentColor.current.copy(alpha = 0.7f),
             modifier = Modifier.size(20.dp),
         )
@@ -552,6 +557,7 @@ private fun EmptyPresetList(message: String) {
 }
 
 /** Where the preset sits, which is what the row's second line is for. */
+@Composable
 private fun subtitleFor(
     index: VisualizerPresetIndex,
     preset: VisualizerPreset,
@@ -562,7 +568,7 @@ private fun subtitleFor(
     val place = preset.tags.joinToString(" · ") { it.label }
     val author = credits.firstOrNull()?.let(index::authorLabel)
     return listOfNotNull(author, place.takeIf { it.isNotBlank() }).joinToString(" · ")
-        .ifBlank { "Uncategorised" }
+        .ifBlank { stringResource(R.string.uncategorised) }
 }
 
 /**
@@ -585,22 +591,29 @@ private fun PresetBrowserHeader(
 ) {
     val atRoot = scope == PresetScope.Roots && !searching
     val title = when {
-        searching -> "Search"
-        scope is PresetScope.Favorites -> "Favourites"
+        searching -> stringResource(R.string.tab_search)
+        scope is PresetScope.Favorites -> stringResource(R.string.favourites)
         scope is PresetScope.Author -> scope.facet.label
         scope is PresetScope.Sub -> scope.facet.label
         scope is PresetScope.Category -> scope.facet.label
         else -> rootTitle
     }
     val detail = when {
-        searching -> "$matches of ${index.presets.size}"
+        searching -> stringResource(R.string.matches_of_total, matches, index.presets.size)
         scope is PresetScope.Roots ->
-            "${index.presets.size} presets · ${index.categories.size} categories · " +
-                "${index.authors.size} authors · $favorites favourites"
-        scope is PresetScope.Category -> "${scope.facet.count} presets in " +
-            "${index.subcategoriesOf(scope.facet.id).size} groups"
-        scope is PresetScope.Sub -> "${scope.category.label} · $matches presets"
-        else -> "$matches presets"
+            listOf(
+                pluralStringResource(R.plurals.presets_count, index.presets.size, index.presets.size),
+                pluralStringResource(R.plurals.categories_count, index.categories.size, index.categories.size),
+                pluralStringResource(R.plurals.authors_count, index.authors.size, index.authors.size),
+                pluralStringResource(R.plurals.favourites_count, favorites, favorites),
+            ).joinToString(" · ")
+        scope is PresetScope.Category -> stringResource(
+            R.string.presets_in_groups,
+            pluralStringResource(R.plurals.presets_count, scope.facet.count, scope.facet.count),
+            pluralStringResource(R.plurals.groups_count, index.subcategoriesOf(scope.facet.id).size, index.subcategoriesOf(scope.facet.id).size),
+        )
+        scope is PresetScope.Sub -> "${scope.category.label} · " + pluralStringResource(R.plurals.presets_count, matches, matches)
+        else -> pluralStringResource(R.plurals.presets_count, matches, matches)
     }
 
     Row(
@@ -614,7 +627,7 @@ private fun PresetBrowserHeader(
             IconButton(onClick = onUp, modifier = Modifier.size(36.dp)) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.action_back),
                     modifier = Modifier.size(20.dp),
                 )
             }
@@ -639,7 +652,7 @@ private fun PresetBrowserHeader(
         }
         if (onSettingsClick != null) {
             IconButton(onClick = onSettingsClick) {
-                Icon(Icons.Default.Settings, contentDescription = "Settings")
+                Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings))
             }
         }
     }
@@ -771,7 +784,7 @@ private fun VisualizerPresetRow(
             IconButton(onClick = onToggleFavorite) {
                 Icon(
                     imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                    contentDescription = if (isFavorite) stringResource(R.string.favourite_remove) else stringResource(R.string.favourite_add),
                     tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

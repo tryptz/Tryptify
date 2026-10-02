@@ -35,6 +35,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 data class ContextAction(
     val icon: ImageVector,
@@ -55,7 +57,7 @@ fun TrackContextMenu(
     onRemoveFromPlaylist: (() -> Unit)? = null,
     // The destructive entry isn't always a playlist removal — on Discover it
     // is "take this off my feed" — so the caller names it.
-    removeLabel: String = "Remove from playlist",
+    removeLabel: String = stringResource(R.string.action_remove_from_playlist),
     onDownloadTrack: (() -> Unit)? = null,
     onShareFile: (() -> Unit)? = null,
     onGoToAlbum: (() -> Unit)? = null,
@@ -119,23 +121,23 @@ fun TrackContextMenu(
             // Actions
             ContextMenuItem(
                 icon = Icons.Default.SkipNext,
-                label = "Play next",
+                label = stringResource(R.string.action_play_next),
                 onClick = { onPlayNext(); onDismiss() }
             )
             ContextMenuItem(
                 icon = Icons.Default.QueueMusic,
-                label = "Add to queue",
+                label = stringResource(R.string.action_add_to_queue),
                 onClick = { onAddToQueue(); onDismiss() }
             )
             ContextMenuItem(
                 icon = Icons.Default.Favorite,
-                label = if (isLiked) "Unlike" else "Like",
+                label = if (isLiked) stringResource(R.string.action_unlike) else stringResource(R.string.action_like),
                 tint = if (isLiked) MaterialTheme.colorScheme.primary else null,
                 onClick = { onToggleLike(); onDismiss() }
             )
             ContextMenuItem(
                 icon = Icons.Default.PlaylistAdd,
-                label = "Add to playlist",
+                label = stringResource(R.string.action_add_to_playlist),
                 onClick = { onAddToPlaylist(); onDismiss() }
             )
 
@@ -151,7 +153,7 @@ fun TrackContextMenu(
             if (onDownloadTrack != null) {
                 ContextMenuItem(
                     icon = Icons.Default.Download,
-                    label = "Download",
+                    label = stringResource(R.string.action_download),
                     onClick = { onDownloadTrack(); onDismiss() }
                 )
             }
@@ -163,7 +165,7 @@ fun TrackContextMenu(
             if (onShareFile != null) {
                 ContextMenuItem(
                     icon = Icons.Default.Share,
-                    label = "Share file",
+                    label = stringResource(R.string.action_share_file),
                     onClick = { onShareFile(); onDismiss() }
                 )
             }
@@ -171,21 +173,21 @@ fun TrackContextMenu(
             if (onGoToAlbum != null && track.album != null) {
                 ContextMenuItem(
                     icon = Icons.Default.Album,
-                    label = "Go to album",
+                    label = stringResource(R.string.action_go_to_album),
                     onClick = { onGoToAlbum(); onDismiss() }
                 )
             }
             if (onGoToArtist != null && track.artist != null) {
                 ContextMenuItem(
                     icon = Icons.Default.Person,
-                    label = "Go to artist",
+                    label = stringResource(R.string.action_go_to_artist),
                     onClick = { onGoToArtist(); onDismiss() }
                 )
             }
             if (onShowTrackInfo != null) {
                 ContextMenuItem(
                     icon = Icons.Default.Info,
-                    label = "Track info",
+                    label = stringResource(R.string.action_track_info),
                     onClick = { onShowTrackInfo(); onDismiss() }
                 )
             }

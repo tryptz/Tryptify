@@ -14,3 +14,240 @@ page_downloads	Downloads	下载	ダウンロード	Téléchargements	Descargas	�
 settings_language	Language	语言	言語	Langue	Idioma	Dil	Sprache
 settings_language_title	App language	应用语言	アプリの言語	Langue de l’application	Idioma de la app	Uygulama dili	App-Sprache
 settings_language_follow_phone	Same as phone	跟随系统	端末の言語	Langue du système	Idioma del sistema	Sistem dili	Systemsprache
+action_play	Play	播放	再生	Lecture	Reproducir	Çal	Wiedergabe
+action_pause	Pause	暂停	一時停止	Pause	Pausa	Duraklat	Pause
+action_skip_next	Skip next	下一首	次の曲へ	Titre suivant	Siguiente	Sonraki	Nächster Titel
+action_play_next	Play next	下一首播放	次に再生	Lire ensuite	Reproducir a continuación	Sıradaki olarak çal	Als Nächstes spielen
+action_add_to_queue	Add to queue	添加到播放队列	キューに追加	Ajouter à la file d’attente	Añadir a la cola	Sıraya ekle	Zur Warteschlange hinzufügen
+action_like	Like	喜欢	お気に入りに追加	J’aime	Me gusta	Beğen	Gefällt mir
+action_unlike	Unlike	取消喜欢	お気に入りから削除	Je n’aime plus	Ya no me gusta	Beğenmekten vazgeç	Gefällt mir nicht mehr
+action_add_to_playlist	Add to playlist	添加到歌单	プレイリストに追加	Ajouter à une playlist	Añadir a una playlist	Çalma listesine ekle	Zu Playlist hinzufügen
+action_remove_from_playlist	Remove from playlist	从歌单中移除	プレイリストから削除	Retirer de la playlist	Quitar de la playlist	Çalma listesinden kaldır	Aus Playlist entfernen
+action_download	Download	下载	ダウンロード	Télécharger	Descargar	İndir	Herunterladen
+action_share_file	Share file	分享文件	ファイルを共有	Partager le fichier	Compartir archivo	Dosyayı paylaş	Datei teilen
+action_go_to_album	Go to album	查看专辑	アルバムへ移動	Voir l’album	Ir al álbum	Albüme git	Zum Album
+action_go_to_artist	Go to artist	查看艺人	アーティストへ移動	Voir l’artiste	Ir al artista	Sanatçıya git	Zum Künstler
+action_track_info	Track info	歌曲信息	曲の情報	Infos sur le titre	Información de la canción	Parça bilgisi	Titelinfo
+action_close_search	Close search	关闭搜索	検索を閉じる	Fermer la recherche	Cerrar búsqueda	Aramayı kapat	Suche schließen
+action_clear	Clear	清除	クリア	Effacer	Borrar	Temizle	Löschen
+action_delete	Delete	删除	削除	Supprimer	Eliminar	Sil	Löschen
+action_exit_selection	Exit selection	退出选择	選択を終了	Quitter la sélection	Salir de la selección	Seçimden çık	Auswahl beenden
+selected_count#one	%1$d selected	已选择 %1$d 项	%1$d 件選択中	%1$d sélectionné	%1$d seleccionado	%1$d seçildi	%1$d ausgewählt
+selected_count#many	%1$d selected	已选择 %1$d 项	%1$d 件選択中	%1$d sélectionnés	%1$d seleccionados	%1$d seçildi	%1$d ausgewählt
+selected_count#other	%1$d selected	已选择 %1$d 项	%1$d 件選択中	%1$d sélectionnés	%1$d seleccionados	%1$d seçildi	%1$d ausgewählt
+action_sort	Sort	排序	並べ替え	Trier	Ordenar	Sırala	Sortieren
+sort_ascending	Ascending	升序	昇順	Croissant	Ascendente	Artan	Aufsteigend
+sort_descending	Descending	降序	降順	Décroissant	Descendente	Azalan	Absteigend
+sort_original	Original order	原始顺序	元の順序	Ordre d’origine	Orden original	Orijinal sıra	Ursprüngliche Reihenfolge
+sort_title	Title	标题	タイトル	Titre	Título	Başlık	Titel
+sort_artist	Artist	艺人	アーティスト	Artiste	Artista	Sanatçı	Künstler
+sort_album	Album	专辑	アルバム	Album	Álbum	Albüm	Album
+sort_duration	Duration	时长	再生時間	Durée	Duración	Süre	Dauer
+add_to_playlist_title	Add to playlist	添加到歌单	プレイリストに追加	Ajouter à une playlist	Añadir a una playlist	Çalma listesine ekle	Zu Playlist hinzufügen
+new_playlist	New playlist	新建歌单	新規プレイリスト	Nouvelle playlist	Nueva playlist	Yeni çalma listesi	Neue Playlist
+playlist	Playlist	歌单	プレイリスト	Playlist	Playlist	Çalma listesi	Playlist
+state_selected	Selected	已选择	選択済み	Sélectionné	Seleccionado	Seçildi	Ausgewählt
+state_not_selected	Not selected	未选择	未選択	Non sélectionné	No seleccionado	Seçilmedi	Nicht ausgewählt
+badge_explicit	Explicit	含不雅内容	露骨な表現	Explicite	Explícito	Müstehcen	Explizit
+action_more_options	More options	更多选项	その他のオプション	Plus d’options	Más opciones	Diğer seçenekler	Weitere Optionen
+badge_thx	THX Spatial Audio	THX 空间音频	THX 空間オーディオ	THX Spatial Audio	THX Spatial Audio	THX Uzamsal Ses	THX Spatial Audio
+action_see_all	See all	查看全部	すべて表示	Tout afficher	Ver todo	Tümünü gör	Alle anzeigen
+action_retry	Retry	重试	再試行	Réessayer	Reintentar	Tekrar dene	Erneut versuchen
+import_spotify_instructions	Open exportify.net, sign in, and export the playlist as CSV. Or connect Spotify in Settings › System to import without a file at all.	打开 exportify.net，登录后将歌单导出为 CSV。也可以在“设置 › 系统”中连接 Spotify，无需文件即可导入。	exportify.net を開いてサインインし、プレイリストを CSV で書き出してください。または「設定 › システム」で Spotify に接続すれば、ファイルなしで読み込めます。	Ouvrez exportify.net, connectez-vous et exportez la playlist au format CSV. Vous pouvez aussi connecter Spotify dans Paramètres › Système pour importer sans fichier.	Abre exportify.net, inicia sesión y exporta la playlist en CSV. También puedes conectar Spotify en Ajustes › Sistema para importarla sin ningún archivo.	exportify.net’i açın, oturum açın ve çalma listesini CSV olarak dışa aktarın. Ya da hiç dosya kullanmadan içe aktarmak için Spotify’ı Ayarlar › Sistem’den bağlayın.	Öffne exportify.net, melde dich an und exportiere die Playlist als CSV. Oder verbinde Spotify unter Einstellungen › System, dann geht der Import ganz ohne Datei.
+import_apple_music_instructions	In the Music app on a Mac: File › Library › Export Playlist, with Format set to Text. The .txt it writes is read here as-is.	在 Mac 上的“音乐”App 中：选择“文件 › 资料库 › 导出播放列表”，格式选“文本”。导出的 .txt 文件可直接在此读取。	Mac の「ミュージック」App で「ファイル › ライブラリ › プレイリストを書き出す」を選び、フォーマットを「テキスト」にします。書き出された .txt はそのまま読み込めます。	Dans l’app Musique sur Mac : Fichier › Bibliothèque › Exporter la playlist, avec le format Texte. Le fichier .txt obtenu est lu ici tel quel.	En la app Música del Mac: Archivo › Biblioteca › Exportar playlist, con el formato Texto. El .txt resultante se lee aquí tal cual.	Mac’teki Müzik uygulamasında: Dosya › Arşiv › Çalma Listesini Dışa Aktar’ı seçin ve biçimi Metin olarak ayarlayın. Oluşan .txt dosyası burada olduğu gibi okunur.	In der Musik-App auf dem Mac: Ablage › Mediathek › Playlist exportieren, mit dem Format „Text“. Die erzeugte .txt-Datei wird hier unverändert gelesen.
+import_youtube_music_instructions	Export the playlist with Google Takeout, or a converter like TuneMyMusic, and pick the .csv it produces.	使用 Google Takeout 或 TuneMyMusic 等转换工具导出歌单，然后选择生成的 .csv 文件。	Google データエクスポート（Takeout）や TuneMyMusic などの変換ツールでプレイリストを書き出し、作成された .csv を選んでください。	Exportez la playlist avec Google Takeout ou un convertisseur comme TuneMyMusic, puis choisissez le fichier .csv obtenu.	Exporta la playlist con Google Takeout o con un conversor como TuneMyMusic y elige el .csv que genere.	Çalma listesini Google Takeout veya TuneMyMusic gibi bir dönüştürücüyle dışa aktarın ve oluşan .csv dosyasını seçin.	Exportiere die Playlist mit Google Takeout oder einem Konverter wie TuneMyMusic und wähle die erzeugte .csv-Datei.
+create_playlist_title	Create playlist	创建歌单	プレイリストを作成	Créer une playlist	Crear playlist	Çalma listesi oluştur	Playlist erstellen
+action_create	Create	创建	作成	Créer	Crear	Oluştur	Erstellen
+playlist_name_hint	Playlist name	歌单名称	プレイリスト名	Nom de la playlist	Nombre de la playlist	Çalma listesi adı	Name der Playlist
+playlist_description_hint	Description (optional)	简介（可选）	説明（任意）	Description (facultative)	Descripción (opcional)	Açıklama (isteğe bağlı)	Beschreibung (optional)
+action_cancel	Cancel	取消	キャンセル	Annuler	Cancelar	İptal	Abbrechen
+action_import	Import	导入	読み込む	Importer	Importar	İçe aktar	Importieren
+import_tracks_title	Import tracks	导入歌曲	曲を読み込む	Importer des titres	Importar canciones	Parçaları içe aktar	Titel importieren
+import_format_unsupported	%1$s files aren’t supported yet — export as CSV instead.	暂不支持 %1$s 文件，请改为导出 CSV。	%1$s ファイルにはまだ対応していません。CSV で書き出してください。	Les fichiers %1$s ne sont pas encore pris en charge : exportez plutôt en CSV.	Los archivos %1$s aún no son compatibles; exporta en CSV.	%1$s dosyaları henüz desteklenmiyor; bunun yerine CSV olarak dışa aktarın.	%1$s-Dateien werden noch nicht unterstützt – exportiere stattdessen als CSV.
+action_choose_file	Choose a file	选择文件	ファイルを選択	Choisir un fichier	Elegir un archivo	Dosya seç	Datei auswählen
+import_any_columns	Any column naming these exports use is understood, in any of the encodings they write.	这些导出文件所用的列名和编码均可识别。	これらの書き出しで使われる列名と文字コードはすべて認識されます。	Les noms de colonnes et les encodages de ces exports sont tous reconnus.	Se reconocen todos los nombres de columna y codificaciones que usan estas exportaciones.	Bu dışa aktarımların kullandığı tüm sütun adları ve karakter kodlamaları tanınır.	Alle Spaltennamen und Zeichenkodierungen dieser Exporte werden erkannt.
+strict_album_matching	Strict album matching	严格匹配专辑	アルバムを厳密に照合	Correspondance stricte de l’album	Coincidencia estricta de álbum	Katı albüm eşleştirme	Strenger Albumabgleich
+strict_album_matching_detail	Only accept a match from the same album. Off finds more, but sometimes the wrong recording.	只接受来自同一专辑的匹配。关闭后能找到更多歌曲，但有时会匹配到错误的录音版本。	同じアルバムの曲だけを一致とみなします。オフにすると見つかる曲は増えますが、別の録音になることがあります。	N’accepter que les correspondances du même album. Désactivé, on en trouve davantage, mais parfois le mauvais enregistrement.	Solo acepta coincidencias del mismo álbum. Si lo desactivas, encontrarás más, pero a veces la grabación equivocada.	Yalnızca aynı albümden gelen eşleşmeleri kabul et. Kapalıyken daha fazla parça bulunur ama bazen yanlış kayıt seçilir.	Nur Treffer aus demselben Album akzeptieren. Ausgeschaltet findet mehr, aber manchmal die falsche Aufnahme.
+action_collapse	Collapse	收起	閉じる	Réduire	Contraer	Daralt	Einklappen
+output_device	Output device	输出设备	出力デバイス	Appareil de sortie	Dispositivo de salida	Çıkış cihazı	Ausgabegerät
+action_more	More	更多	その他	Plus	Más	Daha fazla	Mehr
+shuffle_on	Shuffle: On	随机播放：开	シャッフル：オン	Lecture aléatoire : activée	Aleatorio: activado	Karıştır: Açık	Zufallswiedergabe: an
+shuffle_off	Shuffle: Off	随机播放：关	シャッフル：オフ	Lecture aléatoire : désactivée	Aleatorio: desactivado	Karıştır: Kapalı	Zufallswiedergabe: aus
+repeat_off	Repeat: Off	循环：关	リピート：オフ	Répéter : désactivé	Repetir: desactivado	Tekrarla: Kapalı	Wiederholen: aus
+repeat_one	Repeat: One	循环：单曲	リピート：1曲	Répéter : un titre	Repetir: una canción	Tekrarla: Tek parça	Wiederholen: ein Titel
+repeat_all	Repeat: All	循环：全部	リピート：すべて	Répéter : tout	Repetir: todo	Tekrarla: Tümü	Wiederholen: alle
+action_send_file	Send file	发送文件	ファイルを送信	Envoyer le fichier	Enviar archivo	Dosyayı gönder	Datei senden
+player_visuals_studio	Player Visuals Studio	播放器视觉工作室	プレーヤービジュアル スタジオ	Studio visuel du lecteur	Estudio visual del reproductor	Oynatıcı Görsel Stüdyosu	Player-Visuals-Studio
+settings	Settings	设置	設定	Paramètres	Ajustes	Ayarlar	Einstellungen
+download_done	Downloaded	已下载	ダウンロード済み	Téléchargé	Descargada	İndirildi	Heruntergeladen
+download_progress	Downloading %1$d%%	正在下载 %1$d%%	ダウンロード中 %1$d%%	Téléchargement… %1$d %%	Descargando… %1$d %%	İndiriliyor %%%1$d	Wird geladen … %1$d %%
+download_queued	Queued	排队中	待機中	En attente	En cola	Sırada	In der Warteschlange
+download_failed_retry	Download failed — retry	下载失败，点按重试	ダウンロードに失敗しました。再試行	Échec du téléchargement — réessayer	Error en la descarga: reintentar	İndirme başarısız — tekrar dene	Download fehlgeschlagen – erneut versuchen
+album_art	Album art	专辑封面	アルバムアートワーク	Pochette de l’album	Portada del álbum	Albüm kapağı	Albumcover
+action_fullscreen	Fullscreen	全屏	全画面表示	Plein écran	Pantalla completa	Tam ekran	Vollbild
+action_exit_fullscreen	Exit fullscreen	退出全屏	全画面表示を終了	Quitter le plein écran	Salir de pantalla completa	Tam ekrandan çık	Vollbild beenden
+action_exit_visualizer	Exit visualizer	退出可视化	ビジュアライザを終了	Quitter le visualiseur	Salir del visualizador	Görselleştiriciden çık	Visualizer beenden
+visualizer_bundled_presets	Bundled projectM presets	内置 projectM 预设	内蔵の projectM プリセット	Préréglages projectM intégrés	Presets de projectM incluidos	Yerleşik projectM ön ayarları	Mitgelieferte projectM-Presets
+visualizer_shuffle	Shuffle	随机	シャッフル	Aléatoire	Aleatorio	Karışık	Zufall
+visualizer_manual	Manual	手动	手動	Manuel	Manual	Manuel	Manuell
+preset_save	Like	收藏	お気に入り	Aimer	Guardar	Beğen	Merken
+preset_saved	Liked	已收藏	お気に入り済み	Aimé	Guardado	Beğenildi	Gemerkt
+action_next	Next	下一个	次へ	Suivant	Siguiente	Sonraki	Weiter
+visualizer_presets	Presets	预设	プリセット	Préréglages	Presets	Ön ayarlar	Presets
+preset_previous	Previous preset	上一个预设	前のプリセット	Préréglage précédent	Preset anterior	Önceki ön ayar	Vorheriges Preset
+preset_browser	Preset browser	预设浏览器	プリセット一覧	Liste des préréglages	Explorador de presets	Ön ayar tarayıcısı	Preset-Browser
+preset_like	Like preset	收藏预设	プリセットをお気に入りに追加	Aimer ce préréglage	Guardar preset	Ön ayarı beğen	Preset merken
+preset_unlike	Unlike preset	取消收藏预设	プリセットをお気に入りから削除	Ne plus aimer ce préréglage	Quitar preset de guardados	Ön ayar beğenisini kaldır	Preset nicht mehr merken
+preset_next	Next preset	下一个预设	次のプリセット	Préréglage suivant	Siguiente preset	Sonraki ön ayar	Nächstes Preset
+hero_show_album_art	Show album art	显示专辑封面	アートワークを表示	Afficher la pochette	Mostrar la portada	Albüm kapağını göster	Albumcover anzeigen
+hero_show_spectrum	Show spectrum	显示频谱	スペクトラムを表示	Afficher le spectre	Mostrar el espectro	Spektrumu göster	Spektrum anzeigen
+hero_switch_to_spectrum	Switch to spectrum	切换到频谱	スペクトラムに切り替え	Passer au spectre	Cambiar al espectro	Spektruma geç	Zum Spektrum wechseln
+hero_switch_to_wave_candy	Switch to Wave Candy scope	切换到 Wave Candy 示波器	Wave Candy スコープに切り替え	Passer à l’oscilloscope Wave Candy	Cambiar al osciloscopio Wave Candy	Wave Candy osiloskopuna geç	Zum Wave-Candy-Oszilloskop wechseln
+hero_waveform_mono	Switch waveform to mono	波形切换为单声道	波形をモノラルに切り替え	Forme d’onde en mono	Forma de onda en mono	Dalga biçimini mono yap	Wellenform auf Mono umschalten
+hero_waveform_stereo	Switch waveform to stereo	波形切换为立体声	波形をステレオに切り替え	Forme d’onde en stéréo	Forma de onda en estéreo	Dalga biçimini stereo yap	Wellenform auf Stereo umschalten
+hero_spectrum_speed	Spectrum speed	频谱速度	スペクトラムの速度	Vitesse du spectre	Velocidad del espectro	Spektrum hızı	Spektrum-Geschwindigkeit
+action_open_visualizer	Open visualizer	打开可视化	ビジュアライザを開く	Ouvrir le visualiseur	Abrir el visualizador	Görselleştiriciyi aç	Visualizer öffnen
+audio_tools	Audio tools	音频工具	オーディオツール	Outils audio	Herramientas de audio	Ses araçları	Audio-Tools
+autoeq_detail	Headphone EQ correction	耳机均衡校正	ヘッドホンの EQ 補正	Correction EQ du casque	Corrección de EQ para auriculares	Kulaklık EQ düzeltmesi	Kopfhörer-EQ-Korrektur
+system_wide	System-wide	全局应用	システム全体	À l’échelle du système	En todo el sistema	Sistem genelinde	Systemweit
+system_wide_detail	Apply to all device audio	应用于设备上的所有音频	端末のすべての音声に適用	Appliquer à tout le son de l’appareil	Aplicar a todo el audio del dispositivo	Cihazdaki tüm seslere uygula	Auf den gesamten Gerätesound anwenden
+badge_beta	Beta	测试版	ベータ	Bêta	Beta	Beta	Beta
+system_wide_caution	Swaps the app's exact correction for a coarser global one. For correcting other apps.	会把应用内的精确校正换成较粗略的全局校正，用于校正其他应用的声音。	アプリ内の精密な補正を、より大まかなシステム全体の補正に切り替えます。他のアプリの音を補正するためのものです。	Remplace la correction précise de l’app par une correction globale plus approximative. Pour corriger les autres apps.	Cambia la corrección exacta de la app por una global menos precisa. Sirve para corregir otras apps.	Uygulamanın hassas düzeltmesini daha kaba, genel bir düzeltmeyle değiştirir. Diğer uygulamaları düzeltmek içindir.	Ersetzt die exakte Korrektur der App durch eine gröbere globale. Gedacht für andere Apps.
+visualizer	Visualizer	可视化	ビジュアライザ	Visualiseur	Visualizador	Görselleştirici	Visualizer
+waveform	Waveform	波形	波形	Forme d’onde	Forma de onda	Dalga formu	Wellenform
+compressor	Compressor	压缩器	コンプレッサー	Compresseur	Compresor	Kompresör	Kompressor
+compressor_detail	Oxford dynamics. Hold to configure	Oxford 动态处理。长按可设置	Oxford ダイナミクス。長押しで設定	Dynamique Oxford. Maintenez pour configurer	Dinámica Oxford. Mantén pulsado para configurar	Oxford dinamikleri. Ayarlamak için basılı tutun	Oxford-Dynamik. Gedrückt halten zum Einrichten
+inflator_detail	Oxford loudness. Hold to configure	Oxford 响度。长按可设置	Oxford ラウドネス。長押しで設定	Sonie Oxford. Maintenez pour configurer	Sonoridad Oxford. Mantén pulsado para configurar	Oxford ses yüksekliği. Ayarlamak için basılı tutun	Oxford-Lautheit. Gedrückt halten zum Einrichten
+crossfeed	Crossfeed	交叉馈送	クロスフィード	Crossfeed	Crossfeed	Crossfeed	Crossfeed
+crossfeed_detail	Speaker simulation. Hold to configure	扬声器模拟。长按可设置	スピーカーシミュレーション。長押しで設定	Simulation d’enceintes. Maintenez pour configurer	Simulación de altavoces. Mantén pulsado para configurar	Hoparlör simülasyonu. Ayarlamak için basılı tutun	Lautsprechersimulation. Gedrückt halten zum Einrichten
+no_track_playing	No track playing	当前没有播放	再生中の曲はありません	Aucune lecture en cours	No se está reproduciendo nada	Çalan parça yok	Es wird nichts abgespielt
+unknown	Unknown	未知	不明	Inconnu	Desconocido	Bilinmiyor	Unbekannt
+output_default	Default	默认	デフォルト	Par défaut	Predeterminado	Varsayılan	Standard
+minutes_short	%1$d min	%1$d 分钟	%1$d分	%1$d min	%1$d min	%1$d dk	%1$d Min.
+state_off	Off	关	オフ	Désactivé	Desactivado	Kapalı	Aus
+sleep_timer	Sleep timer	睡眠定时	スリープタイマー	Minuteur de mise en veille	Temporizador	Uyku zamanlayıcısı	Sleep-Timer
+sleep_timer_pauses_in#one	Playback will pause in %1$d minute.	将在 %1$d 分钟后暂停播放。	%1$d分後に再生を一時停止します。	La lecture s’arrêtera dans %1$d minute.	La reproducción se pausará en %1$d minuto.	Oynatma %1$d dakika sonra duraklatılacak.	Die Wiedergabe pausiert in %1$d Minute.
+sleep_timer_pauses_in#many	Playback will pause in %1$d minutes.	将在 %1$d 分钟后暂停播放。	%1$d分後に再生を一時停止します。	La lecture s’arrêtera dans %1$d minutes.	La reproducción se pausará en %1$d minutos.	Oynatma %1$d dakika sonra duraklatılacak.	Die Wiedergabe pausiert in %1$d Minuten.
+sleep_timer_pauses_in#other	Playback will pause in %1$d minutes.	将在 %1$d 分钟后暂停播放。	%1$d分後に再生を一時停止します。	La lecture s’arrêtera dans %1$d minutes.	La reproducción se pausará en %1$d minutos.	Oynatma %1$d dakika sonra duraklatılacak.	Die Wiedergabe pausiert in %1$d Minuten.
+sleep_timer_off	Sleep timer is off.	睡眠定时已关闭。	スリープタイマーはオフです。	Le minuteur de mise en veille est désactivé.	El temporizador está desactivado.	Uyku zamanlayıcısı kapalı.	Der Sleep-Timer ist aus.
+speed	Speed	速度	速度	Vitesse	Velocidad	Hız	Geschwindigkeit
+detecting	Detecting…	正在检测…	検出中…	Détection…	Detectando…	Algılanıyor…	Wird erkannt …
+speed_reset	Reset speed to 1.0x	将速度重置为 1.0x	速度を 1.0x に戻す	Rétablir la vitesse à 1,0x	Restablecer la velocidad a 1,0x	Hızı 1,0x’e sıfırla	Geschwindigkeit auf 1,0x zurücksetzen
+speed_unit_multiplier	Multiplier	倍速	倍率	Multiplicateur	Multiplicador	Çarpan	Faktor
+speed_unit_semitones	Semitones	半音	半音	Demi-tons	Semitonos	Yarım ton	Halbtöne
+semitone_down	Down one semitone	降低一个半音	半音下げる	Baisser d’un demi-ton	Bajar un semitono	Bir yarım ton düşür	Einen Halbton tiefer
+semitone_up	Up one semitone	升高一个半音	半音上げる	Monter d’un demi-ton	Subir un semitono	Bir yarım ton yükselt	Einen Halbton höher
+bpm_slower	One BPM slower	慢 1 BPM	1 BPM 遅く	1 BPM plus lent	1 BPM más lento	1 BPM yavaş	1 BPM langsamer
+bpm_faster	One BPM faster	快 1 BPM	1 BPM 速く	1 BPM plus rapide	1 BPM más rápido	1 BPM hızlı	1 BPM schneller
+preserve_pitch	Preserve pitch	保持音高	ピッチを維持	Conserver la hauteur	Conservar el tono	Perdeyi koru	Tonhöhe beibehalten
+preserve_pitch_on	Tempo changes, pitch stays natural	速度改变，音高保持自然	テンポだけが変わり、ピッチは自然なまま	Le tempo change, la hauteur reste naturelle	Cambia el tempo; el tono se mantiene natural	Tempo değişir, perde doğal kalır	Das Tempo ändert sich, die Tonhöhe bleibt natürlich
+preserve_pitch_off	Pitch shifts with speed (vinyl-style)	音高随速度变化（黑胶唱片效果）	速度に合わせてピッチも変わります（レコード風）	La hauteur suit la vitesse (comme un vinyle)	El tono cambia con la velocidad (como un vinilo)	Perde hızla birlikte değişir (plak gibi)	Die Tonhöhe ändert sich mit der Geschwindigkeit (wie bei Vinyl)
+pitch	Pitch	音高	ピッチ	Hauteur	Tono	Perde	Tonhöhe
+pitch_down	Pitch down one semitone	音高降低一个半音	ピッチを半音下げる	Baisser la hauteur d’un demi-ton	Bajar el tono un semitono	Perdeyi bir yarım ton düşür	Tonhöhe einen Halbton senken
+pitch_up	Pitch up one semitone	音高升高一个半音	ピッチを半音上げる	Monter la hauteur d’un demi-ton	Subir el tono un semitono	Perdeyi bir yarım ton yükselt	Tonhöhe einen Halbton anheben
+pitch_reset	Reset pitch	重置音高	ピッチをリセット	Réinitialiser la hauteur	Restablecer el tono	Perdeyi sıfırla	Tonhöhe zurücksetzen
+pitch_wsola_floor	Holds bass down to %1$s Hz	低音可保持到 %1$s Hz	%1$s Hz までの低音を保持	Conserve les basses jusqu’à %1$s Hz	Conserva los graves hasta %1$s Hz	Basları %1$s Hz’e kadar korur	Hält den Bass bis hinunter zu %1$s Hz
+pitch_vocoder_error	Within %1$s. Lower settings are lighter work and less likely to stutter.	误差在 %1$s 以内。较低的设置负担更轻，也更不容易卡顿。	誤差は %1$s 以内です。設定を下げると処理が軽くなり、音飛びしにくくなります。	Écart inférieur à %1$s. Un réglage plus bas demande moins de calcul et saccade moins.	Margen de %1$s. Los ajustes más bajos exigen menos y se entrecortan menos.	%1$s içinde. Düşük ayarlar daha az iş yükü getirir ve takılma olasılığı daha düşüktür.	Innerhalb von %1$s. Niedrigere Einstellungen sind weniger aufwendig und stocken seltener.
+queue	Queue	播放队列	キュー	File d’attente	Cola	Sıra	Warteschlange
+track_count#one	%1$d track	%1$d 首歌曲	%1$d 曲	%1$d titre	%1$d canción	%1$d parça	%1$d Titel
+track_count#many	%1$d tracks	%1$d 首歌曲	%1$d 曲	%1$d titres	%1$d canciones	%1$d parça	%1$d Titel
+track_count#other	%1$d tracks	%1$d 首歌曲	%1$d 曲	%1$d titres	%1$d canciones	%1$d parça	%1$d Titel
+radio_on	Radio on	电台已开启	ラジオ オン	Radio activée	Radio activada	Radyo açık	Radio an
+action_reset	Reset	重置	リセット	Réinitialiser	Restablecer	Sıfırla	Zurücksetzen
+queue_empty	"Queue is empty.
+Play some music to get started."	"播放队列为空。
+播放一些音乐开始吧。"	"キューは空です。
+音楽を再生して始めましょう。"	"La file d’attente est vide.
+Lancez de la musique pour commencer."	"La cola está vacía.
+Reproduce algo de música para empezar."	"Sıra boş.
+Başlamak için biraz müzik çalın."	"Die Warteschlange ist leer.
+Spiel Musik ab, um loszulegen."
+now_playing	Now playing	正在播放	再生中	En cours de lecture	Reproduciendo	Şimdi çalıyor	Wird gespielt
+up_next	Up next	接下来播放	次に再生	À suivre	A continuación	Sıradaki	Als Nächstes
+queue_reset_title	Reset queue?	要重置播放队列吗？	キューをリセットしますか？	Réinitialiser la file d’attente ?	¿Restablecer la cola?	Sıra sıfırlansın mı?	Warteschlange zurücksetzen?
+queue_reset_body	This will remove all upcoming tracks from the queue. The current track will keep playing.	这会从播放队列中移除所有待播歌曲，当前歌曲会继续播放。	キューにある次の曲がすべて削除されます。再生中の曲はそのまま再生されます。	Tous les titres à venir seront retirés de la file d’attente. Le titre en cours continuera.	Se quitarán de la cola todas las canciones siguientes. La canción actual seguirá sonando.	Sıradaki tüm parçalar kaldırılacak. Çalan parça çalmaya devam edecek.	Alle kommenden Titel werden aus der Warteschlange entfernt. Der aktuelle Titel läuft weiter.
+start_radio_from_song	Start radio from this song	从这首歌开始电台	この曲からラジオを開始	Lancer une radio à partir de ce titre	Iniciar una radio a partir de esta canción	Bu parçadan radyo başlat	Radio zu diesem Titel starten
+action_select	Select	选择	選択	Sélectionner	Seleccionar	Seç	Auswählen
+action_reorder	Reorder	重新排序	並べ替え	Réorganiser	Reordenar	Yeniden sırala	Neu anordnen
+tone	Tone	音调	トーン	Tonalité	Tono	Ton	Klang
+tone_collapse	Collapse tone	收起音调	トーンを閉じる	Réduire la tonalité	Contraer el tono	Tonu daralt	Klang einklappen
+tone_expand	Expand tone	展开音调	トーンを開く	Développer la tonalité	Expandir el tono	Tonu genişlet	Klang ausklappen
+tone_bass	Bass	低音	低音	Graves	Graves	Bas	Bass
+tone_treble	Treble	高音	高音	Aigus	Agudos	Tiz	Höhen
+tone_freq	Freq	频率	周波数	Fréq.	Frec.	Frek.	Freq.
+action_previous	Previous	上一首	前の曲へ	Précédent	Anterior	Önceki	Zurück
+buffering	Buffering	正在缓冲	バッファリング中	Mise en mémoire tampon	Almacenando en búfer	Arabelleğe alınıyor	Wird gepuffert
+status_timer	Timer	定时	タイマー	Minuteur	Temporizador	Zamanlayıcı	Timer
+status_sound	Sound	音效	サウンド	Son	Sonido	Ses	Klang
+status_mixer	Mixer	混音器	ミキサー	Mixeur	Mezclador	Mikser	Mixer
+mode_art	Art	封面	アート	Pochette	Portada	Kapak	Cover
+mode_visual	Visual	视觉	ビジュアル	Visuel	Visual	Görsel	Visual
+mode_lyrics	Lyrics	歌词	歌詞	Paroles	Letra	Şarkı sözleri	Songtext
+mode_dsp_mix	DSP Mix	DSP 混音	DSP ミックス	Mix DSP	Mezcla DSP	DSP Miksi	DSP-Mix
+lyrics_loading	Loading lyrics…	正在加载歌词…	歌詞を読み込み中…	Chargement des paroles…	Cargando la letra…	Şarkı sözleri yükleniyor…	Songtext wird geladen …
+lyrics_none	No lyrics available for this track.	这首歌暂无歌词。	この曲の歌詞はありません。	Aucunes paroles disponibles pour ce titre.	No hay letra disponible para esta canción.	Bu parça için şarkı sözü yok.	Für diesen Titel ist kein Songtext verfügbar.
+bpm_nudge_description	Nudge tempo: push left to slow down, right to speed up	微调速度：向左推减慢，向右推加快	テンポを微調整：左に押すと遅く、右に押すと速くなります	Ajuster le tempo : poussez à gauche pour ralentir, à droite pour accélérer	Ajustar el tempo: empuja a la izquierda para ralentizar y a la derecha para acelerar	Tempoyu ayarla: yavaşlatmak için sola, hızlandırmak için sağa itin	Tempo anpassen: nach links schieben zum Verlangsamen, nach rechts zum Beschleunigen
+bpm_set_title	Set BPM	设置 BPM	BPM を設定	Définir le BPM	Establecer BPM	BPM ayarla	BPM festlegen
+action_set	Set	设置	設定	Définir	Establecer	Ayarla	Festlegen
+queue_empty_short	Queue is empty.	播放队列为空。	キューは空です。	La file d’attente est vide.	La cola está vacía.	Sıra boş.	Die Warteschlange ist leer.
+unknown_artist	Unknown artist	未知艺人	不明なアーティスト	Artiste inconnu	Artista desconocido	Bilinmeyen sanatçı	Unbekannter Künstler
+dock_mixer_fx	Mixer/FX	混音/效果	ミキサー/FX	Mixeur/FX	Mezclador/FX	Mikser/FX	Mixer/FX
+lyrics_none_short	No lyrics available for this track	这首歌暂无歌词	この曲の歌詞はありません	Aucunes paroles disponibles pour ce titre	No hay letra disponible para esta canción	Bu parça için şarkı sözü yok	Für diesen Titel ist kein Songtext verfügbar
+action_seek	Seek	调整播放进度	再生位置	Position de lecture	Posición de reproducción	Konum	Position
+audio_pipeline	Audio pipeline	音频处理链	オーディオパイプライン	Chaîne audio	Cadena de audio	Ses işlem hattı	Audio-Pipeline
+error_play_track	Couldn’t play this track.	无法播放这首歌。	この曲を再生できませんでした。	Impossible de lire ce titre.	No se ha podido reproducir esta canción.	Bu parça çalınamadı.	Dieser Titel konnte nicht abgespielt werden.
+error_play_tracks	Couldn’t play these tracks. Check your connection.	无法播放这些歌曲。请检查网络连接。	これらの曲を再生できませんでした。接続を確認してください。	Impossible de lire ces titres. Vérifiez votre connexion.	No se han podido reproducir estas canciones. Comprueba tu conexión.	Bu parçalar çalınamadı. Bağlantınızı kontrol edin.	Diese Titel konnten nicht abgespielt werden. Prüfe deine Verbindung.
+browse_by_category	Category	分类	カテゴリ	Catégorie	Categoría	Kategori	Kategorie
+browse_by_author	Author	作者	作者	Auteur	Autor	Yazar	Autor
+visualizer_presets_title	Visualizer presets	可视化预设	ビジュアライザのプリセット	Préréglages du visualiseur	Presets del visualizador	Görselleştirici ön ayarları	Visualizer-Presets
+action_dismiss	Dismiss	关闭	閉じる	Fermer	Cerrar	Kapat	Schließen
+favourites	Favourites	收藏	お気に入り	Favoris	Favoritos	Favoriler	Favoriten
+presets_no_match	No presets match “%1$s”. Search looks at names across all %2$d.	没有与“%1$s”匹配的预设。搜索范围为全部 %2$d 个预设的名称。	「%1$s」に一致するプリセットはありません。検索の対象は全 %2$d 件の名前です。	Aucun préréglage ne correspond à « %1$s ». La recherche porte sur les noms des %2$d préréglages.	Ningún preset coincide con “%1$s”. La búsqueda revisa los nombres de los %2$d presets.	“%1$s” ile eşleşen ön ayar yok. Arama, %2$d ön ayarın tümünün adlarına bakar.	Kein Preset passt zu „%1$s“. Die Suche durchsucht die Namen aller %2$d Presets.
+favourites_empty	No favourites yet. Tap the heart on any preset to keep it here.	还没有收藏。点按任意预设上的心形图标即可收藏到这里。	お気に入りはまだありません。プリセットのハートをタップするとここに追加されます。	Aucun favori pour l’instant. Touchez le cœur d’un préréglage pour le garder ici.	Aún no hay favoritos. Toca el corazón de cualquier preset para guardarlo aquí.	Henüz favori yok. Burada tutmak için herhangi bir ön ayardaki kalbe dokunun.	Noch keine Favoriten. Tippe bei einem Preset auf das Herz, um es hier zu behalten.
+nothing_here	Nothing here.	这里什么都没有。	ここには何もありません。	Rien ici.	No hay nada aquí.	Burada bir şey yok.	Hier ist nichts.
+current	Current	当前	現在	Actuel	Actual	Geçerli	Aktuell
+show_its_group	Show its group	显示所在分组	グループを表示	Afficher son groupe	Mostrar su grupo	Grubunu göster	Gruppe anzeigen
+uncategorised	Uncategorised	未分类	未分類	Sans catégorie	Sin categoría	Kategorisiz	Ohne Kategorie
+matches_of_total	%1$d of %2$d	%2$d 个中的 %1$d 个	%2$d 件中 %1$d 件	%1$d sur %2$d	%1$d de %2$d	%1$d / %2$d	%1$d von %2$d
+presets_in_groups	%1$s in %2$s	%2$s中的%1$s	%2$sに%1$s	%1$s dans %2$s	%1$s en %2$s	%2$s içinde %1$s	%1$s in %2$s
+action_back	Back	返回	戻る	Retour	Atrás	Geri	Zurück
+favourite_remove	Remove from favourites	取消收藏	お気に入りから削除	Retirer des favoris	Quitar de favoritos	Favorilerden kaldır	Aus Favoriten entfernen
+favourite_add	Add to favourites	加入收藏	お気に入りに追加	Ajouter aux favoris	Añadir a favoritos	Favorilere ekle	Zu Favoriten hinzufügen
+presets_count#one	%1$d preset	%1$d 个预设	%1$d 件のプリセット	%1$d préréglage	%1$d preset	%1$d ön ayar	%1$d Preset
+presets_count#many	%1$d presets	%1$d 个预设	%1$d 件のプリセット	%1$d préréglages	%1$d presets	%1$d ön ayar	%1$d Presets
+presets_count#other	%1$d presets	%1$d 个预设	%1$d 件のプリセット	%1$d préréglages	%1$d presets	%1$d ön ayar	%1$d Presets
+categories_count#one	%1$d category	%1$d 个分类	%1$d カテゴリ	%1$d catégorie	%1$d categoría	%1$d kategori	%1$d Kategorie
+categories_count#many	%1$d categories	%1$d 个分类	%1$d カテゴリ	%1$d catégories	%1$d categorías	%1$d kategori	%1$d Kategorien
+categories_count#other	%1$d categories	%1$d 个分类	%1$d カテゴリ	%1$d catégories	%1$d categorías	%1$d kategori	%1$d Kategorien
+authors_count#one	%1$d author	%1$d 位作者	%1$d 人の作者	%1$d auteur	%1$d autor	%1$d yazar	%1$d Autor
+authors_count#many	%1$d authors	%1$d 位作者	%1$d 人の作者	%1$d auteurs	%1$d autores	%1$d yazar	%1$d Autoren
+authors_count#other	%1$d authors	%1$d 位作者	%1$d 人の作者	%1$d auteurs	%1$d autores	%1$d yazar	%1$d Autoren
+favourites_count#one	%1$d favourite	%1$d 个收藏	お気に入り %1$d 件	%1$d favori	%1$d favorito	%1$d favori	%1$d Favorit
+favourites_count#many	%1$d favourites	%1$d 个收藏	お気に入り %1$d 件	%1$d favoris	%1$d favoritos	%1$d favori	%1$d Favoriten
+favourites_count#other	%1$d favourites	%1$d 个收藏	お気に入り %1$d 件	%1$d favoris	%1$d favoritos	%1$d favori	%1$d Favoriten
+groups_count#one	%1$d group	%1$d 个分组	%1$d グループ	%1$d groupe	%1$d grupo	%1$d grup	%1$d Gruppe
+groups_count#many	%1$d groups	%1$d 个分组	%1$d グループ	%1$d groupes	%1$d grupos	%1$d grup	%1$d Gruppen
+groups_count#other	%1$d groups	%1$d 个分组	%1$d グループ	%1$d groupes	%1$d grupos	%1$d grup	%1$d Gruppen
+presets_search_hint#one	Search %1$d preset	搜索 %1$d 个预设	%1$d 件のプリセットを検索	Rechercher parmi %1$d préréglage	Buscar en %1$d preset	%1$d ön ayarda ara	%1$d Preset durchsuchen
+presets_search_hint#many	Search %1$d presets	搜索 %1$d 个预设	%1$d 件のプリセットを検索	Rechercher parmi %1$d préréglages	Buscar en %1$d presets	%1$d ön ayarda ara	%1$d Presets durchsuchen
+presets_search_hint#other	Search %1$d presets	搜索 %1$d 个预设	%1$d 件のプリセットを検索	Rechercher parmi %1$d préréglages	Buscar en %1$d presets	%1$d ön ayarda ara	%1$d Presets durchsuchen
+source_local	Local	本地	端末内	Local	Local	Yerel	Lokal
+source_collection	Collection	收藏集	コレクション	Collection	Colección	Koleksiyon	Sammlung
+source_live	Live	直播	ライブ	Direct	En directo	Canlı	Live
+state_on	On	开	オン	Activé	Activado	Açık	An
+tidal_offer_title	TIDAL couldn’t play this	TIDAL 无法播放这首歌	TIDAL で再生できませんでした	TIDAL n’a pas pu lire ce titre	TIDAL no ha podido reproducir esto	TIDAL bunu çalamadı	TIDAL konnte das nicht abspielen
+tidal_offer_body	“%1$s” by %2$s isn’t available from TIDAL right now. Qobuz has the same recording. Play it from Qobuz?	%2$s 的《%1$s》目前无法在 TIDAL 上播放。Qobuz 有相同的录音版本，要从 Qobuz 播放吗？	%2$s の「%1$s」は現在 TIDAL で再生できません。Qobuz に同じ音源があります。Qobuz で再生しますか？	« %1$s » de %2$s n’est pas disponible sur TIDAL pour le moment. Qobuz propose le même enregistrement. Le lire depuis Qobuz ?	“%1$s” de %2$s no está disponible en TIDAL ahora mismo. Qobuz tiene la misma grabación. ¿Reproducirla desde Qobuz?	%2$s – “%1$s” şu anda TIDAL’da yok. Qobuz’da aynı kayıt var. Qobuz’dan çalınsın mı?	„%1$s“ von %2$s ist bei TIDAL gerade nicht verfügbar. Qobuz hat dieselbe Aufnahme. Von Qobuz abspielen?
+play_from_qobuz	Play from Qobuz	从 Qobuz 播放	Qobuz で再生	Lire depuis Qobuz	Reproducir desde Qobuz	Qobuz’dan çal	Von Qobuz abspielen
+action_skip	Skip	跳过	スキップ	Passer	Omitir	Atla	Überspringen
+radio_finding	Finding similar tracks…	正在查找相似歌曲…	似た曲を探しています…	Recherche de titres similaires…	Buscando canciones similares…	Benzer parçalar aranıyor…	Ähnliche Titel werden gesucht …
+radio_on_tap_to_stop	Radio on — tap to stop	电台已开启 — 点按停止	ラジオ オン — タップで停止	Radio activée — touchez pour arrêter	Radio activada: toca para detener	Radyo açık — durdurmak için dokunun	Radio an – zum Beenden tippen
+play_radio	Play radio	播放电台	ラジオを再生	Lancer la radio	Reproducir radio	Radyoyu çal	Radio abspielen
+donate_title	Enjoying Tryptify?	喜欢 Tryptify 吗？	Tryptify を楽しんでいますか？	Vous aimez Tryptify ?	¿Te gusta Tryptify?	Tryptify’ı beğendiniz mi?	Gefällt dir Tryptify?
+donate_detail	A tip keeps it going	打赏一点，支持它继续下去	チップが開発の支えになります	Un pourboire aide à le faire vivre	Una propina ayuda a que siga adelante	Küçük bir bağış devam etmesini sağlar	Ein Trinkgeld hält es am Laufen
+dismiss_for_good	Dismiss for good	不再显示	今後は表示しない	Fermer définitivement	Cerrar para siempre	Kalıcı olarak kapat	Dauerhaft ausblenden
+dont_ask_again	Don’t ask again	不再询问	今後は確認しない	Ne plus demander	No volver a preguntar	Bir daha sorma	Nicht mehr fragen
+dont_show_again	Don’t show again	不再显示	今後は表示しない	Ne plus afficher	No volver a mostrar	Bir daha gösterme	Nicht mehr anzeigen
+spotify_import_title	Import from Spotify	从 Spotify 导入	Spotify から読み込む	Importer depuis Spotify	Importar desde Spotify	Spotify’dan içe aktar	Aus Spotify importieren
+spotify_strict_detail	Album name must match Spotify metadata	专辑名称必须与 Spotify 元数据一致	アルバム名が Spotify のメタデータと一致する必要があります	Le nom de l’album doit correspondre aux métadonnées Spotify	El nombre del álbum debe coincidir con los metadatos de Spotify	Albüm adı Spotify meta verileriyle eşleşmelidir	Der Albumname muss mit den Spotify-Metadaten übereinstimmen
+spotify_liked_songs	Liked Songs	已点赞的歌曲	お気に入りの曲	Titres likés	Canciones que te gustan	Beğenilen Şarkılar	Lieblingssongs
+spotify_liked_songs_detail	Your saved Spotify tracks	你在 Spotify 上收藏的歌曲	Spotify で保存した曲	Vos titres enregistrés sur Spotify	Tus canciones guardadas en Spotify	Spotify’da kaydettiğiniz parçalar	Deine gespeicherten Spotify-Titel

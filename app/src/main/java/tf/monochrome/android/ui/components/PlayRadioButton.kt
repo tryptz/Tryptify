@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.performance.LocalPerformanceProfile
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * The resting primary action on Home and at the top of Discover: seed a radio
@@ -133,9 +135,9 @@ private fun PlayRadioLabel(glass: Boolean, isActive: Boolean, isGenerating: Bool
         Spacer(modifier = Modifier.width(10.dp))
         Text(
             text = when {
-                isGenerating -> "Finding similar tracks…"
-                isActive -> "Radio on — tap to stop"
-                else -> "Play Radio"
+                isGenerating -> stringResource(R.string.radio_finding)
+                isActive -> stringResource(R.string.radio_on_tap_to_stop)
+                else -> stringResource(R.string.play_radio)
             },
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,

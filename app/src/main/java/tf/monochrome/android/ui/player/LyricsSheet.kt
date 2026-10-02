@@ -39,6 +39,8 @@ import kotlinx.coroutines.flow.StateFlow
 import tf.monochrome.android.domain.model.LyricLine
 import tf.monochrome.android.domain.model.Lyrics
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,7 +65,7 @@ fun LyricsSheet(
                 .padding(horizontal = 24.dp)
         ) {
             Text(
-                text = "Lyrics",
+                text = stringResource(R.string.mode_lyrics),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 16.dp)
@@ -84,7 +86,7 @@ fun LyricsSheet(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No lyrics available for this track",
+                            text = stringResource(R.string.lyrics_none_short),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center

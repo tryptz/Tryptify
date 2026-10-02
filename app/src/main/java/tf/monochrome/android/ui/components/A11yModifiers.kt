@@ -9,6 +9,8 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * Shared accessibility helpers for the app's custom Canvas controls.
@@ -52,11 +54,16 @@ fun Modifier.buttonSemantics(
 }
 
 /** Switch role + [label] + on/off state for mute/solo-style toggle boxes. */
+@androidx.compose.runtime.Composable
 fun Modifier.toggleSemantics(
     label: String,
     checked: Boolean,
-): Modifier = semantics {
-    contentDescription = label
-    role = Role.Switch
-    stateDescription = if (checked) "On" else "Off"
+): Modifier {
+    // Spoken by TalkBack, so in the listener's language like everything else.
+    val state = if (checked) stringResource(R.string.state_on) else stringResource(R.string.state_off)
+    return semantics {
+        contentDescription = label
+        role = Role.Switch
+        stateDescription = state
+    }
 }

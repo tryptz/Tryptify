@@ -34,6 +34,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.ui.components.liquidGlass
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 @Composable
 internal fun ModeSelector(
@@ -50,35 +52,35 @@ internal fun ModeSelector(
         ModePill(
             modifier = Modifier.weight(1f),
             icon = Icons.Default.Album,
-            label = "Art",
+            label = stringResource(R.string.mode_art),
             selected = selectedMode == NowPlayingViewMode.COVER_ART,
             onClick = { onModeSelected(NowPlayingViewMode.COVER_ART) }
         )
         ModePill(
             modifier = Modifier.weight(1f),
             icon = Icons.Default.Equalizer,
-            label = "Visual",
+            label = stringResource(R.string.mode_visual),
             selected = selectedMode == NowPlayingViewMode.VISUALIZER,
             onClick = { onModeSelected(NowPlayingViewMode.VISUALIZER) }
         )
         ModePill(
             modifier = Modifier.weight(1f),
             icon = Icons.AutoMirrored.Filled.FormatAlignLeft,
-            label = "Lyrics",
+            label = stringResource(R.string.mode_lyrics),
             selected = selectedMode == NowPlayingViewMode.LYRICS,
             onClick = { onModeSelected(NowPlayingViewMode.LYRICS) }
         )
         ModePill(
             modifier = Modifier.weight(1f),
             icon = Icons.AutoMirrored.Filled.QueueMusic,
-            label = "Queue",
+            label = stringResource(R.string.queue),
             selected = selectedMode == NowPlayingViewMode.QUEUE,
             onClick = { onModeSelected(NowPlayingViewMode.QUEUE) }
         )
         ModePill(
             modifier = Modifier.weight(1f),
             icon = Icons.Default.Tune,
-            label = "DSP Mix",
+            label = stringResource(R.string.mode_dsp_mix),
             selected = false,
             onClick = onDspMixClick
         )

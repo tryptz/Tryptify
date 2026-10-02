@@ -105,6 +105,8 @@ import tf.monochrome.android.ui.crossfeed.CrossfeedScreen
 import tf.monochrome.android.ui.crossfeed.CrossfeedViewModel
 import tf.monochrome.android.ui.oxford.OxfordEffectsTabs
 import tf.monochrome.android.ui.oxford.OxfordViewModel
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 sealed class Screen(val route: String) {
     data object Home : Screen("home")
@@ -227,21 +229,20 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     qobuzOffer?.let { offer ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = playerViewModel::dismissQobuzOffer,
-            title = { androidx.compose.material3.Text("TIDAL couldn't play this") },
+            title = { androidx.compose.material3.Text(stringResource(R.string.tidal_offer_title)) },
             text = {
                 androidx.compose.material3.Text(
-                    "\"${offer.title}\" by ${offer.artist} isn't available from TIDAL right now. " +
-                        "Qobuz has the same recording. Play it from Qobuz?",
+                    stringResource(R.string.tidal_offer_body, offer.title, offer.artist),
                 )
             },
             confirmButton = {
                 androidx.compose.material3.TextButton(onClick = playerViewModel::acceptQobuzOffer) {
-                    androidx.compose.material3.Text("Play from Qobuz")
+                    androidx.compose.material3.Text(stringResource(R.string.play_from_qobuz))
                 }
             },
             dismissButton = {
                 androidx.compose.material3.TextButton(onClick = playerViewModel::dismissQobuzOffer) {
-                    androidx.compose.material3.Text("Skip")
+                    androidx.compose.material3.Text(stringResource(R.string.action_skip))
                 }
             },
         )

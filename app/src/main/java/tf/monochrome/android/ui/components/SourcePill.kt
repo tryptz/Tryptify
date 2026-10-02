@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import tf.monochrome.android.R
 import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
 
 /**
  * How a catalog presents itself on a pill: name, colour and mark.
@@ -44,6 +45,8 @@ data class SourceBrand(
     val icon: ImageVector? = null,
     // Monochrome marks are tinted with the text colour; coloured marks draw as-is.
     val tintLogo: Boolean = false,
+    /** For a source that is a word rather than a brand; shown instead of [label]. */
+    @androidx.annotation.StringRes val labelRes: Int? = null,
 )
 
 // The Qobuz and Deezer marks are PNGs cut from the brands' own artwork
@@ -54,9 +57,9 @@ fun SourceType.brand(): SourceBrand = when (this) {
     SourceType.QOBUZ -> SourceBrand("Qobuz", Color(0xFF0F6F78), Color(0xFF4FC3C4), logo = R.drawable.logo_qobuz)
     SourceType.APPLE -> SourceBrand("Apple Music", Color(0xFFFA243C), Color(0xFFFF6B7D), logo = R.drawable.logo_apple_music)
     SourceType.DEEZER -> SourceBrand("Deezer", Color(0xFFA238FF), Color(0xFFC98BFF), logo = R.drawable.logo_deezer)
-    SourceType.LOCAL -> SourceBrand("Local", null, null, icon = Icons.Default.PhoneAndroid)
-    SourceType.COLLECTION -> SourceBrand("Collection", null, null, icon = Icons.Default.LibraryMusic)
-    SourceType.LIVE_RADIO -> SourceBrand("Live", null, null, icon = Icons.Default.Radio)
+    SourceType.LOCAL -> SourceBrand("Local", labelRes = R.string.source_local, light = null, dark = null, icon = Icons.Default.PhoneAndroid)
+    SourceType.COLLECTION -> SourceBrand("Collection", labelRes = R.string.source_collection, light = null, dark = null, icon = Icons.Default.LibraryMusic)
+    SourceType.LIVE_RADIO -> SourceBrand("Live", labelRes = R.string.source_live, light = null, dark = null, icon = Icons.Default.Radio)
 }
 
 /** The brand colour for the current theme, or the theme's own when the brand has none. */
@@ -101,7 +104,7 @@ fun SourcePill(source: SourceType, modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             SourceBrandMark(brand, size = 11.dp, tint = color)
-            Text(text = brand.label, style = MaterialTheme.typography.labelSmall, color = color)
+            Text(text = brand.labelRes?.let { stringResource(it) } ?: brand.label, style = MaterialTheme.typography.labelSmall, color = color)
         }
     }
 }

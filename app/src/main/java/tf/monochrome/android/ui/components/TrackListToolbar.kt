@@ -36,6 +36,8 @@ import tf.monochrome.android.ui.theme.MonoDimens
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.RectangleShape
 import tf.monochrome.android.performance.LocalPerformanceProfile
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * Search box and sort control for a list of tracks.
@@ -101,7 +103,7 @@ fun TrackListToolbar(
                 IconButton(onClick = { menuOpen = true }) {
                     Icon(
                         imageVector = Icons.Default.SwapVert,
-                        contentDescription = "Sort",
+                        contentDescription = stringResource(R.string.action_sort),
                         tint = if (sort.order == TrackOrder.ORIGINAL) {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         } else {
@@ -115,7 +117,7 @@ fun TrackListToolbar(
                     orders.forEach { order ->
                         val selected = order == sort.order
                         DropdownMenuItem(
-                            text = { Text(order.label) },
+                            text = { Text(stringResource(order.label)) },
                             onClick = {
                                 // Re-picking the current key flips direction —
                                 // the usual behaviour, and it saves a second control.
@@ -142,7 +144,7 @@ fun TrackListToolbar(
                                         } else {
                                             Icons.Default.ArrowDownward
                                         },
-                                        contentDescription = if (sort.ascending) "Ascending" else "Descending",
+                                        contentDescription = if (sort.ascending) stringResource(R.string.sort_ascending) else stringResource(R.string.sort_descending),
                                         modifier = Modifier.size(18.dp),
                                     )
                                 }

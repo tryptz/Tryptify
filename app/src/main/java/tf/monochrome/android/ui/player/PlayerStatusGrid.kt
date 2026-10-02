@@ -34,6 +34,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.ui.components.liquidGlass
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * Bottom 2×2 grid surfacing the player's premium audio tools: sleep timer,
@@ -66,7 +68,7 @@ fun PlayerStatusGrid(
             StatusCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Default.Timer,
-                title = "Timer",
+                title = stringResource(R.string.status_timer),
                 value = timerLabel,
                 accent = accent,
                 onClick = onTimer,
@@ -74,7 +76,7 @@ fun PlayerStatusGrid(
             StatusCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Default.Equalizer,
-                title = "Sound",
+                title = stringResource(R.string.status_sound),
                 value = soundLabel,
                 accent = accent.shiftHue(36f),
                 onClick = onSound,
@@ -84,7 +86,7 @@ fun PlayerStatusGrid(
             StatusCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Default.Speed,
-                title = "Speed",
+                title = stringResource(R.string.speed),
                 value = speedLabel,
                 accent = accent.shiftHue(72f),
                 onClick = onSpeed,
@@ -92,7 +94,7 @@ fun PlayerStatusGrid(
             StatusCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Default.Tune,
-                title = "Mixer",
+                title = stringResource(R.string.status_mixer),
                 value = mixerLabel,
                 accent = accent.shiftHue(-36f),
                 onClick = onMixer,
