@@ -379,7 +379,7 @@ fun SearchResultsContent(
                 }
 
                 if (artists.isNotEmpty()) {
-                    item(key = "header:artists", contentType = "header") { SectionHeader(title = "Artists") }
+                    item(key = "header:artists", contentType = "header") { SectionHeader(title = stringResource(R.string.filter_artists)) }
                     item(key = "row:artists", contentType = "artistRow") {
                         LazyRow(
                             state = artistsRowState,
@@ -405,7 +405,7 @@ fun SearchResultsContent(
                 }
 
                 if (albums.isNotEmpty()) {
-                    item(key = "header:albums", contentType = "header") { SectionHeader(title = "Albums") }
+                    item(key = "header:albums", contentType = "header") { SectionHeader(title = stringResource(R.string.filter_albums)) }
                     item(key = "row:albums", contentType = "albumRow") {
                         LazyRow(
                             state = albumsRowState,
@@ -431,7 +431,7 @@ fun SearchResultsContent(
                 }
 
                 if (playlistResults.isNotEmpty()) {
-                    item(key = "header:playlists", contentType = "header") { SectionHeader(title = "Playlists") }
+                    item(key = "header:playlists", contentType = "header") { SectionHeader(title = stringResource(R.string.filter_playlists)) }
                     items(
                         playlistResults,
                         key = { it.uuid },
@@ -449,7 +449,7 @@ fun SearchResultsContent(
                 }
 
                 if (tracks.isNotEmpty()) {
-                    item(key = "header:tracks", contentType = "header") { SectionHeader(title = "Tracks") }
+                    item(key = "header:tracks", contentType = "header") { SectionHeader(title = stringResource(R.string.filter_tracks)) }
                     // The one unbounded run in this list — it pages — so it is
                     // the one whose composition reuse actually matters.
                     items(

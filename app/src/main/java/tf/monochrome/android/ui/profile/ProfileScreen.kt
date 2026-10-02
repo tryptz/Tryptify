@@ -389,7 +389,7 @@ private fun SignedOutView(
     ) {
         HorizontalDivider(modifier = Modifier.weight(1f))
         Text(
-            "  or  ",
+            stringResource(R.string.profile_or),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

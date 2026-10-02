@@ -82,7 +82,7 @@ private fun WidgetContent(snapshot: NowPlayingSnapshot, art: Bitmap?, accent: Co
             Spacer(GlanceModifier.width(12.dp))
             Column(modifier = GlanceModifier.defaultWeight()) {
                 Text(
-                    text = snapshot.title.ifBlank { "Nothing playing" },
+                    text = snapshot.title.ifBlank { widgetText(R.string.widget_nothing_playing) },
                     maxLines = 1,
                     style = TextStyle(
                         color = ColorProvider(WidgetColors.Title),
@@ -99,9 +99,9 @@ private fun WidgetContent(snapshot: NowPlayingSnapshot, art: Bitmap?, accent: Co
                 }
             }
             Spacer(GlanceModifier.width(6.dp))
-            ControlGlyph(R.drawable.ic_glass_skip_previous, "Previous", accent, actionRunCallback<PreviousAction>())
+            ControlGlyph(R.drawable.ic_glass_skip_previous, widgetText(R.string.action_previous), accent, actionRunCallback<PreviousAction>())
             PlayPauseDisc(snapshot.isPlaying, accent)
-            ControlGlyph(R.drawable.ic_glass_skip_next, "Next", accent, actionRunCallback<NextAction>())
+            ControlGlyph(R.drawable.ic_glass_skip_next, widgetText(R.string.action_next), accent, actionRunCallback<NextAction>())
         }
     }
 }
@@ -120,7 +120,7 @@ private fun AlbumArt(art: Bitmap?) {
         if (art != null) {
             Image(
                 provider = ImageProvider(art),
-                contentDescription = "Album art",
+                contentDescription = widgetText(R.string.widget_album_art),
                 contentScale = ContentScale.Crop,
                 modifier = GlanceModifier.fillMaxSize().cornerRadius(8.dp),
             )
@@ -165,7 +165,7 @@ private fun PlayPauseDisc(isPlaying: Boolean, accent: Color) {
         Image(
             provider = ImageProvider(if (isPlaying) R.drawable.ic_glass_pause else R.drawable.ic_glass_play),
             colorFilter = ColorFilter.tint(ColorProvider(onAccent(accent))),
-            contentDescription = if (isPlaying) "Pause" else "Play",
+            contentDescription = widgetText(if (isPlaying) R.string.action_pause else R.string.action_play),
             modifier = GlanceModifier.size(22.dp),
         )
     }
@@ -186,3 +186,12 @@ object WidgetColors {
     /** PlayerGlowBlue — the player's accent fallback when a cover has no vibrant colour. */
     val AccentFallback = Color(0xFF7EB6FF)
 }
+
+/**
+ * A widget string in the app's language. The launcher hosts the widget with
+ * the application's context, which below Android 13 ignores the in-app
+ * language, so it is wrapped like the activity's.
+ */
+@androidx.compose.runtime.Composable
+private fun widgetText(id: Int): String =
+    tf.monochrome.android.locale.AppLanguage.wrap(androidx.glance.LocalContext.current).getString(id)

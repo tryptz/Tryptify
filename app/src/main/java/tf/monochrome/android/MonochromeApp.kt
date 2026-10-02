@@ -1,5 +1,6 @@
 package tf.monochrome.android
 
+import tf.monochrome.android.R
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -269,10 +270,11 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
         // needed for the one-time name/description customization.
         val channel = NotificationChannel(
             PLAYBACK_CHANNEL_ID,
-            "Now Playing",
+            tf.monochrome.android.locale.AppLanguage.wrap(this).getString(R.string.notif_playback_channel),
             NotificationManager.IMPORTANCE_LOW,
         ).apply {
-            description = "Playback controls shown in the notification shade and on the lock screen."
+            description = tf.monochrome.android.locale.AppLanguage.wrap(this@MonochromeApp)
+                .getString(R.string.notif_playback_channel_desc)
             setShowBadge(false)
             enableVibration(false)
             setSound(null, null)

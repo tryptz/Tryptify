@@ -198,13 +198,13 @@ fun CrossfeedScreen(
                         )
                         Row(modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                text = "30° narrow",
+                                text = stringResource(R.string.crossfeed_angle_narrow),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.weight(1f),
                             )
                             Text(
-                                text = "180° headphones",
+                                text = stringResource(R.string.crossfeed_angle_headphones),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

@@ -3444,14 +3444,14 @@ private fun PageOrderRow(
             if (reorderable) IconButton(onClick = onUp, enabled = canMoveUp) {
                 Icon(
                     Icons.Default.KeyboardArrowUp,
-                    contentDescription = "Move $title up",
+                    contentDescription = stringResource(R.string.settings_move_up, title),
                     tint = if (canMoveUp) MaterialTheme.colorScheme.onSurface else dim,
                 )
             }
             if (reorderable) IconButton(onClick = onDown, enabled = canMoveDown) {
                 Icon(
                     Icons.Default.KeyboardArrowDown,
-                    contentDescription = "Move $title down",
+                    contentDescription = stringResource(R.string.settings_move_down, title),
                     tint = if (canMoveDown) MaterialTheme.colorScheme.onSurface else dim,
                 )
             }
@@ -3529,7 +3529,7 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
         OutlinedButton(
             onClick = {
                 viewModel.rescanLibrary()
-                android.widget.Toast.makeText(scanContext, "Scanning library…", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(scanContext, scanContext.getString(R.string.settings_scanning_library), android.widget.Toast.LENGTH_SHORT).show()
             },
             enabled = !isScanning,
             modifier = Modifier.fillMaxWidth()

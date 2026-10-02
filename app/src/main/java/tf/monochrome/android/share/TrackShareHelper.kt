@@ -1,5 +1,6 @@
 package tf.monochrome.android.share
 
+import tf.monochrome.android.R
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -63,17 +64,20 @@ class TrackShareHelper @Inject constructor(
         // surface a Toast so the user knows the tap registered.
         // PlayerViewModel.shareTrack drives this from viewModelScope so
         // the fetch outlives the originating tap.
-        toast("Preparing ${track.title} for share…")
+        toast(text().getString(R.string.share_preparing, track.title))
         val fetched = runCatching {
             qobuzCache.getOrFetch(track.id, AudioQuality.LOSSLESS)
         }.getOrNull()
         if (fetched != null) {
             return@withContext shareLocalFile(fetched, track.title, mimeFor(fetched.name))
         }
-        toast("No file available to share")
+        toast(text().getString(R.string.share_no_file))
         Log.i(TAG, "shareTrack: no local file and download-on-demand failed for trackId=${track.id}")
         false
     }
+
+    /** The app context, in the app's language (below Android 13 it would not be). */
+    private fun text(): Context = tf.monochrome.android.locale.AppLanguage.wrap(context)
 
     private suspend fun toast(message: String) {
         withContext(Dispatchers.Main) {
@@ -136,7 +140,7 @@ class TrackShareHelper @Inject constructor(
             putExtra(Intent.EXTRA_SUBJECT, title)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        val chooser = Intent.createChooser(send, "Share track").apply {
+        val chooser = Intent.createChooser(send, text().getString(R.string.share_track)).apply {
             // The share sheet is launched from a non-Activity context (the
             // ApplicationContext-scoped helper), so it needs NEW_TASK.
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

@@ -62,3 +62,13 @@ Name a menu as the person's own device shows it in their language.
 Brand and format names: Tryptify, Spotify, Apple Music, YouTube Music,
 TuneMyMusic, exportify.net, THX (but “Spatial Audio” after it is), AutoEQ,
 CSV, JSPF, XSPF, XML, FLAC, projectM, MilkDrop, Wave Candy, Oxford.
+
+Plugin and console vocabulary stays English, as in every DAW, localized
+hosts included: Oxford's knob labels (INPUT, CURVE, THRESH, RATIO, ATTACK,
+RELEASE, MAKEUP, GR…), mixer plugin parameter names (`ParamDefs.kt`), factory
+preset names (`FxPresets.kt`, WARMTH, PUNCH, DRUM BUS…), EQ filter types
+(PEAK, LOW-S, HIGH-S) and the channel strip's short labels (M, fx, -inf, MIX,
+OS, IN/OUT, LFE). Help text that names them uses them as they appear.
+
+Also kept English on purpose: What's New, the debug log, and data the app
+stores (an imported preset's description, a bus's name).

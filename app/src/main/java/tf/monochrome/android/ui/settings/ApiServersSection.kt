@@ -247,7 +247,7 @@ private fun AddApiDialog(
                     is AddApiState.Checking -> Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.size(10.dp))
-                        Text("Asking ${s.url.substringAfter("://")}…", style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(R.string.api_asking, s.url.substringAfter("://")), style = MaterialTheme.typography.bodySmall)
                     }
                     is AddApiState.Done -> ProbeResultView(s.result)
                 }
