@@ -184,6 +184,17 @@ internal fun GlassTabBar(
                             tint = tint,
                             bulgeCenter = Offset((bulgeSlot.intValue + 0.5f) / tabs.size, 0.5f),
                             bulgeAmount = { bulgeAmt },
+                            // Sized to the tab, not to the bar. The shader's
+                            // default is a sixth of the bar's width, which on
+                            // the four-tab pill is two thirds of one tab — and
+                            // on the round Search button, a one-tab bar, was a
+                            // sixth of a small circle: a dimple next to the
+                            // dome every other tab swells. Two thirds of a slot
+                            // reproduces the pill exactly and gives Search the
+                            // same press. Every bar is at least as wide as it
+                            // is tall, so the fraction of the longest side is a
+                            // fraction of the width.
+                            bulgeRadiusFraction = TAB_DOME_OF_SLOT / tabs.size,
                         )
                         // One offscreen layer, so the punch clears only the
                         // glyphs and never the app behind the bar.
@@ -218,6 +229,9 @@ internal fun GlassTabBar(
         }
     }
 }
+
+/** The press dome's radius as a fraction of one tab's width. */
+private const val TAB_DOME_OF_SLOT = 2f / 3f
 
 /** Erase each glyph from the slab, centred in its equal-width slot. */
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.punchTabGlyphs(
