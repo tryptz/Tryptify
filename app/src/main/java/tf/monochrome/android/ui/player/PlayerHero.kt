@@ -121,6 +121,7 @@ fun PlayerHero(
     onToggleFullscreen: () -> Unit = {},
     spectrumBins: FloatArray = FloatArray(0),
     spectrumColor: Color = PlayerGlowBlue,
+    scopeReader: ((FloatArray, FloatArray) -> Int)? = null,
     showSpectrum: Boolean = true,
     onToggleShowSpectrum: () -> Unit = {},
     onEnterVisualizer: () -> Unit = {},
@@ -156,6 +157,7 @@ fun PlayerHero(
             onToggleFullscreen = onToggleFullscreen,
             spectrumBins = spectrumBins,
             spectrumColor = spectrumColor,
+            scopeReader = scopeReader,
             showSpectrum = showSpectrum,
             onToggleShowSpectrum = onToggleShowSpectrum,
             onExitVisualizer = onExitVisualizer,
@@ -183,6 +185,7 @@ fun PlayerHero(
                 isPlaying = isPlaying,
                 spectrumBins = spectrumBins,
                 spectrumColor = spectrumColor,
+                scopeReader = scopeReader,
                 showSpectrum = showSpectrum,
                 onToggleShowSpectrum = onToggleShowSpectrum,
                 blendMillis = blendMillis,
@@ -201,6 +204,7 @@ private fun SquareArtHero(
     isPlaying: Boolean,
     spectrumBins: FloatArray,
     spectrumColor: Color,
+    scopeReader: ((FloatArray, FloatArray) -> Int)? = null,
     showSpectrum: Boolean,
     onToggleShowSpectrum: () -> Unit,
     blendMillis: Int,
@@ -227,6 +231,7 @@ private fun SquareArtHero(
             isPlaying = isPlaying,
             spectrumBins = spectrumBins,
             spectrumColor = spectrumColor,
+            scopeReader = scopeReader,
             showSpectrum = showSpectrum,
             onToggleShowSpectrum = onToggleShowSpectrum,
             quality = track?.audioQuality,
@@ -321,6 +326,7 @@ private fun VisualizerHero(
     onToggleFullscreen: () -> Unit,
     spectrumBins: FloatArray,
     spectrumColor: Color,
+    scopeReader: ((FloatArray, FloatArray) -> Int)? = null,
     showSpectrum: Boolean,
     onToggleShowSpectrum: () -> Unit,
     onExitVisualizer: () -> Unit,
@@ -679,6 +685,9 @@ private fun AmbientPresetButton(
     }
 }
 
+/** How far the cover punches in on a kick: 5%. */
+private const val KICK_ZOOM = 0.05f
+
 private enum class SpectrumSpeed(val label: String, val attack: Float, val release: Float) {
     SLOW("SLOW", 0.12f, 0.03f),
     NORMAL("NORMAL", 0.55f, 0.12f),
@@ -694,6 +703,7 @@ private fun HeroCoverArt(
     isPlaying: Boolean,
     spectrumBins: FloatArray = FloatArray(0),
     spectrumColor: Color = PlayerGlowBlue,
+    scopeReader: ((FloatArray, FloatArray) -> Int)? = null,
     showSpectrum: Boolean = true,
     onToggleShowSpectrum: () -> Unit = {},
     quality: String? = null,
@@ -711,6 +721,13 @@ private fun HeroCoverArt(
 ) {
     val spectrumEnabled = showSpectrum
     var spectrumSpeed by remember { mutableStateOf(SpectrumSpeed.NORMAL) }
+    // Which picture the spectrum button puts on the art: the FFT envelope, or
+    // Wave Candy's scope. Saveable so a rotation keeps it.
+    var waveCandy by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    // The kick punch: on while a visual is on the art, so the cover follows
+    // the beat with either style.
+    val kick = rememberKickPulse(scopeReader, enabled = spectrumEnabled && isPlaying)
+    val stillArt = tf.monochrome.android.ui.theme.reduceMotion()
 
     // Controls show briefly on tap, then disappear quickly. When idle there are
     // no tags/labels on the art at all — the buttons are small and icon-only.
@@ -746,7 +763,14 @@ private fun HeroCoverArt(
             contentDescription = track?.title ?: "Album Art",
             blendMillis = blendMillis,
             userTrackChanges = userTrackChanges,
-            modifier = Modifier.fillMaxSize(),
+            // Punches in on each kick. Read in the layer block, so the 60 fps
+            // pulse redraws the art without recomposing the hero; still with
+            // "Disable animations" on.
+            modifier = Modifier.fillMaxSize().graphicsLayer {
+                val k = if (stillArt) 0f else kick.floatValue
+                scaleX = 1f + KICK_ZOOM * k
+                scaleY = 1f + KICK_ZOOM * k
+            },
         )
 
         Box(
@@ -763,7 +787,9 @@ private fun HeroCoverArt(
                 )
         )
 
-        if (spectrumEnabled && spectrumBins.isNotEmpty()) {
+        if (spectrumEnabled && waveCandy && scopeReader != null) {
+            WaveCandyOverlay(read = scopeReader, kick = kick, modifier = Modifier.matchParentSize())
+        } else if (spectrumEnabled && spectrumBins.isNotEmpty()) {
             BoxWithConstraints(
                 modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
             ) {
@@ -790,7 +816,15 @@ private fun HeroCoverArt(
                     enabled = interactive,
                     onClick = { onToggleShowSpectrum(); showControls() },
                 )
-                if (spectrumEnabled) {
+                if (spectrumEnabled && scopeReader != null) {
+                    HeroIconButton(
+                        icon = if (waveCandy) Icons.Default.Equalizer else Icons.Default.GraphicEq,
+                        contentDescription = if (waveCandy) "Switch to spectrum" else "Switch to Wave Candy scope",
+                        enabled = interactive,
+                        onClick = { waveCandy = !waveCandy; showControls() },
+                    )
+                }
+                if (spectrumEnabled && !(waveCandy && scopeReader != null)) {
                     HeroIconButton(
                         icon = Icons.Default.Speed,
                         contentDescription = "Spectrum speed",

@@ -829,6 +829,7 @@ fun MainPlayerRoute(
                     onToggleFullscreen = playerViewModel::toggleVisualizerFullscreen,
                     spectrumBins = spectrumBins,
                     spectrumColor = spectrumColor,
+                    scopeReader = playerViewModel.spectrumAnalyzer::copyScope,
                     showSpectrum = showNpSpectrum,
                     onToggleShowSpectrum = {
                         playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying)
