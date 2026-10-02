@@ -705,11 +705,17 @@ private fun AmbientPresetButton(
     }
 }
 
-private enum class SpectrumSpeed(val label: String, val attack: Float, val release: Float) {
-    SLOW("SLOW", 0.12f, 0.03f),
-    NORMAL("NORMAL", 0.55f, 0.12f),
-    FAST("FAST", 0.85f, 0.35f),
-    HYPER("HYPER", 1.0f, 0.70f);
+/**
+ * A quick multiplier on the waterfall's averaging time, from the button on the
+ * art. The factors are the old fixed releases' time constants against
+ * NORMAL's, so each step still moves the way it always did at the default
+ * averaging time.
+ */
+private enum class SpectrumSpeed(val label: String, val timeScale: Float) {
+    SLOW("SLOW", 4f),
+    NORMAL("NORMAL", 1f),
+    FAST("FAST", 0.34f),
+    HYPER("HYPER", 0.17f);
 
     fun next(): SpectrumSpeed = entries[(ordinal + 1) % entries.size]
 }
@@ -851,9 +857,9 @@ private fun HeroCoverArt(
                         color = spectrumColor,
                         modifier = Modifier.fillMaxWidth(),
                         height = maxHeight * 0.35f,
-                        attack = spectrumSpeed.attack,
-                        release = spectrumSpeed.release,
+                        timeScale = spectrumSpeed.timeScale,
                         waterfall = waterfall,
+                        resetKey = track?.id,
                         glassArtFrame = coverFrame,
                     )
                 }

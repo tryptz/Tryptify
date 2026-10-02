@@ -210,16 +210,35 @@ internal fun settingsTabLabelRes(label: String): Int =
  * a test turns into a build failure rather than a result that goes nowhere.
  */
 internal fun settingsTabIndex(label: String): Int =
-    settingsTabs.indexOf(label).also {
-        require(it >= 0) { "no settings tab called \"$label\"" }
+    settingsPages.indexOf(label).also {
+        require(it >= 0) { "no settings page called \"$label\"" }
     }
+
+/**
+ * Chips that open a screen of their own instead of a page, by the route they
+ * open.
+ *
+ * Visual Studio was a page holding one row that opened the Player Visuals
+ * Studio — a tap to reach the page and another to reach the only thing on it.
+ * Its chip goes there directly now, and the pager does not have a page for it,
+ * so a swipe never lands on an empty one either.
+ */
+private val settingsLinkTabs: Map<String, Screen> = mapOf(
+    "Visual Studio" to Screen.LyricsFxStudio,
+)
+
+/** The route a chip opens when it is a link rather than a page, else null. */
+internal fun settingsLinkRoute(label: String): String? = settingsLinkTabs[label]?.route
+
+/** The tabs that are pages of the pager, in chip order. */
+private val settingsPages: List<String> = settingsTabs.filter { it !in settingsLinkTabs }
 
 /**
  * Index of the About tab, where the What's New panel lives. Derived from
  * [settingsTabs] rather than written down, so reordering the tabs can't leave a
  * caller pointing at the wrong page.
  */
-val SETTINGS_TAB_ABOUT: Int = settingsTabs.indexOf("About")
+val SETTINGS_TAB_ABOUT: Int = settingsTabIndex("About")
 
 /** One selectable step in the Appearance › Font Size picker. */
 private data class FontScalePreset(@StringRes val label: Int, val scale: Float)
@@ -249,8 +268,8 @@ fun SettingsScreen(
     // disagree. rememberPagerState saves its own page across process death,
     // which is what the old rememberSaveable int was doing here.
     val settingsPager = rememberPagerState(
-        initialPage = initialTab.coerceIn(0, settingsTabs.lastIndex),
-        pageCount = { settingsTabs.size },
+        initialPage = initialTab.coerceIn(0, settingsPages.lastIndex),
+        pageCount = { settingsPages.size },
     )
     val settingsScope = rememberCoroutineScope()
     // Tab changes slide normally; with "Disable animations" on they jump.
@@ -320,18 +339,38 @@ fun SettingsScreen(
         // be moved between them. The form below is what the glass should be
         // frosting; the tab rail is chrome, and chrome stays put.
         val chipRow = rememberLazyListState()
-        LaunchedEffect(selectedTab) { chipRow.animateScrollToItem(selectedTab) }
+        LaunchedEffect(selectedTab) {
+            chipRow.animateScrollToItem(settingsTabs.indexOf(settingsPages[selectedTab]).coerceAtLeast(0))
+        }
         LazyRow(
             state = chipRow,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            itemsIndexed(settingsTabs) { index, tab ->
+            itemsIndexed(settingsTabs) { _, tab ->
+                val link = settingsLinkTabs[tab]
                 FilterChip(
-                    selected = selectedTab == index,
-                    onClick = { settingsScope.launch { settingsPager.goToPage(index, animateTabs) } },
+                    selected = link == null && settingsPages[selectedTab] == tab,
+                    onClick = {
+                        if (link != null) {
+                            navController.navigateTool(link)
+                        } else {
+                            settingsScope.launch { settingsPager.goToPage(settingsTabIndex(tab), animateTabs) }
+                        }
+                    },
                     label = { Text(stringResource(settingsTabLabelRes(tab)), style = MaterialTheme.typography.labelMedium) },
+                    // The arrow the search pills use for "opens a screen": this
+                    // chip leaves Settings rather than switching its page.
+                    trailingIcon = if (link != null) {
+                        {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                modifier = Modifier.size(FilterChipDefaults.IconSize),
+                            )
+                        }
+                    } else null,
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.primary,
                         selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -407,18 +446,20 @@ fun SettingsScreen(
                     // would mean building all nine of them up front.
                     beyondViewportPageCount = 0,
                 ) { page ->
-                    tf.monochrome.android.devedit.DevEditScreen("settings/${devSlug(settingsTabs[page])}") {
-                        when (page) {
-                            0 -> AppearanceTab(viewModel, navController)
-                            1 -> VisualStudioTab(navController)
-                            2 -> AudioTab(viewModel, navController)
-                            3 -> EqualizerTab(navController, viewModel)
-                            4 -> LibrarySettingsTab(viewModel)
-                            5 -> DownloadsTab(viewModel)
-                            6 -> ConnectionsTab(viewModel)
-                            7 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
-                            8 -> SystemTab(viewModel, navController)
-                            9 -> AboutTab(viewModel)
+                    tf.monochrome.android.devedit.DevEditScreen("settings/${devSlug(settingsPages[page])}") {
+                        // By name, not position: the pages are the chips minus
+                        // the links, so a position here would silently shift
+                        // every time a chip became one.
+                        when (settingsPages[page]) {
+                            "Appearance" -> AppearanceTab(viewModel, navController)
+                            "Audio" -> AudioTab(viewModel, navController)
+                            "Equalizer" -> EqualizerTab(navController, viewModel)
+                            "Library" -> LibrarySettingsTab(viewModel)
+                            "Downloads" -> DownloadsTab(viewModel)
+                            "Connections" -> ConnectionsTab(viewModel)
+                            "Radio" -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
+                            "System" -> SystemTab(viewModel, navController)
+                            "About" -> AboutTab(viewModel)
                         }
                     }
                 }
@@ -606,25 +647,7 @@ private fun EqualizerTab(
     }
 }
 
-/**
- * The Visual Studio tab: what the player looks like while it is playing.
- *
- * Its own category rather than a "Now Playing Appearance" group at the bottom
- * of Appearance, where it was one row under a header of its own — a heading
- * over a single item is a category that has not been admitted to yet.
- * Appearance is the app's chrome: theme, fonts, colours. This is the player's
- * surface, which is a different thing to go looking for.
- */
-@Composable
-private fun VisualStudioTab(navController: NavController) {
-    SettingsTabContent {
-        SettingItem(
-            title = stringResource(R.string.settings_player_visuals_studio),
-            subtitle = stringResource(R.string.settings_lyric_type_3d_wave_and_beat_fx_the_player_and),
-            onClick = { navController.navigateTool(Screen.LyricsFxStudio) },
-        )
-    }
-}
+
 
 // ─── Tab 1: Appearance ─────────────────────────────────────────────────
 //

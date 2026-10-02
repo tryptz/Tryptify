@@ -1,5 +1,12 @@
 package tf.monochrome.android.ui.settings
 
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.alpha
+import tf.monochrome.android.domain.model.SpectrumAnalysisType
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -128,6 +135,12 @@ internal fun SpectrumWaterfallSettingsSection(
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+    )
+
+    WaterfallAnalysisControls(
+        draft = draft,
+        onDraft = { draft = it },
+        onChange = onChange,
     )
 
     // Depth, fade, angle and weight shape the history; a single-line style
@@ -547,4 +560,177 @@ private fun waterfallStyleDescription(style: WaterfallStyle): Int = when (style)
     WaterfallStyle.NEON -> R.string.waterfall_style_neon_desc
     WaterfallStyle.GLASS -> R.string.waterfall_style_glass_desc
     WaterfallStyle.LEGACY -> R.string.waterfall_style_legacy_desc
+}
+
+/**
+ * The analysis behind the lines, laid out like a spectrum analyzer's own
+ * panel (Voxengo SPAN's "Spectrum Mode Editor"): the type as chips, overlap
+ * and averaging time as knobs, and the line colour.
+ *
+ * The knobs report every step of a drag. Writing the settings store that often
+ * would stutter the drag, so a turn moves [draft] (the preview follows it
+ * live) and is saved once the knob has been still for a moment.
+ */
+@Composable
+private fun WaterfallAnalysisControls(
+    draft: SpectrumWaterfallSettings,
+    onDraft: (SpectrumWaterfallSettings) -> Unit,
+    onChange: (SpectrumWaterfallSettings) -> Unit,
+) {
+    var turning by remember { mutableStateOf<SpectrumWaterfallSettings?>(null) }
+    androidx.compose.runtime.LaunchedEffect(turning) {
+        val pending = turning ?: return@LaunchedEffect
+        kotlinx.coroutines.delay(KNOB_SAVE_DELAY_MS)
+        onChange(pending)
+        turning = null
+    }
+    val turn = { next: SpectrumWaterfallSettings ->
+        onDraft(next)
+        turning = next
+    }
+
+    Text(
+        stringResource(R.string.waterfall_analysis),
+        style = MaterialTheme.typography.bodyLarge,
+        modifier = Modifier.padding(top = 12.dp, bottom = 6.dp),
+    )
+    // Two by two: four chips across are too narrow for the longer languages.
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SpectrumAnalysisType.entries.chunked(2).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { type ->
+                    tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                        label = stringResource(analysisTypeLabel(type)),
+                        selected = draft.analysis == type,
+                        accent = MaterialTheme.colorScheme.primary,
+                        onClick = { onChange(draft.copy(analysis = type)) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
+    Text(
+        stringResource(analysisTypeDescription(draft.analysis)),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+    )
+
+    // The averaging time drives the two real-time types only: a long-term
+    // average or max has no time constant, so the knob is shown, dimmed, and
+    // says so rather than turning to no effect.
+    val timed = draft.analysis == SpectrumAnalysisType.RT_AVG || draft.analysis == SpectrumAnalysisType.RT_MAX
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        tf.monochrome.android.ui.mixer.FLKnobControl(
+            label = stringResource(R.string.waterfall_overlap),
+            value = draft.overlapPct,
+            min = SpectrumWaterfallSettings.MIN_OVERLAP_PCT,
+            max = SpectrumWaterfallSettings.MAX_OVERLAP_PCT,
+            unit = "%",
+            color = tf.monochrome.android.ui.mixer.FLPluginColors.knobOrange,
+            onValueChange = { turn(draft.copy(overlapPct = it)) },
+            default = SpectrumWaterfallSettings.DEFAULT_OVERLAP_PCT,
+        )
+        Box(Modifier.alpha(if (timed) 1f else 0.38f)) {
+            tf.monochrome.android.ui.mixer.FLKnobControl(
+                label = stringResource(
+                    if (draft.analysis == SpectrumAnalysisType.RT_MAX) R.string.waterfall_hold_time
+                    else R.string.waterfall_avg_time,
+                ),
+                value = draft.avgTimeMs,
+                min = SpectrumWaterfallSettings.MIN_AVG_TIME_MS,
+                max = SpectrumWaterfallSettings.MAX_AVG_TIME_MS,
+                unit = "ms",
+                color = tf.monochrome.android.ui.mixer.FLPluginColors.knobPink,
+                onValueChange = { turn(draft.copy(avgTimeMs = it)) },
+                default = SpectrumWaterfallSettings.DEFAULT_AVG_TIME_MS,
+            )
+        }
+    }
+    Text(
+        stringResource(
+            if (timed) R.string.waterfall_knobs_hint else R.string.waterfall_avg_time_unused,
+        ),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+    )
+
+    // Line colour: the album's, or one picked here.
+    var picking by remember { mutableStateOf(false) }
+    val accent = MaterialTheme.colorScheme.primary
+    Text(
+        stringResource(R.string.waterfall_line_colour),
+        style = MaterialTheme.typography.bodyLarge,
+        modifier = Modifier.padding(top = 4.dp, bottom = 6.dp),
+    )
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        tf.monochrome.android.ui.mixer.GlassChoiceChip(
+            label = stringResource(R.string.waterfall_album_colour),
+            selected = draft.colorArgb == null,
+            accent = accent,
+            onClick = { onChange(draft.copy(colorArgb = null)) },
+            modifier = Modifier.weight(1f),
+        )
+        tf.monochrome.android.ui.mixer.GlassChoiceChip(
+            label = stringResource(R.string.waterfall_custom_colour),
+            selected = draft.colorArgb != null,
+            accent = draft.colorArgb?.let { Color(it) } ?: accent,
+            onClick = { picking = true },
+            modifier = Modifier.weight(1f),
+        )
+        Box(
+            Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(draft.colorArgb?.let { Color(it) } ?: accent)
+                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                .clickable { picking = true },
+        )
+    }
+    Text(
+        stringResource(R.string.waterfall_colour_desc),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+    )
+    if (picking) {
+        tf.monochrome.android.ui.components.ColorPickerDialog(
+            initial = draft.colorArgb?.let { Color(it) } ?: accent,
+            title = stringResource(R.string.waterfall_line_colour),
+            onDismiss = { picking = false },
+            onConfirm = {
+                picking = false
+                onChange(draft.copy(colorArgb = it.toArgb()))
+            },
+        )
+    }
+}
+
+/** How long a knob has to rest before its value is saved. */
+private const val KNOB_SAVE_DELAY_MS = 350L
+
+@androidx.annotation.StringRes
+private fun analysisTypeLabel(type: SpectrumAnalysisType): Int = when (type) {
+    SpectrumAnalysisType.RT_AVG -> R.string.waterfall_type_rt_avg
+    SpectrumAnalysisType.RT_MAX -> R.string.waterfall_type_rt_max
+    SpectrumAnalysisType.AVG -> R.string.waterfall_type_avg
+    SpectrumAnalysisType.MAX -> R.string.waterfall_type_max
+}
+
+@androidx.annotation.StringRes
+private fun analysisTypeDescription(type: SpectrumAnalysisType): Int = when (type) {
+    SpectrumAnalysisType.RT_AVG -> R.string.waterfall_type_rt_avg_desc
+    SpectrumAnalysisType.RT_MAX -> R.string.waterfall_type_rt_max_desc
+    SpectrumAnalysisType.AVG -> R.string.waterfall_type_avg_desc
+    SpectrumAnalysisType.MAX -> R.string.waterfall_type_max_desc
 }

@@ -1786,4 +1786,22 @@
     <string name="settings_move_up">%1$s öğesini yukarı taşı</string>
     <string name="settings_move_down">%1$s öğesini aşağı taşı</string>
     <string name="settings_scanning_library">Kitaplık taranıyor…</string>
+    <string name="waterfall_analysis">Analiz</string>
+    <string name="waterfall_type_rt_avg">Canlı ortalama</string>
+    <string name="waterfall_type_rt_max">Canlı maksimum</string>
+    <string name="waterfall_type_avg">Ortalama</string>
+    <string name="waterfall_type_max">Maksimum</string>
+    <string name="waterfall_type_rt_avg_desc">Her çubuk hızla yükselir ve ortalama süresi boyunca geri düşer.</string>
+    <string name="waterfall_type_rt_max_desc">Her çubuk bir tepeye sıçrar, tutma süresi boyunca orada kalır, sonra düşer.</string>
+    <string name="waterfall_type_avg_desc">Parça başladığından beri ortalama: parçanın uzun vadeli ton dengesi. Her parçada yeniden başlar.</string>
+    <string name="waterfall_type_max_desc">Parça başladığından beri her çubuğun ulaştığı en yüksek seviye. Her parçada yeniden başlar.</string>
+    <string name="waterfall_overlap">Örtüşme</string>
+    <string name="waterfall_avg_time">Ort. süre</string>
+    <string name="waterfall_hold_time">Tutma</string>
+    <string name="waterfall_knobs_hint">Örtüşme: her analizin bir öncekiyle ne kadar örtüştüğü. Yüksek değer daha akıcı hareket eder; düşük değer kademeli ilerler ve biraz pil tasarrufu sağlar. Bir düğmeyi yukarı veya aşağı sürükleyin; sıfırlamak için iki kez dokunun.</string>
+    <string name="waterfall_avg_time_unused">Ortalama süresi uzun vadeli türlere uygulanmaz.</string>
+    <string name="waterfall_line_colour">Çizgi rengi</string>
+    <string name="waterfall_album_colour">Albüm</string>
+    <string name="waterfall_custom_colour">Özel</string>
+    <string name="waterfall_colour_desc">Albüm rengi kapağı izler; özel renk her parçada aynı kalır. Isı kendi paletini korur.</string>
 </resources>

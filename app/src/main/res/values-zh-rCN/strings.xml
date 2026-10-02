@@ -1737,4 +1737,22 @@
     <string name="settings_move_up">上移 %1$s</string>
     <string name="settings_move_down">下移 %1$s</string>
     <string name="settings_scanning_library">正在扫描音乐库…</string>
+    <string name="waterfall_analysis">分析</string>
+    <string name="waterfall_type_rt_avg">实时平均</string>
+    <string name="waterfall_type_rt_max">实时峰值</string>
+    <string name="waterfall_type_avg">平均</string>
+    <string name="waterfall_type_max">峰值</string>
+    <string name="waterfall_type_rt_avg_desc">每个频段快速上升，并在平均时间内回落。</string>
+    <string name="waterfall_type_rt_max_desc">每个频段跳到峰值，保持一段时间后再回落。</string>
+    <string name="waterfall_type_avg_desc">自歌曲开始以来的平均值：这首歌的长期音色平衡。每首歌重新开始计算。</string>
+    <string name="waterfall_type_max_desc">自歌曲开始以来每个频段达到过的最大值。每首歌重新开始计算。</string>
+    <string name="waterfall_overlap">重叠</string>
+    <string name="waterfall_avg_time">平均时间</string>
+    <string name="waterfall_hold_time">保持</string>
+    <string name="waterfall_knobs_hint">重叠：每次分析与上一次重叠的程度。越高动作越平滑；越低越有跳跃感，也更省电。上下拖动旋钮调整；双击可复位。</string>
+    <string name="waterfall_avg_time_unused">平均时间不适用于长期类型。</string>
+    <string name="waterfall_line_colour">线条颜色</string>
+    <string name="waterfall_album_colour">专辑</string>
+    <string name="waterfall_custom_colour">自定义</string>
+    <string name="waterfall_colour_desc">专辑颜色随封面变化；自定义颜色在每首歌上都保持不变。“热度”样式使用自己的配色。</string>
 </resources>

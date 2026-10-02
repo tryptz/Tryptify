@@ -1787,4 +1787,22 @@
     <string name="settings_move_up">Move %1$s up</string>
     <string name="settings_move_down">Move %1$s down</string>
     <string name="settings_scanning_library">Scanning library…</string>
+    <string name="waterfall_analysis">Analysis</string>
+    <string name="waterfall_type_rt_avg">Live average</string>
+    <string name="waterfall_type_rt_max">Live max</string>
+    <string name="waterfall_type_avg">Average</string>
+    <string name="waterfall_type_max">Max</string>
+    <string name="waterfall_type_rt_avg_desc">Each bar rises quickly and falls back over the averaging time.</string>
+    <string name="waterfall_type_rt_max_desc">Each bar jumps to a peak, holds it for the hold time, then falls.</string>
+    <string name="waterfall_type_avg_desc">The average since the track started: its long-term tonal balance. Starts over on each track.</string>
+    <string name="waterfall_type_max_desc">The loudest each bar has been since the track started. Starts over on each track.</string>
+    <string name="waterfall_overlap">Overlap</string>
+    <string name="waterfall_avg_time">Avg time</string>
+    <string name="waterfall_hold_time">Hold</string>
+    <string name="waterfall_knobs_hint">Overlap: how much each analysis overlaps the last. Higher moves more smoothly; lower steps, and saves a little battery. Drag a knob up or down; double-tap it to reset.</string>
+    <string name="waterfall_avg_time_unused">The averaging time does not apply to the long-term types.</string>
+    <string name="waterfall_line_colour">Line colour</string>
+    <string name="waterfall_album_colour">Album</string>
+    <string name="waterfall_custom_colour">Custom</string>
+    <string name="waterfall_colour_desc">The album’s colour follows the cover; a custom one stays the same on every track. Heat keeps its own palette.</string>
 </resources>

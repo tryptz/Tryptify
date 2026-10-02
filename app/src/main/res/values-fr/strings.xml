@@ -1835,4 +1835,22 @@
     <string name="settings_move_up">Monter %1$s</string>
     <string name="settings_move_down">Descendre %1$s</string>
     <string name="settings_scanning_library">Analyse de la bibliothèque…</string>
+    <string name="waterfall_analysis">Analyse</string>
+    <string name="waterfall_type_rt_avg">Moyenne en direct</string>
+    <string name="waterfall_type_rt_max">Max. en direct</string>
+    <string name="waterfall_type_avg">Moyenne</string>
+    <string name="waterfall_type_max">Max.</string>
+    <string name="waterfall_type_rt_avg_desc">Chaque barre monte vite et redescend sur le temps de moyenne.</string>
+    <string name="waterfall_type_rt_max_desc">Chaque barre bondit jusqu’à un pic, le maintient pendant le temps de maintien, puis redescend.</string>
+    <string name="waterfall_type_avg_desc">La moyenne depuis le début du titre : son équilibre tonal sur la durée. Repart de zéro à chaque titre.</string>
+    <string name="waterfall_type_max_desc">Le plus fort atteint par chaque barre depuis le début du titre. Repart de zéro à chaque titre.</string>
+    <string name="waterfall_overlap">Chevauchement</string>
+    <string name="waterfall_avg_time">Temps moyen</string>
+    <string name="waterfall_hold_time">Maintien</string>
+    <string name="waterfall_knobs_hint">Chevauchement : à quel point chaque analyse recouvre la précédente. Plus haut, le mouvement est plus fluide ; plus bas, il est saccadé et économise un peu de batterie. Faites glisser un bouton vers le haut ou le bas ; touchez-le deux fois pour le réinitialiser.</string>
+    <string name="waterfall_avg_time_unused">Le temps de moyenne ne s’applique pas aux types sur la durée.</string>
+    <string name="waterfall_line_colour">Couleur des lignes</string>
+    <string name="waterfall_album_colour">Album</string>
+    <string name="waterfall_custom_colour">Personnalisée</string>
+    <string name="waterfall_colour_desc">La couleur de l’album suit la pochette ; une couleur personnalisée reste la même sur chaque titre. Chaleur garde sa propre palette.</string>
 </resources>

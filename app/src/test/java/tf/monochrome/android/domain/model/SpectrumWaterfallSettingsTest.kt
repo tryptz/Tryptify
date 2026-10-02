@@ -49,4 +49,43 @@ class SpectrumWaterfallSettingsTest {
     fun `solid seconds is the part before the fade`() {
         assertEquals(1f, SpectrumWaterfallSettings(depthSeconds = 4f, fadeStart = 0.25f).solidSeconds, 1e-6f)
     }
+
+    @Test
+    fun `analysis settings are clamped and the colour made opaque`() {
+        val c = SpectrumWaterfallSettings(
+            avgTimeMs = 99_999f,
+            overlapPct = 10f,
+            colorArgb = 0x3300FF00,
+        ).clamped()
+        assertEquals(SpectrumWaterfallSettings.MAX_AVG_TIME_MS, c.avgTimeMs, 0f)
+        assertEquals(SpectrumWaterfallSettings.MIN_OVERLAP_PCT, c.overlapPct, 0f)
+        assertEquals(0xFF00FF00.toInt(), c.colorArgb)
+    }
+
+    /**
+     * Settings saved before Type, Avg Time, Overlap and colour existed have
+     * none of those keys. They must read back as the look they had: the
+     * default real-time average and the album's colour.
+     */
+    @Test
+    fun `settings saved before the analysis controls read back unchanged`() {
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        val old = """{"depthSeconds":3.0,"fadeStart":0.4,"angleDeg":30.0,"style":"RIDGELINE"}"""
+        val s = json.decodeFromString<SpectrumWaterfallSettings>(old).clamped()
+        assertEquals(WaterfallStyle.RIDGELINE, s.style)
+        assertEquals(SpectrumAnalysisType.RT_AVG, s.analysis)
+        assertEquals(SpectrumWaterfallSettings.DEFAULT_AVG_TIME_MS, s.avgTimeMs, 0f)
+        assertEquals(SpectrumWaterfallSettings.DEFAULT_OVERLAP_PCT, s.overlapPct, 0f)
+        assertEquals(null, s.colorArgb)
+    }
+
+    /** The settings' default overlap is the analyzer's. */
+    @Test
+    fun `default overlap matches the analyzer`() {
+        assertEquals(
+            tf.monochrome.android.audio.eq.SpectrumAnalyzerTap.DEFAULT_OVERLAP * 100f,
+            SpectrumWaterfallSettings.DEFAULT_OVERLAP_PCT,
+            1e-3f,
+        )
+    }
 }

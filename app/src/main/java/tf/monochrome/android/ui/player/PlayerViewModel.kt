@@ -503,6 +503,11 @@ class PlayerViewModel @Inject constructor(
                 spectrumAnalyzer.fftSize = size
             }
         }
+        viewModelScope.launch {
+            preferences.spectrumWaterfall.collect { w ->
+                spectrumAnalyzer.overlap = w.clamped().overlapPct / 100f
+            }
+        }
     }
 
     private fun observeCurrentTrackMeta() {

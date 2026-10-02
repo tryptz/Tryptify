@@ -1835,4 +1835,22 @@
     <string name="settings_move_up">Subir %1$s</string>
     <string name="settings_move_down">Bajar %1$s</string>
     <string name="settings_scanning_library">Escaneando la biblioteca…</string>
+    <string name="waterfall_analysis">Análisis</string>
+    <string name="waterfall_type_rt_avg">Promedio en vivo</string>
+    <string name="waterfall_type_rt_max">Máximo en vivo</string>
+    <string name="waterfall_type_avg">Promedio</string>
+    <string name="waterfall_type_max">Máximo</string>
+    <string name="waterfall_type_rt_avg_desc">Cada barra sube rápido y baja a lo largo del tiempo de promedio.</string>
+    <string name="waterfall_type_rt_max_desc">Cada barra salta a un pico, lo mantiene durante el tiempo de retención y luego baja.</string>
+    <string name="waterfall_type_avg_desc">El promedio desde que empezó la canción: su equilibrio tonal a largo plazo. Vuelve a empezar en cada canción.</string>
+    <string name="waterfall_type_max_desc">Lo más alto que ha llegado cada barra desde que empezó la canción. Vuelve a empezar en cada canción.</string>
+    <string name="waterfall_overlap">Solapamiento</string>
+    <string name="waterfall_avg_time">Tiempo medio</string>
+    <string name="waterfall_hold_time">Retención</string>
+    <string name="waterfall_knobs_hint">Solapamiento: cuánto se solapa cada análisis con el anterior. Más alto se mueve con más suavidad; más bajo va a saltos y ahorra algo de batería. Arrastra un mando hacia arriba o abajo; tócalo dos veces para restablecerlo.</string>
+    <string name="waterfall_avg_time_unused">El tiempo de promedio no se aplica a los tipos a largo plazo.</string>
+    <string name="waterfall_line_colour">Color de las líneas</string>
+    <string name="waterfall_album_colour">Álbum</string>
+    <string name="waterfall_custom_colour">Personalizado</string>
+    <string name="waterfall_colour_desc">El color del álbum sigue a la portada; uno personalizado se mantiene igual en cada canción. Calor conserva su propia paleta.</string>
 </resources>

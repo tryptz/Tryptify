@@ -53,6 +53,23 @@ class SpectrumAnalyzerTap @Inject constructor(
         const val FFT_SIZE_LOW = FFT_SIZE_8K
         const val FFT_SIZE_HIGH = FFT_SIZE_16K
         const val OUTPUT_BINS = 256
+
+        const val MIN_OVERLAP = 0.5f
+        const val MAX_OVERLAP = 0.99f
+        const val DEFAULT_OVERLAP = 0.96f
+
+        /**
+         * Milliseconds between analyses: the hop a window of [fftSize] samples
+         * at [sampleRate] leaves at [overlap], but never under [floorMs], the
+         * display-rate cap. At the default 96 % even a 16K window at 44.1 kHz
+         * hops in under a 60 Hz frame, so the default analyses as often as it
+         * always did.
+         */
+        internal fun analysisIntervalMs(fftSize: Int, sampleRate: Int, overlap: Float, floorMs: Long): Long {
+            val hopSamples = fftSize * (1f - overlap.coerceIn(MIN_OVERLAP, MAX_OVERLAP))
+            val hopMs = (hopSamples * 1000f / sampleRate.coerceAtLeast(1)).toLong()
+            return maxOf(floorMs, hopMs)
+        }
         /** Frames handed to the native scope ring per push, at most. */
         const val SCOPE_CHUNK = 4096
         private const val MIN_FREQ = 20f
@@ -117,6 +134,16 @@ class SpectrumAnalyzerTap @Inject constructor(
                 _analysisDirty = true
             }
         }
+
+    /**
+     * How much each FFT window overlaps the one before (0.5 … 0.99): the hop
+     * between analyses is the rest of the window. Set from the waterfall's
+     * settings. The analyzer never runs faster than [frameDelayMs] however
+     * high this goes, so above the point where it already reaches that, more
+     * overlap changes nothing.
+     */
+    @Volatile var overlap: Float = DEFAULT_OVERLAP
+        set(value) { field = value.coerceIn(MIN_OVERLAP, MAX_OVERLAP) }
 
     @Volatile private var _analysisDirty = true
     @Volatile private var analysisActive = false
@@ -315,7 +342,7 @@ class SpectrumAnalyzerTap @Inject constructor(
                 }
                 if (!settled) _spectrumBins.value = out
 
-                delay(frameDelayMs)
+                delay(analysisIntervalMs(currentSize, sampleRate, overlap, frameDelayMs))
             }
         }
     }

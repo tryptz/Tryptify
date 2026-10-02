@@ -248,7 +248,10 @@ private fun entry(title: String, @StringRes titleRes: Int?, tabLabel: String, ke
     title = title,
     titleRes = titleRes,
     tabLabel = tabLabel,
-    destination = SettingsDestination.Tab(settingsTabIndex(tabLabel)),
+    // A chip that opens a screen has no page to land on; its entries go to
+    // that screen.
+    destination = settingsLinkRoute(tabLabel)?.let { SettingsDestination.Route(it) }
+        ?: SettingsDestination.Tab(settingsTabIndex(tabLabel)),
     keywords = keywords,
 )
 

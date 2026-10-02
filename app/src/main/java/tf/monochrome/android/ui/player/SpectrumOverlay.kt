@@ -33,7 +33,6 @@ import tf.monochrome.android.audio.eq.WaterfallNative
 import tf.monochrome.android.domain.model.SpectrumWaterfallSettings
 import tf.monochrome.android.domain.model.WaterfallStyle
 import kotlin.math.PI
-import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -52,8 +51,12 @@ import kotlin.math.sqrt
  *    alpha per line. This side smooths the bins and draws: one `drawLines` per
  *    line on reused arrays and one reused Paint, nothing allocated per frame.
  *    The line count is fixed, so depth and angle cost nothing to change.
- *  - Separate attack/release time constants give the front line a snappy
- *    response on transients and a longer tail on decays.
+ *  - [SpectrumAverager] holds each bin over time the way the waterfall's
+ *    analysis type and averaging time say; the real-time average rises
+ *    quickly on transients and falls over the averaging time.
+ *  - The lines are one triangle mesh drawn in a single call ([WaterfallMesh]),
+ *    not a drawLines and a drawPath per line, which the renderer could not
+ *    batch and which halved the frame rate.
  *  - Once the front line has caught up with the bins *and* every older line
  *    has had time to become the same picture, the loop sleeps until the
  *    analyzer publishes a new frame: a paused track otherwise redrew an
@@ -86,11 +89,17 @@ internal fun SpectrumOverlay(
     headroomDb: Float = 36f,
     /** dB below 0 that maps to the baseline. */
     floorDb: Float = -24f,
-    /** Approach factor per 60 fps frame for rising bins (0..1, higher = snappier). */
-    attack: Float = 0.55f,
-    /** Approach factor per 60 fps frame for falling bins. */
-    release: Float = 0.12f,
+    /**
+     * Scales the waterfall's averaging time: the hero's speed button, which
+     * makes the whole motion slower or faster without changing the setting.
+     */
+    timeScale: Float = 1f,
     waterfall: SpectrumWaterfallSettings = SpectrumWaterfallSettings.DEFAULT,
+    /**
+     * Starts the long-term analysis types over when it changes — the track,
+     * on the player, so "average since the track started" means that track.
+     */
+    resetKey: Any? = null,
     /**
      * The box the cover behind this overlay is drawn in, so the glass style
      * lenses the slice of artwork it actually lies on. Null maps against the
@@ -102,17 +111,19 @@ internal fun SpectrumOverlay(
     // style never alters the shape of the composition.
     val glassAvailable = rememberLiquidGlassAvailable()
     val still = tf.monochrome.android.ui.theme.reduceMotion()
-    // Persistent in-place smoothing buffer — never replaced.
-    val smoothed = remember {
-        FloatArray(SpectrumAnalyzerTap.OUTPUT_BINS) { floorDb }
-    }
+    // Persistent in-place history — never replaced.
+    val averager = remember { SpectrumAverager(SpectrumAnalyzerTap.OUTPUT_BINS, floorDb) }
+    val smoothed = averager.values
+    LaunchedEffect(resetKey) { averager.reset() }
     // Bumped once per frame to invalidate the Canvas without allocating.
     val tick = remember { mutableIntStateOf(0) }
     val currentBins by rememberUpdatedState(bins)
-    val currentAttack by rememberUpdatedState(attack)
-    val currentRelease by rememberUpdatedState(release)
-    val currentColor by rememberUpdatedState(color)
-    val currentWaterfall by rememberUpdatedState(waterfall.clamped())
+    val currentTimeScale by rememberUpdatedState(timeScale)
+    val clampedWaterfall = waterfall.clamped()
+    // The chosen colour, or the album's.
+    val lineColor = clampedWaterfall.colorArgb?.let { Color(it) } ?: color
+    val currentColor by rememberUpdatedState(lineColor)
+    val currentWaterfall by rememberUpdatedState(clampedWaterfall)
 
     // The native history, freed with the overlay.
     val handle = remember { WaterfallNative.nativeCreate() }
@@ -140,27 +151,14 @@ internal fun SpectrumOverlay(
             lastFrameNanos = now
 
             val src = currentBins()
-            val n = minOf(src.size, smoothed.size)
-            if (n == 0) {
+            if (src.isEmpty()) {
                 tick.intValue++
                 continue
             }
-            // Frame-rate–independent exponential smoothing with split
-            // attack/release for the snappy-on-rise, gentle-on-fall feel.
-            val attackAlpha = (1f - exp(-currentAttack * 60f * dt)).coerceIn(0f, 1f)
-            val releaseAlpha = (1f - exp(-currentRelease * 60f * dt)).coerceIn(0f, 1f)
-            var largestStep = 0f
-            for (i in 0 until n) {
-                val target = src[i]
-                val cur = smoothed[i]
-                val a = if (target > cur) attackAlpha else releaseAlpha
-                val step = (target - cur) * a
-                smoothed[i] = cur + step
-                largestStep = max(largestStep, kotlin.math.abs(step))
-            }
-            // The smoothing above runs every frame — it is 256 additions and
-            // wants the true dt. The draw is what the cap skips.
             val w = currentWaterfall
+            // Runs every frame — 256 bins, and it wants the true dt. The
+            // draw is what the cap skips.
+            val largestStep = averager.process(src, dt, w.analysis, w.avgTimeMs * currentTimeScale)
             if (waterfallFrameDue(frameCount++, now, nextDueNanos, refreshNanos, w.targetFps, w.vsync)) {
                 nextDueNanos = waterfallNextDue(now, nextDueNanos, w.targetFps)
                 tick.intValue++
@@ -229,6 +227,13 @@ internal fun SpectrumOverlay(
         val paint = draw.paintFor(currentColor, size.height, style)
         val stroke = w.lineWidthDp.dp.toPx() * if (style == WaterfallStyle.NEON) 1.3f else 1f
         val glow = 7.dp.toPx()
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            drawIntoCanvas { draw.drawMesh(it.nativeCanvas, lines, currentColor, size.height, style, stroke, glow) }
+            return@Canvas
+        }
+        // Before Android 10 the renderer cannot draw a mesh, so each line is
+        // one stroked path: still far cheaper than drawLines, which strokes
+        // every segment as a path of its own.
         drawIntoCanvas { canvas ->
             val native = canvas.nativeCanvas
             for (i in 0 until lines) {
@@ -253,7 +258,7 @@ internal fun SpectrumOverlay(
                 if (style == WaterfallStyle.NEON && front) {
                     paint.setShadowLayer(glow, 0f, 0f, currentColor.toArgb())
                 }
-                native.drawLines(draw.segs, offset, WaterfallNative.FLOATS_PER_LINE, paint)
+                native.drawPath(draw.linePath(offset), paint)
                 if (style == WaterfallStyle.NEON && front) paint.clearShadowLayer()
             }
         }
@@ -269,7 +274,7 @@ internal fun SpectrumOverlay(
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                 .then(
                     if (glassAvailable) {
-                        Modifier.playerGlass(tint = color, artFrame = glassArtFrame)
+                        Modifier.playerGlass(tint = lineColor, artFrame = glassArtFrame)
                     } else {
                         Modifier
                     },
@@ -507,6 +512,116 @@ private class WaterfallDrawState {
         return bodyEdge
     }
 
+    private val mesh = WaterfallMesh()
+    private val gradient = VerticalGradient()
+    private var gradientColor = Color.Unspecified
+    private var gradientHeight = -1f
+    private var gradientStyle: WaterfallStyle? = null
+    /** White and opaque: the mesh's vertex colours are the colour. */
+    private val meshPaint = Paint().apply { color = android.graphics.Color.WHITE }
+    private val linePathScratch = android.graphics.Path()
+
+    /**
+     * Every visible line, back to front, as one mesh — Ridgeline's ground
+     * under each line included — in as few drawVertices calls as the 16-bit
+     * index limit allows (two, at the most lines and the widest style).
+     * Neon's live line is the exception: its halo is a shadow layer, which a
+     * mesh cannot carry, so that one line is still a stroked path.
+     */
+    fun drawMesh(
+        canvas: android.graphics.Canvas,
+        lines: Int,
+        color: Color,
+        height: Float,
+        style: WaterfallStyle,
+        stroke: Float,
+        glow: Float,
+    ) {
+        updateGradient(color, height, style)
+        meshPaint.xfermode = if (style == WaterfallStyle.NEON) {
+            android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.ADD)
+        } else {
+            null
+        }
+        val ground = style == WaterfallStyle.RIDGELINE
+        val segments = WaterfallNative.FLOATS_PER_LINE / 4
+        val haloFront = style == WaterfallStyle.NEON
+        mesh.reset()
+        for (i in 0 until lines) {
+            val m = i * WaterfallNative.META_PER_LINE
+            val alpha = meta[m]
+            if (alpha <= 0.004f) continue
+            if (haloFront && i == lines - 1) continue
+            if (!mesh.hasRoom(segments + 1, ground)) {
+                flushMesh(canvas)
+                mesh.reset()
+            }
+            val offset = i * WaterfallNative.FLOATS_PER_LINE
+            val points = mesh.loadPoints(segs, offset, segments)
+            if (ground) {
+                val a = (alpha * RIDGE_GROUND_ALPHA * 255f).toInt().coerceIn(0, 255)
+                mesh.addGround(points, meta[m + 2], (a shl 24) or (RIDGE_GROUND and 0x00FFFFFF))
+            }
+            mesh.addRibbon(points, stroke * (0.45f + 0.55f * meta[m + 1]), alpha * LINE_ALPHA, gradient)
+        }
+        flushMesh(canvas)
+
+        if (haloFront && lines > 0) {
+            val m = (lines - 1) * WaterfallNative.META_PER_LINE
+            val alpha = meta[m]
+            if (alpha > 0.004f) {
+                paint.alpha = (alpha * LINE_ALPHA * 255f).toInt().coerceIn(0, 255)
+                paint.strokeWidth = stroke * (0.45f + 0.55f * meta[m + 1])
+                paint.setShadowLayer(glow, 0f, 0f, color.toArgb())
+                canvas.drawPath(linePath((lines - 1) * WaterfallNative.FLOATS_PER_LINE), paint)
+                paint.clearShadowLayer()
+            }
+        }
+    }
+
+    private fun flushMesh(canvas: android.graphics.Canvas) {
+        if (mesh.vertexCount == 0) return
+        canvas.drawVertices(
+            android.graphics.Canvas.VertexMode.TRIANGLES,
+            mesh.vertexCount * 2, mesh.verts, 0,
+            null, 0,
+            mesh.colors, 0,
+            mesh.indices, 0, mesh.indexCount,
+            meshPaint,
+        )
+    }
+
+    /** The line paint's gradient, as per-vertex colours; rebuilt only when it changes. */
+    private fun updateGradient(color: Color, height: Float, style: WaterfallStyle) {
+        if (color == gradientColor && height == gradientHeight && style == gradientStyle) return
+        gradientColor = color
+        gradientHeight = height
+        gradientStyle = style
+        if (style == WaterfallStyle.HEAT) {
+            gradient.set(height, HEAT_STOPS, HEAT_POSITIONS)
+        } else {
+            gradient.set(
+                height,
+                intArrayOf(lerp(color, Color.White, 0.55f).toArgb(), color.toArgb()),
+                floatArrayOf(0f, 1f),
+            )
+        }
+    }
+
+    /** One line at [offset] in [segs] as a polyline, in a reused Path. */
+    fun linePath(offset: Int): android.graphics.Path {
+        val p = linePathScratch
+        p.rewind()
+        p.moveTo(segs[offset], segs[offset + 1])
+        var k = offset
+        val end = offset + WaterfallNative.FLOATS_PER_LINE
+        while (k < end) {
+            p.lineTo(segs[k + 2], segs[k + 3])
+            k += 4
+        }
+        return p
+    }
+
     /** Ridgeline's ground: the dark the lines sit on, alpha set per line. */
     val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val fillPath = android.graphics.Path()
@@ -527,8 +642,8 @@ private class WaterfallDrawState {
                 // on the floor, lime through the body, yellow-white at the top.
                 WaterfallStyle.HEAT -> LinearGradient(
                     0f, 0f, 0f, height,
-                    intArrayOf(0xFFFFF6C8.toInt(), 0xFFE4F55A.toInt(), 0xFF7BD85A.toInt(), 0xFF1F8F5A.toInt()),
-                    floatArrayOf(0f, 0.3f, 0.6f, 1f),
+                    HEAT_STOPS,
+                    HEAT_POSITIONS,
                     Shader.TileMode.CLAMP,
                 )
                 else -> LinearGradient(
@@ -683,6 +798,10 @@ private const val GLASS_FOOT_DP = 2f
 private const val GLASS_RAMP_STEPS = 8
 private const val GLASS_RAMP_STEP_DP = 3f
 private const val GLASS_RAMP_ALPHA = 13
+
+/** Heat's palette, whatever the album: deep green at the floor to yellow-white at the top. */
+private val HEAT_STOPS = intArrayOf(0xFFFFF6C8.toInt(), 0xFFE4F55A.toInt(), 0xFF7BD85A.toInt(), 0xFF1F8F5A.toInt())
+private val HEAT_POSITIONS = floatArrayOf(0f, 0.3f, 0.6f, 1f)
 
 /** Ridgeline's ground colour; its alpha comes from the line it sits under. */
 private val RIDGE_GROUND = 0xFF07090D.toInt()

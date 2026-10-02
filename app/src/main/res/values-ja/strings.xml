@@ -1737,4 +1737,22 @@
     <string name="settings_move_up">%1$s を上へ移動</string>
     <string name="settings_move_down">%1$s を下へ移動</string>
     <string name="settings_scanning_library">ライブラリをスキャンしています…</string>
+    <string name="waterfall_analysis">解析</string>
+    <string name="waterfall_type_rt_avg">リアルタイム平均</string>
+    <string name="waterfall_type_rt_max">リアルタイム最大</string>
+    <string name="waterfall_type_avg">平均</string>
+    <string name="waterfall_type_max">最大</string>
+    <string name="waterfall_type_rt_avg_desc">各バーはすばやく上がり、平均時間をかけて下がります。</string>
+    <string name="waterfall_type_rt_max_desc">各バーはピークまで跳ね上がり、ホールド時間だけ保ってから下がります。</string>
+    <string name="waterfall_type_avg_desc">曲の始まりからの平均で、その曲の長期的な音のバランスです。曲ごとにやり直します。</string>
+    <string name="waterfall_type_max_desc">曲の始まりから各バーが到達した最大値です。曲ごとにやり直します。</string>
+    <string name="waterfall_overlap">オーバーラップ</string>
+    <string name="waterfall_avg_time">平均時間</string>
+    <string name="waterfall_hold_time">ホールド</string>
+    <string name="waterfall_knobs_hint">オーバーラップ：各解析が前の解析とどれだけ重なるか。高いほどなめらかに動き、低いほどステップ状になり、電池も少し節約できます。ノブは上下にドラッグし、ダブルタップでリセットします。</string>
+    <string name="waterfall_avg_time_unused">平均時間は長期のタイプには適用されません。</string>
+    <string name="waterfall_line_colour">線の色</string>
+    <string name="waterfall_album_colour">アルバム</string>
+    <string name="waterfall_custom_colour">カスタム</string>
+    <string name="waterfall_colour_desc">アルバムの色はカバーに合わせて変わり、カスタムの色はどの曲でも同じです。「ヒート」は独自の配色を使います。</string>
 </resources>

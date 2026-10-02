@@ -27,6 +27,28 @@ enum class WaterfallStyle(val label: String, val description: String, val single
 }
 
 /**
+ * How each bin of the spectrum is held over time — the analysis "type" of a
+ * spectrum analyzer such as Voxengo SPAN, whose names these follow.
+ */
+@Serializable
+enum class SpectrumAnalysisType {
+    /**
+     * Real-time average: each bin follows the signal, rising quickly and
+     * falling back over the averaging time. The overlay's long-standing look.
+     */
+    RT_AVG,
+
+    /** Real-time max: each bin jumps to a peak, holds it for the averaging time, then falls. */
+    RT_MAX,
+
+    /** The average since the track started: the song's long-term tonal balance. */
+    AVG,
+
+    /** The loudest each bin has been since the track started. */
+    MAX,
+}
+
+/**
  * The spectrum waterfall over the artwork: how far back the lines run before
  * they are gone, where along that they start to fade, and how steeply they rise
  * toward the back. Stored as one JSON blob and synced with the rest of the
@@ -61,6 +83,24 @@ data class SpectrumWaterfallSettings(
      * the UI renderer, which never presents faster than the display refreshes.
      */
     val vsync: Boolean = true,
+    /** How each bin is held over time. */
+    val analysis: SpectrumAnalysisType = SpectrumAnalysisType.RT_AVG,
+    /**
+     * The averaging time, in ms: how long a real-time average takes to fall
+     * back, or how long a real-time max holds its peak. The default is the
+     * overlay's release from before it was adjustable, so nothing moves for
+     * anyone who never touches it.
+     */
+    val avgTimeMs: Float = DEFAULT_AVG_TIME_MS,
+    /**
+     * How much each FFT window overlaps the one before it, in percent. Higher
+     * analyses more often for smoother motion; lower analyses less often, and
+     * steps more. The analyzer never runs faster than the display, so above
+     * the point where it already does, more overlap changes nothing.
+     */
+    val overlapPct: Float = DEFAULT_OVERLAP_PCT,
+    /** The lines' colour as ARGB, or null to take the album's. */
+    val colorArgb: Int? = null,
 ) {
     fun clamped() = copy(
         depthSeconds = depthSeconds.coerceIn(MIN_DEPTH_SECONDS, MAX_DEPTH_SECONDS),
@@ -68,6 +108,11 @@ data class SpectrumWaterfallSettings(
         angleDeg = angleDeg.coerceIn(MIN_ANGLE_DEG, MAX_ANGLE_DEG),
         lineWidthDp = lineWidthDp.coerceIn(MIN_LINE_WIDTH_DP, MAX_LINE_WIDTH_DP),
         targetFps = if (targetFps <= FPS_DISPLAY) FPS_DISPLAY else targetFps.coerceIn(MIN_FPS, MAX_FPS),
+        avgTimeMs = avgTimeMs.coerceIn(MIN_AVG_TIME_MS, MAX_AVG_TIME_MS),
+        overlapPct = overlapPct.coerceIn(MIN_OVERLAP_PCT, MAX_OVERLAP_PCT),
+        // Lines are drawn over the cover: a see-through colour would just be a
+        // weaker version of the same colour, so the alpha is always full.
+        colorArgb = colorArgb?.let { it or 0xFF000000.toInt() },
     )
 
     /** Seconds a line keeps full strength before it starts to fade. */
@@ -86,6 +131,17 @@ data class SpectrumWaterfallSettings(
         const val FPS_DISPLAY = 0
         const val MIN_FPS = 10
         const val MAX_FPS = 240
+
+        const val MIN_AVG_TIME_MS = 0f
+        const val MAX_AVG_TIME_MS = 5000f
+        /**
+         * The overlay's old fixed release, 0.12 per 60 Hz frame, as a time
+         * constant (about 139 ms): the default changes nothing for anyone.
+         */
+        const val DEFAULT_AVG_TIME_MS = 1000f / (0.12f * 60f)
+        const val MIN_OVERLAP_PCT = 50f
+        const val MAX_OVERLAP_PCT = 99f
+        const val DEFAULT_OVERLAP_PCT = 96f
 
         /** The caps the Studio offers, after Max. */
         val FPS_CHOICES = listOf(15, 24, 30, 45, 60, 90, 120)

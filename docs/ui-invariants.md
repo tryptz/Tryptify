@@ -104,6 +104,17 @@ the width of the cover. Do not replace the ramp with a blur of the edge: the
 output alpha is capped by the input alpha, so a soft edge comes out as a smudge,
 and do not drop it — without it the body reads as a flat pane.
 
+The **waterfall is one mesh, drawn with `drawVertices`**, not a `drawLines`
+and a `drawPath` per line. A stroke wider than a hairline with round caps is
+something the renderer cannot batch: `drawLines` strokes every segment as a
+path of its own, about six thousand a frame across 49 lines, and Ridgeline's
+ground added 49 concave anti-aliased fills on paths that change every frame.
+That halved the player's frame rate. `WaterfallMesh` builds every line as a
+ribbon with a one-pixel transparent fringe (its anti-aliasing) and the ground
+as a strip under it, in back-to-front order, in one or two draws.
+`WaterfallMeshTest` holds the geometry. Below Android 10, where a mesh is not
+hardware-drawn, each line is one stroked path, never `drawLines`.
+
 It is a bitmap and not a live layer capture because it cannot be one:
 `RenderEffect.createRuntimeShaderEffect` binds exactly one input, this shader
 spends it on `content` (the alpha heightfield every bevel normal comes from),

@@ -1786,4 +1786,22 @@
     <string name="settings_move_up">%1$s nach oben</string>
     <string name="settings_move_down">%1$s nach unten</string>
     <string name="settings_scanning_library">Bibliothek wird gescannt …</string>
+    <string name="waterfall_analysis">Analyse</string>
+    <string name="waterfall_type_rt_avg">Live-Mittel</string>
+    <string name="waterfall_type_rt_max">Live-Maximum</string>
+    <string name="waterfall_type_avg">Mittelwert</string>
+    <string name="waterfall_type_max">Maximum</string>
+    <string name="waterfall_type_rt_avg_desc">Jeder Balken steigt schnell und fällt über die Mittelungszeit zurück.</string>
+    <string name="waterfall_type_rt_max_desc">Jeder Balken springt auf eine Spitze, hält sie für die Haltezeit und fällt dann.</string>
+    <string name="waterfall_type_avg_desc">Der Mittelwert seit Beginn des Titels: seine langfristige Klangbalance. Beginnt bei jedem Titel neu.</string>
+    <string name="waterfall_type_max_desc">Das Lauteste, das jeder Balken seit Beginn des Titels erreicht hat. Beginnt bei jedem Titel neu.</string>
+    <string name="waterfall_overlap">Überlappung</string>
+    <string name="waterfall_avg_time">Mittelungszeit</string>
+    <string name="waterfall_hold_time">Halten</string>
+    <string name="waterfall_knobs_hint">Überlappung: wie stark jede Analyse die vorige überlappt. Höher bewegt sich flüssiger, niedriger stufiger und spart etwas Akku. Zieh einen Regler nach oben oder unten; doppelt tippen setzt ihn zurück.</string>
+    <string name="waterfall_avg_time_unused">Die Mittelungszeit gilt nicht für die Langzeit-Typen.</string>
+    <string name="waterfall_line_colour">Linienfarbe</string>
+    <string name="waterfall_album_colour">Album</string>
+    <string name="waterfall_custom_colour">Eigene</string>
+    <string name="waterfall_colour_desc">Die Albumfarbe folgt dem Cover; eine eigene Farbe bleibt bei jedem Titel gleich. Hitze behält ihre eigene Palette.</string>
 </resources>
