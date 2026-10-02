@@ -121,7 +121,12 @@ fun PlayerHero(
     isPresetFavorite: Boolean,
     onTogglePresetFavorite: () -> Unit,
     onToggleFullscreen: () -> Unit = {},
-    spectrumBins: FloatArray = FloatArray(0),
+    /**
+     * A provider for the same reason as [progress]: the analyzer publishes a
+     * fresh array every FFT frame, and taking the array itself recomposed
+     * this whole hero at that rate. Only the overlay's frame loop calls it.
+     */
+    spectrumBins: (() -> FloatArray)? = null,
     spectrumColor: Color = PlayerGlowBlue,
     waveSettings: tf.monochrome.android.domain.model.WaveCandySettings? = null,
     onWaveSettings: (tf.monochrome.android.domain.model.WaveCandySettings) -> Unit = {},
@@ -207,7 +212,7 @@ fun PlayerHero(
 private fun SquareArtHero(
     track: Track?,
     isPlaying: Boolean,
-    spectrumBins: FloatArray,
+    spectrumBins: (() -> FloatArray)?,
     spectrumColor: Color,
     waveSettings: tf.monochrome.android.domain.model.WaveCandySettings? = null,
     onWaveSettings: (tf.monochrome.android.domain.model.WaveCandySettings) -> Unit = {},
@@ -331,7 +336,7 @@ private fun VisualizerHero(
     isPresetFavorite: Boolean,
     onTogglePresetFavorite: () -> Unit,
     onToggleFullscreen: () -> Unit,
-    spectrumBins: FloatArray,
+    spectrumBins: (() -> FloatArray)?,
     spectrumColor: Color,
     waveSettings: tf.monochrome.android.domain.model.WaveCandySettings? = null,
     onWaveSettings: (tf.monochrome.android.domain.model.WaveCandySettings) -> Unit = {},
@@ -706,7 +711,7 @@ private enum class SpectrumSpeed(val label: String, val attack: Float, val relea
 private fun HeroCoverArt(
     track: Track?,
     isPlaying: Boolean,
-    spectrumBins: FloatArray = FloatArray(0),
+    spectrumBins: (() -> FloatArray)? = null,
     spectrumColor: Color = PlayerGlowBlue,
     waveSettings: tf.monochrome.android.domain.model.WaveCandySettings? = null,
     onWaveSettings: (tf.monochrome.android.domain.model.WaveCandySettings) -> Unit = {},
@@ -812,7 +817,7 @@ private fun HeroCoverArt(
                     modifier = Modifier.fillMaxWidth().height(maxHeight * 0.25f),
                 )
             }
-        } else if (spectrumEnabled && spectrumBins.isNotEmpty()) {
+        } else if (spectrumEnabled && spectrumBins != null) {
             BoxWithConstraints(
                 modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
             ) {

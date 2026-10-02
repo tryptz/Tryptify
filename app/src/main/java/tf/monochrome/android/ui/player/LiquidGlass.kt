@@ -379,13 +379,25 @@ val LocalPlayerGlass = compositionLocalOf { tf.monochrome.android.domain.model.P
  */
 @Composable
 fun rememberLiquidGlassAvailable(): Boolean {
-    val compiles = remember {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() != null
-    }
+    val compiles = remember { liquidGlassCompiles }
     val flat = LocalLowPerformance.current.disableLiquidGlass
     val enabled = LocalPlayerGlass.current.enabled
     return compiles && !flat && enabled
+}
+
+/**
+ * Whether [LIQUID_GLASS_SRC] compiles on this device, asked once per process.
+ *
+ * The answer cannot change while the process lives — same source, same OS, same
+ * driver — but it used to be asked by every caller as it composed: the mini
+ * player, the tab bar, every glass panel and mixer strip, each building and
+ * throwing away a whole RuntimeShader on the main thread to get a yes. That is
+ * a full SkSL parse of the largest shader in the app per call site, landing on
+ * exactly the frames where a screen is being built.
+ */
+private val liquidGlassCompiles: Boolean by lazy {
+    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() != null
 }
 
 /**
@@ -583,7 +595,16 @@ private fun playerGlassModifier(
     // has no reason to drive a clock. This is the mini player, mounted app-wide
     // by the nav host, so the gate reaches every screen.
     val timeSec = rememberFrameSeconds(animated = g.surfaceMotion > 0f)
-    val tilt = rememberGravityTilt()
+    // The same argument for the sensor. Every uTilt term in the shader is
+    // multiplied by uTiltAmount, and tilt reactivity defaults to zero, so at
+    // the default this surface's pixels do not depend on the phone's attitude
+    // at all — yet holding the listener kept a 50Hz gravity sensor running
+    // app-wide (this is the mini player, the tab bar and every search bar)
+    // and wrote a new tilt into this layer on each event, redrawing it ~50
+    // times a second even with surface motion at zero. The surfaces that do
+    // read tilt — the lyric glass, the panel, a non-zero reactivity here —
+    // still acquire it, and they share the one listener as before.
+    val tilt = if (g.tiltReactivity > 0f) rememberGravityTilt() else NoTilt
     val backdrop = LocalPlayerBackdrop.current
     val anchor = rememberBackdropAnchor()
     val scrim = remember(backdrop.dominant) { backdropScrimTone(backdrop.dominant) }
@@ -647,6 +668,9 @@ private fun playerGlassModifier(
         }
     }
 }
+
+/** A tilt that never changes, for a surface whose shader would ignore it anyway. */
+private val NoTilt: State<Offset> = mutableStateOf(Offset.Zero)
 
 /**
  * Low-pass-filtered gravity in [-1, 1] per axis; Offset.Zero if no sensor.

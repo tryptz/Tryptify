@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -17,6 +18,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import kotlin.math.exp
@@ -36,12 +38,19 @@ import kotlin.math.max
  *  - Separate attack/release time constants give the envelope a snappy
  *    response on transients and a longer tail on decays, matching the
  *    "Pro-Q" look the reference EQ editor uses.
- *  - The overlay always paints; if the audio falls silent the bins decay
- *    naturally toward the floor and the envelope flattens.
+ *  - If the audio falls silent the bins decay naturally toward the floor and
+ *    the envelope flattens. Once it has caught up with the bins it is
+ *    showing, the loop sleeps until the analyzer publishes a new frame: a
+ *    paused track otherwise redrew an identical envelope every vsync.
+ *  - [bins] is a provider, not the array, and is only ever invoked from the
+ *    frame loop. The analyzer publishes a fresh array every FFT frame, so a
+ *    caller that read it during composition to pass it down recomposed itself
+ *    — on the player, the whole hero and the artwork in it — at the
+ *    analyzer's rate, just to hand over a value this loop reads anyway.
  */
 @Composable
 fun SpectrumOverlay(
-    bins: FloatArray,
+    bins: () -> FloatArray,
     color: Color,
     modifier: Modifier = Modifier,
     height: Dp = 240.dp,
@@ -78,7 +87,7 @@ fun SpectrumOverlay(
                 else ((now - lastFrameNanos) / 1_000_000_000f).coerceIn(0.001f, 0.1f)
             lastFrameNanos = now
 
-            val src = currentBins
+            val src = currentBins()
             val n = minOf(src.size, smoothed.size)
             if (n == 0) {
                 tick.intValue++
@@ -88,13 +97,24 @@ fun SpectrumOverlay(
             // attack/release for the snappy-on-rise, gentle-on-fall feel.
             val attackAlpha = (1f - exp(-currentAttack * 60f * dt)).coerceIn(0f, 1f)
             val releaseAlpha = (1f - exp(-currentRelease * 60f * dt)).coerceIn(0f, 1f)
+            var largestStep = 0f
             for (i in 0 until n) {
                 val target = src[i]
                 val cur = smoothed[i]
                 val a = if (target > cur) attackAlpha else releaseAlpha
-                smoothed[i] = cur + (target - cur) * a
+                val step = (target - cur) * a
+                smoothed[i] = cur + step
+                largestStep = max(largestStep, kotlin.math.abs(step))
             }
             tick.intValue++
+
+            // Settled on these bins: every further frame would draw the same
+            // envelope. Wait for the next array instead. snapshotFlow sees the
+            // read through the provider, so a new FFT frame wakes it.
+            if (largestStep < SETTLED_DB) {
+                snapshotFlow { currentBins() }.first { it !== src }
+                lastFrameNanos = 0L
+            }
         }
     }
 
@@ -175,3 +195,10 @@ fun SpectrumOverlay(
         )
     }
 }
+
+/**
+ * Largest per-frame move, in dB, below which the envelope counts as caught up.
+ * At the overlay's 60 dB span on a ~300 px band that is well under a tenth of
+ * a pixel, so the frame it stops on is the frame it would have kept drawing.
+ */
+private const val SETTLED_DB = 0.005f

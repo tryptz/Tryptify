@@ -829,7 +829,7 @@ fun MainPlayerRoute(
                         currentVisualizerPreset?.id?.let { playerViewModel.toggleVisualizerFavoritePreset(it) }
                     },
                     onToggleFullscreen = playerViewModel::toggleVisualizerFullscreen,
-                    spectrumBins = spectrumBins,
+                    spectrumBins = { spectrumBins },
                     spectrumColor = spectrumColor,
                     waveSettings = waveCandySettings,
                     onWaveSettings = playerViewModel::setWaveCandy,

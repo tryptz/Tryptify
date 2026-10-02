@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.log10
 import kotlin.math.log2
@@ -60,6 +61,9 @@ class SpectrumAnalyzerTap @Inject constructor(
         // Slow exponential smoothing → ~176 ms time constant @ 60 fps (SPAN-like Avg Time).
         private const val SMOOTH_ATTACK = 0.55f
         private const val SMOOTH_RELEASE = 0.09f
+        // Largest per-frame move, in dB, below which an idle ring's output
+        // counts as landed: far under a pixel on any of the spectrum views.
+        private const val SETTLED_DB = 0.005f
     }
 
     // Frame cadence picked from the device tier: LOW=15 fps, MID=30 fps, HIGH=60 fps.
@@ -175,6 +179,10 @@ class SpectrumAnalyzerTap @Inject constructor(
             // `out` array below cannot get the same treatment: consumers keep
             // the reference off the StateFlow, so that one must stay fresh.)
             val magnitudes = FloatArray(OUTPUT_BINS)
+            // Where the ring stood last frame, and whether the output has
+            // stopped moving since it last did. See the idle check below.
+            var lastWriteIdx = -1
+            var settled = false
 
             while (isActive) {
                 // Re-allocate work arrays if size changed
@@ -188,6 +196,7 @@ class SpectrumAnalyzerTap @Inject constructor(
                     binMap = buildBinMap(currentSize, sampleRate, OUTPUT_BINS)
                     smoothed = FloatArray(OUTPUT_BINS)
                     _analysisDirty = false
+                    settled = false
                 }
 
                 // Copy last N samples from ring buffer
@@ -195,6 +204,19 @@ class SpectrumAnalyzerTap @Inject constructor(
                 val ringLocal = ring
                 val ringLen = ringLocal.size
                 val writeIdx = ringWrite
+                // Paused (or between tracks) the player stops feeding this
+                // processor, so the ring holds still and every frame re-ran
+                // the same FFT and published a new — but equal — array. Each
+                // one is a new StateFlow value (arrays compare by identity),
+                // which woke every collector at this rate for a picture that
+                // was not changing. Keep going until the smoothing has landed
+                // on the stale spectrum, then stop until audio arrives again.
+                val idle = writeIdx == lastWriteIdx
+                if (idle && settled) {
+                    delay(frameDelayMs)
+                    continue
+                }
+                lastWriteIdx = writeIdx
                 var startIdx = writeIdx - n
                 if (startIdx < 0) startIdx += ringLen
 
@@ -272,7 +294,18 @@ class SpectrumAnalyzerTap @Inject constructor(
                     out[b] = g3 * (l3 + r3) + g2 * (l2 + r2) + g1 * (l1 + r1) + g0 * c
                 }
 
-                _spectrumBins.value = out
+                settled = if (idle) {
+                    val prev = _spectrumBins.value
+                    var largestStep = 0f
+                    for (b in 0 until minOf(prev.size, OUTPUT_BINS)) {
+                        largestStep = max(largestStep, abs(out[b] - prev[b]))
+                    }
+                    largestStep < SETTLED_DB
+                } else {
+                    // Fresh audio: whatever had landed before no longer has.
+                    false
+                }
+                if (!settled) _spectrumBins.value = out
 
                 delay(frameDelayMs)
             }

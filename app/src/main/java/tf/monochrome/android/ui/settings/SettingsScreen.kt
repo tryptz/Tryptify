@@ -1165,7 +1165,7 @@ internal fun VisualizerSettings(viewModel: SettingsViewModel) {
             }
             Spacer(modifier = Modifier.height(8.dp))
             tf.monochrome.android.ui.player.SpectrumOverlay(
-                bins = spectrumBins,
+                bins = { spectrumBins },
                 color = MaterialTheme.colorScheme.primary,
                 height = 96.dp
             )
