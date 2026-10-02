@@ -65,6 +65,9 @@ object WhatsNew {
     /** What travels between this device and the signed-in account, and when. */
     private const val ACCOUNT_SYNC = "Account sync"
 
+    /** The app as a whole: the languages it speaks, the size of its download. */
+    private const val APP = "The app"
+
     /** The one section heading in use — the Discover page and everything under it. */
     private const val DISCOVER = "Discover (Beta)"
 
@@ -121,6 +124,12 @@ object WhatsNew {
             entries = listOf(
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
+                    section = APP,
+                    title = "Seven languages",
+                    body = "English, Chinese, Japanese, French, Spanish, Turkish and German. Settings › Appearance › Language, or Android's app languages on 13 and later.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = PAGES,
                     title = "Glass tab bar",
                     body = "Home, Discover, Radio, Library and Search in a glass bar. Scroll down and the mini player folds in.",
@@ -130,6 +139,30 @@ object WhatsNew {
                     section = PAGES,
                     title = "New Home, Library and Search",
                     body = "Home shows Recently Played and Liked Songs. Library switches sections with chips. Search is its own page.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PAGES,
+                    title = "Tabs or mini player",
+                    body = "Turn on Hide mini player when the tabs show (Settings › Library › Tab bar): scroll up for the tabs, down for the player. Tap the tab you're on to bring the player back.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "Spectrum waterfall",
+                    body = "Older lines of the spectrum recede behind what you hear now. Lines, Ridgeline, Heat or Neon, in Player Visuals Studio.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "Glass and Legacy spectrum",
+                    body = "Glass draws the spectrum as one line of liquid glass over the cover. Legacy brings back the filled spectrum from before the waterfall.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "Spectrum analysis",
+                    body = "Live average, Live max, Average or Max, with knobs for the averaging time and overlap, and the line in the album's colour or one you pick.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
@@ -196,6 +229,30 @@ object WhatsNew {
                     section = USB_DAC,
                     title = "Crossfades on a USB DAC",
                     body = "Crossfade works while Tryptify drives your DAC, across sample rates.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = APP,
+                    title = "31 MB smaller",
+                    body = "The visualizer's presets were packed into the app twice.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYER,
+                    title = "Smoother spectrum",
+                    body = "The waterfall no longer slows the player down.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYER,
+                    title = "Visual Studio in one tap",
+                    body = "Its chip in Settings opens the Studio straight away.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = VISUALIZER,
+                    title = "No more visualizer crashes",
+                    body = "Presets that use pictures Tryptify doesn't ship no longer crash the app. A preset that crashes your phone is flagged and skipped; clear the flags in the Studio's visualizer settings.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
