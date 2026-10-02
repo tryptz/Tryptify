@@ -137,3 +137,7 @@ tools/__pycache__/
 # test check against (see app/src/main/cpp/dsp/tests/snapin_defaults_test.cpp).
 # The blanket *.csv above would drop it.
 !app/src/test/resources/snapin_defaults.csv
+# The string generator. `*.py` above would swallow it the same way: the
+# translations would still be committed, but nobody could regenerate them
+# from app/l10n/strings.tsv, which is where they are edited.
+!app/l10n/generate_strings.py

@@ -698,7 +698,7 @@ private fun LibrarySectionSwitcher(
     ) {
         items(sections, key = { it }) { id ->
             tf.monochrome.android.ui.mixer.GlassChoiceChip(
-                label = APP_PAGE_TITLES[id] ?: id,
+                label = tf.monochrome.android.ui.navigation.pageTitle(id),
                 selected = id == current,
                 accent = MaterialTheme.colorScheme.primary,
                 onClick = { if (id != current) onSelect(id) },

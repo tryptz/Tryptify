@@ -76,6 +76,12 @@ class MainActivity : ComponentActivity() {
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* result ignored */ }
 
+    // The app's chosen language below Android 13; above it the system has
+    // already applied it and this hands the context straight back.
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(tf.monochrome.android.locale.AppLanguage.wrap(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
         // Hold the system splash until the onboarding flag has been read, so

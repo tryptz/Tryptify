@@ -1,0 +1,16 @@
+key	en	zh	ja	fr	es	tr	de
+app_name	Tryptify						
+widget_description	Now playing controls	正在播放控制	再生中のコントロール	Commandes de lecture en cours	Controles de reproducción	Çalan parça kontrolleri	Wiedergabesteuerung
+tab_home	Home	首页	ホーム	Accueil	Inicio	Ana Sayfa	Start
+tab_discover	Discover	发现	見つける	Découvrir	Descubrir	Keşfet	Entdecken
+tab_radio	Radio	电台	ラジオ	Radio	Radio	Radyo	Radio
+tab_library	Library	音乐库	ライブラリ	Bibliothèque	Biblioteca	Kitaplık	Bibliothek
+tab_search	Search	搜索	検索	Rechercher	Buscar	Ara	Suche
+page_world_radio	World radio	全球电台	世界のラジオ	Radios du monde	Radio mundial	Dünya radyoları	Weltradio
+page_local	Local	本地	端末内	Sur l’appareil	En el dispositivo	Cihazda	Auf dem Gerät
+page_playlists	Playlists	歌单	プレイリスト	Playlists	Playlists	Çalma listeleri	Playlists
+page_favorites	Favorites	收藏	お気に入り	Favoris	Favoritos	Favoriler	Favoriten
+page_downloads	Downloads	下载	ダウンロード	Téléchargements	Descargas	İndirilenler	Downloads
+settings_language	Language	语言	言語	Langue	Idioma	Dil	Sprache
+settings_language_title	App language	应用语言	アプリの言語	Langue de l’application	Idioma de la app	Uygulama dili	App-Sprache
+settings_language_follow_phone	Same as phone	跟随系统	端末の言語	Langue du système	Idioma del sistema	Sistem dili	Systemsprache

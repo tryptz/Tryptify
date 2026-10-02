@@ -48,6 +48,16 @@ data class SettingsEntry(
  */
 val SettingsSearchIndex: List<SettingsEntry> = listOf(
     // ── Appearance ──────────────────────────────────────────────────────
+    // Keywords in every language on offer, so somebody stuck in a language
+    // they cannot read can type the word for "language" in their own.
+    entry(
+        "Language", "Appearance",
+        listOf(
+            "locale", "translation", "english", "chinese", "japanese", "french", "spanish", "turkish", "german",
+            "语言", "語言", "中文", "言語", "日本語", "langue", "français", "idioma", "español", "dil", "türkçe",
+            "sprache", "deutsch",
+        ),
+    ),
     entry("Theme", "Appearance", listOf("colour", "color", "dark", "light", "white")),
     entry("Light paper", "Appearance", listOf("white", "warm", "crisp", "paper", "glare")),
     entry(

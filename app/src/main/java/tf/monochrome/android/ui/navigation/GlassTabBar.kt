@@ -82,6 +82,13 @@ private val TabGlyph = 26.dp
 private val TabGlyphTop = 9.dp
 private val TabLabelGap = 3.dp
 
+/**
+ * The smallest a tab title may shrink to fit its slot. Below this a Latin
+ * label stops reading at arm's length; the longest translation on offer,
+ * French "Bibliothèque", fits well above it.
+ */
+private const val MIN_TAB_LABEL_SP = 8.5f
+
 // Room for the lit glyph's bloom; see PlayerActionDock's DockBloomPadding for
 // why a blur needs margin around the glyph it smears.
 private val TabBloomPadding = 12.dp
@@ -283,6 +290,7 @@ private fun TabSlot(
         label = "tabLit",
     )
     val idle = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
+    val label = androidx.compose.ui.res.stringResource(tab.label)
 
     Column(
         modifier = modifier
@@ -292,7 +300,7 @@ private fun TabSlot(
                 interactionSource = interactionSource,
                 indication = null,
                 role = Role.Tab,
-                onClickLabel = tab.label,
+                onClickLabel = label,
                 onClick = onClick,
             )
             .graphicsLayer { scaleX = scale; scaleY = scale },
@@ -338,14 +346,30 @@ private fun TabSlot(
             CompositionLocalProvider(
                 LocalDensity provides Density(density.density, density.fontScale.coerceAtMost(1.3f)),
             ) {
-                Text(
-                    text = tab.label,
-                    color = androidx.compose.ui.graphics.lerp(idle, accent, lit),
-                    fontSize = 11.sp,
-                    lineHeight = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
+                // Shrunk to fit rather than clipped: a translation is often
+                // longer than the English ("Bibliothèque", "Ana Sayfa"), and a
+                // clipped label is cut mid-word. Compose's own auto-size picks
+                // the largest step from 11sp down that fits on the one line,
+                // inside layout — no oversize first pass ever reaches the screen.
+                androidx.compose.foundation.text.BasicText(
+                    text = label,
+                    // From LocalTextStyle, as Material's Text does, so the
+                    // label keeps the app's typeface (custom fonts included).
+                    style = androidx.compose.material3.LocalTextStyle.current.merge(
+                        androidx.compose.ui.text.TextStyle(
+                            color = androidx.compose.ui.graphics.lerp(idle, accent, lit),
+                            lineHeight = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                    ),
                     maxLines = 1,
+                    softWrap = false,
                     overflow = TextOverflow.Clip,
+                    autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(
+                        minFontSize = MIN_TAB_LABEL_SP.sp,
+                        maxFontSize = 11.sp,
+                        stepSize = 0.5.sp,
+                    ),
                 )
             }
         }

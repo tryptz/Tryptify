@@ -334,9 +334,12 @@ class AppPagesTest {
     @Test
     fun `every page has a unique id and a name`() {
         assertEquals(APP_PAGE_IDS.size, APP_PAGE_IDS.distinct().size)
+        // Titles are string resources now; the generator refuses to write a
+        // language with a missing string, so a real id is a name in all of them.
         for (page in APP_PAGES) {
-            assertTrue("${page.id} has no title", page.title.isNotBlank())
+            assertTrue("${page.id} has no title", page.title != 0)
         }
+        assertEquals("two pages share a name", APP_PAGES.size, APP_PAGES.map { it.title }.distinct().size)
         assertEquals(APP_PAGE_IDS.toSet(), APP_PAGE_TITLES.keys)
     }
 
@@ -401,7 +404,7 @@ class AppPagesTest {
         // creeping back would quietly restore the old behaviour alongside the
         // new one.
         assertTrue("World radio is missing from the page list", RADIO_PAGE_ID in APP_PAGE_IDS)
-        assertEquals("World radio", APP_PAGE_TITLES[RADIO_PAGE_ID])
+        assertEquals(tf.monochrome.android.R.string.page_world_radio, APP_PAGE_TITLES[RADIO_PAGE_ID])
         val source = File("src/main/java/tf/monochrome/android/ui/navigation/MonochromeNavHost.kt")
             .readText()
         assertFalse(

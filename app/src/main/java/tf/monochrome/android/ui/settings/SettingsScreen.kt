@@ -603,6 +603,53 @@ private fun VisualStudioTab(navController: NavController) {
 // They are one page now, in reading order from the app-wide look down to the
 // individual surfaces. The one group that genuinely belonged elsewhere,
 // Playback, moved to Audio.
+/**
+ * The app's display language: the phone's, or one of the translations, each
+ * listed by its own name. Applying it recreates the activity, so the choice
+ * shows at once; see [tf.monochrome.android.locale.AppLanguage].
+ */
+@Composable
+private fun LanguageSetting() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val current = remember { tf.monochrome.android.locale.AppLanguage.current(context) }
+    var open by remember { mutableStateOf(false) }
+    val options = tf.monochrome.android.locale.AppLanguage.OPTIONS
+    val followPhone = androidx.compose.ui.res.stringResource(tf.monochrome.android.R.string.settings_language_follow_phone)
+    SettingsGroupHeader(androidx.compose.ui.res.stringResource(tf.monochrome.android.R.string.settings_language))
+    Box(Modifier.settingsAnchor("Language")) {
+        SettingItem(
+            title = androidx.compose.ui.res.stringResource(tf.monochrome.android.R.string.settings_language_title),
+            subtitle = options.firstOrNull { it.tag == current }?.nativeName ?: followPhone,
+            onClick = { open = true },
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text(followPhone) },
+                onClick = {
+                    open = false
+                    tf.monochrome.android.locale.AppLanguage.set(context.findActivityOrSelf(), "")
+                },
+            )
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.nativeName) },
+                    onClick = {
+                        open = false
+                        tf.monochrome.android.locale.AppLanguage.set(context.findActivityOrSelf(), option.tag)
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** The activity behind a Compose context, which may be wrapped; the context itself if there is none. */
+private tailrec fun android.content.Context.findActivityOrSelf(): android.content.Context = when (this) {
+    is android.app.Activity -> this
+    is android.content.ContextWrapper -> if (baseContext === this) this else baseContext.findActivityOrSelf()
+    else -> this
+}
+
 @Composable
 private fun AppearanceTab(viewModel: SettingsViewModel, navController: NavController) {
     SettingsTabContent {
@@ -646,6 +693,8 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
     ) { uri ->
         uri?.let { viewModel.importFont(it) }
     }
+
+        LanguageSetting()
 
         SettingsGroupHeader("Theme")
         SettingItem(title = "Color Theme", subtitle = themeDisplayNames[themeName] ?: themeName, onClick = { showThemeDropdown = true })
@@ -3520,7 +3569,7 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
             tf.monochrome.android.ui.navigation.RADIO_PAGE_ID,
         ).forEach { pageId ->
             PageOrderRow(
-                title = APP_PAGE_TITLES[pageId] ?: pageId,
+                title = tf.monochrome.android.ui.navigation.pageTitle(pageId),
                 visible = pageId !in hiddenPages,
                 canToggle = canTogglePageVisibility(pageOrder, hiddenPages, pageId),
                 reorderable = false,
@@ -3542,7 +3591,7 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
         val sections = pageOrder.filter { it in tf.monochrome.android.ui.navigation.LIBRARY_PAGE_IDS }
         sections.forEachIndexed { index, pageId ->
             PageOrderRow(
-                title = APP_PAGE_TITLES[pageId] ?: pageId,
+                title = tf.monochrome.android.ui.navigation.pageTitle(pageId),
                 visible = pageId !in hiddenPages,
                 canToggle = canTogglePageVisibility(pageOrder, hiddenPages, pageId),
                 canMoveUp = index > 0,

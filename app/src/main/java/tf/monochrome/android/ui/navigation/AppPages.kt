@@ -4,7 +4,7 @@ package tf.monochrome.android.ui.navigation
  * One swipeable top-level page: the id it is stored and keyed under, and what it
  * calls itself.
  */
-internal data class AppPage(val id: String, val title: String)
+internal data class AppPage(val id: String, @androidx.annotation.StringRes val title: Int)
 
 /**
  * Every page the app can swipe between, in the order a fresh install gets them.
@@ -49,26 +49,34 @@ internal const val RADIO_PAGE_ID = "radio"
 internal const val SEARCH_PAGE_ID = "search"
 
 internal val APP_PAGES: List<AppPage> = listOf(
-    AppPage(Screen.Home.route, "Home"),
-    AppPage(Screen.Discover.route, "Discover"),
+    AppPage(Screen.Home.route, tf.monochrome.android.R.string.tab_home),
+    AppPage(Screen.Discover.route, tf.monochrome.android.R.string.tab_discover),
     // Next to Discover, which is where it used to be reached from. New pages
     // are inserted into a stored order after the nearest earlier page that is
     // stored (see reconcilePageOrder), so an existing install finds it here
     // rather than at the far end of the list.
-    AppPage(RADIO_PAGE_ID, "World radio"),
+    AppPage(RADIO_PAGE_ID, tf.monochrome.android.R.string.page_world_radio),
     // Overview used to sit here. It is Home's body now — Recently Played and
     // Liked Songs are what Home shows under the tab bar — and a stored order
     // that still names it simply drops it (see reconcilePageOrder).
-    AppPage("local", "Local"),
-    AppPage("playlists", "Playlists"),
-    AppPage("favorites", "Favorites"),
-    AppPage("downloads", "Downloads"),
+    AppPage("local", tf.monochrome.android.R.string.page_local),
+    AppPage("playlists", tf.monochrome.android.R.string.page_playlists),
+    AppPage("favorites", tf.monochrome.android.R.string.page_favorites),
+    AppPage("downloads", tf.monochrome.android.R.string.page_downloads),
 )
 
 internal val APP_PAGE_IDS: List<String> = APP_PAGES.map { it.id }
 
-/** Display name for every page id. The one source for what a page is called. */
-internal val APP_PAGE_TITLES: Map<String, String> = APP_PAGES.associate { it.id to it.title }
+/**
+ * Display name for every page id, as a string resource. The one source for
+ * what a page is called; resolve it where it is drawn (see [pageTitle]).
+ */
+internal val APP_PAGE_TITLES: Map<String, Int> = APP_PAGES.associate { it.id to it.title }
+
+/** [id]'s name in the current language, or the id itself for one with no page. */
+@androidx.compose.runtime.Composable
+internal fun pageTitle(id: String): String =
+    APP_PAGE_TITLES[id]?.let { androidx.compose.ui.res.stringResource(it) } ?: id
 
 /** The order a fresh install gets, and the order missing pages are folded back into. */
 internal val DEFAULT_PAGE_ORDER: List<String> = APP_PAGE_IDS

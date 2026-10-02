@@ -1,6 +1,7 @@
 package tf.monochrome.android.ui.navigation
 
 import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 import tf.monochrome.android.R
 
 /**
@@ -10,12 +11,12 @@ import tf.monochrome.android.R
  * Apple Music lays them out. A tab is not a page: Library is one tab over every
  * Library section, and which section it opens is remembered (see [pageForTab]).
  */
-internal enum class AppTab(val label: String, @DrawableRes val glyph: Int) {
-    HOME("Home", R.drawable.ic_glass_tab_home),
-    DISCOVER("Discover", R.drawable.ic_glass_tab_discover),
-    RADIO("Radio", R.drawable.ic_glass_tab_radio),
-    LIBRARY("Library", R.drawable.ic_glass_tab_library),
-    SEARCH("Search", R.drawable.ic_glass_tab_search),
+internal enum class AppTab(@StringRes val label: Int, @DrawableRes val glyph: Int) {
+    HOME(R.string.tab_home, R.drawable.ic_glass_tab_home),
+    DISCOVER(R.string.tab_discover, R.drawable.ic_glass_tab_discover),
+    RADIO(R.string.tab_radio, R.drawable.ic_glass_tab_radio),
+    LIBRARY(R.string.tab_library, R.drawable.ic_glass_tab_library),
+    SEARCH(R.string.tab_search, R.drawable.ic_glass_tab_search),
 }
 
 /** The tab a page belongs to, which is the one the bar shows lit. */
