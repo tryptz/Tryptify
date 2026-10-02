@@ -372,7 +372,6 @@ class CompressorEffect @Inject constructor() {
     fun setRatio(v: Float)       = update { it.copy(ratio       = v.coerceIn(1f, 20f)) }
     fun setAttackMs(v: Float)    = update { it.copy(attackMs    = v.coerceIn(0.1f, 200f)) }
     fun setReleaseMs(v: Float)   = update { it.copy(releaseMs   = v.coerceIn(5f, 2000f)) }
-    fun setKneeDb(v: Float)      = update { it.copy(kneeDb      = v.coerceIn(0f, 24f)) }
     fun setMakeupDb(v: Float)    = update { it.copy(makeupDb    = v.coerceIn(-12f, 24f)) }
     fun setBypass(b: Boolean)    = update { it.copy(bypass      = b) }
 

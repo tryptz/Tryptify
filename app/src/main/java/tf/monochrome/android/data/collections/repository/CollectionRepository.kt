@@ -58,12 +58,6 @@ class CollectionRepository @Inject constructor(
     suspend fun findTrackByIsrc(isrc: String): UnifiedTrack? =
         collectionDao.findTrackByIsrc(isrc)?.toUnifiedTrack(null)
 
-    suspend fun getDirectLinksForTrack(trackUuid: String): List<CollectionDirectLinkEntity> =
-        collectionDao.getDirectLinks(trackUuid)
-
-    suspend fun getEncryptionKey(collectionId: String): String? =
-        collectionDao.getCollection(collectionId)?.encryptionKey
-
     // ── Conversions ─────────────────────────────────────────────────
 
     private suspend fun CollectionTrackEntity.toUnifiedTrack(fallbackCollectionId: String?): UnifiedTrack {

@@ -235,53 +235,6 @@ fun AlphabeticalIndexSidebar(
 }
 
 /**
- * Headphone item row with icon, name, profile count, and chevron
- */
-@Composable
-fun HeadphoneItemRow(
-    headphone: Headphone,
-    modifier: Modifier = Modifier,
-    profileCount: Int = 4,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .bounceClick(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Icon(
-            imageVector = Icons.Default.Headphones,
-            contentDescription = null,
-            modifier = Modifier.size(28.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                headphone.name,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                pluralStringResource(R.plurals.eq_profile_count, profileCount, profileCount),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = null,
-            modifier = Modifier.size(20.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-/**
  * Section header label (e.g. "HEADPHONE MODEL", "TARGET")
  */
 @Composable

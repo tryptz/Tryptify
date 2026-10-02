@@ -132,7 +132,6 @@ class MixBusProcessor @Inject constructor(
     // Most recent post-fader mono waveform for a bus, oldest first; returns samples written
     external fun nativeGetBusWaveform(enginePtr: Long, busIndex: Int, outWave: FloatArray): Int
     external fun nativeGetAndResetClipped(enginePtr: Long): Boolean
-    external fun nativeResetPluginState(enginePtr: Long)
     external fun nativeResetMeters(enginePtr: Long)
 
     /**

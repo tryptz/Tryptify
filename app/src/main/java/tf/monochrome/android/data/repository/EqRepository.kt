@@ -141,32 +141,6 @@ class EqRepository @Inject constructor(
     fun getCustomPresetCount(): Flow<Int> = eqPresetDao.getCustomPresetCount()
 
     /**
-     * Create a preset from AutoEQ calculation result
-     */
-    suspend fun createAutoEqPreset(
-        name: String,
-        bands: List<EqBand>,
-        preamp: Float = 0f,
-        targetId: String = "harman_oe_2018",
-        headphoneName: String = ""
-    ): EqPreset {
-        val preset = EqPreset(
-            id = "custom_autoeq_${System.currentTimeMillis()}",
-            name = name,
-            description = "AutoEQ calculated for $headphoneName",
-            bands = bands,
-            preamp = preamp,
-            targetId = targetId,
-            targetName = FrequencyTargets.getTargetById(targetId)?.label ?: "Unknown",
-            isCustom = true,
-            createdAt = System.currentTimeMillis(),
-            updatedAt = System.currentTimeMillis()
-        )
-        savePreset(preset)
-        return preset
-    }
-
-    /**
      * Load default/built-in presets
      * These can be expanded later or loaded from files
      */

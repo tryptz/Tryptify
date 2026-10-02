@@ -260,10 +260,6 @@ class DspEngineManager @Inject constructor(
         }
     }
 
-    fun resetClipIndicator() {
-        _clipped.value = false
-    }
-
     /**
      * Poll the per-plugin tap meters and post-fader waveform for [busIndex]
      * into [fxTap]. Called once per display frame (60 or 120 Hz); meters get
@@ -632,13 +628,6 @@ class DspEngineManager @Inject constructor(
             bus.copy(plugins = plugins)
         }
         requestSave()
-    }
-
-    // ── Plugin state reset (for gapless track transitions) ───────────────
-
-    fun resetPluginState() {
-        val ptr = processor.getEnginePtr()
-        if (ptr != 0L) processor.nativeResetPluginState(ptr)
     }
 
     // ── State serialization ─────────────────────────────────────────────

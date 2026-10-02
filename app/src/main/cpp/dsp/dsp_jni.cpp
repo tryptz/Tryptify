@@ -254,13 +254,6 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeResetMeters(
     if (engine) engine->forEach([](DspEngine& e) { e.resetMeters(); });
 }
 
-extern "C" JNIEXPORT void JNICALL
-Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeResetPluginState(
-    JNIEnv* /*env*/, jobject /*thiz*/, jlong enginePtr) {
-    auto* engine = getEngine(enginePtr);
-    if (engine) engine->forEach([&](DspEngine& e) { e.resetPluginState(); });
-}
-
 extern "C" JNIEXPORT jboolean JNICALL
 Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeGetAndResetClipped(
     JNIEnv* /*env*/, jobject /*thiz*/, jlong enginePtr) {

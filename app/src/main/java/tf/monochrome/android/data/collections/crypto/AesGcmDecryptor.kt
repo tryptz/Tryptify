@@ -37,26 +37,4 @@ class AesGcmDecryptor @Inject constructor() {
         return cipher.doFinal(ciphertext)
     }
 
-    /**
-     * Decrypt a base64-encoded string.
-     */
-    fun decryptBase64(base64Data: String, base64Key: String): ByteArray {
-        val encryptedBytes = Base64.decode(base64Data, Base64.DEFAULT)
-        val keyBytes = Base64.decode(base64Key, Base64.DEFAULT)
-        return decrypt(encryptedBytes, keyBytes)
-    }
-
-    /**
-     * Decrypt a URL - returns the decrypted URL as a string.
-     * The URL itself may be encrypted in the manifest.
-     */
-    fun decryptUrl(encryptedUrl: String, key: String): String {
-        return try {
-            val decrypted = decryptBase64(encryptedUrl, key)
-            String(decrypted, Charsets.UTF_8)
-        } catch (_: Exception) {
-            // URL might not be encrypted - return as-is
-            encryptedUrl
-        }
-    }
 }

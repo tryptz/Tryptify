@@ -2857,31 +2857,6 @@ private fun AccountControls(viewModel: SettingsViewModel) {
     }
 }
 
-@Composable
-private fun InstanceCard(url: String, version: String?) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
-            .liquidGlass(shape = RoundedCornerShape(8.dp)),
-        colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.Cloud, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(10.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(url, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
-                if (version != null) {
-                    Text("v$version", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            Icon(Icons.Default.Check, contentDescription = stringResource(R.string.settings_online), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-        }
-    }
-}
-
 // ─── Tab 7: System ─────────────────────────────────────────────────────
 @Composable
 private fun SystemTab(viewModel: SettingsViewModel, navController: NavController) {

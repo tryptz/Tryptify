@@ -633,31 +633,6 @@ class HiFiApiClient @Inject constructor(
     }
 
     /**
-     * ISRC of a Deezer track, for matching it on Qobuz. Cached from any payload
-     * that carried one; otherwise asks the instance's search with the track's
-     * deezer.com URL, which it resolves to the single full track record — the
-     * one Deezer shape that always includes the ISRC.
-     */
-    suspend fun getDeezerIsrc(deezerId: Long): String? {
-        deezerIsrcs[deezerId]?.let { return it }
-        val base = deezerBaseOrNull() ?: return null
-        val url = "https://www.deezer.com/track/$deezerId"
-        val envelope = withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
-            runCatching {
-                val res = httpClient.get("$base/api/deezer/get-music?q=${url.encodeUrl()}&offset=0")
-                if (!res.status.isSuccess()) return@runCatching null
-                json.decodeFromString<QobuzSearchEnvelope>(res.bodyAsText())
-            }.getOrNull()
-        } ?: return null
-        val isrc = envelope.data?.tracks?.items
-            ?.firstOrNull { it.id == deezerId }
-            ?.isrc?.takeIf { it.isNotBlank() }
-            ?: return null
-        deezerIsrcs[deezerId] = isrc
-        return isrc
-    }
-
-    /**
      * Full-length file URL for a Deezer track — GET
      * /api/deezer/download?track_id=<id>&quality=<code>, the Deezer twin of
      * Qobuz's /api/download-music. Same quality codes, same envelope
@@ -1574,13 +1549,6 @@ class HiFiApiClient @Inject constructor(
             value.startsWith("/") -> "$base/api${value}".replace("/api/api/", "/api/")
             else -> "$base/api/$value"
         }
-    }
-
-    // Apple quality codes accepted by /api/apple/download-music.
-    private fun AudioQuality.appleCode(): String = when (this) {
-        AudioQuality.HI_RES -> "hires-lossless"
-        AudioQuality.LOSSLESS -> "alac"
-        AudioQuality.LOW, AudioQuality.HIGH -> "aac"
     }
 
     // Resolve the playable URL for an Apple track: hit /api/apple/download-music,

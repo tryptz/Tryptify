@@ -323,7 +323,6 @@
     <string name="downloads_empty">没有已下载的歌曲。</string>
     <string name="delete_downloads">删除下载内容</string>
     <string name="singles">单曲</string>
-    <string name="delete_failed_one">无法删除“%1$s”</string>
     <string name="action_play_all">全部播放</string>
     <string name="search_this_folder">在此文件夹中搜索</string>
     <string name="folder_empty">这里没有音乐</string>
@@ -720,7 +719,6 @@
     <string name="settings_active">当前</string>
     <string name="settings_delete_preset">删除预设</string>
     <string name="settings_player_visuals_studio">播放器视觉工作室</string>
-    <string name="settings_lyric_type_3d_wave_and_beat_fx_the_player_and">歌词字体、3D 波浪与节拍特效；播放器与面板玻璃；以及氛围 MilkDrop 背景</string>
     <string name="settings_color_theme">颜色主题</string>
     <string name="settings_custom_colors">自定义颜色</string>
     <string name="settings_pick_your_own_accent_and_background_overrides">选择你自己的强调色和背景色，将覆盖上方的主题</string>
@@ -807,7 +805,6 @@
     <string name="settings_animated_spectrum">动态频谱</string>
     <string name="settings_a_moving_spectrum_beside_the_artwork_matched_to">封面旁会动的频谱，与流派的节奏和封面的颜色相匹配。关闭后卡片保持静止。</string>
     <string name="settings_signed_in_as">登录身份</string>
-    <string name="settings_online">在线</string>
     <string name="settings_cache_size">缓存大小</string>
     <string name="settings_restart_onboarding">重新开始引导</string>
     <string name="settings_run_the_first_time_setup_again_your_library_and">再次运行首次设置。你的音乐库和设置都会保留。</string>
@@ -1455,11 +1452,9 @@
     <string name="eq_err_parse_data">无法解析测量数据</string>
     <string name="eq_err_autoeq">AutoEQ 计算失败：%1$s</string>
     <string name="eq_err_load_headphones">无法加载耳机列表：%1$s</string>
-    <string name="eq_err_search">搜索失败：%1$s</string>
     <string name="eq_err_fetch_measurement">无法获取测量数据</string>
     <string name="eq_err_parse_headphone">无法解析耳机测量数据</string>
     <string name="eq_err_load_measurement">无法加载测量数据：%1$s</string>
-    <string name="eq_err_load_headphone_preset">无法加载耳机预设：%1$s</string>
     <string name="eq_err_no_measurement">尚未加载耳机测量数据</string>
     <string name="eq_err_parse_file">无法解析测量文件</string>
     <string name="eq_err_import">导入失败：%1$s</string>
@@ -1500,9 +1495,6 @@
     <string name="eq_select">请选择…</string>
     <string name="eq_get_started_caps">开始使用</string>
     <string name="eq_next_caps">下一步</string>
-    <plurals name="eq_profile_count">
-        <item quantity="other">%1$d 个配置</item>
-    </plurals>
     <plurals name="eq_model_count">
         <item quantity="other">%1$d 个型号</item>
     </plurals>
@@ -1664,7 +1656,6 @@
     <string name="mixer_loudness_integrated">，综合 %1$s LUFS</string>
     <string name="mixer_preset_desc">%1$s 预设</string>
     <string name="mixer_preset_desc_creative">%1$s 预设，创意型</string>
-    <string name="mixer_imported_preset">导入的预设</string>
     <string name="notif_debug_channel">调试录屏</string>
     <string name="notif_debug_title">正在录屏（调试）</string>
     <string name="notif_debug_text">原生分辨率/帧率，立体声媒体音频</string>

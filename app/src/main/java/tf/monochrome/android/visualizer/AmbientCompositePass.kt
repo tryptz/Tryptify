@@ -65,9 +65,6 @@ internal class AmbientCompositePass {
         albumUploaded = false
     }
 
-    /** True once there is a program and an album to sample. */
-    val hasAlbum: Boolean get() = albumUploaded
-
     fun ensureCreated(): Boolean {
         if (ready) return true
         val vertex = compile(GLES30.GL_VERTEX_SHADER, AMBIENT_VERTEX_SHADER)

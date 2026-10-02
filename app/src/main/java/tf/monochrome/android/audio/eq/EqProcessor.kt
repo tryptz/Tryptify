@@ -218,20 +218,6 @@ class EqProcessor(
     }
 
     /**
-     * Get the currently applied bands (for custom DSP mode)
-     */
-    fun getAppliedBands(): List<EqBand> = customDspBands
-
-    /**
-     * Get system EQ info for debugging
-     */
-    fun getSystemEqInfo(): String {
-        val eq = equalizer ?: return "No system EQ"
-        return "System EQ: ${eq.numberOfBands} bands, " +
-                "Range: ${eq.bandLevelRange[0] / 100f} to ${eq.bandLevelRange[1] / 100f} dB"
-    }
-
-    /**
      * Release audio effects when no longer needed
      */
     fun release() {

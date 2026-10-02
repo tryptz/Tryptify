@@ -929,25 +929,6 @@ class PlayerViewModel @Inject constructor(
         radioQueueManager.startRadio(track)
     }
 
-    /**
-     * Home-screen "Play radio": seed from whatever is playing, else the most
-     * recent history entry, else a favorite — and start playback when the
-     * seed isn't already playing. No-op only for a completely fresh library.
-     */
-    fun playRadio() {
-        viewModelScope.launch {
-            currentTrack.value?.let {
-                radioQueueManager.startRadio(it)
-                return@launch
-            }
-            val seed = libraryRepository.getHistory().firstOrNull()?.firstOrNull()
-                ?: libraryRepository.getFavoriteTracks().firstOrNull()?.firstOrNull()
-                ?: return@launch
-            playTrack(seed)
-            radioQueueManager.startRadio(seed)
-        }
-    }
-
     fun stopRadio() {
         radioQueueManager.stopRadio()
     }
@@ -1044,22 +1025,6 @@ class PlayerViewModel @Inject constructor(
             // re-application on a mid-playback drag (PlaybackService
             // re-applies on the next STATE_READY).
             bypassVolumeController.setVolume(newVolume)
-        }
-    }
-
-    fun cycleNowPlayingViewMode() {
-        viewModelScope.launch {
-            val current = nowPlayingViewMode.value
-            val next = when (current) {
-                NowPlayingViewMode.COVER_ART -> NowPlayingViewMode.VISUALIZER
-                NowPlayingViewMode.VISUALIZER -> NowPlayingViewMode.COVER_ART
-                NowPlayingViewMode.LYRICS -> NowPlayingViewMode.COVER_ART
-                NowPlayingViewMode.QUEUE -> NowPlayingViewMode.COVER_ART
-            }
-            if (next == NowPlayingViewMode.VISUALIZER) {
-                preferences.setVisualizerEngineEnabled(true)
-            }
-            preferences.setNowPlayingViewMode(next)
         }
     }
 

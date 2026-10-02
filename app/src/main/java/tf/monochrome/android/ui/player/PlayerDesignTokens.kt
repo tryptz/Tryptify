@@ -44,7 +44,6 @@ object PlayerDesignTokens {
      */
     val ChromeMaxWidth = 460.dp
 
-    val HeroCorner = 28.dp
     // Aspect ratio shared by the album-art hero and the projectM visualizer so
     // the two always occupy identically proportioned slots (1:1, matching the
     // square cover art). Routing both through one constant guarantees the
@@ -69,7 +68,6 @@ object PlayerDesignTokens {
     val GlassTintMedium = 0.12f
     val GlassTintSoft = 0.08f
 
-    val FallbackAccent = Color(0xFF8ED081)
     val BackgroundBlack = Color(0xFF050706)
 }
 
@@ -114,9 +112,6 @@ fun rememberAlbumColors(imageUrl: String?): AlbumColors {
 
     return colors
 }
-
-@Composable
-fun rememberDominantColor(imageUrl: String?): Color = rememberAlbumColors(imageUrl).dominant
 
 /** Vertical gradient wash derived from the album art, fading into pure black. */
 fun dynamicPlayerBackground(color: Color): Brush {

@@ -203,9 +203,6 @@ class EqViewModel @Inject constructor(
     private val _customPresets = MutableStateFlow<List<EqPreset>>(emptyList())
     val customPresets: StateFlow<List<EqPreset>> = _customPresets.asStateFlow()
 
-    private val _presetCount = MutableStateFlow(0)
-    val presetCount: StateFlow<Int> = _presetCount.asStateFlow()
-
     // ===== Headphone Selection State =====
 
     private val _availableHeadphones = MutableStateFlow<List<Headphone>>(emptyList())
@@ -216,9 +213,6 @@ class EqViewModel @Inject constructor(
 
     private val _headphonesLoading = MutableStateFlow(false)
     val headphonesLoading: StateFlow<Boolean> = _headphonesLoading.asStateFlow()
-
-    private val _headphoneSearchQuery = MutableStateFlow("")
-    val headphoneSearchQuery: StateFlow<String> = _headphoneSearchQuery.asStateFlow()
 
     // ===== AutoEQ Parameters =====
 
@@ -298,12 +292,6 @@ class EqViewModel @Inject constructor(
         viewModelScope.launch {
             eqRepository.getCustomPresets().collect { presets ->
                 _customPresets.value = presets
-            }
-        }
-
-        viewModelScope.launch {
-            eqRepository.getCustomPresetCount().collect { count ->
-                _presetCount.value = count
             }
         }
 
@@ -494,17 +482,6 @@ class EqViewModel @Inject constructor(
         viewModelScope.launch {
             preferences.setEqEnabled(true)
             _eqEnabled.value = true
-        }
-    }
-
-    /**
-     * Disable EQ
-     */
-    fun disableEq() {
-        viewModelScope.launch {
-            preferences.setEqEnabled(false)
-            _eqEnabled.value = false
-            clearSystemWide()
         }
     }
 
@@ -1159,39 +1136,6 @@ class EqViewModel @Inject constructor(
     }
 
     /**
-     * Search headphones from GitHub AutoEq repository
-     */
-    fun searchAvailableHeadphones(query: String) {
-        _headphoneSearchQuery.value = query
-        viewModelScope.launch {
-            try {
-                _headphonesLoading.value = true
-                _error.value = null
-
-                headphoneRepository.searchHeadphones(query).collect { headphones ->
-                    _availableHeadphones.value = headphones
-                    _headphonesLoading.value = false
-                }
-            } catch (e: Exception) {
-                _error.value = UiText.Res(R.string.eq_err_search, listOf(e.message.orEmpty()))
-                _headphonesLoading.value = false
-            }
-        }
-    }
-
-    /**
-     * Select a headphone and load its measurement (legacy path: picks the
-     * headphone's first available AutoEq measurement).
-     */
-    fun selectHeadphone(headphone: Headphone) {
-        _selectedHeadphone.value = headphone
-        viewModelScope.launch {
-            preferences.setEqSelectedHeadphone(headphone.id, headphone.name)
-        }
-        loadHeadphonePreset(headphone.name)
-    }
-
-    /**
      * Select a specific measurement (squig.link or AutoEq) for a headphone.
      * Used by the rig-filtered headphone browser, where each row binds to one
      * concrete measurement rather than the whole headphone.
@@ -1378,64 +1322,6 @@ class EqViewModel @Inject constructor(
         } catch (e: Exception) {
             _error.value = UiText.Res(R.string.eq_err_load_measurement, listOf(e.message.orEmpty()))
             _isCalculating.value = false
-        }
-    }
-
-    /**
-     * Load preset and apply AutoEQ for a specific headphone
-     *
-     * Fetches measurement from GitHub AutoEq, parses it, and calculates optimal bands
-     */
-    fun loadHeadphonePreset(headphoneName: String) {
-        viewModelScope.launch {
-            try {
-                _isCalculating.value = true
-                _error.value = null
-
-                val headphoneId = headphoneName.replace(" ", "_").lowercase()
-                // Pass the original name through so the repo's fallback URLs
-                // can hit case-sensitive GitHub paths like "AKG K371".
-                val measurementResult = headphoneRepository.loadHeadphoneMeasurement(
-                    headphoneId,
-                    headphoneName
-                )
-
-                measurementResult.collect { result ->
-                    result.onSuccess { csvData ->
-                        val measurement = EqDataParser.parseRawData(csvData)
-                        if (measurement.isEmpty()) {
-                            _error.value = UiText.Res(R.string.eq_err_parse_headphone)
-                            _isCalculating.value = false
-                            return@collect
-                        }
-
-                        _originalMeasurement.value = measurement
-                        persistMeasurement(measurement)
-
-                        val target = _selectedTarget.value.data
-                        if (target.isEmpty()) {
-                            _error.value = UiText.Res(R.string.eq_err_no_target)
-                            _isCalculating.value = false
-                            return@collect
-                        }
-
-                        val bands = runEngine(measurement, target, fitSettings())
-
-                        _currentBands.value = bands
-                        saveBandsToPreferences(bands)
-                        _error.value = null
-                        _isCalculating.value = false
-
-                    }.onFailure { error ->
-                        _error.value = UiText.Res(R.string.eq_err_load_measurement, listOf(error.message.orEmpty()))
-                        _isCalculating.value = false
-                    }
-                }
-
-            } catch (e: Exception) {
-                _error.value = UiText.Res(R.string.eq_err_load_headphone_preset, listOf(e.message.orEmpty()))
-                _isCalculating.value = false
-            }
         }
     }
 

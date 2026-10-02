@@ -220,7 +220,6 @@ object ReverbP {
     const val SIZE = 2
     const val DAMPING = 3
     const val DIFFUSION = 4
-    const val MOD_RATE = 5
     const val MOD_DEPTH = 6
     const val TONE = 7
     const val LOW_CUT = 8
@@ -234,7 +233,6 @@ object DelayP {
     const val FEEDBACK = 1
     const val PING_PONG = 2
     const val PAN = 3
-    const val DUCK = 4
     const val FB_LOWCUT = 5
     const val FB_HICUT = 6
     const val MOD_DEPTH = 7
@@ -242,7 +240,6 @@ object DelayP {
 }
 
 object ChorusP {
-    const val DELAY_MS = 0
     const val RATE = 1
     const val DEPTH = 2
     const val VOICES = 3
@@ -292,13 +289,11 @@ object LimiterP {
 object Eq3P {
     const val LOW_FREQ = 0
     const val LOW_GAIN = 1
-    const val LOW_Q = 2
     const val MID_FREQ = 3
     const val MID_GAIN = 4
     const val MID_Q = 5
     const val HIGH_FREQ = 6
     const val HIGH_GAIN = 7
-    const val HIGH_Q = 8
 }
 
 /** Filter (filter.h). SLOPE n is n + 1 cascaded 12 dB/oct stages. */
@@ -306,11 +301,9 @@ object FilterP {
     const val TYPE = 0
     const val CUTOFF = 1
     const val Q = 2
-    const val GAIN_DB = 3
     const val SLOPE = 4
 
     const val LOW_PASS = 0f
-    const val BAND_PASS = 1f
     const val HIGH_PASS = 2f
     const val NOTCH = 3f
     const val LOW_SHELF = 4f

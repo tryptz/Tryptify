@@ -337,16 +337,6 @@ class SearchViewModel @Inject constructor(
         _selectedSource.value = source
     }
 
-    /**
-     * The genre the current query names, if it names one.
-     *
-     * Exposed so the results screen can say what it understood the query to be
-     * — "dnb" silently becoming a drum & bass search is helpful; silently
-     * becoming one with no explanation is confusing.
-     */
-    private val _resolvedGenre = MutableStateFlow<GenreNode?>(null)
-    val resolvedGenre: StateFlow<GenreNode?> = _resolvedGenre.asStateFlow()
-
     private suspend fun performSearch(query: String) {
         _isSearching.value = true
         _searchError.value = false
@@ -356,7 +346,6 @@ class SearchViewModel @Inject constructor(
         // graph doesn't recognise — which is most queries, since most queries
         // are artists and titles.
         val genre = genreGraph.graph.resolve(query.trim())
-        _resolvedGenre.value = genre
         val trimmedQuery = genre?.queries()?.firstOrNull() ?: query.trim()
         // TIDAL, Qobuz, and the local/collection library all run in parallel.
         // Qobuz failures (instance unset, network error, schema mismatch) are

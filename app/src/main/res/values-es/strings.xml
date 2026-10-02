@@ -353,7 +353,6 @@
     <string name="downloads_empty">No hay canciones descargadas.</string>
     <string name="delete_downloads">Eliminar descargas</string>
     <string name="singles">Sencillos</string>
-    <string name="delete_failed_one">No se ha podido eliminar “%1$s”</string>
     <string name="action_play_all">Reproducir todo</string>
     <string name="search_this_folder">Buscar en esta carpeta</string>
     <string name="folder_empty">No hay música aquí</string>
@@ -794,7 +793,6 @@
     <string name="settings_active">Activo</string>
     <string name="settings_delete_preset">Eliminar preset</string>
     <string name="settings_player_visuals_studio">Estudio visual del reproductor</string>
-    <string name="settings_lyric_type_3d_wave_and_beat_fx_the_player_and">Tipografía de la letra, efectos de onda 3D y de ritmo; el cristal del reproductor y los paneles; y el fondo ambiental MilkDrop</string>
     <string name="settings_color_theme">Tema de color</string>
     <string name="settings_custom_colors">Colores personalizados</string>
     <string name="settings_pick_your_own_accent_and_background_overrides">Elige tu propio color de acento y fondo. Sustituye al tema de arriba</string>
@@ -881,7 +879,6 @@
     <string name="settings_animated_spectrum">Espectro animado</string>
     <string name="settings_a_moving_spectrum_beside_the_artwork_matched_to">Un espectro en movimiento junto a la portada, acorde al ritmo del género y al color de la portada. Desactivado, la tarjeta queda quieta.</string>
     <string name="settings_signed_in_as">Sesión iniciada como</string>
-    <string name="settings_online">En línea</string>
     <string name="settings_cache_size">Tamaño de caché</string>
     <string name="settings_restart_onboarding">Reiniciar la configuración inicial</string>
     <string name="settings_run_the_first_time_setup_again_your_library_and">Vuelve a ejecutar la configuración inicial. Se conservan tu biblioteca y tus ajustes.</string>
@@ -1541,11 +1538,9 @@
     <string name="eq_err_parse_data">No se pudieron leer los datos de medición</string>
     <string name="eq_err_autoeq">Error en el cálculo de AutoEQ: %1$s</string>
     <string name="eq_err_load_headphones">No se pudieron cargar los auriculares: %1$s</string>
-    <string name="eq_err_search">Error en la búsqueda: %1$s</string>
     <string name="eq_err_fetch_measurement">No se pudo obtener la medición</string>
     <string name="eq_err_parse_headphone">No se pudo leer la medición de los auriculares</string>
     <string name="eq_err_load_measurement">No se pudo cargar la medición: %1$s</string>
-    <string name="eq_err_load_headphone_preset">No se pudo cargar el preset de auriculares: %1$s</string>
     <string name="eq_err_no_measurement">No hay ninguna medición de auriculares cargada</string>
     <string name="eq_err_parse_file">No se pudo leer el archivo de medición</string>
     <string name="eq_err_import">Error al importar: %1$s</string>
@@ -1586,11 +1581,6 @@
     <string name="eq_select">Elegir…</string>
     <string name="eq_get_started_caps">EMPEZAR</string>
     <string name="eq_next_caps">SIGUIENTE</string>
-    <plurals name="eq_profile_count">
-        <item quantity="one">%1$d perfil</item>
-        <item quantity="many">%1$d perfiles</item>
-        <item quantity="other">%1$d perfiles</item>
-    </plurals>
     <plurals name="eq_model_count">
         <item quantity="one">%1$d modelo</item>
         <item quantity="many">%1$d modelos</item>
@@ -1760,7 +1750,6 @@
     <string name="mixer_loudness_integrated">, integrada %1$s LUFS</string>
     <string name="mixer_preset_desc">Preset %1$s</string>
     <string name="mixer_preset_desc_creative">Preset %1$s, creativo</string>
-    <string name="mixer_imported_preset">Preset importado</string>
     <string name="notif_debug_channel">Grabador de pantalla de depuración</string>
     <string name="notif_debug_title">Grabando la pantalla (depuración)</string>
     <string name="notif_debug_text">Resolución y FPS nativos, audio multimedia estéreo</string>

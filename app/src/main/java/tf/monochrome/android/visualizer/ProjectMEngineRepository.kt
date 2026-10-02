@@ -634,16 +634,6 @@ class ProjectMEngineRepository @Inject constructor(
         }
     }
 
-    fun setRotationSeconds(seconds: Int) {
-        scope.launch {
-            preferences.setVisualizerRotationSeconds(seconds)
-        }
-        synchronized(engineLock) {
-            rotationSeconds = seconds
-            if (nativeInitialized) applyRotationLocked()
-        }
-    }
-
     fun touch(x: Float, y: Float, pressure: Int, touchType: Int) {
         synchronized(engineLock) {
             if (nativeInitialized) nativeBridge.touch(x, y, pressure, touchType)

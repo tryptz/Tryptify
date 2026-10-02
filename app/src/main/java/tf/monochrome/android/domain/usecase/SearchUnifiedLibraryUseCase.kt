@@ -14,9 +14,6 @@ data class UnifiedSearchResult(
     val collectionTracks: List<UnifiedTrack> = emptyList(),
     val apiTracks: List<UnifiedTrack> = emptyList()
 ) {
-    val allTracks: List<UnifiedTrack>
-        get() = localTracks + collectionTracks + apiTracks
-
     val isEmpty: Boolean
         get() = localTracks.isEmpty() && collectionTracks.isEmpty() && apiTracks.isEmpty()
 }

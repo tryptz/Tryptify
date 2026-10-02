@@ -23,6 +23,4 @@ object PlayedFrom {
     /** The service a playing item comes from, if it was marked. */
     fun of(metadata: MediaMetadata?): String? = metadata?.extras?.getString(KEY)
 
-    /** Whether [uri] is served from the Qobuz cache. */
-    fun isQobuz(uri: Uri?): Boolean = uri?.scheme == QobuzStreamUri.SCHEME
 }

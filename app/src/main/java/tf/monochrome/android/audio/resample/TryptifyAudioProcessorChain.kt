@@ -95,30 +95,6 @@ class TryptifyAudioProcessorChain(
 
     override fun getSkippedOutputFrameCount(): Long = silenceSkipping.skippedFrames
 
-    /**
-     * Total factor by which everything downstream of the app's own processors
-     * will scale frequency: the vinyl-style resampling ratio and the
-     * independent transposition compound, because both sit after them.
-     *
-     * This is what the AutoEQ pre-warp has to invert.
-     */
-    fun downstreamPitchRatio(): Float {
-        val fromSpeed = resampler.getRatio()
-        val fromTranspose = 2f.pow(stretch.getSemitones() / 12f)
-        return fromSpeed * fromTranspose
-    }
-
-    /**
-     * How long the slowest engaged pitch stage lags by, in milliseconds — the
-     * window a dependent transition should be spread over. The resampler's own
-     * latency is a few dozen samples and is deliberately ignored.
-     */
-    fun pitchLatencyMillis(sampleRate: Int): Int {
-        if (sampleRate <= 0) return 0
-        val frames = stretch.latencyFrames()
-        return (frames * 1000L / sampleRate).toInt()
-    }
-
     private companion object {
         /** Sonic's own threshold for treating a factor as unity. */
         const val TOLERANCE = 1e-4f

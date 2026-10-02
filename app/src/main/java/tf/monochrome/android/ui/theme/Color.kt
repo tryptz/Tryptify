@@ -11,7 +11,6 @@ val MonoOutline = Color(0xFF333333)
 val MonoWhite = Color(0xFFFFFFFF)
 val MonoTextSecondary = Color(0xFFB0B0B0)
 val MonoTextTertiary = Color(0xFF808080)
-val MonoAccent = Color(0xFFFFFFFF)
 
 // Ocean Theme
 val OceanPrimary = Color(0xFF00D4FF)

@@ -979,33 +979,6 @@ private fun HeroIconButton(
 }
 
 @Composable
-private fun BouncePill(
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-    content: @Composable () -> Unit,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.90f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "bouncePillScale",
-    )
-    Box(
-        modifier = modifier
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .liquidGlass(
-                shape = RoundedCornerShape(999.dp),
-                tintAlpha = 0.15f,
-                borderAlpha = 0.12f,
-            )
-    ) {
-        content()
-    }
-}
-
-@Composable
 private fun VisualizerActionPill(
     modifier: Modifier = Modifier,
     icon: ImageVector,

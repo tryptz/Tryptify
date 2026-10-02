@@ -323,7 +323,6 @@
     <string name="downloads_empty">ダウンロードした曲はありません。</string>
     <string name="delete_downloads">ダウンロードを削除</string>
     <string name="singles">シングル</string>
-    <string name="delete_failed_one">「%1$s」を削除できませんでした</string>
     <string name="action_play_all">すべて再生</string>
     <string name="search_this_folder">このフォルダを検索</string>
     <string name="folder_empty">ここには音楽がありません</string>
@@ -720,7 +719,6 @@
     <string name="settings_active">使用中</string>
     <string name="settings_delete_preset">プリセットを削除</string>
     <string name="settings_player_visuals_studio">プレーヤービジュアル スタジオ</string>
-    <string name="settings_lyric_type_3d_wave_and_beat_fx_the_player_and">歌詞の書体、3D ウェーブとビートエフェクト、プレーヤーとパネルのガラス、アンビエント MilkDrop 背景</string>
     <string name="settings_color_theme">カラーテーマ</string>
     <string name="settings_custom_colors">カスタムカラー</string>
     <string name="settings_pick_your_own_accent_and_background_overrides">アクセントカラーと背景色を自分で選びます。上のテーマより優先されます</string>
@@ -807,7 +805,6 @@
     <string name="settings_animated_spectrum">アニメーションするスペクトラム</string>
     <string name="settings_a_moving_spectrum_beside_the_artwork_matched_to">アートワークの横で動くスペクトラム。ジャンルのリズムとカバーの色に合わせます。オフにするとカードは静止します。</string>
     <string name="settings_signed_in_as">サインイン中のアカウント</string>
-    <string name="settings_online">オンライン</string>
     <string name="settings_cache_size">キャッシュサイズ</string>
     <string name="settings_restart_onboarding">初期設定をやり直す</string>
     <string name="settings_run_the_first_time_setup_again_your_library_and">初回セットアップをもう一度実行します。ライブラリと設定はそのまま残ります。</string>
@@ -1455,11 +1452,9 @@
     <string name="eq_err_parse_data">測定データを解析できませんでした</string>
     <string name="eq_err_autoeq">AutoEQ の計算に失敗しました：%1$s</string>
     <string name="eq_err_load_headphones">ヘッドホンを読み込めませんでした：%1$s</string>
-    <string name="eq_err_search">検索に失敗しました：%1$s</string>
     <string name="eq_err_fetch_measurement">測定データを取得できませんでした</string>
     <string name="eq_err_parse_headphone">ヘッドホンの測定データを解析できませんでした</string>
     <string name="eq_err_load_measurement">測定データを読み込めませんでした：%1$s</string>
-    <string name="eq_err_load_headphone_preset">ヘッドホンのプリセットを読み込めませんでした：%1$s</string>
     <string name="eq_err_no_measurement">ヘッドホンの測定データが読み込まれていません</string>
     <string name="eq_err_parse_file">測定ファイルを解析できませんでした</string>
     <string name="eq_err_import">インポートに失敗しました：%1$s</string>
@@ -1500,9 +1495,6 @@
     <string name="eq_select">選択…</string>
     <string name="eq_get_started_caps">始める</string>
     <string name="eq_next_caps">次へ</string>
-    <plurals name="eq_profile_count">
-        <item quantity="other">%1$d 件のプロファイル</item>
-    </plurals>
     <plurals name="eq_model_count">
         <item quantity="other">%1$d モデル</item>
     </plurals>
@@ -1664,7 +1656,6 @@
     <string name="mixer_loudness_integrated">、積算 %1$s LUFS</string>
     <string name="mixer_preset_desc">%1$s プリセット</string>
     <string name="mixer_preset_desc_creative">%1$s プリセット（クリエイティブ）</string>
-    <string name="mixer_imported_preset">インポートしたプリセット</string>
     <string name="notif_debug_channel">デバッグ画面録画</string>
     <string name="notif_debug_title">画面を録画中（デバッグ）</string>
     <string name="notif_debug_text">ネイティブの解像度/fps、ステレオのメディア音声</string>

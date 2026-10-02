@@ -282,10 +282,6 @@ class LocalLibraryViewModel @Inject constructor(
         viewModelScope.launch { scanCoordinator.runFullScan() }
     }
 
-    fun startIncrementalScan() {
-        viewModelScope.launch { scanCoordinator.runIncrementalScan() }
-    }
-
     /** Drops a folder from the library. The files on disk are not touched. */
     fun excludeFolder(path: String) {
         viewModelScope.launch { scanCoordinator.excludeFolder(path) }

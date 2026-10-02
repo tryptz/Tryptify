@@ -231,7 +231,6 @@ class DiscoverViewModel @Inject constructor(
      * Discover, a See All grid and the Flow feed, and is forgotten on restart.
      */
     private val _dismissedItems = MutableStateFlow<Set<String>>(emptySet())
-    val dismissedItems: StateFlow<Set<String>> = _dismissedItems.asStateFlow()
     private val _dismissedShelves = MutableStateFlow<Set<String>>(emptySet())
 
     /** How many times "show me something else" has been tapped, rotating the seeds. */
@@ -386,22 +385,12 @@ class DiscoverViewModel @Inject constructor(
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /**
-     * Shelves fetched to keep the Flow feed going past the end of the page.
-     *
-     * Kept apart from [_shelves] so swiping deep into Flow doesn't silently
-     * grow the Discover page behind it — the two surfaces share a feed, not a
-     * scroll position.
-     */
-    private val _flowExtra = MutableStateFlow<List<DiscoveryShelf>>(emptyList())
-    private var extendJob: Job? = null
-
-    /**
      * Every track in the feed, in feed order, de-duplicated — the supply the
      * Flow feed swipes through and the queue it plays into.
      */
     val flowTracks: StateFlow<List<UnifiedTrack>> =
-        combine(visibleShelves, _flowExtra, _dismissedItems) { shelves, extra, dismissed ->
-            (shelves + extra)
+        combine(visibleShelves, _dismissedItems) { shelves, dismissed ->
+            shelves
                 .flatMap { it.items }
                 .filterIsInstance<DiscoveryItem.TrackItem>()
                 .filterNot { it.key in dismissed }
@@ -412,51 +401,6 @@ class DiscoverViewModel @Inject constructor(
             // list on its first frame and flash "nothing to flow through" over
             // a feed that was already built. The data is in memory either way.
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    /** The reason line for a track, so the Flow feed can say why it's showing it. */
-    fun reasonFor(track: UnifiedTrack): String? =
-        (_shelves.value + _flowExtra.value).firstOrNull { shelf ->
-            shelf.items.any { it is DiscoveryItem.TrackItem && it.track.id == track.id }
-        }?.reason
-
-    /**
-     * Fetch more for Flow, called as the listener approaches the end.
-     *
-     * Each call takes the next chip in rotation, so the tail of a long session
-     * drifts through moods rather than looping the same page — the format only
-     * works if there is always a next one, but "always" shouldn't mean "the
-     * same twelve records again".
-     */
-    fun extendFlow() {
-        if (extendJob?.isActive == true || chips.isEmpty() || flowExhausted) return
-        extendJob = viewModelScope.launch {
-            val seed = chips[(extendRotation++ % chips.size + chips.size) % chips.size]
-            val built = try {
-                discoveryFeed.buildForQuery(seed.label, seed.query, SHELF_SIZE)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                emptyList()
-            }
-            val known = (_shelves.value + _flowExtra.value).map { it.id }.toSet()
-            val fresh = built.filterNot { it.id in known }
-            _flowExtra.value = _flowExtra.value + fresh
-            // Every chip's shelves carry a fixed id, so once a full rotation
-            // adds nothing the well is dry. Without this the listener sitting
-            // near the end fires a 7-second Qobuz search on every settle, for
-            // ever, and never gets a card out of it.
-            if (fresh.isEmpty()) {
-                dryRounds++
-                if (dryRounds >= chips.size) flowExhausted = true
-            } else {
-                dryRounds = 0
-            }
-        }
-    }
-    private var dryRounds = 0
-    private var flowExhausted = false
-
-    private var extendRotation = 0
 
     // Switching chips fast would otherwise leave two builds racing to write the
     // same list, and the slower one wins whichever chip the user is looking at.
@@ -576,7 +520,6 @@ class DiscoverViewModel @Inject constructor(
             // thing to do with it is show it.
             builtPages[key]?.let { built ->
                 _shelves.value = built
-                _flowExtra.value = emptyList()
                 _loading.value = false
                 _refreshing.value = false
                 return@launch
@@ -584,8 +527,6 @@ class DiscoverViewModel @Inject constructor(
 
             _loading.value = true
             _shelves.value = emptyList()
-            // The tail was fetched to continue a feed that no longer exists.
-            _flowExtra.value = emptyList()
             try {
                 val moodId = label?.let { moodIdByLabel[it] }
                 val seed = label?.let { chips.firstOrNull { chip -> chip.label == it } }
@@ -1056,17 +997,12 @@ class DiscoverViewModel @Inject constructor(
         // rather than "the same thing minus what I rejected".
         _dismissedShelves.value = emptySet()
         _dismissedItems.value = emptySet()
-        _flowExtra.value = emptyList()
         selectChip(_selectedChip.value)
     }
 
     /** Wave one card away. */
     fun dismissItem(key: String) {
         _dismissedItems.value = _dismissedItems.value + key
-    }
-
-    fun undismissItem(key: String) {
-        _dismissedItems.value = _dismissedItems.value - key
     }
 
     /** Wave a whole shelf away. */

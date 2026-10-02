@@ -56,13 +56,8 @@ import tf.monochrome.android.R
 // ── FL Studio Mobile color palette (shared by the plugin editor + FX chain) ──
 internal object FLPluginColors {
     val bg = Color(0xFF1A1A2E)
-    val knobBg = Color(0xFF0F3460)
-    val knobTrack = Color(0xFF2A2A4A)
     val knobOrange = Color(0xFFFF6B35)
     val knobPink = Color(0xFFFF6B9D)
-    val textPrimary = Color(0xFFE0E0E0)
-    val textSecondary = Color(0xFF808090)
-    val textValue = Color(0xFF00D4AA)
     val divider = Color(0xFF2A2A4A)
 }
 

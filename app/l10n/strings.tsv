@@ -329,7 +329,6 @@ unknown_error	Unknown error	未知错误	不明なエラー	Erreur inconnue	Erro
 downloads_empty	No downloaded tracks found.	没有已下载的歌曲。	ダウンロードした曲はありません。	Aucun titre téléchargé.	No hay canciones descargadas.	İndirilmiş parça yok.	Keine heruntergeladenen Titel gefunden.
 delete_downloads	Delete downloads	删除下载内容	ダウンロードを削除	Supprimer les téléchargements	Eliminar descargas	İndirilenleri sil	Downloads löschen
 singles	Singles	单曲	シングル	Singles	Sencillos	Single’lar	Singles
-delete_failed_one	Couldn’t delete “%1$s”	无法删除“%1$s”	「%1$s」を削除できませんでした	Impossible de supprimer « %1$s »	No se ha podido eliminar “%1$s”	“%1$s” silinemedi	„%1$s“ konnte nicht gelöscht werden
 action_play_all	Play all	全部播放	すべて再生	Tout lire	Reproducir todo	Tümünü çal	Alle abspielen
 search_this_folder	Search this folder	在此文件夹中搜索	このフォルダを検索	Rechercher dans ce dossier	Buscar en esta carpeta	Bu klasörde ara	Diesen Ordner durchsuchen
 folder_empty	No music here	这里没有音乐	ここには音楽がありません	Aucune musique ici	No hay música aquí	Burada müzik yok	Hier ist keine Musik
@@ -726,7 +725,6 @@ settings_headphone	Headphone	耳机	ヘッドホン	Casque	Auriculares	Kulaklık
 settings_active	Active	当前	使用中	Actif	Activo	Etkin	Aktiv
 settings_delete_preset	Delete preset	删除预设	プリセットを削除	Supprimer le préréglage	Eliminar preset	Ön ayarı sil	Preset löschen
 settings_player_visuals_studio	Player Visuals Studio	播放器视觉工作室	プレーヤービジュアル スタジオ	Studio visuel du lecteur	Estudio visual del reproductor	Oynatıcı Görsel Stüdyosu	Player-Visuals-Studio
-settings_lyric_type_3d_wave_and_beat_fx_the_player_and	Lyric type, 3D wave and beat FX; the player and panel glass; and the ambient MilkDrop background	歌词字体、3D 波浪与节拍特效；播放器与面板玻璃；以及氛围 MilkDrop 背景	歌詞の書体、3D ウェーブとビートエフェクト、プレーヤーとパネルのガラス、アンビエント MilkDrop 背景	Typographie des paroles, effets de vague 3D et de rythme ; verre du lecteur et des panneaux ; et fond d’ambiance MilkDrop	Tipografía de la letra, efectos de onda 3D y de ritmo; el cristal del reproductor y los paneles; y el fondo ambiental MilkDrop	Şarkı sözü yazısı, 3B dalga ve vuruş efektleri; oynatıcı ve panel camı; ve ortam MilkDrop arka planı	Songtext-Schrift, 3D-Welle und Beat-Effekte; das Glas von Player und Panels; und der MilkDrop-Ambient-Hintergrund
 settings_color_theme	Color Theme	颜色主题	カラーテーマ	Thème de couleurs	Tema de color	Renk teması	Farbschema
 settings_custom_colors	Custom colors	自定义颜色	カスタムカラー	Couleurs personnalisées	Colores personalizados	Özel renkler	Eigene Farben
 settings_pick_your_own_accent_and_background_overrides	Pick your own accent and background. Overrides the theme above	选择你自己的强调色和背景色，将覆盖上方的主题	アクセントカラーと背景色を自分で選びます。上のテーマより優先されます	Choisissez votre couleur d’accent et votre arrière-plan. Remplace le thème ci-dessus	Elige tu propio color de acento y fondo. Sustituye al tema de arriba	Kendi vurgu ve arka plan renginizi seçin. Yukarıdaki temanın yerine geçer	Wähle eigene Akzent- und Hintergrundfarben. Ersetzt das Farbschema oben
@@ -813,7 +811,6 @@ settings_spectrum_over_the_artwork	Spectrum over the artwork	封面上的频谱	
 settings_animated_spectrum	Animated spectrum	动态频谱	アニメーションするスペクトラム	Spectre animé	Espectro animado	Hareketli spektrum	Animiertes Spektrum
 settings_a_moving_spectrum_beside_the_artwork_matched_to	A moving spectrum beside the artwork, matched to the genre's rhythm and the cover's colour. Off leaves the card still.	封面旁会动的频谱，与流派的节奏和封面的颜色相匹配。关闭后卡片保持静止。	アートワークの横で動くスペクトラム。ジャンルのリズムとカバーの色に合わせます。オフにするとカードは静止します。	Un spectre animé à côté de la pochette, accordé au rythme du genre et à la couleur de la pochette. Désactivé, la carte reste immobile.	Un espectro en movimiento junto a la portada, acorde al ritmo del género y al color de la portada. Desactivado, la tarjeta queda quieta.	Kapağın yanında, türün ritmine ve kapağın rengine uyan hareketli bir spektrum. Kapalıyken kart sabit kalır.	Ein bewegtes Spektrum neben dem Cover, passend zum Rhythmus des Genres und zur Farbe des Covers. Aus: Die Karte bleibt still.
 settings_signed_in_as	Signed in as	登录身份	サインイン中のアカウント	Connecté en tant que	Sesión iniciada como	Oturum açan	Angemeldet als
-settings_online	Online	在线	オンライン	En ligne	En línea	Çevrimiçi	Online
 settings_cache_size	Cache Size	缓存大小	キャッシュサイズ	Taille du cache	Tamaño de caché	Önbellek boyutu	Cache-Größe
 settings_restart_onboarding	Restart onboarding	重新开始引导	初期設定をやり直す	Relancer la configuration	Reiniciar la configuración inicial	Kurulumu yeniden başlat	Einrichtung neu starten
 settings_run_the_first_time_setup_again_your_library_and	Run the first-time setup again. Your library and settings are kept.	再次运行首次设置。你的音乐库和设置都会保留。	初回セットアップをもう一度実行します。ライブラリと設定はそのまま残ります。	Relancer la configuration initiale. Votre bibliothèque et vos réglages sont conservés.	Vuelve a ejecutar la configuración inicial. Se conservan tu biblioteca y tus ajustes.	İlk kurulumu yeniden çalıştırın. Kitaplığınız ve ayarlarınız korunur.	Die Ersteinrichtung erneut durchlaufen. Bibliothek und Einstellungen bleiben erhalten.
@@ -1475,11 +1472,9 @@ eq_err_delete_preset	Failed to delete preset: %1$s	无法删除预设：%1$s	プ
 eq_err_parse_data	Failed to parse measurement data	无法解析测量数据	測定データを解析できませんでした	Impossible de lire les données de mesure	No se pudieron leer los datos de medición	Ölçüm verileri ayrıştırılamadı	Messdaten konnten nicht gelesen werden
 eq_err_autoeq	AutoEQ calculation failed: %1$s	AutoEQ 计算失败：%1$s	AutoEQ の計算に失敗しました：%1$s	Échec du calcul AutoEQ : %1$s	Error en el cálculo de AutoEQ: %1$s	AutoEQ hesaplaması başarısız: %1$s	AutoEQ-Berechnung fehlgeschlagen: %1$s
 eq_err_load_headphones	Failed to load headphones: %1$s	无法加载耳机列表：%1$s	ヘッドホンを読み込めませんでした：%1$s	Impossible de charger les casques : %1$s	No se pudieron cargar los auriculares: %1$s	Kulaklıklar yüklenemedi: %1$s	Kopfhörer konnten nicht geladen werden: %1$s
-eq_err_search	Search failed: %1$s	搜索失败：%1$s	検索に失敗しました：%1$s	Échec de la recherche : %1$s	Error en la búsqueda: %1$s	Arama başarısız: %1$s	Suche fehlgeschlagen: %1$s
 eq_err_fetch_measurement	Failed to fetch measurement	无法获取测量数据	測定データを取得できませんでした	Impossible de récupérer la mesure	No se pudo obtener la medición	Ölçüm alınamadı	Messung konnte nicht abgerufen werden
 eq_err_parse_headphone	Failed to parse headphone measurement	无法解析耳机测量数据	ヘッドホンの測定データを解析できませんでした	Impossible de lire la mesure du casque	No se pudo leer la medición de los auriculares	Kulaklık ölçümü ayrıştırılamadı	Kopfhörermessung konnte nicht gelesen werden
 eq_err_load_measurement	Failed to load measurement: %1$s	无法加载测量数据：%1$s	測定データを読み込めませんでした：%1$s	Impossible de charger la mesure : %1$s	No se pudo cargar la medición: %1$s	Ölçüm yüklenemedi: %1$s	Messung konnte nicht geladen werden: %1$s
-eq_err_load_headphone_preset	Failed to load headphone preset: %1$s	无法加载耳机预设：%1$s	ヘッドホンのプリセットを読み込めませんでした：%1$s	Impossible de charger le préréglage du casque : %1$s	No se pudo cargar el preset de auriculares: %1$s	Kulaklık ön ayarı yüklenemedi: %1$s	Kopfhörer-Preset konnte nicht geladen werden: %1$s
 eq_err_no_measurement	No headphone measurement loaded	尚未加载耳机测量数据	ヘッドホンの測定データが読み込まれていません	Aucune mesure de casque chargée	No hay ninguna medición de auriculares cargada	Yüklü kulaklık ölçümü yok	Keine Kopfhörermessung geladen
 eq_err_parse_file	Failed to parse measurement file	无法解析测量文件	測定ファイルを解析できませんでした	Impossible de lire le fichier de mesure	No se pudo leer el archivo de medición	Ölçüm dosyası ayrıştırılamadı	Messdatei konnte nicht gelesen werden
 eq_err_import	Import failed: %1$s	导入失败：%1$s	インポートに失敗しました：%1$s	Échec de l’import : %1$s	Error al importar: %1$s	İçe aktarma başarısız: %1$s	Import fehlgeschlagen: %1$s
@@ -1520,9 +1515,6 @@ eq_preamp_summary	 · preamp %1$.1f dB	 · 前置增益 %1$.1f dB	 · プリア�
 eq_select	Select…	请选择…	選択…	Choisir…	Elegir…	Seçin…	Auswählen …
 eq_get_started_caps	GET STARTED	开始使用	始める	COMMENCER	EMPEZAR	BAŞLA	LOS GEHT’S
 eq_next_caps	NEXT	下一步	次へ	SUIVANT	SIGUIENTE	İLERİ	WEITER
-eq_profile_count#one	%1$d profile	%1$d 个配置	%1$d 件のプロファイル	%1$d profil	%1$d perfil	%1$d profil	%1$d Profil
-eq_profile_count#many	%1$d profiles	%1$d 个配置	%1$d 件のプロファイル	%1$d profils	%1$d perfiles	%1$d profil	%1$d Profile
-eq_profile_count#other	%1$d profiles	%1$d 个配置	%1$d 件のプロファイル	%1$d profils	%1$d perfiles	%1$d profil	%1$d Profile
 eq_model_count#one	%1$d model	%1$d 个型号	%1$d モデル	%1$d modèle	%1$d modelo	%1$d model	%1$d Modell
 eq_model_count#many	%1$d models	%1$d 个型号	%1$d モデル	%1$d modèles	%1$d modelos	%1$d model	%1$d Modelle
 eq_model_count#other	%1$d models	%1$d 个型号	%1$d モデル	%1$d modèles	%1$d modelos	%1$d model	%1$d Modelle
@@ -1684,7 +1676,6 @@ mixer_loudness_measuring	measuring	正在测量	測定中	mesure en cours	midien
 mixer_loudness_integrated	, integrated %1$s LUFS	，综合 %1$s LUFS	、積算 %1$s LUFS	, intégrée %1$s LUFS	, integrada %1$s LUFS	, bütünleşik %1$s LUFS	, integriert %1$s LUFS
 mixer_preset_desc	%1$s preset	%1$s 预设	%1$s プリセット	Préréglage %1$s	Preset %1$s	%1$s ön ayarı	Preset %1$s
 mixer_preset_desc_creative	%1$s preset, creative	%1$s 预设，创意型	%1$s プリセット（クリエイティブ）	Préréglage %1$s, créatif	Preset %1$s, creativo	%1$s ön ayarı, yaratıcı	Preset %1$s, kreativ
-mixer_imported_preset	Imported Preset	导入的预设	インポートしたプリセット	Préréglage importé	Preset importado	İçe aktarılan ön ayar	Importiertes Preset
 notif_debug_channel	Debug screen recorder	调试录屏	デバッグ画面録画	Enregistreur d’écran de débogage	Grabador de pantalla de depuración	Hata ayıklama ekran kaydedici	Debug-Bildschirmrekorder
 notif_debug_title	Recording screen (debug)	正在录屏（调试）	画面を録画中（デバッグ）	Enregistrement de l’écran (débogage)	Grabando la pantalla (depuración)	Ekran kaydediliyor (hata ayıklama)	Bildschirm wird aufgenommen (Debug)
 notif_debug_text	Native resolution/fps, stereo media audio	原生分辨率/帧率，立体声媒体音频	ネイティブの解像度/fps、ステレオのメディア音声	Résolution et FPS natifs, audio multimédia stéréo	Resolución y FPS nativos, audio multimedia estéreo	Yerel çözünürlük/fps, stereo medya sesi	Native Auflösung/FPS, Stereo-Medienaudio

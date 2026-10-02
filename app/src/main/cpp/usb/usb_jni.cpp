@@ -67,12 +67,6 @@ Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativeIsStreamingFormat(
         ? JNI_TRUE : JNI_FALSE;
 }
 
-JNIEXPORT jboolean JNICALL
-Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativeIsStreaming(
-    JNIEnv*, jobject) {
-    return driver().isStreaming() ? JNI_TRUE : JNI_FALSE;
-}
-
 // Expects a direct ByteBuffer plus the caller-visible [byteOffset]
 // (ByteBuffer.position()); we read [base+byteOffset,
 // base+byteOffset+frames*frameSize). The offset must come from the
@@ -115,12 +109,6 @@ Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativeWrite(
         return 0;
     }
     return driver().writePcm(base + byteOffset, frames);
-}
-
-JNIEXPORT jint JNICALL
-Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativeWritableFrames(
-    JNIEnv*, jobject) {
-    return driver().writableFrames();
 }
 
 JNIEXPORT jlong JNICALL

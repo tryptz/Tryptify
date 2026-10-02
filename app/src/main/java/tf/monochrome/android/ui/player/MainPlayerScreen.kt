@@ -1262,18 +1262,3 @@ private fun PlayerTrackInfo(
         }
     }
 }
-
-@Composable
-internal fun MetaChip(label: String, accent: Color) {
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = accent.copy(alpha = 0.14f),
-        contentColor = accent,
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            style = MaterialTheme.typography.labelMedium,
-        )
-    }
-}

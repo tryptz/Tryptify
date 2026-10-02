@@ -338,7 +338,6 @@
     <string name="downloads_empty">Keine heruntergeladenen Titel gefunden.</string>
     <string name="delete_downloads">Downloads löschen</string>
     <string name="singles">Singles</string>
-    <string name="delete_failed_one">„%1$s“ konnte nicht gelöscht werden</string>
     <string name="action_play_all">Alle abspielen</string>
     <string name="search_this_folder">Diesen Ordner durchsuchen</string>
     <string name="folder_empty">Hier ist keine Musik</string>
@@ -757,7 +756,6 @@
     <string name="settings_active">Aktiv</string>
     <string name="settings_delete_preset">Preset löschen</string>
     <string name="settings_player_visuals_studio">Player-Visuals-Studio</string>
-    <string name="settings_lyric_type_3d_wave_and_beat_fx_the_player_and">Songtext-Schrift, 3D-Welle und Beat-Effekte; das Glas von Player und Panels; und der MilkDrop-Ambient-Hintergrund</string>
     <string name="settings_color_theme">Farbschema</string>
     <string name="settings_custom_colors">Eigene Farben</string>
     <string name="settings_pick_your_own_accent_and_background_overrides">Wähle eigene Akzent- und Hintergrundfarben. Ersetzt das Farbschema oben</string>
@@ -844,7 +842,6 @@
     <string name="settings_animated_spectrum">Animiertes Spektrum</string>
     <string name="settings_a_moving_spectrum_beside_the_artwork_matched_to">Ein bewegtes Spektrum neben dem Cover, passend zum Rhythmus des Genres und zur Farbe des Covers. Aus: Die Karte bleibt still.</string>
     <string name="settings_signed_in_as">Angemeldet als</string>
-    <string name="settings_online">Online</string>
     <string name="settings_cache_size">Cache-Größe</string>
     <string name="settings_restart_onboarding">Einrichtung neu starten</string>
     <string name="settings_run_the_first_time_setup_again_your_library_and">Die Ersteinrichtung erneut durchlaufen. Bibliothek und Einstellungen bleiben erhalten.</string>
@@ -1498,11 +1495,9 @@
     <string name="eq_err_parse_data">Messdaten konnten nicht gelesen werden</string>
     <string name="eq_err_autoeq">AutoEQ-Berechnung fehlgeschlagen: %1$s</string>
     <string name="eq_err_load_headphones">Kopfhörer konnten nicht geladen werden: %1$s</string>
-    <string name="eq_err_search">Suche fehlgeschlagen: %1$s</string>
     <string name="eq_err_fetch_measurement">Messung konnte nicht abgerufen werden</string>
     <string name="eq_err_parse_headphone">Kopfhörermessung konnte nicht gelesen werden</string>
     <string name="eq_err_load_measurement">Messung konnte nicht geladen werden: %1$s</string>
-    <string name="eq_err_load_headphone_preset">Kopfhörer-Preset konnte nicht geladen werden: %1$s</string>
     <string name="eq_err_no_measurement">Keine Kopfhörermessung geladen</string>
     <string name="eq_err_parse_file">Messdatei konnte nicht gelesen werden</string>
     <string name="eq_err_import">Import fehlgeschlagen: %1$s</string>
@@ -1543,10 +1538,6 @@
     <string name="eq_select">Auswählen …</string>
     <string name="eq_get_started_caps">LOS GEHT’S</string>
     <string name="eq_next_caps">WEITER</string>
-    <plurals name="eq_profile_count">
-        <item quantity="one">%1$d Profil</item>
-        <item quantity="other">%1$d Profile</item>
-    </plurals>
     <plurals name="eq_model_count">
         <item quantity="one">%1$d Modell</item>
         <item quantity="other">%1$d Modelle</item>
@@ -1712,7 +1703,6 @@
     <string name="mixer_loudness_integrated">, integriert %1$s LUFS</string>
     <string name="mixer_preset_desc">Preset %1$s</string>
     <string name="mixer_preset_desc_creative">Preset %1$s, kreativ</string>
-    <string name="mixer_imported_preset">Importiertes Preset</string>
     <string name="notif_debug_channel">Debug-Bildschirmrekorder</string>
     <string name="notif_debug_title">Bildschirm wird aufgenommen (Debug)</string>
     <string name="notif_debug_text">Native Auflösung/FPS, Stereo-Medienaudio</string>

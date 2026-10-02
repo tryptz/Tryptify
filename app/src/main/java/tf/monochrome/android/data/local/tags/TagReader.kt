@@ -91,18 +91,6 @@ class TagReader @Inject constructor(
         }
     }
 
-    suspend fun readTagsFromUri(uri: Uri): AudioTags {
-        val retriever = MediaMetadataRetriever()
-        return try {
-            retriever.setDataSource(context, uri)
-            extractTagsFromRetriever(retriever, uri.toString(), 0, 0)
-        } catch (e: Exception) {
-            AudioTags()
-        } finally {
-            try { retriever.release() } catch (_: Exception) {}
-        }
-    }
-
     private fun extractTags(
         retriever: MediaMetadataRetriever,
         file: File,

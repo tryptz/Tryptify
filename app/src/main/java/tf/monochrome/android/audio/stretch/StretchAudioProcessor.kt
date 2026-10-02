@@ -105,10 +105,6 @@ class StretchAudioProcessor @Inject constructor() : AudioProcessor {
         if (h != 0L) StretchNative.nativeSetEngine(h, engine.nativeId, quality.nativeId)
     }
 
-    fun getEngine(): PitchEngine = engine
-
-    fun getQuality(): PitchQuality = quality
-
     /**
      * Round-trip latency in frames, or 0 when the processor is not engaged.
      * Whoever changes the pitch should glide dependent state over this window.

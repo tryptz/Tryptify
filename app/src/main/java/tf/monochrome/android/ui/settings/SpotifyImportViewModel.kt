@@ -86,8 +86,6 @@ class SpotifyImportViewModel @Inject constructor(
         }
     }
 
-    fun clearAuthError() = spotifyAuthManager.clearError()
-
     fun loadMyPlaylists() {
         viewModelScope.launch {
             _playlistsLoading.value = true

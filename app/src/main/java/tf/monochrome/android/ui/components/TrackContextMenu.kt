@@ -38,12 +38,6 @@ import tf.monochrome.android.ui.theme.MonoDimens
 import androidx.compose.ui.res.stringResource
 import tf.monochrome.android.R
 
-data class ContextAction(
-    val icon: ImageVector,
-    val label: String,
-    val action: () -> Unit
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TrackContextMenu(

@@ -62,8 +62,6 @@ class FloatSonicAudioProcessor : AudioProcessor {
         sonic?.setPitch(value)
     }
 
-    fun getSpeed(): Float = speed
-
     override fun configure(inputAudioFormat: AudioFormat): AudioFormat {
         if (inputAudioFormat.encoding != C.ENCODING_PCM_16BIT &&
             inputAudioFormat.encoding != C.ENCODING_PCM_FLOAT

@@ -132,7 +132,6 @@ fun EqualizerScreen(
     var showSaveDialog by rememberSaveable { mutableStateOf(false) }
     var showTargetMenu by remember { mutableStateOf(false) }
     var showHeadphoneSelect by remember { mutableStateOf(false) }
-    var showPresetMenu by remember { mutableStateOf(false) }
     var showBandsExpanded by rememberSaveable { mutableStateOf(true) }
     var showProfilesExpanded by rememberSaveable { mutableStateOf(true) }
     var saveName by rememberSaveable { mutableStateOf("") }

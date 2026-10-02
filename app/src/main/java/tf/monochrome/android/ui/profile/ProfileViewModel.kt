@@ -56,10 +56,6 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    fun clearSyncStatus() {
-        _syncStatus.value = null
-    }
-
     fun refreshUser() {
         viewModelScope.launch {
             authManager.refreshUser()

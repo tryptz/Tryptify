@@ -91,9 +91,6 @@ internal class FloatSonic(
         newRatePosition = 0
     }
 
-    /** Frames queued but not yet turned into output — the analogue of Sonic's pending bytes. */
-    val pendingInputFrameCount: Int get() = inputFrameCount
-
     val outputFrameCountAvailable: Int get() = outputFrameCount
 
     /** Queues [frameCount] frames of interleaved samples from [samples] at [offset]. */

@@ -113,9 +113,6 @@ data class Album(
     val coverUrl: String?
         get() = cover?.let { buildCoverUrl(it, 640) }
 
-    val thumbnailUrl: String?
-        get() = cover?.let { buildCoverUrl(it, 320) }
-
     val releaseYear: String?
         get() = releaseDate?.take(4)
 
@@ -715,12 +712,6 @@ data class Headphone(
     val name: String,
     val type: String = "over-ear", // "over-ear", "in-ear", "earbud"
     val data: List<FrequencyPoint> = emptyList(),
-    val measurements: List<AutoEqMeasurement> = emptyList()
-)
-
-data class AutoEqEntry(
-    val name: String,
-    val type: String,
     val measurements: List<AutoEqMeasurement> = emptyList()
 )
 

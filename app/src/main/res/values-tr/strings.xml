@@ -338,7 +338,6 @@
     <string name="downloads_empty">İndirilmiş parça yok.</string>
     <string name="delete_downloads">İndirilenleri sil</string>
     <string name="singles">Single’lar</string>
-    <string name="delete_failed_one">“%1$s” silinemedi</string>
     <string name="action_play_all">Tümünü çal</string>
     <string name="search_this_folder">Bu klasörde ara</string>
     <string name="folder_empty">Burada müzik yok</string>
@@ -757,7 +756,6 @@
     <string name="settings_active">Etkin</string>
     <string name="settings_delete_preset">Ön ayarı sil</string>
     <string name="settings_player_visuals_studio">Oynatıcı Görsel Stüdyosu</string>
-    <string name="settings_lyric_type_3d_wave_and_beat_fx_the_player_and">Şarkı sözü yazısı, 3B dalga ve vuruş efektleri; oynatıcı ve panel camı; ve ortam MilkDrop arka planı</string>
     <string name="settings_color_theme">Renk teması</string>
     <string name="settings_custom_colors">Özel renkler</string>
     <string name="settings_pick_your_own_accent_and_background_overrides">Kendi vurgu ve arka plan renginizi seçin. Yukarıdaki temanın yerine geçer</string>
@@ -844,7 +842,6 @@
     <string name="settings_animated_spectrum">Hareketli spektrum</string>
     <string name="settings_a_moving_spectrum_beside_the_artwork_matched_to">Kapağın yanında, türün ritmine ve kapağın rengine uyan hareketli bir spektrum. Kapalıyken kart sabit kalır.</string>
     <string name="settings_signed_in_as">Oturum açan</string>
-    <string name="settings_online">Çevrimiçi</string>
     <string name="settings_cache_size">Önbellek boyutu</string>
     <string name="settings_restart_onboarding">Kurulumu yeniden başlat</string>
     <string name="settings_run_the_first_time_setup_again_your_library_and">İlk kurulumu yeniden çalıştırın. Kitaplığınız ve ayarlarınız korunur.</string>
@@ -1498,11 +1495,9 @@
     <string name="eq_err_parse_data">Ölçüm verileri ayrıştırılamadı</string>
     <string name="eq_err_autoeq">AutoEQ hesaplaması başarısız: %1$s</string>
     <string name="eq_err_load_headphones">Kulaklıklar yüklenemedi: %1$s</string>
-    <string name="eq_err_search">Arama başarısız: %1$s</string>
     <string name="eq_err_fetch_measurement">Ölçüm alınamadı</string>
     <string name="eq_err_parse_headphone">Kulaklık ölçümü ayrıştırılamadı</string>
     <string name="eq_err_load_measurement">Ölçüm yüklenemedi: %1$s</string>
-    <string name="eq_err_load_headphone_preset">Kulaklık ön ayarı yüklenemedi: %1$s</string>
     <string name="eq_err_no_measurement">Yüklü kulaklık ölçümü yok</string>
     <string name="eq_err_parse_file">Ölçüm dosyası ayrıştırılamadı</string>
     <string name="eq_err_import">İçe aktarma başarısız: %1$s</string>
@@ -1543,10 +1538,6 @@
     <string name="eq_select">Seçin…</string>
     <string name="eq_get_started_caps">BAŞLA</string>
     <string name="eq_next_caps">İLERİ</string>
-    <plurals name="eq_profile_count">
-        <item quantity="one">%1$d profil</item>
-        <item quantity="other">%1$d profil</item>
-    </plurals>
     <plurals name="eq_model_count">
         <item quantity="one">%1$d model</item>
         <item quantity="other">%1$d model</item>
@@ -1712,7 +1703,6 @@
     <string name="mixer_loudness_integrated">, bütünleşik %1$s LUFS</string>
     <string name="mixer_preset_desc">%1$s ön ayarı</string>
     <string name="mixer_preset_desc_creative">%1$s ön ayarı, yaratıcı</string>
-    <string name="mixer_imported_preset">İçe aktarılan ön ayar</string>
     <string name="notif_debug_channel">Hata ayıklama ekran kaydedici</string>
     <string name="notif_debug_title">Ekran kaydediliyor (hata ayıklama)</string>
     <string name="notif_debug_text">Yerel çözünürlük/fps, stereo medya sesi</string>

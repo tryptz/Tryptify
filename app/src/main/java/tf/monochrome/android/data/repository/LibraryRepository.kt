@@ -133,26 +133,6 @@ class LibraryRepository @Inject constructor(
         }
     }
 
-    suspend fun toggleFavoriteAlbum(album: Album) {
-        if (favoriteDao.isFavoriteAlbum(album.id)) {
-            favoriteDao.deleteFavoriteAlbum(album.id)
-            supabaseSync.queueChange(SyncKind.FAVORITE_ALBUM, album.id.toString(), SyncOp.DELETE)
-        } else {
-            favoriteDao.insertFavoriteAlbum(album.toFavoriteEntity())
-            supabaseSync.queueChange(SyncKind.FAVORITE_ALBUM, album.id.toString(), SyncOp.UPSERT)
-        }
-    }
-
-    suspend fun toggleFavoriteArtist(artist: Artist) {
-        if (favoriteDao.isFavoriteArtist(artist.id)) {
-            favoriteDao.deleteFavoriteArtist(artist.id)
-            supabaseSync.queueChange(SyncKind.FAVORITE_ARTIST, artist.id.toString(), SyncOp.DELETE)
-        } else {
-            favoriteDao.insertFavoriteArtist(artist.toFavoriteEntity())
-            supabaseSync.queueChange(SyncKind.FAVORITE_ARTIST, artist.id.toString(), SyncOp.UPSERT)
-        }
-    }
-
     fun isFavoriteTrack(trackId: Long): Flow<Boolean> = favoriteDao.isFavoriteTrackFlow(trackId)
     fun isFavoriteAlbum(albumId: Long): Flow<Boolean> = favoriteDao.isFavoriteAlbumFlow(albumId)
     fun isFavoriteArtist(artistId: Long): Flow<Boolean> = favoriteDao.isFavoriteArtistFlow(artistId)
@@ -223,8 +203,6 @@ class LibraryRepository @Inject constructor(
     }
 
     // --- Play events / stats ---
-
-    val playEventDaoRef: PlayEventDao get() = playEventDao
 
     suspend fun getMostPlayed(limit: Int = 50): List<Track> {
         return historyDao.getMostPlayed(limit).map { it.toDomain() }

@@ -193,14 +193,6 @@ class DownloadsViewModel @Inject constructor(
     private val _messages = MutableSharedFlow<tf.monochrome.android.ui.components.UiText>(extraBufferCapacity = 4)
     val messages: SharedFlow<tf.monochrome.android.ui.components.UiText> = _messages.asSharedFlow()
 
-    fun deleteDownload(track: DownloadedTrackEntity) {
-        viewModelScope.launch {
-            if (!deleteOne(track)) {
-                _messages.tryEmit(tf.monochrome.android.ui.components.UiText.Res(R.string.delete_failed_one, listOf(track.title)))
-            }
-        }
-    }
-
     fun deleteDownloads(tracks: List<DownloadedTrackEntity>) {
         viewModelScope.launch {
             val failed = tracks.count { !deleteOne(it) }
