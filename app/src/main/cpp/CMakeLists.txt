@@ -6,6 +6,17 @@ project("monochrome_native")
 link_libraries(c++_shared)
 
 # ── ProjectM Visualizer ──────────────────────────────────────────────────
+# projectM's version.h is generated from CMAKE_PROJECT_VERSION_*, which CMake
+# takes from the TOP-level project() — this file's, which has no version — not
+# from projectM's own project(VERSION 4.1.6). They came out empty and
+# ProjectMCWrapper.cpp failed with "expected expression" on any fresh
+# configure; earlier builds only passed on a configure cached before that.
+# Pin them to the vendored projectM's version; keep in step with
+# third_party/projectm/CMakeLists.txt.
+set(CMAKE_PROJECT_VERSION 4.1.6)
+set(CMAKE_PROJECT_VERSION_MAJOR 4)
+set(CMAKE_PROJECT_VERSION_MINOR 1)
+set(CMAKE_PROJECT_VERSION_PATCH 6)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/projectm
     ${CMAKE_CURRENT_BINARY_DIR}/projectm)
 
