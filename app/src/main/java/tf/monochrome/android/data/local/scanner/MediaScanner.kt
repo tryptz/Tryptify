@@ -545,11 +545,13 @@ class MediaScanner @Inject constructor(
                     .isLegacyKey(existing.artworkCacheKey)
             ) return true
             // Re-read rows that were indexed before artist-from-title
-            // recovery existed: no artist tag, but a "Artist - Title"
-            // shaped title we can now split. Self-heals (artist gets
+            // recovery could split them: no artist tag, but an "Artist - Title"
+            // or "Artist ~ Title" shaped title. Self-heals (artist gets
             // populated, so the next scan skips them) and stays cheap
             // by only targeting files that can actually benefit.
-            if (existing.artist == null && existing.title?.contains(" - ") == true) return true
+            if (existing.artist == null &&
+                existing.title?.let { tf.monochrome.android.data.local.tags.splitArtistTitle(it) } != null
+            ) return true
             return false
         }
 

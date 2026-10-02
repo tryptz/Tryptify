@@ -270,6 +270,9 @@ class AudioPipelineSnapshotTest {
         // No MIME at all: fall back to the library row's own word for it.
         assertEquals("ALAC", codecName(null, "ALAC"))
         assertNull(codecName(null, null))
+        // A WAV decodes to raw PCM; the library's container name stays in it.
+        assertEquals("WAV (PCM)", codecName("audio/raw", "WAV"))
+        assertEquals("PCM", codecName("audio/raw", null))
     }
 
     @Test

@@ -248,7 +248,10 @@ internal fun codecName(mimeType: String?, tagged: String?): String? {
         mime.endsWith("/mp4a-latm") || mime.contains("aac") -> "AAC"
         mime.endsWith("/opus") -> "Opus"
         mime.endsWith("/vorbis") -> "Vorbis"
-        mime.endsWith("/raw") -> "PCM"
+        // The decoder reports every WAV and AIFF as raw PCM; the library knows
+        // the container, so say both rather than just "PCM".
+        mime.endsWith("/raw") -> tagged?.takeIf { it.equals("WAV", true) || it.equals("AIFF", true) }
+            ?.let { "${it.uppercase()} (PCM)" } ?: "PCM"
         mime.endsWith("/wav") || mime.endsWith("/x-wav") -> "WAV"
         mime.endsWith("/eac3-joc") -> "E-AC-3 JOC"
         mime.endsWith("/eac3") -> "E-AC-3"

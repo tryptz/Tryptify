@@ -550,6 +550,11 @@ data class UnifiedTrack(
             codec == AudioCodec.ALAC && (bitDepth ?: 16) >= 24 ->
                 "ALAC ${bitDepth}/${(sampleRate ?: 44100) / 1000}"
             codec == AudioCodec.ALAC -> "ALAC"
+            // Uncompressed containers: their format is bit depth and rate,
+            // like FLAC's. They had no case at all, so a WAV row showed no
+            // badge beside an MP3's "MP3 320".
+            codec == AudioCodec.WAV -> "WAV ${bitDepth ?: 16}/${(sampleRate ?: 44100) / 1000}"
+            codec == AudioCodec.AIFF -> "AIFF ${bitDepth ?: 16}/${(sampleRate ?: 44100) / 1000}"
             codec == AudioCodec.MP3 -> "MP3 ${bitRate ?: 320}"
             codec == AudioCodec.AAC -> "AAC ${bitRate ?: 256}"
             codec == AudioCodec.OPUS -> "Opus ${bitRate ?: 128}"

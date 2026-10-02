@@ -343,20 +343,14 @@ class TagReader @Inject constructor(
      * used only when the file has no ARTIST tag at all. Falls back to the file
      * name (sans extension) when the title tag is also missing.
      *
-     * Only the spaced hyphen-minus (` - `) is treated as the separator. En/em
-     * dashes (`–`, `—`) are routinely used *inside* a title (e.g. "Heroine —
-     * Pat B Remix"), so splitting on them would mangle good titles. Returns
+     * See [splitArtistTitle] for which separators count. Returns
      * `(null, originalTitle)` when nothing can be confidently derived.
      */
     private fun deriveArtistFromTitle(rawTitle: String?, filePath: String): Pair<String?, String?> {
         val base = rawTitle?.takeIf { it.isNotBlank() }
             ?: File(filePath).nameWithoutExtension.takeIf { it.isNotBlank() }
             ?: return null to rawTitle
-        val idx = base.indexOf(" - ")
-        if (idx <= 0) return null to rawTitle
-        val artist = base.substring(0, idx).trim()
-        val title = base.substring(idx + 3).trim()
-        return if (artist.isNotEmpty() && title.isNotEmpty()) artist to title else null to rawTitle
+        return splitArtistTitle(base) ?: (null to rawTitle)
     }
 
     private fun parseTrackNumber(raw: String?): Pair<Int?, Int?> {
@@ -545,4 +539,21 @@ class TagReader @Inject constructor(
             "albumart" // AlbumArt_{GUID}_Large.jpg (WMP)
         )
     }
+}
+
+/**
+ * "Artist - Title" or "Artist ~ Title" → (artist, title), or null.
+ *
+ * Only a *spaced* hyphen-minus or tilde counts. A spaced tilde is how a lot of
+ * DJ and scene rips name files ("Banana Inc ~ Black Magic") and practically
+ * never sits inside a title. En/em dashes (`–`, `—`) are routinely used inside
+ * one ("Heroine — Pat B Remix"), so splitting on them would mangle good titles.
+ */
+internal fun splitArtistTitle(base: String): Pair<String, String>? {
+    val sep = listOf(" - ", " ~ ")
+        .mapNotNull { s -> base.indexOf(s).takeIf { it > 0 }?.let { it to s } }
+        .minByOrNull { it.first } ?: return null
+    val artist = base.substring(0, sep.first).trim()
+    val title = base.substring(sep.first + sep.second.length).trim()
+    return if (artist.isNotEmpty() && title.isNotEmpty()) artist to title else null
 }
