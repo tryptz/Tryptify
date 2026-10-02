@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.player
 
+import androidx.compose.material.icons.filled.SurroundSound
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -724,6 +725,8 @@ private fun HeroCoverArt(
     // Which picture the spectrum button puts on the art: the FFT envelope, or
     // Wave Candy's scope. Saveable so a rotation keeps it.
     var waveCandy by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    // Wave Candy's two channels apart, or summed into one line.
+    var waveStereo by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(true) }
     // The kick punch: on while a visual is on the art, so the cover follows
     // the beat with either style.
     val kick = rememberKickPulse(scopeReader, enabled = spectrumEnabled && isPlaying)
@@ -788,7 +791,7 @@ private fun HeroCoverArt(
         )
 
         if (spectrumEnabled && waveCandy && scopeReader != null) {
-            WaveCandyOverlay(read = scopeReader, kick = kick, modifier = Modifier.matchParentSize())
+            WaveCandyOverlay(read = scopeReader, stereo = waveStereo, kick = kick, modifier = Modifier.matchParentSize())
         } else if (spectrumEnabled && spectrumBins.isNotEmpty()) {
             BoxWithConstraints(
                 modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
@@ -822,6 +825,14 @@ private fun HeroCoverArt(
                         contentDescription = if (waveCandy) "Switch to spectrum" else "Switch to Wave Candy scope",
                         enabled = interactive,
                         onClick = { waveCandy = !waveCandy; showControls() },
+                    )
+                }
+                if (spectrumEnabled && waveCandy && scopeReader != null) {
+                    HeroIconButton(
+                        icon = if (waveStereo) Icons.Default.SurroundSound else Icons.Default.GraphicEq,
+                        contentDescription = if (waveStereo) "Switch waveform to mono" else "Switch waveform to stereo",
+                        enabled = interactive,
+                        onClick = { waveStereo = !waveStereo; showControls() },
                     )
                 }
                 if (spectrumEnabled && !(waveCandy && scopeReader != null)) {
