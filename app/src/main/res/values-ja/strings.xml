@@ -1764,4 +1764,6 @@
     <plurals name="settings_flagged_presets_device">
         <item quantity="other">うち %1$d 件はこのデバイスで付いたフラグです。タップすると解除します。</item>
     </plurals>
+    <string name="settings_mini_player_hide_with_tabs">タブバー表示中はミニプレーヤーを隠す</string>
+    <string name="settings_mini_player_hide_with_tabs_desc">上にスクロールするとタブバー、下にスクロールするとミニプレーヤーを表示します。表示中のタブをタップするとミニプレーヤーが表示されます。</string>
 </resources>

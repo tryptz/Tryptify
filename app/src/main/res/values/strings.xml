@@ -1816,4 +1816,6 @@
         <item quantity="one">%1$d of them was flagged on this device; tap to give it another chance.</item>
         <item quantity="other">%1$d of them were flagged on this device; tap to give them another chance.</item>
     </plurals>
+    <string name="settings_mini_player_hide_with_tabs">Hide mini player when the tabs show</string>
+    <string name="settings_mini_player_hide_with_tabs_desc">Scroll up for the tabs, down for the mini player. Tap the tab you’re on to bring the player back.</string>
 </resources>

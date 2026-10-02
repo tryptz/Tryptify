@@ -214,6 +214,8 @@ class PreferencesManager @Inject constructor(
         // Player / display
         private val PLAYER_DYNAMIC_COLOR = booleanPreferencesKey("player_dynamic_color")
         private val PLAYER_BLURRED_BACKGROUND = booleanPreferencesKey("player_blurred_background")
+        // The bar only ever shows the tabs or the mini player, never both stacked.
+        private val MINI_PLAYER_HIDE_WITH_TABS = booleanPreferencesKey("mini_player_hide_with_tabs")
         // Device-local: which bars a panel has and whether you want them is a
         // property of the phone in your hand, not of the account. Deliberately
         // absent from SETTINGS_SYNC_KEYS.
@@ -486,6 +488,7 @@ class PreferencesManager @Inject constructor(
             LASTFM_ENABLED, LASTFM_USERNAME, LISTENBRAINZ_ENABLED,
             CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, APPLE_WRAPPER_URL, API_SERVERS, DEV_MODE_ENABLED,
             NOW_PLAYING_VIEW_MODE, PLAYER_DYNAMIC_COLOR, PLAYER_BLURRED_BACKGROUND,
+            MINI_PLAYER_HIDE_WITH_TABS,
             ROMAJI_LYRICS, LYRICS_WORD_PROVIDER,
             LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON, GLOBE_FX_JSON, PLAYER_GLASS_JSON,
             PLAYER_GLASS_CUSTOM_PRESETS_JSON, MINI_PLAYER_GLASS_JSON, WAVE_CANDY_JSON,
@@ -2417,6 +2420,15 @@ class PreferencesManager @Inject constructor(
     // shader's uBackdropMix, so the default liquid glass lenses real album
     // tones instead of the flat wash.
     val playerBlurredBackground: Flow<Boolean> = dataStore.data.map { it[PLAYER_BLURRED_BACKGROUND] ?: true }
+    /**
+     * Whether the tab bar and the mini player take turns instead of stacking:
+     * scrolled up shows the tabs alone, scrolled down the folded bar with the
+     * mini player in it. Off by default, which keeps the stack.
+     */
+    val miniPlayerHideWithTabs: Flow<Boolean> = dataStore.data.map { it[MINI_PLAYER_HIDE_WITH_TABS] ?: false }
+    suspend fun setMiniPlayerHideWithTabs(enabled: Boolean) {
+        dataStore.edit { it[MINI_PLAYER_HIDE_WITH_TABS] = enabled }
+    }
     suspend fun setPlayerBlurredBackground(enabled: Boolean) {
         dataStore.edit { it[PLAYER_BLURRED_BACKGROUND] = enabled }
     }

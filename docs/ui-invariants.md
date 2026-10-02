@@ -204,6 +204,15 @@ It is driven by nested scroll at the nav host, so every list drives it without
 knowing. Lists pad by the bar's *expanded* height even while it is folded — a
 padding that followed the fold would jolt the list mid-scroll.
 
+**"Hide mini player when the tabs show" makes the two take turns.** The open bar
+is the tabs alone, with no mini player stacked over them. The folded bar is
+unchanged: the current tab's bubble, the mini player, then Search. Both states
+are one row, so the expanded height lists pad by drops the mini player's row.
+The open bar then has no way to the player except scrolling, which a short page
+cannot do. So a tap on the tab you are already on (otherwise a no-op) folds
+the bar. Do not make that tap switch or reload the page instead, and do not
+start pages folded: tab switching would become two taps.
+
 **The bar is on every screen but four**: the player, the mixer, Oxford and car
 mode, whose own controls run to the bottom edge (`chromeHiddenRoutes`). The
 download pill follows the same list.

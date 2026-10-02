@@ -3605,6 +3605,13 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
                 onToggleVisible = { viewModel.setPageVisible(pageId, pageId in hiddenPages) },
             )
         }
+        val hideMiniWithTabs by viewModel.miniPlayerHideWithTabs.collectAsStateWithLifecycle()
+        SettingSwitchItem(
+            title = stringResource(R.string.settings_mini_player_hide_with_tabs),
+            subtitle = stringResource(R.string.settings_mini_player_hide_with_tabs_desc),
+            checked = hideMiniWithTabs,
+            onCheckedChange = viewModel::setMiniPlayerHideWithTabs,
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader(stringResource(R.string.settings_library_sections))

@@ -1866,4 +1866,6 @@
         <item quantity="many">%1$d se marcaron en este dispositivo; toca para darles otra oportunidad.</item>
         <item quantity="other">%1$d se marcaron en este dispositivo; toca para darles otra oportunidad.</item>
     </plurals>
+    <string name="settings_mini_player_hide_with_tabs">Ocultar el minirreproductor cuando se muestran las pestañas</string>
+    <string name="settings_mini_player_hide_with_tabs_desc">Desplázate hacia arriba para ver las pestañas y hacia abajo para el minirreproductor. Toca la pestaña en la que estás para que vuelva el reproductor.</string>
 </resources>

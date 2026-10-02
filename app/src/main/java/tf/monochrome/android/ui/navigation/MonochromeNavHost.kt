@@ -293,6 +293,8 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     val settingsViewModel: tf.monochrome.android.ui.settings.SettingsViewModel = hiltViewModel()
     val pageOrder by settingsViewModel.pageOrder.collectAsStateWithLifecycle()
     val hiddenPages by settingsViewModel.hiddenPages.collectAsStateWithLifecycle()
+    // The tabs and the mini player take turns instead of stacking — see TabChrome.
+    val miniPlayerHideWithTabs by settingsViewModel.miniPlayerHideWithTabs.collectAsStateWithLifecycle()
     // The pages the user can show or hide, then Search, which is always there:
     // it is the round button beside the tab bar, not one of the ordered pages.
     val pages = remember(pageOrder, hiddenPages) {
@@ -454,9 +456,10 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     // How tall the floating chrome stands above the system bar, expanded: the
     // tab bar, and the mini player stacked over it. Lists pad by the expanded
     // height even while the bar is folded — following the fold would jolt them.
+    // Taking turns, nothing is ever stacked: both states are one row high.
     val chromeHeight = when {
         !showChrome -> 0.dp
-        showMiniPlayer -> CHROME_GAP + TabBarHeight + CHROME_GAP + MINI_PLAYER_HEIGHT
+        showMiniPlayer && !miniPlayerHideWithTabs -> CHROME_GAP + TabBarHeight + CHROME_GAP + MINI_PLAYER_HEIGHT
         else -> CHROME_GAP + TabBarHeight
     }
 
@@ -945,9 +948,23 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                     tabs = pillTabs(pages),
                     // On a pushed screen the bar lights the tab underneath it.
                     selected = tabFor(currentPageId),
-                    onTab = onTab,
+                    onTab = { tab ->
+                        // Taking turns, the open bar has no mini player, and a
+                        // page too short to scroll could never fold to show it.
+                        // So the tab you are already on — a tap that did nothing
+                        // — folds the bar instead: the player is always one tap
+                        // from anywhere, and switching tab is still one tap.
+                        if (miniPlayerHideWithTabs && miniPlayer != null && isOnMainTab &&
+                            !chromeCollapsed && tab == tabFor(currentPageId)
+                        ) {
+                            chromeCollapsed = true
+                        } else {
+                            onTab(tab)
+                        }
+                    },
                     collapsed = chromeCollapsed && miniPlayer != null,
                     onExpand = { chromeCollapsed = false },
+                    stackMiniPlayer = !miniPlayerHideWithTabs,
                     hazeState = hazeState,
                     miniPlayer = miniPlayer,
                     modifier = Modifier
@@ -1022,6 +1039,10 @@ private val MINI_PLAYER_HEIGHT = 66.dp
  * the mini player slides in between it and Search — iOS 26's tab bar. Tapping
  * the shrunken pill opens it back up rather than switching tab: what it shows
  * is the tab you are already on.
+ *
+ * Open, the mini player stacks over the pill unless [stackMiniPlayer] is off.
+ * Then the two take turns, and the bar only ever moves between two one-row
+ * states: the tabs, and the folded pill with the mini player beside it.
  */
 @Composable
 private fun TabChrome(
@@ -1030,6 +1051,7 @@ private fun TabChrome(
     onTab: (AppTab) -> Unit,
     collapsed: Boolean,
     onExpand: () -> Unit,
+    stackMiniPlayer: Boolean,
     hazeState: dev.chrisbanes.haze.HazeState,
     miniPlayer: (@Composable (Modifier) -> Unit)?,
     modifier: Modifier = Modifier,
@@ -1041,7 +1063,7 @@ private fun TabChrome(
         verticalArrangement = Arrangement.spacedBy(CHROME_GAP),
     ) {
         AnimatedVisibility(
-            visible = miniPlayer != null && !collapsed,
+            visible = miniPlayer != null && !collapsed && stackMiniPlayer,
             enter = fadeIn(tween(foldMillis)) + expandVertically(tween(foldMillis)),
             exit = fadeOut(tween(foldMillis)) + shrinkVertically(tween(foldMillis)),
         ) {

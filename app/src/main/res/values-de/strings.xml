@@ -1815,4 +1815,6 @@
         <item quantity="one">%1$d davon wurde auf diesem Gerät markiert – tippe, um ihm noch eine Chance zu geben.</item>
         <item quantity="other">%1$d davon wurden auf diesem Gerät markiert – tippe, um ihnen noch eine Chance zu geben.</item>
     </plurals>
+    <string name="settings_mini_player_hide_with_tabs">Mini-Player ausblenden, wenn die Tabs zu sehen sind</string>
+    <string name="settings_mini_player_hide_with_tabs_desc">Nach oben scrollen zeigt die Tabs, nach unten den Mini-Player. Tippe auf den aktuellen Tab, um den Player zurückzuholen.</string>
 </resources>

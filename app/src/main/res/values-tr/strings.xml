@@ -1815,4 +1815,6 @@
         <item quantity="one">Bunlardan %1$d tanesi bu cihazda işaretlendi; yeniden denemek için dokunun.</item>
         <item quantity="other">Bunlardan %1$d tanesi bu cihazda işaretlendi; yeniden denemek için dokunun.</item>
     </plurals>
+    <string name="settings_mini_player_hide_with_tabs">Sekmeler görünürken mini oynatıcıyı gizle</string>
+    <string name="settings_mini_player_hide_with_tabs_desc">Sekmeler için yukarı, mini oynatıcı için aşağı kaydırın. Oynatıcıyı geri getirmek için bulunduğunuz sekmeye dokunun.</string>
 </resources>

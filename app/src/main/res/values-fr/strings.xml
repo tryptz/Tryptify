@@ -1866,4 +1866,6 @@
         <item quantity="many">Dont %1$d signalés sur cet appareil ; touchez pour leur redonner une chance.</item>
         <item quantity="other">Dont %1$d signalés sur cet appareil ; touchez pour leur redonner une chance.</item>
     </plurals>
+    <string name="settings_mini_player_hide_with_tabs">Masquer le mini-lecteur quand les onglets s’affichent</string>
+    <string name="settings_mini_player_hide_with_tabs_desc">Faites défiler vers le haut pour les onglets, vers le bas pour le mini-lecteur. Touchez l’onglet actuel pour faire revenir le lecteur.</string>
 </resources>

@@ -1764,4 +1764,6 @@
     <plurals name="settings_flagged_presets_device">
         <item quantity="other">其中 %1$d 个是在此设备上标记的；点按即可重新允许。</item>
     </plurals>
+    <string name="settings_mini_player_hide_with_tabs">显示标签栏时隐藏迷你播放器</string>
+    <string name="settings_mini_player_hide_with_tabs_desc">向上滚动显示标签栏，向下滚动显示迷你播放器。点按当前所在的标签可调出迷你播放器。</string>
 </resources>

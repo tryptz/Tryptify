@@ -329,6 +329,8 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val playerBlurredBackground: StateFlow<Boolean> = preferences.playerBlurredBackground
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val miniPlayerHideWithTabs: StateFlow<Boolean> = preferences.miniPlayerHideWithTabs
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val immersiveFullScreen: StateFlow<Boolean> = preferences.immersiveFullScreen
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val lowPerformanceMode: StateFlow<Boolean> = preferences.lowPerformanceMode
@@ -651,6 +653,7 @@ class SettingsViewModel @Inject constructor(
     fun setLyricsBassReact(value: Float) { viewModelScope.launch { preferences.setLyricsBassReact(value) } }
     fun setPlayerDynamicColor(enabled: Boolean) { viewModelScope.launch { preferences.setPlayerDynamicColor(enabled) } }
     fun setPlayerBlurredBackground(enabled: Boolean) { viewModelScope.launch { preferences.setPlayerBlurredBackground(enabled) } }
+    fun setMiniPlayerHideWithTabs(enabled: Boolean) { viewModelScope.launch { preferences.setMiniPlayerHideWithTabs(enabled) } }
     fun setImmersiveFullScreen(enabled: Boolean) { viewModelScope.launch { preferences.setImmersiveFullScreen(enabled) } }
     // The master writes all three; each of the three re-derives the master.
     // Both directions are single DataStore transactions, so the four switches
