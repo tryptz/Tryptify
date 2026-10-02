@@ -54,8 +54,12 @@ CMakeLists.txt file":
 git submodule update --init --recursive --depth 1
 ```
 
-The third submodule, `app/src/main/assets/presets`, is the MilkDrop preset
-pack the visualizer ships; it comes down with the same command.
+The MilkDrop preset pack the visualizer ships is not a submodule. It is
+committed at `app/src/main/projectm-assets/presets`, and a build task packs it
+into one `assets/projectm/presets.zip`. Never put presets under
+`src/main/assets/`. Everything there is copied into the APK as-is, next to the
+zip. A submodule there used to do exactly that: about 29 MB of loose `.milk`
+files that nothing ever opened.
 
 The native DSP has host tests that build with the desktop compiler, no
 device or NDK needed — the multichannel mixer, the Oxford stages at Atmos
