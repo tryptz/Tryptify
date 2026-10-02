@@ -106,15 +106,21 @@ internal fun SpectrumWaterfallSettingsSection(
         style = MaterialTheme.typography.bodyLarge,
         modifier = Modifier.settingsAnchor("Waterfall style").padding(top = 8.dp, bottom = 6.dp),
     )
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        WaterfallStyle.entries.forEach { style ->
-            tf.monochrome.android.ui.mixer.GlassChoiceChip(
-                label = style.label,
-                selected = draft.style == style,
-                accent = MaterialTheme.colorScheme.primary,
-                onClick = { onChange(draft.copy(style = style)) },
-                modifier = Modifier.weight(1f),
-            )
+    // Two rows of three: six chips in one row are too narrow for "Ridgeline"
+    // on a phone.
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        WaterfallStyle.entries.chunked(3).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { style ->
+                    tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                        label = style.label,
+                        selected = draft.style == style,
+                        accent = MaterialTheme.colorScheme.primary,
+                        onClick = { onChange(draft.copy(style = style)) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
         }
     }
     Text(
@@ -124,44 +130,48 @@ internal fun SpectrumWaterfallSettingsSection(
         modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
     )
 
-    WaterfallSlider(
-        title = "Depth",
-        subtitle = "How long a line takes to travel back and disappear",
-        value = draft.depthSeconds,
-        range = SpectrumWaterfallSettings.MIN_DEPTH_SECONDS..SpectrumWaterfallSettings.MAX_DEPTH_SECONDS,
-        format = { String.format(Locale.US, "%.1f s", it) },
-        onDrag = { draft = draft.copy(depthSeconds = it) },
-        onCommit = { onChange(draft) },
-    )
-    WaterfallSlider(
-        title = "Fade start",
-        subtitle = "How far back a line stays at full strength before fading",
-        value = draft.fadeStart,
-        range = 0f..SpectrumWaterfallSettings.MAX_FADE_START,
-        format = {
-            String.format(Locale.US, "%d%% · %.1f s", (it * 100).toInt(), it * draft.depthSeconds)
-        },
-        onDrag = { draft = draft.copy(fadeStart = it) },
-        onCommit = { onChange(draft) },
-    )
-    WaterfallSlider(
-        title = "Angle",
-        subtitle = "Low: a near-flat horizon. High: looking down on the ridges",
-        value = draft.angleDeg,
-        range = SpectrumWaterfallSettings.MIN_ANGLE_DEG..SpectrumWaterfallSettings.MAX_ANGLE_DEG,
-        format = { "${it.toInt()}°" },
-        onDrag = { draft = draft.copy(angleDeg = it) },
-        onCommit = { onChange(draft) },
-    )
-    WaterfallSlider(
-        title = "Line weight",
-        subtitle = "Thick bands, or fine hairlines like a radio sweep",
-        value = draft.lineWidthDp,
-        range = SpectrumWaterfallSettings.MIN_LINE_WIDTH_DP..SpectrumWaterfallSettings.MAX_LINE_WIDTH_DP,
-        format = { String.format(Locale.US, "%.1f dp", it) },
-        onDrag = { draft = draft.copy(lineWidthDp = it) },
-        onCommit = { onChange(draft) },
-    )
+    // Depth, fade, angle and weight shape the history; a single-line style
+    // has none, so they would be sliders that change nothing.
+    if (!draft.style.singleLine) {
+        WaterfallSlider(
+            title = "Depth",
+            subtitle = "How long a line takes to travel back and disappear",
+            value = draft.depthSeconds,
+            range = SpectrumWaterfallSettings.MIN_DEPTH_SECONDS..SpectrumWaterfallSettings.MAX_DEPTH_SECONDS,
+            format = { String.format(Locale.US, "%.1f s", it) },
+            onDrag = { draft = draft.copy(depthSeconds = it) },
+            onCommit = { onChange(draft) },
+        )
+        WaterfallSlider(
+            title = "Fade start",
+            subtitle = "How far back a line stays at full strength before fading",
+            value = draft.fadeStart,
+            range = 0f..SpectrumWaterfallSettings.MAX_FADE_START,
+            format = {
+                String.format(Locale.US, "%d%% · %.1f s", (it * 100).toInt(), it * draft.depthSeconds)
+            },
+            onDrag = { draft = draft.copy(fadeStart = it) },
+            onCommit = { onChange(draft) },
+        )
+        WaterfallSlider(
+            title = "Angle",
+            subtitle = "Low: a near-flat horizon. High: looking down on the ridges",
+            value = draft.angleDeg,
+            range = SpectrumWaterfallSettings.MIN_ANGLE_DEG..SpectrumWaterfallSettings.MAX_ANGLE_DEG,
+            format = { "${it.toInt()}°" },
+            onDrag = { draft = draft.copy(angleDeg = it) },
+            onCommit = { onChange(draft) },
+        )
+        WaterfallSlider(
+            title = "Line weight",
+            subtitle = "Thick bands, or fine hairlines like a radio sweep",
+            value = draft.lineWidthDp,
+            range = SpectrumWaterfallSettings.MIN_LINE_WIDTH_DP..SpectrumWaterfallSettings.MAX_LINE_WIDTH_DP,
+            format = { String.format(Locale.US, "%.1f dp", it) },
+            onDrag = { draft = draft.copy(lineWidthDp = it) },
+            onCommit = { onChange(draft) },
+        )
+    }
 
     Text(
         "Frame rate",

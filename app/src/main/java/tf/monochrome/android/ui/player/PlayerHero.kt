@@ -749,6 +749,16 @@ private fun HeroCoverArt(
     )
     val stillArt = tf.monochrome.android.ui.theme.reduceMotion()
 
+    // The glass spectrum lies on the cover itself, so the cover is what it
+    // refracts — always, not only while the blurred background is on as for
+    // the rest of the player's glass: here the artwork really is behind it.
+    // The box records itself as the frame the cover is cropped into, so the
+    // pane lenses the slice of the cover it covers, not the window's.
+    val glassSpectrum = spectrumEnabled && !(waveCandy && waveSettings != null) &&
+        spectrumBins != null && waterfall.style == tf.monochrome.android.domain.model.WaterfallStyle.GLASS
+    val coverFrame = rememberBackdropAnchor()
+    val coverArt = rememberBackdropArt(track?.coverUrl, enabled = glassSpectrum)
+
     // Controls show briefly on tap, then disappear quickly. When idle there are
     // no tags/labels on the art at all — the buttons are small and icon-only.
     // Keyed on an interaction counter (bumped by showControls()) so every tap
@@ -772,6 +782,7 @@ private fun HeroCoverArt(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .backdropFrame(coverFrame)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -826,15 +837,23 @@ private fun HeroCoverArt(
             BoxWithConstraints(
                 modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
             ) {
-                SpectrumOverlay(
-                    bins = spectrumBins,
-                    color = spectrumColor,
-                    modifier = Modifier.fillMaxWidth(),
-                    height = maxHeight * 0.35f,
-                    attack = spectrumSpeed.attack,
-                    release = spectrumSpeed.release,
-                    waterfall = waterfall,
-                )
+                androidx.compose.runtime.CompositionLocalProvider(
+                    LocalPlayerBackdrop provides LocalPlayerBackdrop.current.copy(
+                        art = coverArt,
+                        fit = BackdropArtFit.ROOT,
+                    ),
+                ) {
+                    SpectrumOverlay(
+                        bins = spectrumBins,
+                        color = spectrumColor,
+                        modifier = Modifier.fillMaxWidth(),
+                        height = maxHeight * 0.35f,
+                        attack = spectrumSpeed.attack,
+                        release = spectrumSpeed.release,
+                        waterfall = waterfall,
+                        glassArtFrame = coverFrame,
+                    )
+                }
             }
         }
 

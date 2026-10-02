@@ -4,6 +4,8 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
@@ -16,6 +18,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.nativeCanvas
@@ -28,8 +32,11 @@ import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.audio.eq.WaterfallNative
 import tf.monochrome.android.domain.model.SpectrumWaterfallSettings
 import tf.monochrome.android.domain.model.WaterfallStyle
+import kotlin.math.PI
 import kotlin.math.exp
 import kotlin.math.max
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * The spectrum over the artwork as a receding waterfall: the live spectrum is
@@ -57,9 +64,20 @@ import kotlin.math.max
  *    caller that read it during composition to pass it down recomposed itself
  *    — on the player, the whole hero and the artwork in it — at the
  *    analyzer's rate, just to hand over a value this loop reads anyway.
+ *  - The [WaterfallStyle.singleLine] styles draw the live spectrum alone,
+ *    straight from the smoothed bins, and never touch the native history.
+ *    [WaterfallStyle.LEGACY] is the overlay as it was before the waterfall: a
+ *    Catmull-Rom envelope filled to the baseline. [WaterfallStyle.GLASS] turns
+ *    that envelope into a body — smoothed, given a floor so it reads as a
+ *    pool rather than a fence of spikes — drawn SOLID in its own layer and
+ *    relit by [playerGlass], the same material as the transport. The shader
+ *    bevels the alpha shape it is handed, so the body has to be opaque; where
+ *    the shader is not coming ([rememberLiquidGlassAvailable]) a solid body
+ *    would just be a block over the cover, so it is drawn as a translucent
+ *    fill with its top edge stroked instead.
  */
 @Composable
-fun SpectrumOverlay(
+internal fun SpectrumOverlay(
     bins: () -> FloatArray,
     color: Color,
     modifier: Modifier = Modifier,
@@ -73,7 +91,17 @@ fun SpectrumOverlay(
     /** Approach factor per 60 fps frame for falling bins. */
     release: Float = 0.12f,
     waterfall: SpectrumWaterfallSettings = SpectrumWaterfallSettings.DEFAULT,
+    /**
+     * The box the cover behind this overlay is drawn in, so the glass style
+     * lenses the slice of artwork it actually lies on. Null maps against the
+     * window, which is right wherever the backdrop is the blurred background.
+     */
+    glassArtFrame: BackdropAnchor? = null,
 ) {
+    // Asked unconditionally, before anything that can change, so switching
+    // style never alters the shape of the composition.
+    val glassAvailable = rememberLiquidGlassAvailable()
+    val still = tf.monochrome.android.ui.theme.reduceMotion()
     // Persistent in-place smoothing buffer — never replaced.
     val smoothed = remember {
         FloatArray(SpectrumAnalyzerTap.OUTPUT_BINS) { floorDb }
@@ -145,7 +173,8 @@ fun SpectrumOverlay(
             // frame wakes it.
             if (largestStep < SETTLED_DB) {
                 if (settledSince < 0L) settledSince = now
-                val heldNanos = ((currentWaterfall.depthSeconds + 0.1f) * 1e9f).toLong()
+                val history = if (currentWaterfall.style.singleLine) 0f else currentWaterfall.depthSeconds
+                val heldNanos = ((history + 0.1f) * 1e9f).toLong()
                 if (now - settledSince >= heldNanos) {
                     snapshotFlow { currentBins() }.first { it !== src }
                     lastFrameNanos = 0L
@@ -157,11 +186,12 @@ fun SpectrumOverlay(
         }
     }
 
-    Canvas(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .height(height)
     ) {
+    Canvas(Modifier.fillMaxSize()) {
         // Subscribe to the per-frame tick so the Canvas redraws.
         @Suppress("UNUSED_VARIABLE")
         val t = tick.intValue
@@ -169,6 +199,26 @@ fun SpectrumOverlay(
 
         val w = currentWaterfall
         val nowSec = (draw.nowNanos - draw.epochNanos) / 1e9
+        val style = w.style
+        if (style.singleLine) {
+            draw.envelope(smoothed, floorDb, headroomDb, size.width, size.height)
+            if (style == WaterfallStyle.LEGACY) {
+                drawIntoCanvas { draw.drawLegacy(it.nativeCanvas, currentColor, size.height) }
+                draw.hasBody = false
+            } else {
+                val rippleSec = if (still) 0.0 else nowSec
+                draw.buildBody(
+                    baseline = size.height - GLASS_FOOT_DP.dp.toPx(),
+                    minThickness = GLASS_MIN_THICKNESS_DP.dp.toPx(),
+                    ceiling = GLASS_CEILING_DP.dp.toPx(),
+                    ripple = if (still) 0f else GLASS_RIPPLE_DP.dp.toPx(),
+                    phase = (rippleSec * GLASS_RIPPLE_HZ * 2.0 * PI).toFloat(),
+                )
+            }
+            return@Canvas
+        }
+        draw.hasBody = false
+
         val lines = WaterfallNative.nativeRender(
             handle, smoothed, nowSec,
             size.width, size.height, w.depthSeconds, w.fadeStart, w.angleDeg,
@@ -176,7 +226,6 @@ fun SpectrumOverlay(
         )
         if (lines <= 0) return@Canvas
 
-        val style = w.style
         val paint = draw.paintFor(currentColor, size.height, style)
         val stroke = w.lineWidthDp.dp.toPx() * if (style == WaterfallStyle.NEON) 1.3f else 1f
         val glow = 7.dp.toPx()
@@ -209,6 +258,38 @@ fun SpectrumOverlay(
             }
         }
     }
+
+    if (waterfall.style == WaterfallStyle.GLASS) {
+        // Its own layer: the shader works on everything the layer holds.
+        // Offscreen so the inner ramp's DST_OUT erases the body and nothing
+        // under it, whichever way the modifier below resolves.
+        Canvas(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .then(
+                    if (glassAvailable) {
+                        Modifier.playerGlass(tint = color, artFrame = glassArtFrame)
+                    } else {
+                        Modifier
+                    },
+                ),
+        ) {
+            @Suppress("UNUSED_VARIABLE")
+            val t = tick.intValue
+            if (!draw.hasBody) return@Canvas
+            drawIntoCanvas { canvas ->
+                val native = canvas.nativeCanvas
+                native.drawPath(draw.bodyPath, draw.bodyPaint(currentColor, size.height, solid = glassAvailable))
+                if (glassAvailable) {
+                    draw.innerRamp(native, GLASS_RAMP_STEP_DP.dp.toPx())
+                } else {
+                    native.drawPath(draw.bodyEdgePath, draw.bodyEdgePaint(currentColor, 1.6.dp.toPx()))
+                }
+            }
+        }
+    }
+    }
 }
 
 /**
@@ -230,6 +311,201 @@ private class WaterfallDrawState {
     private var shaderColor = Color.Unspecified
     private var shaderHeight = -1f
     private var shaderStyle: WaterfallStyle? = null
+
+    /** The glass body under the front line, rebuilt each drawn frame; see [buildBody]. */
+    val bodyPath = android.graphics.Path()
+    /** Its top edge alone, for the fallback's stroke. */
+    val bodyEdgePath = android.graphics.Path()
+    var hasBody = false
+    private val bodyScratch = FloatArray(SpectrumAnalyzerTap.OUTPUT_BINS)
+    private val bodyFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val bodyEdge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+    private var bodyColor = Color.Unspecified
+    private var bodyHeight = -1f
+    private var bodySolid = false
+
+    /** The live spectrum as points across the box, for the single-line styles. */
+    private val envXs = FloatArray(SpectrumAnalyzerTap.OUTPUT_BINS)
+    private val envYs = FloatArray(SpectrumAnalyzerTap.OUTPUT_BINS)
+    private var envCount = 0
+
+    /**
+     * [smoothed] across the box: bins spaced evenly in x (they are already
+     * log-spaced in frequency), [floorDb]..[headroomDb] across the full height.
+     * The legacy overlay's own mapping.
+     */
+    fun envelope(smoothed: FloatArray, floorDb: Float, headroomDb: Float, width: Float, height: Float) {
+        val n = minOf(smoothed.size, envXs.size)
+        envCount = n
+        if (n < 2) return
+        val span = max(0.001f, headroomDb - floorDb)
+        for (i in 0 until n) {
+            envXs[i] = i.toFloat() / (n - 1) * width
+            envYs[i] = height - (smoothed[i].coerceIn(floorDb, headroomDb) - floorDb) / span * height
+        }
+    }
+
+    private val legacyEnvelope = android.graphics.Path()
+    private val legacyFill = android.graphics.Path()
+    private val legacyFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val legacyStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private var legacyColor = Color.Unspecified
+    private var legacyHeight = -1f
+
+    /**
+     * The overlay as it was before the waterfall: the envelope through every
+     * bin as a Catmull-Rom spline, filled down to the baseline bright at the
+     * peaks and gone at the floor, outlined white under an album-coloured
+     * halo. Same numbers as then; only the per-frame allocation is gone.
+     */
+    fun drawLegacy(canvas: android.graphics.Canvas, color: Color, height: Float) {
+        val n = envCount
+        if (n < 2) return
+        val xs = envXs
+        val ys = envYs
+        val env = legacyEnvelope
+        env.rewind()
+        env.moveTo(xs[0], ys[0])
+        for (i in 0 until n - 1) {
+            val i0 = (i - 1).coerceAtLeast(0)
+            val i3 = (i + 2).coerceAtMost(n - 1)
+            env.cubicTo(
+                xs[i] + (xs[i + 1] - xs[i0]) / 6f, ys[i] + (ys[i + 1] - ys[i0]) / 6f,
+                xs[i + 1] - (xs[i3] - xs[i]) / 6f, ys[i + 1] - (ys[i3] - ys[i]) / 6f,
+                xs[i + 1], ys[i + 1],
+            )
+        }
+        val fill = legacyFill
+        fill.rewind()
+        fill.addPath(env)
+        fill.lineTo(xs[n - 1], height)
+        fill.lineTo(xs[0], height)
+        fill.close()
+        if (color != legacyColor || height != legacyHeight) {
+            legacyColor = color
+            legacyHeight = height
+            legacyFillPaint.shader = LinearGradient(
+                0f, 0f, 0f, height,
+                intArrayOf(
+                    color.copy(alpha = 0.75f).toArgb(),
+                    color.copy(alpha = 0.35f).toArgb(),
+                    color.copy(alpha = 0.10f).toArgb(),
+                    Color.Transparent.toArgb(),
+                ),
+                null,
+                Shader.TileMode.CLAMP,
+            )
+        }
+        canvas.drawPath(fill, legacyFillPaint)
+        legacyStroke.color = Color.White.copy(alpha = 0.92f).toArgb()
+        legacyStroke.strokeWidth = 2.5f
+        canvas.drawPath(env, legacyStroke)
+        legacyStroke.color = color.copy(alpha = 0.55f).toArgb()
+        legacyStroke.strokeWidth = 5f
+        canvas.drawPath(env, legacyStroke)
+    }
+
+    /**
+     * The glass body under the live envelope: [glassBodyProfile] for its
+     * outline, then joined through the midpoints with quadratics so the surface
+     * reads as liquid rather than as straight runs. Closed along [baseline].
+     */
+    fun buildBody(baseline: Float, minThickness: Float, ceiling: Float, ripple: Float, phase: Float) {
+        val n = envCount
+        if (n < 2) {
+            hasBody = false
+            return
+        }
+        val xs = envXs
+        val tops = envYs
+        glassBodyProfile(tops, n, baseline, minThickness, ceiling, ripple, phase, bodyScratch)
+        val p = bodyPath
+        val e = bodyEdgePath
+        p.rewind()
+        e.rewind()
+        p.moveTo(xs[0], baseline)
+        p.lineTo(xs[0], tops[0])
+        e.moveTo(xs[0], tops[0])
+        for (j in 1 until n) {
+            val mx = (xs[j - 1] + xs[j]) * 0.5f
+            val my = (tops[j - 1] + tops[j]) * 0.5f
+            p.quadTo(xs[j - 1], tops[j - 1], mx, my)
+            e.quadTo(xs[j - 1], tops[j - 1], mx, my)
+        }
+        p.lineTo(xs[n - 1], tops[n - 1])
+        e.lineTo(xs[n - 1], tops[n - 1])
+        p.lineTo(xs[n - 1], baseline)
+        p.close()
+        hasBody = true
+    }
+
+    private val rampPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeJoin = Paint.Join.ROUND
+        color = android.graphics.Color.argb(GLASS_RAMP_ALPHA, 0, 0, 0)
+        xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OUT)
+    }
+
+    /**
+     * Shapes the body's alpha into the heightfield the shader bevels from.
+     *
+     * The shader reads its surface normals off the alpha gradient a few
+     * pixels either side of each point — sized for glyphs and buttons. On a
+     * body the width of the cover that is a hairline, and the body reads as a
+     * flat pane with a scratched outline. Blurring the edge to widen it does
+     * not work either: the output alpha is capped by the input alpha, so a
+     * soft edge comes out as a smudge.
+     *
+     * So the silhouette stays crisp and the ramp goes INSIDE it: [GLASS_RAMP_STEPS]
+     * nested strokes, clipped to the body, each erasing a little alpha. The
+     * rim keeps about two thirds and the core all of it, and the shader reads
+     * that slope as a rounded shoulder — a body of liquid, not a slab.
+     */
+    fun innerRamp(canvas: android.graphics.Canvas, step: Float) {
+        val save = canvas.save()
+        canvas.clipPath(bodyPath)
+        for (i in GLASS_RAMP_STEPS downTo 1) {
+            rampPaint.strokeWidth = step * i
+            canvas.drawPath(bodyPath, rampPaint)
+        }
+        canvas.restoreToCount(save)
+    }
+
+    /**
+     * The body's fill. [solid] is the shader's slab — opaque, a little lighter
+     * than the album colour so the glass carries it without going muddy.
+     * Otherwise a see-through wash, light at the surface and gone at the floor.
+     */
+    fun bodyPaint(color: Color, height: Float, solid: Boolean): Paint {
+        if (color != bodyColor || height != bodyHeight || solid != bodySolid) {
+            bodyColor = color
+            bodyHeight = height
+            bodySolid = solid
+            if (solid) {
+                bodyFill.shader = null
+                bodyFill.color = lerp(color, Color.White, 0.3f).toArgb()
+            } else {
+                bodyFill.shader = LinearGradient(
+                    0f, 0f, 0f, height,
+                    lerp(color, Color.White, 0.4f).copy(alpha = 0.42f).toArgb(),
+                    color.copy(alpha = 0.12f).toArgb(),
+                    Shader.TileMode.CLAMP,
+                )
+            }
+        }
+        return bodyFill
+    }
+
+    /** The fallback's top edge: the Lines style's front line, in effect. */
+    fun bodyEdgePaint(color: Color, width: Float): Paint {
+        bodyEdge.color = lerp(color, Color.White, 0.55f).copy(alpha = LINE_ALPHA).toArgb()
+        bodyEdge.strokeWidth = width
+        return bodyEdge
+    }
 
     /** Ridgeline's ground: the dark the lines sit on, alpha set per line. */
     val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
@@ -337,6 +613,76 @@ internal fun waterfallNextDue(nowNanos: Long, previousDueNanos: Long, targetFps:
     val next = if (previousDueNanos == 0L) nowNanos + interval else previousDueNanos + interval
     return if (next < nowNanos) nowNanos + interval else next
 }
+
+/**
+ * Turns the live envelope in [tops] — the y of each of its first [n] points,
+ * spread evenly across the box — into the top edge of the glass body, in place.
+ *
+ * Three things turn a spectrum into something that reads as a pool of liquid:
+ *  - **Smoothed across frequency** — two passes of a 1-2-1 kernel. The raw line
+ *    is jagged bin to bin, and the bevel would pick out every tooth.
+ *  - **A floor of [minThickness]** under the whole span, so a quiet band is a
+ *    thin film rather than a gap that splits the body into islands. The level
+ *    above it is compressed so the tallest peak still stops [ceiling] px from
+ *    the top: the bevel needs a few pixels of room, and a body flattened
+ *    against the edge of its layer would lose its top rim.
+ *  - **Rounded ends** — the thickness falls to nothing over the outer
+ *    [GLASS_TAPER] of the width along a square-rooted smoothstep, which meets
+ *    the floor vertically: a drop's rounded end rather than a wedge.
+ *
+ * Heights are measured up from [baseline]. [ripple] px of slow surface swell,
+ * phased by [phase], keeps it liquid in a quiet passage; zero is perfectly
+ * still. [scratch] is a work buffer at least [n] long. Allocates nothing.
+ */
+internal fun glassBodyProfile(
+    tops: FloatArray,
+    n: Int,
+    baseline: Float,
+    minThickness: Float,
+    ceiling: Float,
+    ripple: Float,
+    phase: Float,
+    scratch: FloatArray,
+) {
+    if (n < 2) return
+    for (j in 0 until n) tops[j] = (baseline - tops[j]).coerceAtLeast(0f)
+    repeat(2) {
+        for (j in 0 until n) {
+            val l = tops[if (j > 0) j - 1 else 0]
+            val r = tops[if (j < n - 1) j + 1 else n - 1]
+            scratch[j] = (l + 2f * tops[j] + r) * 0.25f
+        }
+        scratch.copyInto(tops, 0, 0, n)
+    }
+    val room = (baseline - ceiling).coerceAtLeast(0f)
+    val floor = minThickness.coerceAtMost(room)
+    val gain = if (room > 0f) (room - floor) / room else 0f
+    for (j in 0 until n) {
+        val u = j.toFloat() / (n - 1)
+        val edge = (minOf(u, 1f - u) / GLASS_TAPER).coerceIn(0f, 1f)
+        val s = edge * edge * (3f - 2f * edge)
+        val swell = ripple * (0.6f * sin(u * 9.4f + phase) + 0.4f * sin(u * 23.1f - phase * 1.7f))
+        val thick = (floor + tops[j].coerceAtMost(room) * gain + swell).coerceIn(0f, room)
+        tops[j] = baseline - thick * sqrt(s)
+    }
+}
+
+/** Fraction of the width at each end over which the glass body rounds off. */
+internal const val GLASS_TAPER = 0.07f
+/** The film the body never thins below, so it stays one piece. */
+private const val GLASS_MIN_THICKNESS_DP = 10f
+/** Room left above the tallest peak for the bevel's top rim. */
+private const val GLASS_CEILING_DP = 4f
+/** Height of the slow swell that keeps the surface moving in a quiet passage. */
+private const val GLASS_RIPPLE_DP = 1.5f
+/** How fast that swell rolls. Slow on purpose: liquid, not a signal. */
+private const val GLASS_RIPPLE_HZ = 0.35
+/** Lifts the body off the bottom edge so its lower rim is not cut by the layer. */
+private const val GLASS_FOOT_DP = 2f
+/** The inner ramp: this many nested strokes, each this much wider, each erasing this much alpha. */
+private const val GLASS_RAMP_STEPS = 8
+private const val GLASS_RAMP_STEP_DP = 3f
+private const val GLASS_RAMP_ALPHA = 13
 
 /** Ridgeline's ground colour; its alpha comes from the line it sits under. */
 private val RIDGE_GROUND = 0xFF07090D.toInt()

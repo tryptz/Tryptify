@@ -88,6 +88,22 @@ it is not gated on the blurred-background setting either. Its scrim is flat
 (zero height in `uArtScreen`) and read off the bar's own position on screen,
 because the gradient it stands in for is not really there.
 
+The **Glass spectrum on the hero art is the other exception**. It lies on the
+cover itself, so the cover is behind it whatever the blurred-background setting
+says, and the hero hands it the art unconditionally while that style is on. The
+mapping is still honest: the cover box records itself with `backdropFrame`, and
+`playerGlass(artFrame = …)` resolves the pane against that box through
+`anchorInFrame` rather than against the window, so the band lenses the bottom of
+the cover it actually covers. `GlassSpectrumTest` holds the arithmetic.
+
+Its body is drawn solid like every other slab, but **with an inner alpha ramp**:
+nested `DST_OUT` strokes clipped to the body take the rim down to about two
+thirds while the core stays opaque. The shader reads normals off the alpha
+gradient a few pixels either side of each point, which is a hairline on a body
+the width of the cover. Do not replace the ramp with a blur of the edge: the
+output alpha is capped by the input alpha, so a soft edge comes out as a smudge,
+and do not drop it — without it the body reads as a flat pane.
+
 It is a bitmap and not a live layer capture because it cannot be one:
 `RenderEffect.createRuntimeShaderEffect` binds exactly one input, this shader
 spends it on `content` (the alpha heightfield every bevel normal comes from),

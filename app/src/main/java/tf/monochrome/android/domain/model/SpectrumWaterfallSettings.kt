@@ -2,13 +2,28 @@ package tf.monochrome.android.domain.model
 
 import kotlinx.serialization.Serializable
 
-/** How the waterfall's lines are drawn. */
+/**
+ * How the spectrum over the artwork is drawn.
+ *
+ * The first four are the waterfall. [singleLine] styles draw only the live
+ * spectrum — no history, so depth, fade and angle do not apply to them.
+ */
 @Serializable
-enum class WaterfallStyle(val label: String, val description: String) {
+enum class WaterfallStyle(val label: String, val description: String, val singleLine: Boolean = false) {
     LINES("Lines", "See-through lines in the album colour, lightening at the peaks"),
     RIDGELINE("Ridgeline", "Each line hides what is behind it, like a mountain range"),
     HEAT("Heat", "Coloured by height: green at the floor, yellow-white at the peaks"),
     NEON("Neon", "Lines add up where they cross, so dense areas glow"),
+    GLASS(
+        "Glass",
+        "One line: the live spectrum as a pool of liquid glass that morphs with the music and refracts the cover",
+        singleLine = true,
+    ),
+    LEGACY(
+        "Legacy",
+        "One line: the original spectrum, a flowing envelope filled down to the baseline",
+        singleLine = true,
+    ),
 }
 
 /**

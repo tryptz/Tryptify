@@ -572,11 +572,17 @@ internal fun Modifier.playerGlass(
      * sixth of the width on a full-width sheet is a dimple nobody can see.
      */
     bulgeRadiusFraction: Float = 0f,
+    /**
+     * The box the backdrop art is drawn across, when that is not the window —
+     * glass lying on the hero cover rather than on the blurred background.
+     * Recorded with [backdropFrame]; null keeps the window-wide mapping.
+     */
+    artFrame: BackdropAnchor? = null,
 ): Modifier {
     val g = LocalPlayerGlass.current
     if (LocalLowPerformance.current.disableLiquidGlass) return this
     if (!g.enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
-    return this.then(playerGlassModifier(tint, g, bulgeCenter, bulgeAmount, bulgeRadiusFraction))
+    return this.then(playerGlassModifier(tint, g, bulgeCenter, bulgeAmount, bulgeRadiusFraction, artFrame))
 }
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -587,6 +593,7 @@ private fun playerGlassModifier(
     bulgeCenter: Offset,
     bulgeAmount: () -> Float,
     bulgeRadiusFraction: Float,
+    artFrame: BackdropAnchor?,
 ): Modifier {
     val shader = remember { runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() } ?: return Modifier
     // Unlike the lyric glass and the panel, which pin uLiquid to 1, this
@@ -623,7 +630,7 @@ private fun playerGlassModifier(
                 art = backdrop.art,
                 fit = backdrop.fit,
                 scrim = scrim,
-                anchor = anchor.rect,
+                anchor = if (artFrame != null) anchorInFrame(anchor.rect, artFrame.rect) else anchor.rect,
                 paneW = size.width,
                 paneH = size.height,
             )
