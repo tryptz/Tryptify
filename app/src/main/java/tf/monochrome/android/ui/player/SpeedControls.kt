@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.player
 
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -139,6 +141,8 @@ internal fun SpeedStepper(
     canDecrement: Boolean = true,
     canIncrement: Boolean = true,
     compact: Boolean = false,
+    /** Long-press on the number — the BPM row opens a keyboard with it. */
+    onValueLongPress: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -158,6 +162,11 @@ internal fun SpeedStepper(
             textAlign = TextAlign.Center,
             maxLines = 1,
             modifier = (if (compact) Modifier.widthIn(min = 52.dp) else Modifier.weight(1f))
+                .then(
+                    if (onValueLongPress != null) Modifier.pointerInput(onValueLongPress) {
+                        detectTapGestures(onLongPress = { onValueLongPress() })
+                    } else Modifier
+                )
                 .padding(horizontal = 6.dp),
         )
         StepSign(Icons.Default.Add, incrementLabel, accent, canIncrement, onIncrement)

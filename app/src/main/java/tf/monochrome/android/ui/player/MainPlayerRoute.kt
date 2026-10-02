@@ -12,6 +12,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.HorizontalDivider
@@ -1415,7 +1416,20 @@ private fun BoxScope.SpeedPanel(
                         else SpeedUnit.speedFor(SpeedUnit.stepBpm(played, direction), source)
                     val down = stepTo(-1)
                     val up = stepTo(1)
+                    // Long-press the number to type a tempo.
+                    var editingBpm by remember { mutableStateOf(false) }
+                    if (editingBpm && played != null && source != null) {
+                        BpmEntryDialog(
+                            current = played,
+                            onDismiss = { editingBpm = false },
+                            onSet = { bpm ->
+                                onSpeedChange(SpeedUnit.speedFor(bpm, source))
+                                editingBpm = false
+                            },
+                        )
+                    }
                     SpeedStepper(
+                        onValueLongPress = if (played != null && source != null) ({ editingBpm = true }) else null,
                         value = played?.let { "${it.roundToInt()} BPM" } ?: "Detecting…",
                         accent = speedAccent,
                         onDecrement = { down?.let(onSpeedChange) },
@@ -1426,6 +1440,16 @@ private fun BoxScope.SpeedPanel(
                         canIncrement = up != null && up > speed + 0.0001f,
                         modifier = controlModifier,
                     )
+                    // Hold left or right to bend the tempo smoothly; the
+                    // stepper above stays for exact whole-BPM moves.
+                    if (played != null && source != null) {
+                        Spacer(Modifier.height(10.dp))
+                        BpmNudge(
+                            playedBpm = played,
+                            accent = speedAccent,
+                            onBpmChange = { bpm -> onSpeedChange(SpeedUnit.speedFor(bpm, source)) },
+                        )
+                    }
                 }
                 SpeedUnit.MULTIPLIER -> Slider(
                     value = speed,
