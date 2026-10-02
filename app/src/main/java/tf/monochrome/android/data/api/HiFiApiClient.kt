@@ -661,8 +661,12 @@ class HiFiApiClient @Inject constructor(
      * Full-length file URL for a Deezer track — GET
      * /api/deezer/download?track_id=<id>&quality=<code>, the Deezer twin of
      * Qobuz's /api/download-music. Same quality codes, same envelope
-     * (`{ success, data: { url } }`, a signed /api/file link), so it is read
+     * (`{ success, data: { url } }`), so it is read
      * with the same parsers. See [DeezerQuality] for what each code serves.
+     *
+     * The url is a signed link straight onto Deezer's CDN, and the file there
+     * is Blowfish-striped: whoever writes it to disk runs it through
+     * DeezerStripeDecryptor first.
      *
      * Null when no instance serves Deezer or the instance refuses the track —
      * it answers 403 "not available for download with current ARL cookie"

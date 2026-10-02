@@ -169,16 +169,22 @@ class TrackDownloader @Inject constructor(
                 val channel = response.bodyAsChannel()
                 val buffer = ByteArray(8192)
                 var totalRead = 0L
+                // A Deezer file comes off Deezer's CDN striped with Blowfish;
+                // decrypt it on the way to disk (same length, so the
+                // truncation check below still holds).
+                val decryptor = deezerId?.let { tf.monochrome.android.data.cache.DeezerStripeDecryptor(it) }
                 tempAudio.outputStream().use { out ->
+                    val sink: (ByteArray, Int, Int) -> Unit = { b, o, l -> out.write(b, o, l) }
                     while (!channel.isClosedForRead) {
                         val read = channel.readAvailable(buffer)
                         if (read <= 0) break
-                        out.write(buffer, 0, read)
+                        if (decryptor != null) decryptor.feed(buffer, 0, read, sink) else out.write(buffer, 0, read)
                         totalRead += read
                         if (contentLength > 0) {
                             onProgress((totalRead.toFloat() / contentLength).coerceIn(0.05f, 0.95f))
                         }
                     }
+                    decryptor?.finish(sink)
                 }
                 // A short read means a truncated file, and for M4A that is
                 // silently fatal: the container still opens but the audio is cut

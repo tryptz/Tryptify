@@ -104,7 +104,7 @@ class DeezerStreamCacheManager @Inject constructor(
             val part = File(cacheDir, "$key.bin.part").also { if (it.exists()) it.delete() }
             val stream = PartialStream(part)
             inFlight[key] = stream
-            downloadScope.launch { download(url, stream, target, key) }
+            downloadScope.launch { download(url, stream, target, key, deezerId) }
             stream
         }
     }
@@ -113,7 +113,7 @@ class DeezerStreamCacheManager @Inject constructor(
      * Fetches [url] into [stream]'s part file, publishing progress as it goes,
      * and installs it at [target] when every byte has landed.
      */
-    private suspend fun download(url: String, stream: PartialStream, target: File, key: String) {
+    private suspend fun download(url: String, stream: PartialStream, target: File, key: String, deezerId: Long) {
         val part = stream.file
         try {
             // prepareGet + execute is the STREAMING request shape. A plain
@@ -129,19 +129,30 @@ class DeezerStreamCacheManager @Inject constructor(
 
                 val buffer = ByteArray(BUFFER_BYTES)
                 var written = 0L
+                // Deezer's CDN stripes its files with Blowfish; undo it as the
+                // bytes land, so the cache holds a playable file. Only whole
+                // 2048-byte blocks come out until the tail, and only what came
+                // out is published to readers.
+                val decryptor = DeezerStripeDecryptor(deezerId)
                 part.outputStream().use { out ->
+                    val sink: (ByteArray, Int, Int) -> Unit = { b, o, l ->
+                        out.write(b, o, l)
+                        written += l
+                    }
                     val channel = response.bodyAsChannel()
                     while (!channel.isClosedForRead) {
                         val read = channel.readAvailable(buffer)
                         if (read <= 0) break
-                        out.write(buffer, 0, read)
-                        written += read
+                        decryptor.feed(buffer, 0, read, sink)
                         // Flush before publishing: a reader must never be told
                         // about bytes that are still sitting in the stream's
                         // buffer and would read back as a short file.
                         out.flush()
                         stream.publish(written)
                     }
+                    decryptor.finish(sink)
+                    out.flush()
+                    stream.publish(written)
                 }
 
                 // Atomic install. If rename fails (e.g. cross-mount), fall back
