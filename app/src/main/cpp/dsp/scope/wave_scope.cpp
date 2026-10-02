@@ -20,14 +20,12 @@
 
 namespace {
 
-constexpr int kRing = 1 << 15;            // frames — ~0.68 s at 48 kHz
+constexpr int kRing = 1 << 17;            // frames — ~2.7 s at 48 kHz, room for long bursts
 constexpr int kMask = kRing - 1;
 
 float gL[kRing];
 float gR[kRing];
 std::atomic<uint64_t> gWritten{0};        // frames pushed, ever
-std::atomic<int64_t> gLastPushNs{0};
-std::atomic<int> gLastChunk{0};
 std::atomic<int> gSampleRate{48000};
 
 int64_t nowNs() {
@@ -36,16 +34,63 @@ int64_t nowNs() {
     return int64_t(ts.tv_sec) * 1000000000LL + ts.tv_nsec;
 }
 
-// The interpolated end of the visible window, in absolute frames: one chunk
-// behind the newest sample, advanced by the time since that chunk arrived.
+// ── The read clock (UI thread only) ─────────────────────────────────────
+//
+// The analyzer is fed ahead of what is heard, and how it is fed depends on the
+// stream: some arrive in small steady chunks, others in bursts of hundreds of
+// milliseconds with gaps between. Sliding through "the newest chunk" was smooth
+// for the first kind and stepped for the second — the same scope looked
+// instant on one song and low-fps on the next. So the read position keeps its
+// own clock: it advances at exactly the sample rate each frame, trailing the
+// newest sample by a lag that adapts to the largest burst seen lately, and is
+// only nudged toward that target, never jumped, unless it has fallen out of the
+// ring or overtaken the writer.
+
+double gReadPos = -1.0;           // absolute frames; < 0 until first render
+int64_t gLastAdvanceNs = 0;
+uint64_t gSeenWritten = 0;
+double gBurst = 2048.0;           // decaying max of frames that arrived between two frames
+
+constexpr double kMinLag = 1024.0;
+constexpr double kMaxLag = kRing / 2.0;
+
+// Advances and returns the end of the visible window. Idempotent within a
+// frame: a second call at the same time moves nothing.
+double advancePlayhead(uint64_t written, int64_t now, int sr) {
+    const double dt = gLastAdvanceNs == 0 ? 0.0 : double(now - gLastAdvanceNs) / 1e9;
+    gLastAdvanceNs = now;
+
+    // How bursty is delivery? The jump in `written` since the last frame, as a
+    // max that decays with a ~2 s half-life.
+    if (written > gSeenWritten) {
+        const double jump = double(written - gSeenWritten);
+        gBurst = std::fmax(jump, gBurst * std::pow(0.5, dt / 2.0));
+        gSeenWritten = written;
+    } else if (dt > 0) {
+        gBurst *= std::pow(0.5, dt / 2.0);
+    }
+    double lag = gBurst * 1.25 + 256.0;
+    if (lag < kMinLag) lag = kMinLag;
+    if (lag > kMaxLag) lag = kMaxLag;
+    const double target = double(written) - lag;
+
+    if (gReadPos < 0 || gReadPos > double(written) ||
+        double(written) - gReadPos > kRing - 4096 || dt > 0.5) {
+        // First frame, overtook the writer, fell out of the ring, or a long
+        // stall (pause, seek, backgrounded): place it, don't glide it.
+        gReadPos = target;
+    } else if (dt > 0) {
+        gReadPos += dt * sr;                                  // real-time scroll
+        // Gentle pull to the lag. The target itself steps with every burst,
+        // so a firm pull turns bursts into a speed wobble; this keeps it ~3%.
+        gReadPos += (target - gReadPos) * std::fmin(1.0, dt * 0.3);
+        if (gReadPos > double(written)) gReadPos = double(written);
+    }
+    return gReadPos < 0 ? 0.0 : gReadPos;
+}
+
 double playhead(uint64_t written) {
-    const int chunk = gLastChunk.load(std::memory_order_relaxed);
-    const int sr = gSampleRate.load(std::memory_order_relaxed);
-    const double elapsed = double(nowNs() - gLastPushNs.load(std::memory_order_relaxed)) * sr / 1e9;
-    double end = double(written) - chunk + std::fmin(std::fmax(elapsed, 0.0), double(chunk));
-    if (end > double(written)) end = double(written);
-    if (end < 0) end = 0;
-    return end;
+    return advancePlayhead(written, nowNs(), gSampleRate.load(std::memory_order_relaxed));
 }
 
 inline float sampleAt(int64_t frame, uint64_t written, int which /*0 L, 1 R, 2 mid*/) {
@@ -103,8 +148,6 @@ Java_tf_monochrome_android_audio_eq_WaveScopeNative_nativePush(
     }
     env->ReleasePrimitiveArrayCritical(interleaved, p, JNI_ABORT);
     gSampleRate.store(sampleRate > 0 ? sampleRate : 48000, std::memory_order_relaxed);
-    gLastChunk.store(frames, std::memory_order_relaxed);
-    gLastPushNs.store(nowNs(), std::memory_order_relaxed);
     gWritten.store(w + frames, std::memory_order_release);
 }
 
