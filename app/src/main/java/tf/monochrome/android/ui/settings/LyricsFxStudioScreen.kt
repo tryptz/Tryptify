@@ -72,6 +72,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import tf.monochrome.android.ui.components.GlassPanel
 import dev.chrisbanes.haze.hazeSource
+import tf.monochrome.android.ui.player.VisualizerPresetPanel
 import dev.chrisbanes.haze.rememberHazeState
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
@@ -491,9 +492,17 @@ fun LyricsFxStudioScreen(
             // the screen, so there is nothing left to scroll it clear with.
             val visualizerNavBar =
                 WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            // The preset library opens over this tab as the player's glass
+            // browser. It is drawn here, beside the scroll it covers rather
+            // than inside it, so the sheet frosts this tab's own content: the
+            // column below is the haze source and the panel its sibling.
+            var showPresetBrowser by rememberSaveable { mutableStateOf(false) }
+            val browserHaze = rememberHazeState()
+            Box(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .hazeSource(browserHaze)
                     .verticalScroll(rememberScrollState())
                     .padding(
                         start = 16.dp,
@@ -609,7 +618,32 @@ fun LyricsFxStudioScreen(
                     }
                 }
 
-                VisualizerSettings(settingsViewModel)
+                VisualizerSettings(
+                    settingsViewModel,
+                    onOpenPresetBrowser = { showPresetBrowser = true },
+                )
+            }
+            val presets by settingsViewModel.visualizerPresets.collectAsStateWithLifecycle()
+            val presetId by settingsViewModel.visualizerPresetId.collectAsStateWithLifecycle()
+            val favorites by settingsViewModel.visualizerFavoritePresetIds.collectAsStateWithLifecycle()
+            VisualizerPresetPanel(
+                visible = showPresetBrowser,
+                presets = presets,
+                selectedPresetId = presetId,
+                favoritePresetIds = favorites,
+                onPresetSelected = { settingsViewModel.setVisualizerPresetId(it.id) },
+                onToggleFavorite = settingsViewModel::toggleVisualizerFavoritePreset,
+                // Already in the settings it would open.
+                onSettingsClick = null,
+                onDismiss = { showPresetBrowser = false },
+                hazeState = browserHaze,
+                title = "Default preset",
+                autoOption = tf.monochrome.android.ui.player.PresetAutoOption(
+                    label = "Auto-select",
+                    description = "Let the visualizer pick a bundled preset when it starts",
+                    onSelect = { settingsViewModel.setVisualizerPresetId(null) },
+                ),
+            )
             }
             return@Column
         }

@@ -165,11 +165,12 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
 
     entry("Wave Candy", "Equalizer", listOf("waveform", "oscilloscope", "scope", "kick", "punch", "stereo", "mono")),
 
+    // On the Player Visuals Studio's Visualizer tab, with the spectrum it draws.
     entry(
         "Spectrum waterfall",
-        "Equalizer",
+        "Visual Studio",
         listOf("waterfall", "depth", "fade", "angle", "perspective", "ridgeline", "3d", "history", "spectrogram"),
-    ),
+    ).at(SettingsDestination.Route("lyrics_fx_studio")),
 
     // ── Library ─────────────────────────────────────────────────────────
     // Renamed with the header it points at: SettingsSearchIndexTest greps the

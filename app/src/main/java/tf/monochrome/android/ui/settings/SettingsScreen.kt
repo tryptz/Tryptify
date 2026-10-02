@@ -1087,7 +1087,11 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
  * settings-row helpers below.
  */
 @Composable
-internal fun VisualizerSettings(viewModel: SettingsViewModel) {
+internal fun VisualizerSettings(
+    viewModel: SettingsViewModel,
+    /** Opens the glass preset browser the hosting screen draws over itself. */
+    onOpenPresetBrowser: () -> Unit,
+) {
     val sensitivity by viewModel.visualizerSensitivity.collectAsStateWithLifecycle()
     val brightness by viewModel.visualizerBrightness.collectAsStateWithLifecycle()
     val engineEnabled by viewModel.visualizerEngineEnabled.collectAsStateWithLifecycle()
@@ -1111,7 +1115,6 @@ internal fun VisualizerSettings(viewModel: SettingsViewModel) {
     val spectrumBins by viewModel.spectrumBins.collectAsStateWithLifecycle()
     val selectedPresetName = presets.firstOrNull { it.id == presetId }?.displayName ?: "Auto-select bundled preset"
     var showTextureDropdown by remember { mutableStateOf(false) }
-    var showPresetDropdown by remember { mutableStateOf(false) }
     var showFftDropdown by remember { mutableStateOf(false) }
 
     // Presets install lazily; make sure the preset dropdown has data.
@@ -1193,29 +1196,15 @@ internal fun VisualizerSettings(viewModel: SettingsViewModel) {
             checked = engineEnabled,
             onCheckedChange = { viewModel.setVisualizerEngineEnabled(it) }
         )
+        // The preset library is the player's glass browser, opened over this
+        // screen: categories, authors, favourites and search across all of
+        // it. The dropdown it replaces listed every preset in one menu — over
+        // nine thousand rows with no way to search or group them.
         SettingItem(
             title = "Default Preset",
             subtitle = selectedPresetName,
-            onClick = { showPresetDropdown = true }
+            onClick = onOpenPresetBrowser,
         )
-        DropdownMenu(expanded = showPresetDropdown, onDismissRequest = { showPresetDropdown = false }) {
-            DropdownMenuItem(
-                text = { Text("Auto-select bundled preset") },
-                onClick = {
-                    viewModel.setVisualizerPresetId(null)
-                    showPresetDropdown = false
-                }
-            )
-            presets.forEach { preset ->
-                DropdownMenuItem(
-                    text = { Text(preset.displayName) },
-                    onClick = {
-                        viewModel.setVisualizerPresetId(preset.id)
-                        showPresetDropdown = false
-                    }
-                )
-            }
-        }
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Visualizer Graphics")
         
