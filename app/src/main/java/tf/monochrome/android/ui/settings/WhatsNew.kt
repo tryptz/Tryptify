@@ -122,166 +122,134 @@ object WhatsNew {
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = PAGES,
-                    title = "A glass tab bar",
-                    body = "Home, Discover, Radio and Library sit in a glass bar at the bottom, " +
-                        "with Search as its own page beside it. Scroll down and the mini player " +
-                        "folds into the bar. Home now shows Recently Played and Liked Songs.",
+                    title = "Glass tab bar",
+                    body = "Home, Discover, Radio, Library and Search in a glass bar. Scroll down and the mini player folds in.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PAGES,
+                    title = "New Home, Library and Search",
+                    body = "Home shows Recently Played and Liked Songs. Library switches sections with chips. Search is its own page.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "Wave Candy on the cover",
+                    body = "An FL-style oscilloscope along the bottom of the art: stereo or mono, neon or shadow. Settings › Equalizer.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "Kick punch",
+                    body = "The cover jumps on every kick drum. Strength and sensitivity in the Wave Candy settings.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = SEARCH,
-                    title = "Deezer in Search",
-                    body = "Search now finds Deezer's songs, albums and artists when one of " +
-                        "your APIs serves Deezer, and they open as Deezer pages.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
-                    section = SEARCH,
-                    title = "Every result shows where it's from",
-                    body = "Songs, albums and artists carry a pill with their catalog's logo and " +
-                        "colour: TIDAL, Qobuz, Deezer, Apple Music or Local.",
+                    title = "Deezer",
+                    body = "Search Deezer's songs, albums and artists when an API serves it.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = SEARCH,
                     title = "Source tags everywhere",
-                    body = "Every song, album and artist shows where it comes from: lists, the " +
-                        "queue, album and artist pages, and the player, which also says \"via\" " +
-                        "when a song plays from somewhere else.",
+                    body = "Every song, album and artist shows its catalog, and the player says \"via\" when it plays from another.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = DOWNLOADS,
-                    title = "Play and download Deezer songs in full",
-                    body = "Deezer songs play and download from Deezer itself in FLAC or MP3 " +
-                        "320 kbps, cached like Qobuz so the next track starts without a gap. If " +
-                        "the full song isn't available you hear the preview, and downloads stop.",
+                    title = "Deezer in full",
+                    body = "Deezer songs play and download in full from Deezer, in FLAC or MP3 320.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = CONNECTIONS,
                     title = "One list of APIs",
-                    body = "Settings › Connections has a single list of servers. Tap Add API, " +
-                        "paste an address, and Tryptify finds out whether it serves TIDAL, " +
-                        "Qobuz, Apple Music or Deezer.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = SEARCH,
-                    title = "Source filters for albums and artists",
-                    body = "The source row sits under Tracks, Albums, Artists and Playlists, and " +
-                        "filters all of them. Songs you have downloaded count as Local.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = SEARCH,
-                    title = "The search bar no longer covers the filters",
-                    body = "On the Search page, the filter pills start below the search bar " +
-                        "instead of under it, and stay on screen while results load.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = SEARCH,
-                    title = "Albums and artists open from their own catalog",
-                    body = "A Qobuz or Apple Music album that can't load says so, instead of " +
-                        "sometimes opening a different album from another service.",
+                    body = "Add any server once; Tryptify finds out which catalogs it serves.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = MIXER,
                     title = "Route any bus to any bus",
-                    body = "Up to 48 buses. The arrow under each strip sends the selected bus " +
-                        "there, and cables show where everything goes. A route that would loop " +
-                        "is greyed out.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
-                    section = MIXER,
-                    title = "Send knobs",
-                    body = "Where the selected bus is routed, its arrow becomes a knob: drag it " +
-                        "to set how much goes there, tap it to remove the route.",
+                    body = "Up to 48 buses, with cables, send knobs, and loops greyed out.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = MIXER,
                     title = "Atmos Upmix 9.1.6",
-                    body = "A new preset that spreads a stereo song into 9.1.6 surround, one " +
-                        "group of speakers per strip. It starts with the next song, and on " +
-                        "headphones you still hear the whole song.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = MIXER,
-                    title = "Presets rebuilt like a mastering desk",
-                    body = "Every preset keeps the master at 0 dB with a limiter last, and puts " +
-                        "its EQ and effects on buses of their own. Wide Stage plays a little " +
-                        "quieter than before.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = MIXER,
-                    title = "Tap to select, tap again to open",
-                    body = "Tapping a strip selects it. Tapping the selected strip, or double " +
-                        "tapping, opens its effects.",
+                    body = "A preset that spreads stereo into 9.1.6 surround.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = SPEED,
                     title = "BPM",
-                    body = "Tryptify works out each song's tempo as it plays. Choose Multiplier, " +
-                        "Semitones or BPM; the speed button shows the one you pick, and BPM " +
-                        "steps in whole beats per minute.",
+                    body = "Each song's tempo is detected; set speed in BPM, multiplier or semitones.",
                 ),
                 WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
+                    kind = WhatsNewKind.NEW,
                     section = SPEED,
-                    title = "A clearer speed panel",
-                    body = "Every button is the same shape and easier to read, and the value " +
-                        "sits between its − and + buttons.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = PLAYBACK,
-                    title = "Smoother crossfades",
-                    body = "The outgoing song no longer cuts out as a crossfade starts, keeps " +
-                        "your speed and pitch, and the next song fades in once it is really " +
-                        "playing, even when it's a different format.",
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = PLAYBACK,
-                    title = "TIDAL asks before Qobuz",
-                    body = "When TIDAL can't play a song, Tryptify no longer switches to Qobuz on " +
-                        "its own. It asks, and plays the Qobuz copy only if you say yes.",
+                    title = "Turntable bend",
+                    body = "Push the bar under the BPM to bend the tempo smoothly, with a click per beat. Long-press the BPM to type one.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = USB_DAC,
                     title = "Crossfades on a USB DAC",
-                    body = "Crossfade now works while Tryptify drives your DAC directly, " +
-                        "including between songs at different sample rates.",
+                    body = "Crossfade works while Tryptify drives your DAC, across sample rates.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = SEARCH,
+                    title = "Cleaner search",
+                    body = "Source filters cover every result type, the bar no longer hides them, and albums open from their own catalog.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PAGES,
+                    title = "Steadier navigation",
+                    body = "A fast double back no longer blanks the screen, and local songs open their own artist and album.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "Mastering-style presets",
+                    body = "Master at 0 dB with a limiter last. Tap a strip to select, again to open.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = SPEED,
+                    title = "Clearer speed panel",
+                    body = "Same-shape buttons, values between − and +.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYBACK,
+                    title = "Smoother crossfades",
+                    body = "No dropouts as a fade starts, and speed and pitch carry through.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYBACK,
+                    title = "TIDAL asks before Qobuz",
+                    body = "When TIDAL can't play a song, you choose whether Qobuz does.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = LIBRARY,
-                    title = "WAV files play and read properly",
-                    body = "32-bit float WAVs no longer play as static, 8-bit WAVs keep your " +
-                        "effects, and WAV titles, artists, albums and covers now show up.",
+                    title = "Better WAVs",
+                    body = "Float and 8-bit WAVs play right, tags and covers show, rows say \"WAV 24/48\", and \"Artist ~ Title\" names fill the artist.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.REMOVED,
                     section = SPEED,
-                    title = "The Nightcore button",
-                    body = "Gone from the speed panel. The same sound is 1.10x with Preserve " +
-                        "pitch off.",
+                    title = "Nightcore button",
+                    body = "Use 1.10x with Preserve pitch off.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.REMOVED,
                     section = CONNECTIONS,
-                    title = "The catalog picker and URL fields",
-                    body = "Both / TIDAL only / Qobuz only, the Deezer switch and the separate " +
-                        "TIDAL and Qobuz URL boxes are gone. Your addresses moved into the " +
-                        "API list; every catalog they serve is searched.",
+                    title = "Catalog picker and URL fields",
+                    body = "Replaced by the API list.",
                 ),
             ),
         ),
@@ -293,107 +261,79 @@ object WhatsNew {
                     kind = WhatsNewKind.NEW,
                     section = MIXER,
                     title = "Up to 16 buses",
-                    body = "Tap the + after the last strip to add a bus, up to 16. Long-press " +
-                        "bus 5 or later to remove it. Presets and exports carry the extra buses.",
+                    body = "Add buses with +, long-press to remove.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = MIXER,
-                    title = "Surround and Atmos spread across the mixer",
-                    body = "A 5.1, 7.1.4 or 9.1.6 track adds a bus for each channel group, named " +
-                        "after it, even when it ends up folded to stereo. Prefer one bus? " +
-                        "Switch it under Input routing on the master.",
+                    title = "Surround across the mixer",
+                    body = "5.1, 7.1.4 and 9.1.6 tracks get a bus per channel group.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = MIXER,
-                    title = "Put every channel where you want it",
-                    body = "The spatial-audio button in the mixer opens a map of the room around " +
-                        "you. Drag a 5.1, Atmos bed or 9.1.6 channel anywhere: on headphones it " +
-                        "is heard there, tuned to an AutoEQ target of your choice, and closer " +
-                        "is louder.",
+                    title = "Place every channel",
+                    body = "Drag surround channels around a room map; on headphones you hear them there.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = MIXER,
                     title = "Drag the effect graphs",
-                    body = "Every effect's graph has handles: pull an EQ band, a compressor's " +
-                        "knee or a reverb's tail and the knobs follow. Double-tap a handle to " +
-                        "reset it; tap a knob's value to type one.",
+                    body = "Pull EQ bands, knees and tails by hand; double-tap to reset.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = MIXER,
-                    title = "Five presets for every effect",
-                    body = "Each effect opens with presets drawn from mastering practice, safe on " +
-                        "a finished song, and its classic creative settings after a divider. The " +
-                        "one you are on lights up; turn a knob and it lets go.",
+                    title = "Five presets per effect",
+                    body = "Mastering-safe presets first, creative ones after.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = MIXER,
-                    title = "The mixer and EQs work on every channel",
-                    body = "Surround and Atmos streams keep all their channels through the " +
-                        "mixer, AutoEQ and the parametric EQ, up to 16. Compressors on the " +
-                        "master turn the whole bed down together.",
+                    title = "Every channel, every effect",
+                    body = "Mixer and EQs keep up to 16 channels.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = MIXER,
-                    title = "New knobs and effect cards",
-                    body = "Knobs have ticks, a default mark and arcs that start from zero for " +
-                        "plus-or-minus settings, and they follow your theme. Graphs are " +
-                        "taller and labelled.",
+                    title = "New knobs and cards",
+                    body = "Ticks, default marks, themed, with labelled graphs.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = MIXER,
                     title = "Five effects fixed",
-                    body = "Pitch Shifter now shifts up and lands in tune, Tape Stop drops in pitch, " +
-                        "Dynamics no longer jumps at its knee, Resonator can't run away, and Stereo " +
-                        "at its defaults is transparent (3 dB louder than before).",
+                    body = "Pitch Shifter, Tape Stop, Dynamics, Resonator and Stereo behave.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = MIXER,
-                    title = "The mixer is no longer 6 dB quieter",
-                    body = "Switching the mixer on turned everything down 6 dB; it is now level " +
-                        "with the mixer off, and pan works as a balance. If you had turned a " +
-                        "bus or the master up to make up for it, turn it back down.",
+                    title = "No more 6 dB drop",
+                    body = "The mixer is level with the mixer off.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = MIXER,
                     title = "Cleaner oversampling",
-                    body = "2x and 4x use linear-phase filters with deeper image rejection, and " +
-                        "stay in time with the dry signal and the other buses, so a blend no " +
-                        "longer thins the sound. Hi-res streams stop at 192 kHz inside, where " +
-                        "there is nothing left to gain.",
+                    body = "Linear-phase 2x/4x that stays in time with the dry signal.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = MIXER,
-                    title = "No setting can break the mixer",
-                    body = "Every effect was pushed to every sample rate and knob extreme. " +
-                        "Filter, Ladder Filter, Resonator, Dynamics and the EQs no longer blow " +
-                        "up; an effect that ever does is reset and plays dry, and a damaged " +
-                        "saved mix loads instead of crashing.",
+                    title = "Unbreakable mixer",
+                    body = "No setting can blow up an effect or crash a saved mix.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = SPEED,
-                    title = "Speed on hi-res, Bluetooth and Atmos",
-                    body = "Changing speed no longer drops a hi-res stream to 16-bit, breaks up " +
-                        "or crashes on hi-res Bluetooth, and now works on spatial and Atmos " +
-                        "tracks at any sample rate.",
+                    title = "Speed everywhere",
+                    body = "Works on hi-res, hi-res Bluetooth and Atmos.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = PIPELINE,
-                    title = "Bluetooth says what it is doing",
-                    body = "The Audio Pipeline panel shows how a Bluetooth output connects " +
-                        "(Classic, LE Audio or hands-free) and whether spatial audio applies, " +
-                        "and no longer passes off the phone speaker's rate as the headphones'.",
+                    title = "Bluetooth explained",
+                    body = "The pipeline panel shows the Bluetooth link and spatial audio.",
                 ),
             ),
         ),
