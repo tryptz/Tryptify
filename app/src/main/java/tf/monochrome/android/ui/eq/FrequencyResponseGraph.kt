@@ -48,6 +48,8 @@ import kotlin.math.ln
 import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.sqrt
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 private const val MIN_FREQ = 20f
 private const val MAX_FREQ = 20000f
@@ -518,15 +520,24 @@ fun FrequencyResponseGraph(
             // Slot keys stay fixed (measL = primary slot); LABELS follow the
             // ear actually occupying the slot, so switching the edit chip
             // never misattributes one ear's curve to the other.
-            val p1 = if (primaryIsRight) "R" else "L"
-            val p2 = if (primaryIsRight) "L" else "R"
+            val left = stringResource(R.string.graph_left_short)
+            val right = stringResource(R.string.graph_right_short)
+            val p1 = if (primaryIsRight) right else left
+            val p2 = if (primaryIsRight) left else right
+            val measured1 = stringResource(R.string.graph_ear_measured, p1)
+            val eq1 = stringResource(R.string.graph_ear_eq, p1)
+            val measured2 = stringResource(R.string.graph_ear_measured, p2)
+            val eq2 = stringResource(R.string.graph_ear_eq, p2)
+            val original = stringResource(R.string.graph_original)
+            val corrected = stringResource(R.string.graph_corrected)
+            val targetLabel = stringResource(R.string.graph_target)
             val entries = buildList {
-                add(Triple("measL", if (stereo) "$p1 meas" else "Original", Color(0xFF4A9EFF)))
-                add(Triple("target", "Target", primary))
-                add(Triple("eqL", if (stereo) "$p1 EQ" else "Corrected", Color(0xFFFF4444)))
+                add(Triple("measL", if (stereo) measured1 else original, Color(0xFF4A9EFF)))
+                add(Triple("target", targetLabel, primary))
+                add(Triple("eqL", if (stereo) eq1 else corrected, Color(0xFFFF4444)))
                 if (stereo) {
-                    add(Triple("measR", "$p2 meas", Color(0xFF4A9EFF).copy(alpha = 0.5f)))
-                    add(Triple("eqR", "$p2 EQ", Color(0xFFFFB300)))
+                    add(Triple("measR", measured2, Color(0xFF4A9EFF).copy(alpha = 0.5f)))
+                    add(Triple("eqR", eq2, Color(0xFFFFB300)))
                 }
             }
             Row(

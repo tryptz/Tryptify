@@ -37,6 +37,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.data.import_.ApoProfileParser
 import tf.monochrome.android.data.import_.ParsedEqProfile
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
+import androidx.compose.ui.res.pluralStringResource
 
 /**
  * Import an EqualizerAPO-style parametric profile (`ParametricEQ.txt` or a
@@ -84,25 +87,22 @@ fun ImportEqProfileSheet(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
-                "Import EQ profile",
+                stringResource(R.string.eq_import_eq_profile),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
             Text(
                 if (perEar) {
-                    "EqualizerAPO / AutoEq ParametricEQ.txt or a type,fc,gain,q CSV. " +
-                        "Fill LEFT only for a mono profile, or both panes for a " +
-                        "per-ear stereo profile."
+                    stringResource(R.string.eq_import_hint_per_ear)
                 } else {
-                    "EqualizerAPO / AutoEq ParametricEQ.txt, or a type,fc,gain,q CSV. " +
-                        "Paste below or open a file."
+                    stringResource(R.string.eq_import_hint)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             ProfilePane(
-                title = if (perEar) "LEFT EAR" else null,
+                title = if (perEar) stringResource(R.string.eq_left_ear_caps) else null,
                 raw = rawL,
                 onRaw = { rawL = it },
                 parsed = parsedL,
@@ -114,7 +114,7 @@ fun ImportEqProfileSheet(
 
             if (perEar) {
                 ProfilePane(
-                    title = "RIGHT EAR",
+                    title = stringResource(R.string.eq_right_ear_caps),
                     raw = rawR,
                     onRaw = { rawR = it },
                     parsed = parsedR,
@@ -138,27 +138,26 @@ fun ImportEqProfileSheet(
                     maxAbsDragGain = maxBandGainDb,
                     secondaryBands = if (validL != null && validR != null) validR.bands else null,
                 )
-                val summary = buildString {
-                    append(primaryProfile.bands.size)
-                    append(" filters")
-                    if (validL != null && validR != null) {
-                        append(" L / ")
-                        append(validR.bands.size)
-                        append(" filters R")
-                    }
-                    append(" · preamp ")
-                    append("%.1f dB".format(minOf(
-                        validL?.preamp ?: Float.MAX_VALUE,
-                        validR?.preamp ?: Float.MAX_VALUE,
-                    )))
-                }
+                val filtersL = pluralStringResource(
+                    R.plurals.eq_filter_count, primaryProfile.bands.size, primaryProfile.bands.size,
+                )
+                val filters = if (validL != null && validR != null) {
+                    stringResource(
+                        R.string.eq_filters_per_ear, filtersL,
+                        pluralStringResource(R.plurals.eq_filter_count, validR.bands.size, validR.bands.size),
+                    )
+                } else filtersL
+                val summary = filters + stringResource(
+                    R.string.eq_preamp_summary,
+                    minOf(validL?.preamp ?: Float.MAX_VALUE, validR?.preamp ?: Float.MAX_VALUE),
+                )
                 Text(summary, style = MaterialTheme.typography.labelMedium)
 
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Profile name") },
+                    label = { Text(stringResource(R.string.eq_profile_name)) },
                     singleLine = true,
                 )
             }
@@ -167,15 +166,16 @@ fun ImportEqProfileSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
                 Spacer(Modifier.width(8.dp))
+                val importedProfileName = stringResource(R.string.eq_imported_profile)
                 Button(
                     enabled = validL != null || validR != null,
                     onClick = {
-                        onImport(validL, validR, name.ifBlank { "Imported profile" })
+                        onImport(validL, validR, name.ifBlank { importedProfileName })
                         onDismiss()
                     },
-                ) { Text("Upload") }
+                ) { Text(stringResource(R.string.eq_upload)) }
             }
             Spacer(Modifier.height(8.dp))
         }
@@ -220,7 +220,7 @@ private fun ProfilePane(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                title ?: "PROFILE",
+                title ?: stringResource(R.string.eq_profile_caps),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.Bold,
@@ -235,7 +235,7 @@ private fun ProfilePane(
                     modifier = Modifier.size(14.dp),
                 )
                 Spacer(Modifier.width(4.dp))
-                Text("Open file", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.eq_open_file), style = MaterialTheme.typography.labelMedium)
             }
         }
         OutlinedTextField(
@@ -256,13 +256,13 @@ private fun ProfilePane(
             parsed == null -> Unit
             parsed.looksLikeMeasurement -> {
                 Text(
-                    "This looks like a frequency-response measurement, not a filter profile.",
+                    stringResource(R.string.eq_this_looks_like_a_frequency_response_measurement),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.tertiary,
                 )
                 if (onMeasurementImport != null) {
                     TextButton(onClick = { onMeasurementImport(raw) }) {
-                        Text("Import as measurement instead")
+                        Text(stringResource(R.string.eq_import_as_measurement_instead))
                     }
                 }
             }
@@ -271,7 +271,8 @@ private fun ProfilePane(
             }
             else -> {
                 Text(
-                    "${parsed.bands.size} filters · preamp ${"%.1f".format(parsed.preamp)} dB",
+                    pluralStringResource(R.plurals.eq_filter_count, parsed.bands.size, parsed.bands.size) +
+                        stringResource(R.string.eq_preamp_summary, parsed.preamp),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                 )

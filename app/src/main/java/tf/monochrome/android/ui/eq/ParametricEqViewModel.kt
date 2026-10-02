@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.eq
 
+import tf.monochrome.android.R
+import tf.monochrome.android.ui.components.UiText
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -53,8 +55,8 @@ class ParametricEqViewModel @Inject constructor(
     private val _selectedBandId = MutableStateFlow(-1)
     val selectedBandId: StateFlow<Int> = _selectedBandId.asStateFlow()
 
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
+    private val _error = MutableStateFlow<UiText?>(null)
+    val error: StateFlow<UiText?> = _error.asStateFlow()
 
     private val _fftSize = MutableStateFlow(SpectrumAnalyzerTap.FFT_SIZE_LOW)
     val fftSize: StateFlow<Int> = _fftSize.asStateFlow()
@@ -194,7 +196,7 @@ class ParametricEqViewModel @Inject constructor(
         viewModelScope.launch {
             val preset = repository.getPresetById(presetId) ?: return@launch
             if (preset.isCorrupted) {
-                _error.value = "Preset \"${preset.name}\" is corrupted and can't be loaded."
+                _error.value = UiText.Res(R.string.eq_err_preset_corrupted, listOf(preset.name))
                 return@launch
             }
             _activePreset.value = preset
@@ -227,7 +229,7 @@ class ParametricEqViewModel @Inject constructor(
                 preferences.setParamEqActivePreset(preset.id)
                 _error.value = null
             } catch (e: Exception) {
-                _error.value = "Failed to save preset: ${e.message}"
+                _error.value = UiText.Res(R.string.eq_err_save_preset, listOf(e.message.orEmpty()))
             }
         }
     }
@@ -268,7 +270,7 @@ class ParametricEqViewModel @Inject constructor(
                 }
                 _error.value = null
             } catch (e: Exception) {
-                _error.value = "Failed to import profile: ${e.message}"
+                _error.value = UiText.Res(R.string.eq_err_import_profile, listOf(e.message.orEmpty()))
             }
         }
     }
@@ -282,7 +284,7 @@ class ParametricEqViewModel @Inject constructor(
                     preferences.setParamEqActivePreset(null)
                 }
             } catch (e: Exception) {
-                _error.value = "Failed to delete preset: ${e.message}"
+                _error.value = UiText.Res(R.string.eq_err_delete_preset, listOf(e.message.orEmpty()))
             }
         }
     }
@@ -319,7 +321,7 @@ class ParametricEqViewModel @Inject constructor(
                 preferences.setParamEqBands(json.encodeToString(bands))
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                _error.value = "Failed to save bands: ${e.message}"
+                _error.value = UiText.Res(R.string.eq_err_save_bands, listOf(e.message.orEmpty()))
             }
         }
     }

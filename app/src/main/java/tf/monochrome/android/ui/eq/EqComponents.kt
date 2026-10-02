@@ -45,6 +45,9 @@ import androidx.compose.ui.unit.sp
 import tf.monochrome.android.domain.model.Headphone
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 /**
  * Pill-shaped category tab chip (ALL / OVER-EAR / IN-EAR)
@@ -264,7 +267,7 @@ fun HeadphoneItemRow(
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                "$profileCount profiles",
+                pluralStringResource(R.plurals.eq_profile_count, profileCount, profileCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -303,7 +306,7 @@ fun SectionLabel(
 fun SelectorRow(
     value: String,
     modifier: Modifier = Modifier,
-    placeholder: String = "Select...",
+    placeholder: String = stringResource(R.string.eq_select),
     onClick: () -> Unit,
     trailingIcon: @Composable (() -> Unit)? = null,
 ) {

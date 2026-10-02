@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.eq
 
+import tf.monochrome.android.R
+import tf.monochrome.android.ui.components.UiText
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -41,6 +43,12 @@ private data class StoredCustomTarget(
     val label: String,
     val rawData: String
 )
+
+/**
+ * The label of a measurement that came from a file rather than the database.
+ * A marker, not words: the screen names it in the reader's language.
+ */
+internal const val IMPORTED_FILE_LABEL = "\u0000imported"
 
 @HiltViewModel
 class EqViewModel @Inject constructor(
@@ -189,8 +197,8 @@ class EqViewModel @Inject constructor(
     private val _bandClampEvents = MutableSharedFlow<Float>(extraBufferCapacity = 1)
     val bandClampEvents: SharedFlow<Float> = _bandClampEvents.asSharedFlow()
 
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
+    private val _error = MutableStateFlow<UiText?>(null)
+    val error: StateFlow<UiText?> = _error.asStateFlow()
 
     private val _customPresets = MutableStateFlow<List<EqPreset>>(emptyList())
     val customPresets: StateFlow<List<EqPreset>> = _customPresets.asStateFlow()
@@ -523,7 +531,7 @@ class EqViewModel @Inject constructor(
         viewModelScope.launch {
             val preset = eqRepository.getPresetById(presetId) ?: return@launch
             if (preset.isCorrupted) {
-                _error.value = "Preset \"${preset.name}\" is corrupted and can't be loaded."
+                _error.value = UiText.Res(R.string.eq_err_preset_corrupted, listOf(preset.name))
                 return@launch
             }
             _activePreset.value = preset
@@ -712,11 +720,11 @@ class EqViewModel @Inject constructor(
                     ?: headphoneRepository.listMeasurementSamples(meas, prefix)
                         .also { if (it.isNotEmpty()) sampleListCache[key] = it }
                 if (samples.isEmpty()) {
-                    _error.value = "Couldn't reach the measurement server — try again"
+                    _error.value = UiText.Res(R.string.eq_err_server)
                     return@launchFit
                 }
                 if (samples.size == 1) {
-                    _error.value = "Only one " + prefix + " sample is published for this measurement"
+                    _error.value = UiText.Res(R.string.eq_err_only_one_sample, listOf(prefix))
                     return@launchFit
                 }
                 val sampleFlow =
@@ -726,17 +734,17 @@ class EqViewModel @Inject constructor(
 
                 val text = headphoneRepository.fetchMeasurementSampleText(meas, next)
                 if (text == null) {
-                    _error.value = "Failed to fetch sample " + next
+                    _error.value = UiText.Res(R.string.eq_err_fetch_sample, listOf(next))
                     return@launchFit
                 }
                 val parsed = EqDataParser.parseRawData(text)
                 if (parsed.isEmpty()) {
-                    _error.value = "Failed to parse sample " + next
+                    _error.value = UiText.Res(R.string.eq_err_parse_sample, listOf(next))
                     return@launchFit
                 }
                 val target = _selectedTarget.value.data
                 if (target.isEmpty()) {
-                    _error.value = "Target curve not available"
+                    _error.value = UiText.Res(R.string.eq_err_no_target)
                     return@launchFit
                 }
                 val bands = runEngine(parsed, target, fitSettings())
@@ -757,7 +765,7 @@ class EqViewModel @Inject constructor(
                     saveBandsToPreferences(bands)
                 }
             } catch (e: Exception) {
-                _error.value = "Failed to switch sample: " + e.message
+                _error.value = UiText.Res(R.string.eq_err_switch_sample, listOf(e.message.orEmpty()))
             } finally {
                 _isCalculating.value = false
             }
@@ -895,7 +903,7 @@ class EqViewModel @Inject constructor(
                 _activePreset.value = preset
                 _error.value = null
             } catch (e: Exception) {
-                _error.value = "Failed to save preset: ${e.message}"
+                _error.value = UiText.Res(R.string.eq_err_save_preset, listOf(e.message.orEmpty()))
             }
         }
     }
@@ -977,7 +985,7 @@ class EqViewModel @Inject constructor(
                 }
                 _error.value = null
             } catch (e: Exception) {
-                _error.value = "Failed to import profile: " + e.message
+                _error.value = UiText.Res(R.string.eq_err_import_profile, listOf(e.message.orEmpty()))
             }
         }
     }
@@ -997,7 +1005,7 @@ class EqViewModel @Inject constructor(
                 }
                 _error.value = null
             } catch (e: Exception) {
-                _error.value = "Failed to delete preset: ${e.message}"
+                _error.value = UiText.Res(R.string.eq_err_delete_preset, listOf(e.message.orEmpty()))
             }
         }
     }
@@ -1027,7 +1035,7 @@ class EqViewModel @Inject constructor(
 
                 val measurement = EqDataParser.parseRawData(measurementCsv)
                 if (measurement.isEmpty()) {
-                    _error.value = "Failed to parse measurement data"
+                    _error.value = UiText.Res(R.string.eq_err_parse_data)
                     _isCalculating.value = false
                     return@launchFit
                 }
@@ -1036,7 +1044,7 @@ class EqViewModel @Inject constructor(
 
                 val target = _selectedTarget.value.data
                 if (target.isEmpty()) {
-                    _error.value = "Target curve not available"
+                    _error.value = UiText.Res(R.string.eq_err_no_target)
                     _isCalculating.value = false
                     return@launchFit
                 }
@@ -1048,7 +1056,7 @@ class EqViewModel @Inject constructor(
                 _error.value = null
 
             } catch (e: Exception) {
-                _error.value = "AutoEQ calculation failed: ${e.message}"
+                _error.value = UiText.Res(R.string.eq_err_autoeq, listOf(e.message.orEmpty()))
             } finally {
                 _isCalculating.value = false
             }
@@ -1076,7 +1084,7 @@ class EqViewModel @Inject constructor(
                     _headphonesLoading.value = false
                 }
             } catch (e: Exception) {
-                _error.value = "Failed to load headphones: ${e.message}"
+                _error.value = UiText.Res(R.string.eq_err_load_headphones, listOf(e.message.orEmpty()))
                 _headphonesLoading.value = false
             }
         }
@@ -1165,7 +1173,7 @@ class EqViewModel @Inject constructor(
                     _headphonesLoading.value = false
                 }
             } catch (e: Exception) {
-                _error.value = "Search failed: ${e.message}"
+                _error.value = UiText.Res(R.string.eq_err_search, listOf(e.message.orEmpty()))
                 _headphonesLoading.value = false
             }
         }
@@ -1233,7 +1241,7 @@ class EqViewModel @Inject constructor(
         if (target.isEmpty()) {
             // Handled here (error surfaced) — returning true stops the caller
             // from re-fetching just to hit the same wall.
-            _error.value = "Target curve not available"
+            _error.value = UiText.Res(R.string.eq_err_no_target)
             return true
         }
 
@@ -1322,14 +1330,14 @@ class EqViewModel @Inject constructor(
                     headphoneRepository.fetchMeasurementText(measurement)
                 }
                 if (csvData == null) {
-                    _error.value = "Failed to fetch measurement"
+                    _error.value = UiText.Res(R.string.eq_err_fetch_measurement)
                     _isCalculating.value = false
                     return
                 }
                 EqDataParser.parseRawData(csvData)
             }
             if (parsed.isEmpty()) {
-                _error.value = "Failed to parse headphone measurement"
+                _error.value = UiText.Res(R.string.eq_err_parse_headphone)
                 _isCalculating.value = false
                 return
             }
@@ -1352,7 +1360,7 @@ class EqViewModel @Inject constructor(
 
             val target = _selectedTarget.value.data
             if (target.isEmpty()) {
-                _error.value = "Target curve not available"
+                _error.value = UiText.Res(R.string.eq_err_no_target)
                 _isCalculating.value = false
                 return
             }
@@ -1368,7 +1376,7 @@ class EqViewModel @Inject constructor(
             _error.value = null
             _isCalculating.value = false
         } catch (e: Exception) {
-            _error.value = "Failed to load measurement: ${e.message}"
+            _error.value = UiText.Res(R.string.eq_err_load_measurement, listOf(e.message.orEmpty()))
             _isCalculating.value = false
         }
     }
@@ -1396,7 +1404,7 @@ class EqViewModel @Inject constructor(
                     result.onSuccess { csvData ->
                         val measurement = EqDataParser.parseRawData(csvData)
                         if (measurement.isEmpty()) {
-                            _error.value = "Failed to parse headphone measurement"
+                            _error.value = UiText.Res(R.string.eq_err_parse_headphone)
                             _isCalculating.value = false
                             return@collect
                         }
@@ -1406,7 +1414,7 @@ class EqViewModel @Inject constructor(
 
                         val target = _selectedTarget.value.data
                         if (target.isEmpty()) {
-                            _error.value = "Target curve not available"
+                            _error.value = UiText.Res(R.string.eq_err_no_target)
                             _isCalculating.value = false
                             return@collect
                         }
@@ -1419,13 +1427,13 @@ class EqViewModel @Inject constructor(
                         _isCalculating.value = false
 
                     }.onFailure { error ->
-                        _error.value = "Failed to load measurement: ${error.message}"
+                        _error.value = UiText.Res(R.string.eq_err_load_measurement, listOf(error.message.orEmpty()))
                         _isCalculating.value = false
                     }
                 }
 
             } catch (e: Exception) {
-                _error.value = "Failed to load headphone preset: ${e.message}"
+                _error.value = UiText.Res(R.string.eq_err_load_headphone_preset, listOf(e.message.orEmpty()))
                 _isCalculating.value = false
             }
         }
@@ -1501,12 +1509,12 @@ class EqViewModel @Inject constructor(
                     if (_stereoMode.value) _originalMeasurementR.value
                     else emptyList<FrequencyPoint>()
                 if (measL.isEmpty() && measR.isEmpty()) {
-                    _error.value = "No headphone measurement loaded"
+                    _error.value = UiText.Res(R.string.eq_err_no_measurement)
                     return@launchFit
                 }
                 val target = _selectedTarget.value.data
                 if (target.isEmpty()) {
-                    _error.value = "Target curve not available"
+                    _error.value = UiText.Res(R.string.eq_err_no_target)
                     return@launchFit
                 }
                 if (measL.isNotEmpty()) {
@@ -1522,7 +1530,7 @@ class EqViewModel @Inject constructor(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _error.value = "AutoEQ calculation failed: " + e.message
+                _error.value = UiText.Res(R.string.eq_err_autoeq, listOf(e.message.orEmpty()))
             } finally {
                 _isCalculating.value = false
             }
@@ -1542,7 +1550,7 @@ class EqViewModel @Inject constructor(
 
                 val measurement = EqDataParser.parseRawData(rawData)
                 if (measurement.isEmpty()) {
-                    _error.value = "Failed to parse measurement file"
+                    _error.value = UiText.Res(R.string.eq_err_parse_file)
                     _isCalculating.value = false
                     return@launchFit
                 }
@@ -1556,20 +1564,20 @@ class EqViewModel @Inject constructor(
                     }
                     _originalMeasurementR.value = measurement
                     persistMeasurementR(measurement)
-                    _measurementLabelR.value = "Imported file"
+                    _measurementLabelR.value = IMPORTED_FILE_LABEL
                     selectedMeasR = null
                     _measurementSampleR.value = null
                 } else {
                     _originalMeasurement.value = measurement
                     persistMeasurement(measurement)
-                    _measurementLabelL.value = "Imported file"
+                    _measurementLabelL.value = IMPORTED_FILE_LABEL
                     selectedMeasL = null
                     _measurementSampleL.value = null
                 }
 
                 val target = _selectedTarget.value.data
                 if (target.isEmpty()) {
-                    _error.value = "Target curve not available"
+                    _error.value = UiText.Res(R.string.eq_err_no_target)
                     _isCalculating.value = false
                     return@launchFit
                 }
@@ -1584,7 +1592,7 @@ class EqViewModel @Inject constructor(
                     saveBandsToPreferences(bands)
                 }
             } catch (e: Exception) {
-                _error.value = "Import failed: ${e.message}"
+                _error.value = UiText.Res(R.string.eq_err_import, listOf(e.message.orEmpty()))
             } finally {
                 _isCalculating.value = false
             }
@@ -1599,7 +1607,7 @@ class EqViewModel @Inject constructor(
             try {
                 val points = EqDataParser.parseRawData(rawData)
                 if (points.isEmpty()) {
-                    _error.value = "Failed to parse target file"
+                    _error.value = UiText.Res(R.string.eq_err_parse_target)
                     return@launch
                 }
 
@@ -1618,7 +1626,7 @@ class EqViewModel @Inject constructor(
                 saveCustomTargets(updatedCustoms, rawData = mapOf(id to rawData))
                 _error.value = null
             } catch (e: Exception) {
-                _error.value = "Failed to import target: ${e.message}"
+                _error.value = UiText.Res(R.string.eq_err_import_target, listOf(e.message.orEmpty()))
             }
         }
     }
@@ -1673,7 +1681,7 @@ class EqViewModel @Inject constructor(
             )
             preferences.setEqCustomTargets(json)
         } catch (e: Exception) {
-            _error.value = "Failed to save custom targets: ${e.message}"
+            _error.value = UiText.Res(R.string.eq_err_save_targets, listOf(e.message.orEmpty()))
         }
     }
 
@@ -1699,7 +1707,7 @@ class EqViewModel @Inject constructor(
                 preferences.setEqBands(encodeBands(bands))
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                _error.value = "Failed to save bands: ${e.message}"
+                _error.value = UiText.Res(R.string.eq_err_save_bands, listOf(e.message.orEmpty()))
             }
         }
     }
@@ -1712,7 +1720,7 @@ class EqViewModel @Inject constructor(
                 preferences.setEqBandsR(encodeBands(bands))
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                _error.value = "Failed to save right-channel bands: ${e.message}"
+                _error.value = UiText.Res(R.string.eq_err_save_bands_right, listOf(e.message.orEmpty()))
             }
         }
     }

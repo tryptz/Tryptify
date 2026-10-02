@@ -57,6 +57,9 @@ import tf.monochrome.android.domain.model.Headphone
 import tf.monochrome.android.domain.model.MeasurementRig
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.components.SearchOverlay
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
+import androidx.compose.ui.res.pluralStringResource
 
 /**
  * Full-screen headphone browser.
@@ -82,7 +85,7 @@ fun HeadphoneSelectScreen(
     val availableHeadphones by viewModel.availableHeadphones.collectAsStateWithLifecycle()
     val uploadedHeadphones by viewModel.uploadedHeadphones.collectAsStateWithLifecycle()
     val headphonesLoading by viewModel.headphonesLoading.collectAsStateWithLifecycle()
-    val error by viewModel.error.collectAsStateWithLifecycle()
+    val error = viewModel.error.collectAsStateWithLifecycle().value?.resolve(androidx.compose.ui.platform.LocalContext.current)
     val selectedRig by viewModel.selectedRig.collectAsStateWithLifecycle()
     val availableRigs by viewModel.availableRigs.collectAsStateWithLifecycle()
 
@@ -151,7 +154,7 @@ fun HeadphoneSelectScreen(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "Database",
+                    stringResource(R.string.eq_database),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
@@ -162,16 +165,16 @@ fun HeadphoneSelectScreen(
                 )
             }
             Text(
-                "${rows.size} measurements",
+                pluralStringResource(R.plurals.eq_measurement_count, rows.size, rows.size),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(end = 8.dp),
             )
             IconButton(onClick = { viewModel.refreshHeadphones() }) {
-                Icon(Icons.Default.Refresh, "Refresh", modifier = Modifier.size(20.dp))
+                Icon(Icons.Default.Refresh, stringResource(R.string.eq_refresh), modifier = Modifier.size(20.dp))
             }
             IconButton(onClick = onDismiss) {
-                Icon(Icons.Default.Close, "Close", modifier = Modifier.size(20.dp))
+                Icon(Icons.Default.Close, stringResource(R.string.action_close), modifier = Modifier.size(20.dp))
             }
         }
 
@@ -206,7 +209,7 @@ fun HeadphoneSelectScreen(
                     FilterChip(
                         selected = selectedRig == null,
                         onClick = { viewModel.setRigFilter(null) },
-                        label = { Text("All rigs") },
+                        label = { Text(stringResource(R.string.eq_all_rigs)) },
                         colors = FilterChipDefaults.filterChipColors(),
                     )
                 }
@@ -238,7 +241,7 @@ fun HeadphoneSelectScreen(
             open = true,
             query = localSearchQuery,
             onQueryChange = { localSearchQuery = it },
-            placeholder = "Search model (e.g. HD 600)…",
+            placeholder = stringResource(R.string.eq_search_model_e_g_hd_600),
             onClose = null,
             modifier = Modifier.weight(1f),
             // Arriving on this screen is not a request to type — the rig chips
@@ -283,7 +286,7 @@ fun HeadphoneSelectScreen(
                     CircularProgressIndicator(modifier = Modifier.size(32.dp))
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        "Loading measurements from AutoEq + squig.link...",
+                        stringResource(R.string.eq_loading_measurements_from_autoeq_squig_link),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -295,7 +298,7 @@ fun HeadphoneSelectScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    "No measurements match",
+                    stringResource(R.string.eq_no_measurements_match),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -378,19 +381,19 @@ fun HeadphoneSelectScreen(
     if (toDelete != null) {
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { Text("Delete uploaded measurement?") },
+            title = { Text(stringResource(R.string.eq_delete_uploaded_measurement)) },
             text = { Text(toDelete.name) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.removeUploadedMeasurement(toDelete.id)
                     pendingDelete = null
                 }) {
-                    Text("Delete")
+                    Text(stringResource(R.string.action_delete))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { pendingDelete = null }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             },
         )
@@ -428,7 +431,7 @@ private fun MeasurementRowItem(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = "${measurement.source} • ${measurement.rig.label}",
+                text = stringResource(R.string.eq_source_rig, measurement.source, measurement.rig.label),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,

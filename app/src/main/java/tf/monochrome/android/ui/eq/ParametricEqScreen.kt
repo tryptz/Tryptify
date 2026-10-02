@@ -58,6 +58,9 @@ import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.player.SpectrumOverlay
 import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
+import androidx.compose.ui.res.pluralStringResource
 
 @Composable
 fun ParametricEqScreen(
@@ -85,7 +88,7 @@ fun ParametricEqScreen(
     val eqErrorContext = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(eqError) {
         eqError?.let {
-            android.widget.Toast.makeText(eqErrorContext, it, android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(eqErrorContext, it.resolve(eqErrorContext), android.widget.Toast.LENGTH_SHORT).show()
             viewModel.clearError()
         }
     }
@@ -118,21 +121,21 @@ fun ParametricEqScreen(
                     IconButton(onClick = { navController.popBackStackSafe() }) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.settings_back),
                             tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     Spacer(modifier = Modifier.width(4.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            "PARAMETRIC EQ",
+                            stringResource(R.string.eq_parametric_eq_caps),
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 2.sp,
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            "Free-form tone shaping on top of AutoEQ.",
+                            stringResource(R.string.eq_free_form_tone_shaping_on_top_of_autoeq),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -178,12 +181,12 @@ fun ParametricEqScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "Preamp",
+                            stringResource(R.string.eq_preamp),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            "${currentPreamp.toInt()} dB",
+                            stringResource(R.string.eq_db_value, currentPreamp.toInt()),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -204,7 +207,7 @@ fun ParametricEqScreen(
             // Edit page hop.
             item {
                 Text(
-                    "BANDS",
+                    stringResource(R.string.eq_bands_caps),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
@@ -247,7 +250,7 @@ fun ParametricEqScreen(
                             modifier = Modifier.size(18.dp)
                         )
                         Text(
-                            "Add band",
+                            stringResource(R.string.eq_add_band),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -273,7 +276,7 @@ fun ParametricEqScreen(
                             modifier = Modifier.size(18.dp)
                         )
                         Text(
-                            "Save current as profile",
+                            stringResource(R.string.eq_save_current_as_profile),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -295,7 +298,7 @@ fun ParametricEqScreen(
                             modifier = Modifier.size(18.dp)
                         )
                         Text(
-                            "Import profile (APO txt / CSV)",
+                            stringResource(R.string.eq_import_profile_apo_txt_csv),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -309,7 +312,7 @@ fun ParametricEqScreen(
                 item {
                   tf.monochrome.android.devedit.DevEditable("peq_saved_profiles_header", Modifier.fillMaxWidth()) {
                     Text(
-                        "SAVED PROFILES",
+                        stringResource(R.string.eq_saved_profiles_caps),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold,
@@ -345,7 +348,7 @@ fun ParametricEqScreen(
                             if (isActive) {
                                 Icon(
                                     Icons.Default.CheckCircle,
-                                    contentDescription = "Active",
+                                    contentDescription = stringResource(R.string.settings_active),
                                     modifier = Modifier.size(16.dp),
                                     tint = MaterialTheme.colorScheme.primary
                                 )
@@ -364,8 +367,8 @@ fun ParametricEqScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    if (preset.isCorrupted) "Corrupted — cannot load"
-                                    else "${preset.bands.size} bands",
+                                    if (preset.isCorrupted) stringResource(R.string.eq_corrupted)
+                                    else pluralStringResource(R.plurals.settings_band_count, preset.bands.size, preset.bands.size),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (preset.isCorrupted) MaterialTheme.colorScheme.error
                                     else MaterialTheme.colorScheme.onSurfaceVariant
@@ -377,7 +380,7 @@ fun ParametricEqScreen(
                             ) {
                                 Icon(
                                     Icons.Default.Delete,
-                                    contentDescription = "Delete profile",
+                                    contentDescription = stringResource(R.string.eq_delete_profile),
                                     modifier = Modifier.size(16.dp),
                                     tint = MaterialTheme.colorScheme.error
                                 )
@@ -402,13 +405,13 @@ fun ParametricEqScreen(
     if (showSaveDialog) {
         AlertDialog(
             onDismissRequest = { showSaveDialog = false },
-            title = { Text("Save Profile") },
+            title = { Text(stringResource(R.string.eq_save_profile)) },
             text = {
                 Column {
                     OutlinedTextField(
                         value = saveName,
                         onValueChange = { saveName = it },
-                        label = { Text("Profile name") },
+                        label = { Text(stringResource(R.string.eq_profile_name)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -416,7 +419,7 @@ fun ParametricEqScreen(
                     OutlinedTextField(
                         value = saveDescription,
                         onValueChange = { saveDescription = it },
-                        label = { Text("Description (optional)") },
+                        label = { Text(stringResource(R.string.eq_description_optional)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -428,10 +431,10 @@ fun ParametricEqScreen(
                         viewModel.saveAsPreset(saveName.trim(), saveDescription.trim())
                         showSaveDialog = false
                     }
-                }) { Text("Save") }
+                }) { Text(stringResource(R.string.action_save)) }
             },
             dismissButton = {
-                TextButton(onClick = { showSaveDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showSaveDialog = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -439,16 +442,16 @@ fun ParametricEqScreen(
     presetToDelete?.let { preset ->
         AlertDialog(
             onDismissRequest = { presetToDelete = null },
-            title = { Text("Delete Profile") },
-            text = { Text("Delete \"${preset.name}\"?") },
+            title = { Text(stringResource(R.string.settings_delete_profile)) },
+            text = { Text(stringResource(R.string.settings_delete_named, preset.name)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deletePreset(preset.id)
                     presetToDelete = null
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { presetToDelete = null }) { Text("Cancel") }
+                TextButton(onClick = { presetToDelete = null }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
