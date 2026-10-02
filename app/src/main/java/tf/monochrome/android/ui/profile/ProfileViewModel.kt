@@ -13,6 +13,7 @@ import tf.monochrome.android.data.auth.SupabaseAuthManager
 import tf.monochrome.android.data.auth.UserProfile
 import tf.monochrome.android.data.sync.SupabaseSyncRepository
 import javax.inject.Inject
+import tf.monochrome.android.R
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
@@ -29,8 +30,8 @@ class ProfileViewModel @Inject constructor(
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
-    private val _syncStatus = MutableStateFlow<String?>(null)
-    val syncStatus: StateFlow<String?> = _syncStatus.asStateFlow()
+    private val _syncStatus = MutableStateFlow<tf.monochrome.android.ui.components.UiText?>(null)
+    val syncStatus: StateFlow<tf.monochrome.android.ui.components.UiText?> = _syncStatus.asStateFlow()
 
     fun syncNow() {
         if (_isSyncing.value) return
@@ -43,12 +44,12 @@ class ProfileViewModel @Inject constructor(
                 // success unless both came back clean.
                 val failed = (supabaseSyncRepository.pushAll() + supabaseSyncRepository.pullAll()).distinct()
                 _syncStatus.value = if (failed.isEmpty()) {
-                    "Sync complete"
+                    tf.monochrome.android.ui.components.UiText.Res(R.string.sync_complete)
                 } else {
-                    "Sync finished with issues: ${failed.joinToString(", ")}"
+                    tf.monochrome.android.ui.components.UiText.Res(R.string.sync_with_issues, listOf(failed.joinToString(", ")))
                 }
             } catch (e: Exception) {
-                _syncStatus.value = "Sync failed: ${e.message ?: "unknown error"}"
+                _syncStatus.value = tf.monochrome.android.ui.components.UiText.Res(R.string.sync_failed, listOf(e.message?.takeIf { it.isNotBlank() }?.let { tf.monochrome.android.ui.components.UiText.Raw(it) } ?: tf.monochrome.android.ui.components.UiText.Res(R.string.unknown_error)))
             } finally {
                 _isSyncing.value = false
             }

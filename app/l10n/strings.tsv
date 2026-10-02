@@ -407,3 +407,323 @@ downloading_tracks#other	Downloading %1$d tracks	正在下载 %1$d 首歌曲	%1$
 show_all_tracks#one	Show all %1$d track	显示全部 %1$d 首歌曲	%1$d 曲すべてを表示	Afficher %1$d titre	Mostrar %1$d canción	%1$d parçanın tümünü göster	%1$d Titel anzeigen
 show_all_tracks#many	Show all %1$d tracks	显示全部 %1$d 首歌曲	%1$d 曲すべてを表示	Afficher les %1$d titres	Mostrar las %1$d canciones	%1$d parçanın tümünü göster	Alle %1$d Titel anzeigen
 show_all_tracks#other	Show all %1$d tracks	显示全部 %1$d 首歌曲	%1$d 曲すべてを表示	Afficher les %1$d titres	Mostrar las %1$d canciones	%1$d parçanın tümünü göster	Alle %1$d Titel anzeigen
+l10n_lowercase_names_in_sentences	true	false	false	true	true	true	false
+shelf_for_mood	For %1$s	氛围：%1$s	ムード：%1$s	Ambiance : %1$s	Ambiente: %1$s	Ruh hali: %1$s	Stimmung: %1$s
+shelf_step_out_from	A step out from %1$s	%1$s的延伸	%1$sから一歩外へ	Un pas de côté : %1$s	Un paso más allá: %1$s	Bir adım öte: %1$s	Einen Schritt weiter: %1$s
+shelf_genre_itself	The genre itself	该流派本身	ジャンルそのもの	Le genre lui-même	El género en sí	Türün kendisi	Das Genre selbst
+shelf_next_on_map	Next to it on the map	地图上的近邻	マップ上の近接ジャンル	Voisin sur la carte	Vecino en el mapa	Haritadaki komşusu	Nachbar auf der Karte
+shelf_popular_in	Popular in %1$s	%1$s 热门	%1$sで人気	Populaire en %1$s	Popular en %1$s	%1$s türünde popüler	Beliebt im Genre %1$s
+shelf_by_way_of	by way of %1$s	经由 %1$s	%1$s経由	en passant par %1$s	a través de %1$s	%1$s üzerinden	über %1$s
+shelf_ranked_by_plays_and_artists	ranked by plays and its most-played artists	按播放量和最常播放的艺人排序	再生数とよく再生されるアーティストで順位付け	classés par écoutes et par ses artistes les plus écoutés	ordenado por reproducciones y sus artistas más escuchados	dinlenme sayısına ve en çok dinlenen sanatçılarına göre sıralı	nach Wiedergaben und meistgespielten Künstlern sortiert
+shelf_ranked_by_plays	ranked by plays	按播放量排序	再生数順	classés par écoutes	ordenado por reproducciones	dinlenme sayısına göre sıralı	nach Wiedergaben sortiert
+shelf_most_played_artists	its most-played artists	最常播放的艺人	よく再生されるアーティスト	ses artistes les plus écoutés	sus artistas más escuchados	en çok dinlenen sanatçıları	die meistgespielten Künstler
+shelf_matched_by_name	matched by name	按名称匹配	名前で一致	correspondance par le nom	coincidencia por nombre	ada göre eşleşti	nach Namen zugeordnet
+shelf_tempo	%1$d–%2$d BPM	%1$d–%2$d BPM	%1$d–%2$d BPM	%1$d–%2$d BPM	%1$d–%2$d BPM	%1$d–%2$d BPM	%1$d–%2$d BPM
+shelf_tracks_for	Tracks for %1$s	歌曲：%1$s	曲：%1$s	Titres : %1$s	Canciones: %1$s	Parçalar: %1$s	Titel: %1$s
+shelf_releases_that_fit	Releases that fit %1$s	契合「%1$s」的作品	%1$sに合う作品	Sorties dans l’ambiance : %1$s	Lanzamientos con ambiente: %1$s	Uyan yayınlar: %1$s	Passende Veröffentlichungen: %1$s
+shelf_artists_to_start_from	Artists to start from	从这些艺人开始	まず聴きたいアーティスト	Des artistes pour commencer	Artistas para empezar	Başlamak için sanatçılar	Künstler für den Einstieg
+shelf_latest_release	Their latest release (%1$s) — you play %2$s	最新作品（%1$s）— 你常听 %2$s	最新リリース（%1$s）— %2$s をよく再生しています	Leur dernière sortie (%1$s) — vous écoutez %2$s	Su último lanzamiento (%1$s): escuchas a %2$s	En son yayınları (%1$s) — %2$s dinliyorsunuz	Neueste Veröffentlichung (%1$s) – du hörst %2$s
+shelf_because_you_play	Because you play %1$s	因为你常听 %1$s	%1$s をよく聴くあなたに	Parce que vous écoutez %1$s	Porque escuchas a %1$s	%1$s dinlediğiniz için	Weil du %1$s hörst
+shelf_artists_placed_next_to	Artists Qobuz places next to %1$s	Qobuz 认为与 %1$s 相近的艺人	Qobuz が %1$s の近くに位置づけるアーティスト	Artistes que Qobuz rapproche de %1$s	Artistas que Qobuz relaciona con %1$s	Qobuz’un %1$s ile ilişkilendirdiği sanatçılar	Künstler, die Qobuz neben %1$s stellt
+shelf_tracks_you_hearted	Tracks you hearted	你点了心的歌曲	ハートを付けた曲	Les titres que vous avez aimés	Canciones que marcaste con un corazón	Kalp bıraktığınız parçalar	Titel mit deinem Herz
+shelf_mood_albums	%1$s albums	专辑：%1$s	アルバム：%1$s	Albums : %1$s	Álbumes: %1$s	Albümler: %1$s	Alben: %1$s
+shelf_mood_artists	%1$s artists	艺人：%1$s	アーティスト：%1$s	Artistes : %1$s	Artistas: %1$s	Sanatçılar: %1$s	Künstler: %1$s
+shelf_new_from	New from %1$s	%1$s 的新作	%1$s の新作	Nouveautés de %1$s	Novedades de %1$s	Yeni: %1$s	Neu von %1$s
+shelf_from_your_favorites	From your favorites	来自你的收藏	お気に入りから	De vos favoris	De tus favoritos	Favorilerinizden	Aus deinen Favoriten
+shelf_separator	 · 	 · 	・	 · 	 · 	 · 	 · 
+mood_focus	Focus	专注	集中	Concentration	Concentración	Odaklanma	Fokus
+mood_late_night	Late night	深夜	深夜	Tard dans la nuit	De madrugada	Gece yarısı	Spätabends
+mood_workout	Workout	健身	ワークアウト	Entraînement	Entrenamiento	Antrenman	Workout
+mood_party	Party	派对	パーティー	Fête	Fiesta	Parti	Party
+mood_chill	Chill	放松	チル	Détente	Relax	Sakin	Chillen
+mood_commute	Commute	通勤	通勤	Trajet	Trayecto	Yolda	Pendeln
+mood_wind_down	Wind down	舒缓	ひと息	Décompresser	Desconectar	Gevşeme	Runterkommen
+mood_uplifting	Uplifting	振奋	高揚感	Exaltant	Optimista	Coşkulu	Erhebend
+mood_sleep	Sleep	睡眠	睡眠	Sommeil	Dormir	Uyku	Schlafen
+mood_rage	Rage	狂怒	怒り	Rage	Furia	Öfke	Wut
+mood_unhinged	Unhinged	失控	狂乱	Déchaîné	Desquiciado	Çılgın	Entfesselt
+mood_menacing	Menacing	阴森	不穏	Menaçant	Amenazante	Tehditkâr	Bedrohlich
+mood_dread	Dread	恐惧	戦慄	Angoisse	Pavor	Dehşet	Grauen
+mood_hypnotic	Hypnotic	催眠	催眠的	Hypnotique	Hipnótico	Hipnotik	Hypnotisch
+mood_euphoric	Euphoric	狂喜	多幸感	Euphorique	Eufórico	Öforik	Euphorisch
+mood_feral	Feral	野性	野性	Sauvage	Salvaje	Vahşi	Wild
+mood_melancholy	Melancholy	忧郁	哀愁	Mélancolie	Melancolía	Melankoli	Melancholie
+mood_swagger	Swagger	张扬	強気	Aplomb	Actitud	Havalı	Lässig
+mood_doom	Doom	末日	破滅	Fatalité	Fatalidad	Kıyamet	Untergang
+mood_dysphoric	Dysphoric	烦躁	不快	Dysphorique	Disfórico	Disforik	Dysphorisch
+mood_blissed_out	Blissed out	极乐	至福	Béat	Extasiado	Kendinden geçmiş	Selig
+mood_deep_cuts	Deep cuts	冷门佳作	隠れた名曲	Pépites cachées	Joyas ocultas	Gizli cevherler	Geheimtipps
+discover_beta	Discover (Beta)	发现（测试版）	見つける（ベータ）	Découvrir (bêta)	Descubrir (beta)	Keşfet (Beta)	Entdecken (Beta)
+close_genre_search	Close genre search	关闭流派搜索	ジャンル検索を閉じる	Fermer la recherche de genres	Cerrar la búsqueda de géneros	Tür aramasını kapat	Genresuche schließen
+search_genres	Search genres	搜索流派	ジャンルを検索	Rechercher des genres	Buscar géneros	Tür ara	Genres suchen
+show_something_else	Show me something else	换一批	別のものを見せて	Me montrer autre chose	Muéstrame otra cosa	Başka bir şey göster	Zeig mir etwas anderes
+search_genres_hint	Search 771 genres — try dnb, liquid, phonk	搜索 771 种流派——试试 dnb、liquid、phonk	771 のジャンルを検索 — dnb、liquid、phonk など	Rechercher parmi 771 genres — essayez dnb, liquid, phonk	Busca entre 771 géneros: prueba dnb, liquid o phonk	771 türde ara — dnb, liquid, phonk deneyin	771 Genres durchsuchen – probier dnb, liquid, phonk
+feed_end	That’s everything for this one.	这一类就这么多了。	ここにあるのはこれで全部です。	C’est tout pour celui-ci.	Eso es todo por aquí.	Bunun için hepsi bu kadar.	Mehr gibt es hier nicht.
+discover_empty_feed	Nothing to show yet. Play a few tracks — Discover builds itself from what you listen to.	暂时没有内容。先播放几首歌——“发现”会根据你的收听记录生成。	まだ表示するものがありません。何曲か再生してください。「見つける」はあなたが聴いた音楽から作られます。	Rien à afficher pour l’instant. Écoutez quelques titres : Découvrir se construit à partir de ce que vous écoutez.	Aún no hay nada que mostrar. Escucha algunas canciones: Descubrir se construye a partir de lo que escuchas.	Henüz gösterilecek bir şey yok. Birkaç parça çalın; Keşfet, dinlediklerinizden oluşur.	Noch nichts zu zeigen. Spiel ein paar Titel ab – Entdecken baut sich aus dem auf, was du hörst.
+discover_empty_chip	Nothing came back for that one. Try another mood, or check the Qobuz instance in Settings › Connections.	这一项没有返回结果。换一个氛围试试，或在“设置 › 连接”中检查 Qobuz 实例。	この項目では何も見つかりませんでした。別のムードを試すか、「設定 › 接続」で Qobuz インスタンスを確認してください。	Rien n’est revenu pour celui-ci. Essayez une autre ambiance, ou vérifiez l’instance Qobuz dans Paramètres › Connexions.	No ha llegado nada para esta. Prueba otro ambiente o revisa la instancia de Qobuz en Ajustes › Conexiones.	Bunun için bir şey gelmedi. Başka bir ruh hali deneyin ya da Ayarlar › Bağlantılar’dan Qobuz örneğini kontrol edin.	Dafür kam nichts zurück. Probier eine andere Stimmung oder prüfe die Qobuz-Instanz unter Einstellungen › Verbindungen.
+not_interested	Not interested	不感兴趣	興味なし	Pas intéressé	No me interesa	İlgilenmiyorum	Kein Interesse
+building_label	Building %1$s…	正在生成 %1$s…	%1$s を作成中…	Préparation de %1$s…	Preparando %1$s…	%1$s hazırlanıyor…	%1$s wird erstellt …
+building_feed	Building your feed…	正在生成你的推荐…	おすすめを作成中…	Préparation de votre fil…	Preparando tu feed…	Akışınız hazırlanıyor…	Dein Feed wird erstellt …
+no_genre_match	No genre matches that	没有匹配的流派	一致するジャンルはありません	Aucun genre ne correspond	Ningún género coincide	Eşleşen tür yok	Kein Genre passt dazu
+browse_the_map	Browse the map	浏览地图	マップを見る	Parcourir la carte	Explorar el mapa	Haritaya göz at	Karte durchstöbern
+pick_genres_on_map	Pick genres on the map	在地图上选择流派	マップでジャンルを選ぶ	Choisir des genres sur la carte	Elige géneros en el mapa	Haritadan tür seç	Genres auf der Karte wählen
+hearted	Hearted	已点心	ハート済み	Aimé	Con corazón	Kalp bırakıldı	Mit Herz markiert
+for_you	For you	为你推荐	あなたへのおすすめ	Pour vous	Para ti	Sizin için	Für dich
+sort_most_popular	Most popular	最受欢迎	人気順	Les plus populaires	Más populares	En popüler	Am beliebtesten
+sort_newest	Newest	最新	新しい順	Les plus récents	Más recientes	En yeni	Neueste
+mix_empty	Nothing left in this mix	这个组合里已经没有内容了	このミックスには何も残っていません	Plus rien dans ce mix	No queda nada en esta mezcla	Bu karışımda bir şey kalmadı	In diesem Mix ist nichts mehr
+remove_named	Remove %1$s	移除 %1$s	%1$s を削除	Retirer %1$s	Quitar %1$s	%1$s öğesini kaldır	%1$s entfernen
+cities_on_air	Cities on air	正在播出的城市	放送中の都市	Villes à l’antenne	Ciudades en directo	Yayındaki şehirler	Städte auf Sendung
+genre_map	Genre map	流派地图	ジャンルマップ	Carte des genres	Mapa de géneros	Tür haritası	Genre-Karte
+every_genre	Every genre	所有流派	すべてのジャンル	Tous les genres	Todos los géneros	Tüm türler	Alle Genres
+queue_all_of	Queue all of %1$s	将“%1$s”全部加入播放队列	「%1$s」をすべてキューに追加	Tout ajouter à la file d’attente : %1$s	Añadir todo a la cola: %1$s	Tümünü sıraya ekle: %1$s	Alles aus %1$s zur Warteschlange
+hide_named	Hide %1$s	隐藏“%1$s”	「%1$s」を非表示	Masquer %1$s	Ocultar %1$s	Gizle: %1$s	%1$s ausblenden
+discover	Discover	发现	見つける	Découvrir	Descubrir	Keşfet	Entdecken
+shelf_gone	That shelf isn’t in the current feed any more.	当前推荐中已经没有这一栏了。	この棚は現在のおすすめにはもうありません。	Cette étagère n’est plus dans le fil actuel.	Esa fila ya no está en el feed actual.	Bu raf artık güncel akışta yok.	Diese Reihe ist nicht mehr im aktuellen Feed.
+action_refresh	Refresh	刷新	更新	Actualiser	Actualizar	Yenile	Aktualisieren
+play_the_chart	Play the chart	播放榜单	チャートを再生	Lire le classement	Reproducir la lista	Listeyi çal	Charts abspielen
+chart_window_7d	7 days	7 天	7日間	7 jours	7 días	7 gün	7 Tage
+chart_window_30d	30 days	30 天	30日間	30 jours	30 días	30 gün	30 Tage
+chart_window_6m	6 months	6 个月	6か月	6 mois	6 meses	6 ay	6 Monate
+chart_window_1y	1 year	1 年	1年	1 an	1 año	1 yıl	1 Jahr
+chart_window_all	All time	全部时间	全期間	Depuis toujours	Todo el tiempo	Tüm zamanlar	Gesamt
+chart_last_7d	the last 7 days	最近 7 天	過去7日間	les 7 derniers jours	los últimos 7 días	son 7 gün	den letzten 7 Tagen
+chart_last_30d	the last 30 days	最近 30 天	過去30日間	les 30 derniers jours	los últimos 30 días	son 30 gün	den letzten 30 Tagen
+chart_last_6m	the last 6 months	最近 6 个月	過去6か月	les 6 derniers mois	los últimos 6 meses	son 6 ay	den letzten 6 Monaten
+chart_last_1y	the last year	最近一年	過去1年	la dernière année	el último año	son bir yıl	dem letzten Jahr
+chart_fell_back	Not enough listening data for %1$s in %2$s — showing all time instead	%2$s内 %1$s 的收听数据不足——改为显示全部时间	%2$sの %1$s の再生データが不足しているため、全期間を表示しています	Pas assez de données d’écoute pour %1$s sur %2$s — affichage de tout l’historique	No hay suficientes datos de escucha de %1$s en %2$s: se muestra todo el historial	%2$s içinde %1$s için yeterli dinleme verisi yok — tüm zamanlar gösteriliyor	Nicht genug Hördaten für %1$s in %2$s – stattdessen alle Zeiten
+chart_ranked_scrobbles	Ranked by global scrobbles, all time	按全球 scrobble 次数排名，全部时间	全世界の Scrobble 数で順位付け（全期間）	Classé par scrobbles mondiaux, depuis toujours	Ordenado por scrobbles globales, de todo el tiempo	Küresel scrobble sayısına göre sıralı, tüm zamanlar	Nach weltweiten Scrobbles sortiert, gesamt
+chart_ranked_listens	Ranked by listens	按收听次数排名	再生数で順位付け	Classé par écoutes	Ordenado por escuchas	Dinlenmeye göre sıralı	Nach Wiedergaben sortiert
+chart_with_range	%1$s, %2$s	%1$s，%2$s	%1$s、%2$s	%1$s, %2$s	%1$s, %2$s	%1$s, %2$s	%1$s, %2$s
+chart_cross_checked	cross-checked with MusicBrainz	已与 MusicBrainz 交叉核对	MusicBrainz と照合済み	vérifié avec MusicBrainz	contrastado con MusicBrainz	MusicBrainz ile doğrulandı	mit MusicBrainz abgeglichen
+chart_none	No chart for this window	此时间段没有榜单	この期間のチャートはありません	Aucun classement pour cette période	No hay lista para este periodo	Bu dönem için liste yok	Für diesen Zeitraum gibt es keine Charts
+chart_none_detail	Windowed charts are drawn from global listening data, which thins out for smaller genres. Try a longer window, or All time.	按时间段的榜单来自全球收听数据，较小的流派数据会很少。试试更长的时间段，或“全部时间”。	期間別チャートは世界中の再生データから作られるため、小さなジャンルではデータが少なくなります。より長い期間か「全期間」をお試しください。	Les classements par période reposent sur les écoutes mondiales, qui se raréfient pour les petits genres. Essayez une période plus longue, ou Depuis toujours.	Las listas por periodo salen de datos de escucha globales, que escasean en los géneros pequeños. Prueba un periodo más largo o Todo el tiempo.	Dönemlik listeler küresel dinleme verilerinden çıkarılır ve küçük türlerde bu veri azalır. Daha uzun bir dönem ya da Tüm zamanlar’ı deneyin.	Charts für Zeiträume stammen aus weltweiten Hördaten, die bei kleineren Genres dünn werden. Probier einen längeren Zeitraum oder „Gesamt“.
+chart_none_in_catalogue	None of this chart is in the catalogue	这个榜单中的歌曲都不在曲库中	このチャートの曲はカタログにありません	Aucun titre de ce classement n’est au catalogue	Nada de esta lista está en el catálogo	Bu listedeki hiçbir parça katalogda yok	Nichts aus diesen Charts ist im Katalog
+chart_partial	Playing %1$d of %2$d — the rest aren’t in the catalogue	正在播放 %2$d 首中的 %1$d 首——其余不在曲库中	%2$d 曲中 %1$d 曲を再生中 — 残りはカタログにありません	Lecture de %1$d sur %2$d — les autres ne sont pas au catalogue	Reproduciendo %1$d de %2$d: el resto no está en el catálogo	%2$d parçanın %1$d tanesi çalınıyor — diğerleri katalogda yok	%1$d von %2$d werden gespielt – der Rest ist nicht im Katalog
+world_radio	World radio	全球电台	世界のラジオ	Radios du monde	Radio mundial	Dünya radyoları	Weltradio
+search_stations	Search stations	搜索电台	局を検索	Rechercher des stations	Buscar emisoras	İstasyon ara	Sender suchen
+outline_glow	Outline glow	轮廓发光	輪郭の光	Halo des contours	Brillo del contorno	Kontur parlaması	Konturleuchten
+recentre	Recentre	重新居中	中央に戻す	Recentrer	Volver a centrar	Ortala	Zentrieren
+globe_caption	Dots are cities on air · sized by how many stations	圆点是正在播出的城市 · 大小表示电台数量	点は放送中の都市 · 大きさは局の数	Les points sont des villes à l’antenne · leur taille suit le nombre de stations	Los puntos son ciudades en directo · su tamaño indica cuántas emisoras hay	Noktalar yayındaki şehirlerdir · boyutları istasyon sayısını gösterir	Punkte sind Städte auf Sendung · ihre Größe zeigt die Zahl der Sender
+globe_failed	The globe didn’t load.	地球没有加载出来。	地球儀を読み込めませんでした。	Le globe ne s’est pas chargé.	El globo no se ha cargado.	Küre yüklenmedi.	Der Globus wurde nicht geladen.
+globe	Globe	地球	地球儀	Globe	Globo	Küre	Globus
+globe_detail	Fills the continents and lights their edges in the app’s accent colour.	用应用的强调色填充大陆并点亮其边缘。	アプリのアクセントカラーで大陸を塗り、輪郭を光らせます。	Remplit les continents et éclaire leurs contours de la couleur d’accent de l’app.	Rellena los continentes e ilumina sus bordes con el color de acento de la app.	Kıtaları doldurur ve kenarlarını uygulamanın vurgu rengiyle aydınlatır.	Füllt die Kontinente und lässt ihre Ränder in der Akzentfarbe der App leuchten.
+globe_land	Land	陆地	陸地	Terres	Tierra	Kara	Land
+globe_land_detail	How solidly the continents fill against the ocean.	大陆相对海洋的填充程度。	海に対して大陸をどれだけ塗りつぶすか。	Opacité des continents face à l’océan.	Cuánto se rellenan los continentes frente al océano.	Kıtaların okyanusa karşı ne kadar dolu görüneceği.	Wie kräftig die Kontinente gegen den Ozean gefüllt sind.
+globe_illumination	Illumination	照明	照明	Éclairage	Iluminación	Aydınlatma	Beleuchtung
+globe_illumination_detail	How far the outlines shift from the map’s ink toward the accent.	轮廓从地图墨色向强调色偏移的程度。	輪郭が地図の線の色からアクセントカラーへどれだけ寄るか。	À quel point les contours passent de l’encre de la carte à la couleur d’accent.	Cuánto pasan los contornos de la tinta del mapa al color de acento.	Konturların harita renginden vurgu rengine ne kadar kayacağı.	Wie weit die Umrisse von der Kartenfarbe zur Akzentfarbe wandern.
+globe_glow	Glow	发光	グロー	Halo	Brillo	Parlama	Leuchten
+globe_glow_detail	Strength of the halo laid under each line.	每条线下方光晕的强度。	各線の下に敷く光の強さ。	Intensité du halo sous chaque ligne.	Intensidad del halo bajo cada línea.	Her çizginin altındaki halenin gücü.	Stärke des Lichtscheins unter jeder Linie.
+globe_glow_width	Glow width	发光宽度	グローの幅	Largeur du halo	Ancho del brillo	Parlama genişliği	Leuchtbreite
+globe_glow_width_detail	How far the halo spreads either side of the line.	光晕向线两侧扩散的范围。	光が線の両側にどれだけ広がるか。	Étendue du halo de part et d’autre de la ligne.	Cuánto se extiende el halo a cada lado de la línea.	Halenin çizginin iki yanına ne kadar yayılacağı.	Wie weit sich der Lichtschein zu beiden Seiten der Linie ausbreitet.
+station_search_hint	Station, city or country	电台、城市或国家	局、都市、国	Station, ville ou pays	Emisora, ciudad o país	İstasyon, şehir veya ülke	Sender, Stadt oder Land
+searching	Searching…	正在搜索…	検索中…	Recherche…	Buscando…	Aranıyor…	Wird gesucht …
+station_directory_unreachable	Couldn’t reach the station directory.	无法连接电台目录。	局のディレクトリに接続できませんでした。	Impossible d’accéder à l’annuaire des stations.	No se ha podido acceder al directorio de emisoras.	İstasyon dizinine ulaşılamadı.	Das Senderverzeichnis ist nicht erreichbar.
+nothing_by_that_name	Nothing by that name.	没有这个名字的内容。	その名前のものはありません。	Rien sous ce nom.	No hay nada con ese nombre.	Bu adla bir şey yok.	Nichts mit diesem Namen.
+action_close	Close	关闭	閉じる	Fermer	Cerrar	Kapat	Schließen
+tuning_in	Tuning in…	正在调频…	チューニング中…	Syntonisation…	Sintonizando…	Ayarlanıyor…	Wird eingestellt …
+station_directory_unreachable_detail	Couldn’t reach the station directory. It’s the listing that’s missing, not the radio — try again in a moment.	无法连接电台目录。缺的是目录，不是电台——请稍后再试。	局のディレクトリに接続できませんでした。届かないのは一覧で、ラジオそのものではありません。しばらくしてからお試しください。	Impossible d’accéder à l’annuaire des stations. C’est la liste qui manque, pas la radio — réessayez dans un instant.	No se ha podido acceder al directorio de emisoras. Lo que falta es la lista, no la radio: vuelve a intentarlo en un momento.	İstasyon dizinine ulaşılamadı. Eksik olan radyo değil, liste — birazdan tekrar deneyin.	Das Senderverzeichnis ist nicht erreichbar. Es fehlt die Liste, nicht das Radio – versuch es gleich noch einmal.
+nearby_on_air	Nearby on air	附近正在播出	近くで放送中	À proximité, à l’antenne	Cerca, en directo	Yakında yayında	In der Nähe auf Sendung
+play_named	Play %1$s	播放 %1$s	%1$s を再生	Lire %1$s	Reproducir %1$s	%1$s istasyonunu çal	%1$s abspielen
+open_station_website	Open %1$s’s website	打开 %1$s 的网站	%1$s のウェブサイトを開く	Ouvrir le site de %1$s	Abrir el sitio web de %1$s	%1$s web sitesini aç	Website von %1$s öffnen
+station_unkeep	Remove from your stations	从你的电台中移除	マイ局から削除	Retirer de vos stations	Quitar de tus emisoras	İstasyonlarınızdan kaldırın	Aus deinen Sendern entfernen
+station_keep	Keep this station	保留此电台	この局を残す	Garder cette station	Guardar esta emisora	Bu istasyonu sakla	Diesen Sender behalten
+drawing_on_genres#one	Drawing on %1$d genre — tap to remove	取自 %1$d 种流派——点按可移除	%1$d ジャンルから選曲 — タップで削除	Basé sur %1$d genre — touchez pour retirer	Basado en %1$d género: toca para quitar	%1$d türden derleniyor — kaldırmak için dokunun	Aus %1$d Genre – zum Entfernen tippen
+drawing_on_genres#many	Drawing on %1$d genres — tap to remove	取自 %1$d 种流派——点按可移除	%1$d ジャンルから選曲 — タップで削除	Basé sur %1$d genres — touchez pour retirer	Basado en %1$d géneros: toca para quitar	%1$d türden derleniyor — kaldırmak için dokunun	Aus %1$d Genres – zum Entfernen tippen
+drawing_on_genres#other	Drawing on %1$d genres — tap to remove	取自 %1$d 种流派——点按可移除	%1$d ジャンルから選曲 — タップで削除	Basé sur %1$d genres — touchez pour retirer	Basado en %1$d géneros: toca para quitar	%1$d türden derleniyor — kaldırmak için dokunun	Aus %1$d Genres – zum Entfernen tippen
+add_n_to_playlist#one	Add %1$d to playlist	将 %1$d 首添加到歌单	%1$d 曲をプレイリストに追加	Ajouter %1$d titre à une playlist	Añadir %1$d a una playlist	%1$d parçayı çalma listesine ekle	%1$d zur Playlist hinzufügen
+add_n_to_playlist#many	Add %1$d to playlist	将 %1$d 首添加到歌单	%1$d 曲をプレイリストに追加	Ajouter %1$d titres à une playlist	Añadir %1$d a una playlist	%1$d parçayı çalma listesine ekle	%1$d zur Playlist hinzufügen
+add_n_to_playlist#other	Add %1$d to playlist	将 %1$d 首添加到歌单	%1$d 曲をプレイリストに追加	Ajouter %1$d titres à une playlist	Añadir %1$d a una playlist	%1$d parçayı çalma listesine ekle	%1$d zur Playlist hinzufügen
+cities_count#one	%1$d city	%1$d 个城市	%1$d 都市	%1$d ville	%1$d ciudad	%1$d şehir	%1$d Stadt
+cities_count#many	%1$d cities	%1$d 个城市	%1$d 都市	%1$d villes	%1$d ciudades	%1$d şehir	%1$d Städte
+cities_count#other	%1$d cities	%1$d 个城市	%1$d 都市	%1$d villes	%1$d ciudades	%1$d şehir	%1$d Städte
+stations_count#one	%1$d station	%1$d 个电台	%1$d 局	%1$d station	%1$d emisora	%1$d istasyon	%1$d Sender
+stations_count#many	%1$d stations	%1$d 个电台	%1$d 局	%1$d stations	%1$d emisoras	%1$d istasyon	%1$d Sender
+stations_count#other	%1$d stations	%1$d 个电台	%1$d 局	%1$d stations	%1$d emisoras	%1$d istasyon	%1$d Sender
+station_dropped#one	Nothing is on air here right now. %1$d station was listed when this map was built; the directory has since dropped it.	这里目前没有在播的电台。制作地图时列有 %1$d 个电台，目录现已将其移除。	ここでは現在放送中の局はありません。マップ作成時には %1$d 局が登録されていましたが、その後ディレクトリから削除されました。	Rien n’est à l’antenne ici pour le moment. %1$d station figurait sur la carte à sa création ; l’annuaire l’a retirée depuis.	Ahora mismo no hay nada en directo aquí. Al crear este mapa figuraba %1$d emisora; el directorio la ha retirado desde entonces.	Şu anda burada yayında olan bir şey yok. Bu harita oluşturulurken %1$d istasyon listelenmişti; dizin onları o zamandan beri kaldırdı.	Hier ist gerade nichts auf Sendung. Beim Erstellen der Karte war %1$d Sender gelistet; das Verzeichnis hat ihn inzwischen entfernt.
+station_dropped#many	Nothing is on air here right now. %1$d stations were listed when this map was built; the directory has since dropped them.	这里目前没有在播的电台。制作地图时列有 %1$d 个电台，目录现已将其移除。	ここでは現在放送中の局はありません。マップ作成時には %1$d 局が登録されていましたが、その後ディレクトリから削除されました。	Rien n’est à l’antenne ici pour le moment. %1$d stations figuraient sur la carte à sa création ; l’annuaire les a retirées depuis.	Ahora mismo no hay nada en directo aquí. Al crear este mapa figuraban %1$d emisoras; el directorio las ha retirado desde entonces.	Şu anda burada yayında olan bir şey yok. Bu harita oluşturulurken %1$d istasyon listelenmişti; dizin onları o zamandan beri kaldırdı.	Hier ist gerade nichts auf Sendung. Beim Erstellen der Karte waren %1$d Sender gelistet; das Verzeichnis hat sie inzwischen entfernt.
+station_dropped#other	Nothing is on air here right now. %1$d stations were listed when this map was built; the directory has since dropped them.	这里目前没有在播的电台。制作地图时列有 %1$d 个电台，目录现已将其移除。	ここでは現在放送中の局はありません。マップ作成時には %1$d 局が登録されていましたが、その後ディレクトリから削除されました。	Rien n’est à l’antenne ici pour le moment. %1$d stations figuraient sur la carte à sa création ; l’annuaire les a retirées depuis.	Ahora mismo no hay nada en directo aquí. Al crear este mapa figuraban %1$d emisoras; el directorio las ha retirado desde entonces.	Şu anda burada yayında olan bir şey yok. Bu harita oluşturulurken %1$d istasyon listelenmişti; dizin onları o zamandan beri kaldırdı.	Hier ist gerade nichts auf Sendung. Beim Erstellen der Karte waren %1$d Sender gelistet; das Verzeichnis hat sie inzwischen entfernt.
+chip_electronic	Electronic	电子	エレクトロニック	Électronique	Electrónica	Elektronik	Elektronik
+chip_classical	Classical	古典	クラシック	Classique	Clásica	Klasik	Klassik
+chip_pop_hits	Pop hits	流行金曲	ポップヒット	Tubes pop	Éxitos pop	Pop hitleri	Pop-Hits
+not_in_catalogue	“%1$s” isn’t in the catalogue	“%1$s”不在曲库中	「%1$s」はカタログにありません	« %1$s » n’est pas au catalogue	“%1$s” no está en el catálogo	“%1$s” katalogda yok	„%1$s“ ist nicht im Katalog
+genres	Genres	流派	ジャンル	Genres	Géneros	Türler	Genres
+collapse_everything	Collapse everything	全部收起	すべて折りたたむ	Tout réduire	Contraer todo	Tümünü daralt	Alles einklappen
+expand_everything	Expand everything	全部展开	すべて展開	Tout développer	Expandir todo	Tümünü genişlet	Alles ausklappen
+back_to_constellation	Back to the constellation map	返回星图	星座マップに戻る	Retour à la carte des constellations	Volver al mapa de constelaciones	Takımyıldız haritasına dön	Zurück zur Sternbildkarte
+arrange_by_year	Arrange by year	按年份排列	年代順に並べる	Classer par année	Ordenar por año	Yıla göre diz	Nach Jahr anordnen
+change_size_meaning	Change what size means	更改大小代表的含义	大きさの意味を変更	Changer ce que représente la taille	Cambiar qué indica el tamaño	Boyutun anlamını değiştir	Ändern, wofür die Größe steht
+hide_constellations	Hide constellations	隐藏星座	星座を非表示	Masquer les constellations	Ocultar constelaciones	Takımyıldızları gizle	Sternbilder ausblenden
+show_constellations	Show constellations	显示星座	星座を表示	Afficher les constellations	Mostrar constelaciones	Takımyıldızları göster	Sternbilder einblenden
+timeline_caption	Oldest left, newest right — each subgenre branches under its parent	左旧右新——每个子流派都从其上级流派下分出	左が古く右が新しい — サブジャンルは親ジャンルの下に枝分かれします	Les plus anciens à gauche, les plus récents à droite — chaque sous-genre part de son parent	Los más antiguos a la izquierda, los más nuevos a la derecha: cada subgénero sale de su género padre	En eskisi solda, en yenisi sağda — her alt tür kendi üst türünün altından dallanır	Älteste links, neueste rechts – jedes Subgenre zweigt unter seinem Elterngenre ab
+map_weight_popularity	Sized by listeners on Last.fm	大小表示 Last.fm 上的听众数	大きさは Last.fm のリスナー数	Taille selon les auditeurs sur Last.fm	Tamaño según los oyentes en Last.fm	Boyut, Last.fm dinleyici sayısına göre	Größe nach Hörern auf Last.fm
+map_weight_era	Sized by how recent the genre is	大小表示流派的新旧程度	大きさはジャンルの新しさ	Taille selon l’ancienneté du genre	Tamaño según lo reciente que es el género	Boyut, türün ne kadar yeni olduğuna göre	Größe danach, wie jung das Genre ist
+map_weight_depth	Sized by depth in the genre tree	大小表示在流派树中的层级	大きさはジャンルツリーでの深さ	Taille selon la profondeur dans l’arbre des genres	Tamaño según la profundidad en el árbol de géneros	Boyut, tür ağacındaki derinliğe göre	Größe nach Tiefe im Genre-Baum
+genre_map_failed	The genre map didn’t load.	流派地图没有加载出来。	ジャンルマップを読み込めませんでした。	La carte des genres ne s’est pas chargée.	El mapa de géneros no se ha cargado.	Tür haritası yüklenmedi.	Die Genre-Karte wurde nicht geladen.
+hide_history	Hide the history	隐藏历史	歴史を閉じる	Masquer l’histoire	Ocultar la historia	Tarihçeyi gizle	Geschichte ausblenden
+read_history_of	Read the history of %1$s	阅读 %1$s 的历史	%1$s の歴史を読む	Lire l’histoire de %1$s	Leer la historia de %1$s	%1$s türünün tarihçesini oku	Geschichte von %1$s lesen
+genre_unkeep	Remove from your genres	从你的流派中移除	マイジャンルから削除	Retirer de vos genres	Quitar de tus géneros	Türlerinizden kaldırın	Aus deinen Genres entfernen
+genre_keep	Keep in your genres	保留在你的流派中	マイジャンルに残す	Garder dans vos genres	Guardar en tus géneros	Türlerinizde tutun	In deinen Genres behalten
+also_called	also called %1$s	又称 %1$s	別名：%1$s	aussi appelé %1$s	también llamado %1$s	diğer adı: %1$s	auch genannt %1$s
+list_separator	, 	、	、	, 	, 	, 	, 
+subgenres	Subgenres	子流派	サブジャンル	Sous-genres	Subgéneros	Alt türler	Subgenres
+closest_to_it	Closest to it	最接近的流派	最も近いジャンル	Les plus proches	Los más cercanos	En yakınları	Am nächsten dran
+play_top	Play top	播放热门	トップを再生	Lire le top	Reproducir lo mejor	En iyileri çal	Top abspielen
+top_100	Top 100	前 100	トップ100	Top 100	Top 100	İlk 100	Top 100
+explore_in_discover	Explore in Discover	在“发现”中探索	「見つける」で探す	Explorer dans Découvrir	Explorar en Descubrir	Keşfet’te incele	In Entdecken erkunden
+counting_them_up	Counting them up…	正在统计…	集計中…	Décompte en cours…	Contando…	Sayılıyor…	Wird gezählt …
+chart_sources_unreachable	Couldn’t reach the chart sources. It’s the listing that’s missing, not the music — try again in a moment.	无法连接榜单来源。缺的是列表，不是音乐——请稍后再试。	チャートの取得元に接続できませんでした。届かないのは一覧で、音楽そのものではありません。しばらくしてからお試しください。	Impossible d’accéder aux sources du classement. C’est la liste qui manque, pas la musique — réessayez dans un instant.	No se ha podido acceder a las fuentes de la lista. Lo que falta es el listado, no la música: vuelve a intentarlo en un momento.	Liste kaynaklarına ulaşılamadı. Eksik olan müzik değil, liste — birazdan tekrar deneyin.	Die Chart-Quellen sind nicht erreichbar. Es fehlt die Liste, nicht die Musik – versuch es gleich noch einmal.
+no_chart_for_genre	No chart is published for this genre.	这个流派没有发布榜单。	このジャンルのチャートは公開されていません。	Aucun classement n’est publié pour ce genre.	No hay ninguna lista publicada para este género.	Bu tür için yayımlanmış bir liste yok.	Für dieses Genre gibt es keine Charts.
+looking_it_up	Looking it up…	正在查找…	調べています…	Recherche…	Buscando…	Aranıyor…	Wird nachgeschlagen …
+no_verified_history	No history we could verify is written for %1$s yet. It’s on the map from the curated dataset — its lineage, tempo and era — and nothing here is invented to fill the gap.	%1$s 还没有可核实的历史介绍。它在地图上的位置来自整理过的数据集——谱系、速度和年代——这里没有为填补空白而编造任何内容。	%1$s については、確認できる歴史はまだ書かれていません。マップ上の位置は精査済みのデータセット（系譜、テンポ、年代）によるもので、空白を埋めるために作られたものはありません。	Aucune histoire vérifiable n’est encore écrite pour %1$s. Le genre figure sur la carte d’après le jeu de données de référence — sa filiation, son tempo et son époque — et rien n’a été inventé pour combler le vide.	Aún no hay ninguna historia verificable escrita sobre %1$s. Está en el mapa por el conjunto de datos curado (su linaje, tempo y época) y aquí no se inventa nada para rellenar el hueco.	%1$s için doğrulanabilir bir tarihçe henüz yazılmadı. Haritadaki yeri, derlenmiş veri kümesinden geliyor — soyu, temposu ve dönemi — ve boşluğu doldurmak için hiçbir şey uydurulmadı.	Für %1$s ist noch keine überprüfbare Geschichte geschrieben. Es steht auf der Karte aufgrund des kuratierten Datensatzes – Abstammung, Tempo und Ära – und nichts hier ist erfunden, um die Lücke zu füllen.
+history_origins	Origins	起源	起源	Origines	Orígenes	Kökenler	Ursprünge
+history_grew_out_of	Grew out of	源自	派生元	Issu de	Surgió de	Doğduğu türler	Hervorgegangen aus
+history_led_to	Led to	衍生出	派生先	A donné naissance à	Dio lugar a	Yol açtığı türler	Führte zu
+wikipedia_attribution	From “%1$s” on Wikipedia, CC BY-SA 4.0	摘自英文维基百科“%1$s”，CC BY-SA 4.0	英語版ウィキペディア「%1$s」より、CC BY-SA 4.0	D’après « %1$s » sur Wikipédia en anglais, CC BY-SA 4.0	De “%1$s” en la Wikipedia en inglés, CC BY-SA 4.0	İngilizce Vikipedi’deki “%1$s” maddesinden, CC BY-SA 4.0	Aus „%1$s“ in der englischen Wikipedia, CC BY-SA 4.0
+wikipedia_attribution_section	From the “%1$s” section of “%2$s” on Wikipedia, CC BY-SA 4.0	摘自英文维基百科“%2$s”的“%1$s”部分，CC BY-SA 4.0	英語版ウィキペディア「%2$s」の「%1$s」節より、CC BY-SA 4.0	D’après la section « %1$s » de « %2$s » sur Wikipédia en anglais, CC BY-SA 4.0	De la sección “%1$s” de “%2$s” en la Wikipedia en inglés, CC BY-SA 4.0	İngilizce Vikipedi’deki “%2$s” maddesinin “%1$s” bölümünden, CC BY-SA 4.0	Aus dem Abschnitt „%1$s“ von „%2$s“ in der englischen Wikipedia, CC BY-SA 4.0
+tour_sound_title	Tune your sound	调校你的声音	サウンドを調整	Réglez votre son	Ajusta tu sonido	Sesinizi ayarlayın	Stimm deinen Sound ab
+tour_sound_text	Parametric EQ with AutoEQ profiles for hundreds of headphones.	参数均衡器，内置数百款耳机的 AutoEQ 配置。	数百種類のヘッドホンに対応した AutoEQ プロファイル付きパラメトリック EQ。	Égaliseur paramétrique avec des profils AutoEQ pour des centaines de casques.	Ecualizador paramétrico con perfiles AutoEQ para cientos de auriculares.	Yüzlerce kulaklık için AutoEQ profilleriyle parametrik EQ.	Parametrischer EQ mit AutoEQ-Profilen für Hunderte Kopfhörer.
+tour_dsp_title	Studio-grade DSP	录音室级 DSP	スタジオ品質の DSP	DSP de qualité studio	DSP de calidad de estudio	Stüdyo kalitesinde DSP	DSP in Studioqualität
+tour_dsp_text	Oxford-style Inflator and Compressor, right in the signal chain.	Oxford 风格的 Inflator 和压缩器，直接接入信号链。	Oxford スタイルの Inflator とコンプレッサーを信号経路に直接搭載。	Inflator et compresseur façon Oxford, directement dans la chaîne du signal.	Inflator y compresor al estilo Oxford, directamente en la cadena de señal.	Oxford tarzı Inflator ve kompresör, doğrudan sinyal zincirinde.	Inflator und Kompressor im Oxford-Stil, direkt in der Signalkette.
+tour_hires_title	Gapless & hi-res	无缝播放与高解析度	ギャップレス & ハイレゾ	Sans blanc et haute résolution	Sin pausas y en alta resolución	Kesintisiz ve yüksek çözünürlüklü	Lückenlos & Hi-Res
+tour_hires_text	Bit-perfect playback all the way up to your DAC’s limits.	比特级精确播放，直达你的 DAC 的极限。	DAC の限界までビットパーフェクトで再生。	Lecture bit-perfect jusqu’aux limites de votre DAC.	Reproducción bit-perfect hasta el límite de tu DAC.	DAC’ınızın sınırlarına kadar bit-perfect çalma.	Bit-perfekte Wiedergabe bis an die Grenzen deines DACs.
+tour_radio_title	Radio that knows your library	懂你音乐库的电台	ライブラリを理解するラジオ	Une radio qui connaît votre bibliothèque	Una radio que conoce tu biblioteca	Kitaplığınızı tanıyan radyo	Radio, das deine Bibliothek kennt
+tour_radio_text	Spotify recommendations, resolved to tracks you actually own.	Spotify 的推荐，匹配到你真正拥有的歌曲。	Spotify のおすすめを、実際に持っている曲に結び付けます。	Les recommandations Spotify, ramenées aux titres que vous possédez vraiment.	Recomendaciones de Spotify convertidas en canciones que de verdad tienes.	Spotify önerileri, gerçekten sahip olduğunuz parçalara eşlenir.	Spotify-Empfehlungen, aufgelöst zu Titeln, die du wirklich besitzt.
+action_done	Done	完成	完了	Terminé	Listo	Bitti	Fertig
+action_continue	Continue	继续	続ける	Continuer	Continuar	Devam	Weiter
+folders_title	Where’s your music?	你的音乐在哪里？	音楽はどこにありますか？	Où est votre musique ?	¿Dónde está tu música?	Müziğiniz nerede?	Wo ist deine Musik?
+folders_subtitle	Pick the folder(s) that hold your library. Only these are scanned.	选择存放音乐库的文件夹。只会扫描这些文件夹。	ライブラリがあるフォルダを選んでください。選んだフォルダだけがスキャンされます。	Choisissez le ou les dossiers qui contiennent votre bibliothèque. Seuls ceux-ci sont analysés.	Elige las carpetas que contienen tu biblioteca. Solo se escanean esas.	Kitaplığınızın bulunduğu klasörleri seçin. Yalnızca bunlar taranır.	Wähle die Ordner mit deiner Bibliothek. Nur diese werden gescannt.
+add_music_folder	Add a music folder	添加音乐文件夹	音楽フォルダを追加	Ajouter un dossier de musique	Añadir una carpeta de música	Müzik klasörü ekle	Musikordner hinzufügen
+add_another_folder	Add another folder	再添加一个文件夹	別のフォルダを追加	Ajouter un autre dossier	Añadir otra carpeta	Başka klasör ekle	Weiteren Ordner hinzufügen
+counting_tracks	Counting tracks…	正在统计歌曲…	曲数を数えています…	Décompte des titres…	Contando canciones…	Parçalar sayılıyor…	Titel werden gezählt …
+folder_no_tracks	No tracks found here yet — pick another folder or continue anyway.	这里还没找到歌曲——换个文件夹，或直接继续。	ここには曲が見つかりません。別のフォルダを選ぶか、このまま続けてください。	Aucun titre trouvé ici pour l’instant — choisissez un autre dossier ou continuez quand même.	Aún no hay canciones aquí: elige otra carpeta o continúa de todos modos.	Burada henüz parça bulunamadı — başka bir klasör seçin ya da yine de devam edin.	Hier wurden noch keine Titel gefunden – wähle einen anderen Ordner oder mach trotzdem weiter.
+remove_folder	Remove folder	移除文件夹	フォルダを削除	Retirer le dossier	Quitar carpeta	Klasörü kaldır	Ordner entfernen
+folder_unscannable	That folder can’t be scanned — pick a folder on device storage.	无法扫描该文件夹——请选择设备存储中的文件夹。	そのフォルダはスキャンできません。端末のストレージにあるフォルダを選んでください。	Ce dossier ne peut pas être analysé — choisissez un dossier sur le stockage de l’appareil.	Esa carpeta no se puede escanear: elige una carpeta del almacenamiento del dispositivo.	Bu klasör taranamıyor — cihaz depolamasından bir klasör seçin.	Dieser Ordner kann nicht gescannt werden – wähle einen Ordner im Gerätespeicher.
+permissions_title	Your music, found	找到你的音乐	あなたの音楽を見つけます	Votre musique, retrouvée	Tu música, encontrada	Müziğiniz bulundu	Deine Musik, gefunden
+permissions_subtitle	Tryptify needs access to your audio files to build your library.	Tryptify 需要访问你的音频文件来建立音乐库。	ライブラリを作るには、Tryptify にオーディオファイルへのアクセスが必要です。	Tryptify a besoin d’accéder à vos fichiers audio pour créer votre bibliothèque.	Tryptify necesita acceder a tus archivos de audio para crear tu biblioteca.	Tryptify’ın kitaplığınızı oluşturması için ses dosyalarınıza erişmesi gerekir.	Tryptify braucht Zugriff auf deine Audiodateien, um deine Bibliothek aufzubauen.
+open_app_settings	Open app settings	打开应用设置	アプリの設定を開く	Ouvrir les paramètres de l’app	Abrir ajustes de la app	Uygulama ayarlarını aç	App-Einstellungen öffnen
+allow_access	Allow access	允许访问	アクセスを許可	Autoriser l’accès	Permitir acceso	Erişime izin ver	Zugriff erlauben
+permission_granted	Access granted. Your files stay on your device — nothing is uploaded.	已授予访问权限。你的文件保留在设备上——不会上传任何内容。	アクセスが許可されました。ファイルは端末内に残り、何もアップロードされません。	Accès accordé. Vos fichiers restent sur votre appareil — rien n’est envoyé.	Acceso concedido. Tus archivos se quedan en tu dispositivo: no se sube nada.	Erişim verildi. Dosyalarınız cihazınızda kalır — hiçbir şey yüklenmez.	Zugriff erteilt. Deine Dateien bleiben auf deinem Gerät – nichts wird hochgeladen.
+permission_denied	Access was denied. Enable the music & audio permission in app settings to continue.	访问被拒绝。请在应用设置中开启“音乐和音频”权限后继续。	アクセスが拒否されました。続けるには、アプリの設定で「音楽とオーディオ」の権限を有効にしてください。	L’accès a été refusé. Activez l’autorisation « Musique et audio » dans les paramètres de l’app pour continuer.	Se ha denegado el acceso. Activa el permiso de música y audio en los ajustes de la app para continuar.	Erişim reddedildi. Devam etmek için uygulama ayarlarında müzik ve ses iznini etkinleştirin.	Der Zugriff wurde verweigert. Aktiviere die Berechtigung „Musik und Audio“ in den App-Einstellungen, um fortzufahren.
+permission_rationale_short	Without this permission Tryptify can’t see any of your music. It’s only used to read audio files and cover art.	没有此权限，Tryptify 就看不到你的任何音乐。它只用于读取音频文件和封面。	この権限がないと、Tryptify はあなたの音楽を見つけられません。オーディオファイルとアートワークの読み取りにのみ使います。	Sans cette autorisation, Tryptify ne voit aucune de vos musiques. Elle sert uniquement à lire les fichiers audio et les pochettes.	Sin este permiso, Tryptify no puede ver tu música. Solo se usa para leer archivos de audio y portadas.	Bu izin olmadan Tryptify müziğinizi göremez. Yalnızca ses dosyalarını ve kapak resimlerini okumak için kullanılır.	Ohne diese Berechtigung sieht Tryptify keine deiner Musik. Sie wird nur zum Lesen von Audiodateien und Covern verwendet.
+permission_files_stay	Your files stay on your device — the permission is only used to read audio files and cover art.	你的文件保留在设备上——此权限只用于读取音频文件和封面。	ファイルは端末内に残ります。この権限はオーディオファイルとアートワークの読み取りにのみ使います。	Vos fichiers restent sur votre appareil — l’autorisation sert uniquement à lire les fichiers audio et les pochettes.	Tus archivos se quedan en tu dispositivo: el permiso solo se usa para leer archivos de audio y portadas.	Dosyalarınız cihazınızda kalır — izin yalnızca ses dosyalarını ve kapak resimlerini okumak için kullanılır.	Deine Dateien bleiben auf deinem Gerät – die Berechtigung dient nur zum Lesen von Audiodateien und Covern.
+bitperfect_title	Bit-perfect out	比特级精确输出	ビットパーフェクト出力	Sortie bit-perfect	Salida bit-perfect	Bit-perfect çıkış	Bit-perfekte Ausgabe
+bitperfect_subtitle	Send audio to a USB DAC untouched — no resampling, no system mixer.	将音频原样发送到 USB DAC——不重采样，不经过系统混音器。	オーディオを USB DAC へそのまま送ります。リサンプリングもシステムミキサーもありません。	Envoyez l’audio intact à un DAC USB — sans rééchantillonnage ni mixeur système.	Envía el audio intacto a un DAC USB: sin remuestreo ni mezclador del sistema.	Sesi bir USB DAC’a olduğu gibi gönderin — yeniden örnekleme yok, sistem mikseri yok.	Schick Audio unverändert an einen USB-DAC – ohne Resampling, ohne System-Mixer.
+maybe_later	Maybe later	以后再说	あとで	Plus tard	Quizá más tarde	Belki sonra	Vielleicht später
+dac_detected	Detected: %1$s	已检测到：%1$s	検出：%1$s	Détecté : %1$s	Detectado: %1$s	Algılandı: %1$s	Erkannt: %1$s
+enable_bitperfect_question	Enable bit-perfect output?	启用比特级精确输出吗？	ビットパーフェクト出力を有効にしますか？	Activer la sortie bit-perfect ?	¿Activar la salida bit-perfect?	Bit-perfect çıkış etkinleştirilsin mi?	Bit-perfekte Ausgabe aktivieren?
+no_dac	No DAC connected	未连接 DAC	DAC が接続されていません	Aucun DAC connecté	No hay ningún DAC conectado	Bağlı DAC yok	Kein DAC verbunden
+no_dac_detail	Plug one in any time — Tryptify picks it up automatically, and bit-perfect mode lives in Settings → Audio.	随时都可以插入——Tryptify 会自动识别，比特级精确模式在“设置 → 音频”中。	いつでも接続できます。Tryptify が自動で認識し、ビットパーフェクトモードは「設定 → オーディオ」にあります。	Branchez-en un quand vous voulez — Tryptify le détecte automatiquement, et le mode bit-perfect se trouve dans Paramètres → Audio.	Conecta uno cuando quieras: Tryptify lo detecta solo, y el modo bit-perfect está en Ajustes → Audio.	İstediğiniz zaman takın — Tryptify otomatik olarak algılar; bit-perfect modu Ayarlar → Ses’te.	Steck jederzeit einen an – Tryptify erkennt ihn automatisch, und der bit-perfekte Modus liegt unter Einstellungen → Audio.
+streaming	Streaming	流媒体	ストリーミング	Streaming	Streaming	Akış	Streaming
+streaming_subtitle	Optional — connect services now or any time in Settings.	可选——现在或之后随时在“设置”中连接服务。	任意です。今すぐ、またはいつでも「設定」でサービスに接続できます。	Facultatif — connectez des services maintenant ou plus tard dans les Paramètres.	Opcional: conecta servicios ahora o cuando quieras en Ajustes.	İsteğe bağlı — hizmetleri şimdi ya da istediğiniz zaman Ayarlar’dan bağlayın.	Optional – verbinde Dienste jetzt oder jederzeit in den Einstellungen.
+skip_for_now	Skip for now	暂时跳过	今はスキップ	Passer pour l’instant	Omitir por ahora	Şimdilik atla	Vorerst überspringen
+tidal_service_detail	Hi-res & lossless catalog through your TrypT HiFi instance — the default source, ready once your instance is connected.	通过你的 TrypT HiFi 实例提供高解析度与无损曲库——默认来源，连接实例后即可使用。	TrypT HiFi インスタンス経由のハイレゾ・ロスレスカタログ。既定のソースで、インスタンスを接続すればすぐ使えます。	Catalogue hi-res et sans perte via votre instance TrypT HiFi — la source par défaut, prête dès que votre instance est connectée.	Catálogo hi-res y sin pérdidas a través de tu instancia de TrypT HiFi: la fuente predeterminada, lista en cuanto conectes tu instancia.	TrypT HiFi örneğiniz üzerinden yüksek çözünürlüklü ve kayıpsız katalog — varsayılan kaynak; örneğiniz bağlanınca hazır.	Hi-Res- und Lossless-Katalog über deine TrypT-HiFi-Instanz – die Standardquelle, bereit, sobald deine Instanz verbunden ist.
+set_up_in_settings	Set up in Settings	在“设置”中设置	「設定」で設定	Configurer dans les Paramètres	Configurar en Ajustes	Ayarlar’da kur	In den Einstellungen einrichten
+qobuz_service_detail	Lossless & hi-res streaming through your TrypT HiFi instance. Add it under Settings → Connections → APIs — this finishes onboarding and takes you there.	通过你的 TrypT HiFi 实例提供无损与高解析度流媒体。请在“设置 → 连接 → API”中添加——这会结束引导并带你前往该页面。	TrypT HiFi インスタンス経由のロスレス・ハイレゾストリーミング。「設定 → 接続 → API」で追加します。セットアップを終えてその画面に移動します。	Streaming sans perte et hi-res via votre instance TrypT HiFi. Ajoutez-la dans Paramètres → Connexions → API — cela termine la configuration et vous y emmène.	Streaming sin pérdidas y hi-res a través de tu instancia de TrypT HiFi. Añádela en Ajustes → Conexiones → API: esto termina la configuración y te lleva allí.	TrypT HiFi örneğiniz üzerinden kayıpsız ve yüksek çözünürlüklü akış. Ayarlar → Bağlantılar → API’ler altından ekleyin — bu, kurulumu bitirip sizi oraya götürür.	Lossless- und Hi-Res-Streaming über deine TrypT-HiFi-Instanz. Füge sie unter Einstellungen → Verbindungen → APIs hinzu – damit endet die Einrichtung und du landest dort.
+spotify_connected_as	Connected as %1$s — radio & recommendations, resolved to tracks you own.	已以 %1$s 身份连接——电台与推荐会匹配到你拥有的歌曲。	%1$s として接続済み — ラジオとおすすめを、持っている曲に結び付けます。	Connecté en tant que %1$s — radio et recommandations ramenées à vos titres.	Conectado como %1$s: radio y recomendaciones con canciones que tienes.	%1$s olarak bağlandı — radyo ve öneriler sahip olduğunuz parçalara eşlenir.	Verbunden als %1$s – Radio und Empfehlungen, aufgelöst zu deinen Titeln.
+spotify_connected_plain	Connected — radio & recommendations, resolved to tracks you own.	已连接——电台与推荐会匹配到你拥有的歌曲。	接続済み — ラジオとおすすめを、持っている曲に結び付けます。	Connecté — radio et recommandations ramenées à vos titres.	Conectado: radio y recomendaciones con canciones que tienes.	Bağlandı — radyo ve öneriler sahip olduğunuz parçalara eşlenir.	Verbunden – Radio und Empfehlungen, aufgelöst zu deinen Titeln.
+waiting_for_spotify	Waiting for Spotify…	正在等待 Spotify…	Spotify を待っています…	En attente de Spotify…	Esperando a Spotify…	Spotify bekleniyor…	Warte auf Spotify …
+spotify_service_detail	Radio & recommendations, resolved to your local and Qobuz tracks.	电台与推荐，匹配到你的本地和 Qobuz 歌曲。	ラジオとおすすめを、端末内と Qobuz の曲に結び付けます。	Radio et recommandations, ramenées à vos titres locaux et Qobuz.	Radio y recomendaciones con tus canciones locales y de Qobuz.	Radyo ve öneriler, yerel ve Qobuz parçalarınıza eşlenir.	Radio und Empfehlungen, aufgelöst zu deinen lokalen und Qobuz-Titeln.
+connect_spotify	Connect Spotify	连接 Spotify	Spotify に接続	Connecter Spotify	Conectar Spotify	Spotify’ı bağla	Spotify verbinden
+connected	Connected	已连接	接続済み	Connecté	Conectado	Bağlandı	Verbunden
+welcome_tagline	Bit-perfect, high-res playback — your library, your way.	比特级精确的高解析度播放——你的音乐库，由你做主。	ビットパーフェクトのハイレゾ再生 — あなたのライブラリを、あなたらしく。	Une lecture bit-perfect et haute résolution — votre bibliothèque, à votre façon.	Reproducción bit-perfect y en alta resolución: tu biblioteca, a tu manera.	Bit-perfect, yüksek çözünürlüklü çalma — kitaplığınız, sizin tarzınız.	Bit-perfekte Hi-Res-Wiedergabe – deine Bibliothek, wie du willst.
+get_started	Get started	开始使用	はじめる	Commencer	Empezar	Başlayın	Los geht’s
+skip_setup	Skip setup	跳过设置	セットアップをスキップ	Ignorer la configuration	Omitir la configuración	Kurulumu atla	Einrichtung überspringen
+all_set	You’re all set	一切就绪	準備完了です	Tout est prêt	Todo listo	Her şey hazır	Alles bereit
+all_set_subtitle	Tryptify will scan your library in the background.	Tryptify 会在后台扫描你的音乐库。	Tryptify はバックグラウンドでライブラリをスキャンします。	Tryptify analysera votre bibliothèque en arrière-plan.	Tryptify escaneará tu biblioteca en segundo plano.	Tryptify kitaplığınızı arka planda tarayacak.	Tryptify scannt deine Bibliothek im Hintergrund.
+start_listening	Start listening	开始收听	聴き始める	Commencer l’écoute	Empezar a escuchar	Dinlemeye başlayın	Hören starten
+no_folders_picked	No library folders picked yet	尚未选择音乐库文件夹	ライブラリのフォルダはまだ選ばれていません	Aucun dossier de bibliothèque choisi pour l’instant	Aún no has elegido carpetas para la biblioteca	Henüz kitaplık klasörü seçilmedi	Noch keine Bibliotheksordner gewählt
+downloads_to_app_storage	Downloads → app storage	下载 → 应用存储空间	ダウンロード → アプリのストレージ	Téléchargements → stockage de l’app	Descargas → almacenamiento de la app	İndirilenler → uygulama depolaması	Downloads → App-Speicher
+downloads_to_custom_folder	Downloads → custom folder	下载 → 自定义文件夹	ダウンロード → カスタムフォルダ	Téléchargements → dossier personnalisé	Descargas → carpeta personalizada	İndirilenler → özel klasör	Downloads → eigener Ordner
+spotify_connected	Spotify connected	已连接 Spotify	Spotify に接続済み	Spotify connecté	Spotify conectado	Spotify bağlandı	Spotify verbunden
+usb_bitperfect_enabled	USB bit-perfect output enabled	已启用 USB 比特级精确输出	USB ビットパーフェクト出力が有効	Sortie USB bit-perfect activée	Salida USB bit-perfect activada	USB bit-perfect çıkış etkin	Bit-perfekte USB-Ausgabe aktiviert
+found_tracks_in_folder#one	Found %1$s track in this folder	在此文件夹中找到 %1$s 首歌曲	このフォルダで %1$s 曲見つかりました	%1$s titre trouvé dans ce dossier	%1$s canción encontrada en esta carpeta	Bu klasörde %1$s parça bulundu	%1$s Titel in diesem Ordner gefunden
+found_tracks_in_folder#many	Found %1$s tracks in this folder	在此文件夹中找到 %1$s 首歌曲	このフォルダで %1$s 曲見つかりました	%1$s titres trouvés dans ce dossier	%1$s canciones encontradas en esta carpeta	Bu klasörde %1$s parça bulundu	%1$s Titel in diesem Ordner gefunden
+found_tracks_in_folder#other	Found %1$s tracks in this folder	在此文件夹中找到 %1$s 首歌曲	このフォルダで %1$s 曲見つかりました	%1$s titres trouvés dans ce dossier	%1$s canciones encontradas en esta carpeta	Bu klasörde %1$s parça bulundu	%1$s Titel in diesem Ordner gefunden
+folders_count#one	%1$d folder	%1$d 个文件夹	%1$d 個のフォルダ	%1$d dossier	%1$d carpeta	%1$d klasör	%1$d Ordner
+folders_count#many	%1$d folders	%1$d 个文件夹	%1$d 個のフォルダ	%1$d dossiers	%1$d carpetas	%1$d klasör	%1$d Ordner
+folders_count#other	%1$d folders	%1$d 个文件夹	%1$d 個のフォルダ	%1$d dossiers	%1$d carpetas	%1$d klasör	%1$d Ordner
+folders_picked#one	%1$d folder picked	已选择 %1$d 个文件夹	%1$d 個のフォルダを選択	%1$d dossier choisi	%1$d carpeta elegida	%1$d klasör seçildi	%1$d Ordner gewählt
+folders_picked#many	%1$d folders picked	已选择 %1$d 个文件夹	%1$d 個のフォルダを選択	%1$d dossiers choisis	%1$d carpetas elegidas	%1$d klasör seçildi	%1$d Ordner gewählt
+folders_picked#other	%1$d folders picked	已选择 %1$d 个文件夹	%1$d 個のフォルダを選択	%1$d dossiers choisis	%1$d carpetas elegidas	%1$d klasör seçildi	%1$d Ordner gewählt
+tracks_found#one	%1$s track found	找到 %1$s 首歌曲	%1$s 曲見つかりました	%1$s titre trouvé	%1$s canción encontrada	%1$s parça bulundu	%1$s Titel gefunden
+tracks_found#many	%1$s tracks found	找到 %1$s 首歌曲	%1$s 曲見つかりました	%1$s titres trouvés	%1$s canciones encontradas	%1$s parça bulundu	%1$s Titel gefunden
+tracks_found#other	%1$s tracks found	找到 %1$s 首歌曲	%1$s 曲見つかりました	%1$s titres trouvés	%1$s canciones encontradas	%1$s parça bulundu	%1$s Titel gefunden
+account	Account	账户	アカウント	Compte	Cuenta	Hesap	Konto
+signing_in	Signing in…	正在登录…	サインイン中…	Connexion…	Iniciando sesión…	Oturum açılıyor…	Anmeldung läuft …
+user	User	用户	ユーザー	Utilisateur	Usuario	Kullanıcı	Nutzer
+syncing	Syncing…	正在同步…	同期中…	Synchronisation…	Sincronizando…	Eşitleniyor…	Wird synchronisiert …
+sync_now	Sync now	立即同步	今すぐ同期	Synchroniser	Sincronizar ahora	Şimdi eşitle	Jetzt synchronisieren
+listening_stats	Listening stats	收听统计	再生の統計	Statistiques d’écoute	Estadísticas de escucha	Dinleme istatistikleri	Hörstatistik
+sign_out	Sign out	退出登录	サインアウト	Se déconnecter	Cerrar sesión	Oturumu kapat	Abmelden
+sign_in_to_tryptify	Sign in to Tryptify	登录 Tryptify	Tryptify にサインイン	Se connecter à Tryptify	Inicia sesión en Tryptify	Tryptify’da oturum açın	Bei Tryptify anmelden
+sign_in_benefit	Sync your favorites and playlists across devices	在多台设备间同步你的收藏和歌单	お気に入りとプレイリストをデバイス間で同期	Synchronisez vos favoris et playlists sur tous vos appareils	Sincroniza tus favoritos y playlists entre dispositivos	Favorilerinizi ve çalma listelerinizi cihazlar arasında eşitleyin	Synchronisiere Favoriten und Playlists auf all deinen Geräten
+continue_with_google	Continue with Google	使用 Google 继续	Google で続ける	Continuer avec Google	Continuar con Google	Google ile devam et	Mit Google fortfahren
+email	Email	电子邮件	メールアドレス	E-mail	Correo electrónico	E-posta	E-Mail
+password	Password	密码	パスワード	Mot de passe	Contraseña	Şifre	Passwort
+toggle_password	Show or hide password	显示或隐藏密码	パスワードの表示/非表示	Afficher ou masquer le mot de passe	Mostrar u ocultar contraseña	Şifreyi göster veya gizle	Passwort ein- oder ausblenden
+create_account	Create account	创建账户	アカウントを作成	Créer un compte	Crear cuenta	Hesap oluştur	Konto erstellen
+sign_in_with_email	Sign in with email	使用电子邮件登录	メールでサインイン	Se connecter par e-mail	Iniciar sesión con correo	E-postayla oturum aç	Mit E-Mail anmelden
+have_account_sign_in	Already have an account? Sign in	已有账户？登录	アカウントをお持ちの方はサインイン	Vous avez déjà un compte ? Connectez-vous	¿Ya tienes cuenta? Inicia sesión	Hesabınız var mı? Oturum açın	Schon ein Konto? Anmelden
+no_account_sign_up	Don’t have an account? Sign up	没有账户？注册	アカウントをお持ちでない方は登録	Pas de compte ? Inscrivez-vous	¿No tienes cuenta? Regístrate	Hesabınız yok mu? Kaydolun	Noch kein Konto? Registrieren
+sync_complete	Sync complete	同步完成	同期が完了しました	Synchronisation terminée	Sincronización completada	Eşitleme tamamlandı	Synchronisierung abgeschlossen
+sync_with_issues	Sync finished with issues: %1$s	同步完成，但存在问题：%1$s	同期は完了しましたが、問題がありました：%1$s	Synchronisation terminée avec des problèmes : %1$s	Sincronización completada con problemas: %1$s	Eşitleme sorunlarla tamamlandı: %1$s	Synchronisierung mit Problemen beendet: %1$s
+sync_failed	Sync failed: %1$s	同步失败：%1$s	同期に失敗しました：%1$s	Échec de la synchronisation : %1$s	Error de sincronización: %1$s	Eşitleme başarısız: %1$s	Synchronisierung fehlgeschlagen: %1$s
+stats_range_7d	7d	7天	7日	7 j	7 d	7 g	7 T
+stats_range_30d	30d	30天	30日	30 j	30 d	30 g	30 T
+stats_range_90d	90d	90天	90日	90 j	90 d	90 g	90 T
+stats_range_1y	1y	1年	1年	1 an	1 año	1 yıl	1 J
+stats_range_all	All	全部	すべて	Tout	Todo	Tümü	Alle
+stats_sign_in_to_sync	Sign in to sync stats across devices	登录以在多台设备间同步统计	サインインすると統計をデバイス間で同期できます	Connectez-vous pour synchroniser les statistiques sur vos appareils	Inicia sesión para sincronizar las estadísticas entre dispositivos	İstatistikleri cihazlar arasında eşitlemek için oturum açın	Melde dich an, um die Statistik geräteübergreifend zu synchronisieren
+plays_over_time	Plays over time	播放趋势	再生回数の推移	Écoutes dans le temps	Reproducciones a lo largo del tiempo	Zaman içinde dinlenmeler	Wiedergaben im Zeitverlauf
+time_of_day	Time of day	一天中的时段	時間帯	Moment de la journée	Hora del día	Günün saati	Tageszeit
+day_of_week	Day of week	星期	曜日	Jour de la semaine	Día de la semana	Haftanın günü	Wochentag
+top_artists	Top artists	热门艺人	トップアーティスト	Artistes les plus écoutés	Artistas más escuchados	En çok dinlenen sanatçılar	Top-Künstler
+top_albums	Top albums	热门专辑	トップアルバム	Albums les plus écoutés	Álbumes más escuchados	En çok dinlenen albümler	Top-Alben
+audio_quality	Audio quality	音质	音質	Qualité audio	Calidad de audio	Ses kalitesi	Audioqualität
+source	Source	来源	ソース	Source	Origen	Kaynak	Quelle
+peak_hour	Peak hour	高峰时段	ピーク時間	Heure de pointe	Hora punta	En yoğun saat	Spitzenstunde
+peak_day	Peak day	高峰日	ピーク曜日	Jour de pointe	Día punta	En yoğun gün	Spitzentag
+longest_streak	Longest streak	最长连续天数	最長連続記録	Plus longue série	Racha más larga	En uzun seri	Längste Serie
+no_plays_for_range	No plays yet for this range.	这个时间段还没有播放记录。	この期間の再生はまだありません。	Aucune écoute sur cette période pour l’instant.	Aún no hay reproducciones en este periodo.	Bu aralıkta henüz dinleme yok.	In diesem Zeitraum gibt es noch keine Wiedergaben.
+range_last_7d	Last 7 days	最近 7 天	過去7日間	7 derniers jours	Últimos 7 días	Son 7 gün	Letzte 7 Tage
+range_last_30d	Last 30 days	最近 30 天	過去30日間	30 derniers jours	Últimos 30 días	Son 30 gün	Letzte 30 Tage
+range_last_90d	Last 90 days	最近 90 天	過去90日間	90 derniers jours	Últimos 90 días	Son 90 gün	Letzte 90 Tage
+range_last_12m	Last 12 months	最近 12 个月	過去12か月	12 derniers mois	Últimos 12 meses	Son 12 ay	Letzte 12 Monate
+synced_when	Synced %1$s	%1$s已同步	%1$sに同期	Synchronisé %1$s	Sincronizado %1$s	%1$s eşitlendi	Synchronisiert %1$s
+total_plays	Total plays	总播放次数	総再生回数	Écoutes au total	Reproducciones totales	Toplam dinlenme	Wiedergaben insgesamt
+music_enthusiast	You’re a music enthusiast!	你是个音乐爱好者！	あなたは音楽好きですね！	Vous êtes un vrai passionné de musique !	¡Eres un amante de la música!	Tam bir müzik tutkunusunuz!	Du bist ein echter Musikfan!
+eq_settings	EQ settings	均衡器设置	EQ 設定	Réglages de l’égaliseur	Ajustes del ecualizador	EQ ayarları	EQ-Einstellungen
+number_of_bands	Number of bands	频段数	バンド数	Nombre de bandes	Número de bandas	Bant sayısı	Anzahl der Bänder
+frequency_range_note	Frequency range: 20 Hz – 20,000 Hz	频率范围：20 Hz – 20,000 Hz	周波数範囲：20 Hz～20,000 Hz	Plage de fréquences : 20 Hz – 20 000 Hz	Rango de frecuencias: 20 Hz – 20.000 Hz	Frekans aralığı: 20 Hz – 20.000 Hz	Frequenzbereich: 20 Hz – 20.000 Hz
+band_count_note	Higher band count = more precise EQ control	频段越多，均衡调节越精细	バンド数が多いほど細かく EQ を調整できます	Plus de bandes = un réglage plus précis	Más bandas = un control de EQ más preciso	Daha fazla bant = daha hassas EQ kontrolü	Mehr Bänder = präzisere EQ-Steuerung
+close_car_mode	Close car mode	关闭车载模式	カーモードを閉じる	Fermer le mode voiture	Cerrar el modo coche	Araç modunu kapat	Automodus schließen
+not_playing	Not playing	未在播放	再生していません	Aucune lecture	Sin reproducción	Çalmıyor	Keine Wiedergabe
+downloading	Downloading	正在下载	ダウンロード中	Téléchargement	Descargando	İndiriliyor	Wird heruntergeladen
+hide_downloads	Hide downloads	隐藏下载	ダウンロードを非表示	Masquer les téléchargements	Ocultar descargas	İndirilenleri gizle	Downloads ausblenden
+cancel_all	Cancel all	全部取消	すべてキャンセル	Tout annuler	Cancelar todo	Tümünü iptal et	Alle abbrechen
+no_active_downloads	No active downloads.	没有正在进行的下载。	実行中のダウンロードはありません。	Aucun téléchargement en cours.	No hay descargas activas.	Etkin indirme yok.	Keine aktiven Downloads.
+failed_tap_retry	Failed — tap retry	失败——点按重试	失敗しました — タップで再試行	Échec — touchez pour réessayer	Error: toca para reintentar	Başarısız — tekrar denemek için dokunun	Fehlgeschlagen – zum Wiederholen tippen
+speaker_simulation	Speaker simulation	扬声器模拟	スピーカーシミュレーション	Simulation d’enceintes	Simulación de altavoces	Hoparlör simülasyonu	Lautsprechersimulation
+crossfeed_explainer	Feeds a small amount of each channel into the opposite ear, slightly delayed and low-pass filtered, so headphones sound more like a pair of speakers.	把每个声道的少量信号经轻微延迟和低通滤波后送入另一侧耳朵，让耳机听起来更像一对音箱。	各チャンネルの音を少しだけ反対側の耳へ、わずかに遅らせてローパスをかけて送ることで、ヘッドホンをスピーカーのように鳴らします。	Envoie un peu de chaque canal vers l’oreille opposée, légèrement retardé et filtré passe-bas, pour que le casque sonne davantage comme une paire d’enceintes.	Envía un poco de cada canal al oído contrario, con un ligero retardo y filtro paso bajo, para que los auriculares suenen más como un par de altavoces.	Her kanalın küçük bir kısmını hafif gecikmeli ve alçak geçiren filtreden geçirilmiş olarak karşı kulağa verir; böylece kulaklık bir çift hoparlör gibi duyulur.	Leitet einen kleinen Teil jedes Kanals leicht verzögert und tiefpassgefiltert ans andere Ohr, damit Kopfhörer eher wie ein Lautsprecherpaar klingen.
+algorithm	Algorithm	算法	アルゴリズム	Algorithme	Algoritmo	Algoritma	Algorithmus
+speaker_angle	Speaker angle	扬声器角度	スピーカーの角度	Angle des enceintes	Ángulo de los altavoces	Hoparlör açısı	Lautsprecherwinkel
+speaker_angle_note	Narrow angles give the strongest crossfeed. At 180° the speakers sit at your ears and no crossfeed is applied.	角度越窄，交叉馈送越强。为 180° 时扬声器位于双耳处，不施加交叉馈送。	角度が狭いほどクロスフィードは強くなります。180° ではスピーカーが耳の位置にあり、クロスフィードはかかりません。	Plus l’angle est étroit, plus le crossfeed est fort. À 180°, les enceintes sont à vos oreilles et aucun crossfeed n’est appliqué.	Cuanto más estrecho el ángulo, más fuerte el crossfeed. A 180°, los altavoces están en tus oídos y no se aplica crossfeed.	Dar açılar en güçlü crossfeed’i verir. 180°’de hoparlörler kulaklarınızın yanındadır ve crossfeed uygulanmaz.	Enge Winkel ergeben das stärkste Crossfeed. Bei 180° sitzen die Lautsprecher an deinen Ohren und es wird kein Crossfeed angewendet.
+plays_count#one	%1$s play	%1$s 次播放	%1$s 回再生	%1$s écoute	%1$s reproducción	%1$s dinlenme	%1$s Wiedergabe
+plays_count#many	%1$s plays	%1$s 次播放	%1$s 回再生	%1$s écoutes	%1$s reproducciones	%1$s dinlenme	%1$s Wiedergaben
+plays_count#other	%1$s plays	%1$s 次播放	%1$s 回再生	%1$s écoutes	%1$s reproducciones	%1$s dinlenme	%1$s Wiedergaben
+sessions_count#one	%1$s session	%1$s 次会话	%1$s セッション	%1$s session	%1$s sesión	%1$s oturum	%1$s Sitzung
+sessions_count#many	%1$s sessions	%1$s 次会话	%1$s セッション	%1$s sessions	%1$s sesiones	%1$s oturum	%1$s Sitzungen
+sessions_count#other	%1$s sessions	%1$s 次会话	%1$s セッション	%1$s sessions	%1$s sesiones	%1$s oturum	%1$s Sitzungen
+day_streak#one	%1$d-day streak	连续 %1$d 天	%1$d日連続	Série de %1$d jour	Racha de %1$d día	%1$d günlük seri	%1$d Tag in Folge
+day_streak#many	%1$d-day streak	连续 %1$d 天	%1$d日連続	Série de %1$d jours	Racha de %1$d días	%1$d günlük seri	%1$d Tage in Folge
+day_streak#other	%1$d-day streak	连续 %1$d 天	%1$d日連続	Série de %1$d jours	Racha de %1$d días	%1$d günlük seri	%1$d Tage in Folge
+days_count#one	%1$d day	%1$d 天	%1$d日	%1$d jour	%1$d día	%1$d gün	%1$d Tag
+days_count#many	%1$d days	%1$d 天	%1$d日	%1$d jours	%1$d días	%1$d gün	%1$d Tage
+days_count#other	%1$d days	%1$d 天	%1$d日	%1$d jours	%1$d días	%1$d gün	%1$d Tage
+eq_bands#one	EQ (%1$d band)	均衡器（%1$d 段）	EQ（%1$d バンド）	Égaliseur (%1$d bande)	EQ (%1$d banda)	EQ (%1$d bant)	EQ (%1$d Band)
+eq_bands#many	EQ (%1$d bands)	均衡器（%1$d 段）	EQ（%1$d バンド）	Égaliseur (%1$d bandes)	EQ (%1$d bandas)	EQ (%1$d bant)	EQ (%1$d Bänder)
+eq_bands#other	EQ (%1$d bands)	均衡器（%1$d 段）	EQ（%1$d バンド）	Égaliseur (%1$d bandes)	EQ (%1$d bandas)	EQ (%1$d bant)	EQ (%1$d Bänder)
+downloads_left#one	Downloading · %1$d left	正在下载 · 剩余 %1$d 个	ダウンロード中 · 残り %1$d 件	Téléchargement · %1$d restant	Descargando · queda %1$d	İndiriliyor · %1$d kaldı	Wird heruntergeladen · noch %1$d
+downloads_left#many	Downloading · %1$d left	正在下载 · 剩余 %1$d 个	ダウンロード中 · 残り %1$d 件	Téléchargement · %1$d restants	Descargando · quedan %1$d	İndiriliyor · %1$d kaldı	Wird heruntergeladen · noch %1$d
+downloads_left#other	Downloading · %1$d left	正在下载 · 剩余 %1$d 个	ダウンロード中 · 残り %1$d 件	Téléchargement · %1$d restants	Descargando · quedan %1$d	İndiriliyor · %1$d kaldı	Wird heruntergeladen · noch %1$d

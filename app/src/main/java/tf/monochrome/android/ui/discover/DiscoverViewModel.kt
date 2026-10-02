@@ -1098,9 +1098,11 @@ class DiscoverViewModel @Inject constructor(
         val shelf = favourites.takeIf { it.isNotEmpty() }?.let {
             DiscoveryShelf(
                 id = "favorites",
-                title = "From your favorites",
-                reason = "Tracks you hearted",
+                title = tf.monochrome.android.domain.model.ShelfPhrase.FromYourFavorites.english(),
+                reason = tf.monochrome.android.domain.model.ShelfPhrase.TracksYouHearted.english(),
                 items = it,
+                titleLine = tf.monochrome.android.domain.model.ShelfLine(tf.monochrome.android.domain.model.ShelfPhrase.FromYourFavorites),
+                reasonLine = tf.monochrome.android.domain.model.ShelfLine(tf.monochrome.android.domain.model.ShelfPhrase.TracksYouHearted),
             )
         }
 

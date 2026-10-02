@@ -43,6 +43,9 @@ import tf.monochrome.android.ui.components.rememberTrackSelectionState
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 /**
  * One shelf, opened out into a full grid — the far end of "See All".
@@ -92,16 +95,16 @@ fun DiscoverShelfScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text(shelf?.title ?: "Discover") },
+            title = { Text(shelf?.let { shelfText(it.titleLine, it.title) } ?: stringResource(R.string.discover)) },
             navigationIcon = {
                 IconButton(onClick = { navController.popBackStackSafe() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
         )
 
-        shelf?.reason?.let { reason ->
+        shelf?.let { shelfText(it.reasonLine, it.reason) }?.let { reason ->
             Text(
                 text = reason,
                 style = MaterialTheme.typography.bodyMedium,
@@ -174,7 +177,7 @@ fun DiscoverShelfScreen(
             // The feed rebuilds per ViewModel, so a shelf can be gone by the
             // time a deep link or a restored back stack lands here.
             else -> Text(
-                text = "That shelf isn't in the current feed any more.",
+                text = stringResource(R.string.shelf_gone),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -184,6 +187,8 @@ fun DiscoverShelfScreen(
 
     if (showAddToPlaylist) {
         val playlists by playerViewModel.playlists.collectAsStateWithLifecycle()
+        // Resolved here: the click below is not a composable scope.
+        val newPlaylistName = shelf?.let { shelfText(it.titleLine, it.title) } ?: stringResource(R.string.discover)
         AddToPlaylistSheet(
             playlists = playlists,
             onDismiss = { showAddToPlaylist = false },
@@ -196,14 +201,14 @@ fun DiscoverShelfScreen(
             },
             onCreateNew = {
                 playerViewModel.createPlaylist(
-                    name = shelf?.title ?: "Discover",
+                    name = newPlaylistName,
                     description = null,
                     initialTracks = selectedTracks.map { it.toLegacyTrack() },
                 )
                 showAddToPlaylist = false
                 selection.clear()
             },
-            title = "Add " + selectedTracks.size + " to playlist",
+            title = pluralStringResource(R.plurals.add_n_to_playlist, selectedTracks.size, selectedTracks.size),
         )
     }
 }

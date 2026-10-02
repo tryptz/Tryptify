@@ -30,6 +30,8 @@ import com.google.accompanist.permissions.shouldShowRationale
 import tf.monochrome.android.ui.onboarding.OnboardingStepScaffold
 import tf.monochrome.android.ui.onboarding.OnboardingViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * Media permission gate. Audio access is required to continue — the next
@@ -67,12 +69,12 @@ fun PermissionsStep(viewModel: OnboardingViewModel) {
     val permanentlyDenied = hasRequested && !audioGranted && !showRationale
 
     OnboardingStepScaffold(
-        title = "Your music, found",
-        subtitle = "Tryptify needs access to your audio files to build your library.",
+        title = stringResource(R.string.permissions_title),
+        subtitle = stringResource(R.string.permissions_subtitle),
         primaryLabel = when {
-            audioGranted -> "Continue"
-            permanentlyDenied -> "Open app settings"
-            else -> "Allow access"
+            audioGranted -> stringResource(R.string.action_continue)
+            permanentlyDenied -> stringResource(R.string.open_app_settings)
+            else -> stringResource(R.string.allow_access)
         },
         onPrimary = {
             when {
@@ -116,13 +118,13 @@ fun PermissionsStep(viewModel: OnboardingViewModel) {
                 Text(
                     text = when {
                         audioGranted ->
-                            "Access granted. Your files stay on your device — nothing is uploaded."
+                            stringResource(R.string.permission_granted)
                         permanentlyDenied ->
-                            "Access was denied. Enable the music & audio permission in app settings to continue."
+                            stringResource(R.string.permission_denied)
                         showRationale ->
-                            "Without this permission Tryptify can't see any of your music. It's only used to read audio files and cover art."
+                            stringResource(R.string.permission_rationale_short)
                         else ->
-                            "Your files stay on your device — the permission is only used to read audio files and cover art."
+                            stringResource(R.string.permission_files_stay)
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(start = MonoDimens.spacingMd)

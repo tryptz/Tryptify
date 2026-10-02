@@ -43,6 +43,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import tf.monochrome.android.ui.player.PlayerViewModel
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 @Composable
 fun CarModeScreen(
@@ -92,7 +95,7 @@ fun CarModeScreen(
                         onClick = { navController.popBackStackSafe() },
                         modifier = Modifier.align(Alignment.Start)
                     ) {
-                        Icon(Icons.Default.Close, "Close car mode", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Default.Close, stringResource(R.string.close_car_mode), tint = MaterialTheme.colorScheme.primary)
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -109,7 +112,7 @@ fun CarModeScreen(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = currentTrack?.title ?: "Not playing",
+                                    text = currentTrack?.title ?: stringResource(R.string.not_playing),
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 24.sp,
@@ -150,7 +153,7 @@ fun CarModeScreen(
                                 onClick = { playerViewModel.skipToPrevious() },
                                 modifier = Modifier.size(60.dp)
                             ) {
-                                Icon(Icons.Default.SkipPrevious, "Previous", modifier = Modifier.size(40.dp))
+                                Icon(Icons.Default.SkipPrevious, stringResource(R.string.action_previous), modifier = Modifier.size(40.dp))
                             }
                             Spacer(modifier = Modifier.width(16.dp))
                             Box(
@@ -172,7 +175,7 @@ fun CarModeScreen(
                                 onClick = { playerViewModel.skipToNext() },
                                 modifier = Modifier.size(60.dp)
                             ) {
-                                Icon(Icons.Default.SkipNext, "Next", modifier = Modifier.size(40.dp))
+                                Icon(Icons.Default.SkipNext, stringResource(R.string.action_next), modifier = Modifier.size(40.dp))
                             }
                         }
                     }
@@ -195,9 +198,9 @@ fun CarModeScreen(
                                 horizontalArrangement = Arrangement.Center,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Icon(Icons.Default.Tune, "EQ Settings", modifier = Modifier.size(20.dp))
+                                Icon(Icons.Default.Tune, stringResource(R.string.eq_settings), modifier = Modifier.size(20.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("EQ ($bandCount bands)", fontWeight = FontWeight.SemiBold)
+                                Text(pluralStringResource(R.plurals.eq_bands, bandCount, bandCount), fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }

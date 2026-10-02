@@ -14,7 +14,7 @@ not Spain-only), Turkish, German.
 |---|---|---|
 | zh-CN | neutral, no 您/你 where avoidable | Full-width punctuation （），、：“” around Chinese text. Space between Chinese and Latin/numbers (`导出 CSV`). |
 | ja | です/ます for sentences, noun phrases for labels | 「」 for UI names. No space between Japanese and Latin except around product names. |
-| fr | *vous* | Typographic apostrophe ’. Space before : ; ? ! in running text is not used in UI labels (Apple/Google convention). |
+| fr | *vous* | Typographic apostrophe ’. A space before : ; ? ! — non-breaking; the generator turns a typed space into U+00A0, so a mark never wraps onto its own line. Guillemets « » with non-breaking spaces inside. |
 | es | *tú* | Neutral Latin American / Spain vocabulary: *playlist*, *canción*, *ajustes*. |
 | tr | *siz* (formal plural) in sentences, imperative in buttons | Never pluralise after a number (“5 parça”, not “5 parçalar”). Suffixes after names take an apostrophe: Spotify’ı. |
 | de | *du* | „Anführungszeichen“ for quoted UI names. Nouns capitalised; compound words joined or hyphenated (App-Sprache). |
@@ -31,6 +31,8 @@ not Spain-only), Turkish, German.
 | Settings | 设置 | 設定 | Paramètres | Ajustes | Ayarlar | Einstellungen |
 | Settings › System | 设置 › 系统 | 設定 › システム | Paramètres › Système | Ajustes › Sistema | Ayarlar › Sistem | Einstellungen › System |
 | Settings › Appearance | 设置 › 外观 | 設定 › 外観 | Paramètres › Apparence | Ajustes › Apariencia | Ayarlar › Görünüm | Einstellungen › Darstellung |
+| Settings tabs: Appearance · Visual Studio · Audio · Equalizer · Library · Downloads · Connections · Radio · System · About | 外观 · 视觉工作室 · 音频 · 均衡器 · 音乐库 · 下载 · 连接 · 电台 · 系统 · 关于 | 外観 · ビジュアルスタジオ · オーディオ · イコライザ · ライブラリ · ダウンロード · 接続 · ラジオ · システム · 情報 | Apparence · Studio visuel · Audio · Égaliseur · Bibliothèque · Téléchargements · Connexions · Radio · Système · À propos | Apariencia · Estudio visual · Audio · Ecualizador · Biblioteca · Descargas · Conexiones · Radio · Sistema · Acerca de | Görünüm · Görsel Stüdyo · Ses · Ekolayzer · Kitaplık · İndirilenler · Bağlantılar · Radyo · Sistem · Hakkında | Darstellung · Visual Studio · Audio · Equalizer · Bibliothek · Downloads · Verbindungen · Radio · System · Info |
+| APIs (Connections) | API | API | API | API | API’ler | APIs |
 | playlist | 歌单 | プレイリスト | playlist | playlist | çalma listesi | Playlist |
 | track / song | 歌曲 | 曲 | titre | canción | parça | Titel |
 | queue | 播放队列 | キュー | file d’attente | cola | sıra | Warteschlange |

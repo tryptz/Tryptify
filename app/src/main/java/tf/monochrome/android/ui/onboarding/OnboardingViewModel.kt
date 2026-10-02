@@ -22,6 +22,7 @@ import tf.monochrome.android.data.local.scanner.ScanWorker
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.util.safTreeUriToPath
 import javax.inject.Inject
+import tf.monochrome.android.R
 
 enum class OnboardingStep {
     WELCOME, PERMISSIONS, FOLDERS, DOWNLOADS, STREAMING, AUDIO_OUTPUT, TOUR, DONE
@@ -66,8 +67,8 @@ class OnboardingViewModel @Inject constructor(
     val folders: StateFlow<List<FolderEntry>> = _folders.asStateFlow()
 
     /** Set when a picked SAF tree can't be resolved to a device path. */
-    private val _folderError = MutableStateFlow<String?>(null)
-    val folderError: StateFlow<String?> = _folderError.asStateFlow()
+    private val _folderError = MutableStateFlow<tf.monochrome.android.ui.components.UiText?>(null)
+    val folderError: StateFlow<tf.monochrome.android.ui.components.UiText?> = _folderError.asStateFlow()
 
     // Streaming / audio state passed straight through from the owning singletons.
     val spotifyConnected: StateFlow<Boolean> = spotifyAuthManager.isConnected
@@ -125,7 +126,7 @@ class OnboardingViewModel @Inject constructor(
         val path = safTreeUriToPath(uri)
         if (path == null) {
             _folderError.value =
-                "That folder can't be scanned — pick a folder on device storage."
+                tf.monochrome.android.ui.components.UiText.Res(R.string.folder_unscannable)
             return
         }
         _folderError.value = null

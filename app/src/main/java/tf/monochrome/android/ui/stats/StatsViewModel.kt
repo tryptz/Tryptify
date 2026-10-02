@@ -27,6 +27,7 @@ import tf.monochrome.android.data.db.dao.TopTrackAggregate
 import tf.monochrome.android.data.db.dao.WeekdayAggregate
 import tf.monochrome.android.data.sync.SupabaseSyncRepository
 import javax.inject.Inject
+import tf.monochrome.android.R
 
 enum class StatsRange(val label: String, val days: Int?) {
     Week("7d", 7),
@@ -78,8 +79,8 @@ class StatsViewModel @Inject constructor(
     val lastSyncedAt: StateFlow<Long?> = _lastSyncedAt.asStateFlow()
 
     /** One-shot messages for the Stats screen (e.g. "sign in to sync"). */
-    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 2)
-    val messages: SharedFlow<String> = _messages.asSharedFlow()
+    private val _messages = MutableSharedFlow<tf.monochrome.android.ui.components.UiText>(extraBufferCapacity = 2)
+    val messages: SharedFlow<tf.monochrome.android.ui.components.UiText> = _messages.asSharedFlow()
 
     init {
         // Kick an initial refresh so the newly-redesigned Stats screen picks
@@ -144,7 +145,7 @@ class StatsViewModel @Inject constructor(
     fun refresh() {
         if (authManager.userProfile.value == null) {
             // Explain the no-op instead of letting the spinner vanish silently.
-            _messages.tryEmit("Sign in to sync stats across devices")
+            _messages.tryEmit(tf.monochrome.android.ui.components.UiText.Res(R.string.stats_sign_in_to_sync))
             return
         }
         viewModelScope.launch { refreshFromCloudInternal(_range.value) }

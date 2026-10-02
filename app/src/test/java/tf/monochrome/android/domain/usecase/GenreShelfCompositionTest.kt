@@ -3,6 +3,8 @@ package tf.monochrome.android.domain.usecase
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import tf.monochrome.android.domain.model.ShelfLine
+import tf.monochrome.android.domain.model.ShelfPhrase
 
 /**
  * How a genre row is put together from two sources, and what it says about
@@ -51,7 +53,7 @@ class GenreShelfCompositionTest {
         // quietly renames its evidence is a shelf nobody can compare.
         assertEquals(
             "For wind down · ranked by plays",
-            genreShelfReason("For wind down", charted = 12, fromArtists = 0),
+            genreShelfReason(ShelfLine(ShelfPhrase.ForMood("Wind down")), charted = 12, fromArtists = 0).english(),
         )
     }
 
@@ -59,7 +61,11 @@ class GenreShelfCompositionTest {
     fun `a row filled from both sources names both`() {
         assertEquals(
             "For rage · 200–260 BPM · ranked by plays and its most-played artists",
-            genreShelfReason("For rage · 200–260 BPM", charted = 4, fromArtists = 16),
+            genreShelfReason(
+                ShelfLine(ShelfPhrase.ForMood("Rage"), ShelfPhrase.Tempo(200, 260)),
+                charted = 4,
+                fromArtists = 16,
+            ).english(),
         )
     }
 
@@ -67,7 +73,7 @@ class GenreShelfCompositionTest {
     fun `a row built entirely from the genre's artists does not claim the chart`() {
         assertEquals(
             "The genre itself · its most-played artists",
-            genreShelfReason("The genre itself", charted = 0, fromArtists = 20),
+            genreShelfReason(ShelfLine(ShelfPhrase.GenreItself), charted = 0, fromArtists = 20).english(),
         )
     }
 
@@ -75,12 +81,20 @@ class GenreShelfCompositionTest {
     fun `a borrowed row names the genre it borrowed from`() {
         assertEquals(
             "For rage · by way of Gabber",
-            genreShelfReason("For rage", charted = 0, fromArtists = 0, borrowedFrom = "Gabber"),
+            genreShelfReason(
+                ShelfLine(ShelfPhrase.ForMood("Rage")),
+                charted = 0,
+                fromArtists = 0,
+                borrowedFrom = "Gabber",
+            ).english(),
         )
     }
 
     @Test
     fun `a row with nothing behind it claims nothing`() {
-        assertEquals("For focus", genreShelfReason("For focus", charted = 0, fromArtists = 0))
+        assertEquals(
+            "For focus",
+            genreShelfReason(ShelfLine(ShelfPhrase.ForMood("Focus")), charted = 0, fromArtists = 0).english(),
+        )
     }
 }

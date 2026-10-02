@@ -20,6 +20,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 @Composable
 fun WelcomeStep(
@@ -52,7 +54,7 @@ fun WelcomeStep(
                 modifier = Modifier.padding(top = MonoDimens.spacingLg)
             )
             Text(
-                text = "Bit-perfect, high-res playback — your library, your way.",
+                text = stringResource(R.string.welcome_tagline),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -77,13 +79,13 @@ fun WelcomeStep(
                     .fillMaxWidth()
                     .height(52.dp)
             ) {
-                Text("Get started", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.get_started), style = MaterialTheme.typography.titleMedium)
             }
             TextButton(
                 onClick = onSkipSetup,
                 modifier = Modifier.padding(top = MonoDimens.spacingXs)
             ) {
-                Text("Skip setup", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.skip_setup), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

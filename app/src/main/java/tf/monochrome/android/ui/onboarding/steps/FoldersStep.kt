@@ -32,6 +32,9 @@ import tf.monochrome.android.ui.onboarding.FolderEntry
 import tf.monochrome.android.ui.onboarding.OnboardingStepScaffold
 import tf.monochrome.android.ui.onboarding.OnboardingViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 /**
  * Required step: pick at least one library folder. Each pick takes a
@@ -56,9 +59,9 @@ fun FoldersStep(viewModel: OnboardingViewModel) {
     }
 
     OnboardingStepScaffold(
-        title = "Where's your music?",
-        subtitle = "Pick the folder(s) that hold your library. Only these are scanned.",
-        primaryLabel = "Continue",
+        title = stringResource(R.string.folders_title),
+        subtitle = stringResource(R.string.folders_subtitle),
+        primaryLabel = stringResource(R.string.action_continue),
         onPrimary = { viewModel.next() },
         primaryEnabled = folders.isNotEmpty()
     ) {
@@ -71,7 +74,7 @@ fun FoldersStep(viewModel: OnboardingViewModel) {
 
         if (folderError != null) {
             Text(
-                text = folderError!!,
+                text = folderError!!.resolve(androidx.compose.ui.platform.LocalContext.current),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(bottom = MonoDimens.spacingSm)
@@ -89,7 +92,7 @@ fun FoldersStep(viewModel: OnboardingViewModel) {
                 modifier = Modifier.size(MonoDimens.iconSm)
             )
             Text(
-                text = if (folders.isEmpty()) "Add a music folder" else "Add another folder",
+                text = if (folders.isEmpty()) stringResource(R.string.add_music_folder) else stringResource(R.string.add_another_folder),
                 modifier = Modifier.padding(start = MonoDimens.spacingSm)
             )
         }
@@ -141,19 +144,19 @@ private fun FolderCard(entry: FolderEntry, onRemove: () -> Unit) {
                             modifier = Modifier.size(12.dp)
                         )
                         Text(
-                            text = "Counting tracks…",
+                            text = stringResource(R.string.counting_tracks),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(start = MonoDimens.spacingXs)
                         )
                     }
                     0 -> Text(
-                        text = "No tracks found here yet — pick another folder or continue anyway.",
+                        text = stringResource(R.string.folder_no_tracks),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
                     )
                     else -> Text(
-                        text = "Found ${"%,d".format(entry.trackCount)} tracks in this folder",
+                        text = pluralStringResource(R.plurals.found_tracks_in_folder, entry.trackCount, java.text.NumberFormat.getIntegerInstance().format(entry.trackCount.toLong())),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -162,7 +165,7 @@ private fun FolderCard(entry: FolderEntry, onRemove: () -> Unit) {
             IconButton(onClick = onRemove) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = "Remove folder",
+                    contentDescription = stringResource(R.string.remove_folder),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

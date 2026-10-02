@@ -21,6 +21,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tf.monochrome.android.ui.onboarding.OnboardingStepScaffold
 import tf.monochrome.android.ui.onboarding.OnboardingViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * Optional USB DAC intro. When a DAC is attached right now the toggle
@@ -33,11 +35,11 @@ fun AudioOutputStep(viewModel: OnboardingViewModel) {
     val bitPerfectEnabled by viewModel.usbBitPerfectEnabled.collectAsStateWithLifecycle()
 
     OnboardingStepScaffold(
-        title = "Bit-perfect out",
-        subtitle = "Send audio to a USB DAC untouched — no resampling, no system mixer.",
-        primaryLabel = "Continue",
+        title = stringResource(R.string.bitperfect_title),
+        subtitle = stringResource(R.string.bitperfect_subtitle),
+        primaryLabel = stringResource(R.string.action_continue),
         onPrimary = { viewModel.next() },
-        secondaryLabel = if (usbDevice == null) "Maybe later" else null,
+        secondaryLabel = if (usbDevice == null) stringResource(R.string.maybe_later) else null,
         onSecondary = if (usbDevice == null) ({ viewModel.next() }) else null
     ) {
         Card(
@@ -67,22 +69,21 @@ fun AudioOutputStep(viewModel: OnboardingViewModel) {
                     val device = usbDevice
                     if (device != null) {
                         Text(
-                            text = "Detected: ${viewModel.usbDeviceLabel(device)}",
+                            text = stringResource(R.string.dac_detected, viewModel.usbDeviceLabel(device)),
                             style = MaterialTheme.typography.titleMedium
                         )
                         Text(
-                            text = "Enable bit-perfect output?",
+                            text = stringResource(R.string.enable_bitperfect_question),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
                         Text(
-                            text = "No DAC connected",
+                            text = stringResource(R.string.no_dac),
                             style = MaterialTheme.typography.titleMedium
                         )
                         Text(
-                            text = "Plug one in any time — Tryptify picks it up automatically, " +
-                                "and bit-perfect mode lives in Settings → Audio.",
+                            text = stringResource(R.string.no_dac_detail),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

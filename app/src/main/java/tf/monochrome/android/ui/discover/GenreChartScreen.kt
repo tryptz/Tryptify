@@ -61,6 +61,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * A genre's Top 100, over a window.
@@ -86,11 +88,12 @@ fun GenreChartScreen(
     val loading by viewModel.loading.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     val snackbarHost = remember { SnackbarHostState() }
+    val messageContext = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(genreId) { viewModel.load(genreId) }
     LaunchedEffect(message) {
         message?.let {
-            snackbarHost.showSnackbar(it)
+            snackbarHost.showSnackbar(it.resolve(messageContext))
             viewModel.consumeMessage()
         }
     }
@@ -102,12 +105,12 @@ fun GenreChartScreen(
                 title = { Text(chart?.genreName?.ifBlank { genreName } ?: genreName) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStackSafe() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
                 },
                 actions = {
                     IconButton(onClick = { viewModel.refresh(force = true) }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.action_refresh))
                     }
                 },
             )
@@ -148,7 +151,7 @@ fun GenreChartScreen(
                         ) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null)
                             Spacer(Modifier.width(MonoDimens.spacingSm))
-                            Text("Play the chart")
+                            Text(stringResource(R.string.play_the_chart))
                         }
                     }
                     items(entries, key = { "${it.rank}:${it.matchKey}" }) { entry ->
@@ -176,7 +179,7 @@ private fun WindowRail(selected: ChartWindow, onSelect: (ChartWindow) -> Unit) {
             FilterChip(
                 selected = window == selected,
                 onClick = { onSelect(window) },
-                label = { Text(window.label) },
+                label = { Text(stringResource(window.labelRes())) },
                 colors = FilterChipDefaults.filterChipColors(),
             )
         }
@@ -192,24 +195,21 @@ private fun WindowRail(selected: ChartWindow, onSelect: (ChartWindow) -> Unit) {
  */
 @Composable
 private fun Provenance(chart: GenreChart) {
-    val text = buildString {
-        if (chart.fellBack) {
-            append("Not enough listening data for ${chart.genreName} in the last ")
-            append(chart.requested.label.lowercase())
-            append(" — showing all time instead")
-        } else {
-            append(
-                when (chart.source) {
-                    ChartSource.TAG_CHART -> "Ranked by global scrobbles, all time"
-                    ChartSource.WINDOWED_LISTENS -> "Ranked by listens"
-                }
-            )
-            chart.range()?.let { append(", $it") }
-            // Crowd tags put popular artists in genres they don't belong to, so
-            // whether this list was checked against a curated source changes how
-            // much of it to believe.
-            if (chart.crossChecked) append(" · cross-checked with MusicBrainz")
+    // Whole sentences per window: "in the last 7 days" is not a label with
+    // "in the last" in front of it in every language (German wants the dative).
+    val separator = stringResource(R.string.shelf_separator)
+    val text = if (chart.fellBack) {
+        stringResource(R.string.chart_fell_back, chart.genreName, stringResource(chart.requested.lastRes()))
+    } else {
+        val ranked = when (chart.source) {
+            ChartSource.TAG_CHART -> stringResource(R.string.chart_ranked_scrobbles)
+            ChartSource.WINDOWED_LISTENS -> stringResource(R.string.chart_ranked_listens)
         }
+        val withRange = chart.range()?.let { stringResource(R.string.chart_with_range, ranked, it) } ?: ranked
+        // Crowd tags put popular artists in genres they don't belong to, so
+        // whether this list was checked against a curated source changes how
+        // much of it to believe.
+        if (chart.crossChecked) withRange + separator + stringResource(R.string.chart_cross_checked) else withRange
     }
     Text(
         text = text,
@@ -226,7 +226,9 @@ private fun Provenance(chart: GenreChart) {
 private fun GenreChart.range(): String? {
     val from = fromTs ?: return null
     val to = toTs ?: return null
-    val format = SimpleDateFormat("d MMM yyyy", Locale.getDefault())
+    // The locale's own date order and month names ("5 oct. 2026", "2026/10/05"),
+    // not one English pattern for everyone.
+    val format = java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM, Locale.getDefault())
     return "${format.format(Date(from * 1000))} – ${format.format(Date(to * 1000))}"
 }
 
@@ -240,15 +242,14 @@ private fun EmptyChart(chart: GenreChart?) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "No chart for this window",
+            text = stringResource(R.string.chart_none),
             style = MaterialTheme.typography.titleMedium,
         )
         Spacer(Modifier.height(MonoDimens.spacingSm))
         Text(
             // Say which way the data thinned out, so an empty screen reads as a
             // fact about this genre in this window rather than a broken feature.
-            text = "Windowed charts are drawn from global listening data, which " +
-                "thins out for smaller genres. Try a longer window, or All time.",
+            text = stringResource(R.string.chart_none_detail),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -320,4 +321,23 @@ private fun Long.abbreviated(): String = when {
     this >= 1_000_000 -> String.format(Locale.getDefault(), "%.1fM", this / 1_000_000.0)
     this >= 1_000 -> String.format(Locale.getDefault(), "%.1fk", this / 1_000.0)
     else -> toString()
+}
+
+/** A window's chip label. The data layer's own label is English and stays there. */
+@androidx.annotation.StringRes
+private fun ChartWindow.labelRes(): Int = when (this) {
+    ChartWindow.SEVEN_DAYS -> R.string.chart_window_7d
+    ChartWindow.THIRTY_DAYS -> R.string.chart_window_30d
+    ChartWindow.SIX_MONTHS -> R.string.chart_window_6m
+    ChartWindow.ONE_YEAR -> R.string.chart_window_1y
+    ChartWindow.ALL_TIME -> R.string.chart_window_all
+}
+
+/** The window as it reads inside "…for jazz in the last 7 days…". All time never falls back. */
+@androidx.annotation.StringRes
+private fun ChartWindow.lastRes(): Int = when (this) {
+    ChartWindow.SEVEN_DAYS -> R.string.chart_last_7d
+    ChartWindow.THIRTY_DAYS -> R.string.chart_last_30d
+    ChartWindow.SIX_MONTHS -> R.string.chart_last_6m
+    ChartWindow.ONE_YEAR, ChartWindow.ALL_TIME -> R.string.chart_last_1y
 }

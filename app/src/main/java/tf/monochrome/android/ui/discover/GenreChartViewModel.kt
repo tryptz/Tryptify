@@ -15,6 +15,7 @@ import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.domain.usecase.GenreChartUseCase
 import tf.monochrome.android.ui.player.PlayerViewModel
 import javax.inject.Inject
+import tf.monochrome.android.R
 
 /**
  * State for one genre's chart screen.
@@ -42,8 +43,8 @@ class GenreChartViewModel @Inject constructor(
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
     /** One-shot text for the snackbar; cleared once shown. */
-    private val _message = MutableStateFlow<String?>(null)
-    val message: StateFlow<String?> = _message.asStateFlow()
+    private val _message = MutableStateFlow<tf.monochrome.android.ui.components.UiText?>(null)
+    val message: StateFlow<tf.monochrome.android.ui.components.UiText?> = _message.asStateFlow()
 
     private var genreId: String = ""
 
@@ -87,7 +88,7 @@ class GenreChartViewModel @Inject constructor(
         viewModelScope.launch {
             val track = resolve(entry)
             if (track == null) {
-                _message.value = "\"${entry.title}\" isn't in the catalogue"
+                _message.value = tf.monochrome.android.ui.components.UiText.Res(R.string.not_in_catalogue, listOf(entry.title))
                 return@launch
             }
             player.playUnifiedTrack(track, listOf(track))
@@ -104,11 +105,11 @@ class GenreChartViewModel @Inject constructor(
             _loading.value = false
             val first = tracks.firstOrNull()
             if (first == null) {
-                _message.value = "None of this chart is in the catalogue"
+                _message.value = tf.monochrome.android.ui.components.UiText.Res(R.string.chart_none_in_catalogue)
                 return@launch
             }
             if (tracks.size < entries.size) {
-                _message.value = "Playing ${tracks.size} of ${entries.size} — the rest aren't in the catalogue"
+                _message.value = tf.monochrome.android.ui.components.UiText.Res(R.string.chart_partial, listOf(tracks.size, entries.size))
             }
             player.playUnifiedTrack(first, tracks)
         }

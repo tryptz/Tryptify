@@ -31,34 +31,20 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 private data class TourSlide(
     val icon: ImageVector,
-    val title: String,
-    val text: String,
+    @androidx.annotation.StringRes val title: Int,
+    @androidx.annotation.StringRes val text: Int,
 )
 
 private val tourSlides = listOf(
-    TourSlide(
-        Icons.Default.Tune,
-        "Tune your sound",
-        "Parametric EQ with AutoEQ profiles for hundreds of headphones."
-    ),
-    TourSlide(
-        Icons.Default.Equalizer,
-        "Studio-grade DSP",
-        "Oxford-style Inflator and Compressor, right in the signal chain."
-    ),
-    TourSlide(
-        Icons.Default.HighQuality,
-        "Gapless & hi-res",
-        "Bit-perfect playback all the way up to your DAC's limits."
-    ),
-    TourSlide(
-        Icons.Default.Radio,
-        "Radio that knows your library",
-        "Spotify recommendations, resolved to tracks you actually own."
-    ),
+    TourSlide(Icons.Default.Tune, R.string.tour_sound_title, R.string.tour_sound_text),
+    TourSlide(Icons.Default.Equalizer, R.string.tour_dsp_title, R.string.tour_dsp_text),
+    TourSlide(Icons.Default.HighQuality, R.string.tour_hires_title, R.string.tour_hires_text),
+    TourSlide(Icons.Default.Radio, R.string.tour_radio_title, R.string.tour_radio_text),
 )
 
 /** Swipeable 4-slide feature tour; the button reads Next until the last slide. */
@@ -92,14 +78,14 @@ fun FeatureTourStep(onDone: () -> Unit) {
                     modifier = Modifier.size(72.dp)
                 )
                 Text(
-                    text = slide.title,
+                    text = stringResource(slide.title),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = MonoDimens.spacingLg)
                 )
                 Text(
-                    text = slide.text,
+                    text = stringResource(slide.text),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -146,7 +132,7 @@ fun FeatureTourStep(onDone: () -> Unit) {
                 .height(52.dp)
         ) {
             Text(
-                text = if (onLastPage) "Done" else "Next",
+                text = if (onLastPage) stringResource(R.string.action_done) else stringResource(R.string.action_next),
                 style = MaterialTheme.typography.titleMedium
             )
         }

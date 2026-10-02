@@ -73,6 +73,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import tf.monochrome.android.ui.navigation.navigateTool
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -114,10 +116,10 @@ fun ProfileScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("Account") },
+            title = { Text(stringResource(R.string.account)) },
             navigationIcon = {
                 IconButton(onClick = { navController.popBackStackSafe() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -139,7 +141,7 @@ fun ProfileScreen(
                 )
                 Spacer(modifier = Modifier.height(20.dp))
                 Text(
-                    "Signing in...",
+                    stringResource(R.string.signing_in),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -160,7 +162,7 @@ fun ProfileScreen(
                     SignedInView(
                         profile = userProfile!!,
                         isSyncing = isSyncing,
-                        syncStatus = syncStatus,
+                        syncStatus = syncStatus?.resolve(androidx.compose.ui.platform.LocalContext.current),
                         onSync = { viewModel.syncNow() },
                         onOpenStats = { navController.navigateTool(Screen.Stats) },
                         onSignOut = {
@@ -214,7 +216,7 @@ private fun SignedInView(
         ) {
             Icon(
                 Icons.Default.AccountCircle,
-                contentDescription = "Profile",
+                contentDescription = stringResource(R.string.profile),
                 modifier = Modifier.size(80.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
@@ -222,7 +224,7 @@ private fun SignedInView(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = profile.displayName ?: "User",
+                text = profile.displayName ?: stringResource(R.string.user),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
@@ -258,11 +260,11 @@ private fun SignedInView(
                 color = MaterialTheme.colorScheme.onPrimary
             )
             Spacer(modifier = Modifier.width(10.dp))
-            Text("Syncing...", style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(R.string.syncing), style = MaterialTheme.typography.labelLarge)
         } else {
             Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(10.dp))
-            Text("Sync Now", style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(R.string.sync_now), style = MaterialTheme.typography.labelLarge)
         }
     }
 
@@ -284,7 +286,7 @@ private fun SignedInView(
     ) {
         Icon(Icons.Default.BarChart, contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(modifier = Modifier.width(10.dp))
-        Text("Listening Stats", style = MaterialTheme.typography.labelLarge)
+        Text(stringResource(R.string.listening_stats), style = MaterialTheme.typography.labelLarge)
     }
 
     Spacer(modifier = Modifier.height(24.dp))
@@ -295,7 +297,7 @@ private fun SignedInView(
         shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
     ) {
-        Text("Sign Out")
+        Text(stringResource(R.string.sign_out))
     }
 }
 
@@ -336,7 +338,7 @@ private fun SignedOutView(
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = "Sign in to Tryptify",
+                text = stringResource(R.string.sign_in_to_tryptify),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onBackground
@@ -345,7 +347,7 @@ private fun SignedOutView(
             Spacer(modifier = Modifier.height(6.dp))
 
             Text(
-                text = "Sync your favorites and playlists across devices",
+                text = stringResource(R.string.sign_in_benefit),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -374,7 +376,7 @@ private fun SignedOutView(
             )
             Spacer(modifier = Modifier.width(10.dp))
         }
-        Text("Continue with Google", style = MaterialTheme.typography.labelLarge)
+        Text(stringResource(R.string.continue_with_google), style = MaterialTheme.typography.labelLarge)
     }
 
     Spacer(modifier = Modifier.height(20.dp))
@@ -400,7 +402,7 @@ private fun SignedOutView(
     OutlinedTextField(
         value = email,
         onValueChange = { onEmailChange(it); onClearError() },
-        label = { Text("Email") },
+        label = { Text(stringResource(R.string.email)) },
         leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
@@ -414,13 +416,13 @@ private fun SignedOutView(
     OutlinedTextField(
         value = password,
         onValueChange = { onPasswordChange(it); onClearError() },
-        label = { Text("Password") },
+        label = { Text(stringResource(R.string.password)) },
         leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
         trailingIcon = {
             IconButton(onClick = { passwordVisible = !passwordVisible }) {
                 Icon(
                     if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                    contentDescription = "Toggle password"
+                    contentDescription = stringResource(R.string.toggle_password)
                 )
             }
         },
@@ -484,7 +486,7 @@ private fun SignedOutView(
         )
     ) {
         Text(
-            if (isSignUp) "Create Account" else "Sign In with Email",
+            if (isSignUp) stringResource(R.string.create_account) else stringResource(R.string.sign_in_with_email),
             style = MaterialTheme.typography.labelLarge
         )
     }
@@ -493,7 +495,7 @@ private fun SignedOutView(
 
     TextButton(onClick = { onIsSignUpChange(!isSignUp); onClearError() }) {
         Text(
-            if (isSignUp) "Already have an account? Sign In" else "Don't have an account? Sign Up",
+            if (isSignUp) stringResource(R.string.have_account_sign_in) else stringResource(R.string.no_account_sign_up),
             style = MaterialTheme.typography.bodySmall
         )
     }

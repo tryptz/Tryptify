@@ -20,6 +20,8 @@ import tf.monochrome.android.data.charts.GenrePool
 import tf.monochrome.android.data.charts.normalizeForMatch
 import tf.monochrome.android.domain.model.DiscoveryItem
 import tf.monochrome.android.domain.model.DiscoveryShelf
+import tf.monochrome.android.domain.model.ShelfLine
+import tf.monochrome.android.domain.model.ShelfPhrase
 import tf.monochrome.android.domain.model.GenreConfidence
 import tf.monochrome.android.domain.model.GenreNode
 import tf.monochrome.android.domain.model.MoodProfile
@@ -134,13 +136,13 @@ class DiscoveryFeedUseCase @Inject constructor(
         listOfNotNull(
             result.tracks.take(itemsPerShelf)
                 .map { DiscoveryItem.TrackItem(it.toQobuzUnifiedTrack()) }
-                .toShelf("mood_tracks_$query", label, "Tracks for $label"),
+                .toShelf("mood_tracks_$query", ShelfLine(ShelfPhrase.Name(label)), ShelfLine(ShelfPhrase.TracksFor(label))),
             result.albums.take(itemsPerShelf)
                 .map { DiscoveryItem.AlbumItem(it) }
-                .toShelf("mood_albums_$query", "$label albums", "Releases that fit $label"),
+                .toShelf("mood_albums_$query", ShelfLine(ShelfPhrase.MoodAlbums(label)), ShelfLine(ShelfPhrase.ReleasesThatFit(label))),
             result.artists.take(itemsPerShelf)
                 .map { DiscoveryItem.ArtistItem(it) }
-                .toShelf("mood_artists_$query", "$label artists", "Artists to start from"),
+                .toShelf("mood_artists_$query", ShelfLine(ShelfPhrase.MoodArtists(label)), ShelfLine(ShelfPhrase.ArtistsToStartFrom)),
         )
     } ?: emptyList()
 
@@ -290,23 +292,21 @@ class DiscoveryFeedUseCase @Inject constructor(
         page: Int = 0,
         idOverride: String? = null,
         titleOverride: String? = null,
-        reasonBase: String? = null,
+        reasonBase: ShelfLine? = null,
         borrow: Boolean = true,
     ): DiscoveryShelf? {
         val node = related.node
         val prefix = mood?.let { "mood_" + it.id } ?: "genre"
         val id = idOverride ?: shelfId(prefix, node.id, page)
-        val reason = buildString {
-            append(
-                reasonBase ?: when {
-                    mood != null && related.hops == 0 -> "For ${mood.label.lowercase()}"
-                    mood != null -> "A step out from ${mood.label.lowercase()}"
-                    related.hops == 0 -> "The genre itself"
-                    else -> "Next to it on the map"
-                }
-            )
-            if (node.hasTempo) append(" · ${node.bpmLow}–${node.bpmHigh} BPM")
-        }
+        val base = reasonBase ?: ShelfLine(
+            when {
+                mood != null && related.hops == 0 -> ShelfPhrase.ForMood(mood.label)
+                mood != null -> ShelfPhrase.StepOutFrom(mood.label)
+                related.hops == 0 -> ShelfPhrase.GenreItself
+                else -> ShelfPhrase.NextOnMap
+            }
+        )
+        val reason = if (node.hasTempo) base + ShelfPhrase.Tempo(node.bpmLow, node.bpmHigh) else base
 
         // What the genre actually is, before what merely says so. Both halves
         // of the pool come from the genre's chart — one matched into the
@@ -321,7 +321,7 @@ class DiscoveryFeedUseCase @Inject constructor(
             val fromChart = merged.count { it.id in chartedIds }
             return merged.map { DiscoveryItem.TrackItem(it.chartedAs(node)) }.toShelf(
                 id = id,
-                title = titleOverride ?: node.name,
+                title = ShelfLine(ShelfPhrase.Name(titleOverride ?: node.name)),
                 reason = genreShelfReason(reason, fromChart, merged.size - fromChart),
                 genreId = node.id,
                 depth = page,
@@ -397,7 +397,7 @@ class DiscoveryFeedUseCase @Inject constructor(
         own: List<UnifiedTrack>,
         id: String,
         title: String,
-        reason: String,
+        reason: ShelfLine,
         limit: Int,
         page: Int,
     ): DiscoveryShelf? = coroutineScope {
@@ -434,7 +434,7 @@ class DiscoveryFeedUseCase @Inject constructor(
                 }
                 .toShelf(
                     id = id,
-                    title = title,
+                    title = ShelfLine(ShelfPhrase.Name(title)),
                     reason = genreShelfReason(reason, 0, 0, borrowedFrom = neighbour.name),
                     genreId = node.id,
                     depth = page,
@@ -472,7 +472,7 @@ class DiscoveryFeedUseCase @Inject constructor(
         queries: List<String>,
         genreId: String?,
         id: String,
-        reason: String,
+        reason: ShelfLine,
         limit: Int,
         variation: Int,
         page: Int,
@@ -522,10 +522,10 @@ class DiscoveryFeedUseCase @Inject constructor(
                 .take(limit)
                 .map { DiscoveryItem.AlbumItem(it) }
         }
-        val honest = if (confirmed.isEmpty()) "$reason · matched by name" else reason
+        val honest = if (confirmed.isEmpty()) reason + ShelfPhrase.MatchedByName else reason
         return items.toShelf(
             id = id,
-            title = title,
+            title = ShelfLine(ShelfPhrase.Name(title)),
             reason = honest,
             genreId = genreId,
             depth = page,
@@ -699,10 +699,12 @@ class DiscoveryFeedUseCase @Inject constructor(
 
             sourceTracks.map { DiscoveryItem.TrackItem(it.toQobuzUnifiedTrack()) }.toShelf(
                 id = "new_from_$name",
-                title = "New from $name",
-                reason = newest?.releaseDate?.take(4)
-                    ?.let { year -> "Their latest release ($year) — you play $name" }
-                    ?: "Because you play $name",
+                title = ShelfLine(ShelfPhrase.NewFrom(name)),
+                reason = ShelfLine(
+                    newest?.releaseDate?.take(4)
+                        ?.let { year -> ShelfPhrase.LatestRelease(year, name) }
+                        ?: ShelfPhrase.BecauseYouPlay(name)
+                ),
             )
         }
 
@@ -726,8 +728,8 @@ class DiscoveryFeedUseCase @Inject constructor(
 
             similar.take(limit).map { DiscoveryItem.ArtistItem(it) }.toShelf(
                 id = "similar_to_${seed.id}",
-                title = "Because you play $name",
-                reason = "Artists Qobuz places next to $name",
+                title = ShelfLine(ShelfPhrase.BecauseYouPlay(name)),
+                reason = ShelfLine(ShelfPhrase.ArtistsPlacedNextTo(name)),
             )
         }
 
@@ -753,7 +755,7 @@ class DiscoveryFeedUseCase @Inject constructor(
                 // on meaning what they meant.
                 idOverride = "genre_${seed.query}",
                 titleOverride = seed.label,
-                reasonBase = "Popular in ${seed.label.lowercase()}",
+                reasonBase = ShelfLine(ShelfPhrase.PopularIn(seed.label)),
             )?.let { return it }
         }
         // A seed that names nothing on the map has no genre to be right about,
@@ -764,7 +766,7 @@ class DiscoveryFeedUseCase @Inject constructor(
                 queries = listOf(seed.query, seed.label).distinct(),
                 genreId = null,
                 id = "genre_${seed.query}",
-                reason = "Popular in ${seed.label.lowercase()}",
+                reason = ShelfLine(ShelfPhrase.PopularIn(seed.label)),
                 limit = limit,
                 variation = 0,
                 page = 0,
@@ -785,8 +787,8 @@ class DiscoveryFeedUseCase @Inject constructor(
      */
     private fun List<DiscoveryItem>.toShelf(
         id: String,
-        title: String,
-        reason: String?,
+        title: ShelfLine,
+        reason: ShelfLine?,
         genreId: String? = null,
         depth: Int = 0,
     ): DiscoveryShelf? = distinctBy { it.key }
@@ -794,11 +796,13 @@ class DiscoveryFeedUseCase @Inject constructor(
         ?.let {
             DiscoveryShelf(
                 id = id,
-                title = title,
-                reason = reason,
+                title = title.english(),
+                reason = reason?.english(),
                 items = it,
                 genreId = genreId,
                 depth = depth,
+                titleLine = title,
+                reasonLine = reason,
             )
         }
 
@@ -964,15 +968,15 @@ internal fun <T> mergeByKey(
  * line stays true without asserting a verification that may not have run.
  */
 internal fun genreShelfReason(
-    base: String,
+    base: ShelfLine,
     charted: Int,
     fromArtists: Int,
     borrowedFrom: String? = null,
-): String = when {
-    borrowedFrom != null -> "$base · by way of $borrowedFrom"
-    charted > 0 && fromArtists > 0 -> "$base · ranked by plays and its most-played artists"
-    charted > 0 -> "$base · ranked by plays"
-    fromArtists > 0 -> "$base · its most-played artists"
+): ShelfLine = when {
+    borrowedFrom != null -> base + ShelfPhrase.ByWayOf(borrowedFrom)
+    charted > 0 && fromArtists > 0 -> base + ShelfPhrase.RankedByPlaysAndArtists
+    charted > 0 -> base + ShelfPhrase.RankedByPlays
+    fromArtists > 0 -> base + ShelfPhrase.MostPlayedArtists
     else -> base
 }
 

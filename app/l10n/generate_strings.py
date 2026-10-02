@@ -32,12 +32,22 @@ PLURAL_FORMS = {
 }
 NON_TRANSLATABLE = {'app_name'}
 
+def french_spacing(s):
+    """French puts a space before : ; ? ! and it has to be non-breaking, or a
+    narrow screen wraps the mark onto a line of its own. Written as a plain
+    space in the table, it becomes U+00A0 here, so nobody has to type it."""
+    return re.sub(r' ([:;?!])', '\u00a0\\1', s)
+
 def android_escape(s):
     s = escape(s)  # & < >
     s = s.replace('\\', '\\\\').replace("'", "\\'").replace('"', '\\"')
     if s.startswith('@') or s.startswith('?'):
         s = '\\' + s
-    return s.replace('\n', '\\n')
+    s = s.replace('\n', '\\n')
+    # aapt trims leading and trailing whitespace unless the string is quoted.
+    if s != s.strip():
+        s = '"' + s + '"'
+    return s
 
 def main():
     rows = list(csv.DictReader(open(os.path.join(HERE, 'strings.tsv'), encoding='utf-8'), delimiter='\t'))
@@ -90,15 +100,19 @@ def main():
                 seen.add(base)
                 out.append(f'    <plurals name="{base}">')
                 for q in PLURAL_FORMS[lang]:
-                    out.append(f'        <item quantity="{q}">{android_escape(plurals[base][q][lang])}</item>')
+                    text = plurals[base][q][lang]
+                    if lang == 'fr':
+                        text = french_spacing(text)
+                    out.append(f'        <item quantity="{q}">{android_escape(text)}</item>')
                 out.append('    </plurals>')
                 continue
             if key in NON_TRANSLATABLE:
                 if lang == 'en':
                     out.append(f'    <string name="{key}" translatable="false">{android_escape(r["en"])}</string>')
                 continue
-            fmt = ' formatted="false"' if '%' in r[lang] and not re.search(r'%\d+\$', r[lang]) else ''
-            out.append(f'    <string name="{key}"{fmt}>{android_escape(r[lang])}</string>')
+            text = french_spacing(r[lang]) if lang == 'fr' else r[lang]
+            fmt = ' formatted="false"' if '%' in text and not re.search(r'%\d+\$', text) else ''
+            out.append(f'    <string name="{key}"{fmt}>{android_escape(text)}</string>')
         out.append('</resources>')
         os.makedirs(os.path.join(RES, folder), exist_ok=True)
         with open(os.path.join(RES, folder, 'strings.xml'), 'w', encoding='utf-8') as f:
