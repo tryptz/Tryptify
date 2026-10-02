@@ -10,7 +10,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,9 +44,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -62,27 +58,23 @@ private data class TutorialStep(
     @androidx.annotation.StringRes val title: Int,
     @androidx.annotation.StringRes val description: Int,
     val icon: ImageVector,
-    val drawableRes: String // resource name for future Gemini-generated asset
 )
 
 private val tutorialSteps = listOf(
     TutorialStep(
         title = R.string.eq_precision_autoeq_caps,
         description = R.string.eq_autoeq_analyzes_your_headphone_s_frequency,
-        icon = Icons.Filled.GraphicEq,
-        drawableRes = "tutorial_autoeq_concept"
+        icon = Icons.Filled.GraphicEq
     ),
     TutorialStep(
         title = R.string.eq_select_your_headphones_caps,
         description = R.string.eq_choose_from_our_database_of_measured_headphones,
-        icon = Icons.Filled.Headphones,
-        drawableRes = "tutorial_autoeq_select"
+        icon = Icons.Filled.Headphones
     ),
     TutorialStep(
         title = R.string.eq_review_apply_caps,
         description = R.string.eq_preview_the_generated_eq_curve_on_the_frequency,
-        icon = Icons.Filled.Tune,
-        drawableRes = "tutorial_autoeq_apply"
+        icon = Icons.Filled.Tune
     )
 )
 
@@ -134,46 +126,26 @@ fun AutoEqTutorialDialog(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         // Icon with gradient background
-                        val context = LocalContext.current
-                        @Suppress("DiscouragedApi", "LocalContextResourcesRead")
-                        val drawableId = context.resources.getIdentifier(
-                            tutorialStep.drawableRes, "drawable", context.packageName
-                        )
-
-                        if (drawableId != 0) {
-                            // Use Gemini-generated image asset
-                            Image(
-                                painter = painterResource(id = drawableId),
-                                contentDescription = stringResource(tutorialStep.title),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(180.dp)
-                                    .clip(RoundedCornerShape(12.dp)),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
-                            // Fallback: icon with gradient circle
-                            Box(
-                                modifier = Modifier
-                                    .size(96.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        Brush.linearGradient(
-                                            colors = listOf(
-                                                MaterialTheme.colorScheme.primary,
-                                                MaterialTheme.colorScheme.tertiary
-                                            )
+                        Box(
+                            modifier = Modifier
+                                .size(96.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.primary,
+                                            MaterialTheme.colorScheme.tertiary
                                         )
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = tutorialStep.icon,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp),
-                                    tint = MaterialTheme.colorScheme.onPrimary
-                                )
-                            }
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = tutorialStep.icon,
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(20.dp))

@@ -32,20 +32,6 @@ internal object CrossfadeRamp {
         return (elapsedMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
     }
 
-    /**
-     * Whether the blend should begin: the track has a known duration and is
-     * within [crossfadeMs] of the end.
-     *
-     * A duration shorter than the blend itself is refused — blending a 2s
-     * interstitial over 12s would start it before it began.
-     */
-    fun shouldStart(positionMs: Long, durationMs: Long, crossfadeMs: Long): Boolean {
-        if (crossfadeMs <= 0L) return false
-        if (durationMs <= 0L) return false
-        if (durationMs <= crossfadeMs) return false
-        return durationMs - positionMs <= crossfadeMs
-    }
-
     // ── Timing at any speed ────────────────────────────────────────────────
     //
     // The blend length is a setting in heard time: "a 6 s crossfade" is six

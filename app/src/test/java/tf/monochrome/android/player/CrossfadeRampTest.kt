@@ -76,33 +76,19 @@ class CrossfadeRampTest {
         assertEquals(1f, CrossfadeRamp.fadeIn(5f), tolerance)
     }
 
-    // --- when to start ---
+    // --- when not to prepare ---
 
     @Test
-    fun `starts once the track is within the blend length of the end`() {
-        assertFalse(CrossfadeRamp.shouldStart(positionMs = 100_000, durationMs = 200_000, crossfadeMs = 5_000))
-        assertTrue(CrossfadeRamp.shouldStart(positionMs = 195_000, durationMs = 200_000, crossfadeMs = 5_000))
-        assertTrue(CrossfadeRamp.shouldStart(positionMs = 199_000, durationMs = 200_000, crossfadeMs = 5_000))
+    fun `never prepares when blending is off`() {
+        assertFalse(CrossfadeRamp.shouldPrepare(199_000L, 200_000L, crossfadeMs = 0L, speed = 1f, leadMs = 1_500L))
     }
 
     @Test
-    fun `never starts when blending is off`() {
-        assertFalse(CrossfadeRamp.shouldStart(positionMs = 199_000, durationMs = 200_000, crossfadeMs = 0))
-    }
-
-    @Test
-    fun `never starts on an unknown duration`() {
+    fun `never prepares on an unknown duration`() {
         // A live stream or a not-yet-prepared item reports no duration; blending
         // from an unknown end point would fire immediately and every tick after.
-        assertFalse(CrossfadeRamp.shouldStart(positionMs = 1_000, durationMs = 0, crossfadeMs = 5_000))
-        assertFalse(CrossfadeRamp.shouldStart(positionMs = 1_000, durationMs = -1, crossfadeMs = 5_000))
-    }
-
-    @Test
-    fun `never starts on a track shorter than the blend itself`() {
-        // Otherwise a 2s interstitial with a 12s blend would start blending
-        // before it had begun.
-        assertFalse(CrossfadeRamp.shouldStart(positionMs = 0, durationMs = 2_000, crossfadeMs = 12_000))
+        assertFalse(CrossfadeRamp.shouldPrepare(1_000L, 0L, crossfadeMs = 5_000L, speed = 1f, leadMs = 1_500L))
+        assertFalse(CrossfadeRamp.shouldPrepare(1_000L, -1L, crossfadeMs = 5_000L, speed = 1f, leadMs = 1_500L))
     }
 
     // ── Timing at any speed ────────────────────────────────────────────────

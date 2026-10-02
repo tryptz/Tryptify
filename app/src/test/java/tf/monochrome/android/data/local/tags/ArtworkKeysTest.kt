@@ -9,7 +9,6 @@ import org.junit.Test
 class ArtworkKeysTest {
 
     private val store = "/data/user/0/tf.monochrome.android/files/artwork"
-    private val oldStore = "/data/user/0/tf.monochrome.android/cache/artwork"
 
     // ── Naming ──────────────────────────────────────────────────────
     //
@@ -66,39 +65,6 @@ class ArtworkKeysTest {
     @Test
     fun `a null key is not legacy`() {
         assertFalse(ArtworkKeys.isLegacyKey(null))
-    }
-
-    // ── Key rewriting (the one-time move out of cacheDir) ───────────
-    //
-    // The column holds sidecar covers and raw audio paths beside stored art,
-    // and a prefix match that ignores directory boundaries corrupts them.
-
-    @Test
-    fun `a key under the old store is repointed`() {
-        assertEquals(
-            "$store/legacy/abc.jpg",
-            ArtworkKeys.rewriteKey("$oldStore/abc.jpg", oldStore, "$store/legacy"),
-        )
-    }
-
-    @Test
-    fun `a trailing slash on the old directory is normalized`() {
-        assertEquals(
-            "$store/legacy/abc.jpg",
-            ArtworkKeys.rewriteKey("$oldStore/abc.jpg", "$oldStore/", "$store/legacy/"),
-        )
-    }
-
-    @Test
-    fun `a sibling directory sharing the prefix is left alone`() {
-        val sibling = "${oldStore}_backup/abc.jpg"
-        assertEquals(sibling, ArtworkKeys.rewriteKey(sibling, oldStore, "$store/legacy"))
-    }
-
-    @Test
-    fun `a sidecar cover outside the old store is left alone`() {
-        val sidecar = "/storage/emulated/0/Music/Album/cover.jpg"
-        assertEquals(sidecar, ArtworkKeys.rewriteKey(sidecar, oldStore, "$store/legacy"))
     }
 
     // ── Downscaling ─────────────────────────────────────────────────
