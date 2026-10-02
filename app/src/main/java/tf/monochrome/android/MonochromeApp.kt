@@ -221,6 +221,11 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
         appScope.launch {
             runCatching { artworkStoreMigration.migrateIfNeeded() }
         }
+        // Settings whose features are gone — Google and PocketBase sign-in, AI
+        // radio, the API instance cache — are dropped from the store, once.
+        appScope.launch {
+            runCatching { preferencesProvider.get().retireRemovedKeys() }
+        }
         warmFirstUseCaches()
     }
 

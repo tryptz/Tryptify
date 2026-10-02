@@ -35,9 +35,6 @@ class InstanceManager @Inject constructor(
         return listOfNotNull(instanceFor(ApiService.TIDAL))
     }
 
-    // No remote pool to refresh — instances come only from the user's list.
-    suspend fun refreshInstances() {}
-
     /** The server answering for Qobuz (TrypT HiFi get-music routes), or null. */
     suspend fun qobuzInstanceOrNull(): Instance? = instanceFor(ApiService.QOBUZ)
 

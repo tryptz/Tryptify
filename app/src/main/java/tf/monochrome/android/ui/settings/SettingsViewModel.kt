@@ -29,9 +29,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
-import tf.monochrome.android.data.api.Instance
-import tf.monochrome.android.data.api.InstanceManager
-import tf.monochrome.android.data.api.InstanceType
 import tf.monochrome.android.data.auth.AuthRepository
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.auth.SupabaseAuthManager
@@ -50,7 +47,6 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val preferences: PreferencesManager,
-    private val instanceManager: InstanceManager,
     private val apiServerProber: tf.monochrome.android.data.api.ApiServerProber,
     private val authRepository: AuthRepository,
     private val backupManager: BackupManager,
@@ -263,8 +259,6 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AudioQuality.HIGH)
     val normalizationEnabled: StateFlow<Boolean> = preferences.normalizationEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-    val dspMixerEnabled: StateFlow<Boolean> = preferences.dspEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val systemWideAutoEqEnabled: StateFlow<Boolean> = preferences.systemWideAutoEqEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val dspBlockSize: StateFlow<Int> = preferences.dspBlockSize
@@ -392,17 +386,12 @@ class SettingsViewModel @Inject constructor(
     /** Ensures presets are installed/loaded so the visualizer settings have data. */
     fun prepareVisualizerEngine() = projectMEngineRepository.requestPrepare()
 
-    // --- PocketBase Auth ---
+    // --- Account ---
     val isLoggedIn: StateFlow<Boolean> = authRepository.isLoggedIn
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val userEmail: StateFlow<String?> = authRepository.userEmail
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    // --- Instances ---
-    private val _apiInstances = MutableStateFlow<List<Instance>>(emptyList())
-    val apiInstances: StateFlow<List<Instance>> = _apiInstances.asStateFlow()
-    private val _streamingInstances = MutableStateFlow<List<Instance>>(emptyList())
-    val streamingInstances: StateFlow<List<Instance>> = _streamingInstances.asStateFlow()
     /** The APIs under Settings › Connections, in priority order. */
     val apiServers: StateFlow<List<tf.monochrome.android.data.api.ApiServer>> = preferences.apiServers
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -416,8 +405,6 @@ class SettingsViewModel @Inject constructor(
     val addApiState: StateFlow<AddApiState> = _addApiState.asStateFlow()
     val devModeEnabled: StateFlow<Boolean> = preferences.devModeEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-    private val _instancesRefreshing = MutableStateFlow(false)
-    val instancesRefreshing: StateFlow<Boolean> = _instancesRefreshing.asStateFlow()
 
     // --- System ---
     private val _cacheSize = MutableStateFlow("")
@@ -434,7 +421,6 @@ class SettingsViewModel @Inject constructor(
         tf.monochrome.android.ui.theme.BundledFonts.ALL
 
     init {
-        loadInstances()
         calculateCacheSize()
         loadFonts()
     }
@@ -600,7 +586,6 @@ class SettingsViewModel @Inject constructor(
     fun setWifiQuality(quality: AudioQuality) { viewModelScope.launch { preferences.setWifiQuality(quality) } }
     fun setCellularQuality(quality: AudioQuality) { viewModelScope.launch { preferences.setCellularQuality(quality) } }
     fun setNormalizationEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setNormalizationEnabled(enabled) } }
-    fun setDspMixerEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setDspEnabled(enabled) } }
     fun setSystemWideAutoEq(enabled: Boolean) { viewModelScope.launch { preferences.setSystemWideAutoEqEnabled(enabled) } }
     fun setDspBlockSize(value: Int) { viewModelScope.launch { preferences.setDspBlockSize(value) } }
     // The two USB toggles are mutually exclusive — they fight for
@@ -996,28 +981,6 @@ class SettingsViewModel @Inject constructor(
     // through SpotifyImportForegroundService — no in-ViewModel import path
     // should exist here, or a big playlist dies when the screen closes.
 
-    // --- Instance actions ---
-    private fun loadInstances() {
-        viewModelScope.launch {
-            try {
-                _apiInstances.value = instanceManager.getInstances(InstanceType.API)
-                _streamingInstances.value = instanceManager.getInstances(InstanceType.STREAMING)
-            } catch (_: Exception) {}
-        }
-    }
-
-    fun refreshInstances() {
-        viewModelScope.launch {
-            _instancesRefreshing.value = true
-            try {
-                instanceManager.refreshInstances()
-                _apiInstances.value = instanceManager.getInstances(InstanceType.API)
-                _streamingInstances.value = instanceManager.getInstances(InstanceType.STREAMING)
-            } catch (_: Exception) {}
-            _instancesRefreshing.value = false
-        }
-    }
-
     /**
      * Check a typed-in address and add it when it serves anything.
      *
@@ -1047,7 +1010,6 @@ class SettingsViewModel @Inject constructor(
                         checkedAt = System.currentTimeMillis(),
                     )
                 )
-                loadInstances()
             }
             _addApiState.value = AddApiState.Done(result)
         }
@@ -1067,7 +1029,6 @@ class SettingsViewModel @Inject constructor(
             preferences.setApiServers(current.map {
                 if (it.url == url) it.copy(services = result.services, checkedAt = System.currentTimeMillis()) else it
             })
-            loadInstances()
             _apiChecking.value = _apiChecking.value - url
         }
     }
@@ -1075,7 +1036,6 @@ class SettingsViewModel @Inject constructor(
     fun removeApi(url: String) {
         viewModelScope.launch {
             preferences.setApiServers(preferences.apiServers.first().filterNot { it.url == url })
-            loadInstances()
         }
     }
 
@@ -1087,14 +1047,12 @@ class SettingsViewModel @Inject constructor(
             if (i <= 0) return@launch
             list.add(i - 1, list.removeAt(i))
             preferences.setApiServers(list)
-            loadInstances()
         }
     }
 
     fun setDevModeEnabled(enabled: Boolean) {
         viewModelScope.launch {
             preferences.setDevModeEnabled(enabled)
-            loadInstances()
         }
     }
 

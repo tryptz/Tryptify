@@ -236,9 +236,6 @@ interface LocalMediaDao {
     suspend fun getTrackCount(): Int
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertTrack(track: LocalTrackEntity): Long
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTracks(tracks: List<LocalTrackEntity>)
 
     @Update
@@ -249,9 +246,6 @@ interface LocalMediaDao {
 
     @Query("SELECT * FROM local_tracks")
     suspend fun getAllTracksSnapshot(): List<LocalTrackEntity>
-
-    @Query("DELETE FROM local_tracks WHERE filePath = :path")
-    suspend fun deleteTrackByPath(path: String)
 
     @Query("DELETE FROM local_tracks WHERE filePath IN (:paths)")
     suspend fun deleteTracksByPaths(paths: List<String>)
@@ -278,12 +272,6 @@ interface LocalMediaDao {
     @Query("SELECT filePath, lastModified, artworkCacheKey, hasEmbeddedArt, artist, title FROM local_tracks")
     suspend fun getAllTrackScanInfo(): List<TrackScanInfo>
 
-    // Distinct because album-cover propagation gives every track in an album
-    // the same key — a 500-track album is one row here, so the startup
-    // artwork eviction probe stays cheap.
-    @Query("SELECT DISTINCT artworkCacheKey FROM local_tracks WHERE artworkCacheKey IS NOT NULL")
-    suspend fun getDistinctArtworkCacheKeys(): List<String>
-
     // ── Albums ──────────────────────────────────────────────────────
 
     @Query("SELECT * FROM local_albums ORDER BY artist, title")
@@ -295,14 +283,8 @@ interface LocalMediaDao {
     @Query("SELECT * FROM local_albums WHERE artist = :artistName ORDER BY year DESC, title")
     fun getAlbumsByArtist(artistName: String): Flow<List<LocalAlbumEntity>>
 
-    @Query("SELECT * FROM local_albums WHERE groupingKey = :key LIMIT 1")
-    suspend fun findAlbumByGroupingKey(key: String): LocalAlbumEntity?
-
     @Upsert
     suspend fun upsertAlbum(album: LocalAlbumEntity): Long
-
-    @Query("DELETE FROM local_albums WHERE id NOT IN (SELECT DISTINCT albumId FROM local_tracks WHERE albumId IS NOT NULL)")
-    suspend fun pruneOrphanAlbums()
 
     // ── Artists ─────────────────────────────────────────────────────
 
@@ -312,28 +294,16 @@ interface LocalMediaDao {
     @Query("SELECT * FROM local_artists WHERE id = :artistId")
     suspend fun getArtistById(artistId: Long): LocalArtistEntity?
 
-    @Query("SELECT * FROM local_artists WHERE normalizedName = :normalizedName LIMIT 1")
-    suspend fun findArtistByNormalizedName(normalizedName: String): LocalArtistEntity?
-
     @Upsert
     suspend fun upsertArtist(artist: LocalArtistEntity): Long
-
-    @Query("DELETE FROM local_artists WHERE id NOT IN (SELECT DISTINCT artistId FROM local_tracks WHERE artistId IS NOT NULL)")
-    suspend fun pruneOrphanArtists()
 
     // ── Genres ──────────────────────────────────────────────────────
 
     @Query("SELECT * FROM local_genres ORDER BY name")
     fun getAllGenres(): Flow<List<LocalGenreEntity>>
 
-    @Query("SELECT * FROM local_genres WHERE name = :name LIMIT 1")
-    suspend fun findGenreByName(name: String): LocalGenreEntity?
-
     @Upsert
     suspend fun upsertGenre(genre: LocalGenreEntity): Long
-
-    @Query("DELETE FROM local_genres WHERE id NOT IN (SELECT DISTINCT lg.id FROM local_genres lg INNER JOIN local_tracks lt ON lt.genre = lg.name)")
-    suspend fun pruneOrphanGenres()
 
     // ── Folders ─────────────────────────────────────────────────────
 
@@ -356,9 +326,6 @@ interface LocalMediaDao {
      */
     @Query("SELECT * FROM local_folders WHERE parentPath IS NULL ORDER BY displayName")
     fun getRootFolders(): Flow<List<LocalFolderEntity>>
-
-    @Upsert
-    suspend fun upsertFolder(folder: LocalFolderEntity)
 
     @Upsert
     suspend fun upsertFolders(folders: List<LocalFolderEntity>)

@@ -33,9 +33,6 @@ interface MixPresetDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(preset: MixPresetEntity): Long
 
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertIfNotExists(preset: MixPresetEntity): Long
-
     @Query("DELETE FROM mix_presets WHERE id = :id")
     suspend fun delete(id: Long)
 

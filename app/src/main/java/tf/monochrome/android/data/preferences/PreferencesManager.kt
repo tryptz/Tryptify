@@ -129,10 +129,6 @@ class PreferencesManager @Inject constructor(
         private val REPEAT_MODE = intPreferencesKey("repeat_mode")
         private val VOLUME = doublePreferencesKey("volume")
 
-        // Instance cache
-        private val INSTANCES_CACHE = stringPreferencesKey("instances_cache")
-        private val INSTANCES_CACHE_TIMESTAMP = longPreferencesKey("instances_cache_timestamp")
-
         // Theme
         private val THEME = stringPreferencesKey("theme")
         private val THEME_PAPER = stringPreferencesKey("theme_paper")
@@ -289,12 +285,6 @@ class PreferencesManager @Inject constructor(
         private val FONT_SCALE_FOLLOW_SYSTEM = booleanPreferencesKey("font_scale_follow_system")
         private val CUSTOM_FONT_URI = stringPreferencesKey("custom_font_uri")
 
-        // Google Auth
-        private val GOOGLE_USER_ID = stringPreferencesKey("google_user_id")
-        private val GOOGLE_DISPLAY_NAME = stringPreferencesKey("google_display_name")
-        private val GOOGLE_EMAIL = stringPreferencesKey("google_email")
-        private val GOOGLE_PHOTO_URL = stringPreferencesKey("google_photo_url")
-
         // Parity features
         private val VISUALIZER_SENSITIVITY = intPreferencesKey("visualizer_sensitivity")
         private val VISUALIZER_BRIGHTNESS = intPreferencesKey("visualizer_brightness")
@@ -335,10 +325,6 @@ class PreferencesManager @Inject constructor(
         // on the next.
         private val VISUALIZER_CRASHED_PRESETS = stringSetPreferencesKey("visualizer_crashed_presets")
 
-        // AI
-        private val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
-        private val AI_RADIO_ENABLED = booleanPreferencesKey("ai_radio_enabled")
-
         // Radio ranking weights, all scored on-device by LocalRadioPlanner.
         private val RADIO_WEIGHT_LOCAL_LIBRARY = floatPreferencesKey("radio_weight_local_library")
         private val RADIO_WEIGHT_QOBUZ = floatPreferencesKey("radio_weight_qobuz")
@@ -357,12 +343,6 @@ class PreferencesManager @Inject constructor(
         private val SPOTIFY_REFRESH_TOKEN = stringPreferencesKey("spotify_refresh_token")
         private val SPOTIFY_TOKEN_EXPIRES_AT = longPreferencesKey("spotify_token_expires_at")
         private val SPOTIFY_USER_NAME = stringPreferencesKey("spotify_user_name")
-
-        // PocketBase
-        private val POCKETBASE_TOKEN = stringPreferencesKey("pocketbase_token")
-        private val POCKETBASE_USER_ID = stringPreferencesKey("pocketbase_user_id")
-        private val POCKETBASE_EMAIL = stringPreferencesKey("pocketbase_email")
-        // Home screen cache
 
         // EQ / AutoEQ
         private val EQ_TUTORIAL_SEEN = booleanPreferencesKey("eq_tutorial_seen")
@@ -507,7 +487,6 @@ class PreferencesManager @Inject constructor(
             PARAM_EQ_ENABLED, PARAM_EQ_ACTIVE_PRESET_ID, PARAM_EQ_PREAMP, PARAM_EQ_BANDS_JSON,
             DSP_ENABLED, DSP_STATE_JSON, MIXER_CHANNEL_DYNAMIC,
             LIBRARY_TAB_ORDER, PAGE_ORDER, HIDDEN_PAGES, CAR_MODE_BAND_COUNT,
-            AI_RADIO_ENABLED,
             RADIO_WEIGHT_LOCAL_LIBRARY, RADIO_WEIGHT_QOBUZ, RADIO_WEIGHT_SPOTIFY_DISCOVERY,
             RADIO_WEIGHT_CANONICAL_VERSION_BIAS, RADIO_WEIGHT_NOVELTY, RADIO_WEIGHT_FAMILIARITY,
             RADIO_WEIGHT_ARTIST_SIMILARITY, RADIO_WEIGHT_GENRE_TAG_SIMILARITY,
@@ -560,32 +539,12 @@ class PreferencesManager @Inject constructor(
         if (stored <= 0.0) 1.0 else stored
     }
 
-    suspend fun setShuffleEnabled(enabled: Boolean) {
-        dataStore.edit { it[SHUFFLE_ENABLED] = enabled }
-    }
-
     suspend fun setRepeatMode(mode: Int) {
         dataStore.edit { it[REPEAT_MODE] = mode }
     }
 
     suspend fun setVolume(volume: Double) {
         dataStore.edit { it[VOLUME] = volume }
-    }
-
-    // Instance cache
-    val instancesCache: Flow<String?> = dataStore.data.map { prefs ->
-        prefs[INSTANCES_CACHE]
-    }
-
-    val instancesCacheTimestamp: Flow<Long> = dataStore.data.map { prefs ->
-        prefs[INSTANCES_CACHE_TIMESTAMP] ?: 0L
-    }
-
-    suspend fun saveInstancesCache(json: String) {
-        dataStore.edit {
-            it[INSTANCES_CACHE] = json
-            it[INSTANCES_CACHE_TIMESTAMP] = System.currentTimeMillis()
-        }
     }
 
     // Theme
@@ -858,52 +817,10 @@ class PreferencesManager @Inject constructor(
         }
     }
 
-    // Custom API
-    val customApiEndpoint: Flow<String?> = dataStore.data.map { prefs ->
-        prefs[CUSTOM_API_ENDPOINT]
-    }
-
-    suspend fun setCustomApiEndpoint(endpoint: String?) {
-        dataStore.edit {
-            if (endpoint != null) {
-                it[CUSTOM_API_ENDPOINT] = endpoint
-            } else {
-                it.remove(CUSTOM_API_ENDPOINT)
-            }
-        }
-    }
-
     // Qobuz instance — used for downloads. Independent of Dev Mode: any
     // value set here is honored whenever the download path is invoked.
     val qobuzInstanceUrl: Flow<String?> = dataStore.data.map { prefs ->
         prefs[QOBUZ_INSTANCE_URL]
-    }
-
-    suspend fun setQobuzInstanceUrl(endpoint: String?) {
-        dataStore.edit {
-            if (endpoint != null) {
-                it[QOBUZ_INSTANCE_URL] = endpoint
-            } else {
-                it.remove(QOBUZ_INSTANCE_URL)
-            }
-        }
-    }
-
-    // Apple Music instance — the TrypT HiFi server that exposes /api/apple/*.
-    // Usually the same server as the Qobuz instance, so InstanceManager falls back
-    // to the Qobuz URL when this is unset (see appleInstanceOrNull).
-    val appleInstanceUrl: Flow<String?> = dataStore.data.map { prefs ->
-        prefs[APPLE_INSTANCE_URL]
-    }
-
-    suspend fun setAppleInstanceUrl(endpoint: String?) {
-        dataStore.edit {
-            if (endpoint != null) {
-                it[APPLE_INSTANCE_URL] = endpoint
-            } else {
-                it.remove(APPLE_INSTANCE_URL)
-            }
-        }
     }
 
     // Tailnet-direct wrapper/agent: when set, Apple tracks decrypt + stream
@@ -911,19 +828,7 @@ class PreferencesManager @Inject constructor(
     // agent's base URL; the secret matches the agent's AGENT_SECRET.
     val appleWrapperUrl: Flow<String?> = dataStore.data.map { it[APPLE_WRAPPER_URL] }
 
-    suspend fun setAppleWrapperUrl(endpoint: String?) {
-        dataStore.edit {
-            if (endpoint != null) it[APPLE_WRAPPER_URL] = endpoint else it.remove(APPLE_WRAPPER_URL)
-        }
-    }
-
     val appleWrapperSecret: Flow<String?> = dataStore.data.map { it[APPLE_WRAPPER_SECRET] }
-
-    suspend fun setAppleWrapperSecret(secret: String?) {
-        dataStore.edit {
-            if (secret != null) it[APPLE_WRAPPER_SECRET] = secret else it.remove(APPLE_WRAPPER_SECRET)
-        }
-    }
 
     /**
      * Prefer the Dolby Atmos master for Apple tracks. Atmos is a separate
@@ -942,10 +847,6 @@ class PreferencesManager @Inject constructor(
         dataStore.edit { it[TIDAL_ATMOS_PREFERRED] = enabled }
     }
 
-    suspend fun setAppleAtmosPreferred(enabled: Boolean) {
-        dataStore.edit { it[APPLE_ATMOS_PREFERRED] = enabled }
-    }
-
     /**
      * Format requested from the Apple wrapper, independent of the Qobuz/TIDAL
      * [downloadQuality] tier — Apple's ladder is its own (`hires-lossless`,
@@ -955,10 +856,6 @@ class PreferencesManager @Inject constructor(
     val appleQuality: Flow<AppleQuality> = dataStore.data.map { prefs ->
         prefs[APPLE_QUALITY]?.let { runCatching { AppleQuality.valueOf(it) }.getOrNull() }
             ?: AppleQuality.ALAC
-    }
-
-    suspend fun setAppleQuality(quality: AppleQuality) {
-        dataStore.edit { it[APPLE_QUALITY] = quality.name }
     }
 
     /**
@@ -1151,6 +1048,34 @@ class PreferencesManager @Inject constructor(
         dataStore.edit { it[ARTWORK_STORE_MIGRATED] = migrated }
     }
 
+    /**
+     * Drops the stored values of settings whose features are gone: Google and
+     * PocketBase sign-in, AI radio and its Gemini key, and the API instance
+     * cache. Without this they would sit in every existing install for ever,
+     * the Gemini key and the PocketBase token among them, read by nothing.
+     *
+     * Writes only when one is still there, so after the first launch it costs
+     * one read. The keys live here and nowhere else: nothing may read them.
+     */
+    suspend fun retireRemovedKeys() {
+        val retired = listOf(
+            stringPreferencesKey("google_user_id"),
+            stringPreferencesKey("google_display_name"),
+            stringPreferencesKey("google_email"),
+            stringPreferencesKey("google_photo_url"),
+            stringPreferencesKey("pocketbase_token"),
+            stringPreferencesKey("pocketbase_user_id"),
+            stringPreferencesKey("pocketbase_email"),
+            stringPreferencesKey("gemini_api_key"),
+            booleanPreferencesKey("ai_radio_enabled"),
+            stringPreferencesKey("instances_cache"),
+            longPreferencesKey("instances_cache_timestamp"),
+        )
+        val stored = dataStore.data.first()
+        if (retired.none { it in stored }) return
+        dataStore.edit { prefs -> retired.forEach { prefs.remove(it) } }
+    }
+
     val crossfadeDuration: Flow<Int> = dataStore.data.map { prefs ->
         prefs[CROSSFADE_DURATION] ?: 0
     }
@@ -1219,21 +1144,6 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setPitchQuality(quality: PitchQuality) {
         dataStore.edit { it[PITCH_QUALITY] = quality.name }
-    }
-
-    /**
-     * Whether the speed control is expressed in semitones rather than as a
-     * multiplier. Presentation only — the stored speed is a ratio either way.
-     *
-     * It does change what the slider can reach, though: in semitone units it
-     * steps whole intervals at exact 2^(n/12) ratios, which is the difference
-     * between choosing a fifth and landing near one.
-     */
-    val speedUnitSemitones: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[SPEED_UNIT_SEMITONES] ?: false
-    }
-    suspend fun setSpeedUnitSemitones(enabled: Boolean) {
-        dataStore.edit { it[SPEED_UNIT_SEMITONES] = enabled }
     }
 
     /** Which unit the speed control reads in: BPM wins over semitones. */
@@ -1348,30 +1258,6 @@ class PreferencesManager @Inject constructor(
 
     suspend fun clearRadioSearchHistory() {
         dataStore.edit { it.remove(RADIO_SEARCH_HISTORY_JSON) }
-    }
-
-    // --- Google Auth ---
-    val googleUserId: Flow<String?> = dataStore.data.map { it[GOOGLE_USER_ID] }
-    val googleDisplayName: Flow<String?> = dataStore.data.map { it[GOOGLE_DISPLAY_NAME] }
-    val googleEmail: Flow<String?> = dataStore.data.map { it[GOOGLE_EMAIL] }
-    val googlePhotoUrl: Flow<String?> = dataStore.data.map { it[GOOGLE_PHOTO_URL] }
-
-    suspend fun setGoogleProfile(userId: String, displayName: String?, email: String?, photoUrl: String?) {
-        dataStore.edit {
-            it[GOOGLE_USER_ID] = userId
-            displayName?.let { name -> it[GOOGLE_DISPLAY_NAME] = name }
-            email?.let { e -> it[GOOGLE_EMAIL] = e }
-            photoUrl?.let { url -> it[GOOGLE_PHOTO_URL] = url }
-        }
-    }
-
-    suspend fun clearGoogleProfile() {
-        dataStore.edit {
-            it.remove(GOOGLE_USER_ID)
-            it.remove(GOOGLE_DISPLAY_NAME)
-            it.remove(GOOGLE_EMAIL)
-            it.remove(GOOGLE_PHOTO_URL)
-        }
     }
 
     // --- Parity features ---
@@ -1603,21 +1489,6 @@ class PreferencesManager @Inject constructor(
         dataStore.edit { it[NOW_PLAYING_VIEW_MODE] = mode.name }
     }
 
-    // --- AI ---
-    val geminiApiKey: Flow<String?> = dataStore.data.map { it[GEMINI_API_KEY] }
-    val aiRadioEnabled: Flow<Boolean> = dataStore.data.map { it[AI_RADIO_ENABLED] ?: false }
-
-    suspend fun setGeminiApiKey(key: String?) {
-        dataStore.edit {
-            if (key.isNullOrBlank()) it.remove(GEMINI_API_KEY)
-            else it[GEMINI_API_KEY] = key
-        }
-    }
-
-    suspend fun setAiRadioEnabled(enabled: Boolean) {
-        dataStore.edit { it[AI_RADIO_ENABLED] = enabled }
-    }
-
     // --- Radio ranking weights ---
 
     val radioPlannerWeights: Flow<RadioPlannerWeights> = dataStore.data.map { prefs ->
@@ -1686,27 +1557,6 @@ class PreferencesManager @Inject constructor(
             it.remove(SPOTIFY_REFRESH_TOKEN)
             it.remove(SPOTIFY_TOKEN_EXPIRES_AT)
             it.remove(SPOTIFY_USER_NAME)
-        }
-    }
-
-    // --- PocketBase ---
-    val pocketBaseToken: Flow<String?> = dataStore.data.map { it[POCKETBASE_TOKEN] }
-    val pocketBaseUserId: Flow<String?> = dataStore.data.map { it[POCKETBASE_USER_ID] }
-    val pocketBaseEmail: Flow<String?> = dataStore.data.map { it[POCKETBASE_EMAIL] }
-
-    suspend fun setPocketBaseAuth(token: String, userId: String, email: String) {
-        dataStore.edit {
-            it[POCKETBASE_TOKEN] = token
-            it[POCKETBASE_USER_ID] = userId
-            it[POCKETBASE_EMAIL] = email
-        }
-    }
-
-    suspend fun clearPocketBaseAuth() {
-        dataStore.edit {
-            it.remove(POCKETBASE_TOKEN)
-            it.remove(POCKETBASE_USER_ID)
-            it.remove(POCKETBASE_EMAIL)
         }
     }
 
@@ -1991,9 +1841,6 @@ class PreferencesManager @Inject constructor(
 
     // --- Library / Local Media ---
     val excludedPathsJson: Flow<String> = dataStore.data.map { it[EXCLUDED_PATHS_JSON] ?: "[]" }
-    suspend fun setExcludedPaths(pathsJson: String) {
-        dataStore.edit { it[EXCLUDED_PATHS_JSON] = pathsJson }
-    }
 
     /** The excluded paths, decoded. The stored JSON is the source of truth. */
     val excludedPaths: Flow<Set<String>> = excludedPathsJson
@@ -2077,9 +1924,6 @@ class PreferencesManager @Inject constructor(
     val libraryTabOrder: Flow<List<String>> = dataStore.data.map { prefs ->
         prefs[LIBRARY_TAB_ORDER]?.split(",")?.filter { it.isNotBlank() }
             ?: listOf("overview", "local", "playlists", "favorites", "downloads")
-    }
-    suspend fun setLibraryTabOrder(order: List<String>) {
-        dataStore.edit { it[LIBRARY_TAB_ORDER] = order.joinToString(",") }
     }
 
     // --- Page order & visibility (the one flat swipe list) ---

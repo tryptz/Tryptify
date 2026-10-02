@@ -18,9 +18,6 @@ interface FavoriteDao {
     @Query("SELECT * FROM favorite_tracks ORDER BY addedAt DESC")
     suspend fun getFavoriteTracksSnapshot(): List<FavoriteTrackEntity>
 
-    @Query("SELECT COUNT(*) FROM favorite_tracks")
-    fun getFavoriteTrackCount(): Flow<Int>
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFavoriteTrack(track: FavoriteTrackEntity)
 
@@ -46,9 +43,6 @@ interface FavoriteDao {
     @Query("SELECT * FROM favorite_albums ORDER BY addedAt DESC")
     suspend fun getFavoriteAlbumsSnapshot(): List<FavoriteAlbumEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertFavoriteAlbum(album: FavoriteAlbumEntity)
-
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAlbumIfNotExists(album: FavoriteAlbumEntity)
 
@@ -70,9 +64,6 @@ interface FavoriteDao {
 
     @Query("SELECT * FROM favorite_artists ORDER BY addedAt DESC")
     suspend fun getFavoriteArtistsSnapshot(): List<FavoriteArtistEntity>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertFavoriteArtist(artist: FavoriteArtistEntity)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertArtistIfNotExists(artist: FavoriteArtistEntity)

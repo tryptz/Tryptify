@@ -56,9 +56,6 @@ interface PlaylistDao {
     @Query("DELETE FROM playlist_tracks WHERE playlistId = :playlistId AND trackId = :trackId")
     suspend fun removeTrackFromPlaylist(playlistId: String, trackId: Long)
 
-    @Query("DELETE FROM playlist_tracks WHERE playlistId = :playlistId")
-    suspend fun clearPlaylistTracks(playlistId: String)
-
     @Transaction
     suspend fun addTrackToPlaylist(playlistId: String, track: PlaylistTrackEntity) {
         val count = getPlaylistTrackCount(playlistId)
@@ -68,16 +65,4 @@ interface PlaylistDao {
             updatePlaylist(playlist.copy(updatedAt = System.currentTimeMillis()))
         }
     }
-
-    @Transaction
-    suspend fun reorderPlaylistTracks(playlistId: String, tracks: List<PlaylistTrackEntity>) {
-        clearPlaylistTracks(playlistId)
-        tracks.forEachIndexed { index, track ->
-            insertPlaylistTrack(track.copy(position = index))
-        }
-    }
-
-    // Check if track exists in any playlist
-    @Query("SELECT EXISTS(SELECT 1 FROM playlist_tracks WHERE trackId = :trackId)")
-    suspend fun isTrackInAnyPlaylist(trackId: Long): Boolean
 }

@@ -8,15 +8,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
-import tf.monochrome.android.data.ai.AudioSnippetFetcher
-import tf.monochrome.android.data.ai.GeminiClient
 import tf.monochrome.android.data.api.HiFiApiClient
 import tf.monochrome.android.data.api.KugouLyricsClient
 import tf.monochrome.android.data.api.LrcLibClient
 import tf.monochrome.android.data.api.NetEaseLyricsClient
 import tf.monochrome.android.data.preferences.LyricsWordProvider
 import tf.monochrome.android.data.preferences.PreferencesManager
-import tf.monochrome.android.domain.model.AiFilter
 import tf.monochrome.android.domain.model.Album
 import tf.monochrome.android.domain.model.AlbumDetail
 import tf.monochrome.android.domain.model.Artist
@@ -37,8 +34,6 @@ class MusicRepository @Inject constructor(
     private val netEaseLyricsClient: NetEaseLyricsClient,
     private val kugouLyricsClient: KugouLyricsClient,
     private val preferences: PreferencesManager,
-    private val geminiClient: GeminiClient,
-    private val audioSnippetFetcher: AudioSnippetFetcher,
     @ApplicationContext private val context: Context
 ) {
     // --- Search ---
@@ -163,52 +158,6 @@ class MusicRepository @Inject constructor(
     }
 
     // --- AI Recommendations ---
-
-    suspend fun getAiRecommendations(
-        seedTrack: Track,
-        filters: Set<AiFilter>
-    ): Result<List<Track>> = runCatching {
-        // Get stream URL for the seed track
-        val stream = apiClient.getTrackStream(seedTrack.id, getEffectiveQuality())
-        require(stream.streamUrl.isNotBlank()) { "No stream URL available" }
-
-        // Fetch audio snippet
-        val snippet = audioSnippetFetcher.fetchSnippet(stream.streamUrl)
-
-        // Build context string from track metadata
-        val trackContext = buildString {
-            append("\"${seedTrack.title}\"")
-            seedTrack.artist?.let { append(" by ${it.name}") }
-            seedTrack.album?.let { append(" from album \"${it.title}\"") }
-            seedTrack.album?.releaseDate?.let { append(" (${it.take(4)})") }
-        }
-
-        // Get API key
-        val apiKey = preferences.geminiApiKey.first()
-        require(!apiKey.isNullOrBlank()) { "Gemini API key not configured" }
-
-        // Get search queries from Gemini
-        val queries = geminiClient.getAudioRecommendations(
-            audioBytes = snippet.bytes,
-            mimeType = snippet.mimeType,
-            trackContext = trackContext,
-            filters = filters,
-            apiKey = apiKey
-        )
-
-        // Search for each query in parallel and collect results
-        coroutineScope {
-            queries.take(8).map { query ->
-                async {
-                    runCatching { apiClient.searchTracks(query) }.getOrDefault(emptyList())
-                }
-            }.awaitAll()
-        }
-            .flatten()
-            .distinctBy { it.id }
-            .filter { it.id != seedTrack.id }
-            .take(20)
-    }
 
     // --- Lyrics ---
 
