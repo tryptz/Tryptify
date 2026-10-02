@@ -109,6 +109,11 @@ class SettingsViewModel @Inject constructor(
      * Settings over another screen that also uses the analyzer doesn't make
      * either preview flicker off when the first one disposes.
      */
+    val waveCandy: StateFlow<tf.monochrome.android.domain.model.WaveCandySettings> = preferences.waveCandy
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.WaveCandySettings.DEFAULT)
+    fun setWaveCandy(settings: tf.monochrome.android.domain.model.WaveCandySettings) {
+        viewModelScope.launch { preferences.setWaveCandy(settings) }
+    }
     fun acquireSpectrum() = spectrumAnalyzerTap.acquire()
     fun releaseSpectrum() = spectrumAnalyzerTap.release()
 

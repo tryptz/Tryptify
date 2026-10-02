@@ -222,6 +222,11 @@ class PlayerViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT)
     val miniPlayerGlass: StateFlow<tf.monochrome.android.domain.model.PlayerGlassSettings> = preferences.miniPlayerGlass
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT)
+    val waveCandy: StateFlow<tf.monochrome.android.domain.model.WaveCandySettings> = preferences.waveCandy
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.WaveCandySettings.DEFAULT)
+    fun setWaveCandy(settings: tf.monochrome.android.domain.model.WaveCandySettings) {
+        viewModelScope.launch { preferences.setWaveCandy(settings) }
+    }
     val lyricsFx: StateFlow<LyricsFxSettings> = preferences.lyricsFx
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LyricsFxSettings())
     val nowPlayingViewMode: StateFlow<NowPlayingViewMode> = preferences.nowPlayingViewMode

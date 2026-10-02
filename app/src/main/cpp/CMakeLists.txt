@@ -44,6 +44,8 @@ add_library(monochrome_dsp SHARED
     dsp/dsp_engine.cpp
     dsp/dsp_jni.cpp
     dsp/oxford/oxford_jni.cpp
+    # Wave Candy scope on the artwork: ring + per-frame segment render.
+    dsp/scope/wave_scope.cpp
 )
 
 target_include_directories(monochrome_dsp PRIVATE

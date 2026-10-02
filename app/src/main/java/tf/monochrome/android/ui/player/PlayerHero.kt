@@ -122,7 +122,8 @@ fun PlayerHero(
     onToggleFullscreen: () -> Unit = {},
     spectrumBins: FloatArray = FloatArray(0),
     spectrumColor: Color = PlayerGlowBlue,
-    scopeReader: ((FloatArray, FloatArray) -> Int)? = null,
+    waveSettings: tf.monochrome.android.domain.model.WaveCandySettings? = null,
+    onWaveSettings: (tf.monochrome.android.domain.model.WaveCandySettings) -> Unit = {},
     showSpectrum: Boolean = true,
     onToggleShowSpectrum: () -> Unit = {},
     onEnterVisualizer: () -> Unit = {},
@@ -158,7 +159,8 @@ fun PlayerHero(
             onToggleFullscreen = onToggleFullscreen,
             spectrumBins = spectrumBins,
             spectrumColor = spectrumColor,
-            scopeReader = scopeReader,
+            waveSettings = waveSettings,
+            onWaveSettings = onWaveSettings,
             showSpectrum = showSpectrum,
             onToggleShowSpectrum = onToggleShowSpectrum,
             onExitVisualizer = onExitVisualizer,
@@ -186,7 +188,8 @@ fun PlayerHero(
                 isPlaying = isPlaying,
                 spectrumBins = spectrumBins,
                 spectrumColor = spectrumColor,
-                scopeReader = scopeReader,
+                waveSettings = waveSettings,
+            onWaveSettings = onWaveSettings,
                 showSpectrum = showSpectrum,
                 onToggleShowSpectrum = onToggleShowSpectrum,
                 blendMillis = blendMillis,
@@ -205,7 +208,8 @@ private fun SquareArtHero(
     isPlaying: Boolean,
     spectrumBins: FloatArray,
     spectrumColor: Color,
-    scopeReader: ((FloatArray, FloatArray) -> Int)? = null,
+    waveSettings: tf.monochrome.android.domain.model.WaveCandySettings? = null,
+    onWaveSettings: (tf.monochrome.android.domain.model.WaveCandySettings) -> Unit = {},
     showSpectrum: Boolean,
     onToggleShowSpectrum: () -> Unit,
     blendMillis: Int,
@@ -232,7 +236,8 @@ private fun SquareArtHero(
             isPlaying = isPlaying,
             spectrumBins = spectrumBins,
             spectrumColor = spectrumColor,
-            scopeReader = scopeReader,
+            waveSettings = waveSettings,
+            onWaveSettings = onWaveSettings,
             showSpectrum = showSpectrum,
             onToggleShowSpectrum = onToggleShowSpectrum,
             quality = track?.audioQuality,
@@ -327,7 +332,8 @@ private fun VisualizerHero(
     onToggleFullscreen: () -> Unit,
     spectrumBins: FloatArray,
     spectrumColor: Color,
-    scopeReader: ((FloatArray, FloatArray) -> Int)? = null,
+    waveSettings: tf.monochrome.android.domain.model.WaveCandySettings? = null,
+    onWaveSettings: (tf.monochrome.android.domain.model.WaveCandySettings) -> Unit = {},
     showSpectrum: Boolean,
     onToggleShowSpectrum: () -> Unit,
     onExitVisualizer: () -> Unit,
@@ -686,9 +692,6 @@ private fun AmbientPresetButton(
     }
 }
 
-/** How far the cover punches in on a kick: 5%. */
-private const val KICK_ZOOM = 0.05f
-
 private enum class SpectrumSpeed(val label: String, val attack: Float, val release: Float) {
     SLOW("SLOW", 0.12f, 0.03f),
     NORMAL("NORMAL", 0.55f, 0.12f),
@@ -704,7 +707,8 @@ private fun HeroCoverArt(
     isPlaying: Boolean,
     spectrumBins: FloatArray = FloatArray(0),
     spectrumColor: Color = PlayerGlowBlue,
-    scopeReader: ((FloatArray, FloatArray) -> Int)? = null,
+    waveSettings: tf.monochrome.android.domain.model.WaveCandySettings? = null,
+    onWaveSettings: (tf.monochrome.android.domain.model.WaveCandySettings) -> Unit = {},
     showSpectrum: Boolean = true,
     onToggleShowSpectrum: () -> Unit = {},
     quality: String? = null,
@@ -726,10 +730,12 @@ private fun HeroCoverArt(
     // Wave Candy's scope. Saveable so a rotation keeps it.
     var waveCandy by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     // Wave Candy's two channels apart, or summed into one line.
-    var waveStereo by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(true) }
     // The kick punch: on while a visual is on the art, so the cover follows
     // the beat with either style.
-    val kick = rememberKickPulse(scopeReader, enabled = spectrumEnabled && isPlaying)
+    val kick = rememberKickPulse(
+        enabled = spectrumEnabled && isPlaying && waveSettings?.kickEnabled == true,
+        onsetRatio = waveSettings?.kickOnsetRatio ?: 1.45f,
+    )
     val stillArt = tf.monochrome.android.ui.theme.reduceMotion()
 
     // Controls show briefly on tap, then disappear quickly. When idle there are
@@ -771,8 +777,9 @@ private fun HeroCoverArt(
             // "Disable animations" on.
             modifier = Modifier.fillMaxSize().graphicsLayer {
                 val k = if (stillArt) 0f else kick.floatValue
-                scaleX = 1f + KICK_ZOOM * k
-                scaleY = 1f + KICK_ZOOM * k
+                val zoom = waveSettings?.kickZoom ?: 0f
+                scaleX = 1f + zoom * k
+                scaleY = 1f + zoom * k
             },
         )
 
@@ -790,8 +797,13 @@ private fun HeroCoverArt(
                 )
         )
 
-        if (spectrumEnabled && waveCandy && scopeReader != null) {
-            WaveCandyOverlay(read = scopeReader, stereo = waveStereo, kick = kick, modifier = Modifier.matchParentSize())
+        if (spectrumEnabled && waveCandy && waveSettings != null) {
+            WaveCandyOverlay(
+                settings = waveSettings,
+                accent = spectrumColor,
+                kick = kick,
+                modifier = Modifier.matchParentSize(),
+            )
         } else if (spectrumEnabled && spectrumBins.isNotEmpty()) {
             BoxWithConstraints(
                 modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
@@ -819,7 +831,7 @@ private fun HeroCoverArt(
                     enabled = interactive,
                     onClick = { onToggleShowSpectrum(); showControls() },
                 )
-                if (spectrumEnabled && scopeReader != null) {
+                if (spectrumEnabled && waveSettings != null) {
                     HeroIconButton(
                         icon = if (waveCandy) Icons.Default.Equalizer else Icons.Default.GraphicEq,
                         contentDescription = if (waveCandy) "Switch to spectrum" else "Switch to Wave Candy scope",
@@ -827,15 +839,15 @@ private fun HeroCoverArt(
                         onClick = { waveCandy = !waveCandy; showControls() },
                     )
                 }
-                if (spectrumEnabled && waveCandy && scopeReader != null) {
+                if (spectrumEnabled && waveCandy && waveSettings != null) {
                     HeroIconButton(
-                        icon = if (waveStereo) Icons.Default.SurroundSound else Icons.Default.GraphicEq,
-                        contentDescription = if (waveStereo) "Switch waveform to mono" else "Switch waveform to stereo",
+                        icon = if (waveSettings.stereo) Icons.Default.SurroundSound else Icons.Default.GraphicEq,
+                        contentDescription = if (waveSettings.stereo) "Switch waveform to mono" else "Switch waveform to stereo",
                         enabled = interactive,
-                        onClick = { waveStereo = !waveStereo; showControls() },
+                        onClick = { onWaveSettings(waveSettings.copy(stereo = !waveSettings.stereo)); showControls() },
                     )
                 }
-                if (spectrumEnabled && !(waveCandy && scopeReader != null)) {
+                if (spectrumEnabled && !(waveCandy && waveSettings != null)) {
                     HeroIconButton(
                         icon = Icons.Default.Speed,
                         contentDescription = "Spectrum speed",

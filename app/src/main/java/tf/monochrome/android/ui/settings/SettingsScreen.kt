@@ -1172,6 +1172,15 @@ internal fun VisualizerSettings(viewModel: SettingsViewModel) {
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+        val waveCandy by viewModel.waveCandy.collectAsStateWithLifecycle()
+        WaveCandySettingsSection(
+            settings = waveCandy,
+            onChange = viewModel::setWaveCandy,
+            // Drawn from the same analyzer, so it previews while that runs.
+            preview = spectrumEnabled,
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader("Audio Visualizer")
         SettingSwitchItem(
             title = "Use projectM Visualizer",

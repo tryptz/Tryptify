@@ -8,34 +8,31 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
 import kotlinx.coroutines.isActive
-import kotlin.math.sqrt
+import tf.monochrome.android.audio.eq.WaveScopeNative
 
 /**
  * A 0..1 pulse that jumps on every kick drum and decays — what makes the cover
  * punch in on the beat, Euphoric Hardstylez style.
  *
- * Each frame it reads the latest stereo frames through [read], low-passes them
- * to the kick's band (a one-pole at ~150 Hz), and takes the RMS. A kick is that
- * energy jumping well above its own recent average, so a quiet intro and a wall
- * of hardstyle both trigger on their kicks rather than on their loudness.
+ * Each frame the native scope gives the RMS of the kick band (~150 Hz) over
+ * the last 1024 frames at the smoothed playhead. A kick is that energy jumping
+ * above [onsetRatio] × its own recent average, so a quiet intro and a wall of
+ * hardstyle both trigger on their kicks rather than on their loudness.
  * Off ([enabled] false) it reads nothing and holds at 0.
  */
 @Composable
-fun rememberKickPulse(read: ((FloatArray, FloatArray) -> Int)?, enabled: Boolean): FloatState {
+fun rememberKickPulse(enabled: Boolean, onsetRatio: Float = 1.45f): FloatState {
     val pulse = remember { mutableFloatStateOf(0f) }
-    val l = remember { FloatArray(KICK_FRAMES) }
-    val r = remember { FloatArray(KICK_FRAMES) }
-    val reader = rememberUpdatedState(read)
-    LaunchedEffect(enabled, read != null) {
+    val ratio = rememberUpdatedState(onsetRatio)
+    LaunchedEffect(enabled) {
         pulse.floatValue = 0f
-        if (!enabled || read == null) return@LaunchedEffect
+        if (!enabled) return@LaunchedEffect
         var average = 0f
         var cooldown = 0
         while (isActive) {
             withFrameNanos { }
-            val n = reader.value?.invoke(l, r) ?: 0
-            val energy = lowBandRms(l, r, n)
-            val onset = energy > average * ONSET_RATIO && energy > FLOOR && cooldown == 0
+            val energy = WaveScopeNative.nativeLowBandRms(KICK_FRAMES)
+            val onset = energy > average * ratio.value && energy > FLOOR && cooldown == 0
             average += (energy - average) * AVERAGE_RATE
             if (onset) {
                 pulse.floatValue = 1f
@@ -49,23 +46,19 @@ fun rememberKickPulse(read: ((FloatArray, FloatArray) -> Int)?, enabled: Boolean
     return pulse
 }
 
-/** RMS of the frames after a ~150 Hz one-pole low-pass (at 48 kHz). */
+/** RMS of the frames after a ~150 Hz one-pole low-pass — the native twin, kept for tests. */
 internal fun lowBandRms(l: FloatArray, r: FloatArray, n: Int): Float {
     if (n <= 0) return 0f
     var y = 0f
     var sum = 0f
     for (i in 0 until n) {
-        y += ((l[i] + r[i]) * 0.5f - y) * LOWPASS_ALPHA
+        y += ((l[i] + r[i]) * 0.5f - y) * 0.02f
         sum += y * y
     }
-    return sqrt(sum / n)
+    return kotlin.math.sqrt(sum / n)
 }
 
-// The last ~21 ms at 48 kHz: about one kick's attack, so a frame's window
-// holds a hit rather than averaging it into the bars around it.
 private const val KICK_FRAMES = 1024
-private const val LOWPASS_ALPHA = 0.02f
-private const val ONSET_RATIO = 1.45f
 private const val FLOOR = 0.015f
 private const val AVERAGE_RATE = 0.06f
 // Per 60 fps frame: back to ~10% in about 150 ms.

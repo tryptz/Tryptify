@@ -52,8 +52,8 @@ class SpectrumAnalyzerTap @Inject constructor(
         const val FFT_SIZE_LOW = FFT_SIZE_8K
         const val FFT_SIZE_HIGH = FFT_SIZE_16K
         const val OUTPUT_BINS = 256
-        /** Frames of left/right kept for the scope — ~85 ms at 48 kHz. */
-        const val SCOPE_FRAMES = 4096
+        /** Frames handed to the native scope ring per push, at most. */
+        const val SCOPE_CHUNK = 4096
         private const val MIN_FREQ = 20f
         private const val MAX_FREQ = 20000f
         private const val PINK_SLOPE_DB_PER_OCT = 4.0f
@@ -86,33 +86,11 @@ class SpectrumAnalyzerTap @Inject constructor(
     @Volatile private var ring: FloatArray = FloatArray(FFT_SIZE_HIGH)
     @Volatile private var ringWrite = 0
 
-    // The last SCOPE_FRAMES frames as left/right, for the Wave Candy scope on
-    // the artwork — an oscilloscope and goniometer need the two channels, which
-    // the mono FFT ring above has already summed away. Written in the same
-    // loop, allocation-free; a mono stream writes the same sample to both.
-    private val scopeL = FloatArray(SCOPE_FRAMES)
-    private val scopeR = FloatArray(SCOPE_FRAMES)
-    @Volatile private var scopeWrite = 0
-
-    /**
-     * Copy the most recent frames, oldest first, into [outL]/[outR]; returns
-     * how many were copied (the smaller array's size, at most SCOPE_FRAMES).
-     * Only fed while someone holds [acquire]. A read can race the audio thread
-     * by a buffer's worth of samples, which a scope cannot show.
-     */
-    fun copyScope(outL: FloatArray, outR: FloatArray): Int {
-        val n = minOf(outL.size, outR.size, SCOPE_FRAMES)
-        val end = scopeWrite
-        var idx = end - n
-        if (idx < 0) idx += SCOPE_FRAMES
-        for (i in 0 until n) {
-            outL[i] = scopeL[idx]
-            outR[i] = scopeR[idx]
-            idx++
-            if (idx >= SCOPE_FRAMES) idx = 0
-        }
-        return n
-    }
+    // Left/right for the Wave Candy scope, gathered per buffer and handed to
+    // the native ring (WaveScopeNative) — the mono FFT ring above has already
+    // summed the channels away. Preallocated: nothing here allocates on the
+    // audio thread.
+    private val scopeChunk = FloatArray(SCOPE_CHUNK * 2)
 
     @Volatile var fftSize: Int = FFT_SIZE_8K
         set(value) {
@@ -343,13 +321,13 @@ class SpectrumAnalyzerTap @Inject constructor(
             val ringLocal = ring
             val ringLen = ringLocal.size
             var w = ringWrite
-            var sw = scopeWrite
+            var cn = 0
             if (encoding == C.ENCODING_PCM_FLOAT) {
                 if (channels == 1) {
                     for (i in 0 until numFrames) {
                         val m = inputBuffer.getFloat(startPos + i * 4)
-                        scopeL[sw] = m; scopeR[sw] = m
-                        sw++; if (sw >= SCOPE_FRAMES) sw = 0
+                        scopeChunk[cn * 2] = m; scopeChunk[cn * 2 + 1] = m
+                        if (++cn == SCOPE_CHUNK) { WaveScopeNative.nativePush(scopeChunk, cn, sampleRate); cn = 0 }
                         ringLocal[w] = m
                         w++
                         if (w >= ringLen) w = 0
@@ -361,8 +339,8 @@ class SpectrumAnalyzerTap @Inject constructor(
                         val off = startPos + i * frameSize
                         val l = inputBuffer.getFloat(off)
                         val r = inputBuffer.getFloat(off + 4)
-                        scopeL[sw] = l; scopeR[sw] = r
-                        sw++; if (sw >= SCOPE_FRAMES) sw = 0
+                        scopeChunk[cn * 2] = l; scopeChunk[cn * 2 + 1] = r
+                        if (++cn == SCOPE_CHUNK) { WaveScopeNative.nativePush(scopeChunk, cn, sampleRate); cn = 0 }
                         ringLocal[w] = (l + r) * 0.5f
                         w++
                         if (w >= ringLen) w = 0
@@ -372,8 +350,8 @@ class SpectrumAnalyzerTap @Inject constructor(
                 if (channels == 1) {
                     for (i in 0 until numFrames) {
                         val m = inputBuffer.getShort(startPos + i * 2).toFloat() / 32768f
-                        scopeL[sw] = m; scopeR[sw] = m
-                        sw++; if (sw >= SCOPE_FRAMES) sw = 0
+                        scopeChunk[cn * 2] = m; scopeChunk[cn * 2 + 1] = m
+                        if (++cn == SCOPE_CHUNK) { WaveScopeNative.nativePush(scopeChunk, cn, sampleRate); cn = 0 }
                         ringLocal[w] = m
                         w++
                         if (w >= ringLen) w = 0
@@ -383,8 +361,8 @@ class SpectrumAnalyzerTap @Inject constructor(
                         val off = startPos + i * frameSize
                         val l = inputBuffer.getShort(off).toFloat() / 32768f
                         val r = inputBuffer.getShort(off + 2).toFloat() / 32768f
-                        scopeL[sw] = l; scopeR[sw] = r
-                        sw++; if (sw >= SCOPE_FRAMES) sw = 0
+                        scopeChunk[cn * 2] = l; scopeChunk[cn * 2 + 1] = r
+                        if (++cn == SCOPE_CHUNK) { WaveScopeNative.nativePush(scopeChunk, cn, sampleRate); cn = 0 }
                         ringLocal[w] = (l + r) * 0.5f
                         w++
                         if (w >= ringLen) w = 0
@@ -392,7 +370,7 @@ class SpectrumAnalyzerTap @Inject constructor(
                 }
             }
             ringWrite = w
-            scopeWrite = sw
+            if (cn > 0) WaveScopeNative.nativePush(scopeChunk, cn, sampleRate)
         }
 
         // Pass through without allocating a duplicate ByteBuffer wrapper.

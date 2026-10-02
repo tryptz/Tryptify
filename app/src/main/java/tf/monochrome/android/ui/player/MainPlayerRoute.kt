@@ -287,6 +287,7 @@ fun MainPlayerRoute(
     )
     val blendedColors = AlbumColors(animatedDominant, animatedVibrant)
     val spectrumColor = MaterialTheme.colorScheme.primary
+    val waveCandySettings by playerViewModel.waveCandy.collectAsStateWithLifecycle()
 
     val isFullscreenActive = viewMode == NowPlayingViewMode.VISUALIZER && visualizerFullscreen
     // OR'd with the app-wide setting so leaving the visualiser doesn't hand the
@@ -830,7 +831,8 @@ fun MainPlayerRoute(
                     onToggleFullscreen = playerViewModel::toggleVisualizerFullscreen,
                     spectrumBins = spectrumBins,
                     spectrumColor = spectrumColor,
-                    scopeReader = playerViewModel.spectrumAnalyzer::copyScope,
+                    waveSettings = waveCandySettings,
+                    onWaveSettings = playerViewModel::setWaveCandy,
                     showSpectrum = showNpSpectrum,
                     onToggleShowSpectrum = {
                         playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying)
