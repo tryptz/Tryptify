@@ -56,30 +56,14 @@ import tf.monochrome.android.R
 // ── FL Studio Mobile color palette (shared by the plugin editor + FX chain) ──
 internal object FLPluginColors {
     val bg = Color(0xFF1A1A2E)
-    val headerBg = Color(0xFF16213E)
     val knobBg = Color(0xFF0F3460)
     val knobTrack = Color(0xFF2A2A4A)
-    val knobAccent = Color(0xFF00D4AA)
     val knobOrange = Color(0xFFFF6B35)
-    val knobBlue = Color(0xFF4A9EFF)
-    val knobPurple = Color(0xFFBB86FC)
-    val knobYellow = Color(0xFFFFD93D)
     val knobPink = Color(0xFFFF6B9D)
     val textPrimary = Color(0xFFE0E0E0)
     val textSecondary = Color(0xFF808090)
     val textValue = Color(0xFF00D4AA)
     val divider = Color(0xFF2A2A4A)
-}
-
-// Assign a color to each parameter index for visual variety
-internal fun knobColor(paramIndex: Int): Color = when (paramIndex % 6) {
-    0 -> FLPluginColors.knobAccent
-    1 -> FLPluginColors.knobOrange
-    2 -> FLPluginColors.knobBlue
-    3 -> FLPluginColors.knobPurple
-    4 -> FLPluginColors.knobYellow
-    5 -> FLPluginColors.knobPink
-    else -> FLPluginColors.knobAccent
 }
 
 /** Snap [raw] to one of [steps]+1 evenly-spaced stops across [min]..[max]. */

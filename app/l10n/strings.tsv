@@ -180,16 +180,12 @@ buffering	Buffering	正在缓冲	バッファリング中	Mise en mémoire tampo
 status_timer	Timer	定时	タイマー	Minuteur	Temporizador	Zamanlayıcı	Timer
 status_sound	Sound	音效	サウンド	Son	Sonido	Ses	Klang
 status_mixer	Mixer	混音器	ミキサー	Mixeur	Mezclador	Mikser	Mixer
-mode_art	Art	封面	アート	Pochette	Portada	Kapak	Cover
-mode_visual	Visual	视觉	ビジュアル	Visuel	Visual	Görsel	Visual
 mode_lyrics	Lyrics	歌词	歌詞	Paroles	Letra	Şarkı sözleri	Songtext
-mode_dsp_mix	DSP Mix	DSP 混音	DSP ミックス	Mix DSP	Mezcla DSP	DSP Miksi	DSP-Mix
 lyrics_loading	Loading lyrics…	正在加载歌词…	歌詞を読み込み中…	Chargement des paroles…	Cargando la letra…	Şarkı sözleri yükleniyor…	Songtext wird geladen …
 lyrics_none	No lyrics available for this track.	这首歌暂无歌词。	この曲の歌詞はありません。	Aucunes paroles disponibles pour ce titre.	No hay letra disponible para esta canción.	Bu parça için şarkı sözü yok.	Für diesen Titel ist kein Songtext verfügbar.
 bpm_nudge_description	Nudge tempo: push left to slow down, right to speed up	微调速度：向左推减慢，向右推加快	テンポを微調整：左に押すと遅く、右に押すと速くなります	Ajuster le tempo : poussez à gauche pour ralentir, à droite pour accélérer	Ajustar el tempo: empuja a la izquierda para ralentizar y a la derecha para acelerar	Tempoyu ayarla: yavaşlatmak için sola, hızlandırmak için sağa itin	Tempo anpassen: nach links schieben zum Verlangsamen, nach rechts zum Beschleunigen
 bpm_set_title	Set BPM	设置 BPM	BPM を設定	Définir le BPM	Establecer BPM	BPM ayarla	BPM festlegen
 action_set	Set	设置	設定	Définir	Establecer	Ayarla	Festlegen
-queue_empty_short	Queue is empty.	播放队列为空。	キューは空です。	La file d’attente est vide.	La cola está vacía.	Sıra boş.	Die Warteschlange ist leer.
 unknown_artist	Unknown artist	未知艺人	不明なアーティスト	Artiste inconnu	Artista desconocido	Bilinmeyen sanatçı	Unbekannter Künstler
 dock_mixer_fx	Mixer/FX	混音/效果	ミキサー/FX	Mixeur/FX	Mezclador/FX	Mikser/FX	Mixer/FX
 lyrics_none_short	No lyrics available for this track	这首歌暂无歌词	この曲の歌詞はありません	Aucunes paroles disponibles pour ce titre	No hay letra disponible para esta canción	Bu parça için şarkı sözü yok	Für diesen Titel ist kein Songtext verfügbar
@@ -239,9 +235,6 @@ tidal_offer_title	TIDAL couldn’t play this	TIDAL 无法播放这首歌	TIDAL �
 tidal_offer_body	“%1$s” by %2$s isn’t available from TIDAL right now. Qobuz has the same recording. Play it from Qobuz?	%2$s 的《%1$s》目前无法在 TIDAL 上播放。Qobuz 有相同的录音版本，要从 Qobuz 播放吗？	%2$s の「%1$s」は現在 TIDAL で再生できません。Qobuz に同じ音源があります。Qobuz で再生しますか？	« %1$s » de %2$s n’est pas disponible sur TIDAL pour le moment. Qobuz propose le même enregistrement. Le lire depuis Qobuz ?	“%1$s” de %2$s no está disponible en TIDAL ahora mismo. Qobuz tiene la misma grabación. ¿Reproducirla desde Qobuz?	%2$s – “%1$s” şu anda TIDAL’da yok. Qobuz’da aynı kayıt var. Qobuz’dan çalınsın mı?	„%1$s“ von %2$s ist bei TIDAL gerade nicht verfügbar. Qobuz hat dieselbe Aufnahme. Von Qobuz abspielen?
 play_from_qobuz	Play from Qobuz	从 Qobuz 播放	Qobuz で再生	Lire depuis Qobuz	Reproducir desde Qobuz	Qobuz’dan çal	Von Qobuz abspielen
 action_skip	Skip	跳过	スキップ	Passer	Omitir	Atla	Überspringen
-radio_finding	Finding similar tracks…	正在查找相似歌曲…	似た曲を探しています…	Recherche de titres similaires…	Buscando canciones similares…	Benzer parçalar aranıyor…	Ähnliche Titel werden gesucht …
-radio_on_tap_to_stop	Radio on — tap to stop	电台已开启 — 点按停止	ラジオ オン — タップで停止	Radio activée — touchez pour arrêter	Radio activada: toca para detener	Radyo açık — durdurmak için dokunun	Radio an – zum Beenden tippen
-play_radio	Play radio	播放电台	ラジオを再生	Lancer la radio	Reproducir radio	Radyoyu çal	Radio abspielen
 donate_title	Enjoying Tryptify?	喜欢 Tryptify 吗？	Tryptify を楽しんでいますか？	Vous aimez Tryptify ?	¿Te gusta Tryptify?	Tryptify’ı beğendiniz mi?	Gefällt dir Tryptify?
 donate_detail	A tip keeps it going	打赏一点，支持它继续下去	チップが開発の支えになります	Un pourboire aide à le faire vivre	Una propina ayuda a que siga adelante	Küçük bir bağış devam etmesini sağlar	Ein Trinkgeld hält es am Laufen
 dismiss_for_good	Dismiss for good	不再显示	今後は表示しない	Fermer définitivement	Cerrar para siempre	Kalıcı olarak kapat	Dauerhaft ausblenden
@@ -333,14 +326,6 @@ playlist_empty	This playlist is empty.	这个歌单是空的。	このプレイ�
 no_tracks_match	No tracks match “%1$s”.	没有与“%1$s”匹配的歌曲。	「%1$s」に一致する曲はありません。	Aucun titre ne correspond à « %1$s ».	Ninguna canción coincide con “%1$s”.	“%1$s” ile eşleşen parça yok.	Keine Titel passen zu „%1$s“.
 import_failed	Import failed	导入失败	読み込みに失敗しました	Échec de l’importation	Error al importar	İçe aktarma başarısız	Import fehlgeschlagen
 unknown_error	Unknown error	未知错误	不明なエラー	Erreur inconnue	Error desconocido	Bilinmeyen hata	Unbekannter Fehler
-action_ok	OK	确定	OK	OK	Aceptar	Tamam	OK
-import_collection	Import collection	导入收藏集	コレクションを読み込む	Importer une collection	Importar colección	Koleksiyonu içe aktar	Sammlung importieren
-collections_empty	No collections imported	尚未导入收藏集	読み込んだコレクションはありません	Aucune collection importée	No hay colecciones importadas	İçe aktarılmış koleksiyon yok	Keine Sammlungen importiert
-collections_empty_detail	Import a collection manifest to get started	导入收藏集清单即可开始	コレクションのマニフェストを読み込んで始めましょう	Importez un manifeste de collection pour commencer	Importa un manifiesto de colección para empezar	Başlamak için bir koleksiyon manifestosu içe aktarın	Importiere ein Sammlungsmanifest, um loszulegen
-reading_file	Reading file…	正在读取文件…	ファイルを読み込み中…	Lecture du fichier…	Leyendo el archivo…	Dosya okunuyor…	Datei wird gelesen …
-select_json_file	Select .json file	选择 .json 文件	.json ファイルを選択	Choisir un fichier .json	Seleccionar archivo .json	.json dosyası seç	.json-Datei auswählen
-paste_manifest	Or paste the manifest JSON below:	或在下方粘贴清单 JSON：	または、マニフェストの JSON を下に貼り付けてください：	Ou collez le JSON du manifeste ci-dessous :	O pega el JSON del manifiesto a continuación:	Ya da manifesto JSON’unu aşağıya yapıştırın:	Oder füge das Manifest-JSON unten ein:
-manifest_json	Manifest JSON	清单 JSON	マニフェスト JSON	JSON du manifeste	JSON del manifiesto	Manifesto JSON’u	Manifest-JSON
 downloads_empty	No downloaded tracks found.	没有已下载的歌曲。	ダウンロードした曲はありません。	Aucun titre téléchargé.	No hay canciones descargadas.	İndirilmiş parça yok.	Keine heruntergeladenen Titel gefunden.
 delete_downloads	Delete downloads	删除下载内容	ダウンロードを削除	Supprimer les téléchargements	Eliminar descargas	İndirilenleri sil	Downloads löschen
 singles	Singles	单曲	シングル	Singles	Sencillos	Single’lar	Singles
