@@ -38,6 +38,10 @@ not Spain-only), Turkish, German.
 | queue | 播放队列 | キュー | file d’attente | cola | sıra | Warteschlange |
 | like / unlike | 喜欢 / 取消喜欢 | お気に入りに追加 / お気に入りから削除 | J’aime / Je n’aime plus | Me gusta / Ya no me gusta | Beğen / Beğenmekten vazgeç | Gefällt mir / Gefällt mir nicht mehr |
 | Now playing | 正在播放 | 再生中 | En cours de lecture | Reproduciendo | Şimdi çalıyor | Wird gespielt |
+| Liquid glass | 液态玻璃 | リキッドグラス | verre liquide | cristal líquido | sıvı cam | Liquid Glass |
+| preset | 预设 | プリセット | préréglage | preset | ön ayar | Preset |
+| token (Discord, ListenBrainz) | 令牌 | トークン | jeton | token | belirteç | Token |
+| scrobble | 同步收听记录（scrobble） | スクロブル | scrobbler | scrobbling | scrobble | scrobbeln |
 
 ## Other apps' UI, quoted in instructions
 
@@ -48,6 +52,9 @@ Name a menu as the person's own device shows it in their language.
 | Music app (Mac) | “音乐”App | 「ミュージック」App | l’app Musique | la app Música | Müzik uygulaması | Musik-App |
 | File › Library › Export Playlist | 文件 › 资料库 › 导出播放列表 | ファイル › ライブラリ › プレイリストを書き出す | Fichier › Bibliothèque › Exporter la playlist | Archivo › Biblioteca › Exportar playlist | Dosya › Arşiv › Çalma Listesini Dışa Aktar *(unverified on a Turkish Mac)* | Ablage › Mediathek › Playlist exportieren |
 | Format: Text | 文本 | テキスト | Texte | Texto | Metin | Text |
+| Developer options › Disable USB audio routing (Android) | 开发者选项 › 停用 USB 音频路由 | 開発者向けオプション › USB オーディオ ルーティングを無効化 | Options pour les développeurs › Désactiver routage audio USB | Opciones para desarrolladores › Inhabilitar enrutamiento audio USB | Geliştirici seçenekleri › USB ses yönlendirmesini devre dışı bırak | Entwickleroptionen › USB-Audiorouting deaktivieren |
+| Developer Mode / Copy Channel ID (Discord) | 开发者模式 / 复制频道 ID | 開発者モード / チャンネルIDをコピー | Mode développeur / Copier l’identifiant du salon | Modo desarrollador / Copiar ID del canal | Geliştirici Modu / Kanal ID’sini Kopyala | Entwicklermodus / Kanal-ID kopieren |
+| Blend modes: Normal · Screen · Additive · Soft Light (image editors) | 正常 · 滤色 · 相加 · 柔光 | 通常 · スクリーン · 加算 · ソフトライト | Normal · Superposition · Addition · Lumière tamisée | Normal · Trama · Aditivo · Luz suave | Normal · Ekran · Toplama · Yumuşak ışık | Normal · Negativ multiplizieren · Addieren · Weiches Licht |
 | Google Takeout | Google Takeout | Google データエクスポート（Takeout） | Google Takeout | Google Takeout | Google Takeout | Google Takeout |
 
 ## Never translated

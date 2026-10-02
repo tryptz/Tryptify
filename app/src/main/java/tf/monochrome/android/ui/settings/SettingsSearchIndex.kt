@@ -1,5 +1,8 @@
 package tf.monochrome.android.ui.settings
 
+import androidx.annotation.StringRes
+import tf.monochrome.android.R
+
 /**
  * Where a settings search result takes you.
  *
@@ -21,6 +24,9 @@ sealed interface SettingsDestination {
 /**
  * One findable setting.
  *
+ * [title] is the entry's English name and its identity: stable across
+ * languages, which is what de-duplication and the tests key on.
+ *
  * [keywords] carry the words someone would actually type that are not in the
  * title — "bass" for the equaliser, "battery" for performance, "cache" for
  * storage. Without them the search only finds settings whose name you already
@@ -28,6 +34,13 @@ sealed interface SettingsDestination {
  */
 data class SettingsEntry(
     val title: String,
+    /**
+     * What the result says on screen, in the reader's language, and the text
+     * its row anchors on. Usually the row's own title resource, so the search
+     * scrolls to exactly that row; null for a name that is never translated
+     * (Spotify, ListenBrainz, Wave Candy), shown as [title].
+     */
+    @StringRes val titleRes: Int?,
     val tabLabel: String,
     val destination: SettingsDestination,
     val keywords: List<String> = emptyList(),
@@ -51,39 +64,39 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     // Keywords in every language on offer, so somebody stuck in a language
     // they cannot read can type the word for "language" in their own.
     entry(
-        "Language", "Appearance",
+        "Language", R.string.settings_language_title, "Appearance",
         listOf(
             "locale", "translation", "english", "chinese", "japanese", "french", "spanish", "turkish", "german",
             "语言", "語言", "中文", "言語", "日本語", "langue", "français", "idioma", "español", "dil", "türkçe",
             "sprache", "deutsch",
         ),
     ),
-    entry("Theme", "Appearance", listOf("colour", "color", "dark", "light", "white")),
-    entry("Light paper", "Appearance", listOf("white", "warm", "crisp", "paper", "glare")),
+    entry("Theme", R.string.settings_theme, "Appearance", listOf("colour", "color", "dark", "light", "white")),
+    entry("Light paper", R.string.settings_light_paper, "Appearance", listOf("white", "warm", "crisp", "paper", "glare")),
     entry(
-        "Color transition", "Appearance",
+        "Color transition", R.string.settings_color_transition, "Appearance",
         listOf("colour", "fade", "crossfade", "blend", "album", "speed", "duration"),
     ),
-    entry("Dynamic colours", "Appearance", listOf("album", "art", "material you", "accent")),
-    entry("Font scale", "Appearance", listOf("text size", "bigger", "smaller", "accessibility")),
-    entry("Custom font", "Appearance", listOf("typeface", "import font")),
-    entry("Now playing view", "Appearance", listOf("player", "layout", "lyrics")),
-    entry("Blurred background", "Appearance", listOf("player", "artwork", "blur")),
-    entry("Glow behind album art", "Appearance", listOf("bloom", "halo", "cover", "kick", "bass", "pump")),
-    entry("Glow radius", "Appearance", listOf("bloom", "halo", "cover", "size", "reach", "spread")),
-    entry("Glow brightness", "Appearance", listOf("bloom", "halo", "cover", "strength", "intensity")),
-    entry("Dynamic Player Color", "Appearance", listOf("album", "art", "tint", "accent", "player")),
-    entry("Custom colors", "Appearance", listOf("colour", "accent", "background", "pick", "override")),
-    entry("Use system font size", "Appearance", listOf("text size", "accessibility", "os", "display")),
-    entry("Romaji Lyrics", "Appearance", listOf("japanese", "transliterate", "latin", "kana", "lyrics")),
-    entry("Show Explicit Badges", "Appearance", listOf("explicit", "badge", "parental", "e")),
-    entry("Legacy player", "Appearance", listOf("old", "flat", "classic", "pre-glass", "design")),
-    entry("Remove liquid glass", "Appearance", listOf("flat", "opaque", "blur", "performance", "glass")),
-    entry("Disable animations", "Appearance", listOf("motion", "reduce", "still", "accessibility")),
+    entry("Dynamic colours", R.string.settings_dynamic_colors, "Appearance", listOf("album", "art", "material you", "accent")),
+    entry("Font scale", R.string.settings_font_size, "Appearance", listOf("text size", "bigger", "smaller", "accessibility")),
+    entry("Custom font", R.string.settings_font_library, "Appearance", listOf("typeface", "import font")),
+    entry("Now playing view", R.string.settings_view_mode, "Appearance", listOf("player", "layout", "lyrics")),
+    entry("Blurred background", R.string.settings_blurred_album_background, "Appearance", listOf("player", "artwork", "blur")),
+    entry("Glow behind album art", R.string.settings_glow_behind_album_art, "Appearance", listOf("bloom", "halo", "cover", "kick", "bass", "pump")),
+    entry("Glow radius", R.string.settings_glow_radius, "Appearance", listOf("bloom", "halo", "cover", "size", "reach", "spread")),
+    entry("Glow brightness", R.string.settings_glow_brightness, "Appearance", listOf("bloom", "halo", "cover", "strength", "intensity")),
+    entry("Dynamic Player Color", R.string.settings_dynamic_player_color, "Appearance", listOf("album", "art", "tint", "accent", "player")),
+    entry("Custom colors", R.string.settings_custom_colors, "Appearance", listOf("colour", "accent", "background", "pick", "override")),
+    entry("Use system font size", R.string.settings_use_system_font_size, "Appearance", listOf("text size", "accessibility", "os", "display")),
+    entry("Romaji Lyrics", R.string.settings_romaji_lyrics, "Appearance", listOf("japanese", "transliterate", "latin", "kana", "lyrics")),
+    entry("Show Explicit Badges", R.string.settings_show_explicit_badges, "Appearance", listOf("explicit", "badge", "parental", "e")),
+    entry("Legacy player", R.string.settings_legacy_player, "Appearance", listOf("old", "flat", "classic", "pre-glass", "design")),
+    entry("Remove liquid glass", R.string.settings_remove_liquid_glass, "Appearance", listOf("flat", "opaque", "blur", "performance", "glass")),
+    entry("Disable animations", R.string.settings_disable_animations, "Appearance", listOf("motion", "reduce", "still", "accessibility")),
 
     // ── Visual Studio ───────────────────────────────────────────────────
     entry(
-        "Player Visuals Studio",
+        "Player Visuals Studio", R.string.settings_player_visuals_studio,
         "Visual Studio",
         listOf(
             "lyrics", "glass", "fx", "visuals", "beat",
@@ -102,82 +115,81 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     // artwork" and "Animated spectrum" stayed under Appearance — they are
     // the equalizer/lifecycle rows, not the visualizer engine.
     entry(
-        "Show Spectrum Analyzer", "Visual Studio",
+        "Show Spectrum Analyzer", R.string.settings_show_spectrum_analyzer, "Visual Studio",
         listOf("fft", "bars", "frequency", "meter", "ambient"),
     ).at(SettingsDestination.Route("lyrics_fx_studio")),
     entry(
-        "Use projectM Visualizer", "Visual Studio",
+        "Use projectM Visualizer", R.string.settings_use_projectm_visualizer, "Visual Studio",
         listOf("milkdrop", "visualiser", "projectm", "preset", "engine", "ambient"),
     ).at(SettingsDestination.Route("lyrics_fx_studio")),
     entry(
-        "Default Preset", "Visual Studio",
+        "Default Preset", R.string.settings_default_preset, "Visual Studio",
         listOf("visualiser", "milkdrop", "projectm", "startup"),
     ).at(SettingsDestination.Route("lyrics_fx_studio")),
     entry(
-        "Texture Size", "Visual Studio",
+        "Texture Size", R.string.settings_texture_size, "Visual Studio",
         listOf("visualiser", "resolution", "quality", "graphics", "projectm"),
     ).at(SettingsDestination.Route("lyrics_fx_studio")),
     entry(
-        "Touch Waveform", "Visual Studio",
+        "Touch Waveform", R.string.settings_touch_waveform, "Visual Studio",
         listOf("visualiser", "waveform", "finger", "draw", "projectm"),
     ).at(SettingsDestination.Route("lyrics_fx_studio")),
     // Distinct from System › "Full screen", which is the app-wide immersive
     // switch. Both are real and the tab label tells them apart in results.
     entry(
-        "Fullscreen", "Visual Studio",
+        "Fullscreen", R.string.settings_fullscreen, "Visual Studio",
         listOf("visualiser", "projectm", "fill screen", "now playing"),
     ).at(SettingsDestination.Route("lyrics_fx_studio")),
     entry(
-        "Show FPS", "Visual Studio",
+        "Show FPS", R.string.settings_show_fps, "Visual Studio",
         listOf("visualiser", "framerate", "counter", "performance", "projectm"),
     ).at(SettingsDestination.Route("lyrics_fx_studio")),
     entry(
-        "Disable vsync", "Visual Studio",
+        "Disable vsync", R.string.settings_disable_vsync, "Visual Studio",
         listOf("visualiser", "refresh", "tearing", "framerate", "projectm"),
     ).at(SettingsDestination.Route("lyrics_fx_studio")),
     entry(
-        "Engine Status", "Visual Studio",
+        "Engine Status", R.string.settings_engine_status, "Visual Studio",
         listOf("visualiser", "projectm", "assets", "version", "diagnostics"),
     ).at(SettingsDestination.Route("lyrics_fx_studio")),
 
     // ── Audio ───────────────────────────────────────────────────────────
-    entry("Gapless playback", "Audio", listOf("gap", "continuous", "album")),
-    entry("Crossfade", "Audio", listOf("fade", "transition", "blend")),
-    entry("Normalisation", "Audio", listOf("loudness", "replaygain", "volume", "level")),
-    entry("Playback speed", "Audio", listOf("tempo", "faster", "slower", "pitch")),
-    entry("Multichannel downmix", "Audio", listOf("surround", "5.1", "atmos", "stereo")),
-    entry("Spatial renderer", "Audio", listOf("atmos", "hrtf", "binaural", "spatial"))
+    entry("Gapless playback", R.string.settings_gapless_playback, "Audio", listOf("gap", "continuous", "album")),
+    entry("Crossfade", R.string.search_crossfade, "Audio", listOf("fade", "transition", "blend")),
+    entry("Playback speed", R.string.settings_playback_speed, "Audio", listOf("tempo", "faster", "slower", "pitch")),
+    entry("Multichannel downmix", R.string.settings_downmix_multichannel_to_stereo, "Audio", listOf("surround", "5.1", "atmos", "stereo")),
+    entry("Spatial renderer", R.string.settings_atmos_renderer_configuration, "Audio", listOf("atmos", "hrtf", "binaural", "spatial"))
         .at(SettingsDestination.Route("atmos_renderer")),
-    entry("HRTF database", "Audio", listOf("binaural", "head", "spatial", "sofa"))
+    entry("HRTF database", R.string.search_hrtf_database, "Audio", listOf("binaural", "head", "spatial", "sofa"))
         .at(SettingsDestination.Route("hrtf_database")),
-    entry("Crossfeed", "Audio", listOf("headphone", "stereo", "bauer", "fatigue"))
+    entry("Crossfeed", R.string.crossfeed, "Audio", listOf("headphone", "stereo", "bauer", "fatigue"))
         .at(SettingsDestination.Route("crossfeed")),
-    entry("Mixer", "Audio", listOf("dsp", "bus", "plugin", "insert", "channel"))
+    entry("Mixer", R.string.status_mixer, "Audio", listOf("dsp", "bus", "plugin", "insert", "channel"))
         .at(SettingsDestination.Route("mixer")),
-    entry("Streaming quality", "Audio", listOf("bitrate", "wifi", "cellular", "data")),
-    entry("Preserve Pitch", "Audio", listOf("speed", "tempo", "key", "chipmunk", "semitone")),
-    entry("Never Resample Between Tracks", "Audio", listOf("sample rate", "gap", "dac", "bit perfect")),
-    entry("USB DAC bit-perfect routing", "Audio", listOf("usb", "dac", "exclusive", "bit perfect", "output")),
+    entry("Streaming quality", R.string.settings_streaming_quality, "Audio", listOf("bitrate", "wifi", "cellular", "data")),
+    entry("Preserve Pitch", R.string.settings_preserve_pitch, "Audio", listOf("speed", "tempo", "key", "chipmunk", "semitone")),
+    entry("Never Resample Between Tracks", R.string.settings_never_resample_between_tracks, "Audio", listOf("sample rate", "gap", "dac", "bit perfect")),
+    entry("USB DAC bit-perfect routing", R.string.settings_usb_dac_bit_perfect_routing, "Audio", listOf("usb", "dac", "exclusive", "bit perfect", "output")),
     entry(
-        "Hi-res output (Bluetooth & speaker)",
+        "Hi-res output (Bluetooth & speaker)", R.string.settings_hi_res_output_bluetooth_speaker,
         "Audio",
         listOf("bluetooth", "24-bit", "96khz", "ldac", "float", "high resolution", "bit depth"),
     ),
 
     // ── Equalizer ───────────────────────────────────────────────────────
-    entry("Equalizer", "Equalizer", listOf("eq", "bass", "treble", "bands", "graphic"))
+    entry("Equalizer", R.string.settings_equalizer, "Equalizer", listOf("eq", "bass", "treble", "bands", "graphic"))
         .at(SettingsDestination.Route("equalizer")),
-    entry("Parametric EQ", "Equalizer", listOf("eq", "filter", "peaking", "shelf", "q"))
+    entry("Parametric EQ", R.string.search_parametric_eq, "Equalizer", listOf("eq", "filter", "peaking", "shelf", "q"))
         .at(SettingsDestination.Route("parametric_eq")),
-    entry("AutoEQ headphone profile", "Equalizer", listOf("headphone", "harman", "target", "correction")),
-    entry("Spectrum analyzer", "Equalizer", listOf("fft", "visualiser", "frequency", "meter")),
-    entry("System-wide AutoEQ", "Equalizer", listOf("global", "device", "all audio", "correction", "beta")),
+    entry("AutoEQ headphone profile", R.string.search_autoeq_headphone_profile, "Equalizer", listOf("headphone", "harman", "target", "correction")),
+    entry("Spectrum analyzer", R.string.settings_spectrum_analyzer, "Equalizer", listOf("fft", "visualiser", "frequency", "meter")),
+    entry("System-wide AutoEQ", R.string.settings_system_wide_autoeq, "Equalizer", listOf("global", "device", "all audio", "correction", "beta")),
 
-    entry("Wave Candy", "Equalizer", listOf("waveform", "oscilloscope", "scope", "kick", "punch", "stereo", "mono")),
+    entry("Wave Candy", null, "Equalizer", listOf("waveform", "oscilloscope", "scope", "kick", "punch", "stereo", "mono")),
 
     // On the Player Visuals Studio's Visualizer tab, with the spectrum it draws.
     entry(
-        "Spectrum waterfall",
+        "Spectrum waterfall", R.string.settings_spectrum_waterfall,
         "Visual Studio",
         listOf("waterfall", "depth", "fade", "angle", "perspective", "ridgeline", "3d", "history", "spectrogram"),
     ).at(SettingsDestination.Route("lyrics_fx_studio")),
@@ -186,56 +198,55 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     // Renamed with the header it points at: SettingsSearchIndexTest greps the
     // settings screens for every title here, so the two move together or the
     // build fails. "library" is a keyword now because it left the title.
-    entry("Tab bar", "Library", listOf("tabs", "navigation", "hide", "discover", "radio", "bottom bar")),
-    entry("Library sections", "Library", listOf("reorder", "order", "hide", "pages", "local", "playlists", "favorites", "downloads")),
-    entry("Local folders", "Library", listOf("storage", "saf", "sd card", "path")),
+    entry("Tab bar", R.string.settings_tab_bar, "Library", listOf("tabs", "navigation", "hide", "discover", "radio", "bottom bar")),
+    entry("Library sections", R.string.settings_library_sections, "Library", listOf("reorder", "order", "hide", "pages", "local", "playlists", "favorites", "downloads")),
+    entry("Local folders", R.string.settings_local_media_scanning, "Library", listOf("storage", "saf", "sd card", "path")),
 
     // ── Downloads ───────────────────────────────────────────────────────
-    entry("Download quality", "Downloads", listOf("bitrate", "flac", "offline")),
-    entry("Download lyrics", "Downloads", listOf("offline", "synced")),
-    entry("Auto-download liked", "Downloads", listOf("offline", "favourites", "hearted")),
-    entry("Download centre", "Downloads", listOf("queue", "progress", "offline"))
+    entry("Download quality", R.string.settings_download_quality, "Downloads", listOf("bitrate", "flac", "offline")),
+    entry("Download lyrics", R.string.settings_download_lyrics, "Downloads", listOf("offline", "synced")),
+    entry("Auto-download liked", R.string.settings_auto_download_liked_songs, "Downloads", listOf("offline", "favourites", "hearted")),
+    entry("Download centre", R.string.search_download_centre, "Downloads", listOf("queue", "progress", "offline"))
         .at(SettingsDestination.Route("downloads")),
-    entry("Save location", "Downloads", listOf("folder", "path", "sd card", "storage", "where")),
+    entry("Save location", R.string.settings_save_location, "Downloads", listOf("folder", "path", "sd card", "storage", "where")),
 
     // ── Connections ─────────────────────────────────────────────────────
-    entry("Last.fm scrobbling", "Connections", listOf("scrobble", "account", "history")),
-    entry("ListenBrainz", "Connections", listOf("scrobble", "account", "history")),
+    entry("Last.fm scrobbling", R.string.search_lastfm_scrobbling, "Connections", listOf("scrobble", "account", "history")),
+    entry("ListenBrainz", null, "Connections", listOf("scrobble", "account", "history")),
     entry(
-        "APIs", "Connections",
+        "APIs", R.string.search_apis, "Connections",
         listOf("server", "instance", "url", "endpoint", "source", "catalogue", "catalog",
             "tidal", "qobuz", "apple", "deezer", "hifi", "add"),
     ),
-    entry("Show what I'm playing", "Connections", listOf("discord", "presence", "rich", "status", "playing")),
-    entry("Spotify", "Connections", listOf("import", "playlist", "account", "transfer")),
+    entry("Show what I'm playing", R.string.settings_show_what_i_m_playing, "Connections", listOf("discord", "presence", "rich", "status", "playing")),
+    entry("Spotify", null, "Connections", listOf("import", "playlist", "account", "transfer")),
 
     // ── Radio ───────────────────────────────────────────────────────────
-    entry("AI radio", "Radio", listOf("station", "recommend", "queue", "seed")),
-    entry("Radio weights", "Radio", listOf("tuning", "similarity", "novelty", "familiarity")),
+    entry("AI radio", R.string.search_ai_radio, "Radio", listOf("station", "recommend", "queue", "seed")),
+    entry("Radio weights", R.string.search_radio_weights, "Radio", listOf("tuning", "similarity", "novelty", "familiarity")),
 
     // ── System ──────────────────────────────────────────────────────────
-    entry("Performance", "System", listOf("battery", "fps", "low power", "glass", "blur")),
+    entry("Performance", R.string.settings_performance, "System", listOf("battery", "fps", "low power", "glass", "blur")),
     entry(
-        "Full screen",
+        "Full screen", R.string.settings_full_screen,
         "System",
         listOf("immersive", "hide status bar", "notification bar", "navigation bar", "gesture bar"),
     ),
-    entry("Debug log", "System", listOf("logs", "diagnostics", "report", "crash"))
+    entry("Debug log", R.string.settings_view_debug_log, "System", listOf("logs", "diagnostics", "report", "crash"))
         .at(SettingsDestination.Route("debug_log")),
-    entry("Developer mode", "System", listOf("dev", "advanced", "hidden")),
-    entry("Backup and restore", "System", listOf("export", "import", "settings", "transfer")),
-    entry("Clear cache", "System", listOf("storage", "space", "images")),
-    entry("Check for updates", "System", listOf("update", "version", "github", "release", "newer")),
-    entry("Restart onboarding", "System", listOf("setup", "first run", "wizard", "again", "tutorial")),
+    entry("Backup and restore", R.string.settings_backup_restore, "System", listOf("export", "import", "settings", "transfer")),
+    entry("Clear cache", R.string.settings_clear_cache, "System", listOf("storage", "space", "images")),
+    entry("Check for updates", R.string.settings_check_for_updates, "System", listOf("update", "version", "github", "release", "newer")),
+    entry("Restart onboarding", R.string.settings_restart_onboarding, "System", listOf("setup", "first run", "wizard", "again", "tutorial")),
 
     // ── About ───────────────────────────────────────────────────────────
-    entry("What's new", "About", listOf("changelog", "release", "version", "updates")),
-    entry("Version", "About", listOf("build", "about", "release")),
-    entry("Licences", "About", listOf("open source", "attribution", "credits")),
+    entry("What's new", R.string.settings_what_s_new, "About", listOf("changelog", "release", "version", "updates")),
+    entry("Version", R.string.search_version, "About", listOf("build", "about", "release")),
 )
 
-private fun entry(title: String, tabLabel: String, keywords: List<String>) = SettingsEntry(
+private fun entry(title: String, @StringRes titleRes: Int?, tabLabel: String, keywords: List<String>) = SettingsEntry(
     title = title,
+    titleRes = titleRes,
     tabLabel = tabLabel,
     destination = SettingsDestination.Tab(settingsTabIndex(tabLabel)),
     keywords = keywords,
@@ -250,19 +261,29 @@ private fun SettingsEntry.at(destination: SettingsDestination) = copy(destinatio
  * beats a keyword hit — someone typing "the" wants Theme, not every setting
  * whose description happens to contain the word. Keyword matches rank last but
  * still rank, which is what makes "bass" find the equaliser.
+ *
+ * [resolve] turns a string resource into the reader's language. Titles and tab
+ * names are matched both as they read on screen and in English: the screen is
+ * what someone sees, and English is what a tutorial, a forum post or the
+ * changelog will have told them to look for.
  */
-fun searchSettings(query: String, limit: Int = 8): List<SettingsEntry> {
+fun searchSettings(query: String, limit: Int = 8, resolve: (Int) -> String = { "" }): List<SettingsEntry> {
     val typed = query.trim().lowercase()
     if (typed.length < 2) return emptyList()
     return SettingsSearchIndex
         .mapNotNull { entry ->
-            val title = entry.title.lowercase()
+            val titles = listOfNotNull(entry.title, entry.titleRes?.let(resolve))
+                .filter { it.isNotEmpty() }
+                .map { it.lowercase() }
+            val tabs = listOf(entry.tabLabel, resolve(settingsTabLabelRes(entry.tabLabel)))
+                .filter { it.isNotEmpty() }
+                .map { it.lowercase() }
             val rank = when {
-                title.startsWith(typed) -> 0
-                title.contains(typed) -> 1
+                titles.any { it.startsWith(typed) } -> 0
+                titles.any { it.contains(typed) } -> 1
                 entry.keywords.any { it.startsWith(typed) } -> 2
                 entry.keywords.any { it.contains(typed) } -> 3
-                entry.tabLabel.lowercase().startsWith(typed) -> 4
+                tabs.any { it.startsWith(typed) } -> 4
                 else -> return@mapNotNull null
             }
             entry to rank
@@ -271,3 +292,12 @@ fun searchSettings(query: String, limit: Int = 8): List<SettingsEntry> {
         .take(limit)
         .map { it.first }
 }
+
+/** The result's title as it reads on screen, and as its row anchors. */
+@androidx.compose.runtime.Composable
+fun SettingsEntry.displayTitle(): String =
+    titleRes?.let { androidx.compose.ui.res.stringResource(it) } ?: title
+
+/** [displayTitle] outside composition, for the anchor request a tap makes. */
+fun SettingsEntry.displayTitle(context: android.content.Context): String =
+    titleRes?.let { context.getString(it) } ?: title

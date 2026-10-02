@@ -22,6 +22,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.domain.model.WaveCandySettings
 import java.util.Locale
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * Settings › Wave Candy: the scope over the artwork and its kick punch, with
@@ -36,8 +38,7 @@ internal fun WaveCandySettingsSection(
 ) {
     SettingsGroupHeader("Wave Candy")
     Text(
-        "The oscilloscope on the album art, and the cover punching in on the kick. " +
-            "Switch to it with the waveform button on the art.",
+        stringResource(R.string.wavecandy_the_oscilloscope_on_the_album_art_and_the_cover),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(bottom = 8.dp),
@@ -67,18 +68,18 @@ internal fun WaveCandySettingsSection(
         }
     }
     SettingSwitchItem(
-        title = "Stereo waveform",
-        subtitle = if (settings.stereo) "Left across the top, right across the bottom" else "One line, both channels summed",
+        title = stringResource(R.string.wavecandy_stereo_waveform),
+        subtitle = if (settings.stereo) stringResource(R.string.wavecandy_stereo_on) else stringResource(R.string.wavecandy_stereo_off),
         checked = settings.stereo,
         onCheckedChange = { onChange(settings.copy(stereo = it)) },
     )
     SettingSwitchItem(
-        title = "Album colour",
-        subtitle = "Draw the waveform in the album's accent instead of white",
+        title = stringResource(R.string.wavecandy_album_colour),
+        subtitle = stringResource(R.string.wavecandy_draw_the_waveform_in_the_album_s_accent_instead),
         checked = settings.albumColor,
         onCheckedChange = { onChange(settings.copy(albumColor = it)) },
     )
-    Text("Glow", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.settingsAnchor("Glow").padding(top = 8.dp, bottom = 6.dp))
+    Text(stringResource(R.string.fx_glow), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.settingsAnchor(stringResource(R.string.fx_glow)).padding(top = 8.dp, bottom = 6.dp))
     Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
         tf.monochrome.android.domain.model.WaveGlow.entries.forEach { g ->
             tf.monochrome.android.ui.mixer.GlassChoiceChip(
@@ -90,25 +91,25 @@ internal fun WaveCandySettingsSection(
             )
         }
     }
-    WaveSlider("Time window", settings.windowMs, WaveCandySettings.MIN_WINDOW_MS..WaveCandySettings.MAX_WINDOW_MS,
+    WaveSlider(stringResource(R.string.wavecandy_time_window), settings.windowMs, WaveCandySettings.MIN_WINDOW_MS..WaveCandySettings.MAX_WINDOW_MS,
         { "${it.toInt()} ms" }) { onChange(settings.copy(windowMs = it)) }
-    WaveSlider("Height", settings.gain, 0.25f..3f, { String.format(Locale.US, "%.2fx", it) }) {
+    WaveSlider(stringResource(R.string.wavecandy_height), settings.gain, 0.25f..3f, { String.format(Locale.US, "%.2fx", it) }) {
         onChange(settings.copy(gain = it))
     }
-    WaveSlider("Thickness", settings.thicknessDp, 0.5f..4f, { String.format(Locale.US, "%.1f dp", it) }) {
+    WaveSlider(stringResource(R.string.wavecandy_thickness), settings.thicknessDp, 0.5f..4f, { String.format(Locale.US, "%.1f dp", it) }) {
         onChange(settings.copy(thicknessDp = it))
     }
     SettingSwitchItem(
-        title = "Kick punch",
-        subtitle = "The cover punches in on each kick drum",
+        title = stringResource(R.string.wavecandy_kick_punch),
+        subtitle = stringResource(R.string.wavecandy_the_cover_punches_in_on_each_kick_drum),
         checked = settings.kickEnabled,
         onCheckedChange = { onChange(settings.copy(kickEnabled = it)) },
     )
     if (settings.kickEnabled) {
-        WaveSlider("Punch strength", settings.kickZoom, 0f..0.12f, { "${(it * 100).toInt()}%" }) {
+        WaveSlider(stringResource(R.string.wavecandy_punch_strength), settings.kickZoom, 0f..0.12f, { "${(it * 100).toInt()}%" }) {
             onChange(settings.copy(kickZoom = it))
         }
-        WaveSlider("Kick sensitivity", settings.kickSensitivity, 0f..1f, { "${(it * 100).toInt()}%" }) {
+        WaveSlider(stringResource(R.string.wavecandy_kick_sensitivity), settings.kickSensitivity, 0f..1f, { "${(it * 100).toInt()}%" }) {
             onChange(settings.copy(kickSensitivity = it))
         }
     }

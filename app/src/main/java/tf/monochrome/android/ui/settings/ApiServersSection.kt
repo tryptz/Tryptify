@@ -50,6 +50,8 @@ import tf.monochrome.android.data.api.ProbeResult
 import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.ui.components.SourcePill
 import tf.monochrome.android.ui.components.liquidGlass
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /** The pill a detected service wears: the same brand pill Search uses. */
 private fun ApiService.sourceType(): SourceType = when (this) {
@@ -75,10 +77,9 @@ internal fun ApiServersSection(viewModel: SettingsViewModel) {
     var showAdd by remember { mutableStateOf(false) }
     var confirmRemove by remember { mutableStateOf<String?>(null) }
 
-    SettingsGroupHeader("APIs")
+    SettingsGroupHeader(stringResource(R.string.search_apis))
     Text(
-        text = "Add a server and Tryptify works out what it serves. Search uses every " +
-            "catalog your APIs provide; when two serve the same one, the higher one is used.",
+        text = stringResource(R.string.api_add_a_server_and_tryptify_works_out_what_it),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -86,7 +87,7 @@ internal fun ApiServersSection(viewModel: SettingsViewModel) {
 
     if (servers.isEmpty()) {
         Text(
-            text = "No APIs yet. Add one to search and play.",
+            text = stringResource(R.string.api_no_apis_yet_add_one_to_search_and_play),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(vertical = 8.dp),
@@ -110,7 +111,7 @@ internal fun ApiServersSection(viewModel: SettingsViewModel) {
     ) {
         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(Modifier.size(8.dp))
-        Text("Add API")
+        Text(stringResource(R.string.api_add_api))
     }
 
     if (showAdd) {
@@ -122,12 +123,12 @@ internal fun ApiServersSection(viewModel: SettingsViewModel) {
     confirmRemove?.let { url ->
         AlertDialog(
             onDismissRequest = { confirmRemove = null },
-            title = { Text("Remove this API?") },
-            text = { Text("$url\n\nIts catalogs leave Search unless another API serves them.") },
+            title = { Text(stringResource(R.string.api_remove_this_api)) },
+            text = { Text(stringResource(R.string.api_remove_detail, url)) },
             confirmButton = {
-                TextButton(onClick = { viewModel.removeApi(url); confirmRemove = null }) { Text("Remove") }
+                TextButton(onClick = { viewModel.removeApi(url); confirmRemove = null }) { Text(stringResource(R.string.api_remove)) }
             },
-            dismissButton = { TextButton(onClick = { confirmRemove = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { confirmRemove = null }) { Text(stringResource(R.string.action_cancel)) } },
         )
     }
 }
@@ -162,12 +163,12 @@ private fun ApiServerCard(
                 Spacer(Modifier.height(4.dp))
                 when {
                     checking -> Text(
-                        "Checking…",
+                        stringResource(R.string.api_checking),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     server.services.isEmpty() -> Text(
-                        "Serves nothing Tryptify can use right now. Check the server, then tap ↻.",
+                        stringResource(R.string.api_serves_nothing_tryptify_can_use_right_now_check),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.error,
                     )
@@ -182,15 +183,15 @@ private fun ApiServerCard(
             }
             if (canMoveUp) {
                 IconButton(onClick = onMoveUp) {
-                    Icon(Icons.Default.ArrowUpward, contentDescription = "Move up")
+                    Icon(Icons.Default.ArrowUpward, contentDescription = stringResource(R.string.api_move_up))
                 }
             }
             IconButton(onClick = onRecheck, enabled = !checking) {
                 if (checking) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                else Icon(Icons.Default.Refresh, contentDescription = "Check again")
+                else Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.api_check_again))
             }
             IconButton(onClick = onRemove) {
-                Icon(Icons.Default.Delete, contentDescription = "Remove")
+                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.api_remove))
             }
         }
     }
@@ -210,14 +211,14 @@ private fun AddApiDialog(
 
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        title = { Text(if (added) "API added" else "Add API") },
+        title = { Text(if (added) stringResource(R.string.api_added) else stringResource(R.string.api_add_api)) },
         text = {
             Column(modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
                 if (!added) {
                     OutlinedTextField(
                         value = input,
                         onValueChange = { input = it; if (state !is AddApiState.Checking) viewModel.resetAddApi() },
-                        label = { Text("Server address") },
+                        label = { Text(stringResource(R.string.api_server_address)) },
                         placeholder = { Text("https://hifi.example.com") },
                         singleLine = true,
                         enabled = !busy,
@@ -229,18 +230,17 @@ private fun AddApiDialog(
                 }
                 when (val s = state) {
                     AddApiState.Idle -> Text(
-                        "Just the server's base address. Tryptify checks it for TIDAL, Qobuz, " +
-                            "Apple Music and Deezer.",
+                        stringResource(R.string.api_just_the_server_s_base_address_tryptify_checks),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     AddApiState.Invalid -> Text(
-                        "That isn't a web address. Try something like https://hifi.example.com.",
+                        stringResource(R.string.api_that_isn_t_a_web_address_try_something_like),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
                     is AddApiState.AlreadyAdded -> Text(
-                        "${s.url} is already in the list. Use ↻ on it to check it again.",
+                        stringResource(R.string.api_already_added, s.url),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
@@ -255,15 +255,15 @@ private fun AddApiDialog(
         },
         confirmButton = {
             when {
-                added -> TextButton(onClick = onDismiss) { Text("Done") }
-                done != null -> TextButton(onClick = onDismiss) { Text("Close") }
+                added -> TextButton(onClick = onDismiss) { Text(stringResource(R.string.api_done)) }
+                done != null -> TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
                 else -> TextButton(onClick = { viewModel.addApi(input) }, enabled = !busy && input.isNotBlank()) {
-                    Text("Check and add")
+                    Text(stringResource(R.string.api_check_and_add))
                 }
             }
         },
         dismissButton = {
-            if (!added) TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel") }
+            if (!added) TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.action_cancel)) }
         },
     )
 }
@@ -279,7 +279,7 @@ private fun ProbeResultView(result: ProbeResult) {
             color = MaterialTheme.colorScheme.error,
         )
     } else {
-        Text("Serves", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.api_serves), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(4.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             ApiService.entries.filter { it in result.services }.forEach { SourcePill(it.sourceType()) }
@@ -287,11 +287,11 @@ private fun ProbeResultView(result: ProbeResult) {
     }
     if (result.reasons.isNotEmpty()) {
         Spacer(Modifier.height(10.dp))
-        Text("Not found", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.api_not_found), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         ApiService.entries.forEach { service ->
             result.reasons[service]?.let { reason ->
                 Text(
-                    "${service.label}: $reason",
+                    stringResource(R.string.api_reason_line, service.label, reason),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp),

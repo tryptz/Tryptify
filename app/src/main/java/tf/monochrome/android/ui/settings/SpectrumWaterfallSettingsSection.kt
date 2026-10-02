@@ -59,6 +59,8 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * Settings › Spectrum waterfall: how far back the lines run, where they start
@@ -82,11 +84,9 @@ internal fun SpectrumWaterfallSettingsSection(
     var draft by remember(settings) { mutableStateOf(settings) }
     val preview = draft.clamped()
 
-    SettingsGroupHeader("Spectrum waterfall")
+    SettingsGroupHeader(stringResource(R.string.settings_spectrum_waterfall))
     Text(
-        "The spectrum on the album art. The bright line at the front is now; every " +
-            "moment a copy of it falls back, rises and fades, so the last few seconds " +
-            "stand behind it.",
+        stringResource(R.string.waterfall_the_spectrum_on_the_album_art_the_bright_line_at),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(bottom = 8.dp),
@@ -102,7 +102,7 @@ internal fun SpectrumWaterfallSettingsSection(
     )
 
     Text(
-        "Style",
+        stringResource(R.string.waterfall_style),
         style = MaterialTheme.typography.bodyLarge,
         modifier = Modifier.settingsAnchor("Waterfall style").padding(top = 8.dp, bottom = 6.dp),
     )
@@ -113,7 +113,7 @@ internal fun SpectrumWaterfallSettingsSection(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { style ->
                     tf.monochrome.android.ui.mixer.GlassChoiceChip(
-                        label = style.label,
+                        label = stringResource(waterfallStyleLabel(style)),
                         selected = draft.style == style,
                         accent = MaterialTheme.colorScheme.primary,
                         onClick = { onChange(draft.copy(style = style)) },
@@ -124,7 +124,7 @@ internal fun SpectrumWaterfallSettingsSection(
         }
     }
     Text(
-        draft.style.description,
+        stringResource(waterfallStyleDescription(draft.style)),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
@@ -134,8 +134,8 @@ internal fun SpectrumWaterfallSettingsSection(
     // has none, so they would be sliders that change nothing.
     if (!draft.style.singleLine) {
         WaterfallSlider(
-            title = "Depth",
-            subtitle = "How long a line takes to travel back and disappear",
+            title = stringResource(R.string.waterfall_depth),
+            subtitle = stringResource(R.string.waterfall_how_long_a_line_takes_to_travel_back_and),
             value = draft.depthSeconds,
             range = SpectrumWaterfallSettings.MIN_DEPTH_SECONDS..SpectrumWaterfallSettings.MAX_DEPTH_SECONDS,
             format = { String.format(Locale.US, "%.1f s", it) },
@@ -143,8 +143,8 @@ internal fun SpectrumWaterfallSettingsSection(
             onCommit = { onChange(draft) },
         )
         WaterfallSlider(
-            title = "Fade start",
-            subtitle = "How far back a line stays at full strength before fading",
+            title = stringResource(R.string.waterfall_fade_start),
+            subtitle = stringResource(R.string.waterfall_how_far_back_a_line_stays_at_full_strength),
             value = draft.fadeStart,
             range = 0f..SpectrumWaterfallSettings.MAX_FADE_START,
             format = {
@@ -154,8 +154,8 @@ internal fun SpectrumWaterfallSettingsSection(
             onCommit = { onChange(draft) },
         )
         WaterfallSlider(
-            title = "Angle",
-            subtitle = "Low: a near-flat horizon. High: looking down on the ridges",
+            title = stringResource(R.string.waterfall_angle),
+            subtitle = stringResource(R.string.waterfall_low_a_near_flat_horizon_high_looking_down_on_the),
             value = draft.angleDeg,
             range = SpectrumWaterfallSettings.MIN_ANGLE_DEG..SpectrumWaterfallSettings.MAX_ANGLE_DEG,
             format = { "${it.toInt()}°" },
@@ -163,8 +163,8 @@ internal fun SpectrumWaterfallSettingsSection(
             onCommit = { onChange(draft) },
         )
         WaterfallSlider(
-            title = "Line weight",
-            subtitle = "Thick bands, or fine hairlines like a radio sweep",
+            title = stringResource(R.string.waterfall_line_weight),
+            subtitle = stringResource(R.string.waterfall_thick_bands_or_fine_hairlines_like_a_radio_sweep),
             value = draft.lineWidthDp,
             range = SpectrumWaterfallSettings.MIN_LINE_WIDTH_DP..SpectrumWaterfallSettings.MAX_LINE_WIDTH_DP,
             format = { String.format(Locale.US, "%.1f dp", it) },
@@ -174,13 +174,12 @@ internal fun SpectrumWaterfallSettingsSection(
     }
 
     Text(
-        "Frame rate",
+        stringResource(R.string.waterfall_frame_rate),
         style = MaterialTheme.typography.bodyLarge,
         modifier = Modifier.settingsAnchor("Waterfall frame rate").padding(top = 8.dp, bottom = 2.dp),
     )
     Text(
-        "How often the waterfall is drawn. Lower saves GPU and battery; Max is every refresh " +
-            "the display gives.",
+        stringResource(R.string.waterfall_how_often_the_waterfall_is_drawn_lower_saves_gpu),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(bottom = 6.dp),
@@ -191,25 +190,25 @@ internal fun SpectrumWaterfallSettingsSection(
     ) {
         (listOf(SpectrumWaterfallSettings.FPS_DISPLAY) + SpectrumWaterfallSettings.FPS_CHOICES).forEach { fps ->
             tf.monochrome.android.ui.mixer.GlassChoiceChip(
-                label = if (fps == SpectrumWaterfallSettings.FPS_DISPLAY) "Max" else "$fps",
+                label = if (fps == SpectrumWaterfallSettings.FPS_DISPLAY) stringResource(R.string.waterfall_max) else "$fps",
                 selected = draft.targetFps == fps,
                 accent = MaterialTheme.colorScheme.primary,
                 onClick = { onChange(draft.copy(targetFps = fps)) },
                 modifier = Modifier.width(if (fps == SpectrumWaterfallSettings.FPS_DISPLAY) 64.dp else 52.dp),
                 description = if (fps == SpectrumWaterfallSettings.FPS_DISPLAY) {
-                    "Every display refresh"
+                    stringResource(R.string.waterfall_every_refresh_desc)
                 } else {
-                    "$fps frames a second"
+                    stringResource(R.string.waterfall_rate_clock, fps)
                 },
             )
         }
     }
     SettingSwitchItem(
-        title = "Vsync",
+        title = stringResource(R.string.waterfall_vsync),
         subtitle = if (draft.vsync) {
-            "Snap the frame rate to an even step of the display's refresh: smooth, evenly spaced frames"
+            stringResource(R.string.waterfall_vsync_on)
         } else {
-            "Hold the exact frame rate by the clock: the number you picked, spaced slightly unevenly"
+            stringResource(R.string.waterfall_vsync_off)
         },
         checked = draft.vsync,
         onCheckedChange = { onChange(draft.copy(vsync = it)) },
@@ -217,7 +216,7 @@ internal fun SpectrumWaterfallSettingsSection(
 
     if (settings != SpectrumWaterfallSettings.DEFAULT) {
         TextButton(onClick = { onChange(SpectrumWaterfallSettings.DEFAULT) }) {
-            Text("Reset to default")
+            Text(stringResource(R.string.settings_reset_to_default))
         }
     }
 }
@@ -344,12 +343,19 @@ private fun WaterfallPreview(
             PreviewPaused(Modifier.align(Alignment.Center))
         }
         // The annotations, from the same projection the lines are drawn with.
+        // Worded here, in composition, where the reader's language is known;
+        // the canvas only measures and draws them.
+        val guideLabels = GuideLabels(
+            now = stringResource(R.string.waterfall_guide_now),
+            fadeBegins = stringResource(R.string.waterfall_guide_fade, settings.solidSeconds),
+            gone = stringResource(R.string.waterfall_guide_gone, settings.depthSeconds),
+        )
         Canvas(Modifier.fillMaxSize()) {
             WaterfallNative.nativeGuides(size.width, size.height, settings.fadeStart, settings.angleDeg, guides)
-            drawGuides(textMeasurer, settings, guides, accent)
+            drawGuides(textMeasurer, settings, guides, accent, guideLabels)
         }
         Text(
-            "↕ angle · ↔ depth · pinch weight · drag the fade line",
+            stringResource(R.string.waterfall_angle_depth_pinch_weight_drag_the_fade_line),
             style = MaterialTheme.typography.labelSmall,
             color = Color.White.copy(alpha = 0.6f),
             modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
@@ -361,22 +367,20 @@ private fun WaterfallPreview(
     val fading = settings.depthSeconds - settings.solidSeconds
     Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp)) {
         Text(
-            if (showingLive) "Live: what is playing now" else "Demo signal: play something to see your music",
+            if (showingLive) stringResource(R.string.waterfall_live) else stringResource(R.string.waterfall_demo),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
             color = if (showingLive) accent else MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            String.format(
-                Locale.US,
-                "%s, %.1f dp, %s. %d lines, one every %d ms. Full strength for %.1f s, then " +
-                    "fading over %.1f s; gone %.1f s after it was heard. Rising at %d°.",
-                settings.style.label,
+            stringResource(
+                R.string.waterfall_summary,
+                stringResource(waterfallStyleLabel(settings.style)),
                 settings.lineWidthDp,
                 when {
-                    settings.targetFps == SpectrumWaterfallSettings.FPS_DISPLAY -> "every refresh"
-                    settings.vsync -> "${settings.targetFps} fps, vsync"
-                    else -> "${settings.targetFps} fps by the clock"
+                    settings.targetFps == SpectrumWaterfallSettings.FPS_DISPLAY -> stringResource(R.string.waterfall_rate_every_refresh)
+                    settings.vsync -> stringResource(R.string.waterfall_rate_vsync, settings.targetFps)
+                    else -> stringResource(R.string.waterfall_rate_clock, settings.targetFps)
                 },
                 SpectrumWaterfallSettings.LINES,
                 (period * 1000).toInt(),
@@ -400,6 +404,7 @@ private fun DrawScope.drawGuides(
     settings: SpectrumWaterfallSettings,
     guides: FloatArray,
     accent: Color,
+    labels: GuideLabels,
 ) {
     val dash = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 5.dp.toPx()))
     val ink = Color.White.copy(alpha = 0.55f)
@@ -417,11 +422,11 @@ private fun DrawScope.drawGuides(
         drawText(text, topLeft = Offset(8.dp.toPx(), top))
     }
 
-    guide(guides[0], "now", accent.copy(alpha = 0.8f))
+    guide(guides[0], labels.now, accent.copy(alpha = 0.8f))
     if (settings.fadeStart > 0.02f) {
-        guide(guides[1], String.format(Locale.US, "fade begins · −%.1f s", settings.solidSeconds), ink)
+        guide(guides[1], labels.fadeBegins, ink)
     }
-    guide(guides[2], String.format(Locale.US, "gone · −%.1f s", settings.depthSeconds), ink)
+    guide(guides[2], labels.gone, ink)
 
     // The angle, top right: the horizon, the rise and the arc between them.
     val r = 22.dp.toPx()
@@ -478,7 +483,7 @@ internal fun fillDemoSpectrum(out: FloatArray, t: Double) {
 @Composable
 internal fun PreviewPaused(modifier: Modifier = Modifier) {
     Text(
-        "Preview paused while the other one is on screen",
+        stringResource(R.string.waterfall_preview_paused_while_the_other_one_is_on_screen),
         style = MaterialTheme.typography.labelMedium,
         color = Color.White.copy(alpha = 0.55f),
         modifier = modifier.padding(16.dp),
@@ -517,4 +522,29 @@ private fun WaterfallSlider(
             valueRange = range,
         )
     }
+}
+
+/** The canvas guides' words, resolved in composition and handed to the draw pass. */
+private class GuideLabels(val now: String, val fadeBegins: String, val gone: String)
+
+/** A waterfall style's chip text in the reader's language. */
+@androidx.annotation.StringRes
+private fun waterfallStyleLabel(style: WaterfallStyle): Int = when (style) {
+    WaterfallStyle.LINES -> R.string.waterfall_style_lines
+    WaterfallStyle.RIDGELINE -> R.string.waterfall_style_ridgeline
+    WaterfallStyle.HEAT -> R.string.waterfall_style_heat
+    WaterfallStyle.NEON -> R.string.waterfall_style_neon
+    WaterfallStyle.GLASS -> R.string.waterfall_style_glass
+    WaterfallStyle.LEGACY -> R.string.waterfall_style_legacy
+}
+
+/** What a waterfall style looks like, in the reader's language. */
+@androidx.annotation.StringRes
+private fun waterfallStyleDescription(style: WaterfallStyle): Int = when (style) {
+    WaterfallStyle.LINES -> R.string.waterfall_style_lines_desc
+    WaterfallStyle.RIDGELINE -> R.string.waterfall_style_ridgeline_desc
+    WaterfallStyle.HEAT -> R.string.waterfall_style_heat_desc
+    WaterfallStyle.NEON -> R.string.waterfall_style_neon_desc
+    WaterfallStyle.GLASS -> R.string.waterfall_style_glass_desc
+    WaterfallStyle.LEGACY -> R.string.waterfall_style_legacy_desc
 }

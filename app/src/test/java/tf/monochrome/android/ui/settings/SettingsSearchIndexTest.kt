@@ -3,7 +3,10 @@ package tf.monochrome.android.ui.settings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.w3c.dom.Element
+import tf.monochrome.android.R
 import java.io.File
+import javax.xml.parsers.DocumentBuilderFactory
 
 /**
  * The settings index, checked against the app it claims to describe.
@@ -92,26 +95,111 @@ class SettingsSearchIndexTest {
         }
     }
 
+    private val settingsSources by lazy {
+        File("src/main/java/tf/monochrome/android/ui/settings")
+            .walkTopDown()
+            .filter { it.extension == "kt" && it.name != "SettingsSearchIndex.kt" }
+            .joinToString("\n") { it.readText() }
+    }
+
+    /** Resource id → name, from the generated R class. */
+    private val stringNames: Map<Int, String> by lazy {
+        R.string::class.java.fields.associate { it.getInt(null) to it.name }
+    }
+
+    /** One language's shipped strings, by resource name, unescaped as a device shows them. */
+    private fun shipped(folder: String): Map<String, String> {
+        val doc = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+            .parse(File("src/main/res/$folder/strings.xml"))
+        val out = mutableMapOf<String, String>()
+        val nodes = doc.documentElement.childNodes
+        for (i in 0 until nodes.length) {
+            val e = nodes.item(i) as? Element ?: continue
+            if (e.tagName == "string") {
+                out[e.getAttribute("name")] = e.textContent.removeSurrounding("\"").replace("\\'", "'").replace("\\\"", "\"")
+            }
+        }
+        return out
+    }
+
+    private fun resolverFor(folder: String): (Int) -> String {
+        val strings = shipped(folder)
+        return { id -> strings.getValue(stringNames.getValue(id)) }
+    }
+
     /**
-     * A tab result scrolls to its row by matching the title, so a title the
-     * settings screens never use anchors nothing — it lands on the tab and
-     * stops, silently, with no way to tell from the outside that it was
+     * A tab result scrolls to its row by matching the title as the screen
+     * shows it, so a title no row uses anchors nothing — it lands on the tab
+     * and stops, silently, with no way to tell from the outside that it was
      * supposed to do more. Renaming a row is exactly how that happens.
+     *
+     * Rows are drawn from string resources, so a translated entry has to name
+     * a resource the settings screens actually use; a name that is never
+     * translated has to appear in them as it is.
      */
     @Test
     fun `every tab entry names something the settings screens actually say`() {
-        val sources = File("src/main/java/tf/monochrome/android/ui/settings")
-            .walkTopDown()
-            .filter { it.extension == "kt" }
-            .joinToString("\n") { it.readText() }
-            .lowercase()
-
         val unanchored = SettingsSearchIndex
             .filter { it.destination is SettingsDestination.Tab }
+            .filterNot { entry ->
+                when (val res = entry.titleRes) {
+                    null -> settingsSources.contains("\"${entry.title}\"")
+                    else -> settingsSources.contains("R.string.${stringNames.getValue(res)}")
+                }
+            }
             .map { it.title }
-            .filterNot { sources.contains(it.lowercase()) }
 
         assertTrue("index titles that appear nowhere in Settings: $unanchored", unanchored.isEmpty())
+    }
+
+    /**
+     * The on-screen title of an entry is its English name, or a resource that
+     * says the same thing — not some other row's string that happens to sit
+     * nearby. Checked loosely (one shares a word with the other) because some
+     * entries deliberately point at the row that *is* the feature under a
+     * different name: "Font scale" lands on "Font Size".
+     */
+    @Test
+    fun `each entry's resource is about the same thing as its title`() {
+        val english = resolverFor("values")
+        val words = Regex("[a-z]{3,}")
+        val stray = SettingsSearchIndex.filter { entry ->
+            val res = entry.titleRes ?: return@filter false
+            val a = words.findAll(entry.title.lowercase()).map { it.value.removeSuffix("s") }.toSet()
+            val b = words.findAll(english(res).lowercase()).map { it.value.removeSuffix("s") }.toSet()
+            a.isNotEmpty() && b.isNotEmpty() && (a intersect b).isEmpty()
+        }.map { it.title to english(it.titleRes!!) }
+
+        assertTrue("entries showing an unrelated title: $stray", stray.isEmpty())
+    }
+
+    /**
+     * Someone reading the app in German types the German word. Without the
+     * resolver the index only knew English titles, so every search in another
+     * language came back empty except the ones that happen to be loanwords.
+     */
+    @Test
+    fun `search finds settings by their translated names`() {
+        val german = resolverFor("values-de")
+        assertEquals("Theme", searchSettings("farbschema", resolve = german).first().title)
+        assertTrue(searchSettings("überblendung", resolve = german).any { it.title == "Crossfade" })
+
+        val japanese = resolverFor("values-ja")
+        assertTrue(searchSettings("ギャップレス", resolve = japanese).any { it.title == "Gapless playback" })
+
+        // English still works in every language: it is what guides and the
+        // changelog name things by.
+        assertEquals("Theme", searchSettings("theme", resolve = german).first().title)
+    }
+
+    /** Tab names in results come from resources too, and every tab has one. */
+    @Test
+    fun `every tab label has a translation`() {
+        val german = resolverFor("values-de")
+        val labels = SettingsSearchIndex.map { it.tabLabel }.distinct()
+        for (label in labels) {
+            assertTrue("no chip text for tab $label", german(settingsTabLabelRes(label)).isNotBlank())
+        }
     }
 
     /** Sub-screens have to be reachable, or the index is only a tab switcher. */

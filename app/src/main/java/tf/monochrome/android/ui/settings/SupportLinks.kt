@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.core.net.toUri
+import tf.monochrome.android.R
 
 /**
  * Where the app sends someone who wants to chip in.
@@ -28,6 +29,6 @@ internal fun openDonationUrl(context: Context, url: String) {
     try {
         context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
     } catch (e: ActivityNotFoundException) {
-        Toast.makeText(context, "No app found to open the link", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.settings_no_app_for_link), Toast.LENGTH_SHORT).show()
     }
 }

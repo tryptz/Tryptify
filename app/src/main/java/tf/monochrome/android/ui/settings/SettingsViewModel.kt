@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.settings
 
+import tf.monochrome.android.R
+import tf.monochrome.android.ui.components.UiText
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -73,8 +75,8 @@ class SettingsViewModel @Inject constructor(
 
     /** One-shot user-facing messages (import success/failure, etc.) that the
      *  Settings screen shows as a toast. */
-    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
-    val messages: SharedFlow<String> = _messages.asSharedFlow()
+    private val _messages = MutableSharedFlow<UiText>(extraBufferCapacity = 4)
+    val messages: SharedFlow<UiText> = _messages.asSharedFlow()
 
     /** Honest live status of the libusb exclusive-output path. */
     val usbExclusiveStatus: StateFlow<tf.monochrome.android.audio.usb.UsbExclusiveController.Status> =
@@ -535,9 +537,9 @@ class SettingsViewModel @Inject constructor(
                 }
                 loadFonts()
                 preferences.setCustomFontUri(destFile.absolutePath)
-                _messages.tryEmit("Font imported")
+                _messages.tryEmit(UiText.Res(R.string.settings_font_imported))
             } catch (_: Exception) {
-                _messages.tryEmit("Couldn't import that font file")
+                _messages.tryEmit(UiText.Res(R.string.settings_font_import_failed))
             }
         }
     }
@@ -773,8 +775,8 @@ class SettingsViewModel @Inject constructor(
             }.getOrNull()
             _availableUpdate.value = found
             _messages.tryEmit(
-                if (found != null) "Version ${found.versionName} is available"
-                else "You're on the latest version"
+                if (found != null) UiText.Res(R.string.settings_update_available, listOf(found.versionName))
+                else UiText.Res(R.string.settings_up_to_date)
             )
         }
     }
@@ -953,8 +955,8 @@ class SettingsViewModel @Inject constructor(
                 File(appContext.getExternalFilesDir(null), "downloads").deleteRecursively()
             } catch (_: Exception) { }
             _messages.tryEmit(
-                if (deleted > 0) "Deleted $deleted download${if (deleted == 1) "" else "s"}"
-                else "No downloads to delete"
+                if (deleted > 0) UiText.Plural(R.plurals.settings_deleted_downloads, deleted)
+                else UiText.Res(R.string.settings_no_downloads_to_delete)
             )
         }
     }
@@ -967,7 +969,7 @@ class SettingsViewModel @Inject constructor(
             if (result.isFailure) {
                 // Report the real outcome instead of the old unconditional
                 // "Library imported" success toast fired on a corrupt file.
-                _messages.tryEmit("Import failed: invalid backup file")
+                _messages.tryEmit(UiText.Res(R.string.settings_import_invalid_backup))
                 return@launch
             }
             // Auto-sync to Supabase if signed in
@@ -980,7 +982,7 @@ class SettingsViewModel @Inject constructor(
             } else {
                 Log.w("ImportSync", "Not signed in - skipping Supabase sync")
             }
-            _messages.tryEmit("Library imported")
+            _messages.tryEmit(UiText.Res(R.string.settings_library_imported))
         }
     }
 
@@ -1134,12 +1136,8 @@ class SettingsViewModel @Inject constructor(
     }
 
     private fun formatSize(bytes: Long): String {
-        return when {
-            bytes < 1024 -> "$bytes B"
-            bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-            bytes < 1024 * 1024 * 1024 -> String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
-            else -> String.format(Locale.US, "%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
-        }
+        // The platform's own units and number format ("1,2 Mo" in French).
+        return android.text.format.Formatter.formatShortFileSize(appContext, bytes)
     }
 }
 
