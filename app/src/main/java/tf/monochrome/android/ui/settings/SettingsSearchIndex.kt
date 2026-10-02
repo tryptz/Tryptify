@@ -198,8 +198,8 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     // Renamed with the header it points at: SettingsSearchIndexTest greps the
     // settings screens for every title here, so the two move together or the
     // build fails. "library" is a keyword now because it left the title.
-    entry("Tab bar", R.string.settings_tab_bar, "Library", listOf("tabs", "navigation", "hide", "discover", "radio", "bottom bar")),
-    entry("Hide mini player when the tabs show", R.string.settings_mini_player_hide_with_tabs, "Library", listOf("mini player", "tab bar", "scroll", "hide", "bottom bar")),
+    entry("Nav bar", R.string.settings_tab_bar, "Library", listOf("navigation", "tab bar", "tabs", "buttons", "discover", "radio", "playlists", "favorites", "downloads", "local", "bottom bar")),
+    entry("Hide mini player when the nav bar shows", R.string.settings_mini_player_hide_with_tabs, "Library", listOf("mini player", "nav bar", "tab bar", "scroll", "hide", "bottom bar")),
     entry("Library sections", R.string.settings_library_sections, "Library", listOf("reorder", "order", "hide", "pages", "local", "playlists", "favorites", "downloads")),
     entry("Local folders", R.string.settings_local_media_scanning, "Library", listOf("storage", "saf", "sd card", "path")),
 

@@ -421,6 +421,8 @@ class PreferencesManager @Inject constructor(
         // device's migration would fire again and drag Home back to the front.
         private val PAGE_ORDER = stringPreferencesKey("page_order")
         private val HIDDEN_PAGES = stringSetPreferencesKey("hidden_pages")
+        // The two pages between Home and Library in the nav bar, comma-separated.
+        private val NAV_BAR_SLOTS = stringPreferencesKey("nav_bar_slots")
 
         // Library sort selections (serialized "<KEY>:asc" / "<KEY>:desc")
         private val SONG_SORT = stringPreferencesKey("library_song_sort")
@@ -486,7 +488,7 @@ class PreferencesManager @Inject constructor(
             EQ_BANDS_R_JSON, EQ_STEREO_MODE, SYSTEM_TONE_CONTROLS_JSON,
             PARAM_EQ_ENABLED, PARAM_EQ_ACTIVE_PRESET_ID, PARAM_EQ_PREAMP, PARAM_EQ_BANDS_JSON,
             DSP_ENABLED, DSP_STATE_JSON, MIXER_CHANNEL_DYNAMIC,
-            LIBRARY_TAB_ORDER, PAGE_ORDER, HIDDEN_PAGES, CAR_MODE_BAND_COUNT,
+            LIBRARY_TAB_ORDER, PAGE_ORDER, HIDDEN_PAGES, NAV_BAR_SLOTS, CAR_MODE_BAND_COUNT,
             RADIO_WEIGHT_LOCAL_LIBRARY, RADIO_WEIGHT_QOBUZ, RADIO_WEIGHT_SPOTIFY_DISCOVERY,
             RADIO_WEIGHT_CANONICAL_VERSION_BIAS, RADIO_WEIGHT_NOVELTY, RADIO_WEIGHT_FAMILIARITY,
             RADIO_WEIGHT_ARTIST_SIMILARITY, RADIO_WEIGHT_GENRE_TAG_SIMILARITY,
@@ -1942,6 +1944,14 @@ class PreferencesManager @Inject constructor(
     val hiddenPages: Flow<Set<String>> = dataStore.data.map { it[HIDDEN_PAGES] ?: emptySet() }
     suspend fun setHiddenPages(hidden: Set<String>) {
         dataStore.edit { it[HIDDEN_PAGES] = hidden }
+    }
+
+    /** The nav bar's two middle buttons, always two different pages it can hold. */
+    val navBarSlots: Flow<List<String>> = dataStore.data.map { prefs ->
+        tf.monochrome.android.ui.navigation.sanitizeNavBarSlots(prefs[NAV_BAR_SLOTS]?.split(','))
+    }
+    suspend fun setNavBarSlots(slots: List<String>) {
+        dataStore.edit { it[NAV_BAR_SLOTS] = slots.joinToString(",") }
     }
 
     // --- Library sort selections (persist Songs/Albums/Artists sort order) ---

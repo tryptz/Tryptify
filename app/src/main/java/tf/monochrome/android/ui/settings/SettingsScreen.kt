@@ -3476,6 +3476,44 @@ private fun PageOrderRow(
     }
 }
 
+/**
+ * One of the nav bar's two middle buttons: what it holds now, and a menu of
+ * what it can hold. A hidden page is listed but can't be picked — it has no
+ * page to open — and picking the other slot's page swaps the two.
+ */
+@Composable
+private fun NavBarSlotRow(
+    title: String,
+    current: String?,
+    choices: List<String>,
+    hidden: Set<String>,
+    onPick: (String) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        SettingItem(
+            title = title,
+            subtitle = current?.let { tf.monochrome.android.ui.navigation.pageTitle(it) }.orEmpty(),
+            onClick = { open = true },
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            choices.forEach { id ->
+                DropdownMenuItem(
+                    text = { Text(tf.monochrome.android.ui.navigation.pageTitle(id)) },
+                    enabled = id !in hidden,
+                    trailingIcon = if (id == current) {
+                        { Icon(Icons.Default.Check, contentDescription = null) }
+                    } else null,
+                    onClick = {
+                        open = false
+                        onPick(id)
+                    },
+                )
+            }
+        }
+    }
+}
+
 /** A small pill beside a setting's title — "BETA" and the like. */
 @Composable
 private fun SettingBadge(text: String) {
@@ -3568,6 +3606,24 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)
         )
+        // The two buttons between Home and Library. Each slot is a menu of the
+        // pages that can go there, in the order Settings lists them: Discover,
+        // World radio, then the Library sections as the switcher orders them.
+        val navBarSlots by viewModel.navBarSlots.collectAsStateWithLifecycle()
+        val navChoices = tf.monochrome.android.ui.navigation.NAV_BAR_CHOICES
+            .sortedBy { id -> pageOrder.indexOf(id).let { if (it < 0) Int.MAX_VALUE else it } }
+        listOf(
+            R.string.settings_nav_bar_slot_first,
+            R.string.settings_nav_bar_slot_second,
+        ).forEachIndexed { index, label ->
+            NavBarSlotRow(
+                title = stringResource(label),
+                current = navBarSlots.getOrNull(index),
+                choices = navChoices,
+                hidden = hiddenPages,
+                onPick = { viewModel.setNavBarSlot(index, it) },
+            )
+        }
         listOf(
             tf.monochrome.android.ui.navigation.Screen.Discover.route,
             tf.monochrome.android.ui.navigation.RADIO_PAGE_ID,

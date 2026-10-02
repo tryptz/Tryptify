@@ -976,8 +976,8 @@
     <string name="settings_about_tryptify">Acerca de Tryptify</string>
     <string name="settings_support_the_app">Apoya la app</string>
     <string name="settings_local_media_scanning">Escaneo de contenido local</string>
-    <string name="settings_tab_bar">Barra de pestañas</string>
-    <string name="settings_home_library_and_search_are_always_there_turn">Inicio, Biblioteca y Buscar siempre están. Desactiva las pestañas que no uses.</string>
+    <string name="settings_tab_bar">Barra de navegación</string>
+    <string name="settings_home_library_and_search_are_always_there_turn">Inicio, Biblioteca y Buscar siempre están. Elige hasta dos páginas para el centro.</string>
     <string name="settings_library_sections">Secciones de la biblioteca</string>
     <string name="settings_the_order_of_the_switcher_at_the_top_of_library">El orden del selector en la parte superior de la Biblioteca. Atenúa las que no uses y desaparecerán de él.</string>
     <string name="settings_playlist_import">Importación de playlists</string>
@@ -1840,6 +1840,8 @@
         <item quantity="many">%1$d se marcaron en este dispositivo; toca para darles otra oportunidad.</item>
         <item quantity="other">%1$d se marcaron en este dispositivo; toca para darles otra oportunidad.</item>
     </plurals>
-    <string name="settings_mini_player_hide_with_tabs">Ocultar el minirreproductor cuando se muestran las pestañas</string>
-    <string name="settings_mini_player_hide_with_tabs_desc">Desplázate hacia arriba para ver las pestañas y hacia abajo para el minirreproductor. Toca la pestaña en la que estás para que vuelva el reproductor.</string>
+    <string name="settings_mini_player_hide_with_tabs">Ocultar el minirreproductor cuando se muestra la barra de navegación</string>
+    <string name="settings_mini_player_hide_with_tabs_desc">Desplázate hacia arriba para ver la barra de navegación y hacia abajo para el minirreproductor. Toca en la barra la página en la que estás para que vuelva el reproductor.</string>
+    <string name="settings_nav_bar_slot_first">Primer botón</string>
+    <string name="settings_nav_bar_slot_second">Segundo botón</string>
 </resources>

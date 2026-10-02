@@ -131,8 +131,8 @@ object WhatsNew {
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = PAGES,
-                    title = "Glass tab bar",
-                    body = "Home, Discover, Radio, Library and Search in a glass bar. Scroll down and the mini player folds in.",
+                    title = "Glass nav bar",
+                    body = "Home, Library, Search and two pages you choose, in a glass bar. Scroll down and the mini player folds in.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
@@ -143,8 +143,14 @@ object WhatsNew {
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = PAGES,
-                    title = "Tabs or mini player",
-                    body = "Turn on Hide mini player when the tabs show (Settings › Library › Tab bar): scroll up for the tabs, down for the player. Tap the tab you're on to bring the player back.",
+                    title = "Pick the nav bar's buttons",
+                    body = "The two between Home and Library can be Discover, World radio, Playlists, Local, Favorites or Downloads. Settings › Library › Nav bar.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PAGES,
+                    title = "Nav bar or mini player",
+                    body = "Turn on Hide mini player when the nav bar shows (Settings › Library › Nav bar): scroll up for the nav bar, down for the player. Tap the page you're on in the bar to bring the player back.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,

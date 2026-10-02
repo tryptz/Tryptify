@@ -976,8 +976,8 @@
     <string name="settings_about_tryptify">À propos de Tryptify</string>
     <string name="settings_support_the_app">Soutenir l’app</string>
     <string name="settings_local_media_scanning">Analyse des médias locaux</string>
-    <string name="settings_tab_bar">Barre d’onglets</string>
-    <string name="settings_home_library_and_search_are_always_there_turn">Accueil, Bibliothèque et Rechercher sont toujours là. Désactivez les onglets que vous n’utilisez pas.</string>
+    <string name="settings_tab_bar">Barre de navigation</string>
+    <string name="settings_home_library_and_search_are_always_there_turn">Accueil, Bibliothèque et Rechercher sont toujours là. Choisissez jusqu’à deux pages pour le milieu.</string>
     <string name="settings_library_sections">Sections de la bibliothèque</string>
     <string name="settings_the_order_of_the_switcher_at_the_top_of_library">L’ordre du sélecteur en haut de la Bibliothèque. Grisez ceux que vous n’utilisez pas et ils en disparaissent.</string>
     <string name="settings_playlist_import">Import de playlists</string>
@@ -1840,6 +1840,8 @@
         <item quantity="many">Dont %1$d signalés sur cet appareil ; touchez pour leur redonner une chance.</item>
         <item quantity="other">Dont %1$d signalés sur cet appareil ; touchez pour leur redonner une chance.</item>
     </plurals>
-    <string name="settings_mini_player_hide_with_tabs">Masquer le mini-lecteur quand les onglets s’affichent</string>
-    <string name="settings_mini_player_hide_with_tabs_desc">Faites défiler vers le haut pour les onglets, vers le bas pour le mini-lecteur. Touchez l’onglet actuel pour faire revenir le lecteur.</string>
+    <string name="settings_mini_player_hide_with_tabs">Masquer le mini-lecteur quand la barre de navigation s’affiche</string>
+    <string name="settings_mini_player_hide_with_tabs_desc">Faites défiler vers le haut pour la barre de navigation, vers le bas pour le mini-lecteur. Touchez la page actuelle dans la barre pour faire revenir le lecteur.</string>
+    <string name="settings_nav_bar_slot_first">Premier bouton</string>
+    <string name="settings_nav_bar_slot_second">Deuxième bouton</string>
 </resources>

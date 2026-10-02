@@ -940,8 +940,8 @@
     <string name="settings_about_tryptify">About Tryptify</string>
     <string name="settings_support_the_app">Support the app</string>
     <string name="settings_local_media_scanning">Local Media Scanning</string>
-    <string name="settings_tab_bar">Tab Bar</string>
-    <string name="settings_home_library_and_search_are_always_there_turn">Home, Library and Search are always there. Turn off a tab you don\'t use.</string>
+    <string name="settings_tab_bar">Nav Bar</string>
+    <string name="settings_home_library_and_search_are_always_there_turn">Home, Library and Search are always there. Pick up to two pages for the middle.</string>
     <string name="settings_library_sections">Library Sections</string>
     <string name="settings_the_order_of_the_switcher_at_the_top_of_library">The order of the switcher at the top of Library. Gray out the ones you don\'t use and they leave it.</string>
     <string name="settings_playlist_import">Playlist Import</string>
@@ -1791,6 +1791,8 @@
         <item quantity="one">%1$d of them was flagged on this device; tap to give it another chance.</item>
         <item quantity="other">%1$d of them were flagged on this device; tap to give them another chance.</item>
     </plurals>
-    <string name="settings_mini_player_hide_with_tabs">Hide mini player when the tabs show</string>
-    <string name="settings_mini_player_hide_with_tabs_desc">Scroll up for the tabs, down for the mini player. Tap the tab you’re on to bring the player back.</string>
+    <string name="settings_mini_player_hide_with_tabs">Hide mini player when the nav bar shows</string>
+    <string name="settings_mini_player_hide_with_tabs_desc">Scroll up for the nav bar, down for the mini player. Tap the page you’re on in the nav bar to bring the player back.</string>
+    <string name="settings_nav_bar_slot_first">First button</string>
+    <string name="settings_nav_bar_slot_second">Second button</string>
 </resources>

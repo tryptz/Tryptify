@@ -902,8 +902,8 @@
     <string name="settings_about_tryptify">Tryptify について</string>
     <string name="settings_support_the_app">アプリを支援</string>
     <string name="settings_local_media_scanning">ローカルメディアのスキャン</string>
-    <string name="settings_tab_bar">タブバー</string>
-    <string name="settings_home_library_and_search_are_always_there_turn">ホーム、ライブラリ、検索は常に表示されます。使わないタブはオフにしてください。</string>
+    <string name="settings_tab_bar">ナビゲーションバー</string>
+    <string name="settings_home_library_and_search_are_always_there_turn">ホーム、ライブラリ、検索は常に表示されます。中央に置くページを最大 2 つ選べます。</string>
     <string name="settings_library_sections">ライブラリのセクション</string>
     <string name="settings_the_order_of_the_switcher_at_the_top_of_library">ライブラリ上部の切り替えバーの並び順です。使わないものをグレーにすると、バーから外れます。</string>
     <string name="settings_playlist_import">プレイリストのインポート</string>
@@ -1740,6 +1740,8 @@
     <plurals name="settings_flagged_presets_device">
         <item quantity="other">うち %1$d 件はこのデバイスで付いたフラグです。タップすると解除します。</item>
     </plurals>
-    <string name="settings_mini_player_hide_with_tabs">タブバー表示中はミニプレーヤーを隠す</string>
-    <string name="settings_mini_player_hide_with_tabs_desc">上にスクロールするとタブバー、下にスクロールするとミニプレーヤーを表示します。表示中のタブをタップするとミニプレーヤーが表示されます。</string>
+    <string name="settings_mini_player_hide_with_tabs">ナビゲーションバー表示中はミニプレーヤーを隠す</string>
+    <string name="settings_mini_player_hide_with_tabs_desc">上にスクロールするとナビゲーションバー、下にスクロールするとミニプレーヤーを表示します。ナビゲーションバーで表示中のページをタップするとミニプレーヤーが表示されます。</string>
+    <string name="settings_nav_bar_slot_first">1 つ目のボタン</string>
+    <string name="settings_nav_bar_slot_second">2 つ目のボタン</string>
 </resources>

@@ -939,8 +939,8 @@
     <string name="settings_about_tryptify">Tryptify hakkında</string>
     <string name="settings_support_the_app">Uygulamayı destekle</string>
     <string name="settings_local_media_scanning">Yerel medya taraması</string>
-    <string name="settings_tab_bar">Sekme çubuğu</string>
-    <string name="settings_home_library_and_search_are_always_there_turn">Ana Sayfa, Kitaplık ve Ara her zaman görünür. Kullanmadığınız sekmeleri kapatın.</string>
+    <string name="settings_tab_bar">Gezinme çubuğu</string>
+    <string name="settings_home_library_and_search_are_always_there_turn">Ana Sayfa, Kitaplık ve Ara her zaman görünür. Ortaya en fazla iki sayfa seçin.</string>
     <string name="settings_library_sections">Kitaplık bölümleri</string>
     <string name="settings_the_order_of_the_switcher_at_the_top_of_library">Kitaplık’ın üstündeki geçiş çubuğunun sırası. Kullanmadıklarınızı grileştirin, çubuktan çıksınlar.</string>
     <string name="settings_playlist_import">Çalma listesi içe aktarma</string>
@@ -1790,6 +1790,8 @@
         <item quantity="one">Bunlardan %1$d tanesi bu cihazda işaretlendi; yeniden denemek için dokunun.</item>
         <item quantity="other">Bunlardan %1$d tanesi bu cihazda işaretlendi; yeniden denemek için dokunun.</item>
     </plurals>
-    <string name="settings_mini_player_hide_with_tabs">Sekmeler görünürken mini oynatıcıyı gizle</string>
-    <string name="settings_mini_player_hide_with_tabs_desc">Sekmeler için yukarı, mini oynatıcı için aşağı kaydırın. Oynatıcıyı geri getirmek için bulunduğunuz sekmeye dokunun.</string>
+    <string name="settings_mini_player_hide_with_tabs">Gezinme çubuğu görünürken mini oynatıcıyı gizle</string>
+    <string name="settings_mini_player_hide_with_tabs_desc">Gezinme çubuğu için yukarı, mini oynatıcı için aşağı kaydırın. Oynatıcıyı geri getirmek için çubukta bulunduğunuz sayfaya dokunun.</string>
+    <string name="settings_nav_bar_slot_first">Birinci düğme</string>
+    <string name="settings_nav_bar_slot_second">İkinci düğme</string>
 </resources>

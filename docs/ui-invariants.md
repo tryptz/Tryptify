@@ -182,8 +182,9 @@ one over the Library's sections. Do not reintroduce a second pager, and do not
 pin any page to an index: `local` was pinned to page 0 for a long time, which is
 why moving it in Settings did nothing.
 
-**The tab bar and the Library switcher both drive that one pager.** The bar is
-Home · Discover · Radio · Library in a glass pill, with Search as a round button
+**The nav bar and the Library switcher both drive that one pager.** (Users see
+it called the nav bar; the code and this file still say tab bar.) The bar is
+Home · two chosen pages · Library in a glass pill, with Search as a round button
 beside it (`GlassTabBar`, `AppTabs.kt`). Library is one tab over every Library
 section; the chip row at the top of the Library page (`LibrarySectionSwitcher`)
 moves the same pager to a section, and is not a pager of its own. A tab tapped
@@ -204,7 +205,15 @@ It is driven by nested scroll at the nav host, so every list drives it without
 knowing. Lists pad by the bar's *expanded* height even while it is folded — a
 padding that followed the fold would jolt the list mid-scroll.
 
-**"Hide mini player when the tabs show" makes the two take turns.** The open bar
+**The two middle buttons are the listener's choice**, from `NAV_BAR_CHOICES`:
+Discover, World radio and the Library sections, Discover and World radio by
+default (`nav_bar_slots`, synced). Read them through `sanitizeNavBarSlots`,
+never raw: it guarantees two different pages the bar can hold, whatever came
+from storage or sync. A pinned Library section lights its own button, not
+Library's, and Library skips it, so two buttons never open the same page. A
+hidden page loses its button but keeps its slot.
+
+**"Hide mini player when the nav bar shows" makes the two take turns.** The open bar
 is the tabs alone, with no mini player stacked over them. The folded bar is
 unchanged: the current tab's bubble, the mini player, then Search. Both states
 are one row, so the expanded height lists pad by drops the mini player's row.

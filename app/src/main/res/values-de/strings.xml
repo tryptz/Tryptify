@@ -939,8 +939,8 @@
     <string name="settings_about_tryptify">Über Tryptify</string>
     <string name="settings_support_the_app">App unterstützen</string>
     <string name="settings_local_media_scanning">Lokale Medien scannen</string>
-    <string name="settings_tab_bar">Tab-Leiste</string>
-    <string name="settings_home_library_and_search_are_always_there_turn">Start, Bibliothek und Suche sind immer da. Schalte Tabs aus, die du nicht nutzt.</string>
+    <string name="settings_tab_bar">Navigationsleiste</string>
+    <string name="settings_home_library_and_search_are_always_there_turn">Start, Bibliothek und Suche sind immer da. Wähle bis zu zwei Seiten für die Mitte.</string>
     <string name="settings_library_sections">Bibliotheksbereiche</string>
     <string name="settings_the_order_of_the_switcher_at_the_top_of_library">Die Reihenfolge der Umschaltleiste oben in der Bibliothek. Graue die aus, die du nicht nutzt, dann verschwinden sie daraus.</string>
     <string name="settings_playlist_import">Playlist-Import</string>
@@ -1790,6 +1790,8 @@
         <item quantity="one">%1$d davon wurde auf diesem Gerät markiert – tippe, um ihm noch eine Chance zu geben.</item>
         <item quantity="other">%1$d davon wurden auf diesem Gerät markiert – tippe, um ihnen noch eine Chance zu geben.</item>
     </plurals>
-    <string name="settings_mini_player_hide_with_tabs">Mini-Player ausblenden, wenn die Tabs zu sehen sind</string>
-    <string name="settings_mini_player_hide_with_tabs_desc">Nach oben scrollen zeigt die Tabs, nach unten den Mini-Player. Tippe auf den aktuellen Tab, um den Player zurückzuholen.</string>
+    <string name="settings_mini_player_hide_with_tabs">Mini-Player ausblenden, wenn die Navigationsleiste zu sehen ist</string>
+    <string name="settings_mini_player_hide_with_tabs_desc">Nach oben scrollen zeigt die Navigationsleiste, nach unten den Mini-Player. Tippe in der Leiste auf die aktuelle Seite, um den Player zurückzuholen.</string>
+    <string name="settings_nav_bar_slot_first">Erste Schaltfläche</string>
+    <string name="settings_nav_bar_slot_second">Zweite Schaltfläche</string>
 </resources>

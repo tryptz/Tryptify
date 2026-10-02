@@ -902,8 +902,8 @@
     <string name="settings_about_tryptify">关于 Tryptify</string>
     <string name="settings_support_the_app">支持本应用</string>
     <string name="settings_local_media_scanning">本地媒体扫描</string>
-    <string name="settings_tab_bar">标签栏</string>
-    <string name="settings_home_library_and_search_are_always_there_turn">首页、音乐库和搜索始终保留。关闭你不用的标签页。</string>
+    <string name="settings_tab_bar">导航栏</string>
+    <string name="settings_home_library_and_search_are_always_there_turn">首页、音乐库和搜索始终保留。最多可再选两个页面放在中间。</string>
     <string name="settings_library_sections">音乐库分区</string>
     <string name="settings_the_order_of_the_switcher_at_the_top_of_library">音乐库顶部切换栏的顺序。将不用的分区置灰，它们就会从切换栏中移除。</string>
     <string name="settings_playlist_import">歌单导入</string>
@@ -1740,6 +1740,8 @@
     <plurals name="settings_flagged_presets_device">
         <item quantity="other">其中 %1$d 个是在此设备上标记的；点按即可重新允许。</item>
     </plurals>
-    <string name="settings_mini_player_hide_with_tabs">显示标签栏时隐藏迷你播放器</string>
-    <string name="settings_mini_player_hide_with_tabs_desc">向上滚动显示标签栏，向下滚动显示迷你播放器。点按当前所在的标签可调出迷你播放器。</string>
+    <string name="settings_mini_player_hide_with_tabs">显示导航栏时隐藏迷你播放器</string>
+    <string name="settings_mini_player_hide_with_tabs_desc">向上滚动显示导航栏，向下滚动显示迷你播放器。在导航栏中点按当前所在的页面可调出迷你播放器。</string>
+    <string name="settings_nav_bar_slot_first">第一个按钮</string>
+    <string name="settings_nav_bar_slot_second">第二个按钮</string>
 </resources>

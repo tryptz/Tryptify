@@ -5,7 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The tab bar's mapping between tabs and the pager's pages. Pure, so checked here. */
+/** The nav bar's mapping between tabs and the pager's pages. Pure, so checked here. */
 class AppTabsTest {
 
     private val allPages = visiblePages(DEFAULT_PAGE_ORDER, emptySet()) + SEARCH_PAGE_ID
@@ -56,5 +56,74 @@ class AppTabsTest {
     fun `hiding Discover or Radio removes its tab and nothing else`() {
         val pages = visiblePages(DEFAULT_PAGE_ORDER, setOf("discover", RADIO_PAGE_ID))
         assertEquals(listOf(AppTab.HOME, AppTab.LIBRARY), pillTabs(pages))
+    }
+
+    // ── The two middle buttons are the listener's choice ──────────────────
+
+    @Test
+    fun `out of the box the bar is what it always was`() {
+        assertEquals(listOf("discover", RADIO_PAGE_ID), sanitizeNavBarSlots(null))
+    }
+
+    @Test
+    fun `any two choices become the middle buttons, in slot order`() {
+        val slots = listOf("favorites", "discover")
+        assertEquals(
+            listOf(AppTab.HOME, AppTab.FAVORITES, AppTab.DISCOVER, AppTab.LIBRARY),
+            pillTabs(allPages, slots),
+        )
+    }
+
+    @Test
+    fun `every choice has a button of its own`() {
+        for (id in NAV_BAR_CHOICES) {
+            val tab = tabForPage(id)
+            assertTrue(id, tab != null && tab.pageId == id)
+        }
+    }
+
+    @Test
+    fun `a pinned section lights its own button, the rest still light Library`() {
+        val slots = listOf("favorites", "local")
+        assertEquals(AppTab.FAVORITES, tabFor("favorites", slots))
+        assertEquals(AppTab.LOCAL, tabFor("local", slots))
+        assertEquals(AppTab.LIBRARY, tabFor("playlists", slots))
+        assertEquals(AppTab.LIBRARY, tabFor("downloads", slots))
+    }
+
+    @Test
+    fun `Library skips a section pinned to its own button`() {
+        val slots = listOf("playlists", RADIO_PAGE_ID)
+        // Even when it was the last one open: its button already opens it.
+        val opened = pageForTab(AppTab.LIBRARY, allPages, lastLibrarySection = "playlists", slots = slots)
+        assertTrue(opened in LIBRARY_PAGE_IDS && opened != "playlists")
+    }
+
+    @Test
+    fun `Library still opens something with every section it has pinned`() {
+        val pages = visiblePages(DEFAULT_PAGE_ORDER, setOf("local", "downloads"))
+        val slots = listOf("playlists", "favorites")
+        assertTrue(pageForTab(AppTab.LIBRARY, pages, lastLibrarySection = null, slots = slots) in pages)
+    }
+
+    @Test
+    fun `a hidden page loses its button but keeps its slot`() {
+        val pages = visiblePages(DEFAULT_PAGE_ORDER, setOf("favorites"))
+        assertEquals(listOf(AppTab.HOME, AppTab.DISCOVER, AppTab.LIBRARY), pillTabs(pages, listOf("favorites", "discover")))
+    }
+
+    @Test
+    fun `a bad stored value can cost a slot its choice but never break the bar`() {
+        assertEquals(listOf("favorites", "discover"), sanitizeNavBarSlots(listOf("favorites", "favorites")))
+        assertEquals(listOf("local", "discover"), sanitizeNavBarSlots(listOf("no_such_page", "local")))
+        assertEquals(listOf("local", "playlists"), sanitizeNavBarSlots(listOf("local", "playlists", "favorites")))
+        assertEquals(listOf("discover", RADIO_PAGE_ID), sanitizeNavBarSlots(listOf("", "home", SEARCH_PAGE_ID)))
+    }
+
+    @Test
+    fun `picking the page the other slot holds swaps the two`() {
+        val slots = listOf("discover", "favorites")
+        assertEquals(listOf("favorites", "discover"), withNavBarSlot(slots, 0, "favorites"))
+        assertEquals(listOf("discover", "local"), withNavBarSlot(slots, 1, "local"))
     }
 }

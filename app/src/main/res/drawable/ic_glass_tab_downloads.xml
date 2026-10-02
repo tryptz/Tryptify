@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Nav bar glyph, punched out of the glass slab like the player dock's.
+         Downloads: an arrow down into a tray.
+         Generated as one clean outline set (evenOdd), so overlapping parts
+         never cancel into stray holes when punched. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M13.30,3.20 L13.23,2.78 L13.13,2.55 L12.98,2.34 L12.65,2.07 L12.25,1.92 L11.83,1.91 L11.58,1.97 L11.35,2.07 L11.14,2.22 L10.97,2.41 L10.77,2.78 L10.70,3.20 L10.70,10.86 L8.12,8.28 L7.92,8.12 L7.70,8.00 L7.37,7.91 L7.11,7.90 L6.78,7.97 L6.55,8.07 L6.28,8.28 L6.12,8.48 L6.00,8.70 L5.91,9.03 L5.91,9.37 L5.97,9.62 L6.07,9.85 L6.28,10.12 L11.14,14.98 L11.43,15.17 L11.83,15.29 L12.09,15.30 L12.42,15.23 L12.65,15.13 L12.92,14.92 L17.78,10.06 L18.00,9.70 L18.09,9.37 L18.09,9.03 L18.00,8.70 L17.83,8.41 L17.66,8.22 L17.37,8.03 L17.05,7.92 L16.71,7.90 L16.38,7.97 L16.08,8.12 L15.88,8.28 L13.30,10.86 Z M3.01,19.76 L3.06,19.99 L3.16,20.20 L3.41,20.50 L3.74,20.71 L4.12,20.80 L19.80,20.80 L20.11,20.76 L20.40,20.64 L20.70,20.39 L20.88,20.13 L20.99,19.76 L21.00,15.20 L20.96,14.89 L20.80,14.53 L20.59,14.30 L20.33,14.12 L19.96,14.01 L19.64,14.01 L19.27,14.12 L19.01,14.30 L18.80,14.53 L18.66,14.81 L18.60,15.12 L18.60,18.40 L5.40,18.40 L5.40,15.20 L5.34,14.81 L5.24,14.60 L5.10,14.41 L4.93,14.25 L4.73,14.12 L4.51,14.04 L4.28,14.00 L3.89,14.04 L3.53,14.20 L3.30,14.41 L3.09,14.74 L3.01,15.04 Z" />
+</vector>

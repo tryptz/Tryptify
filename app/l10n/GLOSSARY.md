@@ -38,6 +38,7 @@ not Spain-only), Turkish, German.
 | queue | 播放队列 | キュー | file d’attente | cola | sıra | Warteschlange |
 | like / unlike | 喜欢 / 取消喜欢 | お気に入りに追加 / お気に入りから削除 | J’aime / Je n’aime plus | Me gusta / Ya no me gusta | Beğen / Beğenmekten vazgeç | Gefällt mir / Gefällt mir nicht mehr |
 | Now playing | 正在播放 | 再生中 | En cours de lecture | Reproduciendo | Şimdi çalıyor | Wird gespielt |
+| nav bar (Home · … · Library, Search) | 导航栏 | ナビゲーションバー | barre de navigation | barra de navegación | gezinme çubuğu | Navigationsleiste |
 | Liquid glass | 液态玻璃 | リキッドグラス | verre liquide | cristal líquido | sıvı cam | Liquid Glass |
 | preset | 预设 | プリセット | préréglage | preset | ön ayar | Preset |
 | token (Discord, ListenBrainz) | 令牌 | トークン | jeton | token | belirteç | Token |

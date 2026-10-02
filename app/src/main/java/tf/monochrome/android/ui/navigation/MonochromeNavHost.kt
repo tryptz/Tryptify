@@ -295,6 +295,8 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     val hiddenPages by settingsViewModel.hiddenPages.collectAsStateWithLifecycle()
     // The tabs and the mini player take turns instead of stacking — see TabChrome.
     val miniPlayerHideWithTabs by settingsViewModel.miniPlayerHideWithTabs.collectAsStateWithLifecycle()
+    // The two pages between Home and Library in the nav bar.
+    val navBarSlots by settingsViewModel.navBarSlots.collectAsStateWithLifecycle()
     // The pages the user can show or hide, then Search, which is always there:
     // it is the round button beside the tab bar, not one of the ordered pages.
     val pages = remember(pageOrder, hiddenPages) {
@@ -352,8 +354,10 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     // The Library tab returns to the section that was open last, the way a tab
     // keeps its place. Saveable: it is navigation state, like the page itself.
     var lastLibrarySection by rememberSaveable { mutableStateOf<String?>(null) }
-    LaunchedEffect(currentPageId) {
-        if (currentPageId in LIBRARY_PAGE_IDS) lastLibrarySection = currentPageId
+    // A section pinned to its own button is not where Library goes back to:
+    // that button already opens it.
+    LaunchedEffect(currentPageId, navBarSlots) {
+        if (currentPageId in LIBRARY_PAGE_IDS && currentPageId !in navBarSlots) lastLibrarySection = currentPageId
     }
     // Set by a tap on Search and spent by the Search page's first composition,
     // so the keyboard comes up for a tap and not for coming back to results.
@@ -365,7 +369,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
             navController.navigate(Screen.Home.route)
         }
         if (tab == AppTab.SEARCH) focusSearch = true
-        selectPageWith(pageForTab(tab, pages, lastLibrarySection), false)
+        selectPageWith(pageForTab(tab, pages, lastLibrarySection, navBarSlots), false)
     }
 
     // The bar folds the mini player into itself while the listener scrolls down
@@ -945,9 +949,9 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 tf.monochrome.android.ui.player.LocalPlayerGlass provides miniPlayerGlass,
             ) {
                 TabChrome(
-                    tabs = pillTabs(pages),
+                    tabs = pillTabs(pages, navBarSlots),
                     // On a pushed screen the bar lights the tab underneath it.
-                    selected = tabFor(currentPageId),
+                    selected = tabFor(currentPageId, navBarSlots),
                     onTab = { tab ->
                         // Taking turns, the open bar has no mini player, and a
                         // page too short to scroll could never fold to show it.
@@ -955,7 +959,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                         // — folds the bar instead: the player is always one tap
                         // from anywhere, and switching tab is still one tap.
                         if (miniPlayerHideWithTabs && miniPlayer != null && isOnMainTab &&
-                            !chromeCollapsed && tab == tabFor(currentPageId)
+                            !chromeCollapsed && tab == tabFor(currentPageId, navBarSlots)
                         ) {
                             chromeCollapsed = true
                         } else {

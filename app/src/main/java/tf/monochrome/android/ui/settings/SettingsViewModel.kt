@@ -870,6 +870,16 @@ class SettingsViewModel @Inject constructor(
         if (next != current) setPageOrder(next)
     }
 
+    /** The nav bar's two middle buttons; see [tf.monochrome.android.ui.navigation.NAV_BAR_CHOICES]. */
+    val navBarSlots: StateFlow<List<String>> = preferences.navBarSlots
+        .stateIn(viewModelScope, SharingStarted.Eagerly, tf.monochrome.android.ui.navigation.DEFAULT_NAV_BAR_SLOTS)
+
+    /** Put [pageId] in slot [index]; picking the other slot's page swaps them. */
+    fun setNavBarSlot(index: Int, pageId: String) {
+        val next = tf.monochrome.android.ui.navigation.withNavBarSlot(navBarSlots.value, index, pageId)
+        viewModelScope.launch { preferences.setNavBarSlots(next) }
+    }
+
     fun setPageVisible(id: String, visible: Boolean) {
         val order = _pageOrder.value
         val hidden = _hiddenPages.value
