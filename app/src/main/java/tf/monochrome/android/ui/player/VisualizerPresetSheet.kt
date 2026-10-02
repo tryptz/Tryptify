@@ -29,12 +29,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.draw.alpha
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -126,6 +128,8 @@ fun BoxScope.VisualizerPresetPanel(
     presets: List<VisualizerPreset>,
     selectedPresetId: String?,
     favoritePresetIds: Set<String> = emptySet(),
+    /** Presets that crash the visualizer: shown, marked, and not selectable. */
+    flaggedPresetIds: Set<String> = emptySet(),
     onPresetSelected: (VisualizerPreset) -> Unit,
     onToggleFavorite: (String) -> Unit = {},
     /** The header's gear; null hides it, for a browser already inside Settings. */
@@ -386,15 +390,25 @@ fun BoxScope.VisualizerPresetPanel(
                                 }
                             }
                             items(visiblePresets, key = { it.id }) { preset ->
+                                val flagged = preset.id in flaggedPresetIds
                                 VisualizerPresetRow(
                                     preset = preset,
                                     title = index.titleOf(preset),
-                                    subtitle = subtitleFor(index, preset, scope),
+                                    subtitle = if (flagged) {
+                                        stringResource(R.string.preset_flagged_crashes)
+                                    } else {
+                                        subtitleFor(index, preset, scope)
+                                    },
                                     selected = preset.id == selectedPresetId,
                                     isFavorite = preset.id in favoritePresetIds,
+                                    flagged = flagged,
                                     onClick = {
-                                        onPresetSelected(preset)
-                                        onDismiss()
+                                        // Not loaded, and the sheet stays open:
+                                        // closing it would read as "it worked".
+                                        if (!flagged) {
+                                            onPresetSelected(preset)
+                                            onDismiss()
+                                        }
                                     },
                                     onToggleFavorite = { onToggleFavorite(preset.id) },
                                 )
@@ -715,6 +729,7 @@ private fun VisualizerPresetRow(
     subtitle: String,
     selected: Boolean,
     isFavorite: Boolean,
+    flagged: Boolean,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
@@ -733,6 +748,7 @@ private fun VisualizerPresetRow(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(if (flagged) FLAGGED_ROW_ALPHA else 1f)
             .glassSqueeze(press = rememberGlassPress(), onClick = onClick),
         shape = RoundedCornerShape(20.dp),
         color = if (selected) {
@@ -761,6 +777,13 @@ private fun VisualizerPresetRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (flagged) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = stringResource(R.string.preset_flagged_cd),
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
@@ -798,3 +821,6 @@ private fun VisualizerPresetRow(
         }
     }
 }
+
+/** Dimmed rather than hidden: a preset that silently vanished would look like a bug in the browser. */
+private const val FLAGGED_ROW_ALPHA = 0.55f

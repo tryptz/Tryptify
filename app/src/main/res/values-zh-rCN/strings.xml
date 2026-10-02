@@ -1755,4 +1755,13 @@
     <string name="waterfall_album_colour">专辑</string>
     <string name="waterfall_custom_colour">自定义</string>
     <string name="waterfall_colour_desc">专辑颜色随封面变化；自定义颜色在每首歌上都保持不变。“热度”样式使用自己的配色。</string>
+    <string name="preset_flagged_crashes">会导致可视化崩溃，因此不会加载</string>
+    <string name="preset_flagged_cd">已标记：会导致可视化崩溃</string>
+    <string name="settings_flagged_presets">已标记为崩溃的预设</string>
+    <plurals name="settings_flagged_presets_summary">
+        <item quantity="other">%1$d 个预设会导致可视化崩溃，因此不会加载。</item>
+    </plurals>
+    <plurals name="settings_flagged_presets_device">
+        <item quantity="other">其中 %1$d 个是在此设备上标记的；点按即可重新允许。</item>
+    </plurals>
 </resources>

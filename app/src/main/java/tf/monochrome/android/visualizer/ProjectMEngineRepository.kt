@@ -17,7 +17,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.VisualizerEnginePhase
 import tf.monochrome.android.domain.model.VisualizerEngineStatus
@@ -89,6 +91,23 @@ class ProjectMEngineRepository @Inject constructor(
 
     private val _favoritePresetIds = MutableStateFlow<Set<String>>(emptySet())
     val favoritePresetIds: StateFlow<Set<String>> = _favoritePresetIds.asStateFlow()
+
+    /**
+     * Presets that are never loaded, by id: the ones the host scan found
+     * crashing projectM ([KnownCrashPresets]) and any this device has crashed
+     * on. The browser shows them flagged; the playlist does not contain them.
+     */
+    private val _flaggedPresetIds = MutableStateFlow<Set<String>>(emptySet())
+    val flaggedPresetIds: StateFlow<Set<String>> = _flaggedPresetIds.asStateFlow()
+
+    private val _deviceFlaggedCount = MutableStateFlow(0)
+    /** How many presets this device has flagged itself, for Settings' reset row. */
+    val deviceFlaggedCount: StateFlow<Int> = _deviceFlaggedCount.asStateFlow()
+
+    /** This device's own crash flags, as preset-relative paths. Guarded by engineLock. */
+    private var deviceCrashedPresets: Set<String> = emptySet()
+
+    private val crashGuard = PresetCrashGuard(context, File(context.filesDir, "projectm/active-preset"))
 
     private val _currentFps = MutableStateFlow(0)
     val currentFps: StateFlow<Int> = _currentFps.asStateFlow()
@@ -239,6 +258,7 @@ class ProjectMEngineRepository @Inject constructor(
             preferences.visualizerPresetId.collectLatest { presetId ->
                 preferredPresetId = presetId
                 val selected = _presets.value.firstOrNull { it.id == presetId }
+                    ?.takeUnless { it.id in _flaggedPresetIds.value }
                 if (selected != null) {
                     _currentPreset.value = selected
                     requestPresetOnGlThread(PendingPresetRequest.Select(selected))
@@ -345,7 +365,12 @@ class ProjectMEngineRepository @Inject constructor(
             // The old EGL context is gone; the native handle is invalid.
             releaseNativeLocked()
 
-            val initialized = nativeBridge.initialize(assets.rootDir.absolutePath, width, height, meshX, meshY)
+            val excluded = flaggedRelativePathsLocked().map { File(assets.presetDir, it).absolutePath }
+            val initialized = nativeBridge.initialize(
+                assets.rootDir.absolutePath, width, height, meshX, meshY,
+                excludedPresets = excluded,
+                crashSentinel = crashGuard.sentinel,
+            )
             if (!initialized) {
                 updateStatus(
                     phase = VisualizerEnginePhase.ERROR,
@@ -543,7 +568,21 @@ class ProjectMEngineRepository @Inject constructor(
     }
 
     fun selectPreset(preset: VisualizerPreset) {
+        if (preset.id in _flaggedPresetIds.value) return
         applyPreset(preset, recordHistory = true)
+    }
+
+    /**
+     * Forgets the presets this device flagged itself. The shipped list stays.
+     * The playlist is built when the engine starts, so they come back into
+     * rotation the next time the visualizer opens.
+     */
+    fun clearDeviceCrashFlags() {
+        synchronized(engineLock) {
+            deviceCrashedPresets = emptySet()
+            refreshFlagsLocked()
+        }
+        scope.launch { preferences.clearVisualizerCrashedPresets() }
     }
 
     /**
@@ -661,9 +700,11 @@ class ProjectMEngineRepository @Inject constructor(
             val presets = presetCatalog.load(assets.catalogFile)
             installedAssets = assets
             _presets.value = presets
+            loadCrashFlagsLocked(assets)
+            val flagged = _flaggedPresetIds.value
             _currentPreset.value = preferredPresetId?.let { id ->
                 presets.firstOrNull { it.id == id }
-            } ?: presets.firstOrNull()
+            }?.takeUnless { it.id in flagged } ?: presets.firstOrNull { it.id !in flagged }
             Log.d(TAG, "Loaded ${presets.size} presets from catalog")
             updateStatus(
                 phase = VisualizerEnginePhase.READY,
@@ -761,12 +802,47 @@ class ProjectMEngineRepository @Inject constructor(
         trigger?.invoke()
     }
 
+    /**
+     * Once per process, before the first engine: judges the sentinel the last
+     * process may have left, and reads this device's flags.
+     *
+     * Read blocking, unlike every other preference here, because the playlist
+     * is built from them the moment a surface attaches. A collector would race
+     * that, and losing the race means loading the very preset that crashed.
+     * This runs on the install thread or the GL thread, never the main one.
+     */
+    private fun loadCrashFlagsLocked(assets: InstalledProjectMAssets) {
+        val stored = runBlocking { preferences.visualizerCrashedPresets.first() }
+        val crashed = crashGuard.takeCrashedPreset()?.let { absolute ->
+            File(absolute).relativeToOrNull(assets.presetDir)?.invariantSeparatorsPath
+        }
+        deviceCrashedPresets = if (crashed != null) stored + crashed else stored
+        if (crashed != null && crashed !in stored) {
+            scope.launch { preferences.addVisualizerCrashedPreset(crashed) }
+        }
+        refreshFlagsLocked()
+    }
+
+    private fun flaggedRelativePathsLocked(): Set<String> = KnownCrashPresets.paths + deviceCrashedPresets
+
+    private fun refreshFlagsLocked() {
+        val flagged = flaggedRelativePathsLocked()
+        _flaggedPresetIds.value = _presets.value
+            .filter { it.filePath.removePrefix(PRESET_DIR_PREFIX) in flagged }
+            .mapTo(HashSet()) { it.id }
+        _deviceFlaggedCount.value = deviceCrashedPresets.size
+        if (_currentPreset.value?.id in _flaggedPresetIds.value) {
+            _currentPreset.value = null
+        }
+    }
+
     private fun applyPreferredPresetLocked() {
         val presets = _presets.value
         if (presets.isEmpty()) return
+        val flagged = _flaggedPresetIds.value
         val selected = preferredPresetId?.let { id ->
             presets.firstOrNull { it.id == id }
-        } ?: presets.first()
+        }?.takeUnless { it.id in flagged } ?: presets.firstOrNull { it.id !in flagged } ?: return
         if (nativeBridge.setPreset(resolveAbsolutePresetPath(selected))) {
             _currentPreset.value = selected
         } else {
@@ -816,6 +892,8 @@ class ProjectMEngineRepository @Inject constructor(
 
     companion object {
         private const val TAG = "ProjectMEngineRepository"
+        /** Catalog file paths start here; [KnownCrashPresets] is relative to it. */
+        private const val PRESET_DIR_PREFIX = "presets/"
     }
 }
 

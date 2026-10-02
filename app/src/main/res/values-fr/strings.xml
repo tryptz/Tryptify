@@ -1853,4 +1853,17 @@
     <string name="waterfall_album_colour">Album</string>
     <string name="waterfall_custom_colour">Personnalisée</string>
     <string name="waterfall_colour_desc">La couleur de l’album suit la pochette ; une couleur personnalisée reste la même sur chaque titre. Chaleur garde sa propre palette.</string>
+    <string name="preset_flagged_crashes">Fait planter le visualiseur, il n’est donc jamais chargé</string>
+    <string name="preset_flagged_cd">Signalé : fait planter le visualiseur</string>
+    <string name="settings_flagged_presets">Préréglages qui font planter</string>
+    <plurals name="settings_flagged_presets_summary">
+        <item quantity="one">%1$d préréglage n’est jamais chargé, car il fait planter le visualiseur.</item>
+        <item quantity="many">%1$d préréglages ne sont jamais chargés, car ils font planter le visualiseur.</item>
+        <item quantity="other">%1$d préréglages ne sont jamais chargés, car ils font planter le visualiseur.</item>
+    </plurals>
+    <plurals name="settings_flagged_presets_device">
+        <item quantity="one">Dont %1$d signalé sur cet appareil ; touchez pour lui redonner une chance.</item>
+        <item quantity="many">Dont %1$d signalés sur cet appareil ; touchez pour leur redonner une chance.</item>
+        <item quantity="other">Dont %1$d signalés sur cet appareil ; touchez pour leur redonner une chance.</item>
+    </plurals>
 </resources>

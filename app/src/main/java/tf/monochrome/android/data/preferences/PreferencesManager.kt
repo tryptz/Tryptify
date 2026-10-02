@@ -328,6 +328,10 @@ class PreferencesManager @Inject constructor(
         private val VISUALIZER_OVERLAY_BLEND = stringPreferencesKey("visualizer_overlay_blend")
         private val VISUALIZER_OVERLAY_HIDE_COVER = booleanPreferencesKey("visualizer_overlay_hide_cover")
         private val VISUALIZER_FAVORITE_PRESETS = stringSetPreferencesKey("visualizer_favorite_presets")
+        // Presets this device crashed on, as paths relative to the preset root.
+        // Never synced: a preset that kills one phone's GPU driver can be fine
+        // on the next.
+        private val VISUALIZER_CRASHED_PRESETS = stringSetPreferencesKey("visualizer_crashed_presets")
 
         // AI
         private val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
@@ -1575,6 +1579,18 @@ class PreferencesManager @Inject constructor(
                 current + presetId
             }
         }
+    }
+
+    val visualizerCrashedPresets: Flow<Set<String>> = dataStore.data.map {
+        it[VISUALIZER_CRASHED_PRESETS] ?: emptySet()
+    }
+    suspend fun addVisualizerCrashedPreset(relativePath: String) {
+        dataStore.edit { prefs ->
+            prefs[VISUALIZER_CRASHED_PRESETS] = (prefs[VISUALIZER_CRASHED_PRESETS] ?: emptySet()) + relativePath
+        }
+    }
+    suspend fun clearVisualizerCrashedPresets() {
+        dataStore.edit { it.remove(VISUALIZER_CRASHED_PRESETS) }
     }
 
     val nowPlayingViewMode: Flow<NowPlayingViewMode> = dataStore.data.map { prefs ->

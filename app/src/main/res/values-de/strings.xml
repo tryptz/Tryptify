@@ -1804,4 +1804,15 @@
     <string name="waterfall_album_colour">Album</string>
     <string name="waterfall_custom_colour">Eigene</string>
     <string name="waterfall_colour_desc">Die Albumfarbe folgt dem Cover; eine eigene Farbe bleibt bei jedem Titel gleich. Hitze behält ihre eigene Palette.</string>
+    <string name="preset_flagged_crashes">Bringt den Visualizer zum Absturz und wird deshalb nie geladen</string>
+    <string name="preset_flagged_cd">Markiert: bringt den Visualizer zum Absturz</string>
+    <string name="settings_flagged_presets">Presets mit Absturz-Markierung</string>
+    <plurals name="settings_flagged_presets_summary">
+        <item quantity="one">%1$d Preset wird nie geladen, weil es den Visualizer zum Absturz bringt.</item>
+        <item quantity="other">%1$d Presets werden nie geladen, weil sie den Visualizer zum Absturz bringen.</item>
+    </plurals>
+    <plurals name="settings_flagged_presets_device">
+        <item quantity="one">%1$d davon wurde auf diesem Gerät markiert – tippe, um ihm noch eine Chance zu geben.</item>
+        <item quantity="other">%1$d davon wurden auf diesem Gerät markiert – tippe, um ihnen noch eine Chance zu geben.</item>
+    </plurals>
 </resources>

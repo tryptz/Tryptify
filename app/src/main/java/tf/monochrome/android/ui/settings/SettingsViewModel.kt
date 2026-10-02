@@ -382,6 +382,9 @@ class SettingsViewModel @Inject constructor(
     val visualizerPresets: StateFlow<List<VisualizerPreset>> = projectMEngineRepository.presets
     /** The preset browser's hearts, shared with the player's browser. */
     val visualizerFavoritePresetIds: StateFlow<Set<String>> = projectMEngineRepository.favoritePresetIds
+    val visualizerFlaggedPresetIds: StateFlow<Set<String>> = projectMEngineRepository.flaggedPresetIds
+    val visualizerDeviceFlaggedCount: StateFlow<Int> = projectMEngineRepository.deviceFlaggedCount
+    fun clearVisualizerCrashFlags() = projectMEngineRepository.clearDeviceCrashFlags()
     fun toggleVisualizerFavoritePreset(presetId: String) = projectMEngineRepository.toggleFavoritePreset(presetId)
 
     /** Ensures presets are installed/loaded so the visualizer settings have data. */

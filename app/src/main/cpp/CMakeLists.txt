@@ -20,6 +20,10 @@ set(CMAKE_PROJECT_VERSION_PATCH 6)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/projectm
     ${CMAKE_CURRENT_BINARY_DIR}/projectm)
 
+# Crash fixes to projectM's own sources, swapped in without touching the
+# submodule. See projectm_patches/projectm_patches.cmake for what and why.
+include(${CMAKE_CURRENT_SOURCE_DIR}/projectm_patches/projectm_patches.cmake)
+
 # The ProjectM subproject defaults to appending 'd' to the library name in
 # debug builds (libprojectM-4d.so / libprojectM-4-playlistd.so), which means
 # System.loadLibrary("projectM-4") fails and triggers a scary `dlopen failed`

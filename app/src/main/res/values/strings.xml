@@ -1805,4 +1805,15 @@
     <string name="waterfall_album_colour">Album</string>
     <string name="waterfall_custom_colour">Custom</string>
     <string name="waterfall_colour_desc">The album’s colour follows the cover; a custom one stays the same on every track. Heat keeps its own palette.</string>
+    <string name="preset_flagged_crashes">Crashes the visualizer, so it never loads</string>
+    <string name="preset_flagged_cd">Flagged: crashes the visualizer</string>
+    <string name="settings_flagged_presets">Crash-flagged presets</string>
+    <plurals name="settings_flagged_presets_summary">
+        <item quantity="one">%1$d preset is never loaded because it crashes the visualizer.</item>
+        <item quantity="other">%1$d presets are never loaded because they crash the visualizer.</item>
+    </plurals>
+    <plurals name="settings_flagged_presets_device">
+        <item quantity="one">%1$d of them was flagged on this device; tap to give it another chance.</item>
+        <item quantity="other">%1$d of them were flagged on this device; tap to give them another chance.</item>
+    </plurals>
 </resources>

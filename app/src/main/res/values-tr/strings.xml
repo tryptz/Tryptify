@@ -1804,4 +1804,15 @@
     <string name="waterfall_album_colour">Albüm</string>
     <string name="waterfall_custom_colour">Özel</string>
     <string name="waterfall_colour_desc">Albüm rengi kapağı izler; özel renk her parçada aynı kalır. Isı kendi paletini korur.</string>
+    <string name="preset_flagged_crashes">Görselleştiricinin çökmesine neden olduğu için hiç yüklenmez</string>
+    <string name="preset_flagged_cd">İşaretli: görselleştiricinin çökmesine neden olur</string>
+    <string name="settings_flagged_presets">Çökme nedeniyle işaretlenen ön ayarlar</string>
+    <plurals name="settings_flagged_presets_summary">
+        <item quantity="one">%1$d ön ayar görselleştiricinin çökmesine neden olduğu için hiç yüklenmez.</item>
+        <item quantity="other">%1$d ön ayar görselleştiricinin çökmesine neden olduğu için hiç yüklenmez.</item>
+    </plurals>
+    <plurals name="settings_flagged_presets_device">
+        <item quantity="one">Bunlardan %1$d tanesi bu cihazda işaretlendi; yeniden denemek için dokunun.</item>
+        <item quantity="other">Bunlardan %1$d tanesi bu cihazda işaretlendi; yeniden denemek için dokunun.</item>
+    </plurals>
 </resources>

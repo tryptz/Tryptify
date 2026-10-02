@@ -1853,4 +1853,17 @@
     <string name="waterfall_album_colour">Álbum</string>
     <string name="waterfall_custom_colour">Personalizado</string>
     <string name="waterfall_colour_desc">El color del álbum sigue a la portada; uno personalizado se mantiene igual en cada canción. Calor conserva su propia paleta.</string>
+    <string name="preset_flagged_crashes">Provoca un cierre inesperado del visualizador, así que nunca se carga</string>
+    <string name="preset_flagged_cd">Marcado: provoca un cierre inesperado del visualizador</string>
+    <string name="settings_flagged_presets">Presets marcados por cierres inesperados</string>
+    <plurals name="settings_flagged_presets_summary">
+        <item quantity="one">%1$d preset nunca se carga porque provoca un cierre inesperado del visualizador.</item>
+        <item quantity="many">%1$d presets nunca se cargan porque provocan un cierre inesperado del visualizador.</item>
+        <item quantity="other">%1$d presets nunca se cargan porque provocan un cierre inesperado del visualizador.</item>
+    </plurals>
+    <plurals name="settings_flagged_presets_device">
+        <item quantity="one">%1$d se marcó en este dispositivo; toca para darle otra oportunidad.</item>
+        <item quantity="many">%1$d se marcaron en este dispositivo; toca para darles otra oportunidad.</item>
+        <item quantity="other">%1$d se marcaron en este dispositivo; toca para darles otra oportunidad.</item>
+    </plurals>
 </resources>

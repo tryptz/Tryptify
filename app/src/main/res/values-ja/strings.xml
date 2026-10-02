@@ -1755,4 +1755,13 @@
     <string name="waterfall_album_colour">アルバム</string>
     <string name="waterfall_custom_colour">カスタム</string>
     <string name="waterfall_colour_desc">アルバムの色はカバーに合わせて変わり、カスタムの色はどの曲でも同じです。「ヒート」は独自の配色を使います。</string>
+    <string name="preset_flagged_crashes">ビジュアライザがクラッシュするため読み込みません</string>
+    <string name="preset_flagged_cd">フラグ付き：ビジュアライザがクラッシュします</string>
+    <string name="settings_flagged_presets">クラッシュのフラグが付いたプリセット</string>
+    <plurals name="settings_flagged_presets_summary">
+        <item quantity="other">%1$d 件のプリセットはビジュアライザがクラッシュするため読み込みません。</item>
+    </plurals>
+    <plurals name="settings_flagged_presets_device">
+        <item quantity="other">うち %1$d 件はこのデバイスで付いたフラグです。タップすると解除します。</item>
+    </plurals>
 </resources>

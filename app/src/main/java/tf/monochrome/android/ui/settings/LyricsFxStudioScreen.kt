@@ -620,11 +620,13 @@ fun LyricsFxStudioScreen(
             val presets by settingsViewModel.visualizerPresets.collectAsStateWithLifecycle()
             val presetId by settingsViewModel.visualizerPresetId.collectAsStateWithLifecycle()
             val favorites by settingsViewModel.visualizerFavoritePresetIds.collectAsStateWithLifecycle()
+            val flagged by settingsViewModel.visualizerFlaggedPresetIds.collectAsStateWithLifecycle()
             VisualizerPresetPanel(
                 visible = showPresetBrowser,
                 presets = presets,
                 selectedPresetId = presetId,
                 favoritePresetIds = favorites,
+                flaggedPresetIds = flagged,
                 onPresetSelected = { settingsViewModel.setVisualizerPresetId(it.id) },
                 onToggleFavorite = settingsViewModel::toggleVisualizerFavoritePreset,
                 // Already in the settings it would open.

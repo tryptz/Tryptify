@@ -104,6 +104,10 @@ old_HomeViewModel.kt
 # The Atmos real-content reference check's analysis script (the blanket *.py
 # rule would leave run.sh calling a file that isn't in the repo).
 !app/src/main/cpp/atmos/tools/reference_check/compare.py
+# The preset crash scanner: a host CMake project and its driver, which
+# KnownCrashPresets.kt is regenerated from. Same two blanket rules.
+!tools/preset_crash_scan/CMakeLists.txt
+!tools/preset_crash_scan/scan.py
 
 # The genre graph's source and build/validate scripts. The committed JSON assets
 # above are generated from these, so without them the dataset is unmaintainable.

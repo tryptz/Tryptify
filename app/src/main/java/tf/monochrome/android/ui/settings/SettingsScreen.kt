@@ -1314,6 +1314,25 @@ internal fun VisualizerSettings(
             subtitle = selectedPresetName,
             onClick = onOpenPresetBrowser,
         )
+        // Presets that crash projectM are never loaded. The count says how many
+        // the browser will show flagged; the ones this phone flagged itself can
+        // be forgiven here, say after a GPU driver update.
+        val flaggedCount = viewModel.visualizerFlaggedPresetIds.collectAsStateWithLifecycle().value.size
+        val deviceFlagged by viewModel.visualizerDeviceFlaggedCount.collectAsStateWithLifecycle()
+        if (flaggedCount > 0 || deviceFlagged > 0) {
+            val summary = pluralStringResource(R.plurals.settings_flagged_presets_summary, flaggedCount, flaggedCount)
+            SettingItem(
+                title = stringResource(R.string.settings_flagged_presets),
+                subtitle = if (deviceFlagged > 0) {
+                    summary + " " + pluralStringResource(
+                        R.plurals.settings_flagged_presets_device, deviceFlagged, deviceFlagged,
+                    )
+                } else {
+                    summary
+                },
+                onClick = { if (deviceFlagged > 0) viewModel.clearVisualizerCrashFlags() },
+            )
+        }
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader(stringResource(R.string.settings_visualizer_graphics))
         
