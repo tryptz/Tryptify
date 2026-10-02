@@ -8,6 +8,10 @@ import kotlinx.serialization.Serializable
  * field is clamped on the way in and out, so a hand-edited or newer blob
  * cannot put the scope somewhere it cannot draw.
  */
+/** How the waveform stands off the cover: a glow in its own colour, a soft dark shadow, or nothing. */
+@Serializable
+enum class WaveGlow(val label: String) { NEON("Neon"), SHADOW("Shadow"), NONE("None") }
+
 @Serializable
 data class WaveCandySettings(
     /** Left across the top, right across the bottom; false is one summed line. */
@@ -20,6 +24,8 @@ data class WaveCandySettings(
     val thicknessDp: Float = 1.6f,
     /** Line colour: the album's accent rather than white. */
     val albumColor: Boolean = false,
+    /** What sets the line off the cover. */
+    val glow: WaveGlow = WaveGlow.NEON,
     /** The cover punching in on each kick. */
     val kickEnabled: Boolean = true,
     /** How far the cover punches in on a kick, as a fraction (0.05 = 5%). */

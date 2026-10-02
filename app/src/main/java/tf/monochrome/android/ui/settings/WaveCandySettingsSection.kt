@@ -65,6 +65,18 @@ internal fun WaveCandySettingsSection(
         checked = settings.albumColor,
         onCheckedChange = { onChange(settings.copy(albumColor = it)) },
     )
+    Text("Glow", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.settingsAnchor("Glow").padding(top = 8.dp, bottom = 6.dp))
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+        tf.monochrome.android.domain.model.WaveGlow.entries.forEach { g ->
+            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                label = g.label,
+                selected = settings.glow == g,
+                accent = MaterialTheme.colorScheme.primary,
+                onClick = { onChange(settings.copy(glow = g)) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
     WaveSlider("Time window", settings.windowMs, WaveCandySettings.MIN_WINDOW_MS..WaveCandySettings.MAX_WINDOW_MS,
         { "${it.toInt()} ms" }) { onChange(settings.copy(windowMs = it)) }
     WaveSlider("Height", settings.gain, 0.25f..3f, { String.format(Locale.US, "%.2fx", it) }) {

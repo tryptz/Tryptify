@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.isActive
 import tf.monochrome.android.audio.eq.WaveScopeNative
 import tf.monochrome.android.domain.model.WaveCandySettings
+import tf.monochrome.android.domain.model.WaveGlow
 
 /**
  * FL Studio's Wave Candy oscilloscope over the artwork: the waveform and
@@ -30,8 +31,8 @@ import tf.monochrome.android.domain.model.WaveCandySettings
  * draws them: one `drawLines` per pass on a reused array and reused Paints,
  * nothing allocated per frame, one int state bumped to redraw.
  *
- * Lines are white (or the album accent) over a dark underlay, so they hold on
- * light covers too, and swell with [kick].
+ * Lines are white (or the album accent) set off by a neon glow in their own
+ * colour or a soft drop shadow, per [settings], and swell with [kick].
  */
 @Composable
 fun WaveCandyOverlay(
@@ -43,7 +44,6 @@ fun WaveCandyOverlay(
     val segs = remember { FloatArray((POINTS - 1) * 4 * 2) }
     val tick = remember { mutableIntStateOf(0) }
     val ink = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND } }
-    val shade = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND } }
 
     LaunchedEffect(Unit) {
         while (isActive) {
@@ -61,14 +61,23 @@ fun WaveCandyOverlay(
         )
         if (n <= 0) return@Canvas
         val thick = settings.thicknessDp.dp.toPx() * (1f + 0.6f * k)
-        ink.color = (if (settings.albumColor) accent else Color.White).copy(alpha = 0.92f).toArgb()
+        val line = if (settings.albumColor) accent else Color.White
+        ink.color = line.toArgb()
         ink.strokeWidth = thick
-        shade.color = Color.Black.copy(alpha = 0.45f).toArgb()
-        shade.strokeWidth = thick + 3.dp.toPx()
-        drawIntoCanvas { c ->
-            c.nativeCanvas.drawLines(segs, 0, n, shade)
-            c.nativeCanvas.drawLines(segs, 0, n, ink)
+        // The glow is the line paint's own shadow layer: one GPU pass, and the
+        // segments blur as one stroke, so their joins do not stack into beads
+        // the way a separate translucent underlay did. Hardware canvases draw
+        // shadow layers for lines from API 28; below that the line is plain.
+        when (settings.glow) {
+            WaveGlow.NEON -> ink.setShadowLayer(
+                (8f + 6f * k).dp.toPx(), 0f, 0f, line.copy(alpha = 0.95f).toArgb(),
+            )
+            WaveGlow.SHADOW -> ink.setShadowLayer(
+                5.dp.toPx(), 0f, 2.dp.toPx(), Color.Black.copy(alpha = 0.6f).toArgb(),
+            )
+            WaveGlow.NONE -> ink.clearShadowLayer()
         }
+        drawIntoCanvas { c -> c.nativeCanvas.drawLines(segs, 0, n, ink) }
     }
 }
 

@@ -15,6 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -798,12 +799,19 @@ private fun HeroCoverArt(
         )
 
         if (spectrumEnabled && waveCandy && waveSettings != null) {
-            WaveCandyOverlay(
-                settings = waveSettings,
-                accent = spectrumColor,
-                kick = kick,
-                modifier = Modifier.matchParentSize(),
-            )
+            // The bottom quarter of the art — the cover stays readable above
+            // it. The native layout places the lines within whatever box it is
+            // given, so the band is just the box.
+            BoxWithConstraints(
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+            ) {
+                WaveCandyOverlay(
+                    settings = waveSettings,
+                    accent = spectrumColor,
+                    kick = kick,
+                    modifier = Modifier.fillMaxWidth().height(maxHeight * 0.25f),
+                )
+            }
         } else if (spectrumEnabled && spectrumBins.isNotEmpty()) {
             BoxWithConstraints(
                 modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
