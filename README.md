@@ -22,49 +22,52 @@
 
 <table>
   <tr>
+    <td colspan="3" align="center">
+      <img src="docs/screenshots/player-glass-spectrum.jpg" width="45%" alt="Glass spectrum. The player with the single-line Glass spectrum over the cover and the visualizer as the ambient background. Pitch readout in the top bar, glass dock with lyrics, shuffle, mixer and queue.">
+      <br>
+      <b>Glass spectrum.</b> The player with the single-line Glass spectrum over the cover and the visualizer as the ambient background. Pitch readout in the top bar, glass dock with lyrics, shuffle, mixer and queue.
+    </td>
+  </tr>
+  <tr>
     <td width="33%" valign="top">
       <img src="docs/screenshots/player-ridgeline-ambient.jpg" alt="Ridgeline spectrum. The player with the Ridgeline waterfall over the cover and the MilkDrop visualizer as the ambient background. BPM readout in the top bar, source pill under the artist.">
       <b>Ridgeline spectrum.</b> The player with the Ridgeline waterfall over the cover and the MilkDrop visualizer as the ambient background. BPM readout in the top bar, source pill under the artist.
     </td>
     <td width="33%" valign="top">
-      <img src="docs/screenshots/player-glass-spectrum.jpg" alt="Glass spectrum. The player with the single-line Glass spectrum over the cover and the visualizer as the ambient background. Pitch readout in the top bar, glass dock with lyrics, shuffle, mixer and queue.">
-      <b>Glass spectrum.</b> The player with the single-line Glass spectrum over the cover and the visualizer as the ambient background. Pitch readout in the top bar, glass dock with lyrics, shuffle, mixer and queue.
-    </td>
-    <td width="33%" valign="top">
       <img src="docs/screenshots/player-deezer-waterfall.jpg" alt="Waterfall spectrum. The player with the waterfall over the cover, a Deezer source pill and the pitch readout in the top bar.">
       <b>Waterfall spectrum.</b> The player with the waterfall over the cover, a Deezer source pill and the pitch readout in the top bar.
     </td>
-  </tr>
-  <tr>
-    <td valign="top">
+    <td width="33%" valign="top">
       <img src="docs/screenshots/home-nav-bar.jpg" alt="Home. Recently Played and Liked Songs with TIDAL, Deezer, Qobuz and Local source pills, the mini player, and the glass nav bar with the Search button.">
       <b>Home.</b> Recently Played and Liked Songs with TIDAL, Deezer, Qobuz and Local source pills, the mini player, and the glass nav bar with the Search button.
     </td>
-    <td valign="top">
-      <img src="docs/screenshots/mixer-add-plugin.jpg" alt="Mixer. Surround buses (Front, Centre, LFE), a Reverb plugin editor, and the Add Plugin sheet with Utility, EQ &amp; Filter and Dynamics processors.">
-      <b>Mixer.</b> Surround buses (Front, Centre, LFE), a Reverb plugin editor, and the Add Plugin sheet with Utility, EQ &amp; Filter and Dynamics processors.
-    </td>
-    <td valign="top">
-      <img src="docs/screenshots/autoeq.jpg" alt="AutoEQ. Original, Target and Corrected response curves, smoothing, preamp, Peaking or Shelf ends algorithm, tone, automatic preamp and 2-channel calibration.">
-      <b>AutoEQ.</b> Original, Target and Corrected response curves, smoothing, preamp, Peaking or Shelf ends algorithm, tone, automatic preamp and 2-channel calibration.
-    </td>
   </tr>
   <tr>
-    <td width="25%" valign="top">
+    <td width="33%" valign="top">
       <img src="docs/screenshots/mixer-buses.jpg" alt="Mixer buses. Four buses and the master with faders, level meters, pan, mute and solo, effect counts, routing cables between buses, and a LUFS loudness meter on the master.">
       <b>Mixer buses.</b> Four buses and the master with faders, level meters, pan, mute and solo, effect counts, routing cables between buses, and a LUFS loudness meter on the master.
     </td>
-    <td width="25%" valign="top">
+    <td width="33%" valign="top">
       <img src="docs/screenshots/fx-chain-reverb.jpg" alt="FX Chain. A Reverb on the Centre bus of a surround layout: decay graph, presets, twelve knobs, dry/wet mix and oversampling.">
       <b>FX Chain.</b> A Reverb on the Centre bus of a surround layout: decay graph, presets, twelve knobs, dry/wet mix and oversampling.
     </td>
-    <td width="25%" valign="top">
+    <td width="33%" valign="top">
+      <img src="docs/screenshots/mixer-add-plugin.jpg" alt="Mixer. Surround buses (Front, Centre, LFE), a Reverb plugin editor, and the Add Plugin sheet with Utility, EQ &amp; Filter and Dynamics processors.">
+      <b>Mixer.</b> Surround buses (Front, Centre, LFE), a Reverb plugin editor, and the Add Plugin sheet with Utility, EQ &amp; Filter and Dynamics processors.
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" valign="top">
       <img src="docs/screenshots/speed-pitch.jpg" alt="Speed and pitch. The Audio tools sheet with speed as a multiplier, in semitones or in BPM, Preserve pitch, and a separate pitch control. Detected BPM in the top bar.">
       <b>Speed and pitch.</b> The Audio tools sheet with speed as a multiplier, in semitones or in BPM, Preserve pitch, and a separate pitch control. Detected BPM in the top bar.
     </td>
-    <td width="25%" valign="top">
+    <td width="33%" valign="top">
       <img src="docs/screenshots/lyrics.jpg" alt="Lyrics. Synced lyrics with the current line highlighted, over the ambient visualizer, and the lyrics button lit in the dock.">
       <b>Lyrics.</b> Synced lyrics with the current line highlighted, over the ambient visualizer, and the lyrics button lit in the dock.
+    </td>
+    <td width="33%" valign="top">
+      <img src="docs/screenshots/autoeq.jpg" alt="AutoEQ. Original, Target and Corrected response curves, smoothing, preamp, Peaking or Shelf ends algorithm, tone, automatic preamp and 2-channel calibration.">
+      <b>AutoEQ.</b> Original, Target and Corrected response curves, smoothing, preamp, Peaking or Shelf ends algorithm, tone, automatic preamp and 2-channel calibration.
     </td>
   </tr>
 </table>
