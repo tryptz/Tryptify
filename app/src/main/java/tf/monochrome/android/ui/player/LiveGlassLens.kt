@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
@@ -90,7 +91,7 @@ internal fun Modifier.liveGlassLens(
         onDispose { view.viewTreeObserver.removeOnPreDrawListener(listener) }
     }
 
-    val shape = remember(corner) { RoundedCornerShape(corner) }
+    val shape = remember(corner) { lensClipShape(corner) }
     return this
         .onGloballyPositioned { anchor.screen = it.positionOnScreen() }
         .graphicsLayer {
@@ -138,6 +139,17 @@ internal fun Modifier.liveGlassLens(
                 }
         }
 }
+
+/**
+ * The clip for a lens of [corner], which may be [Dp.Infinity] for a disc or a
+ * pill. `RoundedCornerShape(Dp.Infinity)` cannot be drawn: Compose scales
+ * corners that overflow the box by minDimension / their sum, which for
+ * infinite corners is 0, and infinity × 0 is NaN — it throws on the first
+ * frame. The full player's disc crashed exactly that way. 50% is the same
+ * shape with finite corners.
+ */
+internal fun lensClipShape(corner: Dp): Shape =
+    if (corner.value.isFinite()) RoundedCornerShape(corner) else RoundedCornerShape(percent = 50)
 
 /** Off restores the haze pane under the mini player and every GlassPanel, exactly. */
 internal const val LIVE_LENS_GLASS = true
