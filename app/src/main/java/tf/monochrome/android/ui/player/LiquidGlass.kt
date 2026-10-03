@@ -27,6 +27,8 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
@@ -613,16 +615,7 @@ private fun playerGlassModifier(
                     0f
                 },
             )
-            // Corner clamped to the short half-side, so a pill or disc passes
-            // Infinity and gets a full round end. The band is at most the
-            // corner (no crease) and at most LensRimMax, so a tall pill keeps a
-            // flat middle; roundness widens it, 0.5..2 → 5/8..all of that.
-            val lensR = if (lensCorner.isSpecified) {
-                min(lensCorner.value * density, size.minDimension / 2f)
-            } else {
-                0f
-            }
-            val lensW = min(lensR, LensRimMax.toPx()) * (0.5f + 0.25f * g.roundness)
+            val (lensR, lensW) = lensRimPx(lensCorner, size, g.roundness)
             shader.setFloatUniform("uLensR", lensR)
             shader.setFloatUniform("uLensW", lensW)
             renderEffect = RenderEffect
@@ -633,7 +626,7 @@ private fun playerGlassModifier(
 }
 
 /** The widest a lens rim gets, however large the corner it sits in. */
-private val LensRimMax = 20.dp
+internal val LensRimMax = 20.dp
 
 /** A tilt that never changes, for a surface whose shader would ignore it anyway. */
 private val NoTilt: State<Offset> = mutableStateOf(Offset.Zero)
@@ -800,6 +793,46 @@ half4 main(float2 frag) {
 }
 """
 
+// The lens rim, shared by the slab glass and the live lens so the two bend
+// identically. For a rounded rect of [size] with corner [r], it takes the exact
+// distance to the edge and lays a convex squircle across a band [w] wide,
+// h = (1 - (1-x)^4)^(1/4): near-vertical at the rim, easing to flat by the
+// inner edge, so the backdrop bends hardest at the rim and not at all across
+// the middle. Returns the surface slope, pointing outward; the caller scales it
+// by depth and adds it to the normal's xy. w <= r keeps the band inside the
+// corner arcs, where the distance field has no mitre crease.
+internal const val LENS_RIM_SKSL = """
+float2 lensRimSlope(float2 p, float2 size, float r, float w) {
+    float2 hs = size * 0.5;
+    float2 c = p - hs;
+    float2 q = abs(c) - (hs - r);
+    float2 qp = max(q, float2(0.0));
+    float d = length(qp) + min(max(q.x, q.y), 0.0) - r;   // < 0 inside
+    // Outward direction of the nearest edge (the distance field's gradient).
+    float2 n = (max(q.x, q.y) > 0.0) ? qp / max(length(qp), 1e-4)
+             : ((q.x > q.y) ? float2(1.0, 0.0) : float2(0.0, 1.0));
+    n *= float2(c.x < 0.0 ? -1.0 : 1.0, c.y < 0.0 ? -1.0 : 1.0);
+    float m = 1.0 - clamp(-d / w, 0.0, 1.0);
+    float m3 = m * m * m;
+    // dh/dx of the squircle; unbounded at the rim, so capped.
+    float slope = m3 / pow(max(1.0 - m3 * m, 1e-3), 0.75);
+    return n * min(slope, 6.0);
+}
+"""
+
+/**
+ * The lens rim's corner and band width in px, as `uLensR`/`uLensW` take them.
+ * The corner is clamped to the short half-side, so a pill or disc can pass
+ * [Dp.Infinity]. The band is at most the corner (no crease) and at most
+ * [LensRimMax], so a tall pill keeps a flat middle; roundness widens it,
+ * 0.5..2 → 5/8..all of that. Unspecified gives (0, 0): no rim.
+ */
+internal fun Density.lensRimPx(corner: Dp, size: Size, roundness: Float): Pair<Float, Float> {
+    if (!corner.isSpecified) return 0f to 0f
+    val r = min(corner.value * density, size.minDimension / 2f)
+    return r to min(r, LensRimMax.toPx()) * (0.5f + 0.25f * roundness)
+}
+
 // True refractive glass. Output stays in premultiplied alpha (RenderEffect
 // contract): the final rgb is clamped to <= the emitted alpha, so anti-aliased
 // glyph edges remain valid and halo-free. The glyph body is emitted at reduced
@@ -826,6 +859,7 @@ half4 main(float2 frag) {
 //    stay perfectly still. No pass travels across the pane; see the shader's
 //    own note where the light sheet used to be.
 private const val LIQUID_GLASS_SRC = """
+$LENS_RIM_SKSL
 uniform shader content;
 uniform float2 uSize;
 uniform float uTime;
@@ -1025,29 +1059,10 @@ half4 main(float2 p) {
     // The alpha heightfield alone cannot make one: a solid fill steps from 0 to
     // 1 across its single anti-aliased pixel, so the bevel above is 2-4px wide
     // and everything inside it is dead flat — nothing for refract() to bend.
-    // Glass that lenses like a real pane needs an edge as wide as its corner,
-    // so this takes the exact distance to the rounded rect and lays a convex
-    // squircle across that band, h = (1 - (1-x)^4)^(1/4): near-vertical at the
-    // rim, easing to flat by the inner edge. The backdrop bends hardest at the
-    // rim and not at all across the middle. uLensW <= uLensR keeps the band
-    // inside the corner arcs, where the distance field has no mitre crease.
-    float2 lensSlope = float2(0.0);
-    if (uLensW > 0.5) {
-        float2 hs = uSize * 0.5;
-        float2 c = p - hs;
-        float2 q = abs(c) - (hs - uLensR);
-        float2 qp = max(q, float2(0.0));
-        float d = length(qp) + min(max(q.x, q.y), 0.0) - uLensR;   // < 0 inside
-        // Outward direction of the nearest edge (the distance field's gradient).
-        float2 n = (max(q.x, q.y) > 0.0) ? qp / max(length(qp), 1e-4)
-                 : ((q.x > q.y) ? float2(1.0, 0.0) : float2(0.0, 1.0));
-        n *= float2(c.x < 0.0 ? -1.0 : 1.0, c.y < 0.0 ? -1.0 : 1.0);
-        float m = 1.0 - clamp(-d / uLensW, 0.0, 1.0);
-        float m3 = m * m * m;
-        // dh/dx of the squircle; unbounded at the rim, so capped.
-        float slope = m3 / pow(max(1.0 - m3 * m, 1e-3), 0.75);
-        lensSlope = n * min(slope, 6.0) * uDepth;
-    }
+    // See LENS_RIM_SKSL for the profile.
+    float2 lensSlope = (uLensW > 0.5)
+        ? lensRimSlope(p, uSize, uLensR, uLensW) * uDepth
+        : float2(0.0);
 
     // Surface normal from the alpha heightfield. Depth (profondeur) scales how
     // hard the bevel tips the normal off the surface — the dominant "3D" knob,

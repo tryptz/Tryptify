@@ -36,7 +36,10 @@ import dev.chrisbanes.haze.hazeEffect
 import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.performance.LocalLowPerformance
 import tf.monochrome.android.performance.LocalPerformanceProfile
+import tf.monochrome.android.ui.player.LIVE_LENS_GLASS
 import tf.monochrome.android.ui.player.LocalPlayerGlass
+import tf.monochrome.android.ui.player.liveGlassLens
+import tf.monochrome.android.ui.player.liveLensCompiles
 import tf.monochrome.android.ui.player.playerFrostTint
 import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.player.rememberLiquidGlassAvailable
@@ -157,7 +160,23 @@ fun GlassPanel(
             // Only with a real backdrop. Frosting an unfed state draws the
             // frost's own base colour as a flat pane, which is the slab this
             // whole component exists not to be.
-            if (hazeState != null && allowHaze && glass.hazeBlurDp > 0f) {
+            if (LIVE_LENS_GLASS && liveLensCompiles && hazeState != null && allowHaze &&
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+            ) {
+                // The mini player's live lens, for the same reason this panel
+                // takes its frost: one material, usually side by side. See
+                // LiveGlassLens.
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .liveGlassLens(
+                            hazeState = hazeState,
+                            corner = MonoDimens.radiusLg,
+                            frost = playerFrostTint(glass, isDark),
+                            glass = glass,
+                        ),
+                )
+            } else if (hazeState != null && allowHaze && glass.hazeBlurDp > 0f) {
                 // The mini player's exact frost, from the one shared recipe —
                 // this panel is the same material as that bar and is usually on
                 // screen beside it.

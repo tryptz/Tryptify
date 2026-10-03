@@ -55,6 +55,19 @@ anything that is not one rounded rect filling the layer — glyphs, icons, the
 spectrum — or the rim lands where the edge is not. With it unspecified, the
 output is bit-identical to the alpha-only glass.
 
+**Prototype: the mini player and `GlassPanel` bend the live screen**
+(`LiveGlassLens.kt`, behind `LIVE_LENS_GLASS`). Their haze pane is replaced by a
+layer that draws Haze's own capture of the screen behind them
+(`HazeState.areas[i].contentLayer`, offset by `positionOnScreen`), blurs it
+lightly (a fifth of `hazeBlurDp`) and bends it with the same lens rim, under the
+same frost tint. This is possible only because the lens rim is computed from the
+corner: the slab shader spends its single RenderEffect input on the alpha
+heightfield, while this layer spends its input on the backdrop. The slab still
+draws on top for the tint, the rim light and the control holes. Same sibling
+rule as haze: drawing a source's layer from inside that source recurses. The two
+surfaces are one material, so they move together; turning the flag off restores
+the haze pane on both, exactly.
+
 **Do not put a haze pane under a punched glass slab** (the transport disc, the
 action dock, the mini player). Those are drawn solid and made see-through by the
 shader's body opacity, and what shows through is whatever is composited

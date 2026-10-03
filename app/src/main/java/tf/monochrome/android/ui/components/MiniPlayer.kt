@@ -66,6 +66,9 @@ import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.MANUAL_MORPH_MS
 import tf.monochrome.android.ui.player.MorphingCoverArt
 import tf.monochrome.android.ui.player.playerGlass
+import tf.monochrome.android.ui.player.LIVE_LENS_GLASS
+import tf.monochrome.android.ui.player.liveGlassLens
+import tf.monochrome.android.ui.player.liveLensCompiles
 import tf.monochrome.android.ui.theme.glassTint
 import tf.monochrome.android.ui.theme.PressSpring
 import tf.monochrome.android.ui.theme.MonoDimens
@@ -275,7 +278,26 @@ fun MiniPlayer(
         // (0.15) is disabled: over a dark backdrop it reads as visible grain
         // rather than frost.
         val profile = LocalPerformanceProfile.current
-        if (hazeState != null && profile.allowHazeBlur && glass.hazeBlurDp > 0f) {
+        val liveLens = LIVE_LENS_GLASS && liveLensCompiles &&
+            hazeState != null && profile.allowHazeBlur
+        if (liveLens && hazeState != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Prototype: the live screen behind the bar, bent by the lens rim,
+            // in place of the haze pane — see LiveGlassLens. Same frost tint,
+            // a fifth of the blur, so the rim visibly bends what scrolls under
+            // it. Not gated on hazeBlurDp > 0: at zero it is clear glass, which
+            // is still glass, where the haze pane at zero had nothing to draw.
+            val isDark = MaterialTheme.colorScheme.background.luminance() <= 0.5f
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .liveGlassLens(
+                        hazeState = hazeState,
+                        corner = MiniCorner,
+                        frost = playerFrostTint(glass, isDark),
+                        glass = glass,
+                    ),
+            )
+        } else if (hazeState != null && profile.allowHazeBlur && glass.hazeBlurDp > 0f) {
             val frostBg = MaterialTheme.colorScheme.background
             val isDark = frostBg.luminance() <= 0.5f
             val frostTint = playerFrostTint(glass, isDark)
