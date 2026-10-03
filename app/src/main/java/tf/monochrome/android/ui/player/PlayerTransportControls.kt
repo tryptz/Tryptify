@@ -164,7 +164,7 @@ fun PlayerTransportControls(
                 Canvas(
                     modifier = Modifier
                         .fillMaxSize()
-                        .playerGlass(tint = tint, bulgeAmount = { bulge })
+                        .playerGlass(tint = tint, bulgeAmount = { bulge }, lensCorner = Dp.Infinity)
                         // Own offscreen layer so the punch-out (BlendMode.Clear) is
                         // contained here and can't clear the player behind it — needed
                         // when the glass effect is off or below API 33.

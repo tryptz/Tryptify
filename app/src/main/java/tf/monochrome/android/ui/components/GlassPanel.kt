@@ -201,7 +201,7 @@ fun GlassPanel(
             Canvas(
                 modifier = Modifier
                     .matchParentSize()
-                    .playerGlass(tint = tint),
+                    .playerGlass(tint = tint, lensCorner = MonoDimens.radiusLg),
             ) {
                 val r = MonoDimens.radiusLg.toPx()
                 drawRoundRect(

@@ -202,7 +202,12 @@ fun PlayerActionDock(
         Canvas(
             modifier = Modifier
                 .matchParentSize()
-                .playerGlass(tint = glassTint, bulgeCenter = bulgeCenter, bulgeAmount = { bulgeAmt })
+                .playerGlass(
+                    tint = glassTint,
+                    bulgeCenter = bulgeCenter,
+                    bulgeAmount = { bulgeAmt },
+                    lensCorner = PlayerDesignTokens.GlassCornerLarge,
+                )
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
         ) {
             val cornerPx = PlayerDesignTokens.GlassCornerLarge.toPx()

@@ -202,6 +202,7 @@ internal fun GlassTabBar(
                             // is tall, so the fraction of the longest side is a
                             // fraction of the width.
                             bulgeRadiusFraction = TAB_DOME_OF_SLOT / tabs.size,
+                            lensCorner = Dp.Infinity,
                         )
                         // One offscreen layer, so the punch clears only the
                         // glyphs and never the app behind the bar.

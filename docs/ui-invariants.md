@@ -41,6 +41,20 @@ The reason it was ever faint: on a device where the shader silently no-ops
 compile it), a solid fill is left on screen as an opaque rounded rectangle. Ask
 `rememberLiquidGlassAvailable()` rather than hedging with a low alpha.
 
+**A rounded-rect slab passes its corner as `lensCorner`.** The alpha
+heightfield alone gives a solid fill a bevel 2–4px wide: the fill steps from 0
+to 1 across one anti-aliased pixel, so everything inside it is flat and
+`refract()` bends nothing. The pane then reads as a tinted sheet with a
+garbled hairline, not as glass. With `lensCorner` set, the shader lays a
+convex squircle across a band as wide as the corner (capped at 20dp, scaled by
+`roundness`), and measures the bend in pixels against that band rather than as
+a fraction of the pane, so the backdrop bends hardest at the rim and not at all
+in the middle. The mini player, `GlassPanel` (so every search bar), the tab
+bar, the action dock and the play disc all pass it. Leave it unspecified for
+anything that is not one rounded rect filling the layer — glyphs, icons, the
+spectrum — or the rim lands where the edge is not. With it unspecified, the
+output is bit-identical to the alpha-only glass.
+
 **Do not put a haze pane under a punched glass slab** (the transport disc, the
 action dock, the mini player). Those are drawn solid and made see-through by the
 shader's body opacity, and what shows through is whatever is composited

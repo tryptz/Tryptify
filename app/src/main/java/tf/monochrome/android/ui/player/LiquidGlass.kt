@@ -1,6 +1,7 @@
 package tf.monochrome.android.ui.player
 
 import kotlin.math.max
+import kotlin.math.min
 import android.content.Context
 import android.graphics.RenderEffect
 import android.graphics.RuntimeShader
@@ -26,7 +27,9 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import dev.chrisbanes.haze.hazeEffect
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -267,6 +270,10 @@ private fun liquidGlassModifier(
             shader.setFloatUniform("uBulge", 0.5f, 0.5f)
             shader.setFloatUniform("uBulgeAmt", 0f)
             shader.setFloatUniform("uBulgeR", 0f)
+            // Glyphs are not one rounded rect, so no lens rim: the alpha bevel is
+            // the right shape for a letter.
+            shader.setFloatUniform("uLensR", 0f)
+            shader.setFloatUniform("uLensW", 0f)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -501,11 +508,24 @@ internal fun Modifier.playerGlass(
      * Recorded with [backdropFrame]; null keeps the window-wide mapping.
      */
     artFrame: BackdropAnchor? = null,
+    /**
+     * The corner radius of the slab this layer draws, when that slab is a
+     * rounded rect filling the layer — [Dp.Infinity] for a pill or a disc.
+     *
+     * Set, the shader gives the pane a lens rim as wide as its corner, which is
+     * what makes the backdrop bend toward the edge the way a real pane does.
+     * Unspecified keeps the alpha-only bevel, the right shape for a glyph or an
+     * icon; a slab that is not a rounded rect must leave it unspecified, or the
+     * rim lands where its edge is not.
+     */
+    lensCorner: Dp = Dp.Unspecified,
 ): Modifier {
     val g = LocalPlayerGlass.current
     if (LocalLowPerformance.current.disableLiquidGlass) return this
     if (!g.enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
-    return this.then(playerGlassModifier(tint, g, bulgeCenter, bulgeAmount, bulgeRadiusFraction, artFrame))
+    return this.then(
+        playerGlassModifier(tint, g, bulgeCenter, bulgeAmount, bulgeRadiusFraction, artFrame, lensCorner),
+    )
 }
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -517,6 +537,7 @@ private fun playerGlassModifier(
     bulgeAmount: () -> Float,
     bulgeRadiusFraction: Float,
     artFrame: BackdropAnchor?,
+    lensCorner: Dp,
 ): Modifier {
     val shader = remember { runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() } ?: return Modifier
     // Unlike the lyric glass and the panel, which pin uLiquid to 1, this
@@ -592,12 +613,27 @@ private fun playerGlassModifier(
                     0f
                 },
             )
+            // Corner clamped to the short half-side, so a pill or disc passes
+            // Infinity and gets a full round end. The band is at most the
+            // corner (no crease) and at most LensRimMax, so a tall pill keeps a
+            // flat middle; roundness widens it, 0.5..2 → 5/8..all of that.
+            val lensR = if (lensCorner.isSpecified) {
+                min(lensCorner.value * density, size.minDimension / 2f)
+            } else {
+                0f
+            }
+            val lensW = min(lensR, LensRimMax.toPx()) * (0.5f + 0.25f * g.roundness)
+            shader.setFloatUniform("uLensR", lensR)
+            shader.setFloatUniform("uLensW", lensW)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
         }
     }
 }
+
+/** The widest a lens rim gets, however large the corner it sits in. */
+private val LensRimMax = 20.dp
 
 /** A tilt that never changes, for a surface whose shader would ignore it anyway. */
 private val NoTilt: State<Offset> = mutableStateOf(Offset.Zero)
@@ -814,6 +850,8 @@ uniform float uFrost;         // frosted roughness: 0 = clear, higher = misted
 uniform float2 uBulge;        // press-bulge centre, normalized (0..1) in the surface
 uniform float uBulgeAmt;      // press-bulge swell, 0 = none .. 1 = full dome
 uniform float uBulgeR;        // press-bulge dome radius in px; <=0 falls back to uSize.x/6
+uniform float uLensR;         // lens rim: the slab's corner radius in px (rounded rect filling uSize)
+uniform float uLensW;         // lens rim: bevel band width in px, <= uLensR; 0 = alpha-only bevel
 
 // The real backdrop, when there is one to lens. uArt is ALWAYS bound (SkSL
 // requires every child shader to be set); uArtMix is what decides whether it
@@ -983,11 +1021,39 @@ half4 main(float2 p) {
         grad += bdir * (dome * (1.0 - dome)) * uBulgeAmt * 10.0;
     }
 
+    // Lens rim, for a slab the caller says is a rounded rect filling the layer.
+    // The alpha heightfield alone cannot make one: a solid fill steps from 0 to
+    // 1 across its single anti-aliased pixel, so the bevel above is 2-4px wide
+    // and everything inside it is dead flat — nothing for refract() to bend.
+    // Glass that lenses like a real pane needs an edge as wide as its corner,
+    // so this takes the exact distance to the rounded rect and lays a convex
+    // squircle across that band, h = (1 - (1-x)^4)^(1/4): near-vertical at the
+    // rim, easing to flat by the inner edge. The backdrop bends hardest at the
+    // rim and not at all across the middle. uLensW <= uLensR keeps the band
+    // inside the corner arcs, where the distance field has no mitre crease.
+    float2 lensSlope = float2(0.0);
+    if (uLensW > 0.5) {
+        float2 hs = uSize * 0.5;
+        float2 c = p - hs;
+        float2 q = abs(c) - (hs - uLensR);
+        float2 qp = max(q, float2(0.0));
+        float d = length(qp) + min(max(q.x, q.y), 0.0) - uLensR;   // < 0 inside
+        // Outward direction of the nearest edge (the distance field's gradient).
+        float2 n = (max(q.x, q.y) > 0.0) ? qp / max(length(qp), 1e-4)
+                 : ((q.x > q.y) ? float2(1.0, 0.0) : float2(0.0, 1.0));
+        n *= float2(c.x < 0.0 ? -1.0 : 1.0, c.y < 0.0 ? -1.0 : 1.0);
+        float m = 1.0 - clamp(-d / uLensW, 0.0, 1.0);
+        float m3 = m * m * m;
+        // dh/dx of the squircle; unbounded at the rim, so capped.
+        float slope = m3 / pow(max(1.0 - m3 * m, 1e-3), 0.75);
+        lensSlope = n * min(slope, 6.0) * uDepth;
+    }
+
     // Surface normal from the alpha heightfield. Depth (profondeur) scales how
     // hard the bevel tips the normal off the surface — the dominant "3D" knob,
     // now a strong multiplier on the slope instead of a small z-base nudge.
     float slopeGain = 3.5 * uDepth;
-    float3 N = normalize(float3(grad * slopeGain, 1.0));
+    float3 N = normalize(float3(grad * slopeGain + lensSlope, 1.0));
 
     // Frost: per-pixel micro-roughness scatters the reflection, refraction and
     // glint into a misted, frosted surface. Gated so uFrost = 0 is unchanged.
@@ -1014,7 +1080,13 @@ half4 main(float2 p) {
     float3 Tr = refract(I, N, 0.66 - dispSpread);
     float3 Tg = refract(I, N, 0.66);
     float3 Tb = refract(I, N, 0.66 + dispSpread);
-    float power = uRefraction * 1.6;
+    // How far a bent ray travels, in uv. Without a lens rim it is a fixed share
+    // of the pane, as it always was. With one it is measured in pixels against
+    // the rim's own width — a fraction of the pane would push a long bar's
+    // backdrop several times further sideways than up — so the offset is
+    // isotropic and peaks around one rim width at full refraction.
+    float2 power = uRefraction *
+        ((uLensW > 0.5) ? float2(uLensW * 4.0) / uSize : float2(1.6));
 
     // Interior slab parallax: a real glass pane offsets what's behind it even
     // where the surface is dead flat (thickness x viewing angle), which the

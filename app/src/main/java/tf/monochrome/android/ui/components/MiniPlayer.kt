@@ -306,6 +306,7 @@ fun MiniPlayer(
                     bulgeCenter = bulgeCenter,
                     bulgeAmount = { bulge },
                     bulgeRadiusFraction = bulgeSpread,
+                    lensCorner = MiniCorner,
                 )
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
         ) {
