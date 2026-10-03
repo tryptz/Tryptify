@@ -55,8 +55,11 @@ anything that is not one rounded rect filling the layer — glyphs, icons, the
 spectrum — or the rim lands where the edge is not. With it unspecified, the
 output is bit-identical to the alpha-only glass.
 
-**Prototype: the mini player, `GlassPanel` and the full player's disc and dock bend the live screen**
-(`LiveGlassLens.kt`, behind `LIVE_LENS_GLASS`). Their haze pane is replaced by a
+**Prototype: `GlassPanel` and the full player's disc and dock bend the live screen**
+(`LiveGlassLens.kt`, behind `LIVE_LENS_GLASS`). **The mini player does not:** it
+keeps the tab bar's frost, because it is the same material as the tab bar right
+under it, and over a page of sharp text the live lens let the rows behind read
+through and fight the track title. Their haze pane is replaced by a
 layer that draws Haze's own capture of the screen behind them
 (`HazeState.areas[i].contentLayer`, offset by `positionOnScreen`), blurs it very
 lightly (a twentieth of `hazeBlurDp`) and bends it with the same lens rim, under

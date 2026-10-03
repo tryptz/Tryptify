@@ -47,9 +47,10 @@ import dev.chrisbanes.haze.HazeState
  * Same rule as any haze pane: it must be a sibling of the haze source, never
  * inside it. Drawing the source's layer from inside itself would recurse.
  *
- * Prototype: wired into the mini player and [GlassPanel] — one material, so
- * the search bars and panels match the bar beside them — behind
- * [LIVE_LENS_GLASS].
+ * Prototype: wired into [GlassPanel] and the full player's disc and dock,
+ * behind [LIVE_LENS_GLASS]. Not the mini player, which keeps the tab bar's
+ * frost: it is the tab bar's material, and over sharp page text a clear lens
+ * let the rows behind fight its title.
  */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
@@ -151,7 +152,7 @@ internal fun Modifier.liveGlassLens(
 internal fun lensClipShape(corner: Dp): Shape =
     if (corner.value.isFinite()) RoundedCornerShape(corner) else RoundedCornerShape(percent = 50)
 
-/** Off restores the haze pane under the mini player and every GlassPanel, exactly. */
+/** Off restores the haze pane under every GlassPanel and the player's disc and dock, exactly. */
 internal const val LIVE_LENS_GLASS = true
 
 /** The live lens's blur as a share of the haze pane's (`hazeBlurDp`). */
