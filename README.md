@@ -49,6 +49,24 @@
       <b>AutoEQ.</b> Original, Target and Corrected response curves, smoothing, preamp, Peaking or Shelf ends algorithm, tone, automatic preamp and 2-channel calibration.
     </td>
   </tr>
+  <tr>
+    <td width="25%" valign="top">
+      <img src="docs/screenshots/mixer-buses.jpg" alt="Mixer buses. Four buses and the master with faders, level meters, pan, mute and solo, effect counts, routing cables between buses, and a LUFS loudness meter on the master.">
+      <b>Mixer buses.</b> Four buses and the master with faders, level meters, pan, mute and solo, effect counts, routing cables between buses, and a LUFS loudness meter on the master.
+    </td>
+    <td width="25%" valign="top">
+      <img src="docs/screenshots/fx-chain-reverb.jpg" alt="FX Chain. A Reverb on the Centre bus of a surround layout: decay graph, presets, twelve knobs, dry/wet mix and oversampling.">
+      <b>FX Chain.</b> A Reverb on the Centre bus of a surround layout: decay graph, presets, twelve knobs, dry/wet mix and oversampling.
+    </td>
+    <td width="25%" valign="top">
+      <img src="docs/screenshots/speed-pitch.jpg" alt="Speed and pitch. The Audio tools sheet with speed as a multiplier, in semitones or in BPM, Preserve pitch, and a separate pitch control. Detected BPM in the top bar.">
+      <b>Speed and pitch.</b> The Audio tools sheet with speed as a multiplier, in semitones or in BPM, Preserve pitch, and a separate pitch control. Detected BPM in the top bar.
+    </td>
+    <td width="25%" valign="top">
+      <img src="docs/screenshots/lyrics.jpg" alt="Lyrics. Synced lyrics with the current line highlighted, over the ambient visualizer, and the lyrics button lit in the dock.">
+      <b>Lyrics.</b> Synced lyrics with the current line highlighted, over the ambient visualizer, and the lyrics button lit in the dock.
+    </td>
+  </tr>
 </table>
 
 ## What's in it
