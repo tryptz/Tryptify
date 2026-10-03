@@ -358,8 +358,17 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch { preferences.setSpeedUnit(unit) }
     }
 
-    /** The playing track's own tempo, detected as it plays; null until known. */
+    /**
+     * The playing track's own tempo: measured once a few seconds into the
+     * track, then held. Null until known, and while a measurement is running.
+     */
     val trackBpm: StateFlow<Float?> = bpmTap.bpm
+
+    /** Measure the playing track's tempo again (a tap on the BPM number). */
+    fun measureTrackBpm() = bpmTap.measure()
+
+    /** The listener's own figure for the playing track's tempo; speed is untouched. */
+    fun setTrackBpm(bpm: Float) = bpmTap.setTempo(bpm)
 
     // --- Oxford DSP effect toggles (compressor / inflator) ---
     // The effects are @Singleton, so these flows stay in sync with the Oxford

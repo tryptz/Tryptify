@@ -957,6 +957,8 @@ fun MainPlayerRoute(
             onPitchQualityChange = playerViewModel::setPitchQuality,
             speedUnit = speedUnit,
             trackBpm = trackBpm,
+            onMeasureTrackBpm = playerViewModel::measureTrackBpm,
+            onTrackBpmSet = playerViewModel::setTrackBpm,
             onSpeedUnitChange = playerViewModel::setSpeedUnit,
             onSpeedChange = playerViewModel::setPlaybackSpeed,
             onPreservePitchChange = playerViewModel::setPreservePitch,
@@ -1200,8 +1202,12 @@ private fun BoxScope.SpeedPanel(
     pitchQuality: PitchQuality,
     onPitchQualityChange: (PitchQuality) -> Unit,
     speedUnit: SpeedUnit,
-    /** The track's own tempo, or null while it is being detected. */
+    /** The track's own tempo, or null while it is being measured. */
     trackBpm: Float?,
+    /** Measure the track's tempo again: a tap on the BPM number. */
+    onMeasureTrackBpm: () -> Unit,
+    /** The listener's own figure for the track's tempo: a long-press on it. */
+    onTrackBpmSet: (Float) -> Unit,
     onSpeedUnitChange: (SpeedUnit) -> Unit,
     onSpeedChange: (Float) -> Unit,
     onPreservePitchChange: (Boolean) -> Unit,
@@ -1425,20 +1431,27 @@ private fun BoxScope.SpeedPanel(
                         else SpeedUnit.speedFor(SpeedUnit.stepBpm(played, direction), source)
                     val down = stepTo(-1)
                     val up = stepTo(1)
-                    // Long-press the number to type a tempo.
+                    // The number is measured once per track and then holds. Tap it
+                    // to measure again; long-press it to type the song's own
+                    // tempo when the measurement got it wrong (half or double is
+                    // the usual miss). Typing it leaves the speed alone — the
+                    // played tempo follows from it.
                     var editingBpm by remember { mutableStateOf(false) }
-                    if (editingBpm && played != null && source != null) {
+                    if (editingBpm) {
                         BpmEntryDialog(
-                            current = played,
+                            current = source ?: DEFAULT_TYPED_BPM,
                             onDismiss = { editingBpm = false },
                             onSet = { bpm ->
-                                onSpeedChange(SpeedUnit.speedFor(bpm, source))
+                                onTrackBpmSet(bpm)
                                 editingBpm = false
                             },
                         )
                     }
                     SpeedStepper(
-                        onValueLongPress = if (played != null && source != null) ({ editingBpm = true }) else null,
+                        onValueClick = onMeasureTrackBpm,
+                        valueClickLabel = stringResource(R.string.bpm_measure_again),
+                        onValueLongPress = { editingBpm = true },
+                        valueLongPressLabel = stringResource(R.string.bpm_type_song_tempo),
                         value = played?.let { "${it.roundToInt()} BPM" } ?: stringResource(R.string.detecting),
                         accent = speedAccent,
                         onDecrement = { down?.let(onSpeedChange) },
@@ -1658,3 +1671,6 @@ private fun SleepTimerSheet(
         }
     }
 }
+
+/** Where the song-tempo keyboard starts when nothing has been measured yet. */
+private const val DEFAULT_TYPED_BPM = 120f

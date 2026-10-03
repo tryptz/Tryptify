@@ -181,7 +181,10 @@
     <string name="lyrics_loading">Şarkı sözleri yükleniyor…</string>
     <string name="lyrics_none">Bu parça için şarkı sözü yok.</string>
     <string name="bpm_nudge_description">Tempoyu ayarla: yavaşlatmak için sola, hızlandırmak için sağa itin</string>
-    <string name="bpm_set_title">BPM ayarla</string>
+    <string name="bpm_song_tempo_title">Şarkının temposu</string>
+    <string name="bpm_song_tempo_hint">Hız uygulanmadan önce şarkının kendi BPM\'i. Çalma hızı değişmez.</string>
+    <string name="bpm_measure_again">Tempoyu yeniden ölç</string>
+    <string name="bpm_type_song_tempo">Şarkının temposunu yaz</string>
     <string name="action_set">Ayarla</string>
     <string name="unknown_artist">Bilinmeyen sanatçı</string>
     <string name="dock_mixer_fx">Mikser/FX</string>

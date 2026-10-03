@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.abs
@@ -24,10 +25,17 @@ import kotlin.math.roundToInt
  * playback speed, which the UI applies.
  *
  * Audio passes through untouched. The track's channels are summed to mono
- * for the estimate. Every second a new estimate joins the last few, and the
- * median of them is published, so a fill or a breakdown does not make the
- * number jump. [newTrack] starts over; a seek keeps what it has, since the
- * song's tempo did not change.
+ * and always fed to the estimator, which is a few multiplies a sample, so a
+ * measurement can start from the last ten seconds instead of waiting for them.
+ *
+ * It measures once and then holds still. A measurement takes one estimate a
+ * second until [READINGS] of them have come in, publishes their median and
+ * stops; nothing is published in between. It used to publish every second for
+ * the whole song, and the number kept moving under the listener — a fill or a
+ * breakdown nudged it even through the median. A new track measures once on
+ * its own ([newTrack]); after that only [measure] (a tap on the number) or
+ * [setTempo] (the listener typing the song's tempo) changes it. A seek keeps
+ * what it has, since the song's tempo did not change.
  */
 @Singleton
 @OptIn(UnstableApi::class)
@@ -52,10 +60,33 @@ class BpmTapProcessor @Inject constructor() : AudioProcessor {
 
     @Volatile private var trackChanged = false
 
-    /** A new track: forget the old tempo at the next block. */
+    /**
+     * The latest request from outside the audio thread, applied at the next
+     * block. One slot, latest wins: a tempo typed just after a track change
+     * must not be undone by that change's measurement, and the reverse.
+     */
+    private val request = AtomicInteger(REQUEST_NONE)
+
+    /** Taking readings; touched only on the audio thread. */
+    private var measuring = false
+
+    /** A new track: forget the old tempo and measure the new one once. */
     fun newTrack() {
         trackChanged = true
+        request.set(REQUEST_MEASURE)
         _bpm.value = null
+    }
+
+    /** Measure the playing track again, from the audio of the last few seconds on. */
+    fun measure() {
+        request.set(REQUEST_MEASURE)
+        _bpm.value = null
+    }
+
+    /** The listener's own figure for the track's tempo; holds until the track changes. */
+    fun setTempo(bpm: Float) {
+        request.set(REQUEST_SET)
+        _bpm.value = (bpm * 10f).roundToInt() / 10f
     }
 
     override fun configure(inputAudioFormat: AudioFormat): AudioFormat {
@@ -88,8 +119,18 @@ class BpmTapProcessor @Inject constructor() : AudioProcessor {
             if (trackChanged) {
                 trackChanged = false
                 est.reset()
-                recent.clear()
-                sinceEstimate = 0
+            }
+            when (request.getAndSet(REQUEST_NONE)) {
+                REQUEST_MEASURE -> {
+                    measuring = true
+                    recent.clear()
+                    // Estimate at once: the envelope already holds what played.
+                    sinceEstimate = estimatorRate
+                }
+                REQUEST_SET -> {
+                    measuring = false
+                    recent.clear()
+                }
             }
             if (mono.size < frames) mono = FloatArray(frames)
             val scale = 1f / channels
@@ -103,10 +144,12 @@ class BpmTapProcessor @Inject constructor() : AudioProcessor {
                 mono[i] = sum * scale
             }
             est.feed(mono, frames)
-            sinceEstimate += frames
-            if (sinceEstimate >= estimatorRate) {
-                sinceEstimate = 0
-                publish(est.estimate())
+            if (measuring) {
+                sinceEstimate += frames
+                if (sinceEstimate >= estimatorRate) {
+                    sinceEstimate = 0
+                    takeReading(est.estimate())
+                }
             }
         }
 
@@ -124,22 +167,31 @@ class BpmTapProcessor @Inject constructor() : AudioProcessor {
         outputBuffer = scratch
     }
 
-    private fun publish(estimate: Float?) {
+    /**
+     * One reading of a measurement. No reading (too little audio yet, or no
+     * steady pulse) does not count, so a measurement started in an intro
+     * waits for the beat to arrive.
+     */
+    private fun takeReading(estimate: Float?) {
         if (estimate == null) return
-        // A new reading an octave from the settled one is the same pulse
-        // counted differently; fold it back rather than let it flip the
-        // display between 87 and 174.
-        val settled = _bpm.value
-        val folded = if (settled == null) estimate else when {
-            abs(estimate * 2f - settled) < settled * OCTAVE_TOLERANCE -> estimate * 2f
-            abs(estimate / 2f - settled) < settled * OCTAVE_TOLERANCE -> estimate / 2f
+        // A reading an octave from the first is the same pulse counted
+        // differently; fold it back rather than let one stray 174 among 87s
+        // move the median.
+        val first = recent.firstOrNull()
+        val folded = if (first == null) estimate else when {
+            abs(estimate * 2f - first) < first * OCTAVE_TOLERANCE -> estimate * 2f
+            abs(estimate / 2f - first) < first * OCTAVE_TOLERANCE -> estimate / 2f
             else -> estimate
         }
         recent.addLast(folded)
-        while (recent.size > MEDIAN_OF) recent.removeFirst()
+        if (recent.size < READINGS) return
+        measuring = false
         val sorted = recent.sorted()
         val median = sorted[sorted.size / 2]
-        _bpm.value = (median * 10f).roundToInt() / 10f
+        recent.clear()
+        // A request that arrived during this block wins over the reading it
+        // would replace.
+        if (request.get() == REQUEST_NONE) _bpm.value = (median * 10f).roundToInt() / 10f
     }
 
     override fun getOutput(): ByteBuffer {
@@ -166,6 +218,7 @@ class BpmTapProcessor @Inject constructor() : AudioProcessor {
         if (estimator == null || estimatorRate != rate) {
             estimator = TempoEstimator(rate)
             estimatorRate = rate
+            // A measurement under way starts its readings over at the new rate.
             recent.clear()
         } else {
             // A seek or a new pipeline mid-song: same tempo, but the next
@@ -184,7 +237,11 @@ class BpmTapProcessor @Inject constructor() : AudioProcessor {
     }
 
     private companion object {
-        const val MEDIAN_OF = 5
+        /** Readings in one measurement, a second apart; their median is published. */
+        const val READINGS = 5
         const val OCTAVE_TOLERANCE = 0.04f
+        const val REQUEST_NONE = 0
+        const val REQUEST_MEASURE = 1
+        const val REQUEST_SET = 2
     }
 }

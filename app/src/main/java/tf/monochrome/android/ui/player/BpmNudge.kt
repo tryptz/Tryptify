@@ -195,8 +195,10 @@ private const val PLATTER_RESPONSE = 6f
 private const val RIDGES_PER_BPM = 3f
 
 /**
- * Type a tempo: opened by long-pressing the BPM number. Decimal keyboard,
- * focused on open, Done sets it. An ordinary dialog — it holds no glass.
+ * Type the song's own tempo: opened by long-pressing the BPM number, for when
+ * the measurement got it wrong. The speed is left alone, so the played tempo
+ * moves with it. Decimal keyboard, focused on open, Done sets it. An ordinary
+ * dialog — it holds no glass.
  */
 @Composable
 fun BpmEntryDialog(current: Float, onDismiss: () -> Unit, onSet: (Float) -> Unit) {
@@ -206,23 +208,30 @@ fun BpmEntryDialog(current: Float, onDismiss: () -> Unit, onSet: (Float) -> Unit
     LaunchedEffect(Unit) { focus.requestFocus() }
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.bpm_set_title)) },
+        title = { Text(stringResource(R.string.bpm_song_tempo_title)) },
         text = {
-            androidx.compose.material3.OutlinedTextField(
-                value = text,
-                onValueChange = { v -> text = v.filter { it.isDigit() || it == '.' || it == ',' }.take(6) },
-                singleLine = true,
-                suffix = { Text("BPM") },
-                isError = parsed == null,
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal,
-                    imeAction = androidx.compose.ui.text.input.ImeAction.Done,
-                ),
-                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                    onDone = { parsed?.let(onSet) },
-                ),
-                modifier = Modifier.focusRequester(focus),
-            )
+            androidx.compose.foundation.layout.Column {
+                Text(
+                    stringResource(R.string.bpm_song_tempo_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
+                androidx.compose.material3.OutlinedTextField(
+                    value = text,
+                    onValueChange = { v -> text = v.filter { it.isDigit() || it == '.' || it == ',' }.take(6) },
+                    singleLine = true,
+                    suffix = { Text("BPM") },
+                    isError = parsed == null,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal,
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                    ),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                        onDone = { parsed?.let(onSet) },
+                    ),
+                    modifier = Modifier.focusRequester(focus),
+                )
+            }
         },
         confirmButton = {
             androidx.compose.material3.TextButton(onClick = { parsed?.let(onSet) }, enabled = parsed != null) { Text(stringResource(R.string.action_set)) }

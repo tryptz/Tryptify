@@ -184,7 +184,10 @@ mode_lyrics	Lyrics	歌词	歌詞	Paroles	Letra	Şarkı sözleri	Songtext
 lyrics_loading	Loading lyrics…	正在加载歌词…	歌詞を読み込み中…	Chargement des paroles…	Cargando la letra…	Şarkı sözleri yükleniyor…	Songtext wird geladen …
 lyrics_none	No lyrics available for this track.	这首歌暂无歌词。	この曲の歌詞はありません。	Aucunes paroles disponibles pour ce titre.	No hay letra disponible para esta canción.	Bu parça için şarkı sözü yok.	Für diesen Titel ist kein Songtext verfügbar.
 bpm_nudge_description	Nudge tempo: push left to slow down, right to speed up	微调速度：向左推减慢，向右推加快	テンポを微調整：左に押すと遅く、右に押すと速くなります	Ajuster le tempo : poussez à gauche pour ralentir, à droite pour accélérer	Ajustar el tempo: empuja a la izquierda para ralentizar y a la derecha para acelerar	Tempoyu ayarla: yavaşlatmak için sola, hızlandırmak için sağa itin	Tempo anpassen: nach links schieben zum Verlangsamen, nach rechts zum Beschleunigen
-bpm_set_title	Set BPM	设置 BPM	BPM を設定	Définir le BPM	Establecer BPM	BPM ayarla	BPM festlegen
+bpm_song_tempo_title	Song tempo	歌曲速度	曲のテンポ	Tempo du morceau	Tempo de la canción	Şarkının temposu	Tempo des Songs
+bpm_song_tempo_hint	The song's own BPM, before speed. Playback speed stays the same.	歌曲本身的 BPM，不含变速。播放速度保持不变。	速度変更前の曲本来の BPM。再生速度はそのままです。	Le BPM d'origine du morceau, avant la vitesse. La vitesse de lecture ne change pas.	El BPM original de la canción, antes de la velocidad. La velocidad de reproducción no cambia.	Hız uygulanmadan önce şarkının kendi BPM'i. Çalma hızı değişmez.	Das eigene BPM des Songs, vor der Geschwindigkeit. Die Wiedergabegeschwindigkeit bleibt gleich.
+bpm_measure_again	Measure the tempo again	重新检测速度	テンポを再検出	Mesurer à nouveau le tempo	Volver a medir el tempo	Tempoyu yeniden ölç	Tempo neu messen
+bpm_type_song_tempo	Type the song's tempo	输入歌曲速度	曲のテンポを入力	Saisir le tempo du morceau	Escribir el tempo de la canción	Şarkının temposunu yaz	Tempo des Songs eingeben
 action_set	Set	设置	設定	Définir	Establecer	Ayarla	Festlegen
 unknown_artist	Unknown artist	未知艺人	不明なアーティスト	Artiste inconnu	Artista desconocido	Bilinmeyen sanatçı	Unbekannter Künstler
 dock_mixer_fx	Mixer/FX	混音/效果	ミキサー/FX	Mixeur/FX	Mezclador/FX	Mikser/FX	Mixer/FX

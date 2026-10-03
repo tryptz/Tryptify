@@ -178,7 +178,10 @@
     <string name="lyrics_loading">正在加载歌词…</string>
     <string name="lyrics_none">这首歌暂无歌词。</string>
     <string name="bpm_nudge_description">微调速度：向左推减慢，向右推加快</string>
-    <string name="bpm_set_title">设置 BPM</string>
+    <string name="bpm_song_tempo_title">歌曲速度</string>
+    <string name="bpm_song_tempo_hint">歌曲本身的 BPM，不含变速。播放速度保持不变。</string>
+    <string name="bpm_measure_again">重新检测速度</string>
+    <string name="bpm_type_song_tempo">输入歌曲速度</string>
     <string name="action_set">设置</string>
     <string name="unknown_artist">未知艺人</string>
     <string name="dock_mixer_fx">混音/效果</string>

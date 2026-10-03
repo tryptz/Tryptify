@@ -182,7 +182,10 @@
     <string name="lyrics_loading">Loading lyrics…</string>
     <string name="lyrics_none">No lyrics available for this track.</string>
     <string name="bpm_nudge_description">Nudge tempo: push left to slow down, right to speed up</string>
-    <string name="bpm_set_title">Set BPM</string>
+    <string name="bpm_song_tempo_title">Song tempo</string>
+    <string name="bpm_song_tempo_hint">The song\'s own BPM, before speed. Playback speed stays the same.</string>
+    <string name="bpm_measure_again">Measure the tempo again</string>
+    <string name="bpm_type_song_tempo">Type the song\'s tempo</string>
     <string name="action_set">Set</string>
     <string name="unknown_artist">Unknown artist</string>
     <string name="dock_mixer_fx">Mixer/FX</string>

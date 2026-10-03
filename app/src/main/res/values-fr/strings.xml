@@ -184,7 +184,10 @@
     <string name="lyrics_loading">Chargement des paroles…</string>
     <string name="lyrics_none">Aucunes paroles disponibles pour ce titre.</string>
     <string name="bpm_nudge_description">Ajuster le tempo : poussez à gauche pour ralentir, à droite pour accélérer</string>
-    <string name="bpm_set_title">Définir le BPM</string>
+    <string name="bpm_song_tempo_title">Tempo du morceau</string>
+    <string name="bpm_song_tempo_hint">Le BPM d\'origine du morceau, avant la vitesse. La vitesse de lecture ne change pas.</string>
+    <string name="bpm_measure_again">Mesurer à nouveau le tempo</string>
+    <string name="bpm_type_song_tempo">Saisir le tempo du morceau</string>
     <string name="action_set">Définir</string>
     <string name="unknown_artist">Artiste inconnu</string>
     <string name="dock_mixer_fx">Mixeur/FX</string>

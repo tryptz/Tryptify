@@ -178,7 +178,10 @@
     <string name="lyrics_loading">歌詞を読み込み中…</string>
     <string name="lyrics_none">この曲の歌詞はありません。</string>
     <string name="bpm_nudge_description">テンポを微調整：左に押すと遅く、右に押すと速くなります</string>
-    <string name="bpm_set_title">BPM を設定</string>
+    <string name="bpm_song_tempo_title">曲のテンポ</string>
+    <string name="bpm_song_tempo_hint">速度変更前の曲本来の BPM。再生速度はそのままです。</string>
+    <string name="bpm_measure_again">テンポを再検出</string>
+    <string name="bpm_type_song_tempo">曲のテンポを入力</string>
     <string name="action_set">設定</string>
     <string name="unknown_artist">不明なアーティスト</string>
     <string name="dock_mixer_fx">ミキサー/FX</string>

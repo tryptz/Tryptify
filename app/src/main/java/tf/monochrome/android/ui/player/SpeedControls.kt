@@ -23,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -32,6 +33,8 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -141,9 +144,19 @@ internal fun SpeedStepper(
     canDecrement: Boolean = true,
     canIncrement: Boolean = true,
     compact: Boolean = false,
+    /** Tap on the number — the BPM row measures the tempo again with it. */
+    onValueClick: (() -> Unit)? = null,
+    valueClickLabel: String? = null,
     /** Long-press on the number — the BPM row opens a keyboard with it. */
     onValueLongPress: (() -> Unit)? = null,
+    valueLongPressLabel: String? = null,
 ) {
+    // Read through updated state so the gesture detector, keyed once, always
+    // calls the current lambdas: re-keying it on every recomposition would
+    // cancel a long-press in progress whenever the panel redrew.
+    val tap by rememberUpdatedState(onValueClick)
+    val longPress by rememberUpdatedState(onValueLongPress)
+    val interactive = onValueClick != null || onValueLongPress != null
     Row(
         modifier = modifier
             .height(SpeedControlHeight)
@@ -163,9 +176,18 @@ internal fun SpeedStepper(
             maxLines = 1,
             modifier = (if (compact) Modifier.widthIn(min = 52.dp) else Modifier.weight(1f))
                 .then(
-                    if (onValueLongPress != null) Modifier.pointerInput(onValueLongPress) {
-                        detectTapGestures(onLongPress = { onValueLongPress() })
-                    } else Modifier
+                    if (interactive) Modifier
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onTap = { tap?.invoke() },
+                                onLongPress = { longPress?.invoke() },
+                            )
+                        }
+                        .semantics {
+                            onValueClick?.let { onClick(valueClickLabel) { it(); true } }
+                            onValueLongPress?.let { onLongClick(valueLongPressLabel) { it(); true } }
+                        }
+                    else Modifier
                 )
                 .padding(horizontal = 6.dp),
         )

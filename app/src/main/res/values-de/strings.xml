@@ -181,7 +181,10 @@
     <string name="lyrics_loading">Songtext wird geladen …</string>
     <string name="lyrics_none">Für diesen Titel ist kein Songtext verfügbar.</string>
     <string name="bpm_nudge_description">Tempo anpassen: nach links schieben zum Verlangsamen, nach rechts zum Beschleunigen</string>
-    <string name="bpm_set_title">BPM festlegen</string>
+    <string name="bpm_song_tempo_title">Tempo des Songs</string>
+    <string name="bpm_song_tempo_hint">Das eigene BPM des Songs, vor der Geschwindigkeit. Die Wiedergabegeschwindigkeit bleibt gleich.</string>
+    <string name="bpm_measure_again">Tempo neu messen</string>
+    <string name="bpm_type_song_tempo">Tempo des Songs eingeben</string>
     <string name="action_set">Festlegen</string>
     <string name="unknown_artist">Unbekannter Künstler</string>
     <string name="dock_mixer_fx">Mixer/FX</string>

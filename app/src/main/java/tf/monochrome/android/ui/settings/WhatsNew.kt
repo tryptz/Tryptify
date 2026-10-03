@@ -222,13 +222,13 @@ object WhatsNew {
                     kind = WhatsNewKind.NEW,
                     section = SPEED,
                     title = "BPM",
-                    body = "Each song's tempo is detected; set speed in BPM, multiplier or semitones.",
+                    body = "Each song's tempo is measured once and then holds. Tap the BPM to measure again, long-press it to type the song's tempo. Set speed in BPM, multiplier or semitones.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = SPEED,
                     title = "Turntable bend",
-                    body = "Push the bar under the BPM to bend the tempo smoothly, with a click per beat. Long-press the BPM to type one.",
+                    body = "Push the bar under the BPM to bend the tempo smoothly, with a click per beat.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
