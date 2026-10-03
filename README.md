@@ -25,7 +25,7 @@
     <td colspan="3" align="center">
       <img src="docs/screenshots/player-glass-spectrum.jpg" width="45%" alt="Glass spectrum: a single glass line over the cover, the visualizer behind.">
       <br>
-      <b>Glass spectrum</b>: a single glass line over the cover, the visualizer behind.
+      <b>Glass spectrum</b>: TRYPTIFY SCREENSHOTS
     </td>
   </tr>
   <tr>
@@ -79,7 +79,7 @@
 | 🎧 **Every source in one player** | Local files (FLAC, ALAC, WAV, MP3 …) plus TIDAL, Qobuz and Deezer streams through the servers you add in Settings › Connections. |
 | 📈 **A spectrum you can read** | Waterfall styles Lines, Ridgeline, Heat and Neon, or single-line Glass and Legacy. Analysis modes: Live average, Live max, Average and Max. |
 | 🎛️ **DSP mixing console** | 4–48 buses plus master, up to 16 processors each, sends between buses, a 9.1.6 Atmos upmix preset and EBU R128 loudness meters. |
-| 📐 **Headphone AutoEQ** | A 10-band parametric correction from 4,000+ measurements against 10 target curves, or your own CSV/TXT. |
+| 📐 **Headphone AutoEQ** | A 10 to 31-band parametric correction from 4,000+ measurements against 10 target curves, or your own CSV/TXT. |
 | 🔌 **Bit-perfect USB DAC** | A UAC1/UAC2 driver over libusb writes PCM straight to the DAC, past Android's mixer, and falls back to the system output if it stalls. |
 | ⏩ **Speed, pitch, tempo** | Two pitch engines (WSOLA and a phase vocoder), detected BPM, and a turntable-style tempo bend. |
 | 🌌 **MilkDrop visualizer** | projectM with 9,795 presets, every one crash-tested under AddressSanitizer before it ships. Runs as the hero view or as an ambient layer. |
