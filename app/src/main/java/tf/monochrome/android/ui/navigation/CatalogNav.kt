@@ -35,20 +35,21 @@ import tf.monochrome.android.domain.model.SourceType
  */
 fun NavController.navigateSafe(route: String) {
     if (!isSettled()) return
+    leavePlayerFor(route)
     navigate(route)
 }
 
 /**
- * Navigate to a *tool* screen — Settings, the equaliser, the mixer, Now Playing
- * — collapsing any earlier visit to it rather than stacking another copy.
+ * Navigate to a *tool* screen — Settings, the equaliser, the mixer — collapsing
+ * any earlier visit to it rather than stacking another copy.
  *
  * Content screens are allowed to chain: album → artist → album is a trail
  * through the catalogue, and Back should walk it in reverse. Tool screens are
- * not. They open from everywhere, including from each other (Now Playing opens
- * Settings, Settings opens the equaliser, the equaliser is also reachable from
- * the player sheet), so without this a few minutes of fiddling leaves a dozen
- * near-identical entries on the stack and Back becomes a long walk home through
- * screens the listener has already dismissed once.
+ * not. They open from everywhere, including from each other (Settings opens the
+ * equaliser, the equaliser is also reachable from the player sheet), so without
+ * this a few minutes of fiddling leaves a dozen near-identical entries on the
+ * stack and Back becomes a long walk home through screens the listener has
+ * already dismissed once.
  *
  * [screen] supplies the route *pattern* to pop back to; [filled] is the actual
  * target, which differs when the route carries arguments (`settings?tab=4`).
@@ -57,10 +58,37 @@ fun NavController.navigateSafe(route: String) {
  */
 fun NavController.navigateTool(screen: Screen, filled: String = screen.route) {
     if (!isSettled()) return
+    // Closing the player can uncover the very screen being asked for — Settings
+    // → player → its output button. That visit is kept as it was left, tab and
+    // scroll included, instead of being collapsed and opened fresh.
+    if (leavePlayerFor(screen.route) && currentDestination?.route == screen.route) return
     navigate(filled) {
         launchSingleTop = true
         popUpTo(screen.route) { inclusive = true }
     }
+}
+
+/**
+ * The player is a sheet over the screen it was opened from, not a step in the
+ * trail, so going somewhere from it closes it first. Back from the player then
+ * always lands where the listener was.
+ *
+ * It used to stay underneath, and the mini player — which collapses earlier
+ * visits like any tool — then took everything above it along: player →
+ * Settings → mini player → Back went Home, and the Settings visit, its tab and
+ * scroll, was gone. With the player never left under a screen that shows the
+ * mini player, there is nothing for it to collapse.
+ *
+ * The exception is a screen that hides the mini player ([chromeHiddenRoutes]:
+ * the mixer, Oxford, car mode). Back is the only way to the player from those,
+ * so it stays underneath.
+ *
+ * Returns whether the player was closed.
+ */
+private fun NavController.leavePlayerFor(targetRoute: String): Boolean {
+    if (currentDestination?.route != Screen.NowPlaying.route) return false
+    if (targetRoute in chromeHiddenRoutes || previousBackStackEntry == null) return false
+    return popBackStack()
 }
 
 /**

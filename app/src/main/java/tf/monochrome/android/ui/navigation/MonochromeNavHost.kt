@@ -207,7 +207,7 @@ private val pagerRoutes =
 // with its own transport. Everywhere else the chrome stays — on pushed screens
 // too, the way Apple Music keeps its tab bar — and this list is the whole
 // exception.
-private val chromeHiddenRoutes = setOf(
+internal val chromeHiddenRoutes = setOf(
     Screen.NowPlaying.route,
     Screen.Mixer.route,
     Screen.Oxford.route,
@@ -932,7 +932,12 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                                 onPlayPauseClick = { playerViewModel.togglePlayPause() },
                                 onSkipNextClick = { playerViewModel.skipToNext() },
                                 onSkipPreviousClick = { playerViewModel.skipToPrevious() },
-                                onClick = { navController.navigateTool(Screen.NowPlaying) },
+                                // A plain push, not navigateTool: collapsing an
+                                // earlier player would take every screen above it
+                                // along. One left under the mixer is the only kind
+                                // there can be (see leavePlayerFor), and Back walks
+                                // through it.
+                                onClick = { navController.navigateSafe(Screen.NowPlaying.route) },
                                 modifier = mod,
                                 hazeState = hazeState,
                                 blendMillis = miniBlendMs,
