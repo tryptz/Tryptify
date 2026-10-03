@@ -68,7 +68,9 @@ bar came out a different hue from the tab bar under it. Their haze pane is repla
 layer that draws Haze's own capture of the screen behind them
 (`HazeState.areas[i].contentLayer`, offset by `positionOnScreen`), blurs it (a
 fifth of `hazeBlurDp`, 6.4dp on Liquid) and bends it with the same lens rim,
-under half the haze pane's frost. Glass frosts as well as bends: at 2-3dp page
+with no frost veil at all (clear glass: a veil read as a dull frosted pane on
+device), and never blurs less than 6dp whatever "Backdrop blur" says — with the
+slider turned down the page read straight through every pane, sharp. Glass frosts as well as bends: at 2-3dp page
 text read straight through and fought the labels on top; at 10dp nothing was
 left for the rim to bend. Earlier, an 8dp blur together with full frost and the
 slab's own 20% veil on top flattened the bend into a dark

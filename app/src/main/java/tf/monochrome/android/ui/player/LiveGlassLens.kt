@@ -24,6 +24,8 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import kotlin.math.max
 import dev.chrisbanes.haze.HazeState
 
 /**
@@ -110,15 +112,18 @@ internal fun Modifier.liveGlassLens(
             shader.setFloatUniform("uRefraction", glass.refraction)
             shader.setFloatUniform("uDepth", glass.depth)
             shader.setFloatUniform("uDispersion", glass.dispersion)
-            // Premultiplied, for a plain src-over in the shader.
-            // Half the haze pane's frost: over a sharp backdrop the full 0.32
-            // black flattened the bend into a dark smear.
+            // Premultiplied, for a plain src-over in the shader. Zero: the
+            // live lens is clear glass. Any frost veil read on device as a
+            // dull, frosted pane over the backdrop, which was asked to go;
+            // the slab's thin tint on top is the only colour the glass adds.
             val fa = frost.alpha * LIVE_LENS_FROST_SHARE
             shader.setFloatUniform("uFrost", frost.red * fa, frost.green * fa, frost.blue * fa, fa)
             val lens = RenderEffect.createRuntimeShaderEffect(shader, "content")
-            // See LIVE_LENS_BLUR_SHARE for why a fifth. Zero in the Studio is
-            // clear glass.
-            val blurPx = glass.hazeBlurDp * blurShare * density
+            // See LIVE_LENS_BLUR_SHARE for why a fifth. Never below
+            // LIVE_LENS_MIN_BLUR, though: glass blurs the text behind it, and
+            // with "Backdrop blur" turned down on device the page read straight
+            // through every pane, sharp. The slider can add blur, not remove it.
+            val blurPx = max(glass.hazeBlurDp * blurShare, LIVE_LENS_MIN_BLUR.value) * density
             renderEffect = if (blurPx >= 0.5f) {
                 RenderEffect.createChainEffect(
                     lens,
@@ -195,8 +200,11 @@ private const val LIVE_LENS_BLUR_SHARE = 0.2f
  */
 internal const val LIVE_LENS_CHROME_BLUR_SHARE: Float = LIVE_LENS_BLUR_SHARE
 
-/** The live lens's frost as a share of the haze pane's tint alpha. */
-private const val LIVE_LENS_FROST_SHARE = 0.5f
+/** The live lens's frost as a share of the haze pane's tint alpha: none, clear glass. */
+private const val LIVE_LENS_FROST_SHARE = 0f
+
+/** The least a live lens blurs what is behind it, whatever "Backdrop blur" says. */
+private val LIVE_LENS_MIN_BLUR = 6.dp
 
 private class LensAnchor {
     var screen: Offset = Offset.Zero
