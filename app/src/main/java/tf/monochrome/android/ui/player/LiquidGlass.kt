@@ -668,7 +668,7 @@ private fun playerGlassModifier(
 }
 
 /** The widest a lens rim gets, however large the corner it sits in. */
-internal val LensRimMax = 20.dp
+internal val LensRimMax = 24.dp
 
 /** A tilt that never changes, for a surface whose shader would ignore it anyway. */
 private val NoTilt: State<Offset> = mutableStateOf(Offset.Zero)
@@ -837,10 +837,13 @@ half4 main(float2 frag) {
 
 // The lens rim, shared by the slab glass and the live lens so the two bend
 // identically. For a rounded rect of [size] with corner [r], it takes the exact
-// distance to the edge and lays a convex squircle across a band [w] wide,
-// h = (1 - (1-x)^4)^(1/4): near-vertical at the rim, easing to flat by the
+// distance to the edge and lays a rounded (circular) edge across a band [w]
+// wide, h = sqrt(1 - (1-x)^2): vertical at the rim, easing to flat by the
 // inner edge, so the backdrop bends hardest at the rim and not at all across
-// the middle. Returns the surface slope, pointing outward; the caller scales it
+// the middle. Circular, not a squircle: the squircle (1-(1-x)^4)^(1/4) is flat
+// for most of its width, so only the outermost few pixels bent and on device
+// the refraction read as too weak; at the band's midpoint this has ~4x the
+// slope. Returns the surface slope, pointing outward; the caller scales it
 // by depth and adds it to the normal's xy. w <= r keeps the band inside the
 // corner arcs, where the distance field has no mitre crease.
 internal const val LENS_RIM_SKSL = """
@@ -856,8 +859,8 @@ float2 lensRimSlope(float2 p, float2 size, float r, float w) {
     n *= float2(c.x < 0.0 ? -1.0 : 1.0, c.y < 0.0 ? -1.0 : 1.0);
     float m = 1.0 - clamp(-d / w, 0.0, 1.0);
     float m3 = m * m * m;
-    // dh/dx of the squircle; unbounded at the rim, so capped.
-    float slope = m3 / pow(max(1.0 - m3 * m, 1e-3), 0.75);
+    // dh/dx of the circular edge; unbounded at the rim, so capped.
+    float slope = m / sqrt(max(1.0 - m * m, 1e-3));
     return n * min(slope, 6.0);
 }
 """
@@ -1124,15 +1127,15 @@ half4 main(float2 p) {
     // The normal the LIGHT reads. Without a lens rim it is N. With one, the
     // rim's full slope is right for bending the backdrop but wrong for light:
     // the glint and the room's key light peak where the surface tilts ~15deg
-    // toward them, which on the squircle is a third of the way into the band,
-    // 5-7dp inside the edge — a second bright edge inside the alpha bevel's
-    // crisp outer line, so the pane read as two layers depending on the light
-    // angle (seen on device). Lighting a flatter copy of the rim (15% of its
-    // slope) moves that peak against the outer edge, where it joins the bevel
-    // line as one edge.
+    // toward them, which on the full rim is several dp inside the edge — a
+    // second bright edge inside the alpha bevel's crisp outer line, so the
+    // pane read as two layers depending on the light angle (seen on device).
+    // Lighting a flatter copy of the rim (10% of its slope) moves that peak
+    // to within ~1dp of the outer edge, where it joins the bevel line as one
+    // edge.
     float3 NL = N;
     if (uLensW > 0.5) {
-        NL = normalize(float3(grad * slopeGain + lensSlope * 0.15, 1.0));
+        NL = normalize(float3(grad * slopeGain + lensSlope * 0.1, 1.0));
         if (uFrost > 0.001) {
             float g1 = fract(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453);
             float g2 = fract(sin(dot(p, float2(39.346, 11.135))) * 24634.6345);
@@ -1160,10 +1163,11 @@ half4 main(float2 p) {
     // How far a bent ray travels, in uv. Without a lens rim it is a fixed share
     // of the pane, as it always was. With one it is measured in pixels against
     // the rim's own width — a fraction of the pane would push a long bar's
-    // backdrop several times further sideways than up — so the offset is
-    // isotropic and peaks around one rim width at full refraction.
+    // backdrop several times further sideways than up — at 5 rim widths per
+    // unit of refraction, two at the 0.4 maximum. Keep the 5 equal to
+    // LIVE_LENS_SRC's, so the slab and the live lens under it move together.
     float2 power = uRefraction *
-        ((uLensW > 0.5) ? float2(uLensW * 4.0) / uSize : float2(1.6));
+        ((uLensW > 0.5) ? float2(uLensW * 5.0) / uSize : float2(1.6));
 
     // Interior slab parallax: a real glass pane offsets what's behind it even
     // where the surface is dead flat (thickness x viewing angle), which the

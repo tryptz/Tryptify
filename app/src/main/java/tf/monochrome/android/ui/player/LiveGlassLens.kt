@@ -39,7 +39,7 @@ import dev.chrisbanes.haze.HazeState
  * [HazeState] areas' content layers, the same recording the haze blur samples),
  * offset to where this pane sits, and runs a very light blur and then
  * [LIVE_LENS_SRC] over it. What comes out is the live backdrop, bent by the same
- * squircle rim as the slab, under the same frost tint the haze pane used.
+ * rounded rim as the slab, under the same frost tint the haze pane used.
  *
  * It replaces the haze pane under a punched slab; the slab still draws on top
  * and supplies the tint, the rim light and the control holes.
@@ -116,9 +116,8 @@ internal fun Modifier.liveGlassLens(
             val fa = frost.alpha * LIVE_LENS_FROST_SHARE
             shader.setFloatUniform("uFrost", frost.red * fa, frost.green * fa, frost.blue * fa, fa)
             val lens = RenderEffect.createRuntimeShaderEffect(shader, "content")
-            // A twentieth of the haze pane's blur, 2dp at the default 40. Any
-            // more smears away the very detail the rim bends — 8dp made the
-            // bend unreadable on device. Zero in the Studio is clear glass.
+            // See LIVE_LENS_BLUR_SHARE for why a fifth. Zero in the Studio is
+            // clear glass.
             val blurPx = glass.hazeBlurDp * blurShare * density
             renderEffect = if (blurPx >= 0.5f) {
                 RenderEffect.createChainEffect(
@@ -182,13 +181,19 @@ private object LensDiagnostics {
 }
 
 /**
- * The mini player's and the tab bar's blur share: a tenth of `hazeBlurDp` (3.2dp
- * on Liquid). One value for both, because the two are one material.
+ * The live lens's blur as a share of the haze pane's (`hazeBlurDp`): a fifth,
+ * 6.4dp on Liquid. Glass frosts what is behind it as well as bending it — at
+ * 2-3dp page text read straight through and fought the labels on top. Much
+ * more and there is no detail left to bend: at 10dp the rim's bend all but
+ * vanished (checked offline before shipping). Everything shares it.
  */
-internal const val LIVE_LENS_CHROME_BLUR_SHARE = 0.1f
+private const val LIVE_LENS_BLUR_SHARE = 0.2f
 
-/** The live lens's blur as a share of the haze pane's (`hazeBlurDp`). */
-private const val LIVE_LENS_BLUR_SHARE = 0.05f
+/**
+ * The mini player's and the tab bar's blur share. The same as every other
+ * pane's now; kept as its own name so the two bars keep passing one value.
+ */
+internal const val LIVE_LENS_CHROME_BLUR_SHARE: Float = LIVE_LENS_BLUR_SHARE
 
 /** The live lens's frost as a share of the haze pane's tint alpha. */
 private const val LIVE_LENS_FROST_SHARE = 0.5f
@@ -209,8 +214,8 @@ internal val liveLensCompiles: Boolean by lazy {
 // pane (already lightly blurred by the chained effect), in this pane's own px.
 //
 // The bend is [LIQUID_GLASS_SRC]'s with a lens rim, term for term: the same
-// squircle normal, Snell at eta 0.66 with the same per-channel dispersion, and
-// the same pixel scale — refraction × rim width × 4 — so this layer and the slab
+// rounded-rim normal, Snell at eta 0.66 with the same per-channel dispersion,
+// and the same pixel scale — refraction × rim width × 5 — so this layer and the slab
 // on top of it move together. A convex rim bends rays inward, so every sample
 // lands inside the pane and the layer's own bounds are always enough.
 private const val LIVE_LENS_SRC = """
@@ -232,7 +237,7 @@ half4 main(float2 p) {
         float3 N = normalize(float3(lensRimSlope(p, uSize, uLensR, uLensW) * uDepth, 1.0));
         float3 I = float3(0.0, 0.0, -1.0);
         float ds = 0.06 * uDispersion;
-        float k = uRefraction * uLensW * 4.0;
+        float k = uRefraction * uLensW * 5.0;
         float4 cR = float4(content.eval(p + refract(I, N, 0.66 - ds).xy * k));
         float4 cG = float4(content.eval(p + refract(I, N, 0.66).xy * k));
         float4 cB = float4(content.eval(p + refract(I, N, 0.66 + ds).xy * k));

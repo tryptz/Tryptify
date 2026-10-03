@@ -145,7 +145,7 @@ data class PlayerGlassSettings(
          * whitening it. Still until touched: no surface motion and no tilt,
          * which on the app-wide mini player also means no frame clock and no
          * gravity sensor. A lighter backdrop blur — the live lens takes a
-         * twentieth of it, the haze fallback all of it.
+         * fifth of it (6.4dp), the haze fallback all of it.
          */
         val LIQUID = PlayerGlassSettings(
             bodyOpacity = 0.16f, refraction = 0.4f, rimBrightness = 1f, dispersion = 0.35f,

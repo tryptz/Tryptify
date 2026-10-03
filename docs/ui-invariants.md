@@ -46,14 +46,16 @@ heightfield alone gives a solid fill a bevel 2–4px wide: the fill steps from 0
 to 1 across one anti-aliased pixel, so everything inside it is flat and
 `refract()` bends nothing. The pane then reads as a tinted sheet with a
 garbled hairline, not as glass. With `lensCorner` set, the shader lays a
-convex squircle across a band as wide as the corner (capped at 20dp, scaled by
+rounded (circular) edge across a band as wide as the corner (capped at 24dp, scaled by
 `roundness`), and measures the bend in pixels against that band rather than as
 a fraction of the pane, so the backdrop bends hardest at the rim and not at all
 in the middle. The mini player, `GlassPanel` (so every search bar), the tab
 bar, the action dock and the play disc all pass it. Leave it unspecified for
 anything that is not one rounded rect filling the layer — glyphs, icons, the
 spectrum — or the rim lands where the edge is not. With it unspecified, the
-output is bit-identical to the alpha-only glass.
+output is bit-identical to the alpha-only glass. The profile is circular, not a squircle: a squircle is flat for most of its
+width, only its outermost pixels bent, and on device the refraction read as too
+weak.
 
 **Prototype: the mini player, the tab bar, `GlassPanel` and the full player's disc and dock bend the live screen**
 (`LiveGlassLens.kt`, behind `LIVE_LENS_GLASS`). **The mini player and the tab bar are one
@@ -64,19 +66,21 @@ the tab bar's tint *outside* `DynamicColorScope` and hands it to the mini player
 (`glassTintColor`), because inside it `primary` is the album's colour and the
 bar came out a different hue from the tab bar under it. Their haze pane is replaced by a
 layer that draws Haze's own capture of the screen behind them
-(`HazeState.areas[i].contentLayer`, offset by `positionOnScreen`), blurs it very
-lightly (a twentieth of `hazeBlurDp`) and bends it with the same lens rim, under
-half the haze pane's frost. Heavier was tried and failed on device: an 8dp blur,
-full frost and the slab's own 20% veil on top flattened the bend into a dark
+(`HazeState.areas[i].contentLayer`, offset by `positionOnScreen`), blurs it (a
+fifth of `hazeBlurDp`, 6.4dp on Liquid) and bends it with the same lens rim,
+under half the haze pane's frost. Glass frosts as well as bends: at 2-3dp page
+text read straight through and fought the labels on top; at 10dp nothing was
+left for the rim to bend. Earlier, an 8dp blur together with full frost and the
+slab's own 20% veil on top flattened the bend into a dark
 smear. For the same reason the slab over a live lens is told so
 (`playerGlass(liveUnder = true)`): it drops its stand-in refraction and draws its
 body as plain tint at half the body opacity, leaving the rim, reflection and
 glint to carry the glass. With `liveUnder` false the slab is bit-identical.
 
-**A lens rim is lit through a flattened normal** (`NL`, 15% of the rim's slope)
+**A lens rim is lit through a flattened normal** (`NL`, 10% of the rim's slope)
 while it bends through the full one. Lit at full slope, the glint and the key
-light peak where the rim tilts ~15° toward them — a third of the way into the
-band, 5-7dp inside the edge — so a second bright edge sat inside the bevel's
+light peak where the rim tilts ~15° toward them — several dp inside the edge —
+so a second bright edge sat inside the bevel's
 crisp outer line and the pane read as two layers, worse at some light angles.
 Do not light with `N` on a lens pane. These
 surfaces start from the `Liquid` preset (`PlayerGlassSettings.INITIAL`), as does

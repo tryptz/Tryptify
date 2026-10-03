@@ -143,10 +143,10 @@ relying on hard rule 3: a field you omit inherits these, not a tidy midpoint.
 |---|---|---|---|
 | `enabled` | bool | true | Master button-glass toggle. **False = flat buttons.** |
 | `bodyOpacity` | 0..1 | 0.2 | Glass body see-through amount. Low = ghost/invisible-ink; 0 = body fully invisible (edges/rim remain). **The shipped default is already ghost-thin.** |
-| `refraction` | 0..0.4 | 0.4 | Bevel lensing of the backdrop, and the interior slab parallax. On lens-rim panes the rim offset is in pixels, about one rim width at 0.4. **Default is the maximum** — flat faces lens, not just bevels. |
+| `refraction` | 0..0.4 | 0.4 | Bevel lensing of the backdrop, and the interior slab parallax. On lens-rim panes the rim offset is in pixels, about two rim widths at 0.4. **Default is the maximum** — flat faces lens, not just bevels. |
 | `rimBrightness` | 0..2 | 0.2633547 | Lit specular rim brightness. Default is dim; 2 = blazing edge. |
 | `dispersion` | 0..2 | 1.8702691 | Chromatic aberration at edges. Default is heavy. |
-| `roundness` | 0.5..2 | 2 | Bevel shoulder width. Higher = rounder/softer; low + high depth = faceted gem. On lens-rim panes (mini player, panels, tab bar, dock, play disc) also sets the rim band: 0.5..2 → 5/8..all of the corner radius (max 20dp). **Default is the maximum.** |
+| `roundness` | 0.5..2 | 2 | Bevel shoulder width. Higher = rounder/softer; low + high depth = faceted gem. On lens-rim panes (mini player, panels, tab bar, dock, play disc) also sets the rim band: 0.5..2 → 5/8..all of the corner radius (max 24dp). **Default is the maximum.** |
 | `depth` | 0.5..2 | 1.0025804 | Bevel relief steepness. Default is neutral. |
 | `shadowDepth` | 0..1 | 0.20475428 | Drop-shadow darkness (Compose). 1 = deeply floated/levitating. |
 | `reflection` | 0..2 | 2 | Room/environment reflection strength. **Default is the maximum** — mirror-strong. |
