@@ -136,183 +136,165 @@ data class PlayerGlassSettings(
         val DEFAULT = PlayerGlassSettings()
 
         /**
-         * Liquid — clear glass for the panes that bend the live screen (the
-         * mini player and every glass panel, see LiveGlassLens). Full rim
-         * refraction over a thin tint, so what is behind the pane shows
-         * through and bends at its edge; a crisp, moderate rim light from the
-         * upper left; a whisper of dispersion rather than the default's
-         * rainbow; a calm room reflection that lights the rim without
-         * whitening it. Still until touched: no surface motion and no tilt,
-         * which on the app-wide mini player also means no frame clock and no
-         * gravity sensor. A lighter backdrop blur — the live lens takes a
-         * fifth of it (6.4dp), the haze fallback all of it.
+         * Clear — iOS's clear Liquid Glass, and what every glass setting starts
+         * from ([INITIAL]). On the panes that bend the live screen (see
+         * LiveGlassLens) it is almost nothing but optics: an 8% tint, the full
+         * rim bend, a crisp rim lit from the upper left, a whisper of
+         * dispersion and a calm room reflection. Still until touched — no
+         * surface motion and no tilt, which on the app-wide mini player also
+         * means no frame clock and no gravity sensor.
          */
-        val LIQUID = PlayerGlassSettings(
-            bodyOpacity = 0.16f, refraction = 0.4f, rimBrightness = 1f, dispersion = 0.35f,
-            roundness = 2f, depth = 1.2f, reflection = 0.9f, gloss = 0.85f,
-            surfaceMotion = 0f, tiltReactivity = 0f, lightAngleDeg = 135f, edgeWidth = 0.25f,
-            frost = 0f, hazeBlurDp = 32f, hazeTint = 0.8f,
+        val CLEAR = PlayerGlassSettings(
+            bodyOpacity = 0.16f, refraction = 0.4f, rimBrightness = 1.1f, dispersion = 0.3f,
+            roundness = 2f, depth = 1.2f, reflection = 0.8f, gloss = 0.85f,
+            surfaceMotion = 0f, tiltReactivity = 0f, lightAngleDeg = 120f, edgeWidth = 0.2f,
+            frost = 0f, shadowDepth = 0.25f, shadowSoftness = 0.35f, shadowTint = 0f,
+            hazeBlurDp = 32f, hazeTint = 0.8f,
         )
 
         /**
-         * What every glass setting starts from, the player's and the mini
-         * player's alike, and what "Reset to defaults" restores.
+         * What every glass setting starts from — the player's and the mini
+         * player's alike — and what "Reset to defaults" restores: [CLEAR], the
+         * first chip.
          *
-         * Not [DEFAULT], and DEFAULT does not move: it is also what every
-         * preset inherits for the fields it leaves out, so changing it would
-         * silently restyle all of them. DEFAULT stays the classic material
-         * under its own chip.
+         * Not [DEFAULT], and DEFAULT does not move: it is also what a preset
+         * inherits for any field it leaves out, and the fallback for a
+         * non-finite value, so changing it would silently restyle everything
+         * built on it. It is no longer offered as a chip.
          */
-        val INITIAL = LIQUID
+        val INITIAL = CLEAR
 
         /**
-         * Built-in glass MATERIAL themes — one unified roster, paired 1:1 with
-         * the Lyrics FX presets of the SAME NAME so picking a theme on both
-         * tabs composes a single look. Each varies only the aesthetic fields;
-         * tintColor / previewBg / sampleRings stay at their defaults so a theme
-         * never touches the user's colour or quality.
+         * The glass MATERIAL themes, in two families. The first three are
+         * iOS's own Liquid Glass: Clear, Tinted (the legibility variant) and
+         * Tilt (its highlights riding the phone's motion). The rest extend the
+         * same material where iOS does not go — a water drop, a prism, a soap
+         * film, liquid metal, ice, a glowing halo, an aurora, dusk light and a
+         * hologram — still nothing but optics, never colour: the tint is the
+         * album's or the listener's own, and a theme never touches it.
          *
-         * Tuned for the reworked glass optics: `refraction` now also drives the
-         * interior slab parallax (flat faces lens, not just bevels) and
-         * `surfaceMotion` scales the whole living layer — face swell, edge
-         * shimmer and the glint twinkle — so 0 is truly still and 1 is fully
-         * alive. It no longer drives a traveling light sheet; nothing crosses
-         * the pane, so the values below read as material, never as an event.
+         * Every theme sets every material field. A field left out would be
+         * inherited from [DEFAULT], whose 0.53 surface motion and heavy
+         * dispersion would leak into a theme that never asked for them.
+         *
+         * None uses `frost`, the shader's grain: frosted glass is made from
+         * backdrop blur (`hazeBlurDp`), which the live lens floors at 6dp and
+         * scales to a fifth of the value, so 80 is ~16dp of frost.
+         *
+         * Motion and tilt are not free. On the mini player, which is on every
+         * screen, `surfaceMotion` > 0 runs a frame clock and `tiltReactivity`
+         * > 0 holds the gravity sensor, app-wide. The iOS-quiet themes keep
+         * both at zero; the ones that move are the ones about moving.
          */
         val PRESETS: List<Pair<String, PlayerGlassSettings>> = listOf(
-            // The shipped look.
-            "Default" to DEFAULT,
-            // Clear live-lens glass; what every glass setting starts from.
-            "Liquid" to LIQUID,
-            // Chrome — liquid metal: polished mirror body, steady surface,
-            // tight bright glint. (Name pinned by tests.)
-            "Chrome" to PlayerGlassSettings(
-                bodyOpacity = 0.66f, refraction = 0.14f, rimBrightness = 1.8f, dispersion = 0.6f,
-                roundness = 0.75f, depth = 1.25f, reflection = 1.8f, gloss = 0.9f,
-                surfaceMotion = 0.18f, tiltReactivity = 0.8f, lightAngleDeg = 120f, edgeWidth = 0.22f,
-                frost = 0f, shadowDepth = 0.5f, shadowSoftness = 0.3f,
+            "Clear" to CLEAR,
+            // Tinted — iOS's Tinted option: more body for legibility over busy
+            // pages (a 30% tint), a heavier 12dp blur, a gentler bend.
+            "Tinted" to PlayerGlassSettings(
+                bodyOpacity = 0.6f, refraction = 0.32f, rimBrightness = 0.9f, dispersion = 0.15f,
+                roundness = 1.8f, depth = 1.1f, reflection = 0.6f, gloss = 0.75f,
+                surfaceMotion = 0f, tiltReactivity = 0f, lightAngleDeg = 120f, edgeWidth = 0.3f,
+                frost = 0f, shadowDepth = 0.3f, shadowSoftness = 0.4f, shadowTint = 0f,
+                hazeBlurDp = 60f, hazeTint = 1.2f,
             ),
-            // Frosted — etched sea-glass: heavy mist, broad soft shoulder, dull
-            // wide highlight, a slow living surface. (Name pinned by tests.)
-            "Frosted" to PlayerGlassSettings(
-                bodyOpacity = 0.74f, refraction = 0.12f, rimBrightness = 0.85f, dispersion = 0.5f,
-                roundness = 1.7f, depth = 0.85f, reflection = 0.5f, gloss = 0.12f,
-                surfaceMotion = 0.35f, tiltReactivity = 0.5f, lightAngleDeg = 150f, edgeWidth = 0.75f,
-                frost = 0.85f, shadowDepth = 0.35f, shadowSoftness = 0.8f,
+            // Tilt — Clear whose highlights follow the phone, the way iOS's do:
+            // tilt moves the key light along the rim, with a faint shimmer.
+            "Tilt" to PlayerGlassSettings(
+                bodyOpacity = 0.18f, refraction = 0.4f, rimBrightness = 1.4f, dispersion = 0.35f,
+                roundness = 2f, depth = 1.3f, reflection = 1f, gloss = 0.9f,
+                surfaceMotion = 0.2f, tiltReactivity = 1f, lightAngleDeg = 110f, edgeWidth = 0.25f,
+                frost = 0f, shadowDepth = 0.3f, shadowSoftness = 0.4f, shadowTint = 0.2f,
+                hazeBlurDp = 36f, hazeTint = 0.8f,
             ),
-            // Neon — electric sign: blazing rim, strong fringing, full
-            // accent-tinted glow under the disc. (Name pinned by tests.)
-            "Neon" to PlayerGlassSettings(
-                bodyOpacity = 0.42f, refraction = 0.22f, rimBrightness = 2f, dispersion = 1.7f,
-                roundness = 1f, depth = 1.35f, reflection = 1.7f, gloss = 0.8f,
-                surfaceMotion = 0.5f, tiltReactivity = 0.9f, lightAngleDeg = 335f, edgeWidth = 0.4f,
-                frost = 0f, shadowDepth = 0.75f, shadowSoftness = 0.75f, shadowTint = 1f,
+            // Pure — the least glass can be: full bend, no colour fringe, a
+            // quiet rim and almost no reflection. Still.
+            "Pure" to PlayerGlassSettings(
+                bodyOpacity = 0.15f, refraction = 0.4f, rimBrightness = 0.4f, dispersion = 0f,
+                roundness = 2f, depth = 1f, reflection = 0.25f, gloss = 0.9f,
+                surfaceMotion = 0f, tiltReactivity = 0f, lightAngleDeg = 120f, edgeWidth = 0.1f,
+                frost = 0f, shadowDepth = 0.15f, shadowSoftness = 0.3f, shadowTint = 0f,
+                hazeBlurDp = 30f, hazeTint = 0.6f,
             ),
-            // Voltage — harder and choppier than Neon: deep relief, restless
-            // surface, hard side light, tinted strike shadow.
-            "Voltage" to PlayerGlassSettings(
-                bodyOpacity = 0.46f, refraction = 0.28f, rimBrightness = 1.9f, dispersion = 1.4f,
-                roundness = 0.85f, depth = 1.5f, reflection = 1.4f, gloss = 0.7f,
-                surfaceMotion = 0.75f, tiltReactivity = 1.1f, lightAngleDeg = 60f, edgeWidth = 0.3f,
-                frost = 0f, shadowDepth = 0.6f, shadowSoftness = 0.45f, shadowTint = 0.7f,
+            // Droplet — a thick drop of water: the steepest, roundest rim, so
+            // the edge magnifies hardest, with a slow wobble and a sharp glint.
+            "Droplet" to PlayerGlassSettings(
+                bodyOpacity = 0.1f, refraction = 0.4f, rimBrightness = 1.2f, dispersion = 0.5f,
+                roundness = 2f, depth = 2f, reflection = 0.9f, gloss = 1f,
+                surfaceMotion = 0.35f, tiltReactivity = 0.5f, lightAngleDeg = 100f, edgeWidth = 0.1f,
+                frost = 0f, shadowDepth = 0.45f, shadowSoftness = 0.6f, shadowTint = 0.3f,
+                hazeBlurDp = 24f, hazeTint = 0.7f,
             ),
-            // Glacier — arctic stillness: thin cold rim, faint mist, almost no
-            // motion, a crisp restrained glint.
-            "Glacier" to PlayerGlassSettings(
-                bodyOpacity = 0.55f, refraction = 0.1f, rimBrightness = 1.5f, dispersion = 0.35f,
-                roundness = 0.9f, depth = 0.9f, reflection = 1.1f, gloss = 0.65f,
-                surfaceMotion = 0.06f, tiltReactivity = 0.4f, lightAngleDeg = 105f, edgeWidth = 0.2f,
-                frost = 0.15f, shadowDepth = 0.3f, shadowSoftness = 0.4f,
-            ),
-            // Bloom — dreamy soft-focus: pillowy shoulder, light mist, gentle
-            // living surface, softly tinted floated shadow.
-            "Bloom" to PlayerGlassSettings(
-                bodyOpacity = 0.5f, refraction = 0.2f, rimBrightness = 1.2f, dispersion = 1.3f,
-                roundness = 1.6f, depth = 1.1f, reflection = 0.9f, gloss = 0.35f,
-                surfaceMotion = 0.45f, tiltReactivity = 0.7f, lightAngleDeg = 160f, edgeWidth = 0.65f,
-                frost = 0.25f, shadowDepth = 0.5f, shadowSoftness = 0.85f, shadowTint = 0.4f,
-            ),
-            // Midnight — noir: dark near-still glass, dim rim, deep relief,
-            // light from the lower left like a table lamp.
-            "Midnight" to PlayerGlassSettings(
-                bodyOpacity = 0.38f, refraction = 0.12f, rimBrightness = 0.75f, dispersion = 0.45f,
-                roundness = 1.15f, depth = 1.5f, reflection = 0.35f, gloss = 0.22f,
-                surfaceMotion = 0.12f, tiltReactivity = 0.3f, lightAngleDeg = 210f, edgeWidth = 0.5f,
-                frost = 0.1f, shadowDepth = 0.65f, shadowSoftness = 0.6f,
-            ),
-            // Silk — draped softness: the widest shoulder, satin (not mirror)
-            // highlight, deepest softest shadow bed.
-            "Silk" to PlayerGlassSettings(
-                bodyOpacity = 0.6f, refraction = 0.13f, rimBrightness = 1f, dispersion = 0.7f,
-                roundness = 1.85f, depth = 0.95f, reflection = 0.7f, gloss = 0.28f,
-                surfaceMotion = 0.3f, tiltReactivity = 0.55f, lightAngleDeg = 145f, edgeWidth = 0.8f,
-                frost = 0.3f, shadowDepth = 0.75f, shadowSoftness = 1f, shadowTint = 0.2f,
-            ),
-            // Hyper — everything on: full surface churn, hardest gyro sway,
-            // top-right strike light, tinted kick shadow.
-            "Hyper" to PlayerGlassSettings(
-                bodyOpacity = 0.45f, refraction = 0.26f, rimBrightness = 1.7f, dispersion = 1.5f,
-                roundness = 1.2f, depth = 1.4f, reflection = 1.5f, gloss = 0.6f,
-                surfaceMotion = 1f, tiltReactivity = 1.3f, lightAngleDeg = 30f, edgeWidth = 0.45f,
-                frost = 0f, shadowDepth = 0.6f, shadowSoftness = 0.5f, shadowTint = 0.5f,
-            ),
-            // Prism — cut diamond: maxed refraction + dispersion, top-lit,
-            // faceted (steep depth, low roundness), thin crisp edge.
+            // Prism — cut crystal: a narrow, steep, faceted rim that splits the
+            // backdrop into full rainbow fringes, which sway with tilt.
             "Prism" to PlayerGlassSettings(
-                bodyOpacity = 0.5f, refraction = 0.4f, rimBrightness = 1.8f, dispersion = 2f,
-                roundness = 0.55f, depth = 1.9f, reflection = 1.5f, gloss = 0.9f,
-                surfaceMotion = 0.2f, tiltReactivity = 1f, lightAngleDeg = 90f, edgeWidth = 0.15f,
-                frost = 0f, shadowDepth = 0.5f, shadowSoftness = 0.3f,
+                bodyOpacity = 0.12f, refraction = 0.4f, rimBrightness = 1.8f, dispersion = 2f,
+                roundness = 0.6f, depth = 1.9f, reflection = 1.2f, gloss = 1f,
+                surfaceMotion = 0f, tiltReactivity = 0.8f, lightAngleDeg = 60f, edgeWidth = 0.05f,
+                frost = 0f, shadowDepth = 0.35f, shadowSoftness = 0.2f, shadowTint = 0.5f,
+                hazeBlurDp = 28f, hazeTint = 0.8f,
             ),
-            // Mirage — molten sea-glass: near-full churn UNDER heavy frost, a
-            // broad dull shoulder, heat-haze languor.
-            "Mirage" to PlayerGlassSettings(
-                bodyOpacity = 0.52f, refraction = 0.26f, rimBrightness = 0.85f, dispersion = 1f,
-                roundness = 1.55f, depth = 1.25f, reflection = 0.55f, gloss = 0.15f,
-                surfaceMotion = 0.9f, tiltReactivity = 0.85f, lightAngleDeg = 200f, edgeWidth = 0.7f,
-                frost = 0.75f, shadowDepth = 0.5f, shadowSoftness = 0.85f, shadowTint = 0.35f,
+            // Bubble — a soap film: almost no body, a wide iridescent shoulder
+            // that catches the room, a soft glint and a lazy drift.
+            "Bubble" to PlayerGlassSettings(
+                bodyOpacity = 0.05f, refraction = 0.25f, rimBrightness = 2f, dispersion = 1.6f,
+                roundness = 2f, depth = 0.8f, reflection = 1.4f, gloss = 0.3f,
+                surfaceMotion = 0.6f, tiltReactivity = 0.4f, lightAngleDeg = 150f, edgeWidth = 0.9f,
+                frost = 0f, shadowDepth = 0.1f, shadowSoftness = 0.8f, shadowTint = 0.7f,
+                hazeBlurDp = 0f, hazeTint = 0.5f,
             ),
-            // Aurora — alive holo glass: reactive tilt, an unusual back-left key
-            // light and an accent-tinted bloom under the disc.
-            "Aurora" to PlayerGlassSettings(
-                bodyOpacity = 0.44f, refraction = 0.3f, rimBrightness = 1.45f, dispersion = 1.6f,
-                roundness = 1.4f, depth = 1.35f, reflection = 1.25f, gloss = 0.5f,
-                surfaceMotion = 0.65f, tiltReactivity = 1.25f, lightAngleDeg = 300f, edgeWidth = 0.55f,
-                frost = 0.1f, shadowDepth = 0.55f, shadowSoftness = 0.7f, shadowTint = 0.65f,
+            // Mercury — liquid metal: a dense, mirror-bright body that moves,
+            // a broad reflective shoulder and a deep floating shadow.
+            "Mercury" to PlayerGlassSettings(
+                bodyOpacity = 0.7f, refraction = 0.22f, rimBrightness = 1.6f, dispersion = 0.1f,
+                roundness = 1.5f, depth = 1.6f, reflection = 2f, gloss = 1f,
+                surfaceMotion = 0.45f, tiltReactivity = 0.6f, lightAngleDeg = 90f, edgeWidth = 0.5f,
+                frost = 0f, shadowDepth = 0.6f, shadowSoftness = 0.5f, shadowTint = 0f,
+                hazeBlurDp = 70f, hazeTint = 1.3f,
             ),
-            // Onyx — locked-studio brutalism: perfectly still (zero motion, zero
-            // tilt), lit from BELOW, cut like a faceted gem.
-            "Onyx" to PlayerGlassSettings(
-                bodyOpacity = 0.42f, refraction = 0.1f, rimBrightness = 0.7f, dispersion = 0.3f,
-                roundness = 0.75f, depth = 1.75f, reflection = 0.3f, gloss = 0.25f,
-                surfaceMotion = 0f, tiltReactivity = 0f, lightAngleDeg = 270f, edgeWidth = 0.5f,
-                frost = 0.15f, shadowDepth = 0.6f, shadowSoftness = 0.5f,
+            // Ice — a cold slab: the heaviest blur (~16dp) frosts the page
+            // behind without grain, under a still, clean edge.
+            "Ice" to PlayerGlassSettings(
+                bodyOpacity = 0.35f, refraction = 0.32f, rimBrightness = 1f, dispersion = 0.2f,
+                roundness = 1.2f, depth = 1.4f, reflection = 0.7f, gloss = 0.6f,
+                surfaceMotion = 0f, tiltReactivity = 0f, lightAngleDeg = 135f, edgeWidth = 0.35f,
+                frost = 0f, shadowDepth = 0.3f, shadowSoftness = 0.5f, shadowTint = 0.1f,
+                hazeBlurDp = 80f, hazeTint = 1.4f,
             ),
-            // Halo — ghost levitate: near-invisible body over a lensed backdrop,
-            // maximum gyro tilt, maximally floated soft accent shadow.
+            // Halo — a glowing rim: the widest, brightest edge, top-lit, and an
+            // accent-coloured glow under the play button instead of a shadow.
             "Halo" to PlayerGlassSettings(
-                bodyOpacity = 0.26f, refraction = 0.34f, rimBrightness = 1.65f, dispersion = 1.5f,
-                roundness = 1.3f, depth = 1.35f, reflection = 1.55f, gloss = 0.6f,
-                surfaceMotion = 0.55f, tiltReactivity = 1.5f, lightAngleDeg = 315f, edgeWidth = 0.5f,
-                frost = 0f, shadowDepth = 1f, shadowSoftness = 0.95f, shadowTint = 0.7f,
+                bodyOpacity = 0.2f, refraction = 0.35f, rimBrightness = 2f, dispersion = 0.6f,
+                roundness = 1.6f, depth = 1f, reflection = 1.6f, gloss = 0.5f,
+                surfaceMotion = 0.15f, tiltReactivity = 0.3f, lightAngleDeg = 90f, edgeWidth = 1f,
+                frost = 0f, shadowDepth = 0.7f, shadowSoftness = 0.9f, shadowTint = 1f,
+                hazeBlurDp = 40f, hazeTint = 1f,
             ),
-            // Ticker — deliberately flat: button glass OFF and a plain progress
-            // bar, matching the stripped-back single-line lyric ticker.
-            "Ticker" to PlayerGlassSettings(
-                enabled = false, progressGlass = false,
-                bodyOpacity = 0.85f, refraction = 0.05f, rimBrightness = 0.7f, dispersion = 0.3f,
-                roundness = 0.9f, depth = 0.7f, reflection = 0.35f, gloss = 0.3f,
-                surfaceMotion = 0f, tiltReactivity = 0f, edgeWidth = 0.35f,
-                frost = 0f, shadowDepth = 0.2f, shadowSoftness = 0.3f,
+            // Aurora — colour that lives in the rim: strong dispersion carried
+            // by slow liquid motion and tilt, lit from the lower left.
+            "Aurora" to PlayerGlassSettings(
+                bodyOpacity = 0.15f, refraction = 0.38f, rimBrightness = 1.3f, dispersion = 1.2f,
+                roundness = 1.9f, depth = 1.2f, reflection = 1.2f, gloss = 0.7f,
+                surfaceMotion = 0.8f, tiltReactivity = 1.2f, lightAngleDeg = 200f, edgeWidth = 0.4f,
+                frost = 0f, shadowDepth = 0.4f, shadowSoftness = 0.7f, shadowTint = 0.6f,
+                hazeBlurDp = 40f, hazeTint = 0.9f,
             ),
-            // Static — accessible stillness with the glass kept ON: zero motion,
-            // zero tilt, modest neutral material (the no-animation counterpart
-            // to the Static lyric preset).
-            "Static" to PlayerGlassSettings(
-                bodyOpacity = 0.62f, refraction = 0.1f, rimBrightness = 1f, dispersion = 0.6f,
-                roundness = 1f, depth = 0.9f, reflection = 0.6f, gloss = 0.35f,
-                surfaceMotion = 0f, tiltReactivity = 0f, lightAngleDeg = 135f, edgeWidth = 0.4f,
-                frost = 0.05f, shadowDepth = 0.3f, shadowSoftness = 0.4f,
+            // Dusk — low raking light: the key light almost level from the
+            // right, a warm accent glow under the play button, a slow drift.
+            "Dusk" to PlayerGlassSettings(
+                bodyOpacity = 0.25f, refraction = 0.36f, rimBrightness = 1.5f, dispersion = 0.4f,
+                roundness = 1.7f, depth = 1.3f, reflection = 1.1f, gloss = 0.8f,
+                surfaceMotion = 0.1f, tiltReactivity = 0.2f, lightAngleDeg = 20f, edgeWidth = 0.3f,
+                frost = 0f, shadowDepth = 0.5f, shadowSoftness = 0.7f, shadowTint = 0.8f,
+                hazeBlurDp = 44f, hazeTint = 1f,
+            ),
+            // Holo — a hologram: lit from below, near-total dispersion, and the
+            // most tilt there is, so the rainbow slides as the phone moves.
+            "Holo" to PlayerGlassSettings(
+                bodyOpacity = 0.14f, refraction = 0.4f, rimBrightness = 1.6f, dispersion = 1.8f,
+                roundness = 1.4f, depth = 1.5f, reflection = 1.3f, gloss = 0.6f,
+                surfaceMotion = 0.3f, tiltReactivity = 1.5f, lightAngleDeg = 270f, edgeWidth = 0.6f,
+                frost = 0f, shadowDepth = 0.3f, shadowSoftness = 0.5f, shadowTint = 0.9f,
+                hazeBlurDp = 32f, hazeTint = 0.8f,
             ),
         )
     }

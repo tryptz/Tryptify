@@ -23,9 +23,11 @@ never colour or font** (colours are derived from album art at runtime).
 | **Lyrics FX** | `LyricsFxSettings` | `app/src/main/java/tf/monochrome/android/domain/model/LyricsFxSettings.kt` | Lyric typography, the 3D per-letter wave, the bass beat engine, the reactive glow |
 | **Player Glass** | `PlayerGlassSettings` | `app/src/main/java/tf/monochrome/android/domain/model/PlayerGlassSettings.kt` | The refractive glass on the transport buttons + the progress "thermometer" |
 
-A **theme** is a coordinated pair: add one `LyricsFxSettings` preset **and** one
-`PlayerGlassSettings` preset **with the same name** so the lyrics and the chrome
-read as one look. The two lists are separate, so the same name may appear in both.
+The two rosters are **independent**. Player Glass was rebuilt as an iOS
+Liquid Glass roster (Clear, Tinted, Tilt, then creative extensions); its names
+no longer mirror the Lyrics FX list, and a glass theme does not need a lyric
+twin. If you do want a coordinated look, give the two the same name — the lists
+are separate, so the same name may appear in both.
 
 Each system exposes a `companion object` `PRESETS: List<Pair<String, …Settings>>`.
 **Appending a `Pair` to that list is all it takes to add a chip** — the Studio
@@ -67,8 +69,10 @@ test enforces `tintColor == 0 && previewBg == 0` for every preset, and
    - Lyrics `bassReact ≤ 0.01` → the analyzer is off, so `pumpAmount` / `attackMs`
      / `releaseMs` / `bounce` / `glowRadiusDp` / `glowBrightness` do nothing.
 5. **Don't rename or remove these preset names — tests look them up by name:**
-   Lyrics FX `Voltage`; Player Glass `Neon`, `Chrome`, `Frosted`. **Appending new
-   names is safe** — no test pins preset count or order.
+   Lyrics FX `Voltage`; Player Glass `Clear` (must stay first and be `INITIAL`)
+   and `Tinted`. **Appending new names is safe** — no test pins preset count.
+   Player Glass presets must also leave `frost` at 0 (`no preset uses the frost
+   grain`): frosted glass is made from `hazeBlurDp`, not shader grain.
 6. **Keep names unique (case-insensitive) and give each a distinct value set** —
    two presets with identical values light two chips at once.
 7. **Lyrics glass is only 4 knobs.** For the *lyrics* shader only
@@ -86,21 +90,23 @@ test enforces `tintColor == 0 && previewBg == 0` for every preset, and
 
 ## Where to add a preset
 
-Both lists currently run …`Halo`, `Ticker`, `Static` and end there; append after
-`"Static"` in each.
-
-- Lyrics FX: append inside `PRESETS = listOf(…)` in `LyricsFxSettings.kt`
-  (17 presets today).
-- Player Glass: append inside `PRESETS = listOf(…)` in `PlayerGlassSettings.kt`
-  (17 today — this list opens with `"Default" to DEFAULT` and `"Liquid" to
-  LIQUID`, which the Lyrics one does not; the validator only parses inline
-  presets, so it counts 16 and leaves those two to the unit tests).
-- `LIQUID` is also `INITIAL`, what every glass setting starts from — the
+- Lyrics FX: append after `"Static"` inside `PRESETS = listOf(…)` in
+  `LyricsFxSettings.kt` (17 presets today).
+- Player Glass: append after `"Holo"` inside `PRESETS = listOf(…)` in
+  `PlayerGlassSettings.kt` (13 today: Clear, Tinted, Tilt, Pure, Droplet,
+  Prism, Bubble, Mercury, Ice, Halo, Aurora, Dusk, Holo). It opens with
+  `"Clear" to CLEAR`, a reference the validator cannot parse, so it counts 12
+  and leaves Clear to the unit tests.
+- `CLEAR` is also `INITIAL`, what every glass setting starts from — the
   player's and the mini player's — and what the Studio's reset restores.
   Changing its values restyles the app for everyone who has not customised
-  it; the test `every glass setting starts from Liquid` pins that it stays
-  still (no surface motion, no tilt). `DEFAULT` keeps the classic values under
-  the "Default" chip, because every preset inherits omitted fields from it.
+  it; the test `every glass setting starts from Clear` pins that it stays
+  still (no surface motion, no tilt). `DEFAULT` keeps the classic values but is
+  no longer a chip; it stays because every preset inherits omitted fields from
+  it — so set **every** material field in a new glass preset.
+- Motion and tilt cost battery on the app-wide mini player (`surfaceMotion` > 0
+  runs a frame clock, `tiltReactivity` > 0 holds the gravity sensor). Keep both
+  at 0 unless the theme is *about* moving.
 
 ## Lyrics FX parameter reference
 
@@ -177,7 +183,8 @@ either slider stops matching every chip.
    glass off, a single-line ticker, an unusual `lightAngleDeg`, a tinted shadow…).
 2. **Author the Lyrics FX preset** — set every field you want to differ from
    DEFAULT; respect the gates; keep in range.
-3. **Author the Player Glass preset** with the **same name** and a matching mood.
+3. **Author the Player Glass preset** — setting every material field — with the
+   same name if you want the two to read as one look.
 4. Append both to their `PRESETS` lists.
 5. **Validate ranges + colour-safety** with the helper — a second, no-Gradle
    check, not a replacement for the tests:

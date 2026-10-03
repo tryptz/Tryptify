@@ -131,8 +131,8 @@ object WhatsNew {
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = LOOK,
-                    title = "Liquid theme",
-                    body = "A new glass theme in Player Visuals Studio, and the starting look for the player and the UI panels. Glass you have tuned yourself is kept: tap Liquid to switch.",
+                    title = "New glass themes",
+                    body = "Clear, Tinted and Tilt, after iOS, then Pure, Droplet, Prism, Bubble, Mercury, Ice, Halo, Aurora, Dusk and Holo. Clear is the new starting look; glass you tuned yourself is kept.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
