@@ -88,8 +88,7 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
     private var inputEnded = false
 
     // Scratch float arrays
-    private var scratchL = FloatArray(0)
-    private var scratchR = FloatArray(0)
+    private val block = tf.monochrome.android.audio.dsp.PlanarBlock()
 
     /**
      * A designed chain, ready to install. Published as one immutable object so
@@ -101,6 +100,13 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
         val preampLinear: Float,
         val coefsL: Array<FloatArray>,
         val coefsR: Array<FloatArray>,
+        /**
+         * For channels on neither side — centre, LFE, back centre — of a
+         * multichannel stream. The left curve when the ears match (almost
+         * every profile); otherwise both ears' bands at half gain, which sums
+         * to the average of the two curves in dB.
+         */
+        val coefsC: Array<FloatArray>,
     )
 
     /** The user's curve, in absolute Hz, before any pitch pre-warp. */
@@ -112,13 +118,14 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
     )
 
     private val designRef = AtomicReference(
-        Design(false, 1f, emptyArray(), emptyArray())
+        Design(false, 1f, emptyArray(), emptyArray(), emptyArray())
     )
     private var appliedDesign: Design? = null
 
-    // Per-band biquad filter state (audio thread only)
-    private var filtersL = arrayOf<EqBiquad>()
-    private var filtersR = arrayOf<EqBiquad>()
+    // Per-channel, per-band biquad state (audio thread only). One chain per
+    // channel of the stream; which curve each runs is its ChannelLayout side.
+    private var chains: Array<Array<EqBiquad>> = emptyArray()
+    private var chainSides: Array<tf.monochrome.android.audio.dsp.ChannelLayout.Side> = emptyArray()
 
     @Volatile private var source = Source(emptyList(), emptyList(), 0f, false)
 
@@ -319,9 +326,21 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
                 preampLinear = if (src.preamp == 0f) 1f else 10f.pow(src.preamp / 20f),
                 coefsL = designChain(src.bandsL, warpFactor, sr),
                 coefsR = designChain(src.bandsR, warpFactor, sr),
+                coefsC = if (src.bandsL == src.bandsR) {
+                    designChain(src.bandsL, warpFactor, sr)
+                } else {
+                    designChain(halfGain(src.bandsL) + halfGain(src.bandsR), warpFactor, sr)
+                },
             )
         )
     }
+
+    /**
+     * [bands] at half their gain. Peaking and shelf bands are close to linear
+     * in dB with gain, so both ears' bands at half gain sum to the average of
+     * the two curves — the centre channel's share of a per-ear correction.
+     */
+    private fun halfGain(bands: List<EqBand>): List<EqBand> = bands.map { it.copy(gain = it.gain / 2f) }
 
     /**
      * Designs one channel's chain with every band's centre pre-warped.
@@ -366,16 +385,19 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
             inputAudioFormat.encoding != C.ENCODING_PCM_FLOAT) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }
-        if (inputAudioFormat.channelCount > 2) {
-            // Multichannel passthrough (downmix toggle off): go inactive
-            // instead of failing playback — EQ simply doesn't apply. Clear
-            // both trackers so isActive() reads false immediately (Media3's
-            // pipeline checkState()s active processors against NOT_SET).
+        // Up to 16 channels: a multichannel stream passed on for Android's
+        // spatializer gets the headphone curve too — EQ is linear, so every
+        // bed channel corrected before the binaural render is the same as the
+        // render corrected after it. Wider than that goes inactive rather
+        // than failing playback; clear both trackers so isActive() reads
+        // false at once (Media3's pipeline checkState()s active processors
+        // against NOT_SET).
+        if (inputAudioFormat.channelCount > tf.monochrome.android.audio.dsp.ChannelLayout.MAX_CHANNELS) {
             pendingFormat = AudioFormat.NOT_SET
             inputFormat = AudioFormat.NOT_SET
             return AudioFormat.NOT_SET
         }
-        if (inputAudioFormat.channelCount != 1 && inputAudioFormat.channelCount != 2) {
+        if (inputAudioFormat.channelCount < 1) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }
         pendingFormat = inputAudioFormat
@@ -391,88 +413,31 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
 
     override fun queueInput(inputBuffer: ByteBuffer) {
         val encoding = inputFormat.encoding
-        val inputChannels = inputFormat.channelCount
-        val bytesPerSample = if (encoding == C.ENCODING_PCM_FLOAT) 4 else 2
-        val frameSize = bytesPerSample * inputChannels
-        val numFrames = inputBuffer.remaining() / frameSize
-        if (numFrames <= 0) return
-
-        // Ensure scratch arrays
-        if (scratchL.size < numFrames) {
-            scratchL = FloatArray(numFrames)
-            scratchR = FloatArray(numFrames)
-        }
-
-        // Deinterleave with index-based reads — no asFloatBuffer / asShortBuffer
-        // view allocations on the audio thread.
-        val startPos = inputBuffer.position()
-        if (inputChannels == 1) {
-            if (encoding == C.ENCODING_PCM_FLOAT) {
-                for (i in 0 until numFrames) {
-                    val s = inputBuffer.getFloat(startPos + i * 4)
-                    scratchL[i] = s; scratchR[i] = s
-                }
-            } else {
-                for (i in 0 until numFrames) {
-                    val s = inputBuffer.getShort(startPos + i * 2).toFloat() / 32768f
-                    scratchL[i] = s; scratchR[i] = s
-                }
-            }
-        } else {
-            if (encoding == C.ENCODING_PCM_FLOAT) {
-                for (i in 0 until numFrames) {
-                    val off = startPos + i * 8
-                    scratchL[i] = inputBuffer.getFloat(off)
-                    scratchR[i] = inputBuffer.getFloat(off + 4)
-                }
-            } else {
-                for (i in 0 until numFrames) {
-                    val off = startPos + i * 4
-                    scratchL[i] = inputBuffer.getShort(off).toFloat() / 32768f
-                    scratchR[i] = inputBuffer.getShort(off + 2).toFloat() / 32768f
-                }
-            }
-        }
-        inputBuffer.position(startPos + numFrames * frameSize)
+        val frames = block.read(inputBuffer, inputFormat.channelCount, encoding)
+        if (frames <= 0) return
 
         // Apply EQ if enabled
         val design = designRef.get()
         if (design.enabled) {
-            if (design !== appliedDesign) {
-                installDesign(design)
+            if (design !== appliedDesign || chains.size != block.channelCount) {
+                installDesign(design, block.channelCount)
                 appliedDesign = design
             }
             // Hard bypass when the chain is flat: with no active filters and
             // unity preamp the samples are left untouched.
-            val hasWork = filtersL.isNotEmpty() || filtersR.isNotEmpty() ||
-                design.preampLinear != 1f
+            val hasWork = chains.any { it.isNotEmpty() } || design.preampLinear != 1f
             if (hasWork) {
-                applyEq(scratchL, scratchR, numFrames, design.preampLinear)
+                applyEq(frames, design.preampLinear)
             }
         }
 
-        // Interleave output (always stereo)
-        val outFrameSize = bytesPerSample * 2
-        val outBytes = numFrames * outFrameSize
+        val outBytes = block.outputBytes(frames, encoding)
         if (outputBuffer.capacity() < outBytes) {
             outputBuffer = ByteBuffer.allocateDirect(outBytes).order(ByteOrder.nativeOrder())
         } else {
             outputBuffer.clear()
         }
-        // Interleave via positional put* — no view allocations on the hot path.
-        if (encoding == C.ENCODING_PCM_FLOAT) {
-            for (i in 0 until numFrames) {
-                val off = i * 8
-                outputBuffer.putFloat(off, scratchL[i])
-                outputBuffer.putFloat(off + 4, scratchR[i])
-            }
-        } else {
-            for (i in 0 until numFrames) {
-                val off = i * 4
-                outputBuffer.putShort(off, (scratchL[i] * 32768f).toInt().coerceIn(-32768, 32767).toShort())
-                outputBuffer.putShort(off + 2, (scratchR[i] * 32768f).toInt().coerceIn(-32768, 32767).toShort())
-            }
-        }
+        block.write(outputBuffer, frames, encoding)
         outputBuffer.position(0)
         outputBuffer.limit(outBytes)
     }
@@ -502,8 +467,7 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
                 // their memory across the discontinuity) and ask for a
                 // redesign at the new rate; the next block runs on the old
                 // curve for the millisecond or so that takes.
-                filtersL = emptyArray()
-                filtersR = emptyArray()
+                chains = emptyArray()
                 appliedDesign = null
                 redesignRequests.trySend(Unit)
             }
@@ -515,8 +479,7 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
         flush()
         pendingFormat = AudioFormat.NOT_SET
         inputFormat = AudioFormat.NOT_SET
-        filtersL = emptyArray()
-        filtersR = emptyArray()
+        chains = emptyArray()
         appliedDesign = null
     }
 
@@ -532,30 +495,34 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
      * second. It also means a curve swap at the same band count (switching
      * headphone profile) no longer clicks.
      */
-    private fun installDesign(design: Design) {
-        if (filtersL.size != design.coefsL.size) {
-            filtersL = Array(design.coefsL.size) { EqBiquad() }
+    private fun installDesign(design: Design, channelCount: Int) {
+        if (chains.size != channelCount) {
+            chainSides = tf.monochrome.android.audio.dsp.ChannelLayout.sides(channelCount)
+            chains = Array(channelCount) { emptyArray() }
         }
-        if (filtersR.size != design.coefsR.size) {
-            filtersR = Array(design.coefsR.size) { EqBiquad() }
+        for (c in 0 until channelCount) {
+            val coefs = when (chainSides[c]) {
+                tf.monochrome.android.audio.dsp.ChannelLayout.Side.LEFT -> design.coefsL
+                tf.monochrome.android.audio.dsp.ChannelLayout.Side.RIGHT -> design.coefsR
+                tf.monochrome.android.audio.dsp.ChannelLayout.Side.CENTER -> design.coefsC
+            }
+            if (chains[c].size != coefs.size) chains[c] = Array(coefs.size) { EqBiquad() }
+            for (i in coefs.indices) chains[c][i].retune(coefs[i])
         }
-        for (i in filtersL.indices) filtersL[i].retune(design.coefsL[i])
-        for (i in filtersR.indices) filtersR[i].retune(design.coefsR[i])
     }
 
-    private fun applyEq(bufL: FloatArray, bufR: FloatArray, numFrames: Int, preampLinear: Float) {
-        if (preampLinear != 1f) {
-            for (i in 0 until numFrames) {
-                bufL[i] *= preampLinear
-                bufR[i] *= preampLinear
+    private fun applyEq(numFrames: Int, preampLinear: Float) {
+        val channels = block.channels
+        for (c in 0 until block.channelCount) {
+            val buf = channels[c]
+            if (preampLinear != 1f) {
+                for (i in 0 until numFrames) buf[i] *= preampLinear
             }
+            // Each channel's own chain, off its own length: the curves differ
+            // in band count whenever the ears are calibrated separately.
+            val chain = chains[c]
+            for (i in chain.indices) chain[i].processBlock(buf, numFrames)
         }
-        // Biquad bands. Indexed per channel, NOT off a shared range: the two
-        // chains hold different filter counts whenever the ears are calibrated
-        // separately, and driving both from filtersL.indices would walk off the
-        // end of the shorter one on the audio thread.
-        for (i in filtersL.indices) filtersL[i].processBlock(bufL, numFrames)
-        for (i in filtersR.indices) filtersR[i].processBlock(bufR, numFrames)
     }
 
     private companion object {

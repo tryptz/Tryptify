@@ -38,6 +38,12 @@ import java.util.Locale
  */
 @RequiresApi(Build.VERSION_CODES.Q)
 class DebugScreenRecordService : Service() {
+    // Services get the application's context, which below Android 13 does
+    // not follow the in-app language; their notifications are read in it.
+    override fun attachBaseContext(base: android.content.Context) {
+        super.attachBaseContext(tf.monochrome.android.locale.AppLanguage.wrap(base))
+    }
+
 
     private var recorder: DebugScreenRecorder? = null
     private var projection: MediaProjection? = null
@@ -149,7 +155,7 @@ class DebugScreenRecordService : Service() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
             NotificationChannel(
-                CHANNEL_ID, "Debug screen recorder", NotificationManager.IMPORTANCE_LOW,
+                CHANNEL_ID, getString(R.string.notif_debug_channel), NotificationManager.IMPORTANCE_LOW,
             )
         )
         val stopIntent = PendingIntent.getService(
@@ -159,10 +165,10 @@ class DebugScreenRecordService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("Recording screen (debug)")
-            .setContentText("Native resolution/fps, stereo media audio")
+            .setContentTitle(getString(R.string.notif_debug_title))
+            .setContentText(getString(R.string.notif_debug_text))
             .setOngoing(true)
-            .addAction(0, "Stop", stopIntent)
+            .addAction(0, getString(R.string.notif_stop), stopIntent)
             .build()
     }
 

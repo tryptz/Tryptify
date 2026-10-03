@@ -19,6 +19,7 @@
 #include "emdf.h"
 #include "oamd.h"
 #include "render/hrir_renderer.h"
+#include "speaker_renderer.h"
 #include "vbap.h"
 
 namespace tf {

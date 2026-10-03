@@ -57,7 +57,9 @@ import tf.monochrome.android.ui.components.TrackSelectionBar
 import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
 import tf.monochrome.android.ui.components.rememberTrackSelectionState
 import tf.monochrome.android.ui.player.PlayerViewModel
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 @Composable
 fun DownloadsScreen(
@@ -74,7 +76,7 @@ fun DownloadsScreen(
     val context = LocalContext.current
     LaunchedEffect(Unit) {
         viewModel.messages.collect { msg ->
-            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(context, msg.resolve(context), android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -99,8 +101,8 @@ fun DownloadsScreen(
         val count = selection.count
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete $count download${if (count == 1) "" else "s"}?") },
-            text = { Text("The audio file${if (count == 1) "" else "s"} will be permanently removed from this device.") },
+            title = { Text(pluralStringResource(R.plurals.delete_downloads_title, count, count)) },
+            text = { Text(pluralStringResource(R.plurals.delete_downloads_body, count)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteDownloads(
@@ -109,11 +111,11 @@ fun DownloadsScreen(
                     showDeleteConfirm = false
                     selection.clear()
                 }) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+                TextButton(onClick = { showDeleteConfirm = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -130,7 +132,7 @@ fun DownloadsScreen(
 
     if (showAddToPlaylistForSelection) {
         AddToPlaylistSheet(
-            title = "Add ${selection.count} tracks to playlist",
+            title = pluralStringResource(R.plurals.add_n_tracks_to_playlist, selection.count, selection.count),
             playlists = playlists,
             onDismiss = { showAddToPlaylistForSelection = false },
             onPlaylistSelected = { playlist ->
@@ -155,7 +157,7 @@ fun DownloadsScreen(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "No downloaded tracks found.",
+                text = stringResource(R.string.downloads_empty),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -184,19 +186,19 @@ fun DownloadsScreen(
             },
             onAddToPlaylist = { showAddToPlaylistForSelection = true },
             onDelete = { showDeleteConfirm = true },
-            deleteContentDescription = "Delete downloads"
+            deleteContentDescription = stringResource(R.string.delete_downloads)
         )
     }
 
     LazyColumn(
-        contentPadding = PaddingValues(bottom = 120.dp + LocalMiniPlayerInset.current),
+        contentPadding = PaddingValues(bottom = tf.monochrome.android.ui.navigation.bottomChromePadding),
         modifier = Modifier.fillMaxSize()
     ) {
         if (albumGroups.isNotEmpty()) {
             item {
                 tf.monochrome.android.devedit.DevEditable("downloads_albums_header", Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Albums",
+                    text = stringResource(R.string.filter_albums),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
                 )
@@ -224,7 +226,7 @@ fun DownloadsScreen(
             item {
                 tf.monochrome.android.devedit.DevEditable("downloads_tracks_header", Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Tracks",
+                    text = stringResource(R.string.filter_tracks),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 )
@@ -258,6 +260,12 @@ private fun AlbumCard(
     group: DownloadedAlbumGroup,
     onClick: () -> Unit,
 ) {
+    // The singles bucket is a grouping key; only its name is translated.
+    val groupTitle = if (group.title == DownloadsViewModel.SINGLES_LABEL) {
+        stringResource(R.string.singles)
+    } else {
+        group.title
+    }
     Column(
         modifier = Modifier
             .width(140.dp)
@@ -266,14 +274,14 @@ private fun AlbumCard(
     ) {
         CoverImage(
             url = group.cover,
-            contentDescription = group.title,
+            contentDescription = groupTitle,
             modifier = Modifier
                 .size(140.dp)
                 .clip(RoundedCornerShape(10.dp)),
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = group.title,
+            text = groupTitle,
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
@@ -309,7 +317,7 @@ private fun DownloadedTrackRow(
         if (selectionMode) {
             Icon(
                 imageVector = if (selected) Icons.Default.CheckCircle else Icons.Outlined.Circle,
-                contentDescription = if (selected) "Selected" else "Not selected",
+                contentDescription = if (selected) stringResource(R.string.state_selected) else stringResource(R.string.state_not_selected),
                 tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.width(16.dp))
@@ -330,9 +338,9 @@ private fun DownloadedTrackRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            val mbSize = track.sizeBytes / (1024 * 1024)
+            val sizeText = android.text.format.Formatter.formatShortFileSize(LocalContext.current, track.sizeBytes)
             Text(
-                text = "${track.artistName} • $mbSize MB",
+                text = "${track.artistName} • $sizeText",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -347,7 +355,7 @@ private fun DownloadedTrackRow(
             IconButton(onClick = onMoreClick) {
                 Icon(
                     Icons.Default.MoreVert,
-                    contentDescription = "More options",
+                    contentDescription = stringResource(R.string.action_more_options),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

@@ -27,6 +27,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
@@ -45,6 +49,7 @@ import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.performance.LocalLowPerformance
 import tf.monochrome.android.performance.LocalPerformanceProfile
 import tf.monochrome.android.ui.components.bounceClick
+import tf.monochrome.android.ui.components.bounceCombinedClick
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.components.toggleSemantics
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
@@ -54,10 +59,54 @@ import tf.monochrome.android.ui.player.LocalPlayerGlassGround
 import tf.monochrome.android.ui.player.playerFrostTint
 import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.player.rememberLiquidGlassAvailable
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /** Fixed fader travel so strips stay compact instead of stretching the whole
  *  screen height; the strip is centred in its row and the meters match it. */
 private val FaderTravel = 280.dp
+
+/**
+ * FL's route arrow at the foot of a strip, relative to the selected bus:
+ * [routed] = the selected bus sends here (at [level]); [allowed] = false where
+ * a route here would loop back into the selected bus.
+ */
+data class StripRoute(val routed: Boolean, val level: Float, val allowed: Boolean)
+
+/** The unrouted ▲ pill's height; the route-source ↓'s size. */
+internal val RouteArrowHeight = 20.dp
+internal val RouteSourceArrowSize = 24.dp
+
+/**
+ * FL's ↓ on the selected strip: the bus the route arrows and send knobs act
+ * for, and where its cables leave from. A block arrow rather than a glyph so
+ * it reads at strip size and its tip sits exactly where the cables start.
+ */
+@Composable
+private fun RouteSourceArrow(color: Color, busName: String) {
+    val routingFromLabel = stringResource(R.string.mixer_routing_from, busName)
+    Canvas(
+        modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .size(RouteSourceArrowSize)
+            .semantics { contentDescription = routingFromLabel }
+    ) {
+        val w = size.width
+        val h = size.height
+        val arrow = Path().apply {
+            moveTo(w * 0.34f, 0f)
+            lineTo(w * 0.66f, 0f)
+            lineTo(w * 0.66f, h * 0.45f)
+            lineTo(w * 0.96f, h * 0.45f)
+            lineTo(w * 0.5f, h)
+            lineTo(w * 0.04f, h * 0.45f)
+            lineTo(w * 0.34f, h * 0.45f)
+            close()
+        }
+        drawPath(arrow, Color.Black.copy(alpha = 0.35f), style = Stroke(width = 2.dp.toPx()))
+        drawPath(arrow, color)
+    }
+}
 
 /**
  * Compact DAW channel strip cut from the app's own liquid glass: the AGSL
@@ -111,10 +160,19 @@ fun FLChannelStrip(
      */
     glass: PlayerGlassSettings = LocalMiniPlayerGlass.current,
     onSelect: () -> Unit,
+    /** Long-press on the pane; null for buses that cannot be removed. */
+    onLongPress: (() -> Unit)? = null,
     onGainChange: (Float) -> Unit,
     onPanChange: (Float) -> Unit,
     onToggleMute: () -> Unit,
     onToggleSolo: () -> Unit,
+    /** Null on the selected strip itself, and when the master is selected. */
+    route: StripRoute? = null,
+    onRouteTap: () -> Unit = {},
+    /** This is the selected bus, the one the route arrows act for: FL's ↓. */
+    isRouteSource: Boolean = false,
+    /** Turns the send knob shown where [route] is routed. */
+    onSendLevel: (Float) -> Unit = {},
 ) {
     val colors = MaterialTheme.colorScheme
     val isMaster = bus.isMaster
@@ -182,7 +240,7 @@ fun FLChannelStrip(
             // whole sheet of glass and not just the labels standing on it. Still
             // an ancestor of the fader and the knob, exactly as before, so their
             // drags claim the gesture first.
-            .bounceClick(onClick = onSelect)
+            .bounceCombinedClick(onLongClick = onLongPress, onClick = onSelect)
     ) {
         // ── The pane, behind the controls ─────────────────────────────────
         // Its own node so the glass is relit on its own layer and the fader,
@@ -269,7 +327,7 @@ fun FLChannelStrip(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = if (isMaster) "M" else "${bus.index + 1}",
+                text = if (isMaster) "M" else "${bus.number}",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (isSelected) onAccent else colors.onSurfaceVariant
@@ -379,7 +437,7 @@ fun FLChannelStrip(
                         shape = CircleShape
                     )
                     .bounceClick(onClick = onToggleMute)
-                    .toggleSemantics(label = "Mute", checked = bus.muted),
+                    .toggleSemantics(label = stringResource(R.string.mixer_mute), checked = bus.muted),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -403,7 +461,7 @@ fun FLChannelStrip(
                             shape = CircleShape
                         )
                         .bounceClick(onClick = onToggleSolo)
-                        .toggleSemantics(label = "Solo", checked = bus.soloed),
+                        .toggleSemantics(label = stringResource(R.string.mixer_solo), checked = bus.soloed),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -419,7 +477,51 @@ fun FLChannelStrip(
                 // level. Same modifiers as the button rather than a hardcoded
                 // height, so it reserves exactly what the button would measure
                 // whether or not the touch-target minimum is being enforced.
-                Spacer(modifier = Modifier.minimumInteractiveComponentSize().size(26.dp))
+                // The master's loudness readout fills that space: the Spacer
+                // still sets the height, the readout only matches it.
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Spacer(modifier = Modifier.minimumInteractiveComponentSize().size(26.dp))
+                    MasterLoudnessReadout(accent = accent, modifier = Modifier.matchParentSize())
+                }
+            }
+        }
+
+        // ── Route arrow / send knob (FL's "send to this track") ────────────
+        // Unrouted: the ▲ arrow, which routes the SELECTED bus here (dimmed
+        // where that would loop). Routed: FL's send knob, which sets how much
+        // of the selected bus arrives here, and a tap on it unroutes. On the
+        // selected strip itself, FL's ↓ marks where the cables leave from.
+        // Every state holds the same 48dp slot, so every strip keeps the same
+        // height and the faders stay level; the cable anchors in MixerScreen
+        // are measured from these sizes.
+        val routeShape = RoundedCornerShape(5.dp)
+        val routeModifier = Modifier.minimumInteractiveComponentSize().size(width = 40.dp, height = RouteArrowHeight)
+        when {
+            isRouteSource -> RouteSourceArrow(color = accent, busName = bus.name)
+            route == null -> Spacer(modifier = routeModifier)
+            route.routed -> SendKnob(
+                level = route.level,
+                destinationName = bus.name,
+                accentColor = accent,
+                onLevelChange = onSendLevel,
+                onRemove = onRouteTap,
+            )
+            else -> Box(
+                modifier = routeModifier
+                    .clip(routeShape)
+                    .background(inactiveButton.copy(alpha = if (route.allowed) 0.88f else 0.35f))
+                    .border(1.dp, colors.outline.copy(alpha = 0.18f), routeShape)
+                    .then(if (route.allowed) Modifier.bounceClick(onClick = onRouteTap) else Modifier)
+                    .toggleSemantics(label = stringResource(R.string.mixer_route_selected_to, bus.name), checked = false),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "▲",
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.onSurfaceVariant.copy(alpha = if (route.allowed) 0.8f else 0.3f),
+                    maxLines = 1
+                )
             }
         }
     }

@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.eq
 
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -78,7 +79,10 @@ import tf.monochrome.android.domain.model.FilterType
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
 import kotlin.math.roundToInt
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
+import androidx.compose.ui.res.pluralStringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -95,7 +99,7 @@ fun EqualizerScreen(
     val selectedTarget by viewModel.selectedTarget.collectAsStateWithLifecycle()
     val activePreset by viewModel.activePreset.collectAsStateWithLifecycle()
     val allPresets by viewModel.allPresets.collectAsStateWithLifecycle()
-    val error by viewModel.error.collectAsStateWithLifecycle()
+    val error = viewModel.error.collectAsStateWithLifecycle().value?.resolve(LocalContext.current)
     val isCalculating by viewModel.isCalculating.collectAsStateWithLifecycle()
     val originalMeasurement by viewModel.originalMeasurement.collectAsStateWithLifecycle()
     val selectedHeadphone by viewModel.selectedHeadphone.collectAsStateWithLifecycle()
@@ -128,7 +132,6 @@ fun EqualizerScreen(
     var showSaveDialog by rememberSaveable { mutableStateOf(false) }
     var showTargetMenu by remember { mutableStateOf(false) }
     var showHeadphoneSelect by remember { mutableStateOf(false) }
-    var showPresetMenu by remember { mutableStateOf(false) }
     var showBandsExpanded by rememberSaveable { mutableStateOf(true) }
     var showProfilesExpanded by rememberSaveable { mutableStateOf(true) }
     var saveName by rememberSaveable { mutableStateOf("") }
@@ -149,7 +152,7 @@ fun EqualizerScreen(
         viewModel.bandClampEvents.collect { cap ->
             Toast.makeText(
                 context,
-                "Clamped to \u00b1${cap.toInt()} dB (AutoEQ limit)",
+                context.getString(R.string.eq_clamped, cap.toInt()),
                 Toast.LENGTH_SHORT
             ).show()
         }
@@ -168,11 +171,11 @@ fun EqualizerScreen(
                     if (importForRight) EqChannel.RIGHT else EqChannel.LEFT,
                 )
             } else {
-                android.widget.Toast.makeText(context, "Couldn't read the selected file", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(context, context.getString(R.string.eq_couldnt_read_file), android.widget.Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
             viewModel.clearError()
-            android.widget.Toast.makeText(context, "Couldn't read the selected file", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(context, context.getString(R.string.eq_couldnt_read_file), android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -188,10 +191,10 @@ fun EqualizerScreen(
                 targetName = ""
                 showTargetNameDialog = true
             } else {
-                android.widget.Toast.makeText(context, "Couldn't read the selected file", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(context, context.getString(R.string.eq_couldnt_read_file), android.widget.Toast.LENGTH_SHORT).show()
             }
         } catch (_: Exception) {
-            android.widget.Toast.makeText(context, "Couldn't read the selected file", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(context, context.getString(R.string.eq_couldnt_read_file), android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -212,7 +215,7 @@ fun EqualizerScreen(
             }
             android.widget.Toast.makeText(
                 context,
-                if (ok) "EQ exported" else "Couldn't export EQ",
+                context.getString(if (ok) R.string.eq_exported else R.string.eq_export_failed),
                 android.widget.Toast.LENGTH_SHORT
             ).show()
         }
@@ -231,7 +234,7 @@ fun EqualizerScreen(
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 32.dp + LocalMiniPlayerInset.current)
+            contentPadding = PaddingValues(bottom = 32.dp + LocalBottomChromeInset.current)
         ) {
             // ─── Title Section ───
             item {
@@ -242,24 +245,24 @@ fun EqualizerScreen(
                         .padding(start = 4.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { navController.popBackStack() }) {
+                        IconButton(onClick = { navController.popBackStackSafe() }) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
+                                contentDescription = stringResource(R.string.settings_back),
                                 tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
                         Spacer(modifier = Modifier.width(4.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "PRECISION AUTOEQ",
+                                stringResource(R.string.eq_precision_autoeq_caps),
                                 style = MaterialTheme.typography.headlineSmall,
                                 fontWeight = FontWeight.Black,
                                 letterSpacing = 2.sp,
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                "Headphone correction filters generator.",
+                                stringResource(R.string.eq_headphone_correction_filters_generator),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -270,7 +273,7 @@ fun EqualizerScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Outlined.HelpOutline,
-                                contentDescription = "Help",
+                                contentDescription = stringResource(R.string.eq_help),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(20.dp)
                             )
@@ -309,7 +312,7 @@ fun EqualizerScreen(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            "SMOOTHING",
+                            stringResource(R.string.eq_smoothing_caps),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -335,12 +338,12 @@ fun EqualizerScreen(
                             FilterChip(
                                 selected = !editRight,
                                 onClick = { viewModel.setEditChannel(EqChannel.LEFT) },
-                                label = { Text("Left ear") },
+                                label = { Text(stringResource(R.string.eq_left_ear)) },
                             )
                             FilterChip(
                                 selected = editRight,
                                 onClick = { viewModel.setEditChannel(EqChannel.RIGHT) },
-                                label = { Text("Right ear") },
+                                label = { Text(stringResource(R.string.eq_right_ear)) },
                             )
                         }
                     }
@@ -384,13 +387,13 @@ fun EqualizerScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "Preamp",
+                            stringResource(R.string.eq_preamp),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            if (autoPreamp) "Auto · ${currentPreamp.roundToInt()} dB"
-                            else "${currentPreamp.roundToInt()} dB",
+                            if (autoPreamp) stringResource(R.string.eq_preamp_auto, currentPreamp.roundToInt())
+                            else stringResource(R.string.eq_db_value, currentPreamp.roundToInt()),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -418,7 +421,7 @@ fun EqualizerScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        "ALGORITHM",
+                        stringResource(R.string.eq_algorithm_caps),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -469,12 +472,12 @@ fun EqualizerScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            "Automatic preamp",
+                            stringResource(R.string.eq_automatic_preamp),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            "Compensates the combined EQ + tone boost so the signal can't clip.",
+                            stringResource(R.string.eq_compensates_the_combined_eq_tone_boost_so_the),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -491,7 +494,7 @@ fun EqualizerScreen(
             item {
               tf.monochrome.android.devedit.DevEditable("eq_headphone_selector", Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                    SectionLabel("HEADPHONE MODEL")
+                    SectionLabel(stringResource(R.string.eq_headphone_model_caps))
 
                     // ── 2-channel (per-ear) switch ──
                     Row(
@@ -502,13 +505,12 @@ fun EqualizerScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "2-channel calibration",
+                                stringResource(R.string.eq_2_channel_calibration),
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                "Separate left/right corrections. Non-destructive to " +
-                                    "switch off; system-wide EQ stays mono.",
+                                stringResource(R.string.eq_separate_left_right_corrections_non_destructive),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -521,14 +523,14 @@ fun EqualizerScreen(
 
                     if (stereoMode) {
                         Text(
-                            "LEFT EAR",
+                            stringResource(R.string.eq_left_ear_caps),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         SelectorRow(
-                            value = measurementLabelL
+                            value = measurementLabelText(measurementLabelL)
                                 ?: selectedHeadphone?.name
-                                ?: "Select left measurement...",
+                                ?: stringResource(R.string.eq_select_left),
                             onClick = {
                                 headphoneSelectForRight = false
                                 showHeadphoneSelect = true
@@ -555,7 +557,7 @@ fun EqualizerScreen(
                                     ) {
                                         Icon(
                                             Icons.Default.UploadFile,
-                                            contentDescription = "Import left measurement file",
+                                            contentDescription = stringResource(R.string.eq_import_left_measurement_file),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
@@ -564,12 +566,12 @@ fun EqualizerScreen(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            "RIGHT EAR",
+                            stringResource(R.string.eq_right_ear_caps),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         SelectorRow(
-                            value = measurementLabelR ?: "Select right measurement...",
+                            value = measurementLabelText(measurementLabelR) ?: stringResource(R.string.eq_select_right),
                             onClick = {
                                 headphoneSelectForRight = true
                                 showHeadphoneSelect = true
@@ -596,7 +598,7 @@ fun EqualizerScreen(
                                     ) {
                                         Icon(
                                             Icons.Default.UploadFile,
-                                            contentDescription = "Import right measurement file",
+                                            contentDescription = stringResource(R.string.eq_import_right_measurement_file),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
@@ -605,7 +607,7 @@ fun EqualizerScreen(
                         )
                     } else {
                         SelectorRow(
-                            value = selectedHeadphone?.name ?: "Select headphone...",
+                            value = selectedHeadphone?.name ?: stringResource(R.string.eq_select_headphone),
                             onClick = {
                                 headphoneSelectForRight = false
                                 showHeadphoneSelect = true
@@ -634,7 +636,7 @@ fun EqualizerScreen(
                                     ) {
                                         Icon(
                                             Icons.Default.UploadFile,
-                                            contentDescription = "Import measurement file",
+                                            contentDescription = stringResource(R.string.eq_import_measurement_file),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
@@ -652,7 +654,7 @@ fun EqualizerScreen(
                             tint = MaterialTheme.colorScheme.primary
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Import EQ profile (APO txt / CSV)")
+                        Text(stringResource(R.string.eq_import_eq_profile_apo_txt_csv))
                     }
                 }
               }
@@ -662,7 +664,7 @@ fun EqualizerScreen(
             item {
               tf.monochrome.android.devedit.DevEditable("eq_target_selector", Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                    SectionLabel("TARGET")
+                    SectionLabel(stringResource(R.string.eq_target_caps))
                     Box {
                         SelectorRow(
                             value = selectedTarget.label,
@@ -678,7 +680,7 @@ fun EqualizerScreen(
                                 ) {
                                     Icon(
                                         Icons.Default.UploadFile,
-                                        contentDescription = "Import custom target",
+                                        contentDescription = stringResource(R.string.eq_import_custom_target),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
@@ -708,7 +710,7 @@ fun EqualizerScreen(
                                                 ) {
                                                     Icon(
                                                         Icons.Default.Delete,
-                                                        contentDescription = "Delete",
+                                                        contentDescription = stringResource(R.string.action_delete),
                                                         modifier = Modifier.size(16.dp),
                                                         tint = MaterialTheme.colorScheme.error
                                                     )
@@ -738,14 +740,14 @@ fun EqualizerScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     ParameterDropdown(
-                        label = "FILTER BANDS",
+                        label = stringResource(R.string.eq_filter_bands_caps),
                         value = bandCount.toString(),
                         options = listOf("5", "10", "15", "20", "31"),
                         onValueChanged = { viewModel.setBandCount(it.toInt()) },
                         modifier = Modifier.weight(1f)
                     )
                     ParameterDropdown(
-                        label = "MAX HZ",
+                        label = stringResource(R.string.eq_max_hz_caps),
                         value = formatFreqLabel(maxFrequency),
                         options = listOf("8k", "12k", "16k", "20k"),
                         onValueChanged = {
@@ -770,7 +772,7 @@ fun EqualizerScreen(
                     IconButton(
                         onClick = {
                             if (activeBands.isEmpty()) {
-                                android.widget.Toast.makeText(context, "No EQ bands to export", android.widget.Toast.LENGTH_SHORT).show()
+                                android.widget.Toast.makeText(context, context.getString(R.string.eq_no_bands_to_export), android.widget.Toast.LENGTH_SHORT).show()
                             } else {
                                 pendingEqExport = buildParametricEqText(activeBands, currentPreamp)
                                 eqExportLauncher.launch(
@@ -786,7 +788,7 @@ fun EqualizerScreen(
                     ) {
                         Icon(
                             Icons.Default.Download,
-                            contentDescription = "Export EQ",
+                            contentDescription = stringResource(R.string.eq_export_eq),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -795,7 +797,7 @@ fun EqualizerScreen(
                         onClick = {
                             val hp = selectedHeadphone?.name
                             saveName = if (hp.isNullOrBlank()) selectedTarget.label
-                                       else "$hp — ${selectedTarget.label}"
+                                       else context.getString(R.string.eq_preset_name_with_target, hp, selectedTarget.label)
                             saveDescription = ""
                             showSaveDialog = true
                         },
@@ -806,7 +808,7 @@ fun EqualizerScreen(
                     ) {
                         Icon(
                             Icons.Default.Save,
-                            contentDescription = "Save as preset",
+                            contentDescription = stringResource(R.string.eq_save_as_preset),
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -835,7 +837,7 @@ fun EqualizerScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            "SAVED PROFILES",
+                            stringResource(R.string.eq_saved_profiles_caps),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold,
@@ -871,7 +873,7 @@ fun EqualizerScreen(
                 if (allPresets.isEmpty()) {
                     item {
                         Text(
-                            "No saved profiles yet. Run AutoEq, then tap the save icon next to it.",
+                            stringResource(R.string.eq_no_saved_profiles_yet_run_autoeq_then_tap_the),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -907,7 +909,7 @@ fun EqualizerScreen(
                                 if (isActive) {
                                     Icon(
                                         Icons.Default.CheckCircle,
-                                        contentDescription = "Active",
+                                        contentDescription = stringResource(R.string.settings_active),
                                         modifier = Modifier.size(16.dp),
                                         tint = MaterialTheme.colorScheme.primary
                                     )
@@ -932,7 +934,7 @@ fun EqualizerScreen(
                                         )
                                     }
                                     Text(
-                                        "${preset.bands.size} bands · ${preset.targetName}",
+                                        stringResource(R.string.settings_eq_preset_summary, pluralStringResource(R.plurals.settings_band_count, preset.bands.size, preset.bands.size), preset.targetName),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -944,7 +946,7 @@ fun EqualizerScreen(
                                     ) {
                                         Icon(
                                             Icons.Default.Delete,
-                                            contentDescription = "Delete preset",
+                                            contentDescription = stringResource(R.string.settings_delete_preset),
                                             modifier = Modifier.size(16.dp),
                                             tint = MaterialTheme.colorScheme.error
                                         )
@@ -971,7 +973,7 @@ fun EqualizerScreen(
                     ) {
                         Column {
                             Text(
-                                "Database",
+                                stringResource(R.string.eq_database),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -982,7 +984,7 @@ fun EqualizerScreen(
                             )
                         }
                         Text(
-                            "${availableHeadphones.size} models",
+                            pluralStringResource(R.plurals.eq_model_count, availableHeadphones.size, availableHeadphones.size),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1005,7 +1007,7 @@ fun EqualizerScreen(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            "Search model (e.g. HD 600)...",
+                            stringResource(R.string.eq_search_model_e_g_hd_600),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1050,7 +1052,7 @@ fun EqualizerScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "PARAMETRIC EQ FILTERS",
+                        stringResource(R.string.eq_parametric_eq_filters_caps),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold,
@@ -1095,7 +1097,7 @@ fun EqualizerScreen(
                                 .bounceClick(onClick = { viewModel.resetToFlat() }),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("Reset", style = MaterialTheme.typography.labelLarge)
+                            Text(stringResource(R.string.action_reset), style = MaterialTheme.typography.labelLarge)
                         }
                         Box(
                             modifier = Modifier
@@ -1111,7 +1113,7 @@ fun EqualizerScreen(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Icon(Icons.Default.Save, null, Modifier.size(16.dp))
-                                Text("Save", style = MaterialTheme.typography.labelLarge)
+                                Text(stringResource(R.string.action_save), style = MaterialTheme.typography.labelLarge)
                             }
                         }
                     }
@@ -1126,19 +1128,19 @@ fun EqualizerScreen(
     if (showSaveDialog) {
         AlertDialog(
             onDismissRequest = { showSaveDialog = false },
-            title = { Text("Save EQ Preset") },
+            title = { Text(stringResource(R.string.eq_save_eq_preset)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(
                         value = saveName,
                         onValueChange = { saveName = it },
-                        label = { Text("Preset Name") },
+                        label = { Text(stringResource(R.string.eq_preset_name)) },
                         singleLine = true
                     )
                     OutlinedTextField(
                         value = saveDescription,
                         onValueChange = { saveDescription = it },
-                        label = { Text("Description") },
+                        label = { Text(stringResource(R.string.eq_description)) },
                         minLines = 2
                     )
                 }
@@ -1153,10 +1155,10 @@ fun EqualizerScreen(
                             saveDescription = ""
                         }
                     }
-                ) { Text("Save") }
+                ) { Text(stringResource(R.string.action_save)) }
             },
             dismissButton = {
-                TextButton(onClick = { showSaveDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showSaveDialog = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -1204,12 +1206,12 @@ fun EqualizerScreen(
     if (showTargetNameDialog) {
         AlertDialog(
             onDismissRequest = { showTargetNameDialog = false },
-            title = { Text("Name Custom Target") },
+            title = { Text(stringResource(R.string.eq_name_custom_target)) },
             text = {
                 OutlinedTextField(
                     value = targetName,
                     onValueChange = { targetName = it },
-                    label = { Text("Target Name") },
+                    label = { Text(stringResource(R.string.eq_target_name)) },
                     singleLine = true
                 )
             },
@@ -1222,13 +1224,13 @@ fun EqualizerScreen(
                             pendingTargetData = ""
                         }
                     }
-                ) { Text("Import") }
+                ) { Text(stringResource(R.string.action_import)) }
             },
             dismissButton = {
                 TextButton(onClick = {
                     showTargetNameDialog = false
                     pendingTargetData = ""
-                }) { Text("Cancel") }
+                }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -1237,16 +1239,16 @@ fun EqualizerScreen(
     presetToDelete?.let { preset ->
         AlertDialog(
             onDismissRequest = { presetToDelete = null },
-            title = { Text("Delete Profile") },
-            text = { Text("Delete \"${preset.name}\"?") },
+            title = { Text(stringResource(R.string.settings_delete_profile)) },
+            text = { Text(stringResource(R.string.settings_delete_named, preset.name)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deletePreset(preset.id)
                     presetToDelete = null
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { presetToDelete = null }) { Text("Cancel") }
+                TextButton(onClick = { presetToDelete = null }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -1276,7 +1278,7 @@ fun EqBandSlider(
                 IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = "Remove band",
+                        contentDescription = stringResource(R.string.eq_remove_band),
                         modifier = Modifier.size(15.dp),
                         tint = MaterialTheme.colorScheme.error
                     )
@@ -1318,7 +1320,7 @@ fun EqBandSlider(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Freq", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.eq_freq), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("${band.freq.toInt()} Hz", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
         }
         val minLogFreq = kotlin.math.log10(20f)
@@ -1343,7 +1345,7 @@ fun EqBandSlider(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Gain", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.eq_gain), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
                 "${band.gain.roundToInt()} dB",
                 style = MaterialTheme.typography.labelMedium,
@@ -1372,7 +1374,7 @@ fun EqBandSlider(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Q-Factor", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.eq_q_factor), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("%.2f".format(band.q), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
             }
             Slider(
@@ -1404,7 +1406,7 @@ private fun SampleStepper(
     ) {
         Icon(
             Icons.Default.KeyboardArrowUp,
-            contentDescription = "Next sample",
+            contentDescription = stringResource(R.string.eq_next_sample),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
                 .weight(1f)
@@ -1419,7 +1421,7 @@ private fun SampleStepper(
         )
         Icon(
             Icons.Default.KeyboardArrowDown,
-            contentDescription = "Previous sample",
+            contentDescription = stringResource(R.string.eq_previous_sample),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
                 .weight(1f)
@@ -1460,3 +1462,8 @@ private fun buildParametricEqText(
     }
     return sb.toString()
 }
+
+/** A measurement's label as shown: a file import is named in the reader's language. */
+@Composable
+private fun measurementLabelText(label: String?): String? =
+    if (label == IMPORTED_FILE_LABEL) stringResource(R.string.eq_imported_file) else label

@@ -68,6 +68,8 @@ import tf.monochrome.android.domain.model.Lyrics
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import kotlin.math.cos
 import kotlin.math.sin
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * Lyrics-mode hero. Extracted from NowPlayingScreen.kt so the JIT compile
@@ -153,7 +155,7 @@ internal fun LyricsHeroPanel(
                 isLoading -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
-                            text = "Loading lyrics…",
+                            text = stringResource(R.string.lyrics_loading),
                             style = MaterialTheme.typography.titleMedium,
                             color = Color.White.copy(alpha = 0.85f),
                         )
@@ -162,7 +164,7 @@ internal fun LyricsHeroPanel(
                 lyrics == null || lyrics.lines.isEmpty() -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
-                            text = "No lyrics available for this track.",
+                            text = stringResource(R.string.lyrics_none),
                             style = MaterialTheme.typography.bodyLarge,
                             color = Color.White.copy(alpha = 0.7f),
                             textAlign = TextAlign.Center,
@@ -321,7 +323,7 @@ internal fun LyricsHeroBox(
         when {
             isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    text = "Loading lyrics…",
+                    text = stringResource(R.string.lyrics_loading),
                     style = MaterialTheme.typography.titleSmall,
                     color = Color.White.copy(alpha = 0.85f),
                 )
@@ -331,7 +333,7 @@ internal fun LyricsHeroBox(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "No lyrics available for this track.",
+                    text = stringResource(R.string.lyrics_none),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.7f),
                     textAlign = TextAlign.Center,

@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.settings.radio
 
+import androidx.compose.foundation.layout.Box
+import tf.monochrome.android.ui.settings.settingsAnchor
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -23,6 +25,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tf.monochrome.android.radio.PLANNER_WEIGHT_MAX
 import tf.monochrome.android.radio.PLANNER_WEIGHT_MIN
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * Settings › Radio: the weights radio ranks candidates with.
@@ -41,45 +45,52 @@ fun RadioSettingsTab(viewModel: RadioSettingsViewModel = hiltViewModel()) {
         contentPadding = PaddingValues(16.dp)
     ) {
         item {
-            GroupHeader("Recommendation weights")
+            // The Radio tab is the AI radio's tuning, so a search for either lands here.
+            Box(
+                Modifier
+                    .settingsAnchor(stringResource(R.string.search_ai_radio))
+                    .settingsAnchor(stringResource(R.string.search_radio_weights))
+            ) {
+                GroupHeader(stringResource(R.string.radio_settings_recommendation_weights))
+            }
             Text(
-                text = "1.00x is neutral. Lower values down-rank a signal, higher values strengthen it. Every one of them is scored on-device.",
+                text = stringResource(R.string.radio_settings_neutral),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
-            WeightSlider("Local library", "Prefer tracks already available on-device.", weights.localLibrary) {
+            WeightSlider(stringResource(R.string.radio_settings_local_library), stringResource(R.string.radio_settings_local_library_desc), weights.localLibrary) {
                 viewModel.updateWeights(weights.copy(localLibrary = it))
             }
-            WeightSlider("Qobuz", "Preference for Qobuz candidates.", weights.qobuz) {
+            WeightSlider("Qobuz", stringResource(R.string.radio_settings_qobuz_desc), weights.qobuz) {
                 viewModel.updateWeights(weights.copy(qobuz = it))
             }
-            WeightSlider("Discovery expansion", "How much search/discovery widens the pool.", weights.spotifyDiscovery) {
+            WeightSlider(stringResource(R.string.radio_settings_discovery_expansion), stringResource(R.string.radio_settings_discovery_expansion_desc), weights.spotifyDiscovery) {
                 viewModel.updateWeights(weights.copy(spotifyDiscovery = it))
             }
-            WeightSlider("Novelty", "Prefer new or unheard tracks.", weights.novelty) {
+            WeightSlider(stringResource(R.string.radio_settings_novelty), stringResource(R.string.radio_settings_novelty_desc), weights.novelty) {
                 viewModel.updateWeights(weights.copy(novelty = it))
             }
-            WeightSlider("Familiarity", "How much familiar material repeats.", weights.familiarity) {
+            WeightSlider(stringResource(R.string.radio_settings_familiarity), stringResource(R.string.radio_settings_familiarity_desc), weights.familiarity) {
                 viewModel.updateWeights(weights.copy(familiarity = it))
             }
-            WeightSlider("Artist similarity", "Keep artist relationships close to the seed.", weights.artistSimilarity) {
+            WeightSlider(stringResource(R.string.radio_settings_artist_similarity), stringResource(R.string.radio_settings_artist_similarity_desc), weights.artistSimilarity) {
                 viewModel.updateWeights(weights.copy(artistSimilarity = it))
             }
-            WeightSlider("Genre / tag similarity", "Genre and tag continuity.", weights.genreTagSimilarity) {
+            WeightSlider(stringResource(R.string.radio_settings_genre_similarity), stringResource(R.string.radio_settings_genre_similarity_desc), weights.genreTagSimilarity) {
                 viewModel.updateWeights(weights.copy(genreTagSimilarity = it))
             }
-            WeightSlider("Era consistency", "Prefer similar release periods.", weights.eraConsistency) {
+            WeightSlider(stringResource(R.string.radio_settings_era_consistency), stringResource(R.string.radio_settings_era_consistency_desc), weights.eraConsistency) {
                 viewModel.updateWeights(weights.copy(eraConsistency = it))
             }
-            WeightSlider("Avoid recently played", "How strongly repeats are avoided.", weights.avoidRecentlyPlayed) {
+            WeightSlider(stringResource(R.string.radio_settings_avoid_recent), stringResource(R.string.radio_settings_avoid_recent_desc), weights.avoidRecentlyPlayed) {
                 viewModel.updateWeights(weights.copy(avoidRecentlyPlayed = it))
             }
-            WeightSlider("Discovery distance", "How far recommendations may drift from the seed.", weights.discoveryDistance) {
+            WeightSlider(stringResource(R.string.radio_settings_discovery_distance), stringResource(R.string.radio_settings_discovery_distance_desc), weights.discoveryDistance) {
                 viewModel.updateWeights(weights.copy(discoveryDistance = it))
             }
-            WeightSlider("Canonical version bias", "Prefer original recordings over remasters, live takes and edits.", weights.canonicalVersionBias) {
+            WeightSlider(stringResource(R.string.radio_settings_canonical_bias), stringResource(R.string.radio_settings_canonical_bias_desc), weights.canonicalVersionBias) {
                 viewModel.updateWeights(weights.copy(canonicalVersionBias = it))
             }
 
@@ -89,7 +100,7 @@ fun RadioSettingsTab(viewModel: RadioSettingsViewModel = hiltViewModel()) {
                 onClick = viewModel::resetDefaults,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Reset defaults")
+                Text(stringResource(R.string.radio_settings_reset_defaults))
             }
         }
     }
@@ -128,7 +139,7 @@ private fun WeightSlider(
                 )
             }
             Text(
-                text = "%.2fx".format(value),
+                text = stringResource(R.string.radio_settings_weight_value, value),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary
             )

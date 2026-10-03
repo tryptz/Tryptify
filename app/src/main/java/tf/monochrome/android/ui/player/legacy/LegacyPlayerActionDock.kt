@@ -33,6 +33,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.ui.components.liquidGlass
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * Compact tool row beneath the transport controls: Timer · Mixer/FX · Playlist.
@@ -57,9 +59,9 @@ fun LegacyPlayerActionDock(
             .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
-        DockAction(Icons.Default.Timer, "Timer", accent, false, onTimer)
-        DockAction(Icons.Default.Tune, "Mixer/FX", accent, false, onMixer)
-        DockAction(Icons.AutoMirrored.Filled.QueueMusic, "Playlist", accent, false, onPlaylist)
+        DockAction(Icons.Default.Timer, stringResource(R.string.status_timer), accent, false, onTimer)
+        DockAction(Icons.Default.Tune, stringResource(R.string.legacy_mixer_fx), accent, false, onMixer)
+        DockAction(Icons.AutoMirrored.Filled.QueueMusic, stringResource(R.string.playlist), accent, false, onPlaylist)
     }
 }
 

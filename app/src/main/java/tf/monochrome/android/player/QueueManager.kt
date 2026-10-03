@@ -301,20 +301,6 @@ class QueueManager @Inject constructor() {
         _currentTrack.value = null
     }
 
-    fun hasNext(): Boolean {
-        return when (_repeatMode.value) {
-            RepeatMode.ONE, RepeatMode.ALL -> _queue.value.isNotEmpty()
-            RepeatMode.OFF -> _currentIndex.value < _queue.value.size - 1
-        }
-    }
-
-    fun hasPrevious(): Boolean {
-        return when (_repeatMode.value) {
-            RepeatMode.ALL -> _queue.value.isNotEmpty()
-            else -> _currentIndex.value > 0
-        }
-    }
-
     private fun updateCurrentTrack() {
         val index = _currentIndex.value
         val queue = _queue.value

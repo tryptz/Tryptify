@@ -1,6 +1,22 @@
 package tf.monochrome.android.ui.mixer.fxchain
 
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
+import tf.monochrome.android.ui.components.adjustableSemantics
+import kotlin.math.roundToInt
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,8 +39,6 @@ import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -45,6 +59,8 @@ import tf.monochrome.android.ui.mixer.FLKnobControl
 import tf.monochrome.android.ui.mixer.ParamDef
 import tf.monochrome.android.ui.mixer.getParamDefs
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * One Serum-style stackable effect module in the FX chain.
@@ -68,6 +84,7 @@ fun FxCard(
     onDryWet: (Float) -> Unit,
     onParam: (paramIndex: Int, value: Float) -> Unit,
     onOversample: (Int) -> Unit,
+    onPreset: (FxPreset) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val bypassed = plugin.bypassed
@@ -107,7 +124,7 @@ fun FxCard(
             Box(modifier = dragHandle.padding(horizontal = 4.dp)) {
                 Icon(
                     Icons.Default.DragHandle,
-                    contentDescription = "Reorder",
+                    contentDescription = stringResource(R.string.mixer_reorder),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )
@@ -140,7 +157,7 @@ fun FxCard(
             IconButton(onClick = onBypass, modifier = Modifier.size(32.dp)) {
                 Icon(
                     Icons.Default.PowerSettingsNew,
-                    contentDescription = if (bypassed) "Enable" else "Bypass",
+                    contentDescription = if (bypassed) stringResource(R.string.mixer_enable) else stringResource(R.string.mixer_bypass),
                     tint = if (bypassed) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                            else accent,
                     modifier = Modifier.size(16.dp)
@@ -151,7 +168,7 @@ fun FxCard(
             IconButton(onClick = onToggleExpand, modifier = Modifier.size(32.dp)) {
                 Icon(
                     Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    contentDescription = if (expanded) stringResource(R.string.mixer_collapse) else stringResource(R.string.mixer_expand),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .size(20.dp)
@@ -163,7 +180,7 @@ fun FxCard(
             IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
                 Icon(
                     Icons.Default.Close,
-                    contentDescription = "Remove",
+                    contentDescription = stringResource(R.string.api_remove),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.size(16.dp)
                 )
@@ -177,7 +194,9 @@ fun FxCard(
                     .padding(horizontal = MonoDimens.spacingSm, vertical = MonoDimens.spacingSm),
                 verticalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm)
             ) {
-                FxVisual(plugin = plugin, accent = accent, slotIndex = position - 1, live = live)
+                FxVisual(plugin = plugin, accent = accent, slotIndex = position - 1, live = live, onParam = onParam)
+
+                FxPresetRow(plugin = plugin, accent = accent, onApply = onPreset)
 
                 val defs = getParamDefs(plugin.type)
                 if (plugin.type == SnapinType.EQ_10BAND) {
@@ -199,6 +218,11 @@ fun FxCard(
  * multiple of the stream rate between anti-alias resamplers — worth its CPU on
  * nonlinear effects (distortions, bitcrush, ring mod), where it removes
  * aliasing; changing it resets the effect's internal state.
+ *
+ * The engine never runs an effect above 192 kHz inside: at 96 kHz 4x runs as
+ * 2x, and a stream at 176.4 kHz or more already has the headroom oversampling
+ * buys, so there it runs as off. The note says so, since the chip shows what
+ * was asked for, which is what a saved mix keeps.
  */
 @Composable
 private fun OversampleRow(
@@ -230,13 +254,21 @@ private fun OversampleRow(
                     .padding(horizontal = 10.dp, vertical = 3.dp)
             ) {
                 Text(
-                    text = if (factor == 1) "Off" else "${factor}x",
+                    text = if (factor == 1) stringResource(R.string.state_off) else "${factor}x",
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (selected) accent
                             else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+        if (current > 1) {
+            Text(
+                text = stringResource(R.string.mixer_up_to_192),
+                fontSize = 8.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                maxLines = 1,
+            )
         }
     }
 }
@@ -313,7 +345,7 @@ private fun Eq10BandKnobs(
     for (band in 0 until bandCount) {
         val base = 1 + band * 5
         Text(
-            text = "Band ${band + 1}",
+            text = stringResource(R.string.mixer_band_n, band + 1),
             fontSize = 9.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -347,7 +379,7 @@ private fun DryWetRow(
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
             text = "MIX",
@@ -355,23 +387,80 @@ private fun DryWetRow(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Slider(
-            value = dryWet,
-            onValueChange = onDryWet,
-            valueRange = 0f..1f,
-            modifier = Modifier.weight(1f).height(24.dp),
-            colors = SliderDefaults.colors(
-                thumbColor = accent,
-                activeTrackColor = accent,
-                inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHigh
-            )
-        )
+        MixSlider(dryWet, accent, onDryWet, Modifier.weight(1f))
         Text(
-            text = "${(dryWet * 100).toInt()}%",
-            fontSize = 9.sp,
+            text = "${(dryWet * 100).roundToInt()}%",
+            fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             color = accent,
-            modifier = Modifier.width(34.dp)
+            modifier = Modifier.width(36.dp)
         )
+    }
+}
+
+/**
+ * Dry/wet as a lit bar: tap anywhere to jump there, drag to sweep, double-tap
+ * for fully wet. The fill runs from a faint "dry" to the full accent.
+ */
+@Composable
+private fun MixSlider(
+    value: Float,
+    accent: Color,
+    onChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val latest by rememberUpdatedState(onChange)
+    val haptic = LocalHapticFeedback.current
+    val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+    val thumb = MaterialTheme.colorScheme.surfaceContainerHighest
+    Canvas(
+        modifier = modifier
+            .height(28.dp)
+            .adjustableSemantics(
+                label = stringResource(R.string.mixer_mix),
+                value = value,
+                range = 0f..1f,
+                stateText = LocalContext.current.let { ctx -> { v: Float -> ctx.getString(R.string.mixer_percent, (v * 100).roundToInt()) } },
+                onValueChange = { latest(it.coerceIn(0f, 1f)) },
+            )
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { latest((it.x / size.width).coerceIn(0f, 1f)) },
+                    onDoubleTap = {
+                        latest(1f)
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                )
+            }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures { change, _ ->
+                    change.consume()
+                    latest((change.position.x / size.width).coerceIn(0f, 1f))
+                }
+            }
+    ) {
+        val h = 8.dp.toPx()
+        val top = (size.height - h) / 2f
+        val r = CornerRadius(h / 2f)
+        drawRoundRect(track, Offset(0f, top), Size(size.width, h), r)
+        val x = value.coerceIn(0f, 1f) * size.width
+        if (x > 0f) {
+            drawRoundRect(
+                Brush.horizontalGradient(listOf(accent.copy(alpha = 0.35f), accent), endX = size.width.coerceAtLeast(1f)),
+                Offset(0f, top), Size(x, h), r
+            )
+            drawRoundRect(accent.copy(alpha = 0.18f), Offset(0f, top - 3.dp.toPx()), Size(x, h + 6.dp.toPx()),
+                CornerRadius(h))
+        }
+        // Thumb: a pill with a lit centre line.
+        val tw = 14.dp.toPx()
+        val th = 22.dp.toPx()
+        val tx = (x - tw / 2f).coerceIn(0f, size.width - tw)
+        val ty = (size.height - th) / 2f
+        drawRoundRect(Color.Black.copy(alpha = 0.3f), Offset(tx, ty + 1.5.dp.toPx()), Size(tw, th), CornerRadius(tw / 2f))
+        drawRoundRect(thumb, Offset(tx, ty), Size(tw, th), CornerRadius(tw / 2f))
+        drawRoundRect(accent, Offset(tx, ty), Size(tw, th), CornerRadius(tw / 2f), style = Stroke(1.5.dp.toPx()))
+        drawLine(accent, Offset(tx + tw / 2f, ty + 6.dp.toPx()), Offset(tx + tw / 2f, ty + th - 6.dp.toPx()),
+            strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
     }
 }

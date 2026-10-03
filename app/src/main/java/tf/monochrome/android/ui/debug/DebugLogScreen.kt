@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.debug
 
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -60,7 +61,7 @@ import tf.monochrome.android.debug.DebugLogEntry
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -136,7 +137,7 @@ fun DebugLogScreen(
                 }
             },
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
+                IconButton(onClick = { navController.popBackStackSafe() }) {
                     Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                 }
             },
@@ -191,7 +192,7 @@ fun DebugLogScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 12.dp),
-            contentPadding = PaddingValues(bottom = 80.dp + LocalMiniPlayerInset.current),
+            contentPadding = PaddingValues(bottom = 80.dp + LocalBottomChromeInset.current),
         ) {
             items(items = entries) { entry ->
                 LogRow(entry = entry)

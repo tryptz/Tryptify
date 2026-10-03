@@ -72,6 +72,13 @@ class QobuzIdRegistry @Inject constructor(
     // opened from search resolved against Qobuz and surfaced an API error.
     private val appleAlbumIds: MutableSet<Long> = ConcurrentHashMap.newKeySet()
     private val appleArtistIds: MutableSet<Long> = ConcurrentHashMap.newKeySet()
+    // Ids that came out of the Deezer catalog (/api/deezer/*). Deezer ids are
+    // plain numbers in the same range as Qobuz and TIDAL ids, so without these
+    // a Deezer album would open against Qobuz and a Deezer track would be
+    // streamed or downloaded as whatever Qobuz/TIDAL recording has that id.
+    private val deezerTrackIds: MutableSet<Long> = ConcurrentHashMap.newKeySet()
+    private val deezerAlbumIds: MutableSet<Long> = ConcurrentHashMap.newKeySet()
+    private val deezerArtistIds: MutableSet<Long> = ConcurrentHashMap.newKeySet()
     // Foreign (TIDAL) artist id -> Qobuz artist id, from the playback fallback.
     // Session-scoped (cheap to rebuild) — not persisted.
     private val artistAliases = ConcurrentHashMap<Long, Long>()
@@ -128,6 +135,24 @@ class QobuzIdRegistry @Inject constructor(
 
     fun isAppleArtist(id: Long): Boolean = id in appleArtistIds
 
+    fun registerDeezerTrack(id: Long) {
+        if (id != 0L && deezerTrackIds.add(id)) markDirty()
+    }
+
+    fun isDeezerTrack(id: Long): Boolean = id in deezerTrackIds
+
+    fun registerDeezerAlbum(id: Long) {
+        if (id != 0L && deezerAlbumIds.add(id)) markDirty()
+    }
+
+    fun isDeezerAlbum(id: Long): Boolean = id in deezerAlbumIds
+
+    fun registerDeezerArtist(id: Long) {
+        if (id != 0L && deezerArtistIds.add(id)) markDirty()
+    }
+
+    fun isDeezerArtist(id: Long): Boolean = id in deezerArtistIds
+
     /** Remember the Apple adamId that matches a foreign (Qobuz/TIDAL/local) track id. */
     fun registerAppleIdFor(trackId: Long, adamId: Long) {
         if (trackId == 0L || adamId <= 0L) return
@@ -174,6 +199,9 @@ class QobuzIdRegistry @Inject constructor(
             val appleBridgeJson = json.encodeToString(appleIdByTrack.toMap())
             val appleAlbumsJson = json.encodeToString(appleAlbumIds.toList())
             val appleArtistsJson = json.encodeToString(appleArtistIds.toList())
+            val deezerTracksJson = json.encodeToString(deezerTrackIds.toList())
+            val deezerAlbumsJson = json.encodeToString(deezerAlbumIds.toList())
+            val deezerArtistsJson = json.encodeToString(deezerArtistIds.toList())
             dataStore.edit { prefs ->
                 prefs[KEY_ALBUM_SLUGS] = albumsJson
                 prefs[KEY_ARTIST_IDS] = artistsJson
@@ -182,6 +210,9 @@ class QobuzIdRegistry @Inject constructor(
                 prefs[KEY_APPLE_ID_BY_TRACK] = appleBridgeJson
                 prefs[KEY_APPLE_ALBUM_IDS] = appleAlbumsJson
                 prefs[KEY_APPLE_ARTIST_IDS] = appleArtistsJson
+                prefs[KEY_DEEZER_TRACK_IDS] = deezerTracksJson
+                prefs[KEY_DEEZER_ALBUM_IDS] = deezerAlbumsJson
+                prefs[KEY_DEEZER_ARTIST_IDS] = deezerArtistsJson
             }
         }
     }
@@ -217,6 +248,18 @@ class QobuzIdRegistry @Inject constructor(
                 runCatching { json.decodeFromString<List<Long>>(raw) }.getOrNull()
                     ?.let { appleArtistIds.addAll(it) }
             }
+            prefs[KEY_DEEZER_TRACK_IDS]?.let { raw ->
+                runCatching { json.decodeFromString<List<Long>>(raw) }.getOrNull()
+                    ?.let { deezerTrackIds.addAll(it) }
+            }
+            prefs[KEY_DEEZER_ALBUM_IDS]?.let { raw ->
+                runCatching { json.decodeFromString<List<Long>>(raw) }.getOrNull()
+                    ?.let { deezerAlbumIds.addAll(it) }
+            }
+            prefs[KEY_DEEZER_ARTIST_IDS]?.let { raw ->
+                runCatching { json.decodeFromString<List<Long>>(raw) }.getOrNull()
+                    ?.let { deezerArtistIds.addAll(it) }
+            }
         }
     }
 
@@ -229,5 +272,8 @@ class QobuzIdRegistry @Inject constructor(
         val KEY_APPLE_ID_BY_TRACK = stringPreferencesKey("apple_id_by_track")
         val KEY_APPLE_ALBUM_IDS = stringPreferencesKey("apple_album_ids")
         val KEY_APPLE_ARTIST_IDS = stringPreferencesKey("apple_artist_ids")
+        val KEY_DEEZER_TRACK_IDS = stringPreferencesKey("deezer_track_ids")
+        val KEY_DEEZER_ALBUM_IDS = stringPreferencesKey("deezer_album_ids")
+        val KEY_DEEZER_ARTIST_IDS = stringPreferencesKey("deezer_artist_ids")
     }
 }

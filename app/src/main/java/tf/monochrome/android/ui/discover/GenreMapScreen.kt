@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.discover
 
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import android.os.Build
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
@@ -31,6 +32,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -137,6 +141,8 @@ import tf.monochrome.android.ui.theme.glassTint
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.theme.reduceMotion
 import tf.monochrome.android.ui.player.playerFrostTint
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * The genre map — all 771 genres as one picture you can move around in.
@@ -296,10 +302,11 @@ fun GenreMapScreen(
     // the nav host around everything, not here.)
     val mapHaze = rememberHazeState()
 
-    // The map runs under the mini player so the bar has something to lens, so
-    // the panel has to clear the bar itself.
-    val playing by playerViewModel.currentTrack.collectAsStateWithLifecycle()
-    val panelBottomInset = if (playing != null) MINI_PLAYER_RESERVE else 0.dp
+    // The map runs under the tab bar and mini player so they have something to
+    // lens, so the panel has to clear them itself. The inset includes the
+    // system bar, which this full-bleed route also runs under — the panel's
+    // own navigationBarsPadding is consumed below so it is not counted twice.
+    val panelBottomInset = tf.monochrome.android.ui.navigation.LocalBottomChromeInset.current
 
     // A selected genre swells and springs back — bouncy enough to read as a
     // response to the tap, and it settles larger than it started so the node
@@ -416,10 +423,10 @@ fun GenreMapScreen(
         TopAppBar(
             // "Genre map" wrapped to two lines once the bar carried five
             // actions, and a wrapped title crowds the first row of labels.
-            title = { Text("Genres") },
+            title = { Text(stringResource(R.string.genres)) },
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                IconButton(onClick = { navController.popBackStackSafe() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
             },
             actions = {
@@ -430,13 +437,13 @@ fun GenreMapScreen(
                     folding?.cancel(); fold = null
                     collapsed = graph.roots.map { it.id }.toSet()
                 }) {
-                    Icon(Icons.Default.UnfoldLess, contentDescription = "Collapse everything")
+                    Icon(Icons.Default.UnfoldLess, contentDescription = stringResource(R.string.collapse_everything))
                 }
                 IconButton(onClick = {
                     folding?.cancel(); fold = null
                     collapsed = emptySet()
                 }) {
-                    Icon(Icons.Default.UnfoldMore, contentDescription = "Expand everything")
+                    Icon(Icons.Default.UnfoldMore, contentDescription = stringResource(R.string.expand_everything))
                 }
                 IconButton(onClick = {
                     // A width fit leaves the timeline's height running off the
@@ -452,19 +459,19 @@ fun GenreMapScreen(
                         if (layout == MapLayout.TIMELINE) Icons.Default.BubbleChart
                         else Icons.Default.Timeline,
                         contentDescription = if (layout == MapLayout.TIMELINE) {
-                            "Back to the constellation map"
+                            stringResource(R.string.back_to_constellation)
                         } else {
-                            "Arrange by year"
+                            stringResource(R.string.arrange_by_year)
                         },
                     )
                 }
                 IconButton(onClick = { weighting = weighting.next() }) {
-                    Icon(Icons.Default.Tune, contentDescription = "Change what size means")
+                    Icon(Icons.Default.Tune, contentDescription = stringResource(R.string.change_size_meaning))
                 }
                 IconButton(onClick = { showRings = !showRings }) {
                     Icon(
                         Icons.Default.TrackChanges,
-                        contentDescription = if (showRings) "Hide constellations" else "Show constellations",
+                        contentDescription = if (showRings) stringResource(R.string.hide_constellations) else stringResource(R.string.show_constellations),
                         tint = if (showRings) {
                             MaterialTheme.colorScheme.primary
                         } else {
@@ -473,7 +480,7 @@ fun GenreMapScreen(
                     )
                 }
                 IconButton(onClick = { flight?.cancel(); camera = Camera() }) {
-                    Icon(Icons.Default.CenterFocusStrong, contentDescription = "Recentre")
+                    Icon(Icons.Default.CenterFocusStrong, contentDescription = stringResource(R.string.recentre))
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
@@ -574,9 +581,9 @@ fun GenreMapScreen(
             // bigger without being able to find out in what sense.
             Text(
                 text = if (morph.value > 0.5f) {
-                    "Oldest left, newest right — each subgenre branches under its parent"
+                    stringResource(R.string.timeline_caption)
                 } else {
-                    weighting.caption
+                    stringResource(weighting.caption)
                 },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -638,7 +645,7 @@ fun GenreMapScreen(
                     onPlayChartEntry = { viewModel.playChartEntry(it, playerViewModel) },
                     onExplore = {
                         viewModel.selectGenre(node.id)
-                        navController.popBackStack()
+                        navController.popBackStackSafe()
                     },
                     onRelated = { child ->
                         // A subgenre under a folded branch is not on the map, so
@@ -654,14 +661,15 @@ fun GenreMapScreen(
                         // camera centres a genre in what's left of the map, and
                         // the mini player occludes that too.
                         .onSizeChanged { panelHeightPx = it.height }
-                        .padding(bottom = panelBottomInset),
+                        .padding(bottom = panelBottomInset)
+                        .consumeWindowInsets(WindowInsets.navigationBars),
                 )
                 }
             }
 
             if (graph.size == 0) {
                 Text(
-                    text = "The genre map didn't load.",
+                    text = stringResource(R.string.genre_map_failed),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.align(Alignment.Center),
@@ -839,8 +847,8 @@ private fun GenreCard(
                         // and down to put it away again.
                         imageVector = if (expanded) Icons.Default.ExpandMore
                         else Icons.Default.ExpandLess,
-                        contentDescription = if (expanded) "Hide the history"
-                        else "Read the history of ${node.name}",
+                        contentDescription = if (expanded) stringResource(R.string.hide_history)
+                    else stringResource(R.string.read_history_of, node.name),
                         tint = if (expanded) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -852,8 +860,8 @@ private fun GenreCard(
                     Icon(
                         imageVector = if (hearted) Icons.Default.Favorite
                         else Icons.Default.FavoriteBorder,
-                        contentDescription = if (hearted) "Remove from your genres"
-                        else "Keep in your genres",
+                        contentDescription = if (hearted) stringResource(R.string.genre_unkeep)
+                    else stringResource(R.string.genre_keep),
                         tint = if (hearted) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -864,14 +872,14 @@ private fun GenreCard(
                 IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
                     Icon(
                         Icons.Default.Close,
-                        contentDescription = "Close",
+                        contentDescription = stringResource(R.string.action_close),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
             if (node.aka.isNotEmpty()) {
                 Text(
-                    text = "also called " + node.aka.joinToString(", "),
+                    text = stringResource(R.string.also_called, node.aka.joinToString(stringResource(R.string.list_separator))),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -912,7 +920,7 @@ private fun GenreCard(
             if (related.nodes.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    text = if (related.areChildren) "Subgenres" else "Closest to it",
+                    text = if (related.areChildren) stringResource(R.string.subgenres) else stringResource(R.string.closest_to_it),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -937,7 +945,7 @@ private fun GenreCard(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionPill(
                     icon = Icons.Default.PlayArrow,
-                    label = "Play top",
+                    label = stringResource(R.string.play_top),
                     container = MaterialTheme.colorScheme.primary,
                     content = MaterialTheme.colorScheme.onPrimary,
                     onClick = onPlay,
@@ -945,7 +953,7 @@ private fun GenreCard(
                 )
                 ActionPill(
                     icon = Icons.Default.Radio,
-                    label = "Radio",
+                    label = stringResource(R.string.tab_radio),
                     container = MaterialTheme.colorScheme.secondaryContainer,
                     content = MaterialTheme.colorScheme.onSecondaryContainer,
                     onClick = onRadio,
@@ -961,7 +969,7 @@ private fun GenreCard(
             Row {
                 ActionPill(
                     icon = Icons.Default.BarChart,
-                    label = "Top 100",
+                    label = stringResource(R.string.top_100),
                     container = if (chartOpen) familyColor.copy(alpha = 0.22f)
                     else MaterialTheme.colorScheme.secondaryContainer,
                     content = if (chartOpen) familyColor
@@ -986,7 +994,7 @@ private fun GenreCard(
             Row {
                 ActionPill(
                     icon = Icons.AutoMirrored.Filled.ArrowForward,
-                    label = "Explore in Discover",
+                    label = stringResource(R.string.explore_in_discover),
                     container = Color.Transparent,
                     content = MaterialTheme.colorScheme.onSurfaceVariant,
                     onClick = onExplore,
@@ -1036,14 +1044,13 @@ private fun GenreChartBody(
             // the loading line rather than as nothing, so the section does not
             // flicker empty on its way open.
             GenreChartState.Idle, GenreChartState.Loading -> Text(
-                text = "Counting them up…",
+                text = stringResource(R.string.counting_them_up),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             GenreChartState.Unreachable -> Text(
-                text = "Couldn't reach the chart sources. It's the listing that's " +
-                    "missing, not the music — try again in a moment.",
+                text = stringResource(R.string.chart_sources_unreachable),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1052,7 +1059,7 @@ private fun GenreChartBody(
                 val entries = state.chart.entries
                 if (entries.isEmpty()) {
                     Text(
-                        text = "No chart is published for this genre.",
+                        text = stringResource(R.string.no_chart_for_genre),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1143,15 +1150,13 @@ private fun GenreHistoryBody(
             // noticing, so it draws as the loading line rather than as nothing —
             // a panel that flickers empty on the way open looks broken.
             GenreHistoryState.Idle, GenreHistoryState.Loading -> Text(
-                text = "Looking it up…",
+                text = stringResource(R.string.looking_it_up),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             GenreHistoryState.Missing -> Text(
-                text = "No history we could verify is written for ${node.name} yet. " +
-                    "It's on the map from the curated dataset — its lineage, tempo and era — " +
-                    "and nothing here is invented to fill the gap.",
+                text = stringResource(R.string.no_verified_history, node.name),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1166,12 +1171,12 @@ private fun GenreHistoryBody(
                     // The infobox facts first: "1985, Chicago" and the genres
                     // either side of it are the whole history in three lines,
                     // for a reader who isn't going to read the paragraphs.
-                    history.cultural?.let { HistoryFact("Origins", it, accent) }
+                    history.cultural?.let { HistoryFact(stringResource(R.string.history_origins), it, accent) }
                     if (history.stylistic.isNotEmpty()) {
-                        HistoryFact("Grew out of", history.stylistic.joinToString(", "), accent)
+                        HistoryFact(stringResource(R.string.history_grew_out_of), history.stylistic.joinToString(stringResource(R.string.list_separator)), accent)
                     }
                     if (history.derivatives.isNotEmpty()) {
-                        HistoryFact("Led to", history.derivatives.joinToString(", "), accent)
+                        HistoryFact(stringResource(R.string.history_led_to), history.derivatives.joinToString(stringResource(R.string.list_separator)), accent)
                     }
                     if (history.hasOrigins) Spacer(Modifier.height(10.dp))
 
@@ -1213,11 +1218,11 @@ private fun GenreHistoryBody(
                     // the difference between a claim and a citation.
                     Spacer(Modifier.height(14.dp))
                     Text(
-                        text = buildString {
-                            append("From ")
-                            history.fragment?.let { append("the “$it” section of ") }
-                            append("“${history.title}” on Wikipedia, CC BY-SA 4.0")
-                        },
+                        // The article is English Wikipedia's, and the translations
+                        // say so, since the paragraph above is in English.
+                        text = history.fragment?.let {
+                            stringResource(R.string.wikipedia_attribution_section, it, history.title)
+                        } ?: stringResource(R.string.wikipedia_attribution, history.title),
                         style = MaterialTheme.typography.labelSmall,
                         color = accent,
                         modifier = Modifier
@@ -1378,8 +1383,6 @@ private val MIN_HISTORY_HEIGHT = 120.dp
  */
 private const val FLIGHT_HEIGHT_QUANTUM = 96
 
-/** Height the floating mini player needs, matching the nav host's own reserve. */
-private val MINI_PLAYER_RESERVE = 72.dp
 private const val FLIGHT_MILLIS = 620
 
 /**
@@ -1616,10 +1619,10 @@ private fun fitFor(width: Float, height: Float, bounds: MapBounds, morph: Float 
  * switchable — and naming the active one on screen — is what turns a dot's size
  * from decoration into a claim you can check.
  */
-private enum class MapWeight(val caption: String) {
-    POPULARITY("Sized by listeners on Last.fm"),
-    ERA("Sized by how recent the genre is"),
-    DEPTH("Sized by depth in the genre tree"),
+private enum class MapWeight(@androidx.annotation.StringRes val caption: Int) {
+    POPULARITY(R.string.map_weight_popularity),
+    ERA(R.string.map_weight_era),
+    DEPTH(R.string.map_weight_depth),
     ;
 
     fun next(): MapWeight = entries[(ordinal + 1) % entries.size]

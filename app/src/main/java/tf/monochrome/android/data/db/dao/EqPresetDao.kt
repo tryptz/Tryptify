@@ -1,7 +1,6 @@
 package tf.monochrome.android.data.db.dao
 
 import androidx.room.Dao
-import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -54,12 +53,6 @@ interface EqPresetDao {
     suspend fun insertPreset(preset: EqPresetEntity)
 
     /**
-     * Insert multiple presets
-     */
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertPresets(presets: List<EqPresetEntity>)
-
-    /**
      * Update an existing preset
      */
     @Update
@@ -70,18 +63,6 @@ interface EqPresetDao {
      */
     @Query("DELETE FROM eq_presets WHERE id = :presetId")
     suspend fun deletePreset(presetId: String)
-
-    /**
-     * Delete all custom AutoEQ presets
-     */
-    @Query("DELETE FROM eq_presets WHERE isCustom = 1 AND eqType = 0")
-    suspend fun deleteAllCustomPresets()
-
-    /**
-     * Check if a preset exists
-     */
-    @Query("SELECT EXISTS(SELECT 1 FROM eq_presets WHERE id = :presetId)")
-    suspend fun presetExists(presetId: String): Boolean
 
     /**
      * Get count of all AutoEQ presets
@@ -114,12 +95,6 @@ interface EqPresetDao {
      */
     @Query("SELECT * FROM eq_presets WHERE eqType = 1 ORDER BY isCustom DESC, updatedAt DESC")
     fun getAllParametricPresets(): Flow<List<EqPresetEntity>>
-
-    /**
-     * Get custom Parametric EQ presets
-     */
-    @Query("SELECT * FROM eq_presets WHERE isCustom = 1 AND eqType = 1 ORDER BY updatedAt DESC")
-    fun getCustomParametricPresets(): Flow<List<EqPresetEntity>>
 
     /**
      * Count of custom Parametric EQ presets

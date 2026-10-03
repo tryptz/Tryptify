@@ -5,6 +5,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 /**
  * A folder about to be dropped from the library — its name, and where it is.
@@ -36,30 +39,24 @@ internal fun ExcludeFolderDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Remove ${folder.displayName}?") },
+        title = { Text(stringResource(R.string.remove_folder_title, folder.displayName)) },
         text = {
+            // Whole sentences, not fragments glued together: word order and
+            // agreement change across the whole sentence in other languages.
+            val leaves = when (val n = folder.trackCount) {
+                null -> stringResource(R.string.exclude_folder_unknown)
+                else -> pluralStringResource(R.plurals.exclude_folder_tracks, n, n)
+            }
             Text(
-                buildString {
-                    append(
-                        when (folder.trackCount) {
-                            null -> "This folder and its music leave your library"
-                            1 -> "1 track leaves your library"
-                            else -> "${folder.trackCount} tracks leave your library"
-                        }
-                    )
-                    append(", and scans will skip it from now on.\n\n")
-                    append("Nothing is deleted from your phone — the files stay in ")
-                    append(folder.path)
-                    append(".")
-                },
+                leaves + "\n\n" + stringResource(R.string.exclude_folder_files_stay, folder.path),
                 style = MaterialTheme.typography.bodyMedium,
             )
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(); onDismiss() }) { Text("Remove") }
+            TextButton(onClick = { onConfirm(); onDismiss() }) { Text(stringResource(R.string.action_remove)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )
 }

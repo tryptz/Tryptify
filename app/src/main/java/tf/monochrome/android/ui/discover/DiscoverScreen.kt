@@ -46,7 +46,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
@@ -104,6 +103,9 @@ import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.components.SearchOverlay
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 /**
  * Discover — the browsing half of the app, split out of Home.
@@ -128,22 +130,11 @@ import tf.monochrome.android.ui.components.SearchOverlay
 fun DiscoverScreen(
     navController: NavController,
     playerViewModel: PlayerViewModel,
-    // The page list and the nav host's way of opening one, for the jump sheet.
-    pages: List<String>,
+    // The nav host's way of opening a page — World radio's entry button moves
+    // the pager there rather than pushing a screen.
     onSelectPage: (String) -> Unit,
     viewModel: DiscoverViewModel = rememberDiscoverViewModel(),
 ) {
-    var pageJumpOpen by androidx.compose.runtime.remember {
-        androidx.compose.runtime.mutableStateOf(false)
-    }
-    if (pageJumpOpen) {
-        tf.monochrome.android.ui.navigation.PageJumpSheet(
-            pages = pages,
-            onSelect = onSelectPage,
-            current = tf.monochrome.android.ui.navigation.Screen.Discover.route,
-            onDismiss = { pageJumpOpen = false },
-        )
-    }
     val shelves by viewModel.visibleShelves.collectAsStateWithLifecycle()
     val selectedChip by viewModel.selectedChip.collectAsStateWithLifecycle()
     val genreQuery by viewModel.genreQuery.collectAsStateWithLifecycle()
@@ -190,7 +181,7 @@ fun DiscoverScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("Discover (Beta)") },
+            title = { Text(stringResource(R.string.discover_beta)) },
             actions = {
                 IconButton(onClick = {
                     searchOpen = !searchOpen
@@ -201,18 +192,11 @@ fun DiscoverScreen(
                 }) {
                     Icon(
                         if (searchOpen) Icons.Default.Close else Icons.Default.Search,
-                        contentDescription = if (searchOpen) "Close genre search" else "Search genres",
+                        contentDescription = if (searchOpen) stringResource(R.string.close_genre_search) else stringResource(R.string.search_genres),
                     )
                 }
                 IconButton(onClick = { viewModel.showSomethingElse() }) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Show me something else")
-                }
-                // Discover had no way off it but the swipe.
-                IconButton(onClick = { pageJumpOpen = true }) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.List,
-                        contentDescription = "Go to page",
-                    )
+                    Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.show_something_else))
                 }
                 // Every page can now be the only visible one, so every page has
                 // to be a way into Settings — which is the only place to make
@@ -222,7 +206,7 @@ fun DiscoverScreen(
                 IconButton(onClick = {
                     navController.navigateTool(Screen.Settings, Screen.Settings.createRoute())
                 }) {
-                    Icon(Icons.Default.Settings, contentDescription = "Settings")
+                    Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings))
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
@@ -242,7 +226,7 @@ fun DiscoverScreen(
             open = searchOpen,
             query = genreQuery,
             onQueryChange = viewModel::setGenreQuery,
-            placeholder = "Search 771 genres — try dnb, liquid, phonk",
+            placeholder = stringResource(R.string.search_genres_hint),
             onClose = {
                 searchOpen = false
                 viewModel.setGenreQuery("")
@@ -334,7 +318,7 @@ fun DiscoverScreen(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 160.dp),
+            contentPadding = PaddingValues(bottom = tf.monochrome.android.ui.navigation.bottomChromePadding),
         ) {
             items(shelves, key = { it.id }) { shelf ->
                 DiscoveryShelfRow(
@@ -378,7 +362,7 @@ fun DiscoverScreen(
                                 strokeWidth = 2.5.dp,
                             )
                             exhausted -> Text(
-                                text = "That's everything for this one.",
+                                text = stringResource(R.string.feed_end),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -408,11 +392,9 @@ fun DiscoverScreen(
                 item(key = "empty") {
                     Text(
                         text = if (selectedChip == null) {
-                            "Nothing to show yet. Play a few tracks — Discover builds itself " +
-                                "from what you listen to."
+                            stringResource(R.string.discover_empty_feed)
                         } else {
-                            "Nothing came back for that one. Try another mood, or check the " +
-                                "Qobuz instance in Settings › Connections."
+                            stringResource(R.string.discover_empty_chip)
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -432,7 +414,7 @@ fun DiscoverScreen(
         navController = navController,
         playerViewModel = playerViewModel,
         onRemove = menuTrack?.let { held -> { viewModel.dismissItem("t:" + held.id) } },
-        removeLabel = "Not interested",
+        removeLabel = stringResource(R.string.not_interested),
     )
 }
 
@@ -467,7 +449,7 @@ private fun DiscoveryLoading(label: String?) {
 
     Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
         Text(
-            text = if (label != null) "Building $label…" else "Building your feed…",
+            text = if (label != null) stringResource(R.string.building_label, moodLabel(label)) else stringResource(R.string.building_feed),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -518,7 +500,7 @@ private fun GenreSearchExtras(
         // A query that matches nothing and a query still being typed look
         // identical without this.
         Text(
-            text = if (query.isNotBlank() && resultCount == 0) "No genre matches that" else "",
+            text = if (query.isNotBlank() && resultCount == 0) stringResource(R.string.no_genre_match) else "",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
@@ -532,7 +514,7 @@ private fun GenreSearchExtras(
             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
             modifier = Modifier.heightIn(min = 28.dp),
         ) {
-            Text("Browse the map", style = MaterialTheme.typography.labelMedium)
+            Text(stringResource(R.string.browse_the_map), style = MaterialTheme.typography.labelMedium)
         }
     }
 }
@@ -562,7 +544,7 @@ private fun GenreRail(
         ) {
             AssistChip(
                 onClick = onOpenMap,
-                label = { Text("Pick genres on the map") },
+                label = { Text(stringResource(R.string.pick_genres_on_map)) },
                 leadingIcon = {
                     Icon(
                         Icons.Default.AccountTree,
@@ -588,7 +570,7 @@ private fun GenreRail(
                     {
                         Icon(
                             Icons.Default.Favorite,
-                            contentDescription = "Hearted",
+                            contentDescription = stringResource(R.string.hearted),
                             modifier = Modifier.size(16.dp),
                         )
                     }
@@ -624,7 +606,11 @@ private fun SortRow(selected: DiscoverySort, onSelect: (DiscoverySort) -> Unit) 
                 shape = SegmentedButtonDefaults.itemShape(index, DiscoverySort.entries.size),
                 label = {
                     Text(
-                        text = option.label,
+                        text = when (option) {
+                            tf.monochrome.android.domain.model.DiscoverySort.FOR_YOU -> stringResource(R.string.for_you)
+                            tf.monochrome.android.domain.model.DiscoverySort.POPULAR -> stringResource(R.string.sort_most_popular)
+                            tf.monochrome.android.domain.model.DiscoverySort.NEWEST -> stringResource(R.string.sort_newest)
+                        },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.labelMedium,
@@ -653,7 +639,7 @@ private fun DiscoveryChipRail(
             FilterChip(
                 selected = selected == null && combinedLabels.isEmpty(),
                 onClick = { onSelect(null) },
-                label = { Text("For you") },
+                label = { Text(stringResource(R.string.for_you)) },
                 colors = FilterChipDefaults.filterChipColors(),
             )
         }
@@ -669,7 +655,8 @@ private fun DiscoveryChipRail(
                     if (combinable) onToggle(label)
                     else onSelect(if (selected == label) null else label)
                 },
-                label = { Text(label) },
+                // The label is the chip's key; only what is shown is translated.
+                label = { Text(moodLabel(label)) },
                 leadingIcon = if (combinable && isOn) {
                     { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                 } else null,
@@ -703,16 +690,16 @@ private fun CombinedGenreRow(
         ) {
             Text(
                 text = if (genres.isEmpty()) {
-                    "Nothing left in this mix"
+                    stringResource(R.string.mix_empty)
                 } else {
-                    "Drawing on ${genres.size} genres — tap to remove"
+                    pluralStringResource(R.plurals.drawing_on_genres, genres.size, genres.size)
                 },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
             if (excludedCount > 0) {
-                TextButton(onClick = onReset) { Text("Reset") }
+                TextButton(onClick = onReset) { Text(stringResource(R.string.action_reset)) }
             }
         }
         LazyRow(
@@ -727,7 +714,7 @@ private fun CombinedGenreRow(
                     trailingIcon = {
                         Icon(
                             Icons.Default.Close,
-                            contentDescription = "Remove ${node.name}",
+                            contentDescription = stringResource(R.string.remove_named, node.name),
                             modifier = Modifier.size(16.dp),
                         )
                     },
@@ -766,7 +753,7 @@ private fun WorldRadioEntryButton(onClick: () -> Unit) {
             Spacer(Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "World radio",
+                    text = stringResource(R.string.world_radio),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -774,7 +761,7 @@ private fun WorldRadioEntryButton(onClick: () -> Unit) {
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "Cities on air",
+                    text = stringResource(R.string.cities_on_air),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
                     maxLines = 1,
@@ -808,7 +795,7 @@ private fun MapEntryButton(onClick: () -> Unit) {
             Spacer(Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Genre map",
+                    text = stringResource(R.string.genre_map),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -818,7 +805,7 @@ private fun MapEntryButton(onClick: () -> Unit) {
                 Text(
                     // Shorter than it was: the card is half as wide now, and
                     // "Every genre, linked" hard-clipped mid-word.
-                    text = "Every genre",
+                    text = stringResource(R.string.every_genre),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f),
                     maxLines = 1,
@@ -855,6 +842,7 @@ private fun DiscoveryShelfRow(
     onQueueAll: () -> Unit,
 ) {
     val trackCount = shelf.items.count { it is DiscoveryItem.TrackItem }
+    val shelfTitle = shelfText(shelf.titleLine, shelf.title) ?: shelf.title
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -862,7 +850,7 @@ private fun DiscoveryShelfRow(
         ) {
             Box(modifier = Modifier.weight(1f)) {
                 SectionHeader(
-                    title = shelf.title,
+                    title = shelfTitle,
                     onSeeAllClick = onSeeAll.takeIf { shelf.seeAll && shelf.items.size > 3 },
                 )
             }
@@ -873,7 +861,7 @@ private fun DiscoveryShelfRow(
                 IconButton(onClick = onQueueAll) {
                     Icon(
                         Icons.Default.QueueMusic,
-                        contentDescription = "Queue all of " + shelf.title,
+                        contentDescription = stringResource(R.string.queue_all_of, shelfTitle),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -881,12 +869,12 @@ private fun DiscoveryShelfRow(
             IconButton(onClick = onDismissShelf) {
                 Icon(
                     Icons.Default.Close,
-                    contentDescription = "Hide " + shelf.title,
+                    contentDescription = stringResource(R.string.hide_named, shelfTitle),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
-        shelf.reason?.let { reason ->
+        shelfText(shelf.reasonLine, shelf.reason)?.let { reason ->
             Text(
                 text = reason,
                 style = MaterialTheme.typography.bodySmall,

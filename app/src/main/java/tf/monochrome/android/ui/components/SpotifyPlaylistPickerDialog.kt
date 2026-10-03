@@ -32,6 +32,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.data.api.SpotifySimplePlaylist
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 /**
  * Picker for the connected Spotify account's playlists. "Liked Songs" is
@@ -55,7 +58,7 @@ fun SpotifyPlaylistPickerDialog(
     GlassOverlay(onDismiss = onDismiss) {
         Column(modifier = Modifier.padding(10.dp)) {
             Text(
-                text = "Import from Spotify",
+                text = stringResource(R.string.spotify_import_title),
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onSurface,
             )
@@ -68,9 +71,9 @@ fun SpotifyPlaylistPickerDialog(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Strict Album Matching", style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(R.string.strict_album_matching), style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "Album name must match Spotify metadata",
+                        stringResource(R.string.spotify_strict_detail),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -106,8 +109,8 @@ fun SpotifyPlaylistPickerDialog(
                     LazyColumn(modifier = Modifier.weight(1f, fill = false).heightIn(max = 420.dp)) {
                         item {
                             PickerRow(
-                                title = "Liked Songs",
-                                subtitle = "Your saved Spotify tracks",
+                                title = stringResource(R.string.spotify_liked_songs),
+                                subtitle = stringResource(R.string.spotify_liked_songs_detail),
                                 isLikedSongs = true,
                                 onClick = { onPickLikedSongs(strictAlbumMatch) },
                             )
@@ -116,7 +119,7 @@ fun SpotifyPlaylistPickerDialog(
                             PickerRow(
                                 title = playlist.name,
                                 subtitle = buildString {
-                                    playlist.tracks?.let { append("${it.total} tracks") }
+                                    playlist.tracks?.let { append(pluralStringResource(R.plurals.track_count, it.total, it.total)) }
                                     playlist.owner?.displayName?.let {
                                         if (isNotEmpty()) append(" • ")
                                         append(it)
@@ -134,7 +137,7 @@ fun SpotifyPlaylistPickerDialog(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
             }
         }
     }

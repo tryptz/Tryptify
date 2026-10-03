@@ -36,6 +36,8 @@ public:
         gateOpen_ = false;
     }
 
+    bool supportsLinkedDetection() const override { return true; }
+
     void process(float* left, float* right, int numFrames) override {
         float threshLin = std::pow(10.0f, thresholdDb_ / 20.0f);
         float tolLin = std::pow(10.0f, (thresholdDb_ - toleranceDb_) / 20.0f);
@@ -50,8 +52,9 @@ public:
 
         for (int i = 0; i < numFrames; i++) {
             // Detect level
-            float envValL = envL_.process(left[i]);
-            float envValR = envR_.process(right[i]);
+            // Linked across lanes when a key is set (see setDetectorKey).
+            float envValL = envL_.process(key_ ? key_[i] : left[i]);
+            float envValR = envR_.process(key_ ? key_[i] : right[i]);
             float envVal = std::max(envValL, envValR);
 
             // Hysteresis gate logic

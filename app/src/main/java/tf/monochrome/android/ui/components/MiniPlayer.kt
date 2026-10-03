@@ -75,6 +75,7 @@ import tf.monochrome.android.ui.player.BackdropArtFit
 import tf.monochrome.android.ui.player.LocalPlayerBackdrop
 import tf.monochrome.android.ui.player.PlayerBackdrop
 import tf.monochrome.android.ui.player.rememberBackdropArt
+import androidx.compose.ui.res.stringResource
 
 // Geometry shared between the punched holes and the tap-target overlay so they
 // stay aligned across DPI. The two controls are the rightmost fixed-size cells
@@ -103,16 +104,20 @@ fun MiniPlayer(
 ) {
     if (track == null) return
 
-    // The tunable player glass (AGSL) only exists on API 33+ and when the user
-    // hasn't turned button glass off. Below that, keep the old haze bar + Material
-    // icons — a punched slab with no shader would be an opaque block.
+    // The tunable player glass (AGSL) only exists where the shader really runs.
+    // Elsewhere, keep the old haze bar + Material icons — a punched slab with no
+    // shader would be an opaque block. That means asking
+    // rememberLiquidGlassAvailable(), not just the API level and the glass
+    // switch: "Remove liquid glass" turns the shader off too, and used to leave
+    // this bar a solid block of the accent, its text never contrast-checked
+    // against it and its accent progress line drawn invisibly on top.
     val glass = LocalPlayerGlass.current
     // The progress line is also the bar's top border. With it off the bar
     // must close up, so the height it reserves goes to zero everywhere it is
     // used — including the control-hole centring maths below, which would
     // otherwise punch the play/skip holes 2dp above the icons they reveal.
     val progressHeight = if (glass.miniProgressBar) MiniProgressHeight else 0.dp
-    val useGlass = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && glass.enabled
+    val useGlass = tf.monochrome.android.ui.player.rememberLiquidGlassAvailable()
 
     val swipeGestures = Modifier.pointerInput(Unit) {
         var totalHorizontalDrag = 0f
@@ -158,14 +163,14 @@ fun MiniPlayer(
                 IconButton(onClick = onPlayPauseClick) {
                     Icon(
                         imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        contentDescription = if (isPlaying) stringResource(R.string.action_pause) else stringResource(R.string.action_play),
                         tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
                 IconButton(onClick = onSkipNextClick) {
                     Icon(
                         imageVector = Icons.Default.SkipNext,
-                        contentDescription = "Skip next",
+                        contentDescription = stringResource(R.string.action_skip_next),
                         tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
@@ -349,7 +354,7 @@ fun MiniPlayer(
                     .clickable(
                         interactionSource = playSource,
                         indication = null,
-                        onClickLabel = if (isPlaying) "Pause" else "Play",
+                        onClickLabel = if (isPlaying) stringResource(R.string.action_pause) else stringResource(R.string.action_play),
                         onClick = onPlayPauseClick,
                     )
             )
@@ -359,7 +364,7 @@ fun MiniPlayer(
                     .clickable(
                         interactionSource = skipSource,
                         indication = null,
-                        onClickLabel = "Skip next",
+                        onClickLabel = stringResource(R.string.action_skip_next),
                         onClick = onSkipNextClick,
                     )
             )

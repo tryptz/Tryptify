@@ -27,7 +27,12 @@ public:
         envL_.setMode(DetectionMode::RMS);
         envR_.setMode(DetectionMode::RMS);
         gainSmooth_ = 0.0f;
+        peakHold_ = 0.0f;
+        // 50 ms for the lift limiter's peak follower to fall 60 dB.
+        peakRelease_ = std::pow(0.001f, 1.0f / (0.05f * static_cast<float>(sampleRate)));
     }
+
+    bool supportsLinkedDetection() const override { return true; }
 
     void process(float* left, float* right, int numFrames) override {
         float inputLin = std::pow(10.0f, inputGainDb_ / 20.0f);
@@ -39,14 +44,34 @@ public:
             float inR = right[i] * inputLin;
 
             // Detect level (linked stereo)
-            float envValL = envL_.process(inL);
-            float envValR = envR_.process(inR);
+            // Linked across lanes when a key is set, at the same input gain.
+            float envValL = envL_.process(key_ ? key_[i] * inputLin : inL);
+            float envValR = envR_.process(key_ ? key_[i] * inputLin : inR);
             float envVal = std::max(envValL, envValR);
 
             float levelDb = (envVal > 1e-10f) ? 20.0f * std::log10(envVal) : -200.0f;
 
             // Compute gain from transfer curve
             float gainDb = computeTransferGain(levelDb);
+
+            // Below the low threshold a ratio above 1 lifts quiet audio up
+            // toward it. The curve alone lifts silence without limit (+150 dB
+            // from -200 dB) and, while a slow attack is still rising, lifted a
+            // loud transient by the same: with every knob at its maximum the
+            // output reached +70 dBFS. So the lift is capped at kMaxLiftDb,
+            // and never takes a peak past full scale — measured by a fast
+            // peak follower, not the slow RMS detector. Music whose RMS sits
+            // under the threshold keeps its lift; only a lift that would clip
+            // is cut short.
+            if (gainDb > 0.0f) {
+                const float pk = std::max(std::fabs(inL), std::fabs(inR));
+                peakHold_ = pk > peakHold_ ? pk : peakHold_ * peakRelease_;
+                const float peakDb = peakHold_ > 1e-10f ? 20.0f * std::log10(peakHold_) : -200.0f;
+                gainDb = std::min(gainDb, std::min(kMaxLiftDb, std::max(0.0f, -peakDb)));
+            } else {
+                const float pk = std::max(std::fabs(inL), std::fabs(inR));
+                peakHold_ = pk > peakHold_ ? pk : peakHold_ * peakRelease_;
+            }
 
             // Smooth
             gainSmooth_ += smoothCoeff * (gainDb - gainSmooth_);
@@ -103,6 +128,7 @@ public:
     void reset() override {
         envL_.reset(); envR_.reset();
         gainSmooth_ = 0.0f;
+        peakHold_ = 0.0f;
     }
 
     int getNumParameters() const override { return NUM_PARAMS; }
@@ -122,7 +148,10 @@ private:
         else if (levelDb < lowThreshDb_ + halfKnee && kneeDb_ > 0.0f) {
             float x = levelDb - lowThreshDb_ + halfKnee;
             float t = x / kneeDb_;
-            float kneeGain = (1.0f / lowRatio_ - 1.0f) * (1.0f - t) * (1.0f - t) * 0.5f;
+            // Meets the curve below in value and slope, and unity above. The
+            // sign was flipped, so the gain jumped by twice its size at the
+            // knee's lower edge.
+            float kneeGain = (1.0f - 1.0f / lowRatio_) * (1.0f - t) * (1.0f - t) * 0.5f;
             return kneeGain * kneeDb_;
         }
         // Unity region (between thresholds)
@@ -155,4 +184,10 @@ private:
 
     EnvelopeFollower envL_, envR_;
     float gainSmooth_ = 0.0f;
+
+    // Most the low stage lifts anything by, as upward compressors cap their
+    // range; the tail of a reverb comes up, the noise floor does not.
+    static constexpr float kMaxLiftDb = 24.0f;
+    float peakHold_ = 0.0f;
+    float peakRelease_ = 0.999f;
 };

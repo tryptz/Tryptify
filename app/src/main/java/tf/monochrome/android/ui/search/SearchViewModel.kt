@@ -13,11 +13,13 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.repository.GenreGraphRepository
+import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.domain.model.GenreNode
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.domain.model.Album
@@ -27,8 +29,10 @@ import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.domain.usecase.SearchUnifiedLibraryUseCase
+import tf.monochrome.android.domain.usecase.toDeezerUnifiedTrack
 import tf.monochrome.android.domain.usecase.toQobuzUnifiedTrack
 import tf.monochrome.android.domain.usecase.toUnifiedTrack
+import tf.monochrome.android.R
 
 @HiltViewModel
 class SearchViewModel @Inject constructor(
@@ -36,6 +40,7 @@ class SearchViewModel @Inject constructor(
     private val unifiedLibrarySearch: SearchUnifiedLibraryUseCase,
     private val preferences: PreferencesManager,
     private val genreGraph: GenreGraphRepository,
+    libraryRepository: LibraryRepository,
 ) : ViewModel() {
 
     /**
@@ -67,20 +72,26 @@ class SearchViewModel @Inject constructor(
         private const val SOURCE_BOOST_API = 50
     }
 
-    enum class SearchTypeFilter(val label: String) {
-        ALL("All"),
-        TRACKS("Tracks"),
-        ALBUMS("Albums"),
-        ARTISTS("Artists"),
-        PLAYLISTS("Playlists")
+    enum class SearchTypeFilter(@androidx.annotation.StringRes val label: Int) {
+        ALL(R.string.filter_all),
+        TRACKS(R.string.filter_tracks),
+        ALBUMS(R.string.filter_albums),
+        ARTISTS(R.string.filter_artists),
+        PLAYLISTS(R.string.filter_playlists)
     }
 
-    enum class SearchSourceFilter(val label: String, val sourceType: SourceType?) {
-        ALL("All", null),
+    /** [label] is a brand name, shown as is; [labelRes] is for the entries that are words. */
+    enum class SearchSourceFilter(
+        val label: String,
+        val sourceType: SourceType?,
+        @androidx.annotation.StringRes val labelRes: Int? = null,
+    ) {
+        ALL("All", null, R.string.filter_all),
         TIDAL("TIDAL", SourceType.API),
         QOBUZ("Qobuz", SourceType.QOBUZ),
-        LOCAL("Local", SourceType.LOCAL),
-        COLLECTION("Collection", SourceType.COLLECTION)
+        DEEZER("Deezer", SourceType.DEEZER),
+        LOCAL("Local", SourceType.LOCAL, R.string.source_local),
+        COLLECTION("Collection", SourceType.COLLECTION, R.string.source_collection)
     }
 
     /** What the UI prefetch trigger is asking for more of. */
@@ -106,7 +117,7 @@ class SearchViewModel @Inject constructor(
     }
 
     /** Which catalogue a fetched page came from, so tracks map to the right id space. */
-    private enum class PageSource { TIDAL, QOBUZ }
+    private enum class PageSource(val sourceType: SourceType) { TIDAL(SourceType.API), QOBUZ(SourceType.QOBUZ) }
 
     private val tracksPage = PageState()
     private val albumsPage = PageState()
@@ -159,6 +170,31 @@ class SearchViewModel @Inject constructor(
     private val _allArtists = MutableStateFlow<List<Artist>>(emptyList())
     private val _allPlaylists = MutableStateFlow<List<Playlist>>(emptyList())
 
+    // Which catalog each album / artist result came from. Tracks carry their
+    // own sourceType; Album and Artist don't, and adding one to those models
+    // would reach every screen and every persisted copy for the sake of this
+    // one. Written before the matching list, so a filter never sees a result
+    // it can't place. First writer wins, matching the distinctBy that keeps
+    // the first of two results sharing an id.
+    private val _albumSources = MutableStateFlow<Map<Long, SourceType>>(emptyMap())
+    val albumSources: StateFlow<Map<Long, SourceType>> = _albumSources.asStateFlow()
+    private val _artistSources = MutableStateFlow<Map<Long, SourceType>>(emptyMap())
+    val artistSources: StateFlow<Map<Long, SourceType>> = _artistSources.asStateFlow()
+
+    private fun tagAlbums(items: List<Album>, source: SourceType) {
+        if (items.isEmpty()) return
+        _albumSources.value = _albumSources.value + items
+            .filterNot { it.id in _albumSources.value }
+            .associate { it.id to source }
+    }
+
+    private fun tagArtists(items: List<Artist>, source: SourceType) {
+        if (items.isEmpty()) return
+        _artistSources.value = _artistSources.value + items
+            .filterNot { it.id in _artistSources.value }
+            .associate { it.id to source }
+    }
+
     private val _selectedType = MutableStateFlow(SearchTypeFilter.ALL)
     val selectedType: StateFlow<SearchTypeFilter> = _selectedType.asStateFlow()
 
@@ -177,36 +213,67 @@ class SearchViewModel @Inject constructor(
     // keeping them would fire one Qobuz search per genre seed on every visit to
     // Home for rows nothing renders.
 
+    // Ids with a downloaded copy on disk. A downloaded track is a local track:
+    // StreamResolver already plays it from the file whichever catalog it came
+    // from, so the Local filter includes it and its pill says Local.
+    private val downloadedIds: StateFlow<Set<Long>> = libraryRepository.getDownloadedTracks()
+        .map { downloads -> downloads.mapTo(HashSet()) { it.id } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
     val tracks: StateFlow<List<UnifiedTrack>> = combine(
         _allTracks,
         _selectedType,
-        _selectedSource
-    ) { trackResults, type, source ->
+        _selectedSource,
+        downloadedIds,
+    ) { trackResults, type, source, downloaded ->
         if (type != SearchTypeFilter.ALL && type != SearchTypeFilter.TRACKS) {
             emptyList()
         } else if (source == SearchSourceFilter.ALL) {
             trackResults
         } else {
-            trackResults.filter { it.sourceType == source.sourceType }
+            trackResults.filter { track ->
+                val effective = if (track.legacyId in downloaded) SourceType.LOCAL else track.sourceType
+                effective == source.sourceType
+            }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val albums: StateFlow<List<Album>> = combine(_allAlbums, _selectedType) { albumResults, type ->
-        if (type == SearchTypeFilter.ALL || type == SearchTypeFilter.ALBUMS) albumResults else emptyList()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    val artists: StateFlow<List<Artist>> = combine(_allArtists, _selectedType) { artistResults, type ->
-        if (type == SearchTypeFilter.ALL || type == SearchTypeFilter.ARTISTS) artistResults else emptyList()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    val playlists: StateFlow<List<Playlist>> = combine(_allPlaylists, _selectedType) { playlistResults, type ->
-        if (type == SearchTypeFilter.ALL || type == SearchTypeFilter.PLAYLISTS) playlistResults else emptyList()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    val showSourceFilter: StateFlow<Boolean> = selectedType
-        .combine(query) { type, currentQuery ->
-            currentQuery.isNotBlank() && (type == SearchTypeFilter.ALL || type == SearchTypeFilter.TRACKS)
+    val albums: StateFlow<List<Album>> = combine(
+        _allAlbums, _selectedType, _selectedSource, _albumSources,
+    ) { albumResults, type, source, sources ->
+        when {
+            type != SearchTypeFilter.ALL && type != SearchTypeFilter.ALBUMS -> emptyList()
+            source == SearchSourceFilter.ALL -> albumResults
+            else -> albumResults.filter { sources[it.id] == source.sourceType }
         }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val artists: StateFlow<List<Artist>> = combine(
+        _allArtists, _selectedType, _selectedSource, _artistSources,
+    ) { artistResults, type, source, sources ->
+        when {
+            type != SearchTypeFilter.ALL && type != SearchTypeFilter.ARTISTS -> emptyList()
+            source == SearchSourceFilter.ALL -> artistResults
+            else -> artistResults.filter { sources[it.id] == source.sourceType }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // Playlists only ever come from TIDAL.
+    val playlists: StateFlow<List<Playlist>> = combine(
+        _allPlaylists, _selectedType, _selectedSource,
+    ) { playlistResults, type, source ->
+        when {
+            type != SearchTypeFilter.ALL && type != SearchTypeFilter.PLAYLISTS -> emptyList()
+            source == SearchSourceFilter.ALL || source == SearchSourceFilter.TIDAL -> playlistResults
+            else -> emptyList()
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // The source row sits under the type row for every type, now that albums
+    // and artists filter by source too. It used to vanish on Albums, Artists
+    // and Playlists, because only tracks knew where they came from.
+    val showSourceFilter: StateFlow<Boolean> = query
+        .map { it.isNotBlank() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     private var searchJob: Job? = null
@@ -270,16 +337,6 @@ class SearchViewModel @Inject constructor(
         _selectedSource.value = source
     }
 
-    /**
-     * The genre the current query names, if it names one.
-     *
-     * Exposed so the results screen can say what it understood the query to be
-     * — "dnb" silently becoming a drum & bass search is helpful; silently
-     * becoming one with no explanation is confusing.
-     */
-    private val _resolvedGenre = MutableStateFlow<GenreNode?>(null)
-    val resolvedGenre: StateFlow<GenreNode?> = _resolvedGenre.asStateFlow()
-
     private suspend fun performSearch(query: String) {
         _isSearching.value = true
         _searchError.value = false
@@ -289,43 +346,40 @@ class SearchViewModel @Inject constructor(
         // graph doesn't recognise — which is most queries, since most queries
         // are artists and titles.
         val genre = genreGraph.graph.resolve(query.trim())
-        _resolvedGenre.value = genre
         val trimmedQuery = genre?.queries()?.firstOrNull() ?: query.trim()
         // TIDAL, Qobuz, and the local/collection library all run in parallel.
         // Qobuz failures (instance unset, network error, schema mismatch) are
         // swallowed so the existing TIDAL flow keeps working unchanged.
+        var deezerSearch: tf.monochrome.android.domain.model.SearchResult? = null
         val (searchResult, qobuzResult, unifiedResultsResult) = coroutineScope {
-            // Source mode (Settings → Instances → Source) gates which
-            // catalogs we fan out to. *_ONLY modes restrict to one catalog;
-            // BOTH (default) runs TIDAL + Qobuz.
-            val sourceMode = preferences.sourceMode.first()
-            val apiDeferred = async {
-                if (sourceMode == tf.monochrome.android.data.preferences.SourceMode.QOBUZ_ONLY) {
-                    runCatching {
-                        Result.failure<tf.monochrome.android.domain.model.SearchResult>(
-                            IllegalStateException("TIDAL disabled by source mode")
-                        )
-                    }
-                } else {
-                    runCatching { repository.search(trimmedQuery) }
+            // Every catalog is asked; which ones answer is decided by the APIs
+            // under Settings › Connections. One no API serves comes back empty
+            // (or, for TIDAL, as a failure the branches below already treat as
+            // "TIDAL is down"), so there is nothing to choose between here.
+            val apiDeferred = async { runCatching { repository.search(trimmedQuery) } }
+            val qobuzDeferred = async {
+                withTimeoutOrNull(QOBUZ_BUDGET_MS) {
+                    runCatching { repository.searchQobuz(trimmedQuery) }
                 }
             }
-            val qobuzDeferred = async {
-                if (sourceMode == tf.monochrome.android.data.preferences.SourceMode.TIDAL_ONLY) {
-                    null
-                } else {
-                    withTimeoutOrNull(QOBUZ_BUDGET_MS) {
-                        runCatching { repository.searchQobuz(trimmedQuery) }
-                    }
+            // Deezer runs on the same time budget as Qobuz, and fails soft.
+            val deezerDeferred = async {
+                withTimeoutOrNull(QOBUZ_BUDGET_MS) {
+                    repository.searchDeezer(trimmedQuery).getOrNull()
                 }
             }
             val libraryDeferred = async { runCatching { unifiedLibrarySearch.search(trimmedQuery).first() } }
+            deezerSearch = deezerDeferred.await()
             Triple(apiDeferred.await(), qobuzDeferred.await(), libraryDeferred.await())
         }
         val unifiedResults = unifiedResultsResult.getOrNull()
 
         val qobuzAvailable = qobuzResult?.isSuccess == true
-        if (searchResult.isFailure && unifiedResults == null && !qobuzAvailable) {
+        val deezerTracks = deezerSearch?.tracks?.map { it.toDeezerUnifiedTrack() } ?: emptyList()
+        val deezerAlbums = deezerSearch?.albums ?: emptyList()
+        val deezerArtists = deezerSearch?.artists ?: emptyList()
+        val deezerHasResults = deezerTracks.isNotEmpty() || deezerAlbums.isNotEmpty() || deezerArtists.isNotEmpty()
+        if (searchResult.isFailure && unifiedResults == null && !qobuzAvailable && !deezerHasResults) {
             // Every backend failed (offline / all instances down). Distinguish
             // this from a successful-but-empty search so the UI can offer a
             // retry instead of a flat "No results found".
@@ -351,21 +405,32 @@ class SearchViewModel @Inject constructor(
         // it returns a Result.failure and the screen renders an error
         // (handled, not a crash).
 
+        // A new query's results are tagged afresh; the previous query's tags
+        // would otherwise win first-writer for an id that changed catalog.
+        _albumSources.value = emptyMap()
+        _artistSources.value = emptyMap()
         if (searchResult.getOrNull()?.isSuccess == true) {
             val result = searchResult.getOrThrow().getOrThrow()
             _allTracks.value = scoreTracks(
                 query = trimmedQuery,
                 tracks = localAndCollectionTracks +
                     result.tracks.map { it.toUnifiedTrack() } +
-                    qobuzTracks
+                    qobuzTracks +
+                    deezerTracks
             )
+            tagAlbums(result.albums, SourceType.API)
+            tagAlbums(qobuzAlbums, SourceType.QOBUZ)
+            tagAlbums(deezerAlbums, SourceType.DEEZER)
+            tagArtists(result.artists, SourceType.API)
+            tagArtists(qobuzArtists, SourceType.QOBUZ)
+            tagArtists(deezerArtists, SourceType.DEEZER)
             _allAlbums.value = scoreItems(
                 trimmedQuery,
-                (result.albums + qobuzAlbums).distinctBy { it.id },
+                (result.albums + qobuzAlbums + deezerAlbums).distinctBy { it.id },
             ) { listOf(it.title, it.displayArtist) }
             _allArtists.value = scoreItems(
                 trimmedQuery,
-                (result.artists + qobuzArtists).distinctBy { it.id },
+                (result.artists + qobuzArtists + deezerArtists).distinctBy { it.id },
             ) { listOf(it.name) }
             _allPlaylists.value = scoreItems(trimmedQuery, result.playlists) {
                 listOfNotNull(it.title, it.creator?.name, it.description)
@@ -383,15 +448,19 @@ class SearchViewModel @Inject constructor(
             // doesn't feel broken when the public TIDAL pool is unreachable.
             _allTracks.value = scoreTracks(
                 query = trimmedQuery,
-                tracks = localAndCollectionTracks + qobuzTracks
+                tracks = localAndCollectionTracks + qobuzTracks + deezerTracks
             )
-            _allAlbums.value = scoreItems(trimmedQuery, qobuzAlbums.distinctBy { it.id }) { listOf(it.title, it.displayArtist) }
-            _allArtists.value = scoreItems(trimmedQuery, qobuzArtists.distinctBy { it.id }) { listOf(it.name) }
+            tagAlbums(qobuzAlbums, SourceType.QOBUZ)
+            tagAlbums(deezerAlbums, SourceType.DEEZER)
+            tagArtists(qobuzArtists, SourceType.QOBUZ)
+            tagArtists(deezerArtists, SourceType.DEEZER)
+            _allAlbums.value = scoreItems(trimmedQuery, (qobuzAlbums + deezerAlbums).distinctBy { it.id }) { listOf(it.title, it.displayArtist) }
+            _allArtists.value = scoreItems(trimmedQuery, (qobuzArtists + deezerArtists).distinctBy { it.id }) { listOf(it.name) }
             _allPlaylists.value = emptyList()
             // TIDAL failed → mark its end on every type so loadMore won't retry.
-            // This is also the path a QOBUZ_ONLY search takes: the TIDAL
-            // deferred returns a failure rather than being skipped, so tidalEnd
-            // lands here and paging never asks TIDAL for a page 2.
+            // This is also the path a setup with no TIDAL API takes: the TIDAL
+            // search fails rather than being skipped, so tidalEnd lands here and
+            // paging never asks TIDAL for a page 2.
             tracksPage.tidalEnd = true; albumsPage.tidalEnd = true
             artistsPage.tidalEnd = true; playlistsPage.tidalEnd = true
             seedPageEnd(tracksPage,    /*tidal=*/0, qobuzTracks.size,  qobuzAvailable)
@@ -532,6 +601,7 @@ class SearchViewModel @Inject constructor(
             }
             SearchPageType.ALBUMS -> {
                 @Suppress("UNCHECKED_CAST")
+                tagAlbums(items as List<Album>, source.sourceType)
                 val existing = _allAlbums.value
                 val seen = existing.mapTo(HashSet()) { it.id }
                 val fresh = scoreItems(q, (items as List<Album>).distinctBy { it.id }) {
@@ -541,6 +611,7 @@ class SearchViewModel @Inject constructor(
             }
             SearchPageType.ARTISTS -> {
                 @Suppress("UNCHECKED_CAST")
+                tagArtists(items as List<Artist>, source.sourceType)
                 val existing = _allArtists.value
                 val seen = existing.mapTo(HashSet()) { it.id }
                 val fresh = scoreItems(q, (items as List<Artist>).distinctBy { it.id }) {
@@ -561,6 +632,8 @@ class SearchViewModel @Inject constructor(
     }
 
     private fun clearResults() {
+        _albumSources.value = emptyMap()
+        _artistSources.value = emptyMap()
         _allTracks.value = emptyList()
         _allAlbums.value = emptyList()
         _allArtists.value = emptyList()
@@ -604,6 +677,9 @@ class SearchViewModel @Inject constructor(
         SourceType.QOBUZ -> SOURCE_BOOST_API - 5
         // Apple Music (via the instance); rank just below Qobuz.
         SourceType.APPLE -> SOURCE_BOOST_API - 6
+        // Deezer is a preview catalog until a pick is matched to Qobuz, so it
+        // ranks under both streaming catalogs for the same query.
+        SourceType.DEEZER -> SOURCE_BOOST_API - 7
         // Live radio never reaches search — stations are found on the globe, by
         // place rather than by name — so it has no ranking to earn.
         SourceType.LIVE_RADIO -> 0

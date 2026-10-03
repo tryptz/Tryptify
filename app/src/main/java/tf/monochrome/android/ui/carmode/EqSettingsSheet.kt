@@ -24,6 +24,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 @Composable
 fun EqSettingsSheet(
@@ -46,13 +48,13 @@ fun EqSettingsSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "EQ Settings",
+                    stringResource(R.string.eq_settings),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     fontSize = 20.sp
                 )
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, "Close")
+                    Icon(Icons.Default.Close, stringResource(R.string.action_close))
                 }
             }
 
@@ -60,7 +62,7 @@ fun EqSettingsSheet(
 
             // Band count slider
             Text(
-                "Number of Bands",
+                stringResource(R.string.number_of_bands),
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold
             )
@@ -90,12 +92,12 @@ fun EqSettingsSheet(
 
             // Info text
             Text(
-                "Frequency range: 20 Hz - 20,000 Hz",
+                stringResource(R.string.frequency_range_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                "Higher band count = more precise EQ control",
+                stringResource(R.string.band_count_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

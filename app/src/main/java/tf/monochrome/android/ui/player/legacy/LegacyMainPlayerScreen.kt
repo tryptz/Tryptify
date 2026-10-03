@@ -63,6 +63,8 @@ import tf.monochrome.android.ui.player.DynamicAlbumGlow
 import tf.monochrome.android.ui.player.MainPlayerUiState
 import tf.monochrome.android.ui.player.PlayerDesignTokens
 import tf.monochrome.android.ui.player.dynamicPlayerBackground
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 // Vertical drag distance (px) that commits a swipe-up / swipe-down on the
 // audio-tools panel.
@@ -359,7 +361,7 @@ private fun SwipeUpHandle(onClick: () -> Unit) {
                 modifier = Modifier.size(16.dp),
             )
             Text(
-                text = "Audio tools",
+                text = stringResource(R.string.audio_tools),
                 style = MaterialTheme.typography.labelMedium,
                 color = Color.White.copy(alpha = 0.55f),
             )
@@ -433,11 +435,11 @@ private fun StatusOverlayPanel(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                OverlayAction(Icons.Default.Animation, "Visualizer", accent, state.visualizerActive, onVisualizer)
-                OverlayAction(Icons.Default.GraphicEq, "Waveform", accent, state.waveformActive, onWaveform)
+                OverlayAction(Icons.Default.Animation, stringResource(R.string.visualizer), accent, state.visualizerActive, onVisualizer)
+                OverlayAction(Icons.Default.GraphicEq, stringResource(R.string.waveform), accent, state.waveformActive, onWaveform)
                 OverlayAction(
                     Icons.Default.Lyrics,
-                    "Lyrics",
+                    stringResource(R.string.mode_lyrics),
                     accent,
                     state.viewMode == NowPlayingViewMode.LYRICS,
                     onLyrics,
@@ -445,10 +447,10 @@ private fun StatusOverlayPanel(
             }
 
             // Effects toggles
-            ToggleRow("Compressor", "Oxford dynamics", state.compressorEnabled, accent, onCompressorToggle)
-            ToggleRow("Inflator", "Oxford loudness", state.inflatorEnabled, accent, onInflatorToggle)
-            ToggleRow("Crossfeed", "Headphone stage", state.crossfeedEnabled, accent, onCrossfeedToggle)
-            ToggleRow("AutoEQ", "Headphone correction", state.autoEqEnabled, accent, onAutoEqToggle)
+            ToggleRow(stringResource(R.string.compressor), stringResource(R.string.legacy_oxford_dynamics), state.compressorEnabled, accent, onCompressorToggle)
+            ToggleRow("Inflator", stringResource(R.string.legacy_oxford_loudness), state.inflatorEnabled, accent, onInflatorToggle)
+            ToggleRow(stringResource(R.string.crossfeed), stringResource(R.string.legacy_headphone_stage), state.crossfeedEnabled, accent, onCrossfeedToggle)
+            ToggleRow("AutoEQ", stringResource(R.string.legacy_headphone_correction), state.autoEqEnabled, accent, onAutoEqToggle)
         }
     }
 }
@@ -539,14 +541,14 @@ private fun PlayerTrackInfo(
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                text = track?.title ?: "No track playing",
+                text = track?.title ?: stringResource(R.string.no_track_playing),
                 style = MaterialTheme.typography.titleLarge,
                 color = Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = track?.displayArtist?.ifBlank { "Unknown" } ?: "Unknown",
+                text = track?.displayArtist?.ifBlank { stringResource(R.string.unknown) } ?: stringResource(R.string.unknown),
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color.White.copy(alpha = 0.6f),
                 maxLines = 1,
@@ -558,11 +560,16 @@ private fun PlayerTrackInfo(
                     onClick = onArtistClick,
                 ),
             )
+            // Where it plays from, and "via" when that is another service
+            // or the device — the same tag as the current player.
+            tf.monochrome.android.ui.components.LocalPlayerSource.current?.let { (picked, via) ->
+                tf.monochrome.android.ui.components.PlayerSourceTag(source = picked, via = via)
+            }
         }
         IconButton(onClick = onToggleLike) {
             Icon(
                 imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                contentDescription = if (isLiked) "Unlike" else "Like",
+                contentDescription = if (isLiked) stringResource(R.string.action_unlike) else stringResource(R.string.action_like),
                 tint = if (isLiked) accent else Color.White,
             )
         }

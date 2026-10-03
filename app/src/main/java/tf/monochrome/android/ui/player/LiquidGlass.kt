@@ -275,83 +275,6 @@ private fun liquidGlassModifier(
 }
 
 /**
- * The SAME refractive lyric glass ([LIQUID_GLASS_SRC]), applied to a solid PANEL
- * surface (the player's dock / sheet) instead of glyphs — so the player chrome
- * reads as the exact liquid glass the active lyric line does, not a flat frost.
- *
- * Apply it to a Box that already has a rounded, translucent fill: the shader
- * bevels that fill's edges into a lit, tilt-reactive refractive rim (with
- * chromatic dispersion) over a see-through, album-tinted body. Place it BEHIND
- * the panel's content so the buttons and labels sitting on the glass stay crisp
- * and untouched.
- *
- * Unlike [liquidGlass] it is NOT gated on the lyric-FX toggle (player chrome is
- * always glass) and is tuned for a panel: a more present body and a stronger
- * rim. Requires API 33; a no-op (plain fill) below that or on shader failure.
- */
-@Composable
-internal fun Modifier.liquidGlassPanel(tint: Color): Modifier {
-    if (LocalLowPerformance.current.disableLiquidGlass) return this
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
-    return this.then(liquidGlassPanelModifier(tint))
-}
-
-@RequiresApi(Build.VERSION_CODES.TIRAMISU)
-@Composable
-private fun liquidGlassPanelModifier(tint: Color): Modifier {
-    val shader = remember { runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() } ?: return Modifier
-    val timeSec = rememberFrameSeconds()
-    val tilt = rememberGravityTilt()
-    val backdrop = LocalPlayerBackdrop.current
-    val anchor = rememberBackdropAnchor()
-    val scrim = remember(backdrop.dominant) { backdropScrimTone(backdrop.dominant) }
-    return Modifier.backdropAnchor(anchor).graphicsLayer {
-        if (size.minDimension > 0f) {
-            shader.setFloatUniform("uSize", size.width, size.height)
-            shader.setFloatUniform("uTime", timeSec.value)
-            shader.setFloatUniform("uTilt", tilt.value.x, tilt.value.y)
-            shader.setFloatUniform("uTint", tint.red, tint.green, tint.blue)
-            shader.setFloatUniform("uTint2", tint.red, tint.green, tint.blue)
-            shader.setFloatUniform("uBackdropMix", 0f)
-            // uBackdropMix stays 0 — the panel's flat tint reconstruction is
-            // deliberate — but the real cover still lenses through it when one
-            // is behind the panel, which is the whole point of the sampler.
-            shader.bindBackdropArt(
-                art = backdrop.art,
-                fit = backdrop.fit,
-                scrim = scrim,
-                anchor = anchor.rect,
-                paneW = size.width,
-                paneH = size.height,
-            )
-            // Panel tuning: a body that stays fairly present (a panel, not a
-            // glyph), with a strong lit rim and gentle edge refraction.
-            shader.setFloatUniform("uBodyOpacity", 0.82f)
-            shader.setFloatUniform("uRefraction", 0.10f)
-            shader.setFloatUniform("uRimGain", 1.30f)
-            shader.setFloatUniform("uDispersion", 1.0f)
-            shader.setFloatUniform("uSampleRings", 2f)
-            shader.setFloatUniform("uRoundness", 1f)
-            shader.setFloatUniform("uDepth", 1f)
-            shader.setFloatUniform("uLiquid", 1f)
-            // Panel keeps the neutral relight parameters.
-            shader.setFloatUniform("uReflection", 1f)
-            shader.setFloatUniform("uGloss", 90f)
-            shader.setFloatUniform("uTiltAmount", 0.7f)
-            shader.setFloatUniform("uLightAngle", 2.3561945f)   // 135°
-            shader.setFloatUniform("uFresnelPower", 5f)
-            shader.setFloatUniform("uFrost", 0f)
-            shader.setFloatUniform("uBulge", 0.5f, 0.5f)
-            shader.setFloatUniform("uBulgeAmt", 0f)
-            shader.setFloatUniform("uBulgeR", 0f)
-            renderEffect = RenderEffect
-                .createRuntimeShaderEffect(shader, "content")
-                .asComposeRenderEffect()
-        }
-    }
-}
-
-/**
  * Player-chrome glass settings (the transport buttons), provided at the player
  * route from the persisted [tf.monochrome.android.domain.model.PlayerGlassSettings].
  */
@@ -379,13 +302,25 @@ val LocalPlayerGlass = compositionLocalOf { tf.monochrome.android.domain.model.P
  */
 @Composable
 fun rememberLiquidGlassAvailable(): Boolean {
-    val compiles = remember {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() != null
-    }
+    val compiles = remember { liquidGlassCompiles }
     val flat = LocalLowPerformance.current.disableLiquidGlass
     val enabled = LocalPlayerGlass.current.enabled
     return compiles && !flat && enabled
+}
+
+/**
+ * Whether [LIQUID_GLASS_SRC] compiles on this device, asked once per process.
+ *
+ * The answer cannot change while the process lives — same source, same OS, same
+ * driver — but it used to be asked by every caller as it composed: the mini
+ * player, the tab bar, every glass panel and mixer strip, each building and
+ * throwing away a whole RuntimeShader on the main thread to get a yes. That is
+ * a full SkSL parse of the largest shader in the app per call site, landing on
+ * exactly the frames where a screen is being built.
+ */
+private val liquidGlassCompiles: Boolean by lazy {
+    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() != null
 }
 
 /**
@@ -560,11 +495,17 @@ internal fun Modifier.playerGlass(
      * sixth of the width on a full-width sheet is a dimple nobody can see.
      */
     bulgeRadiusFraction: Float = 0f,
+    /**
+     * The box the backdrop art is drawn across, when that is not the window —
+     * glass lying on the hero cover rather than on the blurred background.
+     * Recorded with [backdropFrame]; null keeps the window-wide mapping.
+     */
+    artFrame: BackdropAnchor? = null,
 ): Modifier {
     val g = LocalPlayerGlass.current
     if (LocalLowPerformance.current.disableLiquidGlass) return this
     if (!g.enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
-    return this.then(playerGlassModifier(tint, g, bulgeCenter, bulgeAmount, bulgeRadiusFraction))
+    return this.then(playerGlassModifier(tint, g, bulgeCenter, bulgeAmount, bulgeRadiusFraction, artFrame))
 }
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -575,6 +516,7 @@ private fun playerGlassModifier(
     bulgeCenter: Offset,
     bulgeAmount: () -> Float,
     bulgeRadiusFraction: Float,
+    artFrame: BackdropAnchor?,
 ): Modifier {
     val shader = remember { runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() } ?: return Modifier
     // Unlike the lyric glass and the panel, which pin uLiquid to 1, this
@@ -583,7 +525,16 @@ private fun playerGlassModifier(
     // has no reason to drive a clock. This is the mini player, mounted app-wide
     // by the nav host, so the gate reaches every screen.
     val timeSec = rememberFrameSeconds(animated = g.surfaceMotion > 0f)
-    val tilt = rememberGravityTilt()
+    // The same argument for the sensor. Every uTilt term in the shader is
+    // multiplied by uTiltAmount, and tilt reactivity defaults to zero, so at
+    // the default this surface's pixels do not depend on the phone's attitude
+    // at all — yet holding the listener kept a 50Hz gravity sensor running
+    // app-wide (this is the mini player, the tab bar and every search bar)
+    // and wrote a new tilt into this layer on each event, redrawing it ~50
+    // times a second even with surface motion at zero. The surfaces that do
+    // read tilt — the lyric glass, the panel, a non-zero reactivity here —
+    // still acquire it, and they share the one listener as before.
+    val tilt = if (g.tiltReactivity > 0f) rememberGravityTilt() else NoTilt
     val backdrop = LocalPlayerBackdrop.current
     val anchor = rememberBackdropAnchor()
     val scrim = remember(backdrop.dominant) { backdropScrimTone(backdrop.dominant) }
@@ -602,7 +553,7 @@ private fun playerGlassModifier(
                 art = backdrop.art,
                 fit = backdrop.fit,
                 scrim = scrim,
-                anchor = anchor.rect,
+                anchor = if (artFrame != null) anchorInFrame(anchor.rect, artFrame.rect) else anchor.rect,
                 paneW = size.width,
                 paneH = size.height,
             )
@@ -647,6 +598,9 @@ private fun playerGlassModifier(
         }
     }
 }
+
+/** A tilt that never changes, for a surface whose shader would ignore it anyway. */
+private val NoTilt: State<Offset> = mutableStateOf(Offset.Zero)
 
 /**
  * Low-pass-filtered gravity in [-1, 1] per axis; Offset.Zero if no sensor.

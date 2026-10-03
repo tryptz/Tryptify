@@ -289,10 +289,6 @@ class WorldRadioViewModel @Inject constructor(
         viewModelScope.launch { _nearby.value = repository.nearby(city) }
     }
 
-    fun selectById(cityId: String) {
-        select(_globe.value.cities.firstOrNull { it.id == cityId })
-    }
-
     fun toggleFavourite(station: RadioStation) {
         viewModelScope.launch { preferences.toggleFavouriteStation(station.uuid) }
     }

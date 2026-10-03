@@ -89,6 +89,8 @@ Use for DSP, Atmos/spatial processing, equalization, loudness, normalization, na
 - Parameter updates crossing threads must be atomic, lock-free, or safely handed off outside the realtime callback.
 - Bypass and fallback paths must remain audible and safe when a feature is unavailable.
 - DSP changes must not silently alter gain, clipping behavior, latency, or channel layout.
+- The DSP library builds with `-ffast-math -fno-exceptions`. Under the first, `std::isfinite` may compile to `true`: test finiteness with `dspIsFinite`/`dspAllFinite` (`dsp/util/finite.h`), which read the bits. Under the second, a throw is an abort: parse with `strtof`, never `stof`.
+- An oversampled effect delays its output by `latency()` samples. The engine aligns the dry blend and the other buses to it; anything new that mixes an oversampled path with an unoversampled one must do the same, or it comb-filters.
 
 ### Workflow
 
@@ -105,6 +107,7 @@ Use for DSP, Atmos/spatial processing, equalization, loudness, normalization, na
 - Bypass output is verified.
 - No new realtime allocation or blocking path is introduced.
 - Native tests are discoverable and executable, not merely present as source files.
+- `dsp/tests/run_host_tests.sh` passes, including `engine_stress_test` under ASan/UBSan (with `-ffast-math`, as on the phone) and its chaos run under TSan. A new effect gets swept automatically once `snapin_ranges.csv` carries its parameters.
 - The change documents any measurable latency or gain impact.
 
 ## Playbook: Playback Routing
@@ -298,7 +301,7 @@ serve. Neither is an indexing problem; both are "return fewer rows" problems
 
 **Build-toolchain migration debt.** `gradle.properties` carries `android.builtInKotlin=false` and `android.newDsl=false` against AGP 9.0.0 with Kotlin 2.1.0 / KSP 2.1.0-1.0.29 / Hilt 2.57.1, alongside Media3 1.5.1 and Ktor 3.0.3. These opt-outs are deliberate and load-bearing today; they are also the thing that has to be resolved rather than deleted.
 
-**Keep rules are package-wide, and one of them keeps nothing at all.** `app/proguard-rules.pro` holds `-keep class io.ktor.** { *; }` and `-keep class androidx.media3.** { *; }`, which keep two large dependencies whole rather than keeping their reflective and serialized entry points. It also holds `-keep class io.appwrite.** { *; }` while there is no Appwrite dependency in `app/build.gradle.kts` or `gradle/libs.versions.toml` — the only surviving references are prose comments in `MainActivity.kt` and `PocketBaseClient.kt` describing OAuth history, so that rule matches nothing. Narrowing the first two needs release-build evidence; dropping the third needs only a check that no serialized name still depends on it.
+**Keep rules are package-wide, and one of them keeps nothing at all.** `app/proguard-rules.pro` holds `-keep class io.ktor.** { *; }` and `-keep class androidx.media3.** { *; }`, which keep two large dependencies whole rather than keeping their reflective and serialized entry points. It also holds `-keep class io.appwrite.** { *; }` while there is no Appwrite dependency in `app/build.gradle.kts` or `gradle/libs.versions.toml` — the only surviving reference is a prose comment in `MainActivity.kt` describing OAuth history, so that rule matches nothing. Narrowing the first two needs release-build evidence; dropping the third needs only a check that no serialized name still depends on it.
 
 **Exported surfaces and cleartext are unreviewed.** `AndroidManifest.xml` declares `android:usesCleartextTraffic="true"` application-wide and five components with `android:exported="true"` (one activity, two services, two receivers). Each needs its caller assumptions checked, and the cleartext allowance is a candidate for a scoped `networkSecurityConfig`.
 

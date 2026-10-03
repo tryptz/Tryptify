@@ -29,12 +29,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.draw.alpha
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -60,6 +62,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.hazeSource
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.foundation.lazy.rememberLazyListState
 import dev.chrisbanes.haze.rememberHazeState
 import tf.monochrome.android.domain.model.VisualizerPreset
 import tf.monochrome.android.ui.components.GlassPanel
@@ -69,6 +73,9 @@ import tf.monochrome.android.ui.components.rememberGlassPress
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.visualizer.VisualizerPresetIndex
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 /**
  * Where the browser is looking. A path, not a filter, so Back walks it.
@@ -85,7 +92,10 @@ private sealed interface PresetScope {
     data object Favorites : PresetScope
 }
 
-private enum class BrowseAxis(val label: String) { Category("Category"), Author("Author") }
+private enum class BrowseAxis(@androidx.annotation.StringRes val label: Int) {
+    Category(R.string.browse_by_category),
+    Author(R.string.browse_by_author),
+}
 
 /**
  * The preset browser, drawn in the player's own window.
@@ -118,10 +128,26 @@ fun BoxScope.VisualizerPresetPanel(
     presets: List<VisualizerPreset>,
     selectedPresetId: String?,
     favoritePresetIds: Set<String> = emptySet(),
+    /** Presets that crash the visualizer: shown, marked, and not selectable. */
+    flaggedPresetIds: Set<String> = emptySet(),
     onPresetSelected: (VisualizerPreset) -> Unit,
     onToggleFavorite: (String) -> Unit = {},
-    onSettingsClick: () -> Unit,
+    /** The header's gear; null hides it, for a browser already inside Settings. */
+    onSettingsClick: (() -> Unit)?,
     onDismiss: () -> Unit,
+    /**
+     * What the sheet frosts. The player's source by default; a screen that
+     * hosts the browser elsewhere passes its own, from a source this panel is a
+     * sibling of — never one it is drawn inside (see docs/ui-invariants.md).
+     */
+    hazeState: dev.chrisbanes.haze.HazeState? = LocalPlayerHaze.current,
+    title: String = stringResource(R.string.visualizer_presets_title),
+    /**
+     * A row above everything for "no preset chosen", for a setting where null
+     * means something — Settings' default preset, where it means "let the app
+     * pick". Selected while [selectedPresetId] is null.
+     */
+    autoOption: PresetAutoOption? = null,
 ) {
     var query by remember { mutableStateOf("") }
     var axis by remember { mutableStateOf(BrowseAxis.Category) }
@@ -169,6 +195,14 @@ fun BoxScope.VisualizerPresetPanel(
     }
 
     val searching = query.isNotBlank()
+
+    // Every level starts at its top. One list is reused for all of them, so
+    // without this, opening a category from halfway down the category list
+    // landed halfway down the presets — on rows the listener never scrolled
+    // to, with the first ones out of sight above.
+    val listState = rememberLazyListState()
+    LaunchedEffect(scope, axis, searching) { listState.scrollToItem(0) }
+
     // Keyed on the favourites only where they are consulted. Otherwise one
     // heart tap produced a new Set, invalidated this, and re-filtered all nine
     // thousand seven hundred while the listener was standing in a Category, an
@@ -204,7 +238,7 @@ fun BoxScope.VisualizerPresetPanel(
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClickLabel = "Dismiss",
+                    onClickLabel = stringResource(R.string.action_dismiss),
                     onClick = onDismiss,
                 ),
         )
@@ -217,13 +251,14 @@ fun BoxScope.VisualizerPresetPanel(
         modifier = Modifier.align(Alignment.BottomCenter),
     ) {
         GlassPanel(
-            hazeState = LocalPlayerHaze.current,
+            hazeState = hazeState,
             glass = LocalMiniPlayerGlass.current,
             modifier = Modifier.fillMaxHeight(0.88f),
             avoidNavigationBar = false,
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 PresetBrowserHeader(
+                    rootTitle = title,
                     index = index,
                     scope = scope,
                     searching = searching,
@@ -235,9 +270,11 @@ fun BoxScope.VisualizerPresetPanel(
                             else -> PresetScope.Roots
                         }
                     },
-                    onSettingsClick = {
-                        onDismiss()
-                        onSettingsClick()
+                    onSettingsClick = onSettingsClick?.let { open ->
+                        {
+                            onDismiss()
+                            open()
+                        }
                     },
                 )
 
@@ -252,6 +289,7 @@ fun BoxScope.VisualizerPresetPanel(
                     val haze = rememberHazeState()
 
                     LazyColumn(
+                        state = listState,
                         modifier = Modifier
                             .fillMaxSize()
                             .hazeSource(haze),
@@ -268,9 +306,44 @@ fun BoxScope.VisualizerPresetPanel(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         if (!searching && scope == PresetScope.Roots) {
+                            if (autoOption != null) {
+                                item(key = "auto") {
+                                    PresetAutoRow(
+                                        option = autoOption,
+                                        selected = selectedPresetId == null,
+                                        onClick = {
+                                            autoOption.onSelect()
+                                            onDismiss()
+                                        },
+                                    )
+                                }
+                            }
+                            val current = selectedPresetId?.let { id -> index.presets.firstOrNull { it.id == id } }
+                            if (current != null) {
+                                item(key = "current") {
+                                    CurrentPresetCard(
+                                        title = index.titleOf(current),
+                                        where = subtitleFor(index, current, PresetScope.Roots),
+                                        // Straight to its drawer, so its
+                                        // neighbours are one glance away.
+                                        onClick = {
+                                            val category = current.tags.getOrNull(0)
+                                                ?.let { tag -> index.categories.firstOrNull { it.id == tag.id } }
+                                            val sub = current.tags.getOrNull(1)?.let { tag ->
+                                                category?.let { c -> index.subcategoriesOf(c.id).firstOrNull { it.id == tag.id } }
+                                            }
+                                            scope = when {
+                                                category != null && sub != null -> PresetScope.Sub(category, sub)
+                                                category != null -> PresetScope.Category(category)
+                                                else -> scope
+                                            }
+                                        },
+                                    )
+                                }
+                            }
                             item {
                                 FacetRow(
-                                    label = "Favourites",
+                                    label = stringResource(R.string.favourites),
                                     count = favoritePresetIds.size,
                                     onClick = { scope = PresetScope.Favorites },
                                 )
@@ -304,16 +377,38 @@ fun BoxScope.VisualizerPresetPanel(
                                 )
                             }
                         } else {
+                            if (visiblePresets.isEmpty()) {
+                                item(key = "empty") {
+                                    EmptyPresetList(
+                                        when {
+                                            searching -> stringResource(R.string.presets_no_match, query.trim(), index.presets.size)
+                                            scope is PresetScope.Favorites ->
+                                                stringResource(R.string.favourites_empty)
+                                            else -> stringResource(R.string.nothing_here)
+                                        },
+                                    )
+                                }
+                            }
                             items(visiblePresets, key = { it.id }) { preset ->
+                                val flagged = preset.id in flaggedPresetIds
                                 VisualizerPresetRow(
                                     preset = preset,
                                     title = index.titleOf(preset),
-                                    subtitle = subtitleFor(index, preset, scope),
+                                    subtitle = if (flagged) {
+                                        stringResource(R.string.preset_flagged_crashes)
+                                    } else {
+                                        subtitleFor(index, preset, scope)
+                                    },
                                     selected = preset.id == selectedPresetId,
                                     isFavorite = preset.id in favoritePresetIds,
+                                    flagged = flagged,
                                     onClick = {
-                                        onPresetSelected(preset)
-                                        onDismiss()
+                                        // Not loaded, and the sheet stays open:
+                                        // closing it would read as "it worked".
+                                        if (!flagged) {
+                                            onPresetSelected(preset)
+                                            onDismiss()
+                                        }
                                     },
                                     onToggleFavorite = { onToggleFavorite(preset.id) },
                                 )
@@ -324,7 +419,7 @@ fun BoxScope.VisualizerPresetPanel(
                     GlassSearchBar(
                         query = query,
                         onQueryChange = { query = it },
-                        placeholder = "Search ${index.presets.size} presets",
+                        placeholder = pluralStringResource(R.plurals.presets_search_hint, index.presets.size, index.presets.size),
                         hazeState = haze,
                         // Permanent chrome of this panel, so the trailing
                         // button has nothing to dismiss once the field is
@@ -359,7 +454,7 @@ fun BoxScope.VisualizerPresetPanel(
                                             index = i,
                                             count = BrowseAxis.entries.size,
                                         ),
-                                        label = { Text(option.label, maxLines = 1) },
+                                        label = { Text(stringResource(option.label), maxLines = 1) },
                                     )
                                 }
                             }
@@ -371,7 +466,112 @@ fun BoxScope.VisualizerPresetPanel(
     }
 }
 
+/** A "no particular preset" choice, for a setting where that means something. */
+class PresetAutoOption(
+    val label: String,
+    val description: String,
+    val onSelect: () -> Unit,
+)
+
+@Composable
+private fun PresetAutoRow(option: PresetAutoOption, selected: Boolean, onClick: () -> Unit) {
+    PresetCard(selected = selected, onClick = onClick) {
+        Icon(
+            Icons.Default.AutoAwesome,
+            contentDescription = null,
+            tint = if (selected) MaterialTheme.colorScheme.primary else LocalContentColor.current.copy(alpha = 0.7f),
+            modifier = Modifier.size(22.dp),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(option.label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                option.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = LocalContentColor.current.copy(alpha = 0.7f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (selected) Icon(Icons.Default.Check, contentDescription = stringResource(R.string.state_selected), tint = MaterialTheme.colorScheme.primary)
+    }
+}
+
+/**
+ * The preset that is chosen now, at the top of the roots, so the answer to
+ * "what is it set to?" is not nine thousand rows away. A tap opens its drawer.
+ */
+@Composable
+private fun CurrentPresetCard(title: String, where: String, onClick: () -> Unit) {
+    PresetCard(selected = true, onClick = onClick) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                stringResource(R.string.current),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                where,
+                style = MaterialTheme.typography.bodySmall,
+                color = LocalContentColor.current.copy(alpha = 0.7f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = stringResource(R.string.show_its_group),
+            tint = LocalContentColor.current.copy(alpha = 0.7f),
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+/** The rows' shared card: the same shape, fill and rim as a preset row. */
+@Composable
+private fun PresetCard(
+    selected: Boolean,
+    onClick: () -> Unit,
+    content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassSqueeze(press = rememberGlassPress(), onClick = onClick),
+        shape = RoundedCornerShape(20.dp),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(
+            width = MonoDimens.glassBorderWidth,
+            color = if (selected) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+            } else {
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+            },
+        ),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun EmptyPresetList(message: String) {
+    Text(
+        message,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 24.dp),
+    )
+}
+
 /** Where the preset sits, which is what the row's second line is for. */
+@Composable
 private fun subtitleFor(
     index: VisualizerPresetIndex,
     preset: VisualizerPreset,
@@ -382,7 +582,7 @@ private fun subtitleFor(
     val place = preset.tags.joinToString(" · ") { it.label }
     val author = credits.firstOrNull()?.let(index::authorLabel)
     return listOfNotNull(author, place.takeIf { it.isNotBlank() }).joinToString(" · ")
-        .ifBlank { "Uncategorised" }
+        .ifBlank { stringResource(R.string.uncategorised) }
 }
 
 /**
@@ -394,32 +594,40 @@ private fun subtitleFor(
  */
 @Composable
 private fun PresetBrowserHeader(
+    rootTitle: String,
     index: VisualizerPresetIndex,
     scope: PresetScope,
     searching: Boolean,
     matches: Int,
     favorites: Int,
     onUp: () -> Unit,
-    onSettingsClick: () -> Unit,
+    onSettingsClick: (() -> Unit)?,
 ) {
     val atRoot = scope == PresetScope.Roots && !searching
     val title = when {
-        searching -> "Search"
-        scope is PresetScope.Favorites -> "Favourites"
+        searching -> stringResource(R.string.tab_search)
+        scope is PresetScope.Favorites -> stringResource(R.string.favourites)
         scope is PresetScope.Author -> scope.facet.label
         scope is PresetScope.Sub -> scope.facet.label
         scope is PresetScope.Category -> scope.facet.label
-        else -> "Visualizer Presets"
+        else -> rootTitle
     }
     val detail = when {
-        searching -> "$matches of ${index.presets.size}"
+        searching -> stringResource(R.string.matches_of_total, matches, index.presets.size)
         scope is PresetScope.Roots ->
-            "${index.presets.size} presets · ${index.categories.size} categories · " +
-                "${index.authors.size} authors · $favorites favourites"
-        scope is PresetScope.Category -> "${scope.facet.count} presets in " +
-            "${index.subcategoriesOf(scope.facet.id).size} groups"
-        scope is PresetScope.Sub -> "${scope.category.label} · $matches presets"
-        else -> "$matches presets"
+            listOf(
+                pluralStringResource(R.plurals.presets_count, index.presets.size, index.presets.size),
+                pluralStringResource(R.plurals.categories_count, index.categories.size, index.categories.size),
+                pluralStringResource(R.plurals.authors_count, index.authors.size, index.authors.size),
+                pluralStringResource(R.plurals.favourites_count, favorites, favorites),
+            ).joinToString(" · ")
+        scope is PresetScope.Category -> stringResource(
+            R.string.presets_in_groups,
+            pluralStringResource(R.plurals.presets_count, scope.facet.count, scope.facet.count),
+            pluralStringResource(R.plurals.groups_count, index.subcategoriesOf(scope.facet.id).size, index.subcategoriesOf(scope.facet.id).size),
+        )
+        scope is PresetScope.Sub -> "${scope.category.label} · " + pluralStringResource(R.plurals.presets_count, matches, matches)
+        else -> pluralStringResource(R.plurals.presets_count, matches, matches)
     }
 
     Row(
@@ -433,7 +641,7 @@ private fun PresetBrowserHeader(
             IconButton(onClick = onUp, modifier = Modifier.size(36.dp)) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.action_back),
                     modifier = Modifier.size(20.dp),
                 )
             }
@@ -456,8 +664,10 @@ private fun PresetBrowserHeader(
                 modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
             )
         }
-        IconButton(onClick = onSettingsClick) {
-            Icon(Icons.Default.Settings, contentDescription = "Settings")
+        if (onSettingsClick != null) {
+            IconButton(onClick = onSettingsClick) {
+                Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings))
+            }
         }
     }
 }
@@ -519,6 +729,7 @@ private fun VisualizerPresetRow(
     subtitle: String,
     selected: Boolean,
     isFavorite: Boolean,
+    flagged: Boolean,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
@@ -537,6 +748,7 @@ private fun VisualizerPresetRow(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(if (flagged) FLAGGED_ROW_ALPHA else 1f)
             .glassSqueeze(press = rememberGlassPress(), onClick = onClick),
         shape = RoundedCornerShape(20.dp),
         color = if (selected) {
@@ -565,6 +777,13 @@ private fun VisualizerPresetRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (flagged) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = stringResource(R.string.preset_flagged_cd),
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
@@ -588,7 +807,7 @@ private fun VisualizerPresetRow(
             IconButton(onClick = onToggleFavorite) {
                 Icon(
                     imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                    contentDescription = if (isFavorite) stringResource(R.string.favourite_remove) else stringResource(R.string.favourite_add),
                     tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -602,3 +821,6 @@ private fun VisualizerPresetRow(
         }
     }
 }
+
+/** Dimmed rather than hidden: a preset that silently vanished would look like a bug in the browser. */
+private const val FLAGGED_ROW_ALPHA = 0.55f

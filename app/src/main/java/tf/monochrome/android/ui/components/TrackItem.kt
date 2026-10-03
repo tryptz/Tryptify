@@ -39,6 +39,8 @@ import tf.monochrome.android.domain.usecase.uiArtistRefs
 import tf.monochrome.android.ui.theme.ExplicitBadge
 import tf.monochrome.android.ui.navigation.LocalNowPlayingTrackId
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -100,7 +102,7 @@ fun TrackItem(
         if (selectionMode) {
             Icon(
                 imageVector = if (selected) Icons.Default.CheckCircle else Icons.Outlined.Circle,
-                contentDescription = if (selected) "Selected" else "Not selected",
+                contentDescription = if (selected) stringResource(R.string.state_selected) else stringResource(R.string.state_not_selected),
                 tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.width(MonoDimens.spacingMd))
@@ -151,7 +153,7 @@ fun TrackItem(
                     Spacer(modifier = Modifier.width(4.dp))
                     Icon(
                         imageVector = Icons.Default.Explicit,
-                        contentDescription = "Explicit",
+                        contentDescription = stringResource(R.string.badge_explicit),
                         tint = ExplicitBadge,
                         modifier = Modifier.padding(top = 1.dp)
                     )
@@ -163,6 +165,14 @@ fun TrackItem(
                 track.channelBadge?.let { badge ->
                     Spacer(modifier = Modifier.width(4.dp))
                     ChannelBadgePill(badge)
+                }
+                // Where it plays from, on every list this row is used in.
+                // Downloaded means the device, as in search.
+                val source = if (isDownloaded) tf.monochrome.android.domain.model.SourceType.LOCAL
+                    else LocalTrackSource.current(track)
+                if (source != null) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    SourcePill(source)
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -221,7 +231,7 @@ fun TrackItem(
             IconButton(onClick = effectiveOnLikeClick, modifier = Modifier.padding(start = 4.dp)) {
                 Icon(
                     imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = if (isLiked) "Unlike" else "Like",
+                    contentDescription = if (isLiked) stringResource(R.string.action_unlike) else stringResource(R.string.action_like),
                     tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -255,7 +265,7 @@ fun TrackItem(
             IconButton(onClick = effectiveOnMoreClick) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
-                    contentDescription = "More options",
+                    contentDescription = stringResource(R.string.action_more_options),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -291,8 +301,9 @@ fun ChannelBadgePill(text: String, modifier: Modifier = Modifier) {
  */
 @Composable
 fun ThxBadgePill(modifier: Modifier = Modifier) {
+    val thxLabel = stringResource(R.string.badge_thx)
     Surface(
-        modifier = modifier.semantics { contentDescription = "THX Spatial Audio" },
+        modifier = modifier.semantics { contentDescription = thxLabel },
         shape = RoundedCornerShape(4.dp),
         color = MaterialTheme.colorScheme.primary,
     ) {

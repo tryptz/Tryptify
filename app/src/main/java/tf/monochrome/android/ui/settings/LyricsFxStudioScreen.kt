@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.settings
 
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -71,6 +72,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import tf.monochrome.android.ui.components.GlassPanel
 import dev.chrisbanes.haze.hazeSource
+import tf.monochrome.android.ui.player.VisualizerPresetPanel
 import dev.chrisbanes.haze.rememberHazeState
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
@@ -138,9 +140,10 @@ import tf.monochrome.android.ui.player.withLyricFont
 import java.util.Locale
 import javax.inject.Inject
 import kotlin.math.exp
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import androidx.compose.material3.RadioButton
 import kotlinx.coroutines.flow.SharingStarted
+import androidx.compose.ui.res.stringResource
 
 @HiltViewModel
 class LyricsFxStudioViewModel @Inject constructor(
@@ -437,10 +440,10 @@ fun LyricsFxStudioScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("Player Visuals Studio") },
+            title = { Text(stringResource(R.string.fx_player_visuals_studio)) },
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                IconButton(onClick = { navController.popBackStackSafe() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.settings_back))
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
@@ -455,14 +458,14 @@ fun LyricsFxStudioScreen(
             // because this blob stopped being just the bar: it is the material
             // for the audio-tools sheet, the speed panel, the nav pill, the
             // search bar and the map panels too.
-            Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Player") })
-            Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("UI panels") })
-            Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Lyrics") })
+            Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text(stringResource(R.string.fx_player)) })
+            Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text(stringResource(R.string.fx_ui_panels)) })
+            Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text(stringResource(R.string.mode_lyrics)) })
             // Not glass at all, unlike the other three — this is the player's
             // background and its visualizer engine. It lives here because the
             // screen is the Player Visuals Studio, and because there is nowhere
             // else that a change to what the player looks like belongs.
-            Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("Visualizer") })
+            Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text(stringResource(R.string.visualizer)) })
         }
 
         // With the glass switched off app-wide, every control on these tabs still
@@ -470,8 +473,7 @@ fun LyricsFxStudioScreen(
         // the Studio read as broken.
         if (tf.monochrome.android.performance.LocalLowPerformance.current.disableLiquidGlass) {
             Text(
-                text = "Liquid glass is off in Settings › System › Performance. " +
-                    "These settings are saved but not shown until you turn it back on.",
+                text = stringResource(R.string.fx_liquid_glass_is_off_in_settings_system),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -490,28 +492,34 @@ fun LyricsFxStudioScreen(
             // the screen, so there is nothing left to scroll it clear with.
             val visualizerNavBar =
                 WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            // The preset library opens over this tab as the player's glass
+            // browser. It is drawn here, beside the scroll it covers rather
+            // than inside it, so the sheet frosts this tab's own content: the
+            // column below is the haze source and the panel its sibling.
+            var showPresetBrowser by rememberSaveable { mutableStateOf(false) }
+            val browserHaze = rememberHazeState()
+            Box(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .hazeSource(browserHaze)
                     .verticalScroll(rememberScrollState())
                     .padding(
                         start = 16.dp,
                         end = 16.dp,
                         top = 8.dp,
-                        bottom = 8.dp + LocalMiniPlayerInset.current + visualizerNavBar,
+                        bottom = 8.dp + LocalBottomChromeInset.current + visualizerNavBar,
                     ),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            "Ambient visualizer",
+                            stringResource(R.string.fx_ambient_visualizer),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Text(
-                            "MilkDrop drawn into the album background — over the " +
-                                "blurred cover, under the player's controls — instead " +
-                                "of replacing the artwork.",
+                            stringResource(R.string.fx_milkdrop_drawn_into_the_album_background_over),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -530,34 +538,32 @@ fun LyricsFxStudioScreen(
                         mutableFloatStateOf(ambient.blackPointPercent.toFloat())
                     }
                     FxSlider(
-                        label = "Visualizer opacity",
+                        label = stringResource(R.string.fx_visualizer_opacity),
                         valueLabel = "${opacity.toInt()}%",
                         value = opacity,
                         range = 0f..100f,
-                        description = "How much of the preset reaches the screen at all.",
+                        description = stringResource(R.string.fx_how_much_of_the_preset_reaches_the_screen_at_all),
                         onChange = { opacity = it },
                         onChangeFinished = { viewModel.setAmbientOpacity(opacity.toInt()) },
                     )
                     FxSlider(
-                        label = "Black transparency",
+                        label = stringResource(R.string.fx_black_transparency),
                         valueLabel = "${blackPoint.toInt()}%",
                         value = blackPoint,
                         range = 0f..AmbientVisualizerSettings.MAX_BLACK_POINT.toFloat(),
-                        description = "How much of the dark end disappears. Higher hides " +
-                            "more of a preset's trails and leaves only its bright detail.",
+                        description = stringResource(R.string.fx_how_much_of_the_dark_end_disappears_higher_hides),
                         onChange = { blackPoint = it },
                         onChangeFinished = { viewModel.setAmbientBlackPoint(blackPoint.toInt()) },
                     )
 
                     Text(
-                        "Blend mode",
+                        stringResource(R.string.fx_blend_mode),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(top = 16.dp),
                     )
                     Text(
-                        "Screen is the default: black contributes nothing, so a preset's " +
-                            "luminous detail sits over the cover without flattening it.",
+                        stringResource(R.string.fx_screen_is_the_default_black_contributes_nothing),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -578,7 +584,7 @@ fun LyricsFxStudioScreen(
                                     onClick = null,
                                 )
                                 Spacer(Modifier.width(12.dp))
-                                Text(mode.label, style = MaterialTheme.typography.bodyMedium)
+                                Text(stringResource(blendLabel(mode)), style = MaterialTheme.typography.bodyMedium)
                             }
                         }
                     }
@@ -589,14 +595,12 @@ fun LyricsFxStudioScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Remove album cover",
+                                stringResource(R.string.fx_remove_album_cover),
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                             Text(
-                                "Hide the square artwork while ambient is on: MilkDrop's " +
-                                    "atmosphere is the whole show, backdrop and controls " +
-                                    "unchanged.",
+                                stringResource(R.string.fx_hide_the_square_artwork_while_ambient_is_on),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -608,7 +612,34 @@ fun LyricsFxStudioScreen(
                     }
                 }
 
-                VisualizerSettings(settingsViewModel)
+                VisualizerSettings(
+                    settingsViewModel,
+                    onOpenPresetBrowser = { showPresetBrowser = true },
+                )
+            }
+            val presets by settingsViewModel.visualizerPresets.collectAsStateWithLifecycle()
+            val presetId by settingsViewModel.visualizerPresetId.collectAsStateWithLifecycle()
+            val favorites by settingsViewModel.visualizerFavoritePresetIds.collectAsStateWithLifecycle()
+            val flagged by settingsViewModel.visualizerFlaggedPresetIds.collectAsStateWithLifecycle()
+            VisualizerPresetPanel(
+                visible = showPresetBrowser,
+                presets = presets,
+                selectedPresetId = presetId,
+                favoritePresetIds = favorites,
+                flaggedPresetIds = flagged,
+                onPresetSelected = { settingsViewModel.setVisualizerPresetId(it.id) },
+                onToggleFavorite = settingsViewModel::toggleVisualizerFavoritePreset,
+                // Already in the settings it would open.
+                onSettingsClick = null,
+                onDismiss = { showPresetBrowser = false },
+                hazeState = browserHaze,
+                title = stringResource(R.string.fx_default_preset),
+                autoOption = tf.monochrome.android.ui.player.PresetAutoOption(
+                    label = stringResource(R.string.fx_auto_select),
+                    description = stringResource(R.string.fx_let_the_visualizer_pick_a_bundled_preset_when_it),
+                    onSelect = { settingsViewModel.setVisualizerPresetId(null) },
+                ),
+            )
             }
             return@Column
         }
@@ -657,7 +688,7 @@ fun LyricsFxStudioScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "Presets",
+                    stringResource(R.string.visualizer_presets),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -666,12 +697,12 @@ fun LyricsFxStudioScreen(
                 TextButton(onClick = { showSaveDialog = true }) {
                     Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Save")
+                    Text(stringResource(R.string.action_save))
                 }
                 TextButton(onClick = { showImportDialog = true }) {
                     Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Import")
+                    Text(stringResource(R.string.action_import))
                 }
             }
             Spacer(Modifier.height(6.dp))
@@ -708,7 +739,7 @@ fun LyricsFxStudioScreen(
                                 // 16dp glyph, and the label/role make it a
                                 // findable button for TalkBack.
                                 modifier = Modifier
-                                    .buttonSemantics(label = "Manage ${saved.name}")
+                                    .buttonSemantics(label = stringResource(R.string.fx_manage_named, saved.name))
                                     .clickable { presetAction = saved }
                                     .padding(4.dp)
                                     .size(16.dp),
@@ -728,13 +759,13 @@ fun LyricsFxStudioScreen(
             var name by remember { mutableStateOf("") }
             AlertDialog(
                 onDismissRequest = { showSaveDialog = false },
-                title = { Text("Save preset") },
+                title = { Text(stringResource(R.string.fx_save_preset)) },
                 text = {
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it },
                         singleLine = true,
-                        label = { Text("Preset name") },
+                        label = { Text(stringResource(R.string.fx_preset_name)) },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 },
@@ -744,11 +775,11 @@ fun LyricsFxStudioScreen(
                         onClick = {
                             viewModel.saveCurrentAsPreset(name)
                             showSaveDialog = false
-                            android.widget.Toast.makeText(context, "Saved \"${name.trim()}\"", android.widget.Toast.LENGTH_SHORT).show()
+                            android.widget.Toast.makeText(context, context.getString(R.string.fx_saved_named, name.trim()), android.widget.Toast.LENGTH_SHORT).show()
                         },
-                    ) { Text("Save") }
+                    ) { Text(stringResource(R.string.action_save)) }
                 },
-                dismissButton = { TextButton(onClick = { showSaveDialog = false }) { Text("Cancel") } },
+                dismissButton = { TextButton(onClick = { showSaveDialog = false }) { Text(stringResource(R.string.action_cancel)) } },
             )
         }
 
@@ -757,11 +788,11 @@ fun LyricsFxStudioScreen(
             var code by remember { mutableStateOf("") }
             AlertDialog(
                 onDismissRequest = { showImportDialog = false },
-                title = { Text("Import preset") },
+                title = { Text(stringResource(R.string.fx_import_preset)) },
                 text = {
                     Column {
                         Text(
-                            "Paste a preset code someone shared with you.",
+                            stringResource(R.string.fx_paste_a_preset_code_someone_shared_with_you),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -769,7 +800,7 @@ fun LyricsFxStudioScreen(
                         OutlinedTextField(
                             value = code,
                             onValueChange = { code = it },
-                            label = { Text("Preset code") },
+                            label = { Text(stringResource(R.string.fx_preset_code)) },
                             modifier = Modifier.fillMaxWidth().height(140.dp),
                         )
                         TextButton(onClick = {
@@ -778,7 +809,7 @@ fun LyricsFxStudioScreen(
                             if (primary != null && primary.itemCount > 0) {
                                 primary.getItemAt(0).coerceToText(context)?.let { code = it.toString() }
                             }
-                        }) { Text("Paste from clipboard") }
+                        }) { Text(stringResource(R.string.fx_paste_from_clipboard)) }
                     }
                 },
                 confirmButton = {
@@ -789,13 +820,13 @@ fun LyricsFxStudioScreen(
                             showImportDialog = false
                             android.widget.Toast.makeText(
                                 context,
-                                if (imported != null) "Imported \"$imported\"" else "That doesn't look like a valid preset code",
+                                if (imported != null) context.getString(R.string.fx_imported_named, imported) else context.getString(R.string.fx_invalid_preset_code),
                                 android.widget.Toast.LENGTH_SHORT,
                             ).show()
                         },
-                    ) { Text("Import") }
+                    ) { Text(stringResource(R.string.action_import)) }
                 },
-                dismissButton = { TextButton(onClick = { showImportDialog = false }) { Text("Cancel") } },
+                dismissButton = { TextButton(onClick = { showImportDialog = false }) { Text(stringResource(R.string.action_cancel)) } },
             )
         }
 
@@ -804,20 +835,20 @@ fun LyricsFxStudioScreen(
             AlertDialog(
                 onDismissRequest = { presetAction = null },
                 title = { Text(target.name) },
-                text = { Text("Share this preset or remove it from your list.") },
+                text = { Text(stringResource(R.string.fx_share_this_preset_or_remove_it_from_your_list)) },
                 confirmButton = {
                     TextButton(onClick = {
                         val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                             type = "text/plain"
-                            putExtra(android.content.Intent.EXTRA_SUBJECT, "Lyrics FX preset: ${target.name}")
+                            putExtra(android.content.Intent.EXTRA_SUBJECT, context.getString(R.string.fx_preset_subject, target.name))
                             putExtra(android.content.Intent.EXTRA_TEXT, viewModel.exportPreset(target))
                         }
-                        context.startActivity(android.content.Intent.createChooser(send, "Share preset"))
+                        context.startActivity(android.content.Intent.createChooser(send, context.getString(R.string.fx_share_preset)))
                         presetAction = null
                     }) {
                         Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Share")
+                        Text(stringResource(R.string.fx_share))
                     }
                 },
                 dismissButton = {
@@ -828,9 +859,9 @@ fun LyricsFxStudioScreen(
                         }) {
                             Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("Delete")
+                            Text(stringResource(R.string.action_delete))
                         }
-                        TextButton(onClick = { presetAction = null }) { Text("Close") }
+                        TextButton(onClick = { presetAction = null }) { Text(stringResource(R.string.action_close)) }
                     }
                 },
             )
@@ -847,33 +878,33 @@ fun LyricsFxStudioScreen(
             contentPadding = PaddingValues(
                 start = 16.dp,
                 end = 16.dp,
-                bottom = 48.dp + LocalMiniPlayerInset.current + navBar,
+                bottom = 48.dp + LocalBottomChromeInset.current + navBar,
             ),
         ) {
             item {
-                StudioSection("Typography")
-                FxSlider("Font size", "%.0f sp".format(fx.fontSizeSp), fx.fontSizeSp, 14f..34f) {
+                StudioSection(stringResource(R.string.fx_typography))
+                FxSlider(stringResource(R.string.fx_font_size), "%.0f sp".format(fx.fontSizeSp), fx.fontSizeSp, 14f..34f) {
                     viewModel.update { s -> s.copy(fontSizeSp = it) }
                 }
-                FxSlider("Letter spacing", "%.2f sp".format(fx.letterSpacingSp), fx.letterSpacingSp, -1f..1f) {
+                FxSlider(stringResource(R.string.fx_letter_spacing), "%.2f sp".format(fx.letterSpacingSp), fx.letterSpacingSp, -1f..1f) {
                     viewModel.update { s -> s.copy(letterSpacingSp = it) }
                 }
                 FxSlider(
-                    "Edge margin", "%.0f dp".format(fx.edgeMarginDp), fx.edgeMarginDp, 0f..48f,
-                    description = "Side spacing between the lyrics and the screen edges.",
+                    stringResource(R.string.fx_edge_margin), "%.0f dp".format(fx.edgeMarginDp), fx.edgeMarginDp, 0f..48f,
+                    description = stringResource(R.string.fx_side_spacing_between_the_lyrics_and_the_screen),
                 ) { viewModel.update { s -> s.copy(edgeMarginDp = it) } }
                 FxSlider(
-                    "Lines per block", "${fx.maxWrapLines}" + if (fx.maxWrapLines == 1) " (no wrap)" else "",
+                    stringResource(R.string.fx_lines_per_block), "${fx.maxWrapLines}" + if (fx.maxWrapLines == 1) " (no wrap)" else "",
                     fx.maxWrapLines.toFloat(), 1f..3f, steps = 1,
-                    description = "How many rows a long line may wrap to before it shrinks to fit.",
+                    description = stringResource(R.string.fx_how_many_rows_a_long_line_may_wrap_to_before_it),
                 ) { viewModel.update { s -> s.copy(maxWrapLines = it.toInt()) } }
             }
 
             item {
-                StudioSection("Font")
+                StudioSection(stringResource(R.string.fx_font))
                 FxToggle(
-                    "Custom lyrics font", fx.customFont,
-                    description = "Use one of your imported fonts for the lyrics only.",
+                    stringResource(R.string.fx_custom_lyrics_font), fx.customFont,
+                    description = stringResource(R.string.fx_use_one_of_your_imported_fonts_for_the_lyrics),
                 ) { viewModel.update { s -> s.copy(customFont = it) } }
                 if (fx.customFont) {
                     FontPicker(
@@ -885,68 +916,67 @@ fun LyricsFxStudioScreen(
             }
 
             item {
-                StudioSection("Playback Sync")
+                StudioSection(stringResource(R.string.fx_playback_sync))
                 FxSlider(
-                    "Bluetooth sync delay",
+                    stringResource(R.string.fx_bluetooth_sync_delay),
                     "%+d ms".format(fx.bluetoothDelayMs.toInt()),
                     fx.bluetoothDelayMs, -500f..1500f, steps = 39,
-                    description = "Delays synced lyrics to line up with Bluetooth audio latency. " +
-                        "Raise it until the words land with what you hear; negative pulls them earlier.",
+                    description = stringResource(R.string.fx_delays_synced_lyrics_to_line_up_with_bluetooth),
                 ) { viewModel.update { s -> s.copy(bluetoothDelayMs = it) } }
             }
 
             item {
-                StudioSection("3D Letter Wave")
+                StudioSection(stringResource(R.string.fx_3d_letter_wave))
                 FxSlider(
-                    "Tilt", "%.0f°".format(fx.rotationDegrees) + if (fx.rotationDegrees < 0.5f) " (off)" else "",
+                    stringResource(R.string.fx_tilt), "%.0f°".format(fx.rotationDegrees) + if (fx.rotationDegrees < 0.5f) " (off)" else "",
                     fx.rotationDegrees, 0f..25f,
                 ) { viewModel.update { s -> s.copy(rotationDegrees = it) } }
-                FxSlider("Wave speed", "%.2fx".format(fx.waveSpeed), fx.waveSpeed, 0.25f..3f) {
+                FxSlider(stringResource(R.string.fx_wave_speed), "%.2fx".format(fx.waveSpeed), fx.waveSpeed, 0.25f..3f) {
                     viewModel.update { s -> s.copy(waveSpeed = it) }
                 }
                 FxSlider(
-                    "Wave tightness", "%.2f rad/letter".format(fx.wavePhaseStep),
+                    stringResource(R.string.fx_wave_tightness), "%.2f rad/letter".format(fx.wavePhaseStep),
                     fx.wavePhaseStep, 0.05f..0.9f,
-                    description = "Low = one smooth ribbon; high = choppy per-letter motion.",
+                    description = stringResource(R.string.fx_low_one_smooth_ribbon_high_choppy_per_letter),
                 ) { viewModel.update { s -> s.copy(wavePhaseStep = it) } }
-                FxSlider("Wave travel", "%.1f dp".format(fx.waveTravelDp), fx.waveTravelDp, 0f..8f) {
+                FxSlider(stringResource(R.string.fx_wave_travel), "%.1f dp".format(fx.waveTravelDp), fx.waveTravelDp, 0f..8f) {
                     viewModel.update { s -> s.copy(waveTravelDp = it) }
                 }
-                FxSlider("Shadow depth", "${(fx.shadowDepth * 100).toInt()}%", fx.shadowDepth, 0f..1f) {
+                FxSlider(stringResource(R.string.fx_shadow_depth), "${(fx.shadowDepth * 100).toInt()}%", fx.shadowDepth, 0f..1f) {
                     viewModel.update { s -> s.copy(shadowDepth = it) }
                 }
             }
 
             item {
-                StudioSection("Beat Engine")
+                StudioSection(stringResource(R.string.fx_beat_engine))
                 FxSlider(
-                    "Bass reaction", "${(fx.bassReact * 100).toInt()}%" + if (fx.bassReact < 0.01f) " (off)" else "",
+                    stringResource(R.string.fx_bass_reaction), "${(fx.bassReact * 100).toInt()}%" + if (fx.bassReact < 0.01f) " (off)" else "",
                     fx.bassReact, 0f..1f,
-                    description = "Master intensity for pump and glow.",
+                    description = stringResource(R.string.fx_master_intensity_for_pump_and_glow),
                 ) { viewModel.update { s -> s.copy(bassReact = it) } }
-                FxSlider("Pump amount", "+${(fx.pumpAmount * 100).toInt()}%", fx.pumpAmount, 0f..0.25f) {
+                FxSlider(stringResource(R.string.fx_pump_amount), "+${(fx.pumpAmount * 100).toInt()}%", fx.pumpAmount, 0f..0.25f) {
                     viewModel.update { s -> s.copy(pumpAmount = it) }
                 }
                 FxSlider(
-                    "Attack", "%.0f ms".format(fx.attackMs), fx.attackMs, 4f..60f,
-                    description = "How fast the pulse snaps onto a kick.",
+                    stringResource(R.string.fx_attack), "%.0f ms".format(fx.attackMs), fx.attackMs, 4f..60f,
+                    description = stringResource(R.string.fx_how_fast_the_pulse_snaps_onto_a_kick),
                 ) { viewModel.update { s -> s.copy(attackMs = it) } }
                 FxSlider(
-                    "Release", "%.0f ms".format(fx.releaseMs), fx.releaseMs, 40f..500f,
-                    description = "How long the pulse holds through a kick.",
+                    stringResource(R.string.fx_release), "%.0f ms".format(fx.releaseMs), fx.releaseMs, 40f..500f,
+                    description = stringResource(R.string.fx_how_long_the_pulse_holds_through_a_kick),
                 ) { viewModel.update { s -> s.copy(releaseMs = it) } }
                 FxSlider(
-                    "Bounce", "${(fx.bounce * 100).toInt()}%", fx.bounce, 0f..1f,
-                    description = "Spring overshoot: 0 tracks stiffly, 100 rings like rubber.",
+                    stringResource(R.string.fx_bounce), "${(fx.bounce * 100).toInt()}%", fx.bounce, 0f..1f,
+                    description = stringResource(R.string.fx_spring_overshoot_0_tracks_stiffly_100_rings_like),
                 ) { viewModel.update { s -> s.copy(bounce = it) } }
             }
 
             item {
-                StudioSection("Glow")
-                FxSlider("Glow radius", "+%.0f dp".format(fx.glowRadiusDp), fx.glowRadiusDp, 0f..160f) {
+                StudioSection(stringResource(R.string.fx_glow))
+                FxSlider(stringResource(R.string.settings_glow_radius), "+%.0f dp".format(fx.glowRadiusDp), fx.glowRadiusDp, 0f..160f) {
                     viewModel.update { s -> s.copy(glowRadiusDp = it) }
                 }
-                FxSlider("Glow brightness", "${(fx.glowBrightness * 100).toInt()}%", fx.glowBrightness, 0f..0.6f) {
+                FxSlider(stringResource(R.string.settings_glow_brightness), "${(fx.glowBrightness * 100).toInt()}%", fx.glowBrightness, 0f..0.6f) {
                     viewModel.update { s -> s.copy(glowBrightness = it) }
                 }
                 // "Glow behind album art" is a personal toggle, not a theme
@@ -955,48 +985,48 @@ fun LyricsFxStudioScreen(
             }
 
             item {
-                StudioSection("Liquid Glass")
+                StudioSection(stringResource(R.string.fx_liquid_glass))
                 FxToggle(
-                    "Liquid glass", fx.liquidGlass,
-                    description = "Refractive glass relight of the lyric surface (needs Android 13+).",
+                    stringResource(R.string.fx_liquid_glass_toggle), fx.liquidGlass,
+                    description = stringResource(R.string.fx_refractive_glass_relight_of_the_lyric_surface),
                 ) { viewModel.update { s -> s.copy(liquidGlass = it) } }
                 FxSlider(
-                    "Glass opacity", "${(fx.glassBodyOpacity * 100).toInt()}%",
+                    stringResource(R.string.fx_glass_opacity), "${(fx.glassBodyOpacity * 100).toInt()}%",
                     fx.glassBodyOpacity, 0.2f..1f,
-                    description = "Lower lets more of the backdrop read through the letters.",
+                    description = stringResource(R.string.fx_lower_lets_more_of_the_backdrop_read_through_the),
                 ) { viewModel.update { s -> s.copy(glassBodyOpacity = it) } }
                 FxSlider(
-                    "Refraction", "%.2f".format(fx.glassRefraction), fx.glassRefraction, 0f..0.4f,
-                    description = "How hard the beveled edges lens the backdrop behind them.",
+                    stringResource(R.string.fx_refraction), "%.2f".format(fx.glassRefraction), fx.glassRefraction, 0f..0.4f,
+                    description = stringResource(R.string.fx_how_hard_the_beveled_edges_lens_the_backdrop),
                 ) { viewModel.update { s -> s.copy(glassRefraction = it) } }
                 FxSlider(
-                    "Edge highlight", "${(fx.glassRimBrightness * 100).toInt()}%",
+                    stringResource(R.string.fx_edge_highlight), "${(fx.glassRimBrightness * 100).toInt()}%",
                     fx.glassRimBrightness, 0f..2f,
-                    description = "Brightness of the specular glass rim.",
+                    description = stringResource(R.string.fx_brightness_of_the_specular_glass_rim),
                 ) { viewModel.update { s -> s.copy(glassRimBrightness = it) } }
                 FxSlider(
-                    "Chromatic aberration", "${(fx.glassDispersion * 100).toInt()}%",
+                    stringResource(R.string.fx_chromatic_aberration), "${(fx.glassDispersion * 100).toInt()}%",
                     fx.glassDispersion, 0f..2f,
-                    description = "Colour fringing where the edges refract.",
+                    description = stringResource(R.string.fx_colour_fringing_where_the_edges_refract),
                 ) { viewModel.update { s -> s.copy(glassDispersion = it) } }
                 FxSlider(
-                    "Bevel samples", "${1 + 4 * fx.glassSampleRings} taps/px",
+                    stringResource(R.string.fx_bevel_samples), "${1 + 4 * fx.glassSampleRings} taps/px",
                     fx.glassSampleRings.toFloat(), 1f..3f, steps = 1,
-                    description = "Shader taps per pixel: higher = smoother glass, heavier GPU.",
+                    description = stringResource(R.string.fx_shader_taps_per_pixel_higher_smoother_glass),
                 ) { viewModel.update { s -> s.copy(glassSampleRings = it.toInt()) } }
             }
 
             item {
-                StudioSection("Anti-aliasing")
+                StudioSection(stringResource(R.string.fx_anti_aliasing))
                 FxToggle(
-                    "Anti-aliasing (FXAA)", fx.fxaa,
-                    description = "Smooths jagged edges on the 3D letters and glass (needs Android 13+).",
+                    stringResource(R.string.fx_anti_aliasing_fxaa), fx.fxaa,
+                    description = stringResource(R.string.fx_smooths_jagged_edges_on_the_3d_letters_and_glass),
                 ) { viewModel.update { s -> s.copy(fxaa = it) } }
                 if (fx.fxaa) {
                     FxSlider(
-                        "AA strength", "${(fx.fxaaStrength * 100).toInt()}%",
+                        stringResource(R.string.fx_aa_strength), "${(fx.fxaaStrength * 100).toInt()}%",
                         fx.fxaaStrength, 0f..1f,
-                        description = "How hard edges are smoothed; higher softens more.",
+                        description = stringResource(R.string.fx_how_hard_edges_are_smoothed_higher_softens_more),
                     ) { viewModel.update { s -> s.copy(fxaaStrength = it) } }
                 }
             }
@@ -1006,7 +1036,7 @@ fun LyricsFxStudioScreen(
                 OutlinedButton(
                     onClick = { viewModel.applyPreset(LyricsFxSettings.DEFAULT) },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Reset to defaults") }
+                ) { Text(stringResource(R.string.fx_reset_to_defaults)) }
             }
         }
     }
@@ -1120,13 +1150,13 @@ private fun PlayerGlassTab(
                                 verticalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
                                 Text(
-                                    "Audio tools",
+                                    stringResource(R.string.fx_audio_tools),
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color.White,
                                 )
                                 Text(
-                                    "Sheets, panels and search bars all wear this pane.",
+                                    stringResource(R.string.fx_sheets_panels_and_search_bars_all_wear_this_pane),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Color.White.copy(alpha = 0.62f),
                                 )
@@ -1163,7 +1193,7 @@ private fun PlayerGlassTab(
                         // Real transport icon: bigger skip + shape-accurate shadow,
                         // exactly like the player.
                         TransportIcon(
-                            painterResource(R.drawable.ic_glass_skip_previous_chevron), "Previous", previewTint, {},
+                            painterResource(R.drawable.ic_glass_skip_previous_chevron), stringResource(R.string.action_previous), previewTint, {},
                             size = PlayerDesignTokens.SkipIconSize,
                         )
                         // Solid glass disc with the play symbol punched out, plus the
@@ -1199,7 +1229,7 @@ private fun PlayerGlassTab(
                             }
                         }
                         TransportIcon(
-                            painterResource(R.drawable.ic_glass_skip_next_chevron), "Next", previewTint, {},
+                            painterResource(R.drawable.ic_glass_skip_next_chevron), stringResource(R.string.action_next), previewTint, {},
                             size = PlayerDesignTokens.SkipIconSize,
                         )
                     }
@@ -1225,7 +1255,7 @@ private fun PlayerGlassTab(
                 }
             }
             Text(
-                text = "PREVIEW",
+                text = stringResource(R.string.fx_preview),
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.White.copy(alpha = 0.35f),
                 modifier = Modifier.align(Alignment.TopStart).padding(10.dp),
@@ -1248,7 +1278,7 @@ private fun PlayerGlassTab(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "Themes",
+                stringResource(R.string.fx_themes),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1257,12 +1287,12 @@ private fun PlayerGlassTab(
             TextButton(onClick = { showGlassSaveDialog = true }) {
                 Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Save")
+                Text(stringResource(R.string.action_save))
             }
             TextButton(onClick = { showGlassImportDialog = true }) {
                 Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Import")
+                Text(stringResource(R.string.action_import))
             }
         }
         Spacer(Modifier.height(6.dp))
@@ -1293,7 +1323,7 @@ private fun PlayerGlassTab(
                     trailingIcon = {
                         Icon(
                             Icons.Default.Share,
-                            contentDescription = "Manage ${saved.name}",
+                            contentDescription = stringResource(R.string.fx_manage_named, saved.name),
                             modifier = Modifier
                                 .size(16.dp)
                                 .clickable { glassPresetAction = saved },
@@ -1312,13 +1342,13 @@ private fun PlayerGlassTab(
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
             ColorSwatch(
-                label = "Background",
+                label = stringResource(R.string.fx_background),
                 color = if (glass.previewBg != 0) Color(glass.previewBg) else lerp(Color.Black, accent, 0.34f),
                 isCustom = glass.previewBg != 0,
                 onClick = { showBgPicker = true },
             )
             ColorSwatch(
-                label = "Button tint",
+                label = stringResource(R.string.fx_button_tint),
                 color = previewTint,
                 isCustom = glass.tintColor != 0,
                 onClick = { showTintPicker = true },
@@ -1328,34 +1358,34 @@ private fun PlayerGlassTab(
         // Controls are grouped by what they affect, in paint order: what the
         // glass IS (body), its 3D form (shape & bevel), how light plays on it
         // (light & reflections), what it casts (drop shadow), then render cost.
-        StudioSection(if (previewMini) "UI panels" else "Player Glass")
+        StudioSection(if (previewMini) stringResource(R.string.fx_ui_panels) else stringResource(R.string.fx_player_glass))
         FxToggle(
-            "Button liquid glass", glass.enabled,
-            description = "3D refractive glass on the transport buttons (needs Android 13+).",
+            stringResource(R.string.fx_button_liquid_glass), glass.enabled,
+            description = stringResource(R.string.fx_3d_refractive_glass_on_the_transport_buttons),
         ) { onUpdate { g -> g.copy(enabled = it) } }
         if (previewMini) {
             // The mini player's progress line doubles as the bar's top border,
             // so this is as much a framing choice as a readout one — off, the
             // bar loses that hairline edge and closes up by its 2dp.
             FxToggle(
-                "Mini player progress bar", glass.miniProgressBar,
-                description = "Thin progress line along the top edge of the mini player, which also gives the bar its top border.",
+                stringResource(R.string.fx_mini_player_progress_bar), glass.miniProgressBar,
+                description = stringResource(R.string.fx_thin_progress_line_along_the_top_edge_of_the),
             ) { onUpdate { g -> g.copy(miniProgressBar = it) } }
         } else {
             FxToggle(
-                "Glass progress bar", glass.progressGlass,
-                description = "Thin glass tube scrubber that fills up, with a sine-wave bulge at the playhead dot.",
+                stringResource(R.string.fx_glass_progress_bar), glass.progressGlass,
+                description = stringResource(R.string.fx_thin_glass_tube_scrubber_that_fills_up_with_a),
             ) { onUpdate { g -> g.copy(progressGlass = it) } }
         }
 
-        StudioSection("Glass body")
+        StudioSection(stringResource(R.string.fx_glass_body))
         FxSlider(
-            "Glass opacity", "${(glass.bodyOpacity * 100).toInt()}%", glass.bodyOpacity, 0f..1f,
-            description = "Lower makes the buttons more see-through (0 = body fully invisible, edges remain).",
+            stringResource(R.string.fx_glass_opacity), "${(glass.bodyOpacity * 100).toInt()}%", glass.bodyOpacity, 0f..1f,
+            description = stringResource(R.string.fx_lower_makes_the_buttons_more_see_through_0_body),
         ) { onUpdate { g -> g.copy(bodyOpacity = it) } }
         FxSlider(
-            "Frosted blur", "${(glass.frost * 100).toInt()}%", glass.frost, 0f..1f,
-            description = "Frosts the glass, from clear to misted.",
+            stringResource(R.string.fx_frosted_blur), "${(glass.frost * 100).toInt()}%", glass.frost, 0f..1f,
+            description = stringResource(R.string.fx_frosts_the_glass_from_clear_to_misted),
         ) { onUpdate { g -> g.copy(frost = it) } }
         // Haze backdrop frost. Each tab's copy drives its own surfaces: the UI
         // blob frosts the mini player bar, the audio-tools sheet, the speed
@@ -1368,99 +1398,98 @@ private fun PlayerGlassTab(
         // player was simply not entitled to. It has surfaces of its own now, so
         // it gets the sliders that aim them.
         FxSlider(
-            "Backdrop blur", "%.0f dp".format(glass.hazeBlurDp), glass.hazeBlurDp, 0f..80f,
+            stringResource(R.string.fx_backdrop_blur), "%.0f dp".format(glass.hazeBlurDp), glass.hazeBlurDp, 0f..80f,
             description = if (previewMini) {
-                "Gaussian blur of whatever sits behind these panels (0 = off)."
+                stringResource(R.string.fx_backdrop_blur_panels)
             } else {
-                "Gaussian blur of the artwork and reactive glow behind the dock " +
-                    "and the play button (0 = off)."
+                stringResource(R.string.fx_backdrop_blur_player)
             },
         ) { onUpdate { g -> g.copy(hazeBlurDp = it) } }
         FxSlider(
-            "Backdrop tint", "${(glass.hazeTint * 100).toInt()}%", glass.hazeTint, 0f..2f,
-            description = "Strength of the frost layer's darkening/lightening wash.",
+            stringResource(R.string.fx_backdrop_tint), "${(glass.hazeTint * 100).toInt()}%", glass.hazeTint, 0f..2f,
+            description = stringResource(R.string.fx_strength_of_the_frost_layer_s_darkening),
         ) { onUpdate { g -> g.copy(hazeTint = it) } }
         FxSlider(
-            "Surface motion", "${(glass.surfaceMotion * 100).toInt()}%", glass.surfaceMotion, 0f..1f,
-            description = "Swell, edge ripple and glint on the glass surface (0 = still).",
+            stringResource(R.string.fx_surface_motion), "${(glass.surfaceMotion * 100).toInt()}%", glass.surfaceMotion, 0f..1f,
+            description = stringResource(R.string.fx_swell_edge_ripple_and_glint_on_the_glass_surface),
         ) { onUpdate { g -> g.copy(surfaceMotion = it) } }
 
-        StudioSection("Shape & bevel")
+        StudioSection(stringResource(R.string.fx_shape_bevel))
         FxSlider(
-            "Roundness", "%.2f".format(glass.roundness), glass.roundness, 0.5f..2f,
-            description = "Rolls the glass edge from a sharp bevel to a round, pillowy shoulder.",
+            stringResource(R.string.fx_roundness), "%.2f".format(glass.roundness), glass.roundness, 0.5f..2f,
+            description = stringResource(R.string.fx_rolls_the_glass_edge_from_a_sharp_bevel_to_a),
         ) { onUpdate { g -> g.copy(roundness = it) } }
         FxSlider(
-            "Depth (profondeur)", "%.2f".format(glass.depth), glass.depth, 0.5f..2f,
-            description = "How thick and deep the relief reads; higher pops the buttons more in 3D.",
+            stringResource(R.string.fx_depth_profondeur), "%.2f".format(glass.depth), glass.depth, 0.5f..2f,
+            description = stringResource(R.string.fx_how_thick_and_deep_the_relief_reads_higher_pops),
         ) { onUpdate { g -> g.copy(depth = it) } }
         FxSlider(
-            "Refraction", "%.2f".format(glass.refraction), glass.refraction, 0f..0.4f,
-            description = "How hard the beveled edges lens the backdrop behind them.",
+            stringResource(R.string.fx_refraction), "%.2f".format(glass.refraction), glass.refraction, 0f..0.4f,
+            description = stringResource(R.string.fx_how_hard_the_beveled_edges_lens_the_backdrop),
         ) { onUpdate { g -> g.copy(refraction = it) } }
         FxSlider(
-            "Chromatic aberration", "${(glass.dispersion * 100).toInt()}%", glass.dispersion, 0f..2f,
-            description = "Colour fringing at the refracting edges.",
+            stringResource(R.string.fx_chromatic_aberration), "${(glass.dispersion * 100).toInt()}%", glass.dispersion, 0f..2f,
+            description = stringResource(R.string.fx_colour_fringing_at_the_refracting_edges),
         ) { onUpdate { g -> g.copy(dispersion = it) } }
 
-        StudioSection("Light & reflections")
+        StudioSection(stringResource(R.string.fx_light_reflections))
         FxSlider(
-            "Light angle", "${glass.lightAngleDeg.toInt()}°", glass.lightAngleDeg, 0f..360f,
-            description = "Direction the key light comes from, and where the highlights sit.",
+            stringResource(R.string.fx_light_angle), "${glass.lightAngleDeg.toInt()}°", glass.lightAngleDeg, 0f..360f,
+            description = stringResource(R.string.fx_direction_the_key_light_comes_from_and_where_the),
         ) { onUpdate { g -> g.copy(lightAngleDeg = it) } }
         FxSlider(
-            "Tilt reactivity", "${(glass.tiltReactivity * 100).toInt()}%", glass.tiltReactivity, 0f..1.5f,
-            description = "How strongly tilting the phone moves the light and reflection.",
+            stringResource(R.string.fx_tilt_reactivity), "${(glass.tiltReactivity * 100).toInt()}%", glass.tiltReactivity, 0f..1.5f,
+            description = stringResource(R.string.fx_how_strongly_tilting_the_phone_moves_the_light),
         ) { onUpdate { g -> g.copy(tiltReactivity = it) } }
         FxSlider(
-            "Edge highlight", "${(glass.rimBrightness * 100).toInt()}%", glass.rimBrightness, 0f..2f,
-            description = "Brightness of the specular glass rim.",
+            stringResource(R.string.fx_edge_highlight), "${(glass.rimBrightness * 100).toInt()}%", glass.rimBrightness, 0f..2f,
+            description = stringResource(R.string.fx_brightness_of_the_specular_glass_rim),
         ) { onUpdate { g -> g.copy(rimBrightness = it) } }
         FxSlider(
-            "Edge width", "${(glass.edgeWidth * 100).toInt()}%", glass.edgeWidth, 0f..1f,
-            description = "Reflective rim: thin crisp edge to a broad glassy shoulder.",
+            stringResource(R.string.fx_edge_width), "${(glass.edgeWidth * 100).toInt()}%", glass.edgeWidth, 0f..1f,
+            description = stringResource(R.string.fx_reflective_rim_thin_crisp_edge_to_a_broad_glassy),
         ) { onUpdate { g -> g.copy(edgeWidth = it) } }
         FxSlider(
-            "Reflection", "${(glass.reflection * 100).toInt()}%", glass.reflection, 0f..2f,
-            description = "How much of the room/environment reflection shows on the glass.",
+            stringResource(R.string.fx_reflection), "${(glass.reflection * 100).toInt()}%", glass.reflection, 0f..2f,
+            description = stringResource(R.string.fx_how_much_of_the_room_environment_reflection),
         ) { onUpdate { g -> g.copy(reflection = it) } }
         FxSlider(
-            "Gloss", "${(glass.gloss * 100).toInt()}%", glass.gloss, 0f..1f,
-            description = "Highlight polish: soft frosted-wide glint to a tight mirror.",
+            stringResource(R.string.fx_gloss), "${(glass.gloss * 100).toInt()}%", glass.gloss, 0f..1f,
+            description = stringResource(R.string.fx_highlight_polish_soft_frosted_wide_glint_to_a),
         ) { onUpdate { g -> g.copy(gloss = it) } }
 
-        StudioSection("Drop shadow")
+        StudioSection(stringResource(R.string.fx_drop_shadow))
         FxSlider(
-            "Shadow depth", "${(glass.shadowDepth * 100).toInt()}%", glass.shadowDepth, 0f..1f,
-            description = "Drop shadow under the glass buttons and dock, lifting them off the surface.",
+            stringResource(R.string.fx_shadow_depth), "${(glass.shadowDepth * 100).toInt()}%", glass.shadowDepth, 0f..1f,
+            description = stringResource(R.string.fx_drop_shadow_under_the_glass_buttons_and_dock),
         ) { onUpdate { g -> g.copy(shadowDepth = it) } }
         FxSlider(
-            "Shadow softness", "${(glass.shadowSoftness * 100).toInt()}%", glass.shadowSoftness, 0f..1f,
-            description = "Blur / spread of the drop shadow.",
+            stringResource(R.string.fx_shadow_softness), "${(glass.shadowSoftness * 100).toInt()}%", glass.shadowSoftness, 0f..1f,
+            description = stringResource(R.string.fx_blur_spread_of_the_drop_shadow),
         ) { onUpdate { g -> g.copy(shadowSoftness = it) } }
         FxSlider(
-            "Shadow tint", "${(glass.shadowTint * 100).toInt()}%", glass.shadowTint, 0f..1f,
-            description = "Colour of the drop shadow: neutral black to accent glow.",
+            stringResource(R.string.fx_shadow_tint), "${(glass.shadowTint * 100).toInt()}%", glass.shadowTint, 0f..1f,
+            description = stringResource(R.string.fx_colour_of_the_drop_shadow_neutral_black_to),
         ) { onUpdate { g -> g.copy(shadowTint = it) } }
 
-        StudioSection("Quality")
+        StudioSection(stringResource(R.string.fx_quality))
         FxSlider(
-            "Per-pixel samples",
-            "${glass.sampleRings} (${when (glass.sampleRings) { 1 -> 5; 2 -> 9; else -> 13 }} taps)",
+            stringResource(R.string.fx_per_pixel_samples),
+            stringResource(R.string.fx_samples_value, glass.sampleRings, when (glass.sampleRings) { 1 -> 5; 2 -> 9; else -> 13 }),
             glass.sampleRings.toFloat(), 1f..3f, steps = 1,
-            description = "Bevel quality vs GPU cost.",
+            description = stringResource(R.string.fx_bevel_quality_vs_gpu_cost),
         ) { onUpdate { g -> g.copy(sampleRings = it.toInt()) } }
         Spacer(Modifier.height(20.dp))
         OutlinedButton(
             onClick = { onApplyPreset(PlayerGlassSettings.DEFAULT) },
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("Reset to defaults") }
+        ) { Text(stringResource(R.string.fx_reset_to_defaults)) }
         // Same reservation as the other two tabs. A flat 48dp was short of the
         // bar plus the navigation inset under it, leaving the reset button
         // half-covered.
         Spacer(
             Modifier.height(
-                48.dp + LocalMiniPlayerInset.current +
+                48.dp + LocalBottomChromeInset.current +
                     WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
             ),
         )
@@ -1469,7 +1498,7 @@ private fun PlayerGlassTab(
 
     if (showBgPicker) {
         GlassColorPickerDialog(
-            title = "Preview background",
+            title = stringResource(R.string.fx_preview_background),
             initial = glass.previewBg,
             onPick = { c -> onUpdate { it.copy(previewBg = c) }; showBgPicker = false },
             onDismiss = { showBgPicker = false },
@@ -1477,7 +1506,7 @@ private fun PlayerGlassTab(
     }
     if (showTintPicker) {
         GlassColorPickerDialog(
-            title = "Button glass tint",
+            title = stringResource(R.string.fx_button_glass_tint),
             initial = glass.tintColor,
             onPick = { c -> onUpdate { it.copy(tintColor = c) }; showTintPicker = false },
             onDismiss = { showTintPicker = false },
@@ -1489,13 +1518,13 @@ private fun PlayerGlassTab(
         var name by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { showGlassSaveDialog = false },
-            title = { Text("Save theme") },
+            title = { Text(stringResource(R.string.fx_save_theme)) },
             text = {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
                     singleLine = true,
-                    label = { Text("Theme name") },
+                    label = { Text(stringResource(R.string.fx_theme_name)) },
                     modifier = Modifier.fillMaxWidth(),
                 )
             },
@@ -1505,11 +1534,11 @@ private fun PlayerGlassTab(
                     onClick = {
                         onSavePreset(name)
                         showGlassSaveDialog = false
-                        android.widget.Toast.makeText(context, "Saved \"${name.trim()}\"", android.widget.Toast.LENGTH_SHORT).show()
+                        android.widget.Toast.makeText(context, context.getString(R.string.fx_saved_named, name.trim()), android.widget.Toast.LENGTH_SHORT).show()
                     },
-                ) { Text("Save") }
+                ) { Text(stringResource(R.string.action_save)) }
             },
-            dismissButton = { TextButton(onClick = { showGlassSaveDialog = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { showGlassSaveDialog = false }) { Text(stringResource(R.string.action_cancel)) } },
         )
     }
 
@@ -1518,11 +1547,11 @@ private fun PlayerGlassTab(
         var code by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { showGlassImportDialog = false },
-            title = { Text("Import theme") },
+            title = { Text(stringResource(R.string.fx_import_theme)) },
             text = {
                 Column {
                     Text(
-                        "Paste a Player Glass theme code someone shared with you.",
+                        stringResource(R.string.fx_paste_a_player_glass_theme_code_someone_shared),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1530,7 +1559,7 @@ private fun PlayerGlassTab(
                     OutlinedTextField(
                         value = code,
                         onValueChange = { code = it },
-                        label = { Text("Theme code") },
+                        label = { Text(stringResource(R.string.fx_theme_code)) },
                         modifier = Modifier.fillMaxWidth().height(140.dp),
                     )
                     TextButton(onClick = {
@@ -1539,7 +1568,7 @@ private fun PlayerGlassTab(
                         if (primary != null && primary.itemCount > 0) {
                             primary.getItemAt(0).coerceToText(context)?.let { code = it.toString() }
                         }
-                    }) { Text("Paste from clipboard") }
+                    }) { Text(stringResource(R.string.fx_paste_from_clipboard)) }
                 }
             },
             confirmButton = {
@@ -1550,13 +1579,13 @@ private fun PlayerGlassTab(
                         showGlassImportDialog = false
                         android.widget.Toast.makeText(
                             context,
-                            if (imported != null) "Imported \"$imported\"" else "That doesn't look like a valid theme code",
+                            if (imported != null) context.getString(R.string.fx_imported_named, imported) else context.getString(R.string.fx_invalid_theme_code),
                             android.widget.Toast.LENGTH_SHORT,
                         ).show()
                     },
-                ) { Text("Import") }
+                ) { Text(stringResource(R.string.action_import)) }
             },
-            dismissButton = { TextButton(onClick = { showGlassImportDialog = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { showGlassImportDialog = false }) { Text(stringResource(R.string.action_cancel)) } },
         )
     }
 
@@ -1565,20 +1594,20 @@ private fun PlayerGlassTab(
         AlertDialog(
             onDismissRequest = { glassPresetAction = null },
             title = { Text(target.name) },
-            text = { Text("Share this theme or remove it from your list.") },
+            text = { Text(stringResource(R.string.fx_share_this_theme_or_remove_it_from_your_list)) },
             confirmButton = {
                 TextButton(onClick = {
                     val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                         type = "text/plain"
-                        putExtra(android.content.Intent.EXTRA_SUBJECT, "Player Glass theme: ${target.name}")
+                        putExtra(android.content.Intent.EXTRA_SUBJECT, context.getString(R.string.fx_theme_subject, target.name))
                         putExtra(android.content.Intent.EXTRA_TEXT, onExportPreset(target))
                     }
-                    context.startActivity(android.content.Intent.createChooser(send, "Share theme"))
+                    context.startActivity(android.content.Intent.createChooser(send, context.getString(R.string.fx_share_theme)))
                     glassPresetAction = null
                 }) {
                     Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Share")
+                    Text(stringResource(R.string.fx_share))
                 }
             },
             dismissButton = {
@@ -1589,9 +1618,9 @@ private fun PlayerGlassTab(
                     }) {
                         Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Delete")
+                        Text(stringResource(R.string.action_delete))
                     }
-                    TextButton(onClick = { glassPresetAction = null }) { Text("Close") }
+                    TextButton(onClick = { glassPresetAction = null }) { Text(stringResource(R.string.action_close)) }
                 }
             },
         )
@@ -1617,7 +1646,7 @@ private fun ColorSwatch(label: String, color: Color, isCustom: Boolean, onClick:
         )
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onBackground)
         Text(
-            if (isCustom) "Custom" else "Current",
+            if (isCustom) stringResource(R.string.fx_custom) else stringResource(R.string.current),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1657,21 +1686,21 @@ private fun GlassColorPickerDialog(
                         .clip(RoundedCornerShape(12.dp))
                         .background(preview),
                 )
-                Text("Hue", style = MaterialTheme.typography.labelSmall)
+                Text(stringResource(R.string.fx_hue), style = MaterialTheme.typography.labelSmall)
                 Slider(value = h, onValueChange = { h = it }, valueRange = 0f..360f)
-                Text("Saturation", style = MaterialTheme.typography.labelSmall)
+                Text(stringResource(R.string.fx_saturation), style = MaterialTheme.typography.labelSmall)
                 Slider(value = s, onValueChange = { s = it }, valueRange = 0f..1f)
-                Text("Brightness", style = MaterialTheme.typography.labelSmall)
+                Text(stringResource(R.string.fx_brightness), style = MaterialTheme.typography.labelSmall)
                 Slider(value = v, onValueChange = { v = it }, valueRange = 0f..1f)
-                TextButton(onClick = { onPick(0) }) { Text("Use current album colour") }
+                TextButton(onClick = { onPick(0) }) { Text(stringResource(R.string.fx_use_current_album_colour)) }
             }
         },
         confirmButton = {
             TextButton(onClick = { onPick(android.graphics.Color.HSVToColor(floatArrayOf(h, s, v))) }) {
-                Text("Select")
+                Text(stringResource(R.string.action_select))
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
     )
 }
 
@@ -1728,7 +1757,7 @@ private fun StudioPreview(
                 )
             } else {
                 Letters3DRow(
-                    text = "Feel the beat tonight",
+                    text = stringResource(R.string.fx_feel_the_beat_tonight),
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontSize = fx.fontSizeSp.sp,
                         lineHeight = (fx.fontSizeSp * 1.26f).sp,
@@ -1749,8 +1778,8 @@ private fun StudioPreview(
             // fixed tempo — the synthetic beat only exists to drive the FX, and
             // what the preview is actually demonstrating is how reactive the
             // current settings are.
-            text = "PREVIEW · reactivity ${(fx.bassReact * 100).toInt()}%" +
-                if (playing != null) " · now playing" else "",
+            text = stringResource(R.string.fx_preview_reactivity, (fx.bassReact * 100).toInt()) +
+                if (playing != null) stringResource(R.string.fx_now_playing_suffix) else "",
             style = MaterialTheme.typography.labelSmall,
             color = Color.White.copy(alpha = 0.35f),
             modifier = Modifier
@@ -1849,7 +1878,7 @@ private fun FontPicker(
 ) {
     if (fonts.isEmpty()) {
         Text(
-            text = "No imported fonts yet. Add them in Settings › Appearance › Font Library.",
+            text = stringResource(R.string.fx_no_imported_fonts_yet_add_them_in_settings),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
@@ -1864,7 +1893,7 @@ private fun FontPicker(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Font: " + (selectedName ?: "choose…"),
+                text = stringResource(R.string.fx_font_value, selectedName ?: stringResource(R.string.fx_choose)),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
@@ -1954,3 +1983,12 @@ private fun FxSlider(
 }
 
 private fun String.format(vararg args: Any?): String = String.format(Locale.US, this, *args)
+
+/** A blend mode's name as image editors in the reader's language call it. */
+@androidx.annotation.StringRes
+private fun blendLabel(mode: VisualizerBlendMode): Int = when (mode) {
+    VisualizerBlendMode.NORMAL -> R.string.blend_normal
+    VisualizerBlendMode.SCREEN -> R.string.blend_screen
+    VisualizerBlendMode.ADDITIVE -> R.string.blend_additive
+    VisualizerBlendMode.SOFT_LIGHT -> R.string.blend_soft_light
+}

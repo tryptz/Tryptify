@@ -19,7 +19,10 @@ public:
         bufL_.prepare(maxSamples);
         bufR_.prepare(maxSamples);
         currentRate_ = 1.0f;
-        readPhase_ = 0.0;
+        lag_ = 0.0;
+        catchUp_ = 0.0f;
+        catchUpStep_ = 1.0f / static_cast<float>(0.02 * sampleRate);
+        maxLag_ = static_cast<double>(maxSamples - 8);
         playing_ = true;
     }
 
@@ -56,33 +59,52 @@ public:
                 shapedRate = linear * (1.0f - curveAmt) + exponential * curveAmt;
             }
 
-            // Variable-rate read from buffer
-            readPhase_ += static_cast<double>(shapedRate);
-            int readOffset = static_cast<int>(readPhase_);
-
-            if (readOffset > 0 && shapedRate > 0.001f) {
-                float frac = static_cast<float>(readPhase_ - static_cast<double>(readOffset));
-                // Simple linear interpolation for variable rate
-                float s0L = bufL_.readReverse(1);
-                float s1L = bufL_.readReverse(0);
-                float s0R = bufR_.readReverse(1);
-                float s1R = bufR_.readReverse(0);
-                left[i]  = s0L + frac * (s1L - s0L);
-                right[i] = s0R + frac * (s1R - s0R);
-                readPhase_ -= readOffset;
-            } else if (shapedRate <= 0.001f) {
-                // Stopped: output silence or last sample
+            // The read head falls behind the write head by (1 − rate) each
+            // sample, so the tape plays slower — and lower — as it stops.
+            // (It used to read the newest two samples whatever the speed,
+            // so a stop kept its pitch and let the dry signal through.)
+            if (shapedRate <= 0.001f) {
+                // Stopped: silence. The head is parked; it rejoins live audio
+                // when play resumes (below), so the lag never builds up.
                 left[i] = 0.0f;
                 right[i] = 0.0f;
+                continue;
             }
+            lag_ += 1.0 - static_cast<double>(shapedRate);
+            lag_ = std::min(lag_, maxLag_);
+
+            float outL = bufL_.readLinear(static_cast<float>(lag_));
+            float outR = bufR_.readLinear(static_cast<float>(lag_));
+
+            // Back at full speed but still behind: crossfade to live audio
+            // over 20 ms rather than keep the delay for the rest of the song.
+            if (playing_ && currentRate_ >= 1.0f && lag_ > 0.0) {
+                catchUp_ += catchUpStep_;
+                if (catchUp_ >= 1.0f) {
+                    catchUp_ = 0.0f;
+                    lag_ = 0.0;
+                    outL = left[i];
+                    outR = right[i];
+                } else {
+                    outL = outL * (1.0f - catchUp_) + left[i] * catchUp_;
+                    outR = outR * (1.0f - catchUp_) + right[i] * catchUp_;
+                }
+            }
+            left[i] = outL;
+            right[i] = outR;
         }
     }
 
     void setParameter(int index, float value) override {
         switch (index) {
-            case PLAY:
-                playing_ = value > 0.5f;
+            case PLAY: {
+                const bool play = value > 0.5f;
+                // Starting from a full stop: the output was silent, so the
+                // head can jump back to live audio with nothing to hear.
+                if (play && !playing_ && currentRate_ <= 0.001f) lag_ = 0.0;
+                playing_ = play;
                 break;
+            }
             case STOP_TIME:  stopTimeMs_ = std::max(50.0f, std::min(5000.0f, value)); break;
             case START_TIME: startTimeMs_ = std::max(50.0f, std::min(5000.0f, value)); break;
             case CURVE:      curve_ = std::max(0.0f, std::min(100.0f, value)); break;
@@ -102,7 +124,8 @@ public:
     void reset() override {
         bufL_.reset(); bufR_.reset();
         currentRate_ = 1.0f;
-        readPhase_ = 0.0;
+        lag_ = 0.0;
+        catchUp_ = 0.0f;
         playing_ = true;
     }
 
@@ -118,5 +141,8 @@ private:
 
     DelayLine bufL_, bufR_;
     float currentRate_ = 1.0f;
-    double readPhase_ = 0.0;
+    double lag_ = 0.0;          // samples the read head is behind the write head
+    double maxLag_ = 0.0;
+    float catchUp_ = 0.0f;      // 0..1 through the crossfade back to live
+    float catchUpStep_ = 0.0f;
 };

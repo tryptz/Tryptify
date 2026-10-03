@@ -141,25 +141,6 @@ class HeadphoneRepository @Inject constructor(
     }
 
     /**
-     * Load measurement data for a specific headphone
-     *
-     * @param headphoneId The normalized (lowercased, underscored) id used for cache lookup.
-     * @param headphoneName The original-case display name, needed for the
-     *   case-sensitive GitHub fallback URLs. Defaults to the id when unknown.
-     */
-    fun loadHeadphoneMeasurement(
-        headphoneId: String,
-        headphoneName: String = ""
-    ): Flow<Result<String>> = flow {
-        try {
-            val result = autoEqApi.fetchHeadphoneMeasurement(headphoneId, headphoneName)
-            emit(result)
-        } catch (e: Exception) {
-            emit(Result.failure(e))
-        }
-    }
-
-    /**
      * Refresh headphone cache across both source APIs. Forces a fresh fetch
      * on the next request.
      */

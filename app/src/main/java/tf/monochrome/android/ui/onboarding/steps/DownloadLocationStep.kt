@@ -27,6 +27,8 @@ import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.onboarding.OnboardingStepScaffold
 import tf.monochrome.android.ui.onboarding.OnboardingViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * Choose where downloaded tracks land. Default is app-scoped storage
@@ -51,22 +53,22 @@ fun DownloadLocationStep(viewModel: OnboardingViewModel) {
     }
 
     OnboardingStepScaffold(
-        title = "Downloads",
-        subtitle = "Qobuz downloads and saved tracks land here.",
-        primaryLabel = "Continue",
+        title = stringResource(R.string.page_downloads),
+        subtitle = stringResource(R.string.onboarding_downloads_subtitle),
+        primaryLabel = stringResource(R.string.action_continue),
         onPrimary = { viewModel.next() }
     ) {
         LocationOption(
             selected = downloadUri == null,
-            title = "App storage (default)",
-            description = "Private to Tryptify; removed if you uninstall the app.",
+            title = stringResource(R.string.onboarding_app_storage_default),
+            description = stringResource(R.string.onboarding_app_storage_desc),
             onClick = { viewModel.setDownloadFolder(null) }
         )
         LocationOption(
             selected = downloadUri != null,
-            title = "Custom folder",
+            title = stringResource(R.string.settings_custom_folder),
             description = downloadUri?.let { friendlyTreeUriLabel(it) }
-                ?: "Pick any folder — downloads stay after uninstall and are visible to other apps.",
+                ?: stringResource(R.string.onboarding_custom_folder_desc),
             onClick = { downloadFolderPicker.launch(null) }
         )
     }

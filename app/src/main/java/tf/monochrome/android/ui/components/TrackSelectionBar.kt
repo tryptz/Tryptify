@@ -19,6 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 /**
  * Contextual action bar shown while track multi-select is active. Delete is
@@ -33,7 +36,7 @@ fun TrackSelectionBar(
     onAddToPlaylist: () -> Unit,
     modifier: Modifier = Modifier,
     onDelete: (() -> Unit)? = null,
-    deleteContentDescription: String = "Delete",
+    deleteContentDescription: String = stringResource(R.string.action_delete),
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -48,12 +51,12 @@ fun TrackSelectionBar(
             IconButton(onClick = onClose) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = "Exit selection",
+                    contentDescription = stringResource(R.string.action_exit_selection),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
             Text(
-                text = "$selectedCount selected",
+                text = pluralStringResource(R.plurals.selected_count, selectedCount, selectedCount),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -62,14 +65,14 @@ fun TrackSelectionBar(
             IconButton(onClick = onAddToQueue) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.QueueMusic,
-                    contentDescription = "Add to queue",
+                    contentDescription = stringResource(R.string.action_add_to_queue),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
             IconButton(onClick = onAddToPlaylist) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.PlaylistAdd,
-                    contentDescription = "Add to playlist",
+                    contentDescription = stringResource(R.string.action_add_to_playlist),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
             }

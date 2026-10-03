@@ -50,14 +50,4 @@ interface DownloadDao {
 
     @Query("SELECT SUM(sizeBytes) FROM downloaded_tracks")
     fun getTotalDownloadSize(): Flow<Long?>
-
-    // Lyrics cache
-    @Query("SELECT * FROM cached_lyrics WHERE trackId = :trackId")
-    suspend fun getCachedLyrics(trackId: Long): CachedLyricsEntity?
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertCachedLyrics(lyrics: CachedLyricsEntity)
-
-    @Query("DELETE FROM cached_lyrics WHERE cachedAt < :beforeTimestamp")
-    suspend fun clearOldLyricsCache(beforeTimestamp: Long)
 }

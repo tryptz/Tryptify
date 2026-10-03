@@ -71,7 +71,12 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var projectMEngineRepository: ProjectMEngineRepository
     @Inject lateinit var channelDetectorProcessor: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor
     @Inject lateinit var downmixProcessor: tf.monochrome.android.audio.dsp.DownmixProcessor
+    @Inject lateinit var spatialPlacement: tf.monochrome.android.audio.dsp.spatial.SpatialPlacementStore
     @Inject lateinit var mixBusProcessor: MixBusProcessor
+    // The mixer's Atmos upmix: stereo → 9.1.6 ahead of the mixer, off unless a mix turns it on.
+    @Inject lateinit var upmixProcessor: tf.monochrome.android.audio.dsp.UpmixProcessor
+    // The playing track's tempo, for the speed control's BPM unit.
+    @Inject lateinit var bpmTap: tf.monochrome.android.audio.tempo.BpmTapProcessor
     // The Oxford post-chain, injected so a blend's DSP copy can be seeded with
     // whatever these are set to right now.
     @Inject lateinit var inflatorEffect: tf.monochrome.android.audio.dsp.oxford.InflatorEffect
@@ -90,6 +95,7 @@ class PlaybackService : MediaSessionService() {
     // MediaController, which carries neither one nor any decoder identity.
     @Inject lateinit var audioPipelineMonitor: tf.monochrome.android.audio.pipeline.AudioPipelineMonitor
     @Inject lateinit var qobuzCache: tf.monochrome.android.data.cache.QobuzStreamCacheManager
+    @Inject lateinit var deezerCache: tf.monochrome.android.data.cache.DeezerStreamCacheManager
     @Inject lateinit var usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter
     @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
     @Inject lateinit var bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController
@@ -108,7 +114,7 @@ class PlaybackService : MediaSessionService() {
     @OptIn(UnstableApi::class)
     private fun buildAtmosTapFactory() =
         tf.monochrome.android.audio.atmos.AtmosTapMediaSourceFactory(
-            DefaultMediaSourceFactory(buildDataSourceFactory()), atmosFrameBuffer)
+            DefaultMediaSourceFactory(buildDataSourceFactory(), tf.monochrome.android.audio.wav.TryptifyExtractors.factory), atmosFrameBuffer)
 
     /**
      * Everything DefaultDataSource handles (file / content / asset / http),
@@ -134,10 +140,12 @@ class PlaybackService : MediaSessionService() {
             .setReadTimeoutMs(15_000)
         val default = androidx.media3.datasource.DefaultDataSource.Factory(this, http)
         val qobuz = tf.monochrome.android.data.cache.QobuzPartialDataSource.Factory(qobuzCache)
+        val deezer = tf.monochrome.android.data.cache.DeezerPartialDataSource.Factory(deezerCache)
         return androidx.media3.datasource.DataSource.Factory {
             tf.monochrome.android.data.cache.SchemeRoutingDataSource(
                 default.createDataSource(),
                 qobuz.createDataSource(),
+                deezer.createDataSource(),
             )
         }
     }
@@ -258,6 +266,8 @@ class PlaybackService : MediaSessionService() {
                 // stale — it would keep counting from where the track used to
                 // be. Only seeks: track changes come through the queue watcher.
                 if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                    // A seek is a new run at the end of the track.
+                    crossfadeArmed = true
                     queueManager.currentTrack.value?.let { pushDiscordPresence(it) }
                     playbackState.savePosition(player.currentPosition, player.duration, flush = true)
                 }
@@ -384,6 +394,14 @@ class PlaybackService : MediaSessionService() {
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                // A new track gets its own blend at its own end, and its own tempo.
+                crossfadeArmed = true
+                bpmTap.newTrack()
+                // Integrated loudness and range are per track. The tap runs a
+                // buffer ahead of what is heard, so this lands a moment into
+                // the new track rather than exactly on it — a few hundred ms of
+                // intro, which the gate would mostly discard anyway.
+                tf.monochrome.android.audio.eq.LoudnessNative.reset()
                 // A gapless hand-off: the player moved to the item we
                 // pre-queued, so it advanced the queue for us. Bring
                 // QueueManager into line *without* re-resolving — calling
@@ -514,6 +532,8 @@ class PlaybackService : MediaSessionService() {
                 preferences.pitchQuality,
             ) { engine, quality -> engine to quality }
                 .collect { (engine, quality) ->
+                    lastPitchEngine = engine
+                    lastPitchQuality = quality
                     stretchProcessor.setEngine(engine, quality)
                     pushAutoEqWarp()
                 }
@@ -521,11 +541,25 @@ class PlaybackService : MediaSessionService() {
 
         // Multichannel handling: fold 5.1/7.1 down to stereo (default) or,
         // when the user turns the toggle off, pass multichannel PCM through
-        // to AudioTrack untouched (the stereo-only processors deactivate
-        // themselves for >2 ch). Takes effect on the next pipeline
+        // to AudioTrack untouched — where Android's spatializer can take it.
+        // The chain runs at that width, up to 16 channels: the mixer as one
+        // lane per channel pair, both EQs per channel, speed and
+        // transposition per channel. Takes effect on the next pipeline
         // reconfigure (track change / seek), like the other DSP toggles.
+        //
+        // The Atmos speaker render (Atmos page › Speakers) outputs the layout's
+        // channels itself, so while it targets a multichannel layout the fold
+        // must stay out of its way; the connected output's channel count feeds
+        // the layout auto-detect.
+        registerOutputChannelTracking()
         serviceScope.launch {
-            preferences.multichannelDownmixEnabled.collect { enabled ->
+            combine(
+                preferences.multichannelDownmixEnabled,
+                preferences.rendererProfile,
+                outputChannelCount,
+            ) { enabled, profile, channels ->
+                enabled && !profile.speakerLayout(channels).isMultichannel
+            }.distinctUntilChanged().collect { enabled ->
                 downmixProcessor.setEnabled(enabled)
             }
         }
@@ -535,6 +569,14 @@ class PlaybackService : MediaSessionService() {
             preferences.rendererProfile.collect { profile ->
                 downmixProcessor.setPreampDb(profile.downmixPreampDb)
                 downmixProcessor.setLfeLowpass(profile.lfeLowpass)
+                // The spatial map's binaural fold uses the Atmos renderer's
+                // headphone settings, so the two sound alike.
+                downmixProcessor.setHeadphoneRender(
+                    profile.binauralStrength,
+                    profile.heightVirtualization,
+                    profile.bassManagement,
+                    profile.crossoverHz,
+                )
             }
         }
 
@@ -565,6 +607,7 @@ class PlaybackService : MediaSessionService() {
         // the 1024 default with the mixer on regardless of what the user set.
         serviceScope.launch { preferences.dspBlockSize.collect { dspBlockSize = it } }
         serviceScope.launch { preferences.dspEnabled.collect { dspEnabled = it } }
+        serviceScope.launch { preferences.hiResHalOutputEnabled.collect { hiResHalEnabled = it } }
 
         // Blend length. Any non-zero value takes over from the gapless window,
         // so re-derive that whenever it changes.
@@ -704,6 +747,13 @@ class PlaybackService : MediaSessionService() {
      */
     @OptIn(UnstableApi::class)
     private fun audioPipelineAnalytics(): AnalyticsListener = object : AnalyticsListener {
+        // The audio really playing out, after a pause, a seek or a new track —
+        // for a blend, the moment the incoming track can be heard, which a
+        // change of codec, rate or channel count puts well after "playing".
+        override fun onAudioPositionAdvancing(eventTime: AnalyticsListener.EventTime, playoutStartSystemTimeMs: Long) {
+            audioStarts++
+        }
+
         override fun onAudioInputFormatChanged(
             eventTime: AnalyticsListener.EventTime,
             format: androidx.media3.common.Format,
@@ -849,7 +899,15 @@ class PlaybackService : MediaSessionService() {
             ): AudioSink {
                 return try {
                     val defaultSink = DefaultAudioSink.Builder(context)
-                        // Deliberately false, whatever the factory was told.
+                        // Puts the Atmos speaker layout's real channel mask on
+                        // the track (Media3 derives masks from the count only).
+                        .setAudioTrackProvider(
+                            tf.monochrome.android.audio.atmos.AtmosAudioTrackProvider {
+                                atmosAudioProcessor.activeLayout
+                            }
+                        )
+                        // Float output: on, but DefaultAudioSink never gets to
+                        // act on it by itself.
                         //
                         // DefaultAudioSink.configure builds its pipeline one of
                         // two ways, and they are not equivalent:
@@ -861,24 +919,20 @@ class PlaybackService : MediaSessionService() {
                         //     pipelineProcessors.add(audioProcessorChain.getAudioProcessors())
                         //   }
                         //
-                        // toFloatPcmAvailableAudioProcessors is exactly one
-                        // processor, the float converter. The custom chain is
-                        // added on the other branch only. So turning this on
-                        // silently deletes the mixer, both EQs, the spectrum
-                        // tap and the projectM feed from the HAL path, and the
-                        // audio keeps playing, which is how it went unnoticed:
-                        // every effect dead, nothing in the log.
+                        // The float branch has no custom chain: handed a hi-res
+                        // stream directly it would play with the mixer, both
+                        // EQs, the spectrum and the projectM feed silently gone.
+                        // The int branch has one, but narrows to 16 bits first.
                         //
-                        // shouldUseFloatOutput also requires high-resolution
-                        // input, so this only started biting once the renderer
-                        // above began emitting float.
-                        //
-                        // Nothing is lost. The exclusive USB path takes the
-                        // renderer's float directly and packs it into the DAC's
-                        // 24-bit subslots itself; this flag never touched it.
-                        // The HAL path goes back to what it did before, which
-                        // is 16-bit out with every effect running.
-                        .setEnableFloatOutput(false)
+                        // LibusbAudioSink stands in front and never hands this
+                        // sink a hi-res stream it would take down the float
+                        // branch unprocessed: it either runs the DSP itself in
+                        // float and passes the finished float here (hi-res
+                        // output — the reason this is on), or narrows to 16-bit
+                        // itself so the int branch and its chain run as before.
+                        // 16-bit sources come straight through to the int
+                        // branch, unchanged.
+                        .setEnableFloatOutput(true)
                         .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                         // Our own chain rather than setAudioProcessors, which
                         // would wrap these in DefaultAudioProcessorChain and send
@@ -892,9 +946,20 @@ class PlaybackService : MediaSessionService() {
                             tf.monochrome.android.audio.resample.TryptifyAudioProcessorChain(
                                 arrayOf(
                                 channelDetectorProcessor, // Passive tap: reports source channel count/layout + per-channel activity
-                                atmosAudioProcessor,    // Atmos: multichannel bed → object render → binaural stereo; inactive for ≤2ch
+                                bpmTap,                 // Passive tap: the track's own tempo, before the mixer and the speed change
+                                atmosAudioProcessor,    // Atmos: multichannel bed → object render → binaural stereo or speakers; inactive for ≤2ch
+                                // The mixer before the fold, so it sees the song's own layout: a
+                                // 9.1.6 bed spreads one channel group per bus (nine of them), and
+                                // is folded to stereo only after it has been mixed. With the fold
+                                // first, every multichannel song reached the mixer as plain stereo.
+                                // An Atmos speaker render reaches it as the layout's speakers, so
+                                // up to 7.1.4 is mixed per speaker group; 9.1.4 / 9.1.6 travel as a
+                                // 24-channel frame, past its 16, and it steps aside for those.
+                                // Stereo → 9.1.6 when the mix's Atmos upmix is on, so the mixer gets
+                                // nine channel groups to work on; inactive otherwise and for >2ch.
+                                upmixProcessor,
+                                mixBusProcessor,        // DSP engine (mixer/effects), up to 16 channels
                                 downmixProcessor,       // Multichannel→stereo fold-down; inactive (NOT_SET) for mono/stereo
-                                mixBusProcessor,        // DSP engine (mixer/effects)
                                 autoEqProcessor,        // AutoEQ (independent, always-on when enabled)
                                 parametricEqProcessor,  // Parametric EQ (after AutoEQ, stacks on top)
                                 spectrumAnalyzerTap,    // Passive FFT tap for the Parametric EQ editor visualizer
@@ -922,6 +987,13 @@ class PlaybackService : MediaSessionService() {
                     // configures + drains them at a time (bypassActive
                     // gates inside LibusbAudioSink), so there's no
                     // contention.
+                    // Time-stretching for the two paths that run the DSP in
+                    // the sink. DefaultAudioSink's int branch keeps Media3's
+                    // Sonic; this one also takes float, so hi-res and USB
+                    // streams change speed at their own resolution. One
+                    // instance, like the other shared stages: only one of
+                    // the two paths runs at a time.
+                    val timeStretch = tf.monochrome.android.audio.resample.FloatSonicAudioProcessor()
                     tf.monochrome.android.audio.usb.LibusbAudioSink(
                         delegate = defaultSink,
                         driver = libusbDriver,
@@ -939,9 +1011,12 @@ class PlaybackService : MediaSessionService() {
                             // feed.
                             tf.monochrome.android.audio.usb.ToFloatPcmAudioProcessor(),
                             channelDetectorProcessor,
+                            bpmTap,
                             atmosAudioProcessor,
-                            downmixProcessor,
+                            upmixProcessor,
+                            // Mixer before the fold, as in the chain above.
                             mixBusProcessor,
+                            downmixProcessor,
                             autoEqProcessor,
                             parametricEqProcessor,
                             spectrumAnalyzerTap,
@@ -971,6 +1046,11 @@ class PlaybackService : MediaSessionService() {
                             // passes the block straight through, so
                             // bit-perfect output survives.
                             stretchProcessor,
+                            // Speed with pitch preserved. Without it that mode
+                            // did nothing over USB. Not in the chain until a
+                            // speed is used, and exact at 1.00x after that,
+                            // so bit-perfect output survives here too.
+                            timeStretch,
                             // ProjectM tap intentionally omitted from
                             // the bypass chain — the inline pump runs
                             // on the renderer thread and the visualizer
@@ -978,6 +1058,35 @@ class PlaybackService : MediaSessionService() {
                             // Spectrum tap is light-weight and fine.
                         ),
                         resampler = variRateProcessor,
+                        timeStretch = timeStretch,
+                        // A crossfade's tail mixes in here while the DAC is
+                        // ours (see CrossfadeController / MixFeedAudioSink).
+                        crossfadeMix = usbCrossfadeMix,
+                        // The hi-res HAL path: the same DSP, run here in float
+                        // and handed to defaultSink finished (see the note on
+                        // setEnableFloatOutput). Speed included, with the
+                        // transport stages last in the int branch's order, so
+                        // a speed change never moves the stream off this path.
+                        // With the projectM tap, which the normal HAL path
+                        // has and this one must not lose.
+                        halProcessors = listOf(
+                            tf.monochrome.android.audio.usb.ToFloatPcmAudioProcessor(),
+                            channelDetectorProcessor,
+                            bpmTap,
+                            atmosAudioProcessor,
+                            upmixProcessor,
+                            // Mixer before the fold, as in the chain above.
+                            mixBusProcessor,
+                            downmixProcessor,
+                            autoEqProcessor,
+                            parametricEqProcessor,
+                            spectrumAnalyzerTap,
+                            TeeAudioProcessor(ProjectMAudioTapProcessor(audioBus)),
+                            variRateProcessor,
+                            stretchProcessor,
+                            timeStretch,
+                        ),
+                        hiResHalEnabled = { hiResHalEnabled },
                     )
                 } catch (error: Exception) {
                     projectMEngineRepository.reportAudioTapFailure(
@@ -1070,7 +1179,46 @@ class PlaybackService : MediaSessionService() {
     }
 
     @OptIn(UnstableApi::class)
+    // Largest channel count an attached HDMI / USB output reports (null: none,
+    // or it lists no counts), for the Atmos speaker layout auto-detect.
+    private val outputChannelCount = kotlinx.coroutines.flow.MutableStateFlow<Int?>(null)
+    private var outputDeviceCallback: android.media.AudioDeviceCallback? = null
+
+    private fun registerOutputChannelTracking() {
+        val audioManager = getSystemService(android.media.AudioManager::class.java) ?: return
+        fun refresh() {
+            val external = setOf(
+                android.media.AudioDeviceInfo.TYPE_HDMI,
+                android.media.AudioDeviceInfo.TYPE_HDMI_ARC,
+                android.media.AudioDeviceInfo.TYPE_USB_DEVICE,
+                android.media.AudioDeviceInfo.TYPE_USB_HEADSET,
+            ) + if (android.os.Build.VERSION.SDK_INT >= 31) {
+                setOf(android.media.AudioDeviceInfo.TYPE_HDMI_EARC)
+            } else {
+                emptySet()
+            }
+            val channels = audioManager.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)
+                .filter { it.type in external }
+                .mapNotNull { it.channelCounts.maxOrNull() }
+                .maxOrNull()
+            outputChannelCount.value = channels
+            atmosAudioProcessor.deviceChannelCount = channels
+        }
+        val callback = object : android.media.AudioDeviceCallback() {
+            override fun onAudioDevicesAdded(added: Array<out android.media.AudioDeviceInfo>?) = refresh()
+            override fun onAudioDevicesRemoved(removed: Array<out android.media.AudioDeviceInfo>?) = refresh()
+        }
+        outputDeviceCallback = callback
+        // Called back on the main looper; fires once immediately with the current set.
+        audioManager.registerAudioDeviceCallback(callback, android.os.Handler(android.os.Looper.getMainLooper()))
+        refresh()
+    }
+
     override fun onDestroy() {
+        outputDeviceCallback?.let {
+            getSystemService(android.media.AudioManager::class.java)?.unregisterAudioDeviceCallback(it)
+        }
+        outputDeviceCallback = null
         // Discord holds a presence until the connection that set it closes, so
         // leaving without this parks the last track on the profile for good.
         // shutdown(), not clear(): the service is going away now, so there is
@@ -1163,7 +1311,7 @@ class PlaybackService : MediaSessionService() {
                         DashMediaSource.Factory(dataSourceFactory)
                             .createMediaSource(MediaItem.fromUri(mpdUri))
                     } else {
-                        ProgressiveMediaSource.Factory(dataSourceFactory)
+                        ProgressiveMediaSource.Factory(dataSourceFactory, tf.monochrome.android.audio.wav.TryptifyExtractors.factory)
                             .createMediaSource(mediaItem)
                     }
 
@@ -1312,6 +1460,10 @@ class PlaybackService : MediaSessionService() {
     /** Mirrors the independent transposition, for the same reason. */
     @Volatile private var lastSemitones = 0f
 
+    /** And which engine runs it, so a blend's tail transposes the same way. */
+    @Volatile private var lastPitchEngine: tf.monochrome.android.audio.stretch.PitchEngine? = null
+    @Volatile private var lastPitchQuality: tf.monochrome.android.audio.stretch.PitchQuality? = null
+
     // Volume has two independent inputs — the user slider and the crossfade
     // ramp — and both would otherwise want to own player.volume outright.
     // They're kept apart here: [baseVolume] is the level the track should play
@@ -1350,6 +1502,10 @@ class PlaybackService : MediaSessionService() {
 
     @Volatile private var crossfadeMs = 0L
 
+    /** Where a blend's tail joins the exclusive USB stream. */
+    @OptIn(UnstableApi::class)
+    private val usbCrossfadeMix = tf.monochrome.android.audio.usb.UsbCrossfadeMix()
+
     /**
      * Mirrors [player]'s playing state as something suspendable. Player.Listener
      * is a callback, and the blend watcher needs to *wait* for playback rather
@@ -1361,6 +1517,8 @@ class PlaybackService : MediaSessionService() {
     // defaults match PreferencesManager's until the collectors above land.
     @Volatile private var dspBlockSize = 1024
     @Volatile private var dspEnabled = false
+    // Read by LibusbAudioSink on the playback thread at configure time.
+    @Volatile private var hiResHalEnabled = true
 
     // Type left inferred, like atmosTapFactory above: spelling CrossfadeController
     // out here is itself an opt-in usage that an @OptIn on the property doesn't
@@ -1396,11 +1554,15 @@ class PlaybackService : MediaSessionService() {
      */
     @OptIn(UnstableApi::class)
     private fun buildSeededDspChain(): tf.monochrome.android.audio.dsp.DspChain {
-        val chain = tf.monochrome.android.audio.dsp.DspChain.createCopy()
+        val chain = tf.monochrome.android.audio.dsp.DspChain.createCopy(spatialPlacement)
         val autoEq = lastAutoEq
         val paramEq = lastParametricEq
         chain.seedFrom(
-            dspStateJson = runCatching { dspManager.getStateJson() }.getOrNull(),
+            // Without the upmix switch: the tail runs its own chain, which
+            // has no upmix stage, and the engine needs only the buses.
+            dspStateJson = runCatching {
+                tf.monochrome.android.audio.dsp.model.MixUpmix.strip(dspManager.getStateJson())
+            }.getOrNull(),
             autoEqBandsL = autoEq.bandsL,
             autoEqBandsR = autoEq.bandsR,
             autoEqPreamp = autoEq.preamp,
@@ -1429,53 +1591,84 @@ class PlaybackService : MediaSessionService() {
             scope = serviceScope,
             dataSourceFactory = buildDataSourceFactory(),
             dspChainFactory = ::buildSeededDspChain,
+            // While the DAC is exclusively ours, the tail is mixed into the
+            // main stream instead of playing through Android.
+            usbMix = { usbCrossfadeMix.takeIf { libusbDriver.isStreaming.value } },
         ) { gain ->
             crossfadeGain = gain
             pushVolume()
         }
 
     /**
-     * Whether a blend can run right now.
-     *
-     * The exclusive libusb path is the hard stop: it claims the USB device for
-     * one stream, and the tail player uses the ordinary Android sink, so during
-     * a blend its audio would come out of a different device entirely. Skipping
-     * the blend is the honest outcome — bit-perfect output is the reason
-     * someone plugs in that DAC, and a gap is a smaller price than the tail
-     * playing out of the phone speaker.
-     */
-    private fun canCrossfade(): Boolean =
-        crossfadeMs > 0L && !libusbDriver.isStreaming.value
-
-    /**
-     * Hands the tail of the current track to the secondary player and starts
-     * the next one on the main player, overlapping the two.
+     * Whether a blend can run right now. On the exclusive USB path too: the
+     * tail is mixed into the main stream before it reaches the DAC
+     * (UsbCrossfadeMix), so there is still one stream and one owner.
      */
     @OptIn(UnstableApi::class)
-    private fun beginCrossfade() {
+    private fun canCrossfade(): Boolean = crossfadeMs > 0L
+
+
+    /** Counts [AnalyticsListener.onAudioPositionAdvancing] on the main player. */
+    @Volatile private var audioStarts = 0L
+
+    /**
+     * Whether this play-through of the track may still blend. Cleared when a
+     * blend starts — so one abandoned for a slow tail is not retried every
+     * poll — and set again by a new track or a seek.
+     */
+    @Volatile private var crossfadeArmed = true
+
+    /**
+     * Blends the current track into the next one.
+     *
+     * The tail is prepared while the main player is still playing the track,
+     * and the main player only moves on once the tail is audibly carrying it
+     * ([CrossfadeController.start]) — so the outgoing song never drops out at
+     * the start of a blend, however long the tail took to open and seek. It
+     * plays at the main player's speed, pitch and transposition, and the
+     * blend is timed in heard time, so it lasts as long as the setting at any
+     * speed.
+     */
+    @OptIn(UnstableApi::class)
+    private fun beginCrossfade(fadeFromMs: Long) {
         val item = player.currentMediaItem ?: return
         val outgoing = queueManager.currentTrack.value
-        val started = crossfade.start(
+        val params = player.playbackParameters
+        crossfadeArmed = false
+        crossfade.start(
             item = item,
-            fromPositionMs = player.currentPosition,
-            durationMs = crossfadeMs,
+            fadeFromMs = fadeFromMs,
+            trackDurationMs = player.duration,
+            crossfadeMs = crossfadeMs,
             tailVolume = baseVolume,
-            // The incoming track is resolved and buffered from scratch below;
-            // until the main player is genuinely sounding, there is nothing to
-            // fade in and the blend waits.
-            incomingReady = { player.playbackState == Player.STATE_READY && player.isPlaying },
+            playback = CrossfadeController.Playback(
+                speed = params.speed,
+                pitch = params.pitch,
+                semitones = lastSemitones,
+                engine = lastPitchEngine,
+                quality = lastPitchQuality,
+            ),
+            mainPositionMs = { player.currentPosition },
+            onHandOff = {
+                // The outgoing track never reaches STATE_ENDED on the main
+                // player now — we pre-empt it — so scrobble here instead,
+                // exactly as that handler would have.
+                outgoing?.let { serviceScope.launch { scrobblingService.scrobbleTrack(it) } }
+                incomingStartsAfter = audioStarts
+                // Start the incoming track silent; the ramp brings it up.
+                crossfadeGain = 0f
+                pushVolume()
+                onTrackEnded()
+            },
+            // Until the next track's audio is genuinely leaving the device,
+            // there is nothing to fade in, and the blend waits.
+            incomingSounding = { audioStarts > incomingStartsAfter },
         )
-        if (!started) return // Fall through to the ordinary end-of-track path.
-
-        // The outgoing track never reaches STATE_ENDED on the main player now —
-        // we pre-empt it — so scrobble here instead, exactly as that handler
-        // would have.
-        outgoing?.let { serviceScope.launch { scrobblingService.scrobbleTrack(it) } }
-
-        // Start the incoming track silent; the ramp brings it up.
-        crossfadeGain = 0f
-        onTrackEnded()
+        // If the tail could not be built, the track just ends the ordinary way.
     }
+
+    /** [audioStarts] at the hand-off; the incoming track sounds once it moves past. */
+    @Volatile private var incomingStartsAfter = Long.MAX_VALUE
 
     /**
      * Writes the play head down periodically, so a session that ends without
@@ -1530,16 +1723,19 @@ class PlaybackService : MediaSessionService() {
                     continue
                 }
                 kotlinx.coroutines.delay(CROSSFADE_POLL_MS)
-                if (!canCrossfade() || crossfade.isRunning) continue
+                if (!canCrossfade() || crossfade.isRunning || !crossfadeArmed) continue
                 if (!player.isPlaying) continue
                 if (queueManager.peekNext() == null) continue
-                if (CrossfadeRamp.shouldStart(
-                        positionMs = player.currentPosition,
-                        durationMs = player.duration,
-                        crossfadeMs = crossfadeMs,
-                    )
-                ) {
-                    beginCrossfade()
+                val speed = player.playbackParameters.speed
+                val position = player.currentPosition
+                val duration = player.duration
+                if (CrossfadeRamp.shouldPrepare(position, duration, crossfadeMs, speed, CROSSFADE_LEAD_MS)) {
+                    val fadeFrom = CrossfadeRamp.fadeStartMs(position, duration, crossfadeMs, speed, CROSSFADE_LEAD_MS)
+                    if (fadeFrom == null) {
+                        crossfadeArmed = false // too close to the end to blend at all
+                    } else {
+                        beginCrossfade(fadeFrom)
+                    }
                 }
             }
         }
@@ -1632,6 +1828,13 @@ class PlaybackService : MediaSessionService() {
 
         /** How often the play head is checked against the blend threshold. */
         const val CROSSFADE_POLL_MS = 250L
+
+        /**
+         * How long before the blend point the tail starts preparing, heard
+         * time: enough to open a stream, start a decoder and seek. Shorter
+         * than the poll would miss it, so it is several polls long.
+         */
+        const val CROSSFADE_LEAD_MS = 1_500L
 
         /** How often a running track writes its position down. */
         const val POSITION_PERSIST_INTERVAL_MS = 10_000L
@@ -1775,9 +1978,11 @@ class PlaybackService : MediaSessionService() {
     private suspend fun resolveGaplessItem(track: tf.monochrome.android.domain.model.Track): MediaItem? {
         val unified = unifiedTrackRegistry[track.id]
         val item = if (unified != null) {
-            streamResolver.resolveUnifiedTrack(unified).takeIf { it.isPlayable }?.mediaItem
+            // An upcoming track: never ask about another service while the
+            // current one is playing; the ask happens when it is reached.
+            streamResolver.resolveUnifiedTrack(unified, askForOtherService = false).takeIf { it.isPlayable }?.mediaItem
         } else {
-            streamResolver.resolveMediaItem(track).first
+            streamResolver.resolveMediaItem(track, askForOtherService = false).first
         } ?: return null
 
         val uri = item.localConfiguration?.uri?.toString()

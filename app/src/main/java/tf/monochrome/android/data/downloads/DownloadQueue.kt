@@ -22,6 +22,9 @@ import javax.inject.Singleton
 data class DownloadItem(
     val trackId: Long,
     val appleId: Long = -1L,
+    // Deezer identity, captured at enqueue for the same reason as [appleId].
+    // Defaulted so a queue persisted before it existed still decodes.
+    val deezerId: Long = -1L,
     val title: String,
     val artistName: String,
     val albumTitle: String? = null,
@@ -42,6 +45,7 @@ data class DownloadItem(
         fun from(track: Track): DownloadItem = DownloadItem(
             trackId = track.id,
             appleId = track.appleId ?: -1L,
+            deezerId = track.deezerId ?: -1L,
             title = track.title,
             artistName = track.artist?.name
                 ?: track.displayArtist.ifBlank { "Unknown Artist" },

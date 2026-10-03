@@ -46,6 +46,7 @@ import tf.monochrome.android.R
 import tf.monochrome.android.performance.LocalLowPerformance
 import tf.monochrome.android.ui.components.buttonSemantics
 import tf.monochrome.android.ui.theme.PressSpring
+import androidx.compose.ui.res.stringResource
 
 /**
  * Primary transport row: previous · play/pause · next. The icons are solid glyph
@@ -73,7 +74,7 @@ fun PlayerTransportControls(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         TransportIcon(
-            painterResource(R.drawable.ic_glass_skip_previous_chevron), "Previous", tint, onPrevious,
+            painterResource(R.drawable.ic_glass_skip_previous_chevron), stringResource(R.string.action_previous), tint, onPrevious,
             size = PlayerDesignTokens.SkipIconSize,
         )
 
@@ -155,8 +156,8 @@ fun PlayerTransportControls(
                         onClick = onPlayPause,
                     )
                     .buttonSemantics(
-                        label = if (isPlaying) "Pause" else "Play",
-                        state = if (isBuffering) "Buffering" else null,
+                        label = if (isPlaying) stringResource(R.string.action_pause) else stringResource(R.string.action_play),
+                        state = if (isBuffering) stringResource(R.string.buffering) else null,
                     ),
                 contentAlignment = Alignment.Center,
             ) {
@@ -184,7 +185,7 @@ fun PlayerTransportControls(
         }
 
         TransportIcon(
-            painterResource(R.drawable.ic_glass_skip_next_chevron), "Next", tint, onNext,
+            painterResource(R.drawable.ic_glass_skip_next_chevron), stringResource(R.string.action_next), tint, onNext,
             size = PlayerDesignTokens.SkipIconSize,
         )
     }

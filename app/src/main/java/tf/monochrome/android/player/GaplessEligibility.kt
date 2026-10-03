@@ -11,6 +11,7 @@ package tf.monochrome.android.player
  *  - `file` / `content` — a path on the device. Stable by definition.
  *  - `qobuz` — resolved by QobuzPartialDataSource at open time, not now, so
  *    there is nothing in it to expire. This is what makes Qobuz gapless.
+ *  - `deezer` — the same, through DeezerPartialDataSource.
  *  - `http` / `https` — a signed or time-limited stream URL (TIDAL, Apple).
  *    Queuing one ahead is exactly the staleness the one-track-at-a-time design
  *    was built to avoid, so these are refused.
@@ -29,6 +30,7 @@ internal object GaplessEligibility {
         "rawresource",
         "android.resource",
         tf.monochrome.android.data.cache.QobuzStreamUri.SCHEME,
+        tf.monochrome.android.data.cache.DeezerStreamUri.SCHEME,
     )
 
     /** True when [uri] will still resolve to the same audio some minutes from now. */

@@ -31,8 +31,14 @@ import java.nio.ByteBuffer
 @UnstableApi
 internal class AudioProcessorChain(
     private val processors: List<AudioProcessor>,
+    /** Where membership changes are logged; a no-op in JVM tests. */
+    private val log: (String) -> Unit = { Log.i(TAG, it) },
 ) {
     private val active = BooleanArray(processors.size)
+
+    // End of stream: the input has ended, and which processors have been told.
+    private var inputEnded = false
+    private val endQueued = BooleanArray(processors.size)
     private var outputFormat: AudioProcessor.AudioFormat =
         AudioProcessor.AudioFormat.NOT_SET
 
@@ -52,7 +58,8 @@ internal class AudioProcessorChain(
             p.flush()
         }
         outputFormat = fmt
-        Log.i(TAG, "configure($input) -> $fmt; chain: ${membership()}")
+        clearEnd()
+        log("configure($input) -> $fmt; chain: ${membership()}")
         return fmt
     }
 
@@ -82,15 +89,44 @@ internal class AudioProcessorChain(
      */
     fun process(input: ByteBuffer): ByteBuffer {
         var current = input
+        // After queueEndOfStream, each stage is told in turn once everything
+        // before it has ended and it has taken the last of their output — the
+        // same order Media3's own pipeline drains in — so the audio a stage
+        // holds (a resampler's history, a time-stretcher's window) comes out.
+        // Never in a step that also fed it input: a stage writes its final
+        // output into the buffer it just filled, and would overwrite that
+        // before anyone read it. It is told on the next step instead.
+        var upstreamEnded = inputEnded && !input.hasRemaining()
         for (i in processors.indices) {
             if (!active[i]) continue
             val p = processors[i]
             if (current.hasRemaining()) {
                 p.queueInput(current)
+            } else if (upstreamEnded && !endQueued[i]) {
+                p.queueEndOfStream()
+                endQueued[i] = true
             }
             current = p.getOutput()
+            upstreamEnded = endQueued[i] && p.isEnded
         }
         return current
+    }
+
+    /**
+     * The input has ended: call [process] with an empty buffer until
+     * [isEnded], handing on what it returns each time.
+     */
+    fun queueEndOfStream() {
+        inputEnded = true
+    }
+
+    /** Every stage has been told the input ended and has given up all it held. */
+    fun isEnded(): Boolean = inputEnded &&
+        processors.indices.all { !active[it] || (endQueued[it] && processors[it].isEnded) }
+
+    private fun clearEnd() {
+        inputEnded = false
+        endQueued.fill(false)
     }
 
     /**
@@ -119,17 +155,22 @@ internal class AudioProcessorChain(
             if (nowActive == active[i]) continue
             active[i] = nowActive
             changed = true
-            if (nowActive) processors[i].flush()
+            if (nowActive) {
+                processors[i].flush()
+                endQueued[i] = false
+            }
         }
-        if (changed) Log.i(TAG, "membership changed -> ${membership()}")
+        if (changed) log("membership changed -> ${membership()}")
     }
 
     fun flush() {
         for (p in processors) p.flush()
+        clearEnd()
     }
 
     fun reset() {
         for (p in processors) p.reset()
+        clearEnd()
     }
 
     fun outputFormat(): AudioProcessor.AudioFormat = outputFormat

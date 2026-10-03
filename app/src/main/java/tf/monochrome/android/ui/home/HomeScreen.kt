@@ -22,10 +22,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Podcasts
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ButtonDefaults
@@ -59,28 +57,23 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import tf.monochrome.android.ui.components.liquidGlass
-import tf.monochrome.android.ui.navigation.PageJumpList
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.player.PlayerViewModel
-import tf.monochrome.android.ui.components.SearchOverlay
-import tf.monochrome.android.ui.search.SearchHistoryContent
-import tf.monochrome.android.ui.search.SearchResultsContent
-import tf.monochrome.android.ui.search.SearchViewModel
 import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.navigation.navigateTool
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     navController: NavController,
     playerViewModel: PlayerViewModel,
-    // The page list, and the nav host's way of opening one. A lambda rather
-    // than the PagerState: see PageJumpList's own note on whose coroutine scope
-    // the scroll has to run on.
+    // Passed through to the Overview section Home draws; it never moves the
+    // pager itself — the tab bar does that now.
     pages: List<String>,
     onSelectPage: (String) -> Unit,
-    searchViewModel: SearchViewModel = hiltViewModel(),
     downloadCenter: tf.monochrome.android.ui.downloads.DownloadCenterViewModel = hiltViewModel(),
     settingsViewModel: tf.monochrome.android.ui.settings.SettingsViewModel = hiltViewModel(),
 ) {
@@ -90,10 +83,6 @@ fun HomeScreen(
     var showDownloadsMonitor by androidx.compose.runtime.remember {
         androidx.compose.runtime.mutableStateOf(false)
     }
-    // Both only feed SearchResultsContent now that the Recently Played list is
-    // gone from this screen.
-    val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsStateWithLifecycle()
-    val libraryPlaylists by playerViewModel.playlists.collectAsStateWithLifecycle()
 
     // Update notice. Reads straight off the settings store so opening About
     // from anywhere — the bar, or the user's own navigation — clears it.
@@ -119,41 +108,6 @@ fun HomeScreen(
     val showUpdateBar by settingsViewModel.showUpdateBar.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { settingsViewModel.refreshUpdateStatus() }
 
-    // Search state
-    val searchQuery by searchViewModel.query.collectAsStateWithLifecycle()
-    val searchTracks by searchViewModel.tracks.collectAsStateWithLifecycle()
-    val searchAlbums by searchViewModel.albums.collectAsStateWithLifecycle()
-    val searchArtists by searchViewModel.artists.collectAsStateWithLifecycle()
-    val searchPlaylists by searchViewModel.playlists.collectAsStateWithLifecycle()
-    val isSearching by searchViewModel.isSearching.collectAsStateWithLifecycle()
-    val selectedType by searchViewModel.selectedType.collectAsStateWithLifecycle()
-    val selectedSource by searchViewModel.selectedSource.collectAsStateWithLifecycle()
-    val showSourceFilter by searchViewModel.showSourceFilter.collectAsStateWithLifecycle()
-    val isLoadingMore by searchViewModel.isLoadingMore.collectAsStateWithLifecycle()
-    val endReached by searchViewModel.endReached.collectAsStateWithLifecycle()
-    val searchError by searchViewModel.searchError.collectAsStateWithLifecycle()
-    val searchHistory by searchViewModel.searchHistory.collectAsStateWithLifecycle()
-    val hasSearchResults = searchQuery.isNotBlank()
-
-    // Search reveals on demand; radio is the resting primary action.
-    var searchOpen by androidx.compose.runtime.saveable.rememberSaveable {
-        androidx.compose.runtime.mutableStateOf(false)
-    }
-    // Whether opening the bar should take the keyboard with it.
-    //
-    // Deliberately a plain remember against a saveable searchOpen: the bar is
-    // composed only while it is showing, so it asks for focus each time it
-    // appears — and "appears" includes Home being rebuilt with searchOpen
-    // restored true, which is arriving back from a detail screen, not a request
-    // to type. That case rebuilds this as false and the keyboard stays down.
-    var focusOnOpen by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    // Back closes an open search (and clears the query so the feed returns)
-    // instead of falling through and exiting the app.
-    androidx.activity.compose.BackHandler(enabled = searchOpen) {
-        searchViewModel.onQueryChange("")
-        searchOpen = false
-    }
-
     if (showDownloadsMonitor) {
         tf.monochrome.android.ui.downloads.DownloadsMonitorSheet(
             downloads = activeDownloads,
@@ -174,24 +128,10 @@ fun HomeScreen(
                         color = MaterialTheme.colorScheme.onBackground
                     )
                 },
+                // No search icon: Search is its own page now, the round button
+                // beside the tab bar, and it took the catalogue search and its
+                // history with it.
                 actions = {
-                    IconButton(onClick = {
-                        if (searchOpen) {
-                            // Closing search also clears the query so the
-                            // home feed comes back.
-                            searchViewModel.onQueryChange("")
-                        }
-                        val opening = !searchOpen
-                        searchOpen = opening
-                        focusOnOpen = opening
-                    }) {
-                        Icon(
-                            if (searchOpen) Icons.Default.Clear else Icons.Default.Search,
-                            contentDescription = if (searchOpen) "Close search" else "Search",
-                            tint = if (searchOpen) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                     tf.monochrome.android.ui.downloads.DownloadTopBarIndicator(
                         activeCount = activeDownloads.size,
                         overallProgress = downloadProgress,
@@ -200,14 +140,14 @@ fun HomeScreen(
                     IconButton(onClick = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) }) {
                         Icon(
                             Icons.Default.Settings,
-                            contentDescription = "Settings",
+                            contentDescription = stringResource(R.string.settings),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     IconButton(onClick = { navController.navigateTool(Screen.Profile) }) {
                         Icon(
                             Icons.Default.AccountCircle,
-                            contentDescription = "Profile",
+                            contentDescription = stringResource(R.string.profile),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -219,84 +159,23 @@ fun HomeScreen(
             )
         }
 
-        // Everything below the bar, with the search floating over it.
+        // ── Home is the Overview ────────────────────────────
         //
-        // The field used to be a row in this column, which meant it took layout
-        // space: the content started *below* it and clipped at its own top edge,
-        // so rows vanished at a hard line instead of sliding under the glass.
-        // Home worked out the fix first and kept its own hand-built Box, haze
-        // source and AnimatedVisibility for it; that is SearchOverlay now, and
-        // this is the last screen to stop having a private copy of it.
+        // It was a list of every page while pages were picked from Home; the
+        // tab bar does that job now. What Home shows instead is what Overview
+        // showed — Recently Played, then Liked Songs — which is what a Home in
+        // a music app is for. It is LibraryScreen's own Overview section rather
+        // than a copy, so selection, the context menu and "See All" behave the
+        // same as they did on the Library page it came from.
         //
-        // The bar stays out while a query is live, not only while the search is
-        // "open", so results never lose the field that produced them.
-        SearchOverlay(
-            open = searchOpen || hasSearchResults,
-            query = searchQuery,
-            onQueryChange = searchViewModel::onQueryChange,
-            placeholder = "Search tracks, albums, artists, playlists…",
-            onSubmit = searchViewModel::submitSearch,
-            onClose = {
-                searchViewModel.onQueryChange("")
-                searchOpen = false
-            },
-            // Only on a genuine user open. This is a plain remember, not a
-            // saveable, so coming back to a Home whose searchOpen was restored
-            // true does not re-pop the keyboard over the results.
-            autoFocus = focusOnOpen,
-        ) { searchTopInset ->
+        // The banners sit above it rather than inside it, one dismissible row
+        // apiece, so the list's own rows are the library and nothing else.
         Column(modifier = Modifier.fillMaxSize()) {
-        if (hasSearchResults) {
-            SearchResultsContent(
-                navController = navController,
-                playerViewModel = playerViewModel,
-                query = searchQuery,
-                tracks = searchTracks,
-                albums = searchAlbums,
-                artists = searchArtists,
-                playlistResults = searchPlaylists,
-                isSearching = isSearching,
-                selectedType = selectedType,
-                onTypeSelected = searchViewModel::setSelectedType,
-                selectedSource = selectedSource,
-                onSourceSelected = searchViewModel::setSelectedSource,
-                showSourceFilter = showSourceFilter,
-                favoriteTrackIds = favoriteTrackIds,
-                libraryPlaylists = libraryPlaylists,
-                onLoadMore = searchViewModel::loadMore,
-                isLoadingMore = isLoadingMore,
-                endReached = endReached,
-                searchError = searchError,
-                onRetry = searchViewModel::submitSearch,
-                // Recent-search history — previously only reachable from the
-                // orphaned standalone SearchScreen; now shown when the Home
-                // search is open with an empty query.
-                emptyContent = {
-                    SearchHistoryContent(
-                        history = searchHistory,
-                        onSelect = searchViewModel::selectHistoryQuery,
-                        onClearHistory = searchViewModel::clearSearchHistory,
-                    )
-                },
-            )
-        } else {
-            // ── Home IS the page list ───────────────────────────
-            //
-            // It used to be a feed: Play Radio, then Recently Played. Both are
-            // gone — the history is still on Overview, which this list is one
-            // tap from — because the swipe was the only way to reach six of the
-            // seven pages and Home is where people start.
-            //
-            // The two banners sit above the list rather than inside it. They
-            // are one dismissible row apiece, and keeping them out of the
-            // LazyColumn means the list's own indices are the pages and nothing
-            // else.
-            Column(modifier = Modifier.fillMaxSize().padding(top = searchTopInset)) {
                 val update = availableUpdate
                 if (showUpdateBar && update != null) {
                     tf.monochrome.android.ui.components.WhatsNewBar(
-                        title = "Version ${update.versionName} is available",
-                        subtitle = "Tap to see the release on GitHub",
+                        title = stringResource(R.string.update_available, update.versionName),
+                        subtitle = stringResource(R.string.update_available_detail),
                         onOpen = {
                             settingsViewModel.dismissUpdate()
                             runCatching {
@@ -313,8 +192,8 @@ fun HomeScreen(
                     )
                 } else if (showWhatsNew) {
                     tf.monochrome.android.ui.components.WhatsNewBar(
-                        title = "Updated to $whatsNewVersionName",
-                        subtitle = "See what's new",
+                        title = stringResource(R.string.updated_to, whatsNewVersionName),
+                        subtitle = stringResource(R.string.see_whats_new),
                         onOpen = {
                             settingsViewModel.markWhatsNewSeen()
                             navController.navigateSafe(
@@ -352,16 +231,14 @@ fun HomeScreen(
                     )
                 }
 
-                PageJumpList(
+                tf.monochrome.android.ui.library.LibraryScreen(
+                    navController = navController,
+                    playerViewModel = playerViewModel,
+                    sectionId = tf.monochrome.android.ui.library.OVERVIEW_SECTION,
                     pages = pages,
-                    onSelect = onSelectPage,
-                    current = Screen.Home.route,
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(bottom = 160.dp),
+                    onSelectPage = onSelectPage,
+                    embedded = true,
                 )
-            }
-        }
-        }
         }
     }
 }

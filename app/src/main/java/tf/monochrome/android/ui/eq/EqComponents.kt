@@ -45,6 +45,9 @@ import androidx.compose.ui.unit.sp
 import tf.monochrome.android.domain.model.Headphone
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 /**
  * Pill-shaped category tab chip (ALL / OVER-EAR / IN-EAR)
@@ -232,53 +235,6 @@ fun AlphabeticalIndexSidebar(
 }
 
 /**
- * Headphone item row with icon, name, profile count, and chevron
- */
-@Composable
-fun HeadphoneItemRow(
-    headphone: Headphone,
-    modifier: Modifier = Modifier,
-    profileCount: Int = 4,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .bounceClick(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Icon(
-            imageVector = Icons.Default.Headphones,
-            contentDescription = null,
-            modifier = Modifier.size(28.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                headphone.name,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                "$profileCount profiles",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = null,
-            modifier = Modifier.size(20.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-/**
  * Section header label (e.g. "HEADPHONE MODEL", "TARGET")
  */
 @Composable
@@ -303,7 +259,7 @@ fun SectionLabel(
 fun SelectorRow(
     value: String,
     modifier: Modifier = Modifier,
-    placeholder: String = "Select...",
+    placeholder: String = stringResource(R.string.eq_select),
     onClick: () -> Unit,
     trailingIcon: @Composable (() -> Unit)? = null,
 ) {

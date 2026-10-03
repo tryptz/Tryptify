@@ -46,8 +46,6 @@ data class ToneControls(
         )
     }
 
-    val isFlat: Boolean get() = !enabled || (bassGainDb == 0f && trebleGainDb == 0f)
-
     companion object {
         val DEFAULT = ToneControls()
 

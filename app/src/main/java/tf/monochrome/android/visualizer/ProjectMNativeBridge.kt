@@ -8,7 +8,20 @@ class ProjectMNativeBridge {
     private var brightness: Int = 80
     private val paused = AtomicBoolean(false)
 
-    fun initialize(assetRoot: String, width: Int, height: Int, meshWidth: Int, meshHeight: Int): Boolean {
+    /**
+     * [excludedPresets] are absolute preset paths left out of the playlist, so
+     * neither rotation nor Next can land on them. [crashSentinel] is the file
+     * the bridge names each preset in before loading it; see [PresetCrashGuard].
+     */
+    fun initialize(
+        assetRoot: String,
+        width: Int,
+        height: Int,
+        meshWidth: Int,
+        meshHeight: Int,
+        excludedPresets: Collection<String> = emptyList(),
+        crashSentinel: File? = null,
+    ): Boolean {
         if (!isLibraryLoaded) return false
         if (nativeHandle != 0L) {
             nativeResize(nativeHandle, width, height)
@@ -23,7 +36,9 @@ class ProjectMNativeBridge {
                 width = width,
                 height = height,
                 meshWidth = meshWidth,
-                meshHeight = meshHeight
+                meshHeight = meshHeight,
+                excludedPresets = excludedPresets.toTypedArray(),
+                crashSentinelPath = crashSentinel?.absolutePath,
             )
         }.getOrElse {
             Log.e(TAG, "Unable to initialize projectM", it)
@@ -189,7 +204,9 @@ class ProjectMNativeBridge {
         width: Int,
         height: Int,
         meshWidth: Int,
-        meshHeight: Int
+        meshHeight: Int,
+        excludedPresets: Array<String>,
+        crashSentinelPath: String?,
     ): Long
 
     private external fun nativeResize(handle: Long, width: Int, height: Int)

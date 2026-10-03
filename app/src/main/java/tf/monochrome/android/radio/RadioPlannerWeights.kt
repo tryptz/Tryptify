@@ -1,8 +1,5 @@
 package tf.monochrome.android.radio
 
-/** Neutral weight — the signal is scored at its default strength. */
-const val PLANNER_WEIGHT_NEUTRAL = 1.0f
-
 /** Weights are clamped to this range. */
 const val PLANNER_WEIGHT_MIN = 0.0f
 const val PLANNER_WEIGHT_MAX = 3.0f

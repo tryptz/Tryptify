@@ -289,9 +289,12 @@ class ChannelDetectorProcessor @Inject constructor() : AudioProcessor {
             6 -> listOf("FL", "FR", "FC", "LFE", "BL", "BR")
             7 -> listOf("FL", "FR", "FC", "LFE", "BC", "SL", "SR")
             8 -> listOf("FL", "FR", "FC", "LFE", "BL", "BR", "SL", "SR")
+            // 9.1.6 in FFmpeg's (the decoder's) order: its channel bits
+            // ascending, so the front-of-centre pair (the wides) comes before
+            // the sides, and the top sides (bits 36/37) come last.
             16 -> listOf(
-                "FL", "FR", "FC", "LFE", "BL", "BR", "BLC", "BRC",
-                "SL", "SR", "TFL", "TFR", "TSL", "TSR", "TBL", "TBR",
+                "FL", "FR", "FC", "LFE", "BL", "BR", "FLC", "FRC",
+                "SL", "SR", "TFL", "TFR", "TBL", "TBR", "TSL", "TSR",
             )
             else -> List(count) { "Ch ${it + 1}" }
         }

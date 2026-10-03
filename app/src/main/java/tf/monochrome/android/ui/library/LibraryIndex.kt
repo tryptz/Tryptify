@@ -34,6 +34,9 @@ import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.detail.LocalFacet
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 /**
  * One way into the local library.
@@ -54,17 +57,17 @@ import tf.monochrome.android.ui.theme.MonoDimens
  */
 enum class LibraryCategory(
     val id: String,
-    val label: String,
+    @androidx.annotation.StringRes val label: Int,
     val icon: ImageVector,
 ) {
-    SONGS("songs", "Songs", Icons.Default.MusicNote),
-    ALBUMS("albums", "Albums", Icons.Default.Album),
-    ARTISTS("artists", "Artists", Icons.Default.Person),
-    ALBUM_ARTISTS("album_artists", "Album Artists", LocalFacet.ALBUM_ARTIST.icon),
-    COMPOSERS("composers", "Composers", LocalFacet.COMPOSER.icon),
-    GENRES("genres", "Genres", LocalFacet.GENRE.icon),
-    YEARS("years", "Years", LocalFacet.YEAR.icon),
-    FOLDERS("folders", "Folders", Icons.Default.Folder);
+    SONGS("songs", R.string.category_songs, Icons.Default.MusicNote),
+    ALBUMS("albums", R.string.filter_albums, Icons.Default.Album),
+    ARTISTS("artists", R.string.filter_artists, Icons.Default.Person),
+    ALBUM_ARTISTS("album_artists", R.string.category_album_artists, LocalFacet.ALBUM_ARTIST.icon),
+    COMPOSERS("composers", R.string.category_composers, LocalFacet.COMPOSER.icon),
+    GENRES("genres", R.string.category_genres, LocalFacet.GENRE.icon),
+    YEARS("years", R.string.category_years, LocalFacet.YEAR.icon),
+    FOLDERS("folders", R.string.category_folders, Icons.Default.Folder);
 
     companion object {
         fun fromId(id: String?): LibraryCategory? = entries.firstOrNull { it.id == id }
@@ -74,11 +77,9 @@ enum class LibraryCategory(
 /**
  * The categories, as tiles.
  *
- * Deliberately the same material and metrics as `PageJumpList`: this is the
- * second list-of-places in the app and the two should not look like they came
- * from different products. That means `headlineMedium` bold on a `liquidGlass`
- * pane, spaced 12dp so they read as separate tiles rather than one striped
- * slab — and, as there, **no hazeState**. This is inside the pager, which is
+ * `headlineMedium` bold on a `liquidGlass` pane — the material the old page
+ * list on Home used, before the tab bar replaced it — spaced 12dp so they read
+ * as separate tiles rather than one striped slab, and **no hazeState**. This is inside the pager, which is
  * inside the app's one hazeSource, and a haze child within its own source is a
  * cycle Haze throws on at draw time.
  *
@@ -95,7 +96,7 @@ fun LibraryIndexList(
         modifier = modifier.fillMaxWidth(),
         contentPadding = PaddingValues(
             top = MonoDimens.spacingSm,
-            bottom = MonoDimens.listBottomPadding,
+            bottom = tf.monochrome.android.ui.navigation.bottomChromePadding,
         ),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -117,7 +118,7 @@ fun LibraryIndexList(
                 )
                 Spacer(modifier = Modifier.width(MonoDimens.spacingLg))
                 Text(
-                    text = category.label,
+                    text = stringResource(category.label),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground,
@@ -148,7 +149,7 @@ fun FacetTallyList(
     Box(modifier = modifier) {
         LazyColumn(
             state = state,
-            contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding),
+            contentPadding = PaddingValues(bottom = tf.monochrome.android.ui.navigation.bottomChromePadding),
         ) {
             items(tallies, key = { it.name }, contentType = { "facet" }) { tally ->
                 Row(
@@ -174,7 +175,7 @@ fun FacetTallyList(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        if (tally.trackCount == 1) "1 track" else "${tally.trackCount} tracks",
+                        pluralStringResource(R.plurals.track_count, tally.trackCount, tally.trackCount),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

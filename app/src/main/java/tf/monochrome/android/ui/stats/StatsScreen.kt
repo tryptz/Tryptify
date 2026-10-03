@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.stats
 
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -89,7 +90,10 @@ import tf.monochrome.android.data.db.dao.TopArtistAggregate
 import tf.monochrome.android.data.db.dao.TopTrackAggregate
 import tf.monochrome.android.data.db.dao.WeekdayAggregate
 import kotlin.math.roundToInt
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -104,16 +108,16 @@ fun StatsScreen(
     val statsMsgContext = androidx.compose.ui.platform.LocalContext.current
     androidx.compose.runtime.LaunchedEffect(Unit) {
         viewModel.messages.collect { msg ->
-            android.widget.Toast.makeText(statsMsgContext, msg, android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(statsMsgContext, msg.resolve(statsMsgContext), android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("Listening Stats") },
+            title = { Text(stringResource(R.string.listening_stats)) },
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                IconButton(onClick = { navController.popBackStackSafe() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -151,7 +155,7 @@ private fun StatsContent(
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp + LocalMiniPlayerInset.current),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp + LocalBottomChromeInset.current),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item { tf.monochrome.android.devedit.DevEditable("range_picker", Modifier.fillMaxWidth()) { RangePicker(state.range, onPick = onPickRange) } }
@@ -163,7 +167,7 @@ private fun StatsContent(
         item {
             tf.monochrome.android.devedit.DevEditable("section_plays_over_time", Modifier.fillMaxWidth()) {
                 StaggerEntry(2) {
-                    SectionCard("Plays over time") {
+                    SectionCard(stringResource(R.string.plays_over_time)) {
                         if (state.playsByDay.isNotEmpty()) DayLineChart(state.playsByDay)
                         else EmptyHint()
                     }
@@ -173,7 +177,7 @@ private fun StatsContent(
         item {
             tf.monochrome.android.devedit.DevEditable("section_time_of_day", Modifier.fillMaxWidth()) {
                 StaggerEntry(3) {
-                    SectionCard("Time of day") {
+                    SectionCard(stringResource(R.string.time_of_day)) {
                         if (state.playsByHour.isNotEmpty()) HourBarChart(state.playsByHour, state.peakHour)
                         else EmptyHint()
                     }
@@ -183,7 +187,7 @@ private fun StatsContent(
         item {
             tf.monochrome.android.devedit.DevEditable("section_day_of_week", Modifier.fillMaxWidth()) {
                 StaggerEntry(4) {
-                    SectionCard("Day of week") {
+                    SectionCard(stringResource(R.string.day_of_week)) {
                         if (state.playsByWeekday.isNotEmpty()) WeekdayBarChart(state.playsByWeekday)
                         else EmptyHint()
                     }
@@ -193,7 +197,7 @@ private fun StatsContent(
         item {
             tf.monochrome.android.devedit.DevEditable("section_top_tracks", Modifier.fillMaxWidth()) {
                 StaggerEntry(5) {
-                    SectionCard("Top tracks") {
+                    SectionCard(stringResource(R.string.top_tracks)) {
                         if (state.topTracks.isEmpty()) EmptyHint()
                         else TopTracksList(state.topTracks.take(10))
                     }
@@ -203,7 +207,7 @@ private fun StatsContent(
         item {
             tf.monochrome.android.devedit.DevEditable("section_top_artists", Modifier.fillMaxWidth()) {
                 StaggerEntry(6) {
-                    SectionCard("Top artists") {
+                    SectionCard(stringResource(R.string.top_artists)) {
                         if (state.topArtists.isEmpty()) EmptyHint()
                         else TopArtistsList(state.topArtists.take(10))
                     }
@@ -213,7 +217,7 @@ private fun StatsContent(
         item {
             tf.monochrome.android.devedit.DevEditable("section_top_albums", Modifier.fillMaxWidth()) {
                 StaggerEntry(7) {
-                    SectionCard("Top albums") {
+                    SectionCard(stringResource(R.string.top_albums)) {
                         if (state.topAlbums.isEmpty()) EmptyHint()
                         else TopAlbumsList(state.topAlbums.take(10))
                     }
@@ -223,7 +227,7 @@ private fun StatsContent(
         item {
             tf.monochrome.android.devedit.DevEditable("section_audio_quality", Modifier.fillMaxWidth()) {
                 StaggerEntry(8) {
-                    SectionCard("Audio quality") {
+                    SectionCard(stringResource(R.string.audio_quality)) {
                         if (state.playsByQuality.isEmpty()) EmptyHint()
                         else QualityBars(state.playsByQuality)
                     }
@@ -234,7 +238,7 @@ private fun StatsContent(
             item {
                 tf.monochrome.android.devedit.DevEditable("section_source", Modifier.fillMaxWidth()) {
                     StaggerEntry(9) {
-                        SectionCard("Source") { SourceBars(state.playsBySource) }
+                        SectionCard(stringResource(R.string.source)) { SourceBars(state.playsBySource) }
                     }
                 }
             }
@@ -287,7 +291,7 @@ private fun RangePicker(current: StatsRange, onPick: (StatsRange) -> Unit) {
             FilterChip(
                 selected = current == r,
                 onClick = { onPick(r) },
-                label = { Text(r.label) }
+                label = { Text(stringResource(r.labelRes())) }
             )
         }
     }
@@ -360,16 +364,16 @@ private fun HeroMinutesCard(state: StatsUiState) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     HeroPill(
                         icon = Icons.Default.MusicNote,
-                        text = "${state.totalPlays} plays"
+                        text = pluralStringResource(R.plurals.plays_count, state.totalPlays, java.text.NumberFormat.getIntegerInstance().format(state.totalPlays.toLong()))
                     )
                     HeroPill(
                         icon = Icons.Default.Schedule,
-                        text = "${state.sessionCount} sessions"
+                        text = pluralStringResource(R.plurals.sessions_count, state.sessionCount, java.text.NumberFormat.getIntegerInstance().format(state.sessionCount.toLong()))
                     )
                     if (state.currentStreakDays > 0) {
                         HeroPill(
                             icon = Icons.Default.LocalFireDepartment,
-                            text = "${state.currentStreakDays}-day streak",
+                            text = pluralStringResource(R.plurals.day_streak, state.currentStreakDays, state.currentStreakDays),
                             highlight = true,
                         )
                     }
@@ -412,17 +416,17 @@ private fun HighlightRow(state: StatsUiState) {
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        HighlightTile("Tracks", state.uniqueTracks.toString())
-        HighlightTile("Artists", state.uniqueArtists.toString())
-        HighlightTile("Albums", state.uniqueAlbums.toString())
+        HighlightTile(stringResource(R.string.filter_tracks), state.uniqueTracks.toString())
+        HighlightTile(stringResource(R.string.filter_artists), state.uniqueArtists.toString())
+        HighlightTile(stringResource(R.string.filter_albums), state.uniqueAlbums.toString())
         if (state.peakHour != null) {
-            HighlightTile("Peak hour", "${state.peakHour}:00")
+            HighlightTile(stringResource(R.string.peak_hour), hourLabel(state.peakHour!!))
         }
         if (state.peakWeekday != null) {
-            HighlightTile("Peak day", weekdayLabel(state.peakWeekday!!))
+            HighlightTile(stringResource(R.string.peak_day), weekdayLabel(state.peakWeekday!!))
         }
         if (state.longestStreakDays > 0) {
-            HighlightTile("Longest streak", "${state.longestStreakDays}d")
+            HighlightTile(stringResource(R.string.longest_streak), pluralStringResource(R.plurals.days_count, state.longestStreakDays, state.longestStreakDays))
         }
     }
 }
@@ -508,7 +512,7 @@ private fun SectionCard(title: String, content: @Composable () -> Unit) {
 @Composable
 private fun EmptyHint() {
     Text(
-        "No plays yet for this range.",
+        stringResource(R.string.no_plays_for_range),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
@@ -633,7 +637,7 @@ private fun WeekdayBarChart(data: List<WeekdayAggregate>) {
     val counts = IntArray(7)
     data.forEach { if (it.weekday in 0..6) counts[it.weekday] = it.playCount }
     val maxV = (counts.maxOrNull() ?: 1).coerceAtLeast(1)
-    val labels = listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+    val labels = (0..6).map { weekdayLabel(it) }
 
     val grow by animateFloatAsState(
         targetValue = 1f,
@@ -746,7 +750,7 @@ private fun TopArtistsList(items: List<TopArtistAggregate>) {
             TopListRow(
                 rank = idx + 1,
                 primary = a.name,
-                secondary = "${a.uniqueTracks} tracks",
+                secondary = pluralStringResource(R.plurals.track_count, a.uniqueTracks, a.uniqueTracks),
                 playCount = a.playCount,
                 maxPlays = maxPlays,
                 cover = null,
@@ -877,25 +881,52 @@ private fun PlayCountPill(count: Int) {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-private fun rangeSubtitle(r: StatsRange): String = when (r) {
-    StatsRange.Week -> "Last 7 days"
-    StatsRange.Month -> "Last 30 days"
-    StatsRange.Quarter -> "Last 90 days"
-    StatsRange.Year -> "Last 12 months"
-    StatsRange.AllTime -> "All time"
+@Composable
+private fun rangeSubtitle(r: StatsRange): String = stringResource(
+    when (r) {
+        StatsRange.Week -> R.string.range_last_7d
+        StatsRange.Month -> R.string.range_last_30d
+        StatsRange.Quarter -> R.string.range_last_90d
+        StatsRange.Year -> R.string.range_last_12m
+        StatsRange.AllTime -> R.string.chart_window_all
+    }
+)
+
+@androidx.annotation.StringRes
+private fun StatsRange.labelRes(): Int = when (this) {
+    StatsRange.Week -> R.string.stats_range_7d
+    StatsRange.Month -> R.string.stats_range_30d
+    StatsRange.Quarter -> R.string.stats_range_90d
+    StatsRange.Year -> R.string.stats_range_1y
+    StatsRange.AllTime -> R.string.stats_range_all
 }
 
-private fun weekdayLabel(w: Int): String = when (w) {
-    0 -> "Sun"; 1 -> "Mon"; 2 -> "Tue"; 3 -> "Wed"
-    4 -> "Thu"; 5 -> "Fri"; 6 -> "Sat"
-    else -> "—"
+/** 0 = Sunday. The platform's own short name in the reader's language: 日, Mo., lun., Pzt. */
+@Composable
+private fun weekdayLabel(w: Int): String {
+    if (w !in 0..6) return "—"
+    val day = java.time.DayOfWeek.SUNDAY.plus(w.toLong())
+    return day.getDisplayName(java.time.format.TextStyle.SHORT, currentLocale())
 }
 
+/** An hour of the day the way the reader writes times: 3 PM, 15:00, 下午3:00. */
+@Composable
+private fun hourLabel(hour: Int): String =
+    java.time.LocalTime.of(hour.coerceIn(0, 23), 0).format(
+        java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT)
+            .withLocale(currentLocale())
+    )
+
+@Composable
+private fun currentLocale(): java.util.Locale =
+    androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
+
+@Composable
 private fun prettySource(s: String): String = when (s.lowercase()) {
     "tidal" -> "TIDAL"
-    "collection" -> "Collection"
-    "local" -> "Local"
-    "unknown", "" -> "Unknown"
+    "collection" -> stringResource(R.string.source_collection)
+    "local" -> stringResource(R.string.source_local)
+    "unknown", "" -> stringResource(R.string.unknown)
     else -> s.replaceFirstChar { it.uppercase() }
 }
 
@@ -904,20 +935,35 @@ private fun LastSyncedLabel(syncedAtMs: Long) {
     val now = System.currentTimeMillis()
     val text = formatRelative(now - syncedAtMs)
     Text(
-        "Synced $text",
+        stringResource(R.string.synced_when, text),
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(start = 4.dp)
     )
 }
 
+/**
+ * "just now", "5 min ago", "il y a 2 h" — ICU's own relative-time wording in
+ * the app's language. Not DateUtils: that formats with the *system* language,
+ * which under a per-app language would put English inside a French sentence.
+ */
+@Composable
 private fun formatRelative(deltaMs: Long): String {
     val seconds = (deltaMs / 1000L).coerceAtLeast(0)
+    val fmt = android.icu.text.RelativeDateTimeFormatter.getInstance(
+        android.icu.util.ULocale.forLocale(currentLocale()),
+        null,
+        android.icu.text.RelativeDateTimeFormatter.Style.SHORT,
+        android.icu.text.DisplayContext.CAPITALIZATION_FOR_MIDDLE_OF_SENTENCE,
+    )
+    val last = android.icu.text.RelativeDateTimeFormatter.Direction.LAST
     return when {
-        seconds < 5 -> "just now"
-        seconds < 60 -> "${seconds}s ago"
-        seconds < 3600 -> "${seconds / 60}m ago"
-        seconds < 86_400 -> "${seconds / 3600}h ago"
-        else -> "${seconds / 86_400}d ago"
+        seconds < 60 -> fmt.format(
+            android.icu.text.RelativeDateTimeFormatter.Direction.PLAIN,
+            android.icu.text.RelativeDateTimeFormatter.AbsoluteUnit.NOW,
+        )
+        seconds < 3600 -> fmt.format((seconds / 60).toDouble(), last, android.icu.text.RelativeDateTimeFormatter.RelativeUnit.MINUTES)
+        seconds < 86_400 -> fmt.format((seconds / 3600).toDouble(), last, android.icu.text.RelativeDateTimeFormatter.RelativeUnit.HOURS)
+        else -> fmt.format((seconds / 86_400).toDouble(), last, android.icu.text.RelativeDateTimeFormatter.RelativeUnit.DAYS)
     }
 }

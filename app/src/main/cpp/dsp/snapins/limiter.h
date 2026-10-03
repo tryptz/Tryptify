@@ -42,6 +42,8 @@ public:
         releaseCoeff_ = calcReleaseCoeff(releaseMs_);
     }
 
+    bool supportsLinkedDetection() const override { return true; }
+
     void process(float* left, float* right, int numFrames) override {
         const float inputLin = dbToLin(inputGainDb_);
         const float outputLin = dbToLin(outputGainDb_);
@@ -60,7 +62,9 @@ public:
             float delR = delayR_.read(lookaheadSamples_);
 
             // True peak of current input sample (linked stereo)
-            float peak = std::max(std::fabs(inL), std::fabs(inR));
+            // Linked across lanes when a key is set; it takes the input gain
+            // the detected signal would have had.
+            float peak = key_ ? key_[i] * inputLin : std::max(std::fabs(inL), std::fabs(inR));
 
             // --- Sliding window maximum via monotone deque (O(1) amortised) ---
             // Write peak into ring buffer

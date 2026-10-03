@@ -46,6 +46,8 @@ import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 // The two gain "O" knobs are ~20% larger than the "o" cutoff/Q knobs, and sit on
 // the outer edges — bass far left, treble far right — mirroring each other:
@@ -79,7 +81,7 @@ internal fun ToneControlsPanel(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "Tone",
+                stringResource(R.string.tone),
                 style = MaterialTheme.typography.labelLarge,
                 color = contentColor.copy(alpha = 0.85f),
                 modifier = Modifier.weight(1f),
@@ -88,7 +90,7 @@ internal fun ToneControlsPanel(
             // System-wide AutoEQ toggle above it.
             Icon(
                 imageVector = Icons.Default.KeyboardArrowDown,
-                contentDescription = if (expanded) "Collapse tone" else "Expand tone",
+                contentDescription = if (expanded) stringResource(R.string.tone_collapse) else stringResource(R.string.tone_expand),
                 tint = contentColor.copy(alpha = 0.7f),
                 modifier = Modifier.rotate(if (expanded) 180f else 0f),
             )
@@ -122,12 +124,12 @@ internal fun ToneControlsPanel(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Knob("Bass", "%+.0f dB".format(tone.bassGainDb), tone.bassGainDb,
+                    Knob(stringResource(R.string.tone_bass), "%+.0f dB".format(tone.bassGainDb), tone.bassGainDb,
                         ToneControls.GAIN_MIN..ToneControls.GAIN_MAX, accent, contentColor, KNOB_BIG,
                         d.bassGainDb) {
                         onChange(tone.copy(bassGainDb = snap(it, 0.5f)))
                     }
-                    Knob("Freq", "${tone.bassFreq.roundToInt()} Hz", tone.bassFreq,
+                    Knob(stringResource(R.string.tone_freq), "${tone.bassFreq.roundToInt()} Hz", tone.bassFreq,
                         ToneControls.BASS_FREQ_MIN..ToneControls.BASS_FREQ_MAX, accent, contentColor, KNOB_SMALL,
                         d.bassFreq) {
                         onChange(tone.copy(bassFreq = it))
@@ -142,12 +144,12 @@ internal fun ToneControlsPanel(
                         d.trebleQ) {
                         onChange(tone.copy(trebleQ = it))
                     }
-                    Knob("Freq", "${(tone.trebleFreq / 1000f).format1()} kHz", tone.trebleFreq,
+                    Knob(stringResource(R.string.tone_freq), "${(tone.trebleFreq / 1000f).format1()} kHz", tone.trebleFreq,
                         ToneControls.TREBLE_FREQ_MIN..ToneControls.TREBLE_FREQ_MAX, accent, contentColor, KNOB_SMALL,
                         d.trebleFreq) {
                         onChange(tone.copy(trebleFreq = it))
                     }
-                    Knob("Treble", "%+.0f dB".format(tone.trebleGainDb), tone.trebleGainDb,
+                    Knob(stringResource(R.string.tone_treble), "%+.0f dB".format(tone.trebleGainDb), tone.trebleGainDb,
                         ToneControls.GAIN_MIN..ToneControls.GAIN_MAX, accent, contentColor, KNOB_BIG,
                         d.trebleGainDb) {
                         onChange(tone.copy(trebleGainDb = snap(it, 0.5f)))

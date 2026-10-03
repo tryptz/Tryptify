@@ -37,6 +37,12 @@ import javax.inject.Inject
  */
 @AndroidEntryPoint
 class SpotifyImportForegroundService : Service() {
+    // Services get the application's context, which below Android 13 does
+    // not follow the in-app language; their notifications are read in it.
+    override fun attachBaseContext(base: android.content.Context) {
+        super.attachBaseContext(tf.monochrome.android.locale.AppLanguage.wrap(base))
+    }
+
 
     @Inject lateinit var playlistImporter: PlaylistImporter
     @Inject lateinit var importService: PlaylistImportService
@@ -50,8 +56,8 @@ class SpotifyImportForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_CANCEL) {
             importJob?.cancel()
-            importService.reportFailure("Import cancelled")
-            finish(success = false, message = "Import cancelled")
+            importService.reportFailure(getString(R.string.import_cancelled))
+            finish(success = false, message = getString(R.string.import_cancelled))
             return START_NOT_STICKY
         }
 
@@ -61,7 +67,7 @@ class SpotifyImportForegroundService : Service() {
         if (importJob?.isActive == true) return START_NOT_STICKY
 
         createChannel()
-        startForegroundCompat(buildProgressNotification("Preparing import…", 0, 0))
+        startForegroundCompat(buildProgressNotification(getString(R.string.import_preparing), 0, 0))
 
         val strict = intent?.getBooleanExtra(EXTRA_STRICT, false) ?: false
         val request: suspend () -> Result<ImportProgress.Done> = when (intent?.getStringExtra(EXTRA_MODE)) {
@@ -88,10 +94,10 @@ class SpotifyImportForegroundService : Service() {
                 importService.progress.collect { progress ->
                     when (progress) {
                         is ImportProgress.Fetching ->
-                            notifyProgress("Fetching playlist from ${progress.source}…", 0, 0)
+                            notifyProgress(getString(R.string.import_fetching, progress.source), 0, 0)
                         is ImportProgress.Matching ->
                             notifyProgress(
-                                "Matching ${progress.current} of ${progress.total} · ${progress.matched} found",
+                                getString(R.string.import_matching, progress.current, progress.total, progress.matched),
                                 progress.current,
                                 progress.total,
                             )
@@ -105,10 +111,12 @@ class SpotifyImportForegroundService : Service() {
                 .onSuccess { done ->
                     finish(
                         success = true,
-                        message = "Imported ${done.matched}/${done.total} tracks into '${done.playlistName}'",
+                        message = resources.getQuantityString(
+                            R.plurals.spotify_import_done, done.total, done.matched, done.total, done.playlistName,
+                        ),
                     )
                 }
-                .onFailure { finish(success = false, message = it.message ?: "Import failed") }
+                .onFailure { finish(success = false, message = it.message ?: getString(R.string.import_failed)) }
         }
         return START_NOT_STICKY
     }
@@ -118,7 +126,7 @@ class SpotifyImportForegroundService : Service() {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val summary = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle(if (success) "Playlist import complete" else "Playlist import failed")
+            .setContentTitle(getString(if (success) R.string.import_complete_title else R.string.import_failed_title))
             .setContentText(message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setContentIntent(launchAppIntent())
@@ -146,7 +154,7 @@ class SpotifyImportForegroundService : Service() {
     private fun buildProgressNotification(text: String, current: Int, total: Int): Notification =
         NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("Importing Spotify playlist")
+            .setContentTitle(getString(R.string.import_progress_title))
             .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -157,7 +165,7 @@ class SpotifyImportForegroundService : Service() {
             }
             .addAction(
                 0,
-                "Cancel",
+                getString(R.string.action_cancel),
                 PendingIntent.getService(
                     this,
                     1,
@@ -194,10 +202,10 @@ class SpotifyImportForegroundService : Service() {
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_ID,
-                "Playlist import",
+                getString(R.string.import_channel),
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = "Progress of Spotify playlist imports."
+                description = getString(R.string.import_channel_desc)
                 setShowBadge(false)
                 enableVibration(false)
                 setSound(null, null)

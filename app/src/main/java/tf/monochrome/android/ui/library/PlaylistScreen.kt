@@ -1,5 +1,9 @@
 package tf.monochrome.android.ui.library
 
+import tf.monochrome.android.ui.navigation.openTrackArtist
+import tf.monochrome.android.ui.navigation.trackArtistAction
+import tf.monochrome.android.ui.navigation.trackAlbumAction
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
@@ -70,9 +74,12 @@ import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.navigation.navigateSafe
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.components.SearchAction
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -122,12 +129,8 @@ fun PlaylistScreen(
             onDownloadTrack = if (playerViewModel.isLocalTrack(track)) null
             else ({ playerViewModel.downloadTrack(track) }),
             onShareFile = { playerViewModel.shareTrack(track) },
-            onGoToAlbum = track.album?.id?.let { albumId ->
-                { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
-            },
-            onGoToArtist = track.artist?.id?.let { artistId ->
-                { navController.navigateSafe(Screen.ArtistDetail.createRoute(artistId)) }
-            }
+            onGoToAlbum = navController.trackAlbumAction(track, playerViewModel.unifiedFor(track)),
+            onGoToArtist = navController.trackArtistAction(track, playerViewModel.unifiedFor(track))
         )
     }
 
@@ -158,7 +161,7 @@ fun PlaylistScreen(
 
     if (showAddToPlaylistForSelection) {
         AddToPlaylistSheet(
-            title = "Add ${selection.count} tracks to playlist",
+            title = pluralStringResource(R.plurals.add_n_tracks_to_playlist, selection.count, selection.count),
             playlists = playlists,
             onDismiss = { showAddToPlaylistForSelection = false },
             onPlaylistSelected = { playlist ->
@@ -179,17 +182,17 @@ fun PlaylistScreen(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete playlist?") },
+            title = { Text(stringResource(R.string.delete_playlist_title)) },
             text = { Text("\"${playlistInfo?.name.orEmpty()}\" will be permanently deleted. This can't be undone.") },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteConfirm = false
                     viewModel.deletePlaylist()
-                    navController.popBackStack()
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                    navController.popBackStackSafe()
+                }) { Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+                TextButton(onClick = { showDeleteConfirm = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -204,8 +207,8 @@ fun PlaylistScreen(
             },
             initialName = editInfo.name,
             initialDescription = editInfo.description.orEmpty(),
-            title = "Edit Playlist",
-            confirmLabel = "Save",
+            title = stringResource(R.string.edit_playlist),
+            confirmLabel = stringResource(R.string.action_save),
         )
     }
 
@@ -219,8 +222,8 @@ fun PlaylistScreen(
                 )
             },
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                IconButton(onClick = { navController.popBackStackSafe() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
             },
             actions = {
@@ -232,14 +235,14 @@ fun PlaylistScreen(
                 })
 
                 IconButton(onClick = { showMenu = true }) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "More")
+                    Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.action_more))
                 }
                 DropdownMenu(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false }
                 ) {
                     DropdownMenuItem(
-                        text = { Text(if (playlistInfo?.isPublic == true) "Make Private" else "Make Public") },
+                        text = { Text(if (playlistInfo?.isPublic == true) stringResource(R.string.make_private) else stringResource(R.string.make_public)) },
                         leadingIcon = { Icon(if (playlistInfo?.isPublic == true) Icons.Default.Lock else Icons.Default.Public, contentDescription = null) },
                         onClick = {
                             showMenu = false
@@ -247,7 +250,7 @@ fun PlaylistScreen(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Edit Playlist") },
+                        text = { Text(stringResource(R.string.edit_playlist)) },
                         leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
                         onClick = {
                             showMenu = false
@@ -255,7 +258,7 @@ fun PlaylistScreen(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Delete Playlist") },
+                        text = { Text(stringResource(R.string.delete_playlist)) },
                         leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
                         onClick = {
                             showMenu = false
@@ -282,7 +285,7 @@ fun PlaylistScreen(
                     viewModel.removeTracks(selection.selectedIds)
                     selection.clear()
                 },
-                deleteContentDescription = "Remove from playlist"
+                deleteContentDescription = stringResource(R.string.action_remove_from_playlist)
             )
         }
 
@@ -290,14 +293,14 @@ fun PlaylistScreen(
             open = searchOpen,
             query = listQuery,
             onQueryChange = { listQuery = it },
-            placeholder = "Search this playlist",
+            placeholder = stringResource(R.string.search_this_playlist),
             onClose = { searchOpen = false; listQuery = "" },
         ) { searchTopInset ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                         top = searchTopInset,
-                        bottom = 80.dp + LocalMiniPlayerInset.current,
+                        bottom = 80.dp + LocalBottomChromeInset.current,
                     )
         ) {
             item {
@@ -308,7 +311,7 @@ fun PlaylistScreen(
                         .padding(horizontal = 24.dp, vertical = 24.dp)
                 ) {
                     Text(
-                        text = playlistInfo?.name ?: "Loading...",
+                        text = playlistInfo?.name ?: stringResource(R.string.loading),
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -323,7 +326,7 @@ fun PlaylistScreen(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "${tracks.size} tracks",
+                        text = pluralStringResource(R.plurals.track_count, tracks.size, tracks.size),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -344,7 +347,7 @@ fun PlaylistScreen(
                         ) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Play", style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.action_play), style = MaterialTheme.typography.titleMedium)
                         }
 
                         FilledIconButton(
@@ -356,7 +359,7 @@ fun PlaylistScreen(
                                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                             )
                         ) {
-                            Icon(Icons.Default.Shuffle, contentDescription = "Shuffle")
+                            Icon(Icons.Default.Shuffle, contentDescription = stringResource(R.string.visualizer_shuffle))
                         }
 
                         FilledIconButton(
@@ -368,7 +371,7 @@ fun PlaylistScreen(
                                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                             )
                         ) {
-                            Icon(Icons.Default.Download, contentDescription = "Download All")
+                            Icon(Icons.Default.Download, contentDescription = stringResource(R.string.download_all))
                         }
                     }
                     }
@@ -388,7 +391,7 @@ fun PlaylistScreen(
             if (tracks.isEmpty()) {
                 item {
                     Text(
-                        text = "This playlist is empty.",
+                        text = stringResource(R.string.playlist_empty),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(24.dp)
@@ -397,7 +400,7 @@ fun PlaylistScreen(
             } else if (visibleTracks.isEmpty()) {
                 item {
                     Text(
-                        text = "No tracks match \"$listQuery\".",
+                        text = stringResource(R.string.no_tracks_match, listQuery),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(24.dp)
@@ -415,10 +418,8 @@ fun PlaylistScreen(
                         },
                         onLongClick = { selection.toggle(track.id) },
                         onMoreClick = { showContextMenuForTrack = track },
-                        onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
-                        onAlbumClick = track.album?.id?.let { albumId ->
-                            { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
-                        },
+                        onArtistClick = { artistId -> navController.openTrackArtist(track, playerViewModel.unifiedFor(track), artistId) },
+                        onAlbumClick = navController.trackAlbumAction(track, playerViewModel.unifiedFor(track)),
                         downloadState = activeDownloads[track.id],
                         isDownloaded = track.id in downloadedTrackIds,
                         selectionMode = selection.active,

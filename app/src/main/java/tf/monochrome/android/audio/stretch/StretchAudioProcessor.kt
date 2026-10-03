@@ -105,10 +105,6 @@ class StretchAudioProcessor @Inject constructor() : AudioProcessor {
         if (h != 0L) StretchNative.nativeSetEngine(h, engine.nativeId, quality.nativeId)
     }
 
-    fun getEngine(): PitchEngine = engine
-
-    fun getQuality(): PitchQuality = quality
-
     /**
      * Round-trip latency in frames, or 0 when the processor is not engaged.
      * Whoever changes the pitch should glide dependent state over this window.
@@ -126,7 +122,9 @@ class StretchAudioProcessor @Inject constructor() : AudioProcessor {
         ) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }
-        if (inputAudioFormat.channelCount != 1 && inputAudioFormat.channelCount != 2) {
+        // Up to a 7.1.4 Atmos bed and beyond; the native side runs the
+        // vocoder for anything wider than stereo, since WSOLA is stereo-only.
+        if (inputAudioFormat.channelCount !in 1..MAX_CHANNELS) {
             pendingFormat = AudioFormat.NOT_SET
             inputFormat = AudioFormat.NOT_SET
             return AudioFormat.NOT_SET
@@ -326,5 +324,7 @@ class StretchAudioProcessor @Inject constructor() : AudioProcessor {
         const val MIN_SEMITONES = -24f
         const val MAX_SEMITONES = 24f
         const val SEMITONE_DEADZONE = 0.01f
+        /** Matches the native engine's kMaxChannels. */
+        const val MAX_CHANNELS = 16
     }
 }

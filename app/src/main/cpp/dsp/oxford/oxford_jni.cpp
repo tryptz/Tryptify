@@ -12,6 +12,7 @@
 #include <jni.h>
 #include <cstdint>
 #include <cstring>
+#include <algorithm>
 #include "oxford_dsp.h"
 
 using trypt::dsp::InflatorProcessor;
@@ -84,9 +85,12 @@ Java_tf_monochrome_android_audio_dsp_oxford_InflatorNative_nativeProcess(
         JNIEnv* env, jclass, jlong h, jobject buf, jint frames, jint channels) {
     auto* base = static_cast<float*>(env->GetDirectBufferAddress(buf));
     if (!base) return;
-    float* planes[2];
-    planes[0] = base;
-    planes[1] = (channels > 1) ? base + frames : base;
+    // Planar [ch0..., ch1..., ...], [frames] each; up to kMaxChannels.
+    // A mono buffer is read as both channels of a stereo pair, as before.
+    const int n = std::clamp(static_cast<int>(channels), 1, trypt::dsp::kMaxChannels);
+    float* planes[trypt::dsp::kMaxChannels];
+    for (int c = 0; c < n; ++c) planes[c] = base + static_cast<size_t>(c) * frames;
+    if (n == 1) planes[1] = base;
     asPtr<InflatorProcessor>(h)->process(planes, frames);
 }
 
@@ -173,9 +177,12 @@ Java_tf_monochrome_android_audio_dsp_oxford_CompressorNative_nativeProcess(
         JNIEnv* env, jclass, jlong h, jobject buf, jint frames, jint channels) {
     auto* base = static_cast<float*>(env->GetDirectBufferAddress(buf));
     if (!base) return;
-    float* planes[2];
-    planes[0] = base;
-    planes[1] = (channels > 1) ? base + frames : base;
+    // Planar [ch0..., ch1..., ...], [frames] each; up to kMaxChannels.
+    // A mono buffer is read as both channels of a stereo pair, as before.
+    const int n = std::clamp(static_cast<int>(channels), 1, trypt::dsp::kMaxChannels);
+    float* planes[trypt::dsp::kMaxChannels];
+    for (int c = 0; c < n; ++c) planes[c] = base + static_cast<size_t>(c) * frames;
+    if (n == 1) planes[1] = base;
     asPtr<CompressorProcessor>(h)->process(planes, frames);
 }
 

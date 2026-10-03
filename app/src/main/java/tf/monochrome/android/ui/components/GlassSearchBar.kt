@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * The app's search bar: a floating pane of glass over whatever is behind it.
@@ -150,7 +152,7 @@ fun GlassSearchBar(
                     ) {
                         Icon(
                             Icons.Default.Close,
-                            contentDescription = if (query.isEmpty()) "Close search" else "Clear",
+                            contentDescription = if (query.isEmpty()) stringResource(R.string.action_close_search) else stringResource(R.string.action_clear),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }

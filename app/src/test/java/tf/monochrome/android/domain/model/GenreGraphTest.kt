@@ -86,7 +86,7 @@ class GenreGraphTest {
         assertNull(graph.resolve("zzzzz not a genre"))
         assertNull(graph.resolve(""))
         assertNull(graph.resolve("   "))
-        assertFalse(graph.isGenreTerm("please play something nice"))
+        assertNull(graph.resolve("please play something nice"))
     }
 
     @Test

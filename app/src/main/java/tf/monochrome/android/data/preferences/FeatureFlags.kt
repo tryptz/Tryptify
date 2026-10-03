@@ -129,9 +129,6 @@ class FeatureFlagStore @Inject constructor(
     fun isEnabled(flag: FeatureFlag): Flow<Boolean> =
         dataStore.data.map { flag.resolve(it) }.distinctUntilChanged()
 
-    /** A one-shot read, for call sites that cannot hold a flow. */
-    suspend fun isEnabledNow(flag: FeatureFlag): Boolean = flag.resolve(dataStore.data.first())
-
     /** Every flag and its current answer — the shape a diagnostic bundle wants. */
     suspend fun snapshot(): Map<FeatureFlag, Boolean> =
         dataStore.data.first().let { prefs -> FeatureFlag.ALL.associateWith { it.resolve(prefs) } }

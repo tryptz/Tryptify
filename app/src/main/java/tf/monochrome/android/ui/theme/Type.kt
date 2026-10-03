@@ -17,9 +17,6 @@ val InterFontFamily = FontFamily(
     Font(R.font.inter_bold, FontWeight.Bold)
 )
 
-/** Default typography using Inter font family at 1.0x scale */
-val MonochromeTypography = buildTypography(InterFontFamily, 1.0f)
-
 /**
  * Build a full Material 3 Typography with the given [fontFamily] and [scale] factor.
  * Scale of 1.0 produces the default sizes. E.g. scale 1.2 makes everything 20% larger.

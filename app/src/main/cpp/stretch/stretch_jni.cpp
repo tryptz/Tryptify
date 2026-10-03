@@ -56,6 +56,12 @@ constexpr double kVocoderBlockSeconds[3] = {0.12, 0.25, 0.35};
 constexpr double kIntervalSeconds = 0.03;
 // Frames accepted in one process() call. The Kotlin side chunks to this.
 constexpr int kMaxBlockFrames = 8192;
+/**
+ * Enough for a 7.1.4 Atmos bed with room to spare. The vocoder is
+ * multichannel by design; WSOLA is stereo-only, so above two channels the
+ * vocoder runs whichever engine was chosen (see Engine::runsWsola).
+ */
+constexpr int kMaxChannels = 16;
 
 /**
  * Which algorithm transposes.
@@ -110,6 +116,13 @@ struct Engine {
         stretch.setTransposeSemitones(semitones);
     }
 
+    /**
+     * Whether WSOLA is the engine actually running. It folds anything that is
+     * not stereo to mono, which on a 5.1 bed would scramble the channels, so
+     * wider streams stay on the vocoder even with WSOLA selected.
+     */
+    bool runsWsola() const { return engine == kEngineWsola && channels <= 2; }
+
     Engine(int ch, int rate) : channels(ch), sampleRate(rate) {
         configureVocoder();
         wsola.configure(ch, sampleRate, tryptify::WsolaQuality::kBalanced);
@@ -135,7 +148,7 @@ extern "C" {
 JNIEXPORT jlong JNICALL
 Java_tf_monochrome_android_audio_stretch_StretchNative_nativeCreate(
         JNIEnv *, jclass, jint channels, jint sampleRate) {
-    if (channels < 1 || channels > 2 || sampleRate <= 0) return 0;
+    if (channels < 1 || channels > kMaxChannels || sampleRate <= 0) return 0;
     auto *e = new(std::nothrow) Engine(channels, sampleRate);
     return static_cast<jlong>(reinterpret_cast<intptr_t>(e));
 }
@@ -233,7 +246,7 @@ Java_tf_monochrome_android_audio_stretch_StretchNative_nativeLatencyFrames(
         JNIEnv *, jclass, jlong handle) {
     auto *e = asEngine(handle);
     if (!e) return 0;
-    if (e->engine == kEngineWsola) return e->wsola.latencyFrames();
+    if (e->runsWsola()) return e->wsola.latencyFrames();
     return e->stretch.inputLatency() + e->stretch.outputLatency();
 }
 
@@ -271,7 +284,7 @@ Java_tf_monochrome_android_audio_stretch_StretchNative_nativeProcess(
         ~Release() { e->busy.clear(std::memory_order_release); }
     } release{e};
 
-    if (e->engine == kEngineWsola) {
+    if (e->runsWsola()) {
         // Already interleaved, and it works in place, so it skips the planar
         // round trip the vocoder needs.
         e->wsola.process(in, out, frames);

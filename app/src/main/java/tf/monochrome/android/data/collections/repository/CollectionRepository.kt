@@ -12,8 +12,6 @@ import tf.monochrome.android.data.collections.db.CollectionDirectLinkEntity
 import tf.monochrome.android.data.collections.db.CollectionEntity
 import tf.monochrome.android.data.collections.db.CollectionTrackArtistCrossRef
 import tf.monochrome.android.data.collections.db.CollectionTrackEntity
-import tf.monochrome.android.data.collections.model.CollectionManifest
-import tf.monochrome.android.data.collections.parser.ManifestParser
 import tf.monochrome.android.domain.model.AudioCodec
 import tf.monochrome.android.domain.model.CollectionDirectLink
 import tf.monochrome.android.domain.model.PlaybackSource
@@ -22,7 +20,6 @@ import tf.monochrome.android.domain.model.TrackLyrics
 import tf.monochrome.android.domain.model.UnifiedAlbum
 import tf.monochrome.android.domain.model.UnifiedArtist
 import tf.monochrome.android.domain.model.UnifiedTrack
-import java.security.MessageDigest
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -30,136 +27,8 @@ import javax.inject.Singleton
 @Singleton
 class CollectionRepository @Inject constructor(
     private val collectionDao: CollectionDao,
-    private val manifestParser: ManifestParser,
     private val json: Json
 ) {
-
-    // ── Import ──────────────────────────────────────────────────────
-
-    suspend fun importManifest(manifestJson: String): Result<String> {
-        return try {
-            val manifest = manifestParser.parse(manifestJson).getOrThrow()
-            val collectionId = UUID.randomUUID().toString()
-            val manifestHash = sha256(manifestJson)
-
-            // Check if already imported
-            val existing = collectionDao.getAllCollections()
-            // We'll skip duplicate check for simplicity - use manifestHash
-
-            // Insert collection
-            collectionDao.insertCollection(
-                CollectionEntity(
-                    collectionId = collectionId,
-                    authorId = manifest.authorId,
-                    version = manifest.version,
-                    collectionLink = manifest.collectionLink,
-                    projectLink = manifest.projectLink,
-                    encryptionType = manifest.encryption.type,
-                    encryptionKey = manifest.encryption.key,
-                    manifestHash = manifestHash
-                )
-            )
-
-            // Insert artists
-            collectionDao.insertArtists(manifest.artists.map { artist ->
-                CollectionArtistEntity(
-                    uuid = artist.uuid,
-                    collectionId = collectionId,
-                    tidalId = artist.tidalId,
-                    isni = artist.isni,
-                    name = artist.name,
-                    bio = artist.bio,
-                    genresJson = json.encodeToString(artist.genres),
-                    imagesJson = json.encodeToString(artist.images),
-                    socialsJson = json.encodeToString(artist.socials)
-                )
-            })
-
-            // Insert albums + album-artist crossrefs
-            collectionDao.insertAlbums(manifest.albums.map { album ->
-                CollectionAlbumEntity(
-                    uuid = album.uuid,
-                    collectionId = collectionId,
-                    tidalId = album.tidalId,
-                    upc = album.upc,
-                    title = album.title,
-                    description = album.description,
-                    releaseDate = album.releaseDate,
-                    numberOfTracks = album.numberOfTracks,
-                    isSingle = album.isSingle,
-                    type = album.type,
-                    explicit = album.explicit,
-                    label = album.label,
-                    copyright = album.copyright,
-                    imagesJson = json.encodeToString(album.images),
-                    genresJson = json.encodeToString(album.genres),
-                    qualityTagsJson = json.encodeToString(album.qualityTags)
-                )
-            })
-            collectionDao.insertAlbumArtistCrossRefs(
-                manifest.albums.flatMap { album ->
-                    album.artistUuids.map { artistUuid ->
-                        CollectionAlbumArtistCrossRef(albumUuid = album.uuid, artistUuid = artistUuid)
-                    }
-                }
-            )
-
-            // Insert tracks + direct links + track-artist crossrefs
-            collectionDao.insertTracks(manifest.tracks.map { track ->
-                CollectionTrackEntity(
-                    uuid = track.uuid,
-                    collectionId = collectionId,
-                    albumUuid = track.albumUuid,
-                    tidalId = track.tidalId,
-                    isrc = track.isrc,
-                    title = track.title,
-                    releaseDate = track.releaseDate,
-                    durationSeconds = track.durationSeconds,
-                    trackNumber = track.trackNumber,
-                    volumeNumber = track.volumeNumber,
-                    version = track.version,
-                    explicit = track.explicit,
-                    replayGain = track.replayGain,
-                    qualityTagsJson = json.encodeToString(track.qualityTags),
-                    cover = track.cover,
-                    fileHash = track.fileHash,
-                    basicLyrics = track.basicLyrics,
-                    lrcLyrics = track.lrcLyrics,
-                    ttmlLyrics = track.ttmlLyrics
-                )
-            })
-
-            collectionDao.insertDirectLinks(
-                manifest.tracks.flatMap { track ->
-                    track.directLinks.map { link ->
-                        CollectionDirectLinkEntity(
-                            trackUuid = track.uuid,
-                            url = link.url,
-                            quality = link.quality
-                        )
-                    }
-                }
-            )
-
-            collectionDao.insertTrackArtistCrossRefs(
-                manifest.tracks.flatMap { track ->
-                    track.artistUuids.map { artistUuid ->
-                        CollectionTrackArtistCrossRef(trackUuid = track.uuid, artistUuid = artistUuid)
-                    }
-                }
-            )
-
-            Result.success(collectionId)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    // ── Delete ───────────────────────────────────────────────────────
-
-    suspend fun deleteCollection(collectionId: String) {
-        collectionDao.deleteCollectionCascade(collectionId)
-    }
 
     // ── Queries ──────────────────────────────────────────────────────
 
@@ -188,12 +57,6 @@ class CollectionRepository @Inject constructor(
 
     suspend fun findTrackByIsrc(isrc: String): UnifiedTrack? =
         collectionDao.findTrackByIsrc(isrc)?.toUnifiedTrack(null)
-
-    suspend fun getDirectLinksForTrack(trackUuid: String): List<CollectionDirectLinkEntity> =
-        collectionDao.getDirectLinks(trackUuid)
-
-    suspend fun getEncryptionKey(collectionId: String): String? =
-        collectionDao.getCollection(collectionId)?.encryptionKey
 
     // ── Conversions ─────────────────────────────────────────────────
 
@@ -281,10 +144,5 @@ class CollectionRepository @Inject constructor(
             genres = genres,
             sourceType = SourceType.COLLECTION
         )
-    }
-
-    private fun sha256(input: String): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        return digest.digest(input.toByteArray()).joinToString("") { "%02x".format(it) }
     }
 }

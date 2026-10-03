@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * The search icon that belongs in a screen's app bar.
@@ -43,7 +45,7 @@ fun SearchAction(open: Boolean, onToggle: () -> Unit) {
     IconButton(onClick = onToggle) {
         Icon(
             Icons.Default.Search,
-            contentDescription = if (open) "Close search" else "Search",
+            contentDescription = if (open) stringResource(R.string.action_close_search) else stringResource(R.string.tab_search),
             tint = if (open) MaterialTheme.colorScheme.primary else LocalContentColor.current,
         )
     }

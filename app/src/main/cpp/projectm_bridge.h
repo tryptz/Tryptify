@@ -1,7 +1,9 @@
 #pragma once
 
+#include <random>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "audio_ring_buffer.h"
@@ -19,7 +21,9 @@ public:
             int width,
             int height,
             int mesh_width,
-            int mesh_height);
+            int mesh_height,
+            std::unordered_set<std::string> excluded_presets,
+            std::string crash_sentinel_path);
     ~ProjectMBridge();
 
     bool IsReady() const;
@@ -44,7 +48,14 @@ public:
     void TouchDestroyAll();
 
 private:
+    static void OnSwitchRequested(bool is_hard_cut, void* user_data);
+    static void OnSwitchFailed(const char* preset_filename, const char* message, void* user_data);
+
+    void RemoveExcludedPresets();
     void BuildPresetIndex();
+    uint32_t PickNextIndex();
+    void PlayIndex(uint32_t index, bool hard_cut, bool retry_on_failure);
+    void MarkLoading(const std::string& preset_path) const;
     std::string ReadCurrentPreset() const;
     void PushBufferedAudioToProjectM();
 
@@ -67,6 +78,27 @@ private:
      * long as the visualizer is open.
      */
     std::unordered_map<std::string, uint32_t> preset_index_;
+    /** The same paths by playlist index, so a pick can be named before it loads. */
+    std::vector<std::string> preset_paths_;
+    /**
+     * Presets that must never be loaded: the ones the host scan found crashing
+     * projectM, and any this device has crashed on. Removed from the playlist
+     * before it is indexed, so neither rotation nor Next can reach them.
+     */
+    std::unordered_set<std::string> excluded_presets_;
+    /**
+     * Holds the preset about to be loaded, written before every load and
+     * deleted when the bridge is released. Found still there at the next
+     * start, it names the preset that was on screen when the process died --
+     * see PresetCrashGuard on the Kotlin side.
+     */
+    std::string crash_sentinel_path_;
+    std::mt19937 rng_{std::random_device{}()};
+    bool shuffle_ = true;
+    /** Set while a switch may move on to another preset if this one fails to load. */
+    bool retry_on_failure_ = false;
+    bool hard_cut_requested_ = true;
+    int switch_failures_ = 0;
     projectm_handle projectm_ = nullptr;
     projectm_playlist_handle playlist_ = nullptr;
     AudioRingBuffer audio_buffer_;

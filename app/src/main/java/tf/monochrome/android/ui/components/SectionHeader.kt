@@ -11,6 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 @Composable
 fun SectionHeader(
@@ -18,7 +20,7 @@ fun SectionHeader(
     modifier: Modifier = Modifier,
     onSeeAllClick: (() -> Unit)? = null,
     /** The action's own word — "Show less" when the section is already open. */
-    seeAllLabel: String = "See All",
+    seeAllLabel: String = stringResource(R.string.action_see_all),
 ) {
     tf.monochrome.android.devedit.DevEditable(
         elementId = "section_" + title.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_'),

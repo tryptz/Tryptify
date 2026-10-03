@@ -46,10 +46,9 @@ class LibraryViewModel @Inject constructor(
             val parsed = csvPlaylistParser.parseFromUri(uri)
             val parsedPlaylist = parsed.getOrNull()
             if (parsedPlaylist == null) {
-                playlistImportService.reportFailure(
-                    parsed.exceptionOrNull()?.message?.takeIf { it.isNotBlank() }
-                        ?: "That file could not be read as a playlist export.",
-                )
+                // Blank when the parser had nothing specific to say; the screen
+                // then shows its own, translated, explanation.
+                playlistImportService.reportFailure(parsed.exceptionOrNull()?.message.orEmpty())
                 return@launch
             }
             playlistImportService.importTracks(name, description, parsedPlaylist.tracks, strictAlbumMatch)

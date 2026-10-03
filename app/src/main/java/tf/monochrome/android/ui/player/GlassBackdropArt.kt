@@ -389,6 +389,44 @@ internal fun Modifier.backdropAnchor(anchor: BackdropAnchor): Modifier =
     }
 
 /**
+ * Records the box the artwork is actually drawn across into [frame], for glass
+ * that sits on a cover rather than on the window-wide blurred background.
+ *
+ * Unlike [backdropAnchor], the size recorded is this node's OWN size, not the
+ * root's: the frame is the "root" the cover is cropped into. Pair it with the
+ * `artFrame` of [playerGlass], which resolves the pane against it through
+ * [anchorInFrame].
+ */
+internal fun Modifier.backdropFrame(frame: BackdropAnchor): Modifier =
+    onGloballyPositioned { coords ->
+        val root = coords.findRootCoordinates()
+        val pos = root.localPositionOf(coords, Offset.Zero)
+        val next = AnchorRect(pos.x, pos.y, coords.size.width.toFloat(), coords.size.height.toFloat())
+        if (next != frame.rect) frame.rect = next
+    }
+
+/**
+ * A pane's [AnchorRect] restated against [frame] instead of the window: its
+ * position becomes relative to the frame's corner, and the frame's size stands
+ * in for the root's. That is all [backdropArtRect] needs to answer "which part
+ * of the cover is behind me" for a cover drawn in a box — the hero art — rather
+ * than across the screen.
+ *
+ * An unmeasured frame gives [AnchorRect.Unset], which [bindBackdropArt] treats
+ * as "no art", so the first frame falls back to the reconstruction instead of
+ * lensing the wrong slice.
+ */
+internal fun anchorInFrame(pane: AnchorRect, frame: AnchorRect): AnchorRect {
+    if (frame.rootW <= 0f || frame.rootH <= 0f || pane.rootW <= 0f) return AnchorRect.Unset
+    return AnchorRect(
+        left = pane.left - frame.left,
+        top = pane.top - frame.top,
+        rootW = frame.rootW,
+        rootH = frame.rootH,
+    )
+}
+
+/**
  * Binds the real-backdrop uniforms for one pane.
  *
  * `uArt` is set on every path, including the ones that do not use it: SkSL

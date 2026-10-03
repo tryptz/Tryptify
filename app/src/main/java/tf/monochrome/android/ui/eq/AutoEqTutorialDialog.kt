@@ -10,7 +10,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,9 +44,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -55,32 +51,30 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 private data class TutorialStep(
-    val title: String,
-    val description: String,
+    @androidx.annotation.StringRes val title: Int,
+    @androidx.annotation.StringRes val description: Int,
     val icon: ImageVector,
-    val drawableRes: String // resource name for future Gemini-generated asset
 )
 
 private val tutorialSteps = listOf(
     TutorialStep(
-        title = "PRECISION AUTOEQ",
-        description = "AutoEQ analyzes your headphone's frequency response and generates precise correction filters to match a professional target curve — bringing studio-grade sound to any headphone.",
-        icon = Icons.Filled.GraphicEq,
-        drawableRes = "tutorial_autoeq_concept"
+        title = R.string.eq_precision_autoeq_caps,
+        description = R.string.eq_autoeq_analyzes_your_headphone_s_frequency,
+        icon = Icons.Filled.GraphicEq
     ),
     TutorialStep(
-        title = "SELECT YOUR HEADPHONES",
-        description = "Choose from our database of measured headphones, or upload your own frequency response measurement file for a custom correction tailored to your exact pair.",
-        icon = Icons.Filled.Headphones,
-        drawableRes = "tutorial_autoeq_select"
+        title = R.string.eq_select_your_headphones_caps,
+        description = R.string.eq_choose_from_our_database_of_measured_headphones,
+        icon = Icons.Filled.Headphones
     ),
     TutorialStep(
-        title = "REVIEW & APPLY",
-        description = "Preview the generated EQ curve on the frequency graph, fine-tune individual bands if needed, then save as a preset. Your correction loads automatically on next launch.",
-        icon = Icons.Filled.Tune,
-        drawableRes = "tutorial_autoeq_apply"
+        title = R.string.eq_review_apply_caps,
+        description = R.string.eq_preview_the_generated_eq_curve_on_the_frequency,
+        icon = Icons.Filled.Tune
     )
 )
 
@@ -132,53 +126,33 @@ fun AutoEqTutorialDialog(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         // Icon with gradient background
-                        val context = LocalContext.current
-                        @Suppress("DiscouragedApi", "LocalContextResourcesRead")
-                        val drawableId = context.resources.getIdentifier(
-                            tutorialStep.drawableRes, "drawable", context.packageName
-                        )
-
-                        if (drawableId != 0) {
-                            // Use Gemini-generated image asset
-                            Image(
-                                painter = painterResource(id = drawableId),
-                                contentDescription = tutorialStep.title,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(180.dp)
-                                    .clip(RoundedCornerShape(12.dp)),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
-                            // Fallback: icon with gradient circle
-                            Box(
-                                modifier = Modifier
-                                    .size(96.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        Brush.linearGradient(
-                                            colors = listOf(
-                                                MaterialTheme.colorScheme.primary,
-                                                MaterialTheme.colorScheme.tertiary
-                                            )
+                        Box(
+                            modifier = Modifier
+                                .size(96.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.primary,
+                                            MaterialTheme.colorScheme.tertiary
                                         )
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = tutorialStep.icon,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp),
-                                    tint = MaterialTheme.colorScheme.onPrimary
-                                )
-                            }
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = tutorialStep.icon,
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(20.dp))
 
                         // Title
                         Text(
-                            text = tutorialStep.title,
+                            text = stringResource(tutorialStep.title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 1.5.sp,
@@ -190,7 +164,7 @@ fun AutoEqTutorialDialog(
 
                         // Description
                         Text(
-                            text = tutorialStep.description,
+                            text = stringResource(tutorialStep.description),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
@@ -234,7 +208,7 @@ fun AutoEqTutorialDialog(
                 ) {
                     TextButton(onClick = onDismiss) {
                         Text(
-                            "SKIP",
+                            stringResource(R.string.eq_skip),
                             letterSpacing = 1.sp,
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -245,7 +219,7 @@ fun AutoEqTutorialDialog(
                         if (currentStep > 0) {
                             TextButton(onClick = { currentStep-- }) {
                                 Text(
-                                    "BACK",
+                                    stringResource(R.string.eq_back),
                                     letterSpacing = 1.sp,
                                     style = MaterialTheme.typography.labelMedium
                                 )
@@ -259,7 +233,7 @@ fun AutoEqTutorialDialog(
                             }
                         ) {
                             Text(
-                                if (isLastStep) "GET STARTED" else "NEXT",
+                                if (isLastStep) stringResource(R.string.eq_get_started_caps) else stringResource(R.string.eq_next_caps),
                                 letterSpacing = 1.sp,
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,

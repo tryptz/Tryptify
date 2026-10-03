@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.settings
 
+import tf.monochrome.android.R
+import tf.monochrome.android.ui.components.UiText
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -84,8 +86,6 @@ class SpotifyImportViewModel @Inject constructor(
         }
     }
 
-    fun clearAuthError() = spotifyAuthManager.clearError()
-
     fun loadMyPlaylists() {
         viewModelScope.launch {
             _playlistsLoading.value = true
@@ -97,17 +97,17 @@ class SpotifyImportViewModel @Inject constructor(
         }
     }
 
-    fun importByUrl(context: Context, url: String, strictAlbumMatch: Boolean = false, onResult: (Boolean, String) -> Unit) {
+    fun importByUrl(context: Context, url: String, strictAlbumMatch: Boolean = false, onResult: (Boolean, UiText) -> Unit) {
         runImport(onResult) { SpotifyImportForegroundService.importUrl(context, url, strictAlbumMatch) }
     }
 
-    fun importPlaylist(context: Context, playlistId: String, name: String, strictAlbumMatch: Boolean = false, onResult: (Boolean, String) -> Unit) {
+    fun importPlaylist(context: Context, playlistId: String, name: String, strictAlbumMatch: Boolean = false, onResult: (Boolean, UiText) -> Unit) {
         runImport(onResult) {
             SpotifyImportForegroundService.importPlaylist(context, playlistId, name, strictAlbumMatch)
         }
     }
 
-    fun importLikedSongs(context: Context, strictAlbumMatch: Boolean = false, onResult: (Boolean, String) -> Unit) {
+    fun importLikedSongs(context: Context, strictAlbumMatch: Boolean = false, onResult: (Boolean, UiText) -> Unit) {
         runImport(onResult) { SpotifyImportForegroundService.importLikedSongs(context, strictAlbumMatch) }
     }
 
@@ -119,7 +119,7 @@ class SpotifyImportViewModel @Inject constructor(
      * this collector dies with the ViewModel — the notification still
      * carries the result.
      */
-    private fun runImport(onResult: (Boolean, String) -> Unit, start: () -> Unit) {
+    private fun runImport(onResult: (Boolean, UiText) -> Unit, start: () -> Unit) {
         if (isImporting.value) return
         playlistImportService.resetProgress()
         start()
@@ -129,8 +129,8 @@ class SpotifyImportViewModel @Inject constructor(
             }
             when (terminal) {
                 is ImportProgress.Done ->
-                    onResult(true, "Imported ${terminal.matched}/${terminal.total} tracks into '${terminal.playlistName}'")
-                is ImportProgress.Failed -> onResult(false, terminal.message)
+                    onResult(true, UiText.Plural(R.plurals.spotify_import_done, terminal.total, listOf(terminal.matched, terminal.total, terminal.playlistName)))
+                is ImportProgress.Failed -> onResult(false, UiText.Raw(terminal.message))
                 else -> Unit
             }
         }

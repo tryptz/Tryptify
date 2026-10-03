@@ -63,7 +63,12 @@ data class Track(
     // QobuzIdRegistry lookup) breaks whenever [id] is a synthetic fallback
     // (e.g. UnifiedTrack.toLegacyTrack hashing "apple_<id>") and can collide
     // outright. Routing (download + playback) trusts this field first.
-    val appleId: Long? = null
+    val appleId: Long? = null,
+    // Deezer identity, kept separate for the same reason as [appleId]: Deezer
+    // ids are plain numbers in the same range as Qobuz and TIDAL ids, so a
+    // Deezer id handed to either of them resolves to a *different* recording.
+    // Non-null means this track came from the Deezer catalog.
+    val deezerId: Long? = null,
 ) {
     val displayArtist: String
         get() = artist?.name ?: artists.joinToString(", ") { it.name }
@@ -107,9 +112,6 @@ data class Album(
 ) {
     val coverUrl: String?
         get() = cover?.let { buildCoverUrl(it, 640) }
-
-    val thumbnailUrl: String?
-        get() = cover?.let { buildCoverUrl(it, 320) }
 
     val releaseYear: String?
         get() = releaseDate?.take(4)
@@ -302,7 +304,7 @@ enum class GenreConfidence {
 // LIVE_RADIO rather than RADIO: `tf.monochrome.android.radio` is already the
 // algorithmic queue-maker that seeds a station from a track, and the two would
 // be read as the same thing by anyone grepping for it.
-enum class SourceType { API, COLLECTION, LOCAL, QOBUZ, APPLE, LIVE_RADIO }
+enum class SourceType { API, COLLECTION, LOCAL, QOBUZ, APPLE, DEEZER, LIVE_RADIO }
 
 @Serializable
 enum class AudioCodec(val displayName: String) {
@@ -378,6 +380,23 @@ sealed class PlaybackSource {
     @SerialName("AppleCached")
     data class AppleCached(
         val appleId: Long,
+        val preferredQuality: AudioQuality = AudioQuality.LOSSLESS,
+    ) : PlaybackSource()
+
+    /**
+     * Deezer catalog pick, from the instance's /api/deezer routes.
+     *
+     * Played like [QobuzCached]: StreamResolver fetches the full file from
+     * /api/deezer/download into the Deezer cache, and only when the instance
+     * can't serve it falls back to the 30-second preview from
+     * /api/deezer/preview. The name predates full playback and stays, because
+     * it is the serialized type tag of saved queues.
+     */
+    @Serializable
+    @SerialName("DeezerPreview")
+    data class DeezerPreview(
+        val deezerId: Long,
+        val isrc: String? = null,
         val preferredQuality: AudioQuality = AudioQuality.LOSSLESS,
     ) : PlaybackSource()
 
@@ -528,6 +547,11 @@ data class UnifiedTrack(
             codec == AudioCodec.ALAC && (bitDepth ?: 16) >= 24 ->
                 "ALAC ${bitDepth}/${(sampleRate ?: 44100) / 1000}"
             codec == AudioCodec.ALAC -> "ALAC"
+            // Uncompressed containers: their format is bit depth and rate,
+            // like FLAC's. They had no case at all, so a WAV row showed no
+            // badge beside an MP3's "MP3 320".
+            codec == AudioCodec.WAV -> "WAV ${bitDepth ?: 16}/${(sampleRate ?: 44100) / 1000}"
+            codec == AudioCodec.AIFF -> "AIFF ${bitDepth ?: 16}/${(sampleRate ?: 44100) / 1000}"
             codec == AudioCodec.MP3 -> "MP3 ${bitRate ?: 320}"
             codec == AudioCodec.AAC -> "AAC ${bitRate ?: 256}"
             codec == AudioCodec.OPUS -> "Opus ${bitRate ?: 128}"
@@ -560,6 +584,9 @@ data class UnifiedTrack(
             // correctly 400'd, and the row sat on "Queued" through four
             // retries before dying.
             is PlaybackSource.AppleCached -> s.appleId
+            // Same reasoning as Apple: the downloader and the legacy resolver
+            // key on this id, and must see the real Deezer id to route it.
+            is PlaybackSource.DeezerPreview -> s.deezerId
             else -> id.hashCode().toLong()
         }
 
@@ -596,7 +623,8 @@ data class UnifiedTrack(
             channelCount = channelCount,
             version = version,
             isThxSpatialAudio = isThxSpatialAudio,
-            appleId = (source as? PlaybackSource.AppleCached)?.appleId
+            appleId = (source as? PlaybackSource.AppleCached)?.appleId,
+            deezerId = (source as? PlaybackSource.DeezerPreview)?.deezerId,
         )
     }
 }
@@ -684,12 +712,6 @@ data class Headphone(
     val name: String,
     val type: String = "over-ear", // "over-ear", "in-ear", "earbud"
     val data: List<FrequencyPoint> = emptyList(),
-    val measurements: List<AutoEqMeasurement> = emptyList()
-)
-
-data class AutoEqEntry(
-    val name: String,
-    val type: String,
     val measurements: List<AutoEqMeasurement> = emptyList()
 )
 

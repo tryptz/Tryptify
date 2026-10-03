@@ -2,6 +2,7 @@ package tf.monochrome.android.ui.components
 
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.domain.model.UnifiedTrack
+import tf.monochrome.android.R
 
 /**
  * Ways a list of catalogue [Track]s can be ordered.
@@ -16,12 +17,12 @@ import tf.monochrome.android.domain.model.UnifiedTrack
  * all decisions someone already made, and re-sorting should be something the
  * user asks for rather than something a list does on arrival.
  */
-enum class TrackOrder(val label: String) {
-    ORIGINAL("Original order"),
-    TITLE("Title"),
-    ARTIST("Artist"),
-    ALBUM("Album"),
-    DURATION("Duration"),
+enum class TrackOrder(@androidx.annotation.StringRes val label: Int) {
+    ORIGINAL(R.string.sort_original),
+    TITLE(R.string.sort_title),
+    ARTIST(R.string.sort_artist),
+    ALBUM(R.string.sort_album),
+    DURATION(R.string.sort_duration),
 }
 
 /** A chosen order and its direction. */

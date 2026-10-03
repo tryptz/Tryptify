@@ -2,10 +2,17 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
+#include <unistd.h>
+
+#include <android/log.h>
 
 namespace {
 constexpr int kDefaultFps = 60;
+/** How many other presets a timed switch or Next tries when one fails to load. */
+constexpr int kMaxSwitchRetries = 3;
+constexpr const char* kTag = "ProjectMBridge";
 }
 
 ProjectMBridge::ProjectMBridge(
@@ -15,10 +22,14 @@ ProjectMBridge::ProjectMBridge(
         int width,
         int height,
         int mesh_width,
-        int mesh_height)
+        int mesh_height,
+        std::unordered_set<std::string> excluded_presets,
+        std::string crash_sentinel_path)
         : asset_root_(std::move(asset_root)),
           preset_root_(std::move(preset_root)),
-          texture_root_(std::move(texture_root)) {
+          texture_root_(std::move(texture_root)),
+          excluded_presets_(std::move(excluded_presets)),
+          crash_sentinel_path_(std::move(crash_sentinel_path)) {
     projectm_ = projectm_create();
     if (projectm_ == nullptr) {
         return;
@@ -45,15 +56,27 @@ ProjectMBridge::ProjectMBridge(
     projectm_set_texture_search_paths(projectm_, texture_paths, 1);
     projectm_playlist_add_path(playlist_, preset_root_.c_str(), true, false);
     projectm_playlist_set_shuffle(playlist_, true);
+    RemoveExcludedPresets();
     BuildPresetIndex();
 
+    // Taken over from the playlist, which registered its own on creation. Its
+    // version picks the next preset and loads it in one step and only says
+    // which it was afterwards -- too late to record, because loading is where
+    // a preset that kills the GPU driver does it. Choosing here means the
+    // sentinel names the preset before it is touched.
+    projectm_set_preset_switch_requested_event_callback(projectm_, &OnSwitchRequested, this);
+    projectm_set_preset_switch_failed_event_callback(projectm_, &OnSwitchFailed, this);
+
     if (projectm_playlist_size(playlist_) > 0) {
-        projectm_playlist_set_position(playlist_, 0, true);
-        current_preset_ = ReadCurrentPreset();
+        PlayIndex(0, true, true);
     }
 }
 
 ProjectMBridge::~ProjectMBridge() {
+    // A clean release: whatever was on screen did not take the process down.
+    if (!crash_sentinel_path_.empty()) {
+        unlink(crash_sentinel_path_.c_str());
+    }
     if (playlist_ != nullptr) {
         projectm_playlist_destroy(playlist_);
         playlist_ = nullptr;
@@ -127,24 +150,124 @@ bool ProjectMBridge::SetPreset(const std::string& preset_path) {
     // hard_cut = true: the switch lands on this frame rather than being blended
     // in over the soft-cut duration, which is what makes picking a preset feel
     // immediate. The soft cut still applies to the automatic rotation.
-    projectm_playlist_set_position(playlist_, found->second, true);
+    //
+    // No retry: a preset chosen by name that fails to load leaves the old one
+    // showing, rather than answering the request with some third preset.
+    PlayIndex(found->second, true, false);
     current_preset_ = found->first;
     return true;
 }
 
+void ProjectMBridge::RemoveExcludedPresets() {
+    if (playlist_ == nullptr || excluded_presets_.empty()) {
+        return;
+    }
+    // Backwards, so removing an item never shifts one still to be checked.
+    uint32_t removed = 0;
+    for (uint32_t index = projectm_playlist_size(playlist_); index-- > 0;) {
+        char* item = projectm_playlist_item(playlist_, index);
+        if (item == nullptr) {
+            continue;
+        }
+        const bool excluded = excluded_presets_.count(item) != 0;
+        projectm_playlist_free_string(item);
+        if (excluded && projectm_playlist_remove_preset(playlist_, index)) {
+            removed++;
+        }
+    }
+    __android_log_print(ANDROID_LOG_INFO, kTag, "Left %u flagged presets out of the playlist", removed);
+}
+
+/**
+ * The next preset for a timed switch or Next: uniformly at random when
+ * shuffling, never the one already showing, otherwise the one after it.
+ */
+uint32_t ProjectMBridge::PickNextIndex() {
+    const auto size = static_cast<uint32_t>(preset_paths_.size());
+    if (size <= 1) {
+        return 0;
+    }
+    const auto current = projectm_playlist_get_position(playlist_);
+    if (!shuffle_) {
+        return (current + 1) % size;
+    }
+    std::uniform_int_distribution<uint32_t> pick(0, size - 2);
+    const auto index = pick(rng_);
+    return index >= current ? index + 1 : index;
+}
+
+void ProjectMBridge::PlayIndex(uint32_t index, bool hard_cut, bool retry_on_failure) {
+    if (index >= preset_paths_.size()) {
+        return;
+    }
+    retry_on_failure_ = retry_on_failure;
+    hard_cut_requested_ = hard_cut;
+    MarkLoading(preset_paths_[index]);
+    projectm_playlist_set_position(playlist_, index, hard_cut);
+}
+
+/**
+ * Records [preset_path] as the preset being loaded. A plain write, no fsync:
+ * the file only has to outlive the process, not the device, and a crashed
+ * process leaves its page cache behind.
+ */
+void ProjectMBridge::MarkLoading(const std::string& preset_path) const {
+    if (crash_sentinel_path_.empty()) {
+        return;
+    }
+    FILE* file = std::fopen(crash_sentinel_path_.c_str(), "w");
+    if (file == nullptr) {
+        return;
+    }
+    std::fprintf(file, "%d\n%s\n", static_cast<int>(getpid()), preset_path.c_str());
+    std::fclose(file);
+}
+
+void ProjectMBridge::OnSwitchRequested(bool is_hard_cut, void* user_data) {
+    auto* bridge = static_cast<ProjectMBridge*>(user_data);
+    if (bridge == nullptr || bridge->preset_paths_.empty()) {
+        return;
+    }
+    bridge->switch_failures_ = 0;
+    bridge->PlayIndex(bridge->PickNextIndex(), is_hard_cut, true);
+    bridge->current_preset_ = bridge->ReadCurrentPreset();
+}
+
+/**
+ * A preset projectM refused -- it threw while loading, which it survives. Runs
+ * inside the projectm_load_preset_file that failed, so a retry from here
+ * nests; kMaxSwitchRetries is what bounds it.
+ */
+void ProjectMBridge::OnSwitchFailed(const char* preset_filename, const char* message, void* user_data) {
+    auto* bridge = static_cast<ProjectMBridge*>(user_data);
+    if (bridge == nullptr) {
+        return;
+    }
+    __android_log_print(ANDROID_LOG_WARN, kTag, "Preset failed to load: %s: %s",
+                        preset_filename ? preset_filename : "?", message ? message : "?");
+    if (!bridge->retry_on_failure_ || bridge->switch_failures_ >= kMaxSwitchRetries) {
+        return;
+    }
+    bridge->switch_failures_++;
+    bridge->PlayIndex(bridge->PickNextIndex(), bridge->hard_cut_requested_, true);
+}
+
 void ProjectMBridge::BuildPresetIndex() {
     preset_index_.clear();
+    preset_paths_.clear();
     if (playlist_ == nullptr) {
         return;
     }
     const auto playlist_size = projectm_playlist_size(playlist_);
     preset_index_.reserve(playlist_size);
+    preset_paths_.resize(playlist_size);
     for (uint32_t index = 0; index < playlist_size; ++index) {
         char* item = projectm_playlist_item(playlist_, index);
         if (item == nullptr) {
             continue;
         }
         preset_index_.emplace(item, index);
+        preset_paths_[index] = item;
         projectm_playlist_free_string(item);
     }
 }
@@ -153,12 +276,14 @@ std::string ProjectMBridge::NextPreset() {
     if (!IsReady()) {
         return {};
     }
-    projectm_playlist_play_next(playlist_, true);
+    switch_failures_ = 0;
+    PlayIndex(PickNextIndex(), true, true);
     current_preset_ = ReadCurrentPreset();
     return current_preset_;
 }
 
 void ProjectMBridge::SetShuffle(bool enabled) {
+    shuffle_ = enabled;
     if (playlist_ != nullptr) {
         projectm_playlist_set_shuffle(playlist_, enabled);
     }

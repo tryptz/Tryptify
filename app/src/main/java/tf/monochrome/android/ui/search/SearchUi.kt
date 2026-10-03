@@ -1,9 +1,12 @@
 package tf.monochrome.android.ui.search
 
+import tf.monochrome.android.ui.navigation.trackArtistAction
+import tf.monochrome.android.ui.navigation.trackAlbumAction
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -35,6 +38,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -58,6 +62,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -76,6 +81,10 @@ import tf.monochrome.android.ui.components.ArtistItem
 import tf.monochrome.android.ui.components.CoverImage
 import tf.monochrome.android.ui.components.CreatePlaylistDialog
 import tf.monochrome.android.ui.components.LoadingScreen
+import tf.monochrome.android.ui.components.SourceBrandMark
+import tf.monochrome.android.ui.components.SourcePill
+import tf.monochrome.android.ui.components.brand
+import tf.monochrome.android.ui.components.color
 import tf.monochrome.android.ui.components.SectionHeader
 import tf.monochrome.android.ui.components.TrackArtistAlbumLine
 import tf.monochrome.android.ui.components.TrackContextMenu
@@ -89,6 +98,9 @@ import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.navigation.navigateSafe
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 // SearchQueryField is gone. It was a one-line forward to GlassSearchBar that
 // existed to keep Home and the search screen agreeing on a placeholder, and both
@@ -104,11 +116,11 @@ fun SearchHistoryContent(
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 80.dp)
+        contentPadding = PaddingValues(bottom = tf.monochrome.android.ui.navigation.bottomChromePadding)
     ) {
         item {
             Text(
-                text = "Search for your favorite music",
+                text = stringResource(R.string.search_empty_prompt),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
@@ -123,9 +135,9 @@ fun SearchHistoryContent(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    SectionHeader(title = "Recent searches")
+                    SectionHeader(title = stringResource(R.string.recent_searches))
                     TextButton(onClick = onClearHistory) {
-                        Text("Clear")
+                        Text(stringResource(R.string.action_clear))
                     }
                 }
             }
@@ -187,6 +199,14 @@ fun SearchResultsContent(
     endReached: Boolean = false,
     searchError: Boolean = false,
     onRetry: () -> Unit = {},
+    // Height of the floating SearchOverlay bar. Applied as the list's top
+    // contentPadding (see docs/ui-invariants.md, "Search bars"): the filter
+    // pills start below the glass at rest and scroll up behind it. Without it
+    // the bar sits on top of the type and source pills.
+    topInset: Dp = 0.dp,
+    // Catalog of each album / artist result, for the pill under its card.
+    albumSources: Map<Long, SourceType> = emptyMap(),
+    artistSources: Map<Long, SourceType> = emptyMap(),
 ) {
     val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsStateWithLifecycle()
     var showContextMenuForTrack by remember { mutableStateOf<Track?>(null) }
@@ -210,12 +230,8 @@ fun SearchResultsContent(
             onDownloadTrack = if (playerViewModel.isLocalTrack(track)) null
             else ({ playerViewModel.downloadTrack(track) }),
             onShareFile = { playerViewModel.shareTrack(track) },
-            onGoToAlbum = track.album?.id?.let { albumId ->
-                { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
-            },
-            onGoToArtist = track.artist?.id?.let { artistId ->
-                { navController.navigateSafe(Screen.ArtistDetail.createRoute(artistId)) }
-            }
+            onGoToAlbum = navController.trackAlbumAction(track, playerViewModel.unifiedFor(track)),
+            onGoToArtist = navController.trackArtistAction(track, playerViewModel.unifiedFor(track))
         )
     }
 
@@ -246,7 +262,7 @@ fun SearchResultsContent(
 
     if (showAddToPlaylistForSelection) {
         AddToPlaylistSheet(
-            title = "Add ${selection.count} tracks to playlist",
+            title = pluralStringResource(R.plurals.add_n_tracks_to_playlist, selection.count, selection.count),
             playlists = libraryPlaylists,
             onDismiss = { showAddToPlaylistForSelection = false },
             onPlaylistSelected = { playlist ->
@@ -265,8 +281,21 @@ fun SearchResultsContent(
     }
 
     when {
-        query.isBlank() && emptyContent != null -> emptyContent()
-        isSearching -> LoadingScreen()
+        query.isBlank() && emptyContent != null ->
+            Box(modifier = modifier.fillMaxSize().padding(top = topInset)) { emptyContent() }
+        // The pills stay up while a query runs. Swapping the whole list for a
+        // spinner made them blink out on every keystroke, and hid the source
+        // row just when someone reached for it.
+        isSearching -> Column(modifier = modifier.fillMaxSize().padding(top = topInset)) {
+            SearchFilterRow(
+                selectedType = selectedType,
+                onTypeSelected = onTypeSelected,
+                selectedSource = selectedSource,
+                onSourceSelected = onSourceSelected,
+                showSourceFilter = showSourceFilter
+            )
+            LoadingScreen()
+        }
         else -> {
             // One LazyListState per scrollable axis. Each gets its own
             // prefetch trigger so artists / albums / tracks page
@@ -337,7 +366,7 @@ fun SearchResultsContent(
             LazyColumn(
                 state = columnState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 80.dp)
+                contentPadding = PaddingValues(top = topInset, bottom = tf.monochrome.android.ui.navigation.bottomChromePadding)
             ) {
                 item(key = "filters", contentType = "filters") {
                     SearchFilterRow(
@@ -350,7 +379,7 @@ fun SearchResultsContent(
                 }
 
                 if (artists.isNotEmpty()) {
-                    item(key = "header:artists", contentType = "header") { SectionHeader(title = "Artists") }
+                    item(key = "header:artists", contentType = "header") { SectionHeader(title = stringResource(R.string.filter_artists)) }
                     item(key = "row:artists", contentType = "artistRow") {
                         LazyRow(
                             state = artistsRowState,
@@ -359,21 +388,24 @@ fun SearchResultsContent(
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             items(artists, key = { it.id }) { artist ->
-                                ArtistItem(
-                                    artist = artist,
-                                    onClick = {
-                                        navController.navigateSafe(
-                                            Screen.ArtistDetail.createRoute(artist.id)
-                                        )
-                                    }
-                                )
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    ArtistItem(
+                                        artist = artist,
+                                        onClick = {
+                                            navController.navigateSafe(
+                                                Screen.ArtistDetail.createRoute(artist.id)
+                                            )
+                                        }
+                                    )
+                                    artistSources[artist.id]?.let { SourcePill(it, Modifier.padding(top = 4.dp)) }
+                                }
                             }
                         }
                     }
                 }
 
                 if (albums.isNotEmpty()) {
-                    item(key = "header:albums", contentType = "header") { SectionHeader(title = "Albums") }
+                    item(key = "header:albums", contentType = "header") { SectionHeader(title = stringResource(R.string.filter_albums)) }
                     item(key = "row:albums", contentType = "albumRow") {
                         LazyRow(
                             state = albumsRowState,
@@ -382,21 +414,24 @@ fun SearchResultsContent(
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             items(albums, key = { it.id }) { album ->
-                                AlbumItem(
-                                    album = album,
-                                    onClick = {
-                                        navController.navigateSafe(
-                                            Screen.AlbumDetail.createRoute(album.id)
-                                        )
-                                    }
-                                )
+                                Column {
+                                    AlbumItem(
+                                        album = album,
+                                        onClick = {
+                                            navController.navigateSafe(
+                                                Screen.AlbumDetail.createRoute(album.id)
+                                            )
+                                        }
+                                    )
+                                    albumSources[album.id]?.let { SourcePill(it, Modifier.padding(top = 4.dp)) }
+                                }
                             }
                         }
                     }
                 }
 
                 if (playlistResults.isNotEmpty()) {
-                    item(key = "header:playlists", contentType = "header") { SectionHeader(title = "Playlists") }
+                    item(key = "header:playlists", contentType = "header") { SectionHeader(title = stringResource(R.string.filter_playlists)) }
                     items(
                         playlistResults,
                         key = { it.uuid },
@@ -414,7 +449,7 @@ fun SearchResultsContent(
                 }
 
                 if (tracks.isNotEmpty()) {
-                    item(key = "header:tracks", contentType = "header") { SectionHeader(title = "Tracks") }
+                    item(key = "header:tracks", contentType = "header") { SectionHeader(title = stringResource(R.string.filter_tracks)) }
                     // The one unbounded run in this list — it pages — so it is
                     // the one whose composition reuse actually matters.
                     items(
@@ -434,7 +469,8 @@ fun SearchResultsContent(
                             onArtistClick = { ref -> ref.id?.let { navController.openArtist(track.sourceType, it) } },
                             onAlbumClick = { navController.openAlbum(track.albumId) },
                             onMoreClick = if (track.sourceType == SourceType.API ||
-                                track.sourceType == SourceType.QOBUZ) {
+                                track.sourceType == SourceType.QOBUZ ||
+                                track.sourceType == SourceType.DEEZER) {
                                 { showContextMenuForTrack = track.toLegacyTrack() }
                             } else null,
                             isDownloaded = track.toLegacyTrack().id in downloadedTrackIds,
@@ -477,15 +513,15 @@ fun SearchResultsContent(
                                 verticalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
                                 Text(
-                                    text = "Couldn't reach search. Check your connection and try again.",
+                                    text = stringResource(R.string.search_unreachable),
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
-                                TextButton(onClick = onRetry) { Text("Retry") }
+                                TextButton(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
                             }
                         } else {
                             Text(
-                                text = "No results found",
+                                text = stringResource(R.string.no_results),
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(24.dp)
@@ -558,7 +594,7 @@ private fun SearchFilterRow(
                 FilterChip(
                     selected = selectedType == type,
                     onClick = { onTypeSelected(type) },
-                    label = { Text(type.label) }
+                    label = { Text(stringResource(type.label)) }
                 )
             }
         }
@@ -568,10 +604,20 @@ private fun SearchFilterRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(SearchViewModel.SearchSourceFilter.entries) { source ->
+                    val brand = source.sourceType?.brand()
+                    val brandColor = brand?.color()
                     FilterChip(
                         selected = selectedSource == source,
                         onClick = { onSourceSelected(source) },
-                        label = { Text(source.label) }
+                        label = { Text(source.labelRes?.let { stringResource(it) } ?: source.label) },
+                        leadingIcon = brand?.let { { SourceBrandMark(it, size = FilterChipDefaults.IconSize) } },
+                        colors = if (brandColor != null) {
+                            FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = brandColor.copy(alpha = 0.22f),
+                                selectedLabelColor = brandColor,
+                                selectedLeadingIconColor = brandColor,
+                            )
+                        } else FilterChipDefaults.filterChipColors(),
                     )
                 }
             }
@@ -616,7 +662,7 @@ private fun UnifiedSearchTrackItem(
             if (selectionMode) {
                 Icon(
                     imageVector = if (selected) Icons.Default.CheckCircle else Icons.Outlined.Circle,
-                    contentDescription = if (selected) "Selected" else "Not selected",
+                    contentDescription = if (selected) stringResource(R.string.state_selected) else stringResource(R.string.state_not_selected),
                     tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.width(MonoDimens.spacingMd))
@@ -663,7 +709,8 @@ private fun UnifiedSearchTrackItem(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    ResultBadge(text = track.sourceType.label())
+                    // Downloaded means it plays from the device, so it reads as Local.
+                    SourcePill(if (isDownloaded) SourceType.LOCAL else track.sourceType)
                     if (track.isThxSpatialAudio) {
                         tf.monochrome.android.ui.components.ThxBadgePill()
                     }
@@ -674,7 +721,7 @@ private fun UnifiedSearchTrackItem(
                 IconButton(onClick = effectiveOnLikeClick) {
                     Icon(
                         imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                        contentDescription = if (isLiked) "Unlike" else "Like",
+                        contentDescription = if (isLiked) stringResource(R.string.action_unlike) else stringResource(R.string.action_like),
                         tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -692,7 +739,7 @@ private fun UnifiedSearchTrackItem(
                 IconButton(onClick = effectiveOnMoreClick) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
-                        contentDescription = "More options",
+                        contentDescription = stringResource(R.string.action_more_options),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -753,7 +800,7 @@ private fun PlaylistSearchItem(
                 )
                 Text(
                     text = buildString {
-                        append(playlist.creator?.name ?: "Playlist")
+                        append(playlist.creator?.name ?: stringResource(R.string.playlist))
                         playlist.numberOfTracks?.let { append(" • $it tracks") }
                     },
                     style = MaterialTheme.typography.bodySmall,
@@ -762,7 +809,7 @@ private fun PlaylistSearchItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            ResultBadge(text = "TIDAL")
+            SourcePill(SourceType.API)
         }
     }
 }
@@ -782,11 +829,3 @@ private fun ResultBadge(text: String) {
     }
 }
 
-private fun SourceType.label(): String = when (this) {
-    SourceType.API -> "TIDAL"
-    SourceType.LOCAL -> "Local"
-    SourceType.COLLECTION -> "Collection"
-    SourceType.QOBUZ -> "Qobuz"
-    SourceType.APPLE -> "Apple Music"
-    SourceType.LIVE_RADIO -> "Live"
-}

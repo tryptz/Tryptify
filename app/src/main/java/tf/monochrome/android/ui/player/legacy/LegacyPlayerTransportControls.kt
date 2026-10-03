@@ -31,6 +31,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * Primary transport row: previous · rewind 10s · play/pause · forward 10s ·
@@ -52,8 +54,8 @@ fun LegacyPlayerTransportControls(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TransportIcon(Icons.Default.SkipPrevious, "Previous", accent, onPrevious)
-        TransportIcon(Icons.Default.Replay10, "Rewind 10 seconds", accent, onRewind10)
+        TransportIcon(Icons.Default.SkipPrevious, stringResource(R.string.action_previous), accent, onPrevious)
+        TransportIcon(Icons.Default.Replay10, stringResource(R.string.legacy_rewind_10), accent, onRewind10)
 
         val interactionSource = remember { MutableInteractionSource() }
         val isPressed by interactionSource.collectIsPressedAsState()
@@ -80,13 +82,13 @@ fun LegacyPlayerTransportControls(
         ) {
             Icon(
                 imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                contentDescription = if (isPlaying) "Pause" else "Play",
+                contentDescription = if (isPlaying) stringResource(R.string.action_pause) else stringResource(R.string.action_play),
                 modifier = Modifier.size(38.dp),
             )
         }
 
-        TransportIcon(Icons.Default.Forward10, "Forward 10 seconds", accent, onForward10)
-        TransportIcon(Icons.Default.SkipNext, "Next", accent, onNext)
+        TransportIcon(Icons.Default.Forward10, stringResource(R.string.legacy_forward_10), accent, onForward10)
+        TransportIcon(Icons.Default.SkipNext, stringResource(R.string.action_next), accent, onNext)
     }
 }
 

@@ -27,6 +27,7 @@ import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.domain.model.UnifiedTrack
 import java.io.File
 import javax.inject.Inject
+import tf.monochrome.android.R
 
 /**
  * Loose grouping of downloaded tracks for the Albums section. Album rows are
@@ -189,22 +190,14 @@ class DownloadsViewModel @Inject constructor(
     }
 
     // One-shot user messages (e.g. a delete that couldn't remove the file).
-    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
-    val messages: SharedFlow<String> = _messages.asSharedFlow()
-
-    fun deleteDownload(track: DownloadedTrackEntity) {
-        viewModelScope.launch {
-            if (!deleteOne(track)) {
-                _messages.tryEmit("Couldn't delete “${track.title}”")
-            }
-        }
-    }
+    private val _messages = MutableSharedFlow<tf.monochrome.android.ui.components.UiText>(extraBufferCapacity = 4)
+    val messages: SharedFlow<tf.monochrome.android.ui.components.UiText> = _messages.asSharedFlow()
 
     fun deleteDownloads(tracks: List<DownloadedTrackEntity>) {
         viewModelScope.launch {
             val failed = tracks.count { !deleteOne(it) }
             if (failed > 0) {
-                _messages.tryEmit("Couldn't delete $failed file${if (failed == 1) "" else "s"}")
+                _messages.tryEmit(tf.monochrome.android.ui.components.UiText.Plural(R.plurals.delete_failed_count, failed))
             }
         }
     }

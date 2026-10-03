@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "wsola.h"
+#include "util/finite.h"
 
 namespace tryptify {
 
@@ -121,7 +122,7 @@ public:
 
     /** Frequency multiplier. 1.0 is no shift. */
     void setPitchRatio(double ratio) {
-        if (!(ratio > 0.0) || !std::isfinite(ratio)) return;
+        if (!(ratio > 0.0) || !dspIsFinite(ratio)) return;
         if (ratio < 0.25) ratio = 0.25;
         if (ratio > 4.0) ratio = 4.0;
         ratio_ = ratio;

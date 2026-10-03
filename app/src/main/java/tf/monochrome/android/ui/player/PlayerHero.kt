@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.player
 
+import androidx.compose.material.icons.filled.SurroundSound
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -14,6 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -70,12 +72,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.takeOrElse
 import kotlinx.coroutines.delay
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.domain.model.VisualizerEngineStatus
 import tf.monochrome.android.domain.model.VisualizerPreset
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /** Visual treatment of the hero artwork area. */
 enum class PlayerHeroStyle { Square, CircularProgress, Visualizer }
@@ -119,8 +124,16 @@ fun PlayerHero(
     isPresetFavorite: Boolean,
     onTogglePresetFavorite: () -> Unit,
     onToggleFullscreen: () -> Unit = {},
-    spectrumBins: FloatArray = FloatArray(0),
+    /**
+     * A provider for the same reason as [progress]: the analyzer publishes a
+     * fresh array every FFT frame, and taking the array itself recomposed
+     * this whole hero at that rate. Only the overlay's frame loop calls it.
+     */
+    spectrumBins: (() -> FloatArray)? = null,
     spectrumColor: Color = PlayerGlowBlue,
+    waterfall: tf.monochrome.android.domain.model.SpectrumWaterfallSettings = tf.monochrome.android.domain.model.SpectrumWaterfallSettings.DEFAULT,
+    waveSettings: tf.monochrome.android.domain.model.WaveCandySettings? = null,
+    onWaveSettings: (tf.monochrome.android.domain.model.WaveCandySettings) -> Unit = {},
     showSpectrum: Boolean = true,
     onToggleShowSpectrum: () -> Unit = {},
     onEnterVisualizer: () -> Unit = {},
@@ -156,6 +169,8 @@ fun PlayerHero(
             onToggleFullscreen = onToggleFullscreen,
             spectrumBins = spectrumBins,
             spectrumColor = spectrumColor,
+            waveSettings = waveSettings,
+            onWaveSettings = onWaveSettings,
             showSpectrum = showSpectrum,
             onToggleShowSpectrum = onToggleShowSpectrum,
             onExitVisualizer = onExitVisualizer,
@@ -183,6 +198,9 @@ fun PlayerHero(
                 isPlaying = isPlaying,
                 spectrumBins = spectrumBins,
                 spectrumColor = spectrumColor,
+                waterfall = waterfall,
+                waveSettings = waveSettings,
+            onWaveSettings = onWaveSettings,
                 showSpectrum = showSpectrum,
                 onToggleShowSpectrum = onToggleShowSpectrum,
                 blendMillis = blendMillis,
@@ -199,8 +217,11 @@ fun PlayerHero(
 private fun SquareArtHero(
     track: Track?,
     isPlaying: Boolean,
-    spectrumBins: FloatArray,
+    spectrumBins: (() -> FloatArray)?,
     spectrumColor: Color,
+    waterfall: tf.monochrome.android.domain.model.SpectrumWaterfallSettings,
+    waveSettings: tf.monochrome.android.domain.model.WaveCandySettings? = null,
+    onWaveSettings: (tf.monochrome.android.domain.model.WaveCandySettings) -> Unit = {},
     showSpectrum: Boolean,
     onToggleShowSpectrum: () -> Unit,
     blendMillis: Int,
@@ -227,6 +248,9 @@ private fun SquareArtHero(
             isPlaying = isPlaying,
             spectrumBins = spectrumBins,
             spectrumColor = spectrumColor,
+            waterfall = waterfall,
+            waveSettings = waveSettings,
+            onWaveSettings = onWaveSettings,
             showSpectrum = showSpectrum,
             onToggleShowSpectrum = onToggleShowSpectrum,
             quality = track?.audioQuality,
@@ -266,7 +290,7 @@ private fun CircularProgressHero(
             MorphingCoverArt(
                 trackKey = track?.id,
                 coverUrl = track?.coverUrl,
-                contentDescription = track?.title ?: "Album Art",
+                contentDescription = track?.title ?: stringResource(R.string.album_art),
                 blendMillis = blendMillis,
                 userTrackChanges = userTrackChanges,
                 modifier = Modifier.fillMaxSize(),
@@ -319,8 +343,10 @@ private fun VisualizerHero(
     isPresetFavorite: Boolean,
     onTogglePresetFavorite: () -> Unit,
     onToggleFullscreen: () -> Unit,
-    spectrumBins: FloatArray,
+    spectrumBins: (() -> FloatArray)?,
     spectrumColor: Color,
+    waveSettings: tf.monochrome.android.domain.model.WaveCandySettings? = null,
+    onWaveSettings: (tf.monochrome.android.domain.model.WaveCandySettings) -> Unit = {},
     showSpectrum: Boolean,
     onToggleShowSpectrum: () -> Unit,
     onExitVisualizer: () -> Unit,
@@ -385,7 +411,7 @@ private fun VisualizerHero(
                     ) {
                         Icon(
                             imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                            contentDescription = if (isFullscreen) "Exit Fullscreen" else "Fullscreen",
+                            contentDescription = if (isFullscreen) stringResource(R.string.action_exit_fullscreen) else stringResource(R.string.action_fullscreen),
                             tint = Color.White,
                         )
                     }
@@ -396,7 +422,7 @@ private fun VisualizerHero(
                             .padding(16.dp)
                             .background(Color.Black.copy(alpha = 0.3f), shape = RoundedCornerShape(999.dp)),
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = "Exit Visualizer", tint = Color.White)
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_exit_visualizer), tint = Color.White)
                     }
 
                     VisualizerHeroOverlay(
@@ -449,7 +475,7 @@ private fun VisualizerHeroOverlay(
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     Text(
-                        text = currentPreset?.displayName ?: "Bundled projectM presets",
+                        text = currentPreset?.displayName ?: stringResource(R.string.visualizer_bundled_presets),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White,
@@ -468,7 +494,7 @@ private fun VisualizerHeroOverlay(
                     contentColor = if (autoShuffle) PlayerGlowMint else Color.White.copy(alpha = 0.72f),
                 ) {
                     Text(
-                        text = if (autoShuffle) "Shuffle" else "Manual",
+                        text = if (autoShuffle) stringResource(R.string.visualizer_shuffle) else stringResource(R.string.visualizer_manual),
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                         style = MaterialTheme.typography.labelSmall,
                     )
@@ -482,28 +508,28 @@ private fun VisualizerHeroOverlay(
                 VisualizerActionPill(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Default.Shuffle,
-                    label = if (autoShuffle) "Shuffle" else "Manual",
+                    label = if (autoShuffle) stringResource(R.string.visualizer_shuffle) else stringResource(R.string.visualizer_manual),
                     accent = if (autoShuffle) PlayerGlowMint else Color.White,
                     onClick = { onToggleShuffle(!autoShuffle) },
                 )
                 VisualizerActionPill(
                     modifier = Modifier.weight(1f),
                     icon = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    label = if (isFavorite) "Liked" else "Like",
+                    label = if (isFavorite) stringResource(R.string.preset_saved) else stringResource(R.string.preset_save),
                     accent = if (isFavorite) PlayerGlowPink else Color.White,
                     onClick = onToggleFavorite,
                 )
                 VisualizerActionPill(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Default.SkipNext,
-                    label = "Next",
+                    label = stringResource(R.string.action_next),
                     accent = PlayerGlowBlue,
                     onClick = onNextPreset,
                 )
                 VisualizerActionPill(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Default.LibraryMusic,
-                    label = "Presets",
+                    label = stringResource(R.string.visualizer_presets),
                     accent = PlayerGlowGold,
                     onClick = onOpenPresetBrowser,
                 )
@@ -604,14 +630,14 @@ internal fun AmbientPresetControls(
         ) {
             AmbientPresetButton(
                 icon = Icons.Default.SkipPrevious,
-                label = "Previous preset",
+                label = stringResource(R.string.preset_previous),
                 enabled = canGoBack,
                 onClick = { selfPoke++; onPreviousPreset() },
                 modifier = Modifier.align(Alignment.CenterStart),
             )
             AmbientPresetButton(
                 icon = Icons.Default.LibraryMusic,
-                label = "Preset browser",
+                label = stringResource(R.string.preset_browser),
                 accent = PlayerGlowGold,
                 onClick = { selfPoke++; onOpenPresetBrowser() },
                 modifier = Modifier.align(Alignment.Center),
@@ -625,13 +651,13 @@ internal fun AmbientPresetControls(
                 // preset is liked, outline and white until then.
                 AmbientPresetButton(
                     icon = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    label = if (isFavorite) "Unlike preset" else "Like preset",
+                    label = if (isFavorite) stringResource(R.string.preset_unlike) else stringResource(R.string.preset_like),
                     accent = if (isFavorite) PlayerGlowPink else Color.White,
                     onClick = { selfPoke++; onToggleFavorite() },
                 )
                 AmbientPresetButton(
                     icon = Icons.Default.SkipNext,
-                    label = "Next preset",
+                    label = stringResource(R.string.preset_next),
                     onClick = { selfPoke++; onNextPreset() },
                 )
             }
@@ -679,11 +705,17 @@ private fun AmbientPresetButton(
     }
 }
 
-private enum class SpectrumSpeed(val label: String, val attack: Float, val release: Float) {
-    SLOW("SLOW", 0.12f, 0.03f),
-    NORMAL("NORMAL", 0.55f, 0.12f),
-    FAST("FAST", 0.85f, 0.35f),
-    HYPER("HYPER", 1.0f, 0.70f);
+/**
+ * A quick multiplier on the waterfall's averaging time, from the button on the
+ * art. The factors are the old fixed releases' time constants against
+ * NORMAL's, so each step still moves the way it always did at the default
+ * averaging time.
+ */
+private enum class SpectrumSpeed(val label: String, val timeScale: Float) {
+    SLOW("SLOW", 4f),
+    NORMAL("NORMAL", 1f),
+    FAST("FAST", 0.34f),
+    HYPER("HYPER", 0.17f);
 
     fun next(): SpectrumSpeed = entries[(ordinal + 1) % entries.size]
 }
@@ -692,8 +724,11 @@ private enum class SpectrumSpeed(val label: String, val attack: Float, val relea
 private fun HeroCoverArt(
     track: Track?,
     isPlaying: Boolean,
-    spectrumBins: FloatArray = FloatArray(0),
+    spectrumBins: (() -> FloatArray)? = null,
     spectrumColor: Color = PlayerGlowBlue,
+    waterfall: tf.monochrome.android.domain.model.SpectrumWaterfallSettings = tf.monochrome.android.domain.model.SpectrumWaterfallSettings.DEFAULT,
+    waveSettings: tf.monochrome.android.domain.model.WaveCandySettings? = null,
+    onWaveSettings: (tf.monochrome.android.domain.model.WaveCandySettings) -> Unit = {},
     showSpectrum: Boolean = true,
     onToggleShowSpectrum: () -> Unit = {},
     quality: String? = null,
@@ -711,6 +746,27 @@ private fun HeroCoverArt(
 ) {
     val spectrumEnabled = showSpectrum
     var spectrumSpeed by remember { mutableStateOf(SpectrumSpeed.NORMAL) }
+    // Which picture the spectrum button puts on the art: the FFT envelope, or
+    // Wave Candy's scope. Saveable so a rotation keeps it.
+    var waveCandy by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    // Wave Candy's two channels apart, or summed into one line.
+    // The kick punch: on while a visual is on the art, so the cover follows
+    // the beat with either style.
+    val kick = rememberKickPulse(
+        enabled = spectrumEnabled && isPlaying && waveSettings?.kickEnabled == true,
+        onsetRatio = waveSettings?.kickOnsetRatio ?: 1.45f,
+    )
+    val stillArt = tf.monochrome.android.ui.theme.reduceMotion()
+
+    // The glass spectrum lies on the cover itself, so the cover is what it
+    // refracts — always, not only while the blurred background is on as for
+    // the rest of the player's glass: here the artwork really is behind it.
+    // The box records itself as the frame the cover is cropped into, so the
+    // pane lenses the slice of the cover it covers, not the window's.
+    val glassSpectrum = spectrumEnabled && !(waveCandy && waveSettings != null) &&
+        spectrumBins != null && waterfall.style == tf.monochrome.android.domain.model.WaterfallStyle.GLASS
+    val coverFrame = rememberBackdropAnchor()
+    val coverArt = rememberBackdropArt(track?.coverUrl, enabled = glassSpectrum)
 
     // Controls show briefly on tap, then disappear quickly. When idle there are
     // no tags/labels on the art at all — the buttons are small and icon-only.
@@ -735,6 +791,7 @@ private fun HeroCoverArt(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .backdropFrame(coverFrame)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -743,10 +800,18 @@ private fun HeroCoverArt(
         MorphingCoverArt(
             trackKey = track?.id,
             coverUrl = track?.coverUrl,
-            contentDescription = track?.title ?: "Album Art",
+            contentDescription = track?.title ?: stringResource(R.string.album_art),
             blendMillis = blendMillis,
             userTrackChanges = userTrackChanges,
-            modifier = Modifier.fillMaxSize(),
+            // Punches in on each kick. Read in the layer block, so the 60 fps
+            // pulse redraws the art without recomposing the hero; still with
+            // "Disable animations" on.
+            modifier = Modifier.fillMaxSize().graphicsLayer {
+                val k = if (stillArt) 0f else kick.floatValue
+                val zoom = waveSettings?.kickZoom ?: 0f
+                scaleX = 1f + zoom * k
+                scaleY = 1f + zoom * k
+            },
         )
 
         Box(
@@ -763,18 +828,41 @@ private fun HeroCoverArt(
                 )
         )
 
-        if (spectrumEnabled && spectrumBins.isNotEmpty()) {
+        if (spectrumEnabled && waveCandy && waveSettings != null) {
+            // The bottom quarter of the art — the cover stays readable above
+            // it. The native layout places the lines within whatever box it is
+            // given, so the band is just the box.
             BoxWithConstraints(
                 modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
             ) {
-                SpectrumOverlay(
-                    bins = spectrumBins,
-                    color = spectrumColor,
-                    modifier = Modifier.fillMaxWidth(),
-                    height = maxHeight * 0.35f,
-                    attack = spectrumSpeed.attack,
-                    release = spectrumSpeed.release,
+                WaveCandyOverlay(
+                    settings = waveSettings,
+                    accent = spectrumColor,
+                    kick = kick,
+                    modifier = Modifier.fillMaxWidth().height(maxHeight * 0.25f),
                 )
+            }
+        } else if (spectrumEnabled && spectrumBins != null) {
+            BoxWithConstraints(
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+            ) {
+                androidx.compose.runtime.CompositionLocalProvider(
+                    LocalPlayerBackdrop provides LocalPlayerBackdrop.current.copy(
+                        art = coverArt,
+                        fit = BackdropArtFit.ROOT,
+                    ),
+                ) {
+                    SpectrumOverlay(
+                        bins = spectrumBins,
+                        color = spectrumColor,
+                        modifier = Modifier.fillMaxWidth(),
+                        height = maxHeight * 0.35f,
+                        timeScale = spectrumSpeed.timeScale,
+                        waterfall = waterfall,
+                        resetKey = track?.id,
+                        glassArtFrame = coverFrame,
+                    )
+                }
             }
         }
 
@@ -786,14 +874,30 @@ private fun HeroCoverArt(
             ) {
                 HeroIconButton(
                     icon = if (spectrumEnabled) Icons.Default.Equalizer else Icons.Default.Album,
-                    contentDescription = if (spectrumEnabled) "Show album art" else "Show spectrum",
+                    contentDescription = if (spectrumEnabled) stringResource(R.string.hero_show_album_art) else stringResource(R.string.hero_show_spectrum),
                     enabled = interactive,
                     onClick = { onToggleShowSpectrum(); showControls() },
                 )
-                if (spectrumEnabled) {
+                if (spectrumEnabled && waveSettings != null) {
+                    HeroIconButton(
+                        icon = if (waveCandy) Icons.Default.Equalizer else Icons.Default.GraphicEq,
+                        contentDescription = if (waveCandy) stringResource(R.string.hero_switch_to_spectrum) else stringResource(R.string.hero_switch_to_wave_candy),
+                        enabled = interactive,
+                        onClick = { waveCandy = !waveCandy; showControls() },
+                    )
+                }
+                if (spectrumEnabled && waveCandy && waveSettings != null) {
+                    HeroIconButton(
+                        icon = if (waveSettings.stereo) Icons.Default.SurroundSound else Icons.Default.GraphicEq,
+                        contentDescription = if (waveSettings.stereo) stringResource(R.string.hero_waveform_mono) else stringResource(R.string.hero_waveform_stereo),
+                        enabled = interactive,
+                        onClick = { onWaveSettings(waveSettings.copy(stereo = !waveSettings.stereo)); showControls() },
+                    )
+                }
+                if (spectrumEnabled && !(waveCandy && waveSettings != null)) {
                     HeroIconButton(
                         icon = Icons.Default.Speed,
-                        contentDescription = "Spectrum speed",
+                        contentDescription = stringResource(R.string.hero_spectrum_speed),
                         enabled = interactive,
                         onClick = { spectrumSpeed = spectrumSpeed.next(); showControls() },
                     )
@@ -801,7 +905,7 @@ private fun HeroCoverArt(
                 if (onEnterVisualizer != null && displaceVisualizerEntry) {
                     HeroIconButton(
                         icon = Icons.Default.GraphicEq,
-                        contentDescription = "Open visualizer",
+                        contentDescription = stringResource(R.string.action_open_visualizer),
                         enabled = interactive,
                         onClick = { onEnterVisualizer(); showControls() },
                     )
@@ -837,7 +941,7 @@ private fun HeroCoverArt(
                 HeroIconButton(
                     modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
                     icon = Icons.Default.GraphicEq,
-                    contentDescription = "Open visualizer",
+                    contentDescription = stringResource(R.string.action_open_visualizer),
                     enabled = interactive,
                     onClick = { onEnterVisualizer(); showControls() },
                 )
@@ -875,33 +979,6 @@ private fun HeroIconButton(
 }
 
 @Composable
-private fun BouncePill(
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-    content: @Composable () -> Unit,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.90f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "bouncePillScale",
-    )
-    Box(
-        modifier = modifier
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .liquidGlass(
-                shape = RoundedCornerShape(999.dp),
-                tintAlpha = 0.15f,
-                borderAlpha = 0.12f,
-            )
-    ) {
-        content()
-    }
-}
-
-@Composable
 private fun VisualizerActionPill(
     modifier: Modifier = Modifier,
     icon: ImageVector,
@@ -930,11 +1007,22 @@ private fun VisualizerActionPill(
             verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(15.dp))
-            Text(
+            // Auto-sized rather than ellipsised: four pills share one row,
+            // and a translation cut to "Préré…" says nothing.
+            val pillStyle = MaterialTheme.typography.labelSmall
+            androidx.compose.foundation.text.BasicText(
                 text = label,
-                style = MaterialTheme.typography.labelSmall,
+                style = pillStyle.copy(
+                    color = pillStyle.color.takeOrElse { androidx.compose.material3.LocalContentColor.current },
+                ),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                softWrap = false,
+                overflow = TextOverflow.Clip,
+                autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(
+                    minFontSize = 8.sp,
+                    maxFontSize = pillStyle.fontSize,
+                    stepSize = 0.5.sp,
+                ),
             )
         }
     }

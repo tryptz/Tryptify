@@ -20,6 +20,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tf.monochrome.android.ui.onboarding.OnboardingStepScaffold
 import tf.monochrome.android.ui.onboarding.OnboardingViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 /** Wrap-up: quick recap of what was set, then hand off to the library. */
 @Composable
@@ -35,26 +38,29 @@ fun DoneStep(
     val trackTotal = folders.mapNotNull { it.trackCount }.sum()
 
     OnboardingStepScaffold(
-        title = "You're all set",
-        subtitle = "Tryptify will scan your library in the background.",
-        primaryLabel = "Start listening",
+        title = stringResource(R.string.all_set),
+        subtitle = stringResource(R.string.all_set_subtitle),
+        primaryLabel = stringResource(R.string.start_listening),
         onPrimary = onStartListening
     ) {
         SummaryRow(
             text = when {
-                folders.isEmpty() -> "No library folders picked yet"
+                folders.isEmpty() -> stringResource(R.string.no_folders_picked)
                 trackTotal > 0 ->
-                    "${folders.size} ${if (folders.size == 1) "folder" else "folders"} · " +
-                        "${"%,d".format(trackTotal)} tracks found"
-                else -> "${folders.size} ${if (folders.size == 1) "folder" else "folders"} picked"
+                    stringResource(
+                        R.string.separator_dot,
+                        pluralStringResource(R.plurals.folders_count, folders.size, folders.size),
+                        pluralStringResource(R.plurals.tracks_found, trackTotal, java.text.NumberFormat.getIntegerInstance().format(trackTotal.toLong())),
+                    )
+                else -> pluralStringResource(R.plurals.folders_picked, folders.size, folders.size)
             }
         )
         SummaryRow(
-            text = if (downloadUri == null) "Downloads → app storage"
-            else "Downloads → custom folder"
+            text = if (downloadUri == null) stringResource(R.string.downloads_to_app_storage)
+            else stringResource(R.string.downloads_to_custom_folder)
         )
-        if (spotifyConnected) SummaryRow(text = "Spotify connected")
-        if (bitPerfect) SummaryRow(text = "USB bit-perfect output enabled")
+        if (spotifyConnected) SummaryRow(text = stringResource(R.string.spotify_connected))
+        if (bitPerfect) SummaryRow(text = stringResource(R.string.usb_bitperfect_enabled))
     }
 }
 

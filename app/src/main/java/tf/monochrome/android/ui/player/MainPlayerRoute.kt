@@ -1,5 +1,8 @@
 package tf.monochrome.android.ui.player
 
+import tf.monochrome.android.ui.navigation.trackArtistAction
+import tf.monochrome.android.ui.navigation.trackAlbumAction
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -9,18 +12,12 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -53,7 +50,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tune
@@ -108,10 +104,14 @@ import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.theme.ColorBlend
 import tf.monochrome.android.audio.PitchRatio
+import tf.monochrome.android.audio.SpeedUnit
 import kotlin.math.roundToInt
 import java.util.Locale
 import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.navigation.navigateTool
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 /**
  * Stateful entry point for the main player. Collects every flow from
@@ -155,7 +155,8 @@ fun MainPlayerRoute(
     val pitchSemitones by playerViewModel.pitchSemitones.collectAsStateWithLifecycle()
     val pitchEngine by playerViewModel.pitchEngine.collectAsStateWithLifecycle()
     val pitchQuality by playerViewModel.pitchQuality.collectAsStateWithLifecycle()
-    val speedUnitSemitones by playerViewModel.speedUnitSemitones.collectAsStateWithLifecycle()
+    val speedUnit by playerViewModel.speedUnit.collectAsStateWithLifecycle()
+    val trackBpm by playerViewModel.trackBpm.collectAsStateWithLifecycle()
     val compressorEnabled by playerViewModel.compressorEnabled.collectAsStateWithLifecycle()
     val inflatorEnabled by playerViewModel.inflatorEnabled.collectAsStateWithLifecycle()
     val crossfeedEnabled by playerViewModel.crossfeedEnabled.collectAsStateWithLifecycle()
@@ -174,6 +175,7 @@ fun MainPlayerRoute(
     val currentVisualizerPreset by playerViewModel.currentVisualizerPreset.collectAsStateWithLifecycle()
     val visualizerPresets by playerViewModel.visualizerPresets.collectAsStateWithLifecycle()
     val visualizerFavoritePresetIds by playerViewModel.visualizerFavoritePresetIds.collectAsStateWithLifecycle()
+    val visualizerFlaggedPresetIds by playerViewModel.visualizerFlaggedPresetIds.collectAsStateWithLifecycle()
     val canGoToPreviousVisualizerPreset by
         playerViewModel.canGoToPreviousVisualizerPreset.collectAsStateWithLifecycle()
     val spectrumBins by playerViewModel.spectrumAnalyzer.spectrumBins.collectAsStateWithLifecycle()
@@ -237,7 +239,7 @@ fun MainPlayerRoute(
     val playbackErrorContext = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(playbackError) {
         playbackError?.let {
-            android.widget.Toast.makeText(playbackErrorContext, it, android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(playbackErrorContext, playbackErrorContext.getString(it), android.widget.Toast.LENGTH_SHORT).show()
             playerViewModel.clearPlaybackError()
         }
     }
@@ -289,6 +291,8 @@ fun MainPlayerRoute(
     )
     val blendedColors = AlbumColors(animatedDominant, animatedVibrant)
     val spectrumColor = MaterialTheme.colorScheme.primary
+    val waveCandySettings by playerViewModel.waveCandy.collectAsStateWithLifecycle()
+    val waterfallSettings by playerViewModel.spectrumWaterfall.collectAsStateWithLifecycle()
 
     val isFullscreenActive = viewMode == NowPlayingViewMode.VISUALIZER && visualizerFullscreen
     // OR'd with the app-wide setting so leaving the visualiser doesn't hand the
@@ -496,12 +500,12 @@ fun MainPlayerRoute(
         repeatMode = repeatMode,
         viewMode = viewMode,
         audioQuality = currentTrack?.audioQuality,
-        outputLabel = "Default",
+        outputLabel = stringResource(R.string.output_default),
         soundLabel = "AutoEQ",
         // In the listener's own unit. This was the raw ratio, so a speed set
         // in semitones read as "+3 st" in the panel and "1.19x" here.
-        speedLabel = PitchRatio.formatSpeed(playbackSpeed, speedUnitSemitones),
-        sleepTimerLabel = if (sleepMinutes > 0) "$sleepRemainingMinutes min" else "Off",
+        speedLabel = speedUnit.format(playbackSpeed, trackBpm),
+        sleepTimerLabel = if (sleepMinutes > 0) stringResource(R.string.minutes_short, sleepRemainingMinutes) else stringResource(R.string.state_off),
         sleepTimerActive = sleepMinutes > 0,
         queueLabel = queueLabel,
         albumColors = blendedColors,
@@ -607,7 +611,7 @@ fun MainPlayerRoute(
             repeatMode = repeatMode,
             isDownloaded = isDownloaded,
             downloadState = downloadState,
-            onCollapse = { navController.popBackStack() },
+            onCollapse = { navController.popBackStackSafe() },
             onOutputClick = { showPipelineSheet = true },
             onSpeedClick = { showSpeedSheet = true },
             onToggleShuffle = playerViewModel::toggleShuffle,
@@ -617,12 +621,8 @@ fun MainPlayerRoute(
             onSendFile = { currentTrack?.let { playerViewModel.shareTrack(it) } },
             onOpenLyricsStudio = { navController.navigateTool(Screen.LyricsFxStudio) },
             onOpenSettings = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
-            onGoToArtist = currentTrack?.artist?.id?.let { artistId ->
-                { navController.navigateSafe(Screen.ArtistDetail.createRoute(artistId)) }
-            },
-            onGoToAlbum = currentTrack?.album?.id?.let { albumId ->
-                { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
-            },
+            onGoToArtist = navController.trackArtistAction(currentTrack, playerViewModel.unifiedFor(currentTrack)),
+            onGoToAlbum = navController.trackAlbumAction(currentTrack, playerViewModel.unifiedFor(currentTrack)),
         )
     }
     // Ambient › "Remove album cover": the preset row fades itself out after a
@@ -834,8 +834,11 @@ fun MainPlayerRoute(
                         currentVisualizerPreset?.id?.let { playerViewModel.toggleVisualizerFavoritePreset(it) }
                     },
                     onToggleFullscreen = playerViewModel::toggleVisualizerFullscreen,
-                    spectrumBins = spectrumBins,
+                    spectrumBins = { spectrumBins },
                     spectrumColor = spectrumColor,
+                    waterfall = waterfallSettings,
+                    waveSettings = waveCandySettings,
+                    onWaveSettings = playerViewModel::setWaveCandy,
                     showSpectrum = showNpSpectrum,
                     onToggleShowSpectrum = {
                         playerViewModel.setSpectrumShowOnNowPlaying(!spectrumShowOnNowPlaying)
@@ -929,6 +932,7 @@ fun MainPlayerRoute(
             presets = visualizerPresets,
             selectedPresetId = currentVisualizerPreset?.id,
             favoritePresetIds = visualizerFavoritePresetIds,
+            flaggedPresetIds = visualizerFlaggedPresetIds,
             onPresetSelected = playerViewModel::selectVisualizerPreset,
             onToggleFavorite = playerViewModel::toggleVisualizerFavoritePreset,
             onSettingsClick = {
@@ -951,15 +955,28 @@ fun MainPlayerRoute(
             onPitchEngineChange = playerViewModel::setPitchEngine,
             pitchQuality = pitchQuality,
             onPitchQualityChange = playerViewModel::setPitchQuality,
-            speedUnitSemitones = speedUnitSemitones,
-            onSpeedUnitChange = playerViewModel::setSpeedUnitSemitones,
+            speedUnit = speedUnit,
+            trackBpm = trackBpm,
+            onMeasureTrackBpm = playerViewModel::measureTrackBpm,
+            onTrackBpmSet = playerViewModel::setTrackBpm,
+            onSpeedUnitChange = playerViewModel::setSpeedUnit,
             onSpeedChange = playerViewModel::setPlaybackSpeed,
             onPreservePitchChange = playerViewModel::setPreservePitch,
             onDismiss = { showSpeedSheet = false },
         )
     }
 
+    // The player's source tag: the catalog the song was picked from, and where
+    // its audio actually comes from when that is somewhere else.
+    val playedFrom by playerViewModel.playedFrom.collectAsStateWithLifecycle()
+    val trackSource = tf.monochrome.android.ui.components.LocalTrackSource.current
+    val pickedFrom = currentUnified?.sourceType ?: state.track?.let(trackSource)
+    val playerSource = pickedFrom?.let { it to playedFrom }
+
     Box(modifier = Modifier.fillMaxSize()) {
+    androidx.compose.runtime.CompositionLocalProvider(
+        tf.monochrome.android.ui.components.LocalPlayerSource provides playerSource,
+    ) {
         if (legacyPlayer) {
             // Settings › System › Performance › "Legacy player" — the pre-glass
             // layout, recovered from history. Same state, same slots; no shader,
@@ -1084,6 +1101,7 @@ fun MainPlayerRoute(
                 overlay = playerPanels,
             )
         }
+    }
         // The legacy layout has no `overlay` slot and no haze source of its own,
         // so the same panels hang here instead. LocalPlayerHaze is null on that
         // path and GlassPanel falls back to plain translucent glass — the same
@@ -1183,8 +1201,14 @@ private fun BoxScope.SpeedPanel(
     onPitchEngineChange: (PitchEngine) -> Unit,
     pitchQuality: PitchQuality,
     onPitchQualityChange: (PitchQuality) -> Unit,
-    speedUnitSemitones: Boolean,
-    onSpeedUnitChange: (Boolean) -> Unit,
+    speedUnit: SpeedUnit,
+    /** The track's own tempo, or null while it is being measured. */
+    trackBpm: Float?,
+    /** Measure the track's tempo again: a tap on the BPM number. */
+    onMeasureTrackBpm: () -> Unit,
+    /** The listener's own figure for the track's tempo: a long-press on it. */
+    onTrackBpmSet: (Float) -> Unit,
+    onSpeedUnitChange: (SpeedUnit) -> Unit,
     onSpeedChange: (Float) -> Unit,
     onPreservePitchChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
@@ -1319,22 +1343,27 @@ private fun BoxScope.SpeedPanel(
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "Speed",
+                    text = stringResource(R.string.speed),
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Spacer(Modifier.weight(1f))
-                // Whichever unit is selected leads; the other trails in small
-                // type, because the two answer different questions — "how much
-                // faster" and "how much higher" — and one control drives both.
+                // Whichever unit is selected leads; another trails in small
+                // type, because they answer different questions — "how much
+                // faster", "how much higher", "how fast is the music now" —
+                // and one control drives them all.
+                val playedBpm = SpeedUnit.playedBpm(speed, trackBpm)
                 Text(
-                    text = PitchRatio.formatSpeed(speed, speedUnitSemitones),
+                    text = when (speedUnit) {
+                        SpeedUnit.BPM -> playedBpm?.let { SpeedUnit.formatBpm(it) } ?: stringResource(R.string.detecting)
+                        else -> speedUnit.format(speed, trackBpm)
+                    },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = speedAccent,
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    text = if (speedUnitSemitones) {
+                    text = if (speedUnit != SpeedUnit.MULTIPLIER) {
                         String.format(Locale.US, "%.2fx", speed)
                     } else if (PitchRatio.isOnSemitone(speed)) {
                         "${PitchRatio.formatSemitones(PitchRatio.nearestSemitone(speed))} st"
@@ -1355,99 +1384,107 @@ private fun BoxScope.SpeedPanel(
                 ) {
                     Icon(
                         Icons.Default.Refresh,
-                        contentDescription = "Reset speed to 1.0x",
+                        contentDescription = stringResource(R.string.speed_reset),
                         tint = speedAccent,
                         modifier = Modifier.size(18.dp),
                     )
                 }
             }
 
-            // Unit toggle, and the one preset worth a button. Not just a
-            // relabelling: in semitones the panel steps whole intervals at
-            // exact 2^(n/12) ratios, so every value it can reach is in tune;
-            // in multiplier units the slider stays continuous, for the speeds
-            // that are not intervals at all.
-            //
-            // Nightcore rides on the same line rather than filling one with a
-            // glowing pill: 1.10x with pitch following the tempo. The
-            // segmented buttons drop their selected-state checkmark to make
-            // room — the filled segment already says which unit is live, and
-            // the check was 24dp of nothing on a row that now has to fit
-            // three controls on a 360dp screen.
-            val nightcoreActive = abs(speed - 1.10f) < 0.01f && !preservePitch
-            Row(
+            // Unit toggle. Not just a relabelling: in semitones the panel
+            // steps whole intervals at exact 2^(n/12) ratios, so every value it
+            // can reach is in tune; in BPM it steps whole beats per minute of
+            // the track's detected tempo; in multiplier units the slider stays
+            // continuous, for the speeds that are neither. The panel's own
+            // capsule (SpeedControls.kt), like everything below it.
+            SpeedSegmented(
+                options = listOf(stringResource(R.string.speed_unit_multiplier), stringResource(R.string.speed_unit_semitones), "BPM"),
+                selectedIndex = speedUnit.ordinal,
+                accent = speedAccent,
+                onSelect = { onSpeedUnitChange(SpeedUnit.entries[it]) },
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.weight(1f)) {
-                    SegmentedButton(
-                        selected = !speedUnitSemitones,
-                        onClick = { onSpeedUnitChange(false) },
-                        shape = SegmentedButtonDefaults.itemShape(0, 2),
-                        icon = {},
-                        label = { Text("Multiplier", maxLines = 1) },
-                    )
-                    SegmentedButton(
-                        selected = speedUnitSemitones,
-                        onClick = { onSpeedUnitChange(true) },
-                        shape = SegmentedButtonDefaults.itemShape(1, 2),
-                        icon = {},
-                        label = { Text("Semitones", maxLines = 1) },
-                    )
-                }
-                FilterChip(
-                    selected = nightcoreActive,
-                    onClick = {
-                        onSpeedChange(1.10f)
-                        onPreservePitchChange(false)
-                    },
-                    label = { Text("Nightcore", maxLines = 1) },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                        )
-                    },
-                )
-            }
+            )
 
-            // One control, chosen by the unit. Semitones step exactly, because
-            // that is the only way to hit an interval by hand; the multiplier
-            // slides, because every value between two intervals is a real
-            // speed there.
-            if (speedUnitSemitones) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    StepButton(
-                        label = "-1 st",
+            // One control, chosen by the unit.
+            // Semitones step exactly, because that is the only way to hit an
+            // interval by hand; BPM steps to whole beats per minute, because
+            // that is how a tempo is matched; the multiplier slides, because
+            // every value between is a real speed there.
+            val controlModifier = Modifier.fillMaxWidth()
+            when (speedUnit) {
+                SpeedUnit.SEMITONES -> SpeedStepper(
+                    value = PitchRatio.formatSpeed(speed, semitoneUnit = true),
+                    accent = speedAccent,
+                    onDecrement = { onSpeedChange(PitchRatio.step(speed, -1)) },
+                    onIncrement = { onSpeedChange(PitchRatio.step(speed, 1)) },
+                    decrementLabel = stringResource(R.string.semitone_down),
+                    incrementLabel = stringResource(R.string.semitone_up),
+                    canDecrement = PitchRatio.step(speed, -1) < speed - 0.0001f,
+                    canIncrement = PitchRatio.step(speed, 1) > speed + 0.0001f,
+                    modifier = controlModifier,
+                )
+                SpeedUnit.BPM -> {
+                    val played = SpeedUnit.playedBpm(speed, trackBpm)
+                    val source = trackBpm
+                    fun stepTo(direction: Int): Float? =
+                        if (played == null || source == null) null
+                        else SpeedUnit.speedFor(SpeedUnit.stepBpm(played, direction), source)
+                    val down = stepTo(-1)
+                    val up = stepTo(1)
+                    // The number is measured once per track and then holds. Tap it
+                    // to measure again; long-press it to type the song's own
+                    // tempo when the measurement got it wrong (half or double is
+                    // the usual miss). Typing it leaves the speed alone — the
+                    // played tempo follows from it.
+                    var editingBpm by remember { mutableStateOf(false) }
+                    if (editingBpm) {
+                        BpmEntryDialog(
+                            current = source ?: DEFAULT_TYPED_BPM,
+                            onDismiss = { editingBpm = false },
+                            onSet = { bpm ->
+                                onTrackBpmSet(bpm)
+                                editingBpm = false
+                            },
+                        )
+                    }
+                    SpeedStepper(
+                        onValueClick = onMeasureTrackBpm,
+                        valueClickLabel = stringResource(R.string.bpm_measure_again),
+                        onValueLongPress = { editingBpm = true },
+                        valueLongPressLabel = stringResource(R.string.bpm_type_song_tempo),
+                        value = played?.let { "${it.roundToInt()} BPM" } ?: stringResource(R.string.detecting),
                         accent = speedAccent,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onSpeedChange(PitchRatio.step(speed, -1)) },
+                        onDecrement = { down?.let(onSpeedChange) },
+                        onIncrement = { up?.let(onSpeedChange) },
+                        decrementLabel = stringResource(R.string.bpm_slower),
+                        incrementLabel = stringResource(R.string.bpm_faster),
+                        canDecrement = down != null && down < speed - 0.0001f,
+                        canIncrement = up != null && up > speed + 0.0001f,
+                        modifier = controlModifier,
                     )
-                    StepButton(
-                        label = "+1 st",
-                        accent = speedAccent,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onSpeedChange(PitchRatio.step(speed, 1)) },
-                    )
+                    // Hold left or right to bend the tempo smoothly; the
+                    // stepper above stays for exact whole-BPM moves.
+                    if (played != null && source != null) {
+                        Spacer(Modifier.height(10.dp))
+                        BpmNudge(
+                            playedBpm = played,
+                            accent = speedAccent,
+                            onBpmChange = { bpm -> onSpeedChange(SpeedUnit.speedFor(bpm, source)) },
+                        )
+                    }
                 }
-            } else {
-                Slider(
+                SpeedUnit.MULTIPLIER -> Slider(
                     value = speed,
-                    // Was Math.round(it * 100f) / 100f, which quantised the ratio
-                    // to a 0.01 grid — up to 13.5 cents off an equal-tempered
-                    // interval. Full precision now, snapped onto an exact
-                    // semitone only when the drag already lands near one.
+                    // Full precision, snapped onto an exact semitone only
+                    // when the drag already lands near one (a 0.01 grid was
+                    // up to 13.5 cents off an equal-tempered interval).
                     onValueChange = { onSpeedChange(PitchRatio.snap(it)) },
                     valueRange = PitchRatio.MIN_SPEED..PitchRatio.MAX_SPEED,
                     colors = SliderDefaults.colors(
                         thumbColor = speedAccent,
                         activeTrackColor = speedAccent,
                     ),
+                    modifier = controlModifier,
                 )
             }
 
@@ -1457,12 +1494,12 @@ private fun BoxScope.SpeedPanel(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(text = "Preserve pitch", style = MaterialTheme.typography.bodyLarge)
+                    Text(text = stringResource(R.string.preserve_pitch), style = MaterialTheme.typography.bodyLarge)
                     Text(
                         text = if (preservePitch) {
-                            "Tempo changes, pitch stays natural"
+                            stringResource(R.string.preserve_pitch_on)
                         } else {
-                            "Pitch shifts with speed (vinyl-style)"
+                            stringResource(R.string.preserve_pitch_off)
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = muted,
@@ -1501,29 +1538,24 @@ private fun BoxScope.SpeedPanel(
                     modifier = Modifier.size(20.dp),
                 )
                 Text(
-                    text = "Pitch",
+                    text = stringResource(R.string.pitch),
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Spacer(Modifier.weight(1f))
-                Text(
-                    text = "${PitchRatio.formatSemitones(pitchSemitones.roundToInt())} st",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = speedAccent,
-                )
-                StepButton(
-                    label = "-1 st",
+                SpeedStepper(
+                    value = "${PitchRatio.formatSemitones(pitchSemitones.roundToInt())} st",
                     accent = speedAccent,
-                    onClick = {
+                    onDecrement = {
                         onPitchSemitonesChange((pitchSemitones.roundToInt() - 1).coerceAtLeast(-24).toFloat())
                     },
-                )
-                StepButton(
-                    label = "+1 st",
-                    accent = speedAccent,
-                    onClick = {
+                    onIncrement = {
                         onPitchSemitonesChange((pitchSemitones.roundToInt() + 1).coerceAtMost(24).toFloat())
                     },
+                    decrementLabel = stringResource(R.string.pitch_down),
+                    incrementLabel = stringResource(R.string.pitch_up),
+                    canDecrement = pitchSemitones.roundToInt() > -24,
+                    canIncrement = pitchSemitones.roundToInt() < 24,
+                    compact = true,
                 )
                 IconButton(
                     onClick = { onPitchSemitonesChange(0f) },
@@ -1532,7 +1564,7 @@ private fun BoxScope.SpeedPanel(
                 ) {
                     Icon(
                         Icons.Default.Refresh,
-                        contentDescription = "Reset pitch",
+                        contentDescription = stringResource(R.string.pitch_reset),
                         tint = speedAccent,
                         modifier = Modifier.size(18.dp),
                     )
@@ -1554,19 +1586,13 @@ private fun BoxScope.SpeedPanel(
                 exit = fadeOut() + shrinkVertically(),
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        PitchEngine.entries.forEachIndexed { index, engine ->
-                            SegmentedButton(
-                                selected = pitchEngine == engine,
-                                onClick = { onPitchEngineChange(engine) },
-                                shape = SegmentedButtonDefaults.itemShape(
-                                    index = index,
-                                    count = PitchEngine.entries.size,
-                                ),
-                                label = { Text(engine.label, maxLines = 1) },
-                            )
-                        }
-                    }
+                    SpeedSegmented(
+                        options = PitchEngine.entries.map { it.label },
+                        selectedIndex = PitchEngine.entries.indexOf(pitchEngine),
+                        accent = speedAccent,
+                        onSelect = { onPitchEngineChange(PitchEngine.entries[it]) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     Text(
                         text = pitchEngine.summary,
                         style = MaterialTheme.typography.bodySmall,
@@ -1579,28 +1605,21 @@ private fun BoxScope.SpeedPanel(
                     // reason it is reachable rather than a constant -- the
                     // vocoder's block was chosen for accuracy alone and drops
                     // out on real hardware at the top setting.
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        PitchQuality.entries.forEachIndexed { index, quality ->
-                            SegmentedButton(
-                                selected = pitchQuality == quality,
-                                onClick = { onPitchQualityChange(quality) },
-                                shape = SegmentedButtonDefaults.itemShape(
-                                    index = index,
-                                    count = PitchQuality.entries.size,
-                                ),
-                                label = { Text(quality.label, maxLines = 1) },
-                            )
-                        }
-                    }
+                    SpeedSegmented(
+                        options = PitchQuality.entries.map { it.label },
+                        selectedIndex = PitchQuality.entries.indexOf(pitchQuality),
+                        accent = speedAccent,
+                        onSelect = { onPitchQualityChange(PitchQuality.entries[it]) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     // The number that actually decides it, which is not the
                     // same number for the two engines.
                     Text(
                         text = when (pitchEngine) {
                             PitchEngine.WSOLA ->
-                                "Holds bass down to ${pitchQuality.bassFloorHz} Hz"
+                                stringResource(R.string.pitch_wsola_floor, pitchQuality.bassFloorHz.toString())
                             PitchEngine.VOCODER ->
-                                "Within ${pitchQuality.vocoderErrorHz}. Lower settings " +
-                                    "are lighter work and less likely to stutter."
+                                stringResource(R.string.pitch_vocoder_error, pitchQuality.vocoderErrorHz.toString())
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = muted,
@@ -1610,36 +1629,6 @@ private fun BoxScope.SpeedPanel(
         }
         }
         }
-    }
-}
-
-/**
- * One press of the semitone steppers, on both engines.
- *
- * A bordered pill rather than the bare [TextButton] these were: as plain text
- * they read as links in a panel that already had several, with nothing to say
- * they were the buttons that move the value. The border is the accent at low
- * alpha so they belong to the control above them without competing with it.
- *
- * The speed pair takes a weight so the two of them split the row; the pitch
- * pair sits at its intrinsic width beside the readout.
- */
-@Composable
-private fun StepButton(
-    label: String,
-    accent: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    OutlinedButton(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(percent = 50),
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 6.dp),
-        border = BorderStroke(1.dp, accent.copy(alpha = 0.45f)),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = accent),
-    ) {
-        Text(text = label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
     }
 }
 
@@ -1660,21 +1649,21 @@ private fun SleepTimerSheet(
                 .padding(horizontal = 24.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(text = "Sleep timer", style = MaterialTheme.typography.titleMedium)
+            Text(text = stringResource(R.string.sleep_timer), style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(0, 15, 30, 45, 60).forEach { minutes ->
                     FilterChip(
                         selected = activeMinutes == minutes,
                         onClick = { onSelect(minutes); onDismiss() },
-                        label = { Text(if (minutes == 0) "Off" else "$minutes min") },
+                        label = { Text(if (minutes == 0) stringResource(R.string.state_off) else stringResource(R.string.minutes_short, minutes)) },
                     )
                 }
             }
             Text(
                 text = if (activeMinutes > 0) {
-                    "Playback will pause in $remainingMinutes minute${if (remainingMinutes == 1) "" else "s"}."
+                    pluralStringResource(R.plurals.sleep_timer_pauses_in, remainingMinutes, remainingMinutes)
                 } else {
-                    "Sleep timer is off."
+                    stringResource(R.string.sleep_timer_off)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1682,3 +1671,6 @@ private fun SleepTimerSheet(
         }
     }
 }
+
+/** Where the song-tempo keyboard starts when nothing has been measured yet. */
+private const val DEFAULT_TYPED_BPM = 120f

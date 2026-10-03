@@ -38,6 +38,9 @@ import androidx.compose.ui.unit.dp
 import tf.monochrome.android.data.downloads.ActiveDownload
 import tf.monochrome.android.data.downloads.DownloadStatus
 import tf.monochrome.android.ui.components.CoverImage
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 /**
  * Floating, dismissible pill that surfaces the current download and its progress.
@@ -75,7 +78,7 @@ fun DownloadProgressPill(
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (remaining > 1) "Downloading · $remaining left" else "Downloading",
+                        text = if (remaining > 1) pluralStringResource(R.plurals.downloads_left, remaining, remaining) else stringResource(R.string.downloading),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary,
@@ -88,7 +91,7 @@ fun DownloadProgressPill(
                     )
                 }
                 IconButton(onClick = onHide) {
-                    Icon(Icons.Default.Close, contentDescription = "Hide downloads")
+                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.hide_downloads))
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -125,7 +128,7 @@ fun DownloadTopBarIndicator(
             )
             Icon(
                 imageVector = Icons.Default.Download,
-                contentDescription = "Downloads",
+                contentDescription = stringResource(R.string.page_downloads),
                 modifier = Modifier.size(15.dp),
                 tint = MaterialTheme.colorScheme.primary,
             )
@@ -158,16 +161,16 @@ fun DownloadsMonitorSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = "Downloads" + if (downloads.isNotEmpty()) " · ${downloads.size}" else "",
+                    text = stringResource(R.string.page_downloads) + if (downloads.isNotEmpty()) " · ${downloads.size}" else "",
                     style = MaterialTheme.typography.titleMedium,
                 )
                 if (downloads.isNotEmpty()) {
-                    TextButton(onClick = onCancelAll) { Text("Cancel all") }
+                    TextButton(onClick = onCancelAll) { Text(stringResource(R.string.cancel_all)) }
                 }
             }
             if (downloads.isEmpty()) {
                 Text(
-                    text = "No active downloads.",
+                    text = stringResource(R.string.no_active_downloads),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -205,8 +208,8 @@ fun DownloadsMonitorSheet(
                             Text(
                                 text = when (d.status) {
                                     DownloadStatus.DOWNLOADING -> d.artistName
-                                    DownloadStatus.FAILED -> "Failed — tap retry"
-                                    else -> "Queued"
+                                    DownloadStatus.FAILED -> stringResource(R.string.failed_tap_retry)
+                                    else -> stringResource(R.string.download_queued)
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (d.status == DownloadStatus.FAILED) {
@@ -244,14 +247,14 @@ fun DownloadsMonitorSheet(
                         // restart retry has no input data to re-enqueue with.
                         if (d.status == DownloadStatus.FAILED) {
                             IconButton(onClick = { onRetry(d.trackId) }) {
-                                Icon(Icons.Default.Refresh, contentDescription = "Retry")
+                                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.action_retry))
                             }
                         }
                         IconButton(onClick = { onCancel(d.trackId) }) {
                             Icon(
                                 Icons.Default.Close,
                                 contentDescription =
-                                    if (d.status == DownloadStatus.FAILED) "Dismiss" else "Cancel",
+                                    if (d.status == DownloadStatus.FAILED) stringResource(R.string.action_dismiss) else stringResource(R.string.action_cancel),
                             )
                         }
                     }

@@ -40,6 +40,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.R
 import tf.monochrome.android.ui.theme.PressSpring
+import androidx.compose.ui.res.stringResource
 
 // Vertical paddings shared between the label overlay and the punch geometry, so
 // the hollow icons stay centred over their labels regardless of DPI.
@@ -216,10 +217,10 @@ fun PlayerActionDock(
         }
         // Transparent overlay: labels + tap targets, one weighted slot per hole.
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = DockRowVerticalPadding)) {
-            DockLabel(Modifier.weight(1f), "Lyrics", icons[0], glassTint, lyricsActive, sources[0], onLyrics)
-            DockLabel(Modifier.weight(1f), "Shuffle", icons[1], glassTint, shuffleActive, sources[1], onShuffle)
-            DockLabel(Modifier.weight(1f), "Mixer/FX", icons[2], glassTint, false, sources[2], onMixer)
-            DockLabel(Modifier.weight(1f), "Playlist", icons[3], glassTint, false, sources[3], onPlaylist)
+            DockLabel(Modifier.weight(1f), stringResource(R.string.mode_lyrics), icons[0], glassTint, lyricsActive, sources[0], onLyrics)
+            DockLabel(Modifier.weight(1f), stringResource(R.string.visualizer_shuffle), icons[1], glassTint, shuffleActive, sources[1], onShuffle)
+            DockLabel(Modifier.weight(1f), stringResource(R.string.dock_mixer_fx), icons[2], glassTint, false, sources[2], onMixer)
+            DockLabel(Modifier.weight(1f), stringResource(R.string.playlist), icons[3], glassTint, false, sources[3], onPlaylist)
         }
     }
 }

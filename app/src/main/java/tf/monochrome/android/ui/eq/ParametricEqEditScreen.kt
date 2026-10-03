@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.eq
 
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -52,7 +53,9 @@ import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.domain.model.FilterType
 import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.bounceCombinedClick
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 @Composable
 fun ParametricEqEditScreen(
@@ -84,7 +87,7 @@ fun ParametricEqEditScreen(
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
             .verticalScroll(rememberScrollState())
-            .padding(bottom = LocalMiniPlayerInset.current)
+            .padding(bottom = LocalBottomChromeInset.current)
     ) {
         // Top bar
         tf.monochrome.android.devedit.DevEditable("peq_edit_top_bar", Modifier.fillMaxWidth()) {
@@ -94,15 +97,15 @@ fun ParametricEqEditScreen(
                 .padding(start = 4.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { navController.popBackStack() }) {
+            IconButton(onClick = { navController.popBackStackSafe() }) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.settings_back),
                     tint = MaterialTheme.colorScheme.onSurface
                 )
             }
             Text(
-                "EDIT PARAMETRIC EQ",
+                stringResource(R.string.eq_edit_parametric_eq_caps),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 2.sp,
@@ -112,7 +115,7 @@ fun ParametricEqEditScreen(
             IconButton(onClick = { viewModel.resetToFlat() }) {
                 Icon(
                     Icons.Default.Refresh,
-                    contentDescription = "Reset to flat",
+                    contentDescription = stringResource(R.string.eq_reset_to_flat),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -123,7 +126,7 @@ fun ParametricEqEditScreen(
             }) {
                 Icon(
                     Icons.Default.Save,
-                    contentDescription = "Save as profile",
+                    contentDescription = stringResource(R.string.eq_save_as_profile),
                     tint = MaterialTheme.colorScheme.primary
                 )
             }
@@ -184,7 +187,7 @@ fun ParametricEqEditScreen(
         // Band strip with add button
         tf.monochrome.android.devedit.DevEditable("peq_edit_band_strip", Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-            SectionLabel("BANDS")
+            SectionLabel(stringResource(R.string.eq_bands_caps))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -211,7 +214,7 @@ fun ParametricEqEditScreen(
                 ) {
                     Icon(
                         Icons.Default.Add,
-                        contentDescription = "Add band",
+                        contentDescription = stringResource(R.string.eq_add_band),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(18.dp)
                     )
@@ -231,7 +234,7 @@ fun ParametricEqEditScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    SectionLabel("BAND ${selectedBand.id + 1}")
+                    SectionLabel(stringResource(R.string.eq_band_n_caps, selectedBand.id + 1))
                     Spacer(modifier = Modifier.weight(1f))
                     IconButton(
                         onClick = { viewModel.removeBand(selectedBand.id) },
@@ -239,7 +242,7 @@ fun ParametricEqEditScreen(
                     ) {
                         Icon(
                             Icons.Default.Delete,
-                            contentDescription = "Remove band",
+                            contentDescription = stringResource(R.string.eq_remove_band),
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(16.dp)
                         )
@@ -284,7 +287,7 @@ fun ParametricEqEditScreen(
 
                 // Frequency slider (log)
                 ValueSlider(
-                    label = "Frequency",
+                    label = stringResource(R.string.eq_frequency),
                     value = logFreqToSlider(selectedBand.freq),
                     valueRange = 0f..1f,
                     display = formatFreq(selectedBand.freq),
@@ -296,7 +299,7 @@ fun ParametricEqEditScreen(
 
                 // Gain slider
                 ValueSlider(
-                    label = "Gain",
+                    label = stringResource(R.string.eq_gain),
                     value = selectedBand.gain,
                     valueRange = -EqLimits.PARAMETRIC_MAX_BAND_DB..EqLimits.PARAMETRIC_MAX_BAND_DB,
                     display = "%+.1f dB".format(selectedBand.gain),
@@ -320,7 +323,7 @@ fun ParametricEqEditScreen(
         // Preamp slider
         tf.monochrome.android.devedit.DevEditable("peq_edit_preamp", Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
-            SectionLabel("PREAMP")
+            SectionLabel(stringResource(R.string.eq_preamp_caps))
             ValueSlider(
                 label = "",
                 value = currentPreamp,
@@ -337,13 +340,13 @@ fun ParametricEqEditScreen(
     if (showSaveDialog) {
         AlertDialog(
             onDismissRequest = { showSaveDialog = false },
-            title = { Text("Save Profile") },
+            title = { Text(stringResource(R.string.eq_save_profile)) },
             text = {
                 Column {
                     OutlinedTextField(
                         value = saveName,
                         onValueChange = { saveName = it },
-                        label = { Text("Profile name") },
+                        label = { Text(stringResource(R.string.eq_profile_name)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -351,7 +354,7 @@ fun ParametricEqEditScreen(
                     OutlinedTextField(
                         value = saveDescription,
                         onValueChange = { saveDescription = it },
-                        label = { Text("Description (optional)") },
+                        label = { Text(stringResource(R.string.eq_description_optional)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -366,10 +369,10 @@ fun ParametricEqEditScreen(
                         viewModel.saveAsPreset(trimmedName, saveDescription.trim())
                         showSaveDialog = false
                     }
-                }) { Text("Save") }
+                }) { Text(stringResource(R.string.action_save)) }
             },
             dismissButton = {
-                TextButton(onClick = { showSaveDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showSaveDialog = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -463,6 +466,10 @@ private fun sliderToLogFreq(t: Float): Float {
 }
 
 private fun formatFreq(freq: Float): String = when {
-    freq >= 1000f -> "%.1fk".format(freq / 1000f).replace(".0k", "k")
+    // Whole kilohertz drop the decimal ("2k"); the rest keep one, written with
+    // the reader's own decimal mark ("1,5k" in German). Matching ".0k" on the
+    // formatted text missed "2,0k" wherever the mark is a comma.
+    freq >= 1000f && freq % 1000f == 0f -> "${(freq / 1000f).toInt()}k"
+    freq >= 1000f -> "%.1fk".format(freq / 1000f)
     else -> "${freq.toInt()}"
 }

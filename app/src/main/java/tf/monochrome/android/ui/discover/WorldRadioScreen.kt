@@ -59,7 +59,6 @@ import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -134,6 +133,9 @@ import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.ln
 import kotlin.math.sin
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 /**
  * World radio — the Earth as one picture, with every city you can tune into.
@@ -181,16 +183,12 @@ import kotlin.math.sin
 @Composable
 fun WorldRadioScreen(
     playerViewModel: PlayerViewModel,
-    // The page list and the pager's way of opening one, for the jump sheet —
-    // the same pair every other page takes. The globe stopped being a nav
-    // destination when it became a page, so there is no back stack to pop and
-    // nothing here needs a NavController.
-    pages: List<String>,
-    onSelectPage: (String) -> Unit,
     viewModel: WorldRadioViewModel = androidx.hilt.navigation.compose.hiltViewModel(),
 ) {
+    // The globe is a tab: the bar is the way off it, and Back leaves it for
+    // Home the way it leaves any tab. Nothing here needs a NavController.
     DynamicColorScope {
-        WorldRadioContent(playerViewModel, pages, onSelectPage, viewModel)
+        WorldRadioContent(playerViewModel, viewModel)
     }
 }
 
@@ -198,19 +196,8 @@ fun WorldRadioScreen(
 @Composable
 private fun WorldRadioContent(
     playerViewModel: PlayerViewModel,
-    pages: List<String>,
-    onSelectPage: (String) -> Unit,
     viewModel: WorldRadioViewModel,
 ) {
-    var pageJumpOpen by remember { mutableStateOf(false) }
-    if (pageJumpOpen) {
-        tf.monochrome.android.ui.navigation.PageJumpSheet(
-            pages = pages,
-            onSelect = onSelectPage,
-            current = tf.monochrome.android.ui.navigation.RADIO_PAGE_ID,
-            onDismiss = { pageJumpOpen = false },
-        )
-    }
     val globe by viewModel.globe.collectAsStateWithLifecycle()
     val selected by viewModel.selected.collectAsStateWithLifecycle()
     val stations by viewModel.stations.collectAsStateWithLifecycle()
@@ -238,8 +225,9 @@ private fun WorldRadioContent(
     val liveScale = rememberUpdatedState(globe.scale)
 
     val mapHaze = rememberHazeState()
-    val playing by playerViewModel.currentTrack.collectAsStateWithLifecycle()
-    val panelBottomInset = if (playing != null) MINI_PLAYER_RESERVE else 0.dp
+    // The tab bar (and the mini player over it) floats on this page, which runs
+    // under the system bar; the station panel has to clear all of it.
+    val panelBottomInset = tf.monochrome.android.ui.navigation.LocalBottomChromeInset.current
     val glassSettings by playerViewModel.miniPlayerGlass.collectAsStateWithLifecycle()
 
     var topBarHeightPx by remember { mutableIntStateOf(0) }
@@ -300,29 +288,21 @@ private fun WorldRadioContent(
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("World radio") },
-            navigationIcon = {
-                // The page list, as on every other page. Back used to pop a
-                // detail screen off the stack; there is no stack now — Back
-                // leaves the globe for Home the way it leaves any page.
-                IconButton(onClick = { pageJumpOpen = true }) {
-                    Icon(Icons.Default.Menu, contentDescription = "Pages")
-                }
-            },
+            title = { Text(stringResource(R.string.world_radio)) },
             actions = {
                 IconButton(onClick = { viewModel.toggleSearch() }) {
                     Icon(
                         Icons.Default.Search,
-                        contentDescription = if (searchOpen) "Close search" else "Search stations",
+                        contentDescription = if (searchOpen) stringResource(R.string.action_close_search) else stringResource(R.string.search_stations),
                         tint = if (searchOpen) MaterialTheme.colorScheme.primary
                         else LocalContentColor.current,
                     )
                 }
                 IconButton(onClick = { showFxSheet = true }) {
-                    Icon(Icons.Default.GraphicEq, contentDescription = "Outline glow")
+                    Icon(Icons.Default.GraphicEq, contentDescription = stringResource(R.string.outline_glow))
                 }
                 IconButton(onClick = { flight?.cancel(); camera = GlobeCamera() }) {
-                    Icon(Icons.Default.CenterFocusStrong, contentDescription = "Recentre")
+                    Icon(Icons.Default.CenterFocusStrong, contentDescription = stringResource(R.string.recentre))
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
@@ -449,7 +429,7 @@ private fun WorldRadioContent(
             }
 
             Text(
-                text = if (globe.cities.isEmpty() || searchOpen) "" else "Dots are cities on air · sized by how many stations",
+                text = if (globe.cities.isEmpty() || searchOpen) "" else stringResource(R.string.globe_caption),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
@@ -487,7 +467,7 @@ private fun WorldRadioContent(
 
             if (globe.cities.isEmpty()) {
                 Text(
-                    text = "The globe didn't load.",
+                    text = stringResource(R.string.globe_failed),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.align(Alignment.Center),
@@ -528,51 +508,51 @@ private fun GlobeFxSheet(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "Globe",
+                    text = stringResource(R.string.globe),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
                 )
-                TextButton(onClick = onReset) { Text("Reset") }
+                TextButton(onClick = onReset) { Text(stringResource(R.string.action_reset)) }
             }
             Text(
-                text = "Fills the continents and lights their edges in the app's accent colour.",
+                text = stringResource(R.string.globe_detail),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             GlobeFxSlider(
-                label = "Land",
-                valueLabel = if (fx.landFill <= 0.01f) "Off"
-                else "${(fx.landFill / 0.8f * 100).toInt()}%",
+                label = stringResource(R.string.globe_land),
+                valueLabel = if (fx.landFill <= 0.01f) stringResource(R.string.state_off)
+                else java.text.NumberFormat.getPercentInstance().format(fx.landFill / 0.8f),
                 value = fx.landFill,
                 range = 0f..0.8f,
-                description = "How solidly the continents fill against the ocean.",
+                description = stringResource(R.string.globe_land_detail),
             ) { onChange(fx.copy(landFill = it)) }
 
             GlobeFxSlider(
-                label = "Illumination",
-                valueLabel = if (fx.illumination <= 0.01f) "Off"
-                else "${(fx.illumination * 100).toInt()}%",
+                label = stringResource(R.string.globe_illumination),
+                valueLabel = if (fx.illumination <= 0.01f) stringResource(R.string.state_off)
+                else java.text.NumberFormat.getPercentInstance().format(fx.illumination),
                 value = fx.illumination,
                 range = 0f..1f,
-                description = "How far the outlines shift from the map's ink toward the accent.",
+                description = stringResource(R.string.globe_illumination_detail),
             ) { onChange(fx.copy(illumination = it)) }
 
             GlobeFxSlider(
-                label = "Glow",
-                valueLabel = if (fx.glowBrightness <= 0.01f) "Off"
-                else "${(fx.glowBrightness * 100).toInt()}%",
+                label = stringResource(R.string.globe_glow),
+                valueLabel = if (fx.glowBrightness <= 0.01f) stringResource(R.string.state_off)
+                else java.text.NumberFormat.getPercentInstance().format(fx.glowBrightness),
                 value = fx.glowBrightness,
                 range = 0f..1f,
-                description = "Strength of the halo laid under each line.",
+                description = stringResource(R.string.globe_glow_detail),
             ) { onChange(fx.copy(glowBrightness = it)) }
 
             GlobeFxSlider(
-                label = "Glow width",
+                label = stringResource(R.string.globe_glow_width),
                 valueLabel = fx.glowWidth.asMultiple(1),
                 value = fx.glowWidth,
                 range = 1f..8f,
-                description = "How far the halo spreads either side of the line.",
+                description = stringResource(R.string.globe_glow_width_detail),
             ) { onChange(fx.copy(glowWidth = it)) }
         }
     }
@@ -663,7 +643,7 @@ private fun StationSearchBar(
     GlassSearchBar(
         query = query,
         onQueryChange = onQueryChange,
-        placeholder = "Station, city or country",
+        placeholder = stringResource(R.string.station_search_hint),
         // The globe marks its own canvas as a source and this bar is a sibling
         // above it, not a child of it — so there is a real picture under here
         // to frost.
@@ -753,7 +733,7 @@ private fun StationSearchBar(
                             modifier = Modifier.bounceClick(onClick = onClearRecents),
                         ) {
                             Text(
-                                text = "Clear",
+                                text = stringResource(R.string.action_clear),
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -766,11 +746,11 @@ private fun StationSearchBar(
             when (state.status) {
                 SearchStatus.Idle -> Unit
                 SearchStatus.Searching ->
-                    if (state.cities.isEmpty()) SearchNote("Searching…")
+                    if (state.cities.isEmpty()) SearchNote(stringResource(R.string.searching))
                 SearchStatus.Unreachable ->
-                    SearchNote("Couldn't reach the station directory.")
+                    SearchNote(stringResource(R.string.station_directory_unreachable))
                 SearchStatus.Ready ->
-                    if (state.isEmpty) SearchNote("Nothing by that name.")
+                    if (state.isEmpty) SearchNote(stringResource(R.string.nothing_by_that_name))
             }
     }
 }
@@ -854,7 +834,7 @@ private fun CountryPill(country: RadioCountry, open: Boolean, onClick: () -> Uni
             if (!open) {
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    text = if (country.cities == 1) "1 city" else "${country.cities} cities",
+                    text = pluralStringResource(R.plurals.cities_count, country.cities, country.cities),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -981,8 +961,7 @@ private fun CityCard(
                             append(city.country)
                             append(" · ")
                             append(
-                                if (city.stations == 1) "1 station"
-                                else "${city.stations} stations",
+                                pluralStringResource(R.plurals.stations_count, city.stations, city.stations),
                             )
                         },
                         style = MaterialTheme.typography.bodySmall,
@@ -992,7 +971,7 @@ private fun CityCard(
                 IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
                     Icon(
                         Icons.Default.Close,
-                        contentDescription = "Close",
+                        contentDescription = stringResource(R.string.action_close),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -1002,7 +981,7 @@ private fun CityCard(
 
             when (stations) {
                 StationsState.Idle, StationsState.Loading -> Text(
-                    text = "Tuning in…",
+                    text = stringResource(R.string.tuning_in),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1012,17 +991,14 @@ private fun CityCard(
                 // has no radio when in fact the request failed is the kind of
                 // small lie that makes a map untrustworthy.
                 StationsState.Unreachable -> Text(
-                    text = "Couldn't reach the station directory. It's the listing " +
-                        "that's missing, not the radio — try again in a moment.",
+                    text = stringResource(R.string.station_directory_unreachable_detail),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
                 is StationsState.Ready -> if (stations.stations.isEmpty()) {
                     Text(
-                        text = "Nothing is on air here right now. ${city.stations} " +
-                            "station(s) were listed when this map was built; the " +
-                            "directory has since dropped them.",
+                        text = pluralStringResource(R.plurals.station_dropped, city.stations, city.stations),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1065,7 +1041,7 @@ private fun CityCard(
             if (nearby.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    text = "Nearby on air",
+                    text = stringResource(R.string.nearby_on_air),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1098,7 +1074,7 @@ private fun StationRow(
     ) {
         Icon(
             imageVector = Icons.Default.PlayArrow,
-            contentDescription = "Play ${station.name}",
+            contentDescription = stringResource(R.string.play_named, station.name),
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(20.dp),
         )
@@ -1127,7 +1103,7 @@ private fun StationRow(
             IconButton(onClick = it, modifier = Modifier.size(30.dp)) {
                 Icon(
                     Icons.Default.OpenInNew,
-                    contentDescription = "Open ${station.name}'s website",
+                    contentDescription = stringResource(R.string.open_station_website, station.name),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp),
                 )
@@ -1136,8 +1112,8 @@ private fun StationRow(
         IconButton(onClick = onFavourite, modifier = Modifier.size(30.dp)) {
             Icon(
                 imageVector = if (favourite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                contentDescription = if (favourite) "Remove from your stations"
-                else "Keep this station",
+                contentDescription = if (favourite) stringResource(R.string.station_unkeep)
+                else stringResource(R.string.station_keep),
                 tint = if (favourite) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp),
@@ -1272,8 +1248,6 @@ private const val PING_TRAVEL = 7f
 private const val PING_RINGS = 2
 
 // ── projection, camera and drawing ──────────────────────────────────────────
-
-private val MINI_PLAYER_RESERVE = 72.dp
 
 /**
  * How long the glow settings sit still before they are written.

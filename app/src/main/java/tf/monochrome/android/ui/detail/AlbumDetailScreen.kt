@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.detail
 
+import tf.monochrome.android.ui.navigation.trackArtistAction
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -54,9 +56,13 @@ import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.navigation.navigateSafe
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.components.SearchAction
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,6 +74,7 @@ fun AlbumDetailScreen(
     val albumDetail by viewModel.albumDetail.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
+    val source by viewModel.source.collectAsStateWithLifecycle()
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsStateWithLifecycle()
     val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsStateWithLifecycle()
     val playlists by playerViewModel.playlists.collectAsStateWithLifecycle()
@@ -100,9 +107,7 @@ fun AlbumDetailScreen(
             onDownloadTrack = { playerViewModel.downloadTrack(track) },
             onShareFile = { playerViewModel.shareTrack(track) },
             onGoToAlbum = null, // Already here
-            onGoToArtist = track.artist?.id?.let { artistId ->
-                { navController.navigateSafe(Screen.ArtistDetail.createRoute(artistId)) }
-            }
+            onGoToArtist = navController.trackArtistAction(track, playerViewModel.unifiedFor(track))
         )
     }
 
@@ -133,7 +138,7 @@ fun AlbumDetailScreen(
 
     if (showAddToPlaylistForSelection) {
         AddToPlaylistSheet(
-            title = "Add ${selection.count} tracks to playlist",
+            title = pluralStringResource(R.plurals.add_n_tracks_to_playlist, selection.count, selection.count),
             playlists = playlists,
             onDismiss = { showAddToPlaylistForSelection = false },
             onPlaylistSelected = { playlist ->
@@ -163,8 +168,8 @@ fun AlbumDetailScreen(
             },
             title = {},
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                IconButton(onClick = { navController.popBackStackSafe() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -175,7 +180,7 @@ fun AlbumDetailScreen(
         when {
             isLoading -> LoadingScreen()
             error != null -> ErrorScreen(
-                message = error ?: "Unknown error",
+                message = error?.resolve(LocalContext.current) ?: stringResource(R.string.unknown_error),
                 onRetry = { viewModel.retry() }
             )
             albumDetail != null -> {
@@ -201,14 +206,14 @@ fun AlbumDetailScreen(
                     open = searchOpen,
                     query = listQuery,
                     onQueryChange = { listQuery = it },
-                    placeholder = "Search this album",
+                    placeholder = stringResource(R.string.search_this_album),
                     onClose = { searchOpen = false; listQuery = "" },
                 ) { searchTopInset ->
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
                         top = searchTopInset,
-                        bottom = 80.dp + LocalMiniPlayerInset.current,
+                        bottom = 80.dp + LocalBottomChromeInset.current,
                     )
                 ) {
                     item {
@@ -224,8 +229,16 @@ fun AlbumDetailScreen(
                                 cornerRadius = 12.dp
                             )
                             Spacer(modifier = Modifier.height(16.dp))
-                            if (detail.album.isThxSpatialAudio) {
-                                tf.monochrome.android.ui.components.ThxBadgePill()
+                            // The catalog this album came from, beside any THX mark.
+                            if (source != null || detail.album.isThxSpatialAudio) {
+                                androidx.compose.foundation.layout.Row(
+                                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
+                                ) {
+                                    source?.let { tf.monochrome.android.ui.components.SourcePill(it) }
+                                    if (detail.album.isThxSpatialAudio) {
+                                        tf.monochrome.android.ui.components.ThxBadgePill()
+                                    }
+                                }
                                 Spacer(modifier = Modifier.height(6.dp))
                             }
                             Text(
@@ -248,7 +261,7 @@ fun AlbumDetailScreen(
                             )
                             detail.album.releaseYear?.let { year ->
                                 Text(
-                                    text = "${detail.album.type ?: "Album"} · $year",
+                                    text = stringResource(R.string.separator_dot, albumTypeLabel(detail.album.type), year.toString()),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -265,7 +278,7 @@ fun AlbumDetailScreen(
                                 ) {
                                     Icon(
                                         Icons.Default.PlayArrow,
-                                        contentDescription = "Play",
+                                        contentDescription = stringResource(R.string.action_play),
                                         tint = MaterialTheme.colorScheme.onPrimary
                                     )
                                 }
@@ -278,7 +291,7 @@ fun AlbumDetailScreen(
                                 ) {
                                     Icon(
                                         Icons.Default.Shuffle,
-                                        contentDescription = "Shuffle",
+                                        contentDescription = stringResource(R.string.visualizer_shuffle),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
@@ -291,7 +304,7 @@ fun AlbumDetailScreen(
                                 ) {
                                     Icon(
                                         Icons.Default.Download,
-                                        contentDescription = "Download album",
+                                        contentDescription = stringResource(R.string.download_album),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
@@ -348,4 +361,16 @@ fun AlbumDetailScreen(
             }
         }
     }
+}
+
+/**
+ * The catalogue's release type in the reader's language. The API sends it as
+ * an upper-case token; one this does not know is shown as it came.
+ */
+@Composable
+private fun albumTypeLabel(type: String?): String = when (type?.uppercase()) {
+    null, "ALBUM" -> stringResource(R.string.album_type_album)
+    "SINGLE" -> stringResource(R.string.album_type_single)
+    "COMPILATION" -> stringResource(R.string.album_type_compilation)
+    else -> type
 }

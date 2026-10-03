@@ -257,11 +257,6 @@ class LibusbUacDriver @Inject constructor(
     fun isStreamingFormat(sampleRate: Int, bitsPerSample: Int, channels: Int): Boolean =
         nativeIsStreamingFormat(sampleRate, bitsPerSample, channels)
 
-    fun nativeStreaming(): Boolean = nativeIsStreaming()
-
-    /** Number of PCM frames the driver can accept right now. */
-    fun writableFrames(): Int = nativeWritableFrames()
-
     /** Cumulative frames the iso pump has dispatched to the DAC since [start].
      *  Used by [LibusbAudioSink.getCurrentPositionUs] for accurate playhead
      *  reporting — `framesWritten` (which the renderer sees as "consumed")
@@ -295,10 +290,8 @@ class LibusbUacDriver @Inject constructor(
     private external fun nativeStart(sampleRate: Int, bitsPerSample: Int, channels: Int): Boolean
     private external fun nativeStop()
     private external fun nativeFlushRing()
-    private external fun nativeIsStreaming(): Boolean
     private external fun nativeIsStreamingFormat(sampleRate: Int, bitsPerSample: Int, channels: Int): Boolean
     private external fun nativeWrite(buffer: ByteBuffer, byteOffset: Int, frames: Int): Int
-    private external fun nativeWritableFrames(): Int
     private external fun nativePlayedFrames(): Long
     private external fun nativePendingFrames(): Long
     /** Numeric category — see [StartError]; 0 = Ok / no failure recorded. */

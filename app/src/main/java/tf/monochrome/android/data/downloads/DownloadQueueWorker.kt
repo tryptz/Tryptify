@@ -134,12 +134,16 @@ class DownloadQueueWorker @AssistedInject constructor(
             it.status == DownloadStatus.QUEUED || it.status == DownloadStatus.DOWNLOADING
         }
         val running = entries.firstOrNull { it.status == DownloadStatus.DOWNLOADING }
+        // A worker's context is the application's: below Android 13 it does
+        // not follow the in-app language unless wrapped.
+        val text = tf.monochrome.android.locale.AppLanguage.wrap(context)
         val notification: Notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(
-                if (remaining > 1) "Downloading $remaining tracks" else "Downloading",
+                if (remaining > 1) text.resources.getQuantityString(R.plurals.notif_downloading_n, remaining, remaining)
+                else text.getString(R.string.notif_downloading),
             )
-            .setContentText(running?.item?.title ?: "Preparing…")
+            .setContentText(running?.item?.title ?: text.getString(R.string.notif_preparing))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setProgress(0, 0, true)
@@ -156,10 +160,11 @@ class DownloadQueueWorker @AssistedInject constructor(
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_ID,
-                "Downloads",
+                tf.monochrome.android.locale.AppLanguage.wrap(context).getString(R.string.notif_downloads_channel),
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = "Progress of track downloads."
+                description = tf.monochrome.android.locale.AppLanguage.wrap(context)
+                    .getString(R.string.notif_downloads_channel_desc)
                 setShowBadge(false)
                 enableVibration(false)
                 setSound(null, null)

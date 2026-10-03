@@ -44,13 +44,13 @@ internal fun getParamDefs(type: SnapinType?): List<ParamDef> = when (type) {
     SnapinType.EQ_3BAND -> listOf(
         ParamDef("Lo Freq", 20f, 500f, 100f, "Hz"),
         ParamDef("Lo Gain", -24f, 24f, 0f, "dB"),
-        ParamDef("Lo Q", 0.1f, 10f, 0.7f, ""),
+        ParamDef("Lo Q", 0.1f, 10f, 0.707f, ""),
         ParamDef("Mid Freq", 200f, 8000f, 1000f, "Hz"),
         ParamDef("Mid Gain", -24f, 24f, 0f, "dB"),
         ParamDef("Mid Q", 0.1f, 10f, 1f, ""),
         ParamDef("Hi Freq", 2000f, 20000f, 8000f, "Hz"),
         ParamDef("Hi Gain", -24f, 24f, 0f, "dB"),
-        ParamDef("Hi Q", 0.1f, 10f, 0.7f, "")
+        ParamDef("Hi Q", 0.1f, 10f, 0.707f, "")
     )
     SnapinType.COMPRESSOR -> listOf(
         ParamDef("Attack", 0.1f, 300f, 10f, "ms"),
@@ -114,7 +114,7 @@ internal fun getParamDefs(type: SnapinType?): List<ParamDef> = when (type) {
     SnapinType.DISTORTION -> listOf(
         ParamDef("Drive", 0f, 48f, 12f, "dB"),
         ParamDef("Type", 0f, 5f, 0f, "", steps = 5),
-        ParamDef("Tone", 200f, 20000f, 12000f, "Hz"),
+        ParamDef("Tone", 200f, 20000f, 8000f, "Hz"),
         ParamDef("Bias", -1f, 1f, 0f, ""),
         ParamDef("Dynamics", 0f, 100f, 0f, "%"),
         ParamDef("Spread", 0f, 100f, 0f, "%"),
@@ -131,7 +131,7 @@ internal fun getParamDefs(type: SnapinType?): List<ParamDef> = when (type) {
         ParamDef("Delay", 1f, 40f, 7f, "ms"),
         ParamDef("Rate", 0.01f, 10f, 1f, "Hz"),
         ParamDef("Depth", 0f, 100f, 50f, "%"),
-        ParamDef("Voices", 1f, 8f, 4f, "", steps = 7),
+        ParamDef("Voices", 1f, 8f, 3f, "", steps = 7),
         ParamDef("Spread", 0f, 100f, 50f, "%"),
         ParamDef("FB", 0f, 50f, 0f, "%"),
         ParamDef("Mix", 0f, 100f, 50f, "%")
@@ -148,19 +148,19 @@ internal fun getParamDefs(type: SnapinType?): List<ParamDef> = when (type) {
         ParamDef("Depth", 0f, 100f, 50f, "%"),
         ParamDef("Rate", 0.01f, 10f, 0.5f, "Hz"),
         ParamDef("FB", -95f, 95f, 30f, "%"),
-        ParamDef("Stereo", 0f, 100f, 50f, "%"),
-        ParamDef("Tone", 200f, 20000f, 12000f, "Hz"),
+        ParamDef("Stereo", 0f, 100f, 0f, "%"),
+        ParamDef("Tone", 200f, 20000f, 10000f, "Hz"),
         ParamDef("Thru-0", 0f, 1f, 0f, "", steps = 1),
         ParamDef("Mix", 0f, 100f, 50f, "%")
     )
     SnapinType.PHASER -> listOf(
-        ParamDef("Stages", 2f, 12f, 6f, "", steps = 10),
+        ParamDef("Stages", 2f, 12f, 4f, "", steps = 10),
         ParamDef("Rate", 0.01f, 10f, 0.5f, "Hz"),
         ParamDef("Depth", 0f, 100f, 50f, "%"),
         ParamDef("Center", 200f, 10000f, 1000f, "Hz"),
-        ParamDef("FB", -90f, 90f, 30f, "%"),
-        ParamDef("Spread", 0f, 360f, 90f, "°"),
-        ParamDef("Stereo", 0f, 100f, 50f, "%"),
+        ParamDef("FB", -90f, 90f, 0f, "%"),
+        ParamDef("Spread", 0f, 360f, 0f, "°"),
+        ParamDef("Stereo", 0f, 100f, 100f, "%"),
         ParamDef("Mix", 0f, 100f, 50f, "%")
     )
     SnapinType.DELAY -> listOf(
@@ -170,7 +170,7 @@ internal fun getParamDefs(type: SnapinType?): List<ParamDef> = when (type) {
         ParamDef("Pan", -100f, 100f, 0f, ""),
         ParamDef("Duck", 0f, 100f, 0f, "%"),
         ParamDef("FB Lo", 20f, 2000f, 80f, "Hz"),
-        ParamDef("FB Hi", 500f, 20000f, 12000f, "Hz"),
+        ParamDef("FB Hi", 500f, 20000f, 8000f, "Hz"),
         ParamDef("Mod", 0f, 100f, 0f, "%"),
         ParamDef("Mix", 0f, 100f, 50f, "%")
     )
@@ -189,7 +189,7 @@ internal fun getParamDefs(type: SnapinType?): List<ParamDef> = when (type) {
         ParamDef("Mix", 0f, 100f, 30f, "%")
     )
     SnapinType.BITCRUSH -> listOf(
-        ParamDef("Rate", 200f, 48000f, 48000f, "Hz"),
+        ParamDef("Rate", 200f, 48000f, 44100f, "Hz"),
         ParamDef("Bits", 1f, 24f, 24f, ""),
         ParamDef("ADC", 0f, 100f, 100f, "%"),
         ParamDef("DAC", 0f, 100f, 100f, "%"),

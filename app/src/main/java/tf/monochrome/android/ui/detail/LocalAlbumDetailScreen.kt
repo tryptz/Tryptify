@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.detail
 
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -62,9 +63,13 @@ import tf.monochrome.android.ui.components.applyUnifiedSearchAndSort
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.components.SearchAction
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -111,8 +116,8 @@ fun LocalAlbumDetailScreen(
             },
             title = {},
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                IconButton(onClick = { navController.popBackStackSafe() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -123,7 +128,7 @@ fun LocalAlbumDetailScreen(
         when {
             isLoading -> LoadingScreen()
             error != null -> ErrorScreen(
-                message = error ?: "Unknown error",
+                message = error?.resolve(LocalContext.current) ?: stringResource(R.string.unknown_error),
                 onRetry = { viewModel.retry() }
             )
             album != null -> {
@@ -132,14 +137,14 @@ fun LocalAlbumDetailScreen(
                     open = searchOpen,
                     query = listQuery,
                     onQueryChange = { listQuery = it },
-                    placeholder = "Search this album",
+                    placeholder = stringResource(R.string.search_this_album),
                     onClose = { searchOpen = false; listQuery = "" },
                 ) { searchTopInset ->
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
                         top = searchTopInset,
-                        bottom = 80.dp + LocalMiniPlayerInset.current,
+                        bottom = 80.dp + LocalBottomChromeInset.current,
                     )
                 ) {
                     item {
@@ -191,7 +196,7 @@ fun LocalAlbumDetailScreen(
                             )
                             val metaParts = buildList {
                                 albumData.year?.let { add(it.toString()) }
-                                add("${albumData.trackCount} tracks")
+                                add(pluralStringResource(R.plurals.track_count, albumData.trackCount, albumData.trackCount))
                                 albumData.qualitySummary?.let { add(it) }
                             }
                             Text(
@@ -217,7 +222,7 @@ fun LocalAlbumDetailScreen(
                                 ) {
                                     Icon(
                                         Icons.Default.PlayArrow,
-                                        contentDescription = "Play All",
+                                        contentDescription = stringResource(R.string.action_play_all),
                                         tint = MaterialTheme.colorScheme.onPrimary
                                     )
                                 }
@@ -230,7 +235,7 @@ fun LocalAlbumDetailScreen(
                                 ) {
                                     Icon(
                                         Icons.Default.Shuffle,
-                                        contentDescription = "Shuffle",
+                                        contentDescription = stringResource(R.string.visualizer_shuffle),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
@@ -314,6 +319,9 @@ private fun LocalTrackRow(
                     onArtistClick = { ref -> ref.id?.let { navController.openArtist(track.sourceType, it) } },
                 )
             }
+            // Where it plays from — on this screen, the device.
+            tf.monochrome.android.ui.components.SourcePill(track.sourceType)
+            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(6.dp))
             if (track.qualityBadge != null) {
                 Surface(
                     shape = RoundedCornerShape(999.dp),
@@ -338,7 +346,7 @@ private fun LocalTrackRow(
             IconButton(onClick = onAddToQueue) {
                 Icon(
                     Icons.AutoMirrored.Filled.PlaylistAdd,
-                    contentDescription = "Add to queue",
+                    contentDescription = stringResource(R.string.action_add_to_queue),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )
@@ -346,7 +354,7 @@ private fun LocalTrackRow(
             IconButton(onClick = onMoreClick) {
                 Icon(
                     Icons.Default.MoreVert,
-                    contentDescription = "More options",
+                    contentDescription = stringResource(R.string.action_more_options),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )

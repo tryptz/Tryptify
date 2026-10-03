@@ -82,6 +82,8 @@ class TrackDownloader @Inject constructor(
         val explicitAppleId = item.appleId.takeIf { it > 0L }
         val isApple = explicitAppleId != null || qobuzIdRegistry.isAppleTrack(trackId)
         val appleId = explicitAppleId ?: trackId
+        val deezerId = item.deezerId.takeIf { it > 0L }
+            ?: trackId.takeIf { qobuzIdRegistry.isDeezerTrack(it) && !qobuzIdRegistry.isQobuzTrack(it) }
 
         return try {
             // Get download quality preference
@@ -97,7 +99,19 @@ class TrackDownloader @Inject constructor(
             // synthetic hash has no usable native id, but the same recording is
             // almost always in the Apple catalog and the wrapper can decrypt it.
             var usedApple = isApple
-            val streamUrl = if (isApple) {
+            val streamUrl = if (deezerId != null) {
+                // A Deezer pick downloads from Deezer, the same way a Qobuz
+                // pick downloads from Qobuz: /api/deezer/download in the
+                // chosen quality. No other catalogue stands in — the bare
+                // Deezer id handed to Qobuz or TIDAL would fetch whatever
+                // other song has that number, and the 30-second preview is
+                // not a download.
+                Log.i(TAG, "\"$trackTitle\" is Deezer (deezerId=$deezerId) - downloading from Deezer")
+                apiClient.getDeezerDownloadUrl(deezerId, quality) ?: run {
+                    Log.w(TAG, "Deezer could not serve \"$trackTitle\" (deezerId=$deezerId, q=$quality) - not falling back to another catalog")
+                    return Outcome.PERMANENT
+                }
+            } else if (isApple) {
                 // An Apple pick is wrapper-only. No Qobuz/TIDAL fallback and no
                 // metadata bridge — those would hand back a different recording
                 // than the one chosen in search. If the wrapper can't serve it,
@@ -155,16 +169,22 @@ class TrackDownloader @Inject constructor(
                 val channel = response.bodyAsChannel()
                 val buffer = ByteArray(8192)
                 var totalRead = 0L
+                // A Deezer file comes off Deezer's CDN striped with Blowfish;
+                // decrypt it on the way to disk (same length, so the
+                // truncation check below still holds).
+                val decryptor = deezerId?.let { tf.monochrome.android.data.cache.DeezerStripeDecryptor(it) }
                 tempAudio.outputStream().use { out ->
+                    val sink: (ByteArray, Int, Int) -> Unit = { b, o, l -> out.write(b, o, l) }
                     while (!channel.isClosedForRead) {
                         val read = channel.readAvailable(buffer)
                         if (read <= 0) break
-                        out.write(buffer, 0, read)
+                        if (decryptor != null) decryptor.feed(buffer, 0, read, sink) else out.write(buffer, 0, read)
                         totalRead += read
                         if (contentLength > 0) {
                             onProgress((totalRead.toFloat() / contentLength).coerceIn(0.05f, 0.95f))
                         }
                     }
+                    decryptor?.finish(sink)
                 }
                 // A short read means a truncated file, and for M4A that is
                 // silently fatal: the container still opens but the audio is cut

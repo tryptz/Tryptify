@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.mixer
 
+import tf.monochrome.android.ui.mixer.fxchain.FxPreset
+import tf.monochrome.android.ui.mixer.fxchain.FxPresetRow
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -49,6 +51,8 @@ import tf.monochrome.android.audio.dsp.model.BusConfig
 import tf.monochrome.android.audio.dsp.model.PluginInstance
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * FL Studio-style insert effect rack — right-side panel.
@@ -72,8 +76,12 @@ fun InsertRack(
     onPluginBypass: (busIndex: Int, slotIndex: Int) -> Unit,
     onPluginRemove: (busIndex: Int, slotIndex: Int) -> Unit,
     onParameterChange: (busIndex: Int, slotIndex: Int, paramIndex: Int, value: Float) -> Unit,
+    onApplyPreset: (busIndex: Int, slotIndex: Int, preset: FxPreset) -> Unit = { _, _, _ -> },
     onPluginDryWet: (busIndex: Int, slotIndex: Int, dryWet: Float) -> Unit = { _, _, _ -> },
     onBusInputToggle: (busIndex: Int, enabled: Boolean) -> Unit = { _, _ -> },
+    onSendLevel: (src: Int, dst: Int, level: Float) -> Unit = { _, _, _ -> },
+    spreadChannels: Boolean = true,
+    onSpreadChannelsChange: (Boolean) -> Unit = {},
     onDismissEditor: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -100,7 +108,7 @@ fun InsertRack(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text       = "Mixer – ${bus?.name ?: "Insert"}",
+                text       = stringResource(R.string.mixer_rack_title, bus?.name ?: stringResource(R.string.mixer_insert)),
                 style      = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 maxLines   = 1,
@@ -113,7 +121,7 @@ fun InsertRack(
             ) {
                 Icon(
                     Icons.Default.Close,
-                    contentDescription = "Close",
+                    contentDescription = stringResource(R.string.action_close),
                     tint     = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                 )
@@ -162,8 +170,107 @@ fun InsertRack(
                         busIndex         = busIndex,
                         slotIndex        = slotIndex,
                         onParameterChange = onParameterChange,
+                        onApplyPreset    = { preset -> onApplyPreset(busIndex, slotIndex, preset) },
                         onDismiss        = onDismissEditor
                     )
+                }
+            }
+        }
+
+        // ── Output routing (mix buses) ──────────────────────────────
+        // Where this bus goes and how loud. Routes are made with the arrows at
+        // the foot of the strips; here they are levelled and removed, and the
+        // bus's feed from the player is switched.
+        if (bus != null && !bus.isMaster) {
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+                modifier = Modifier.padding(horizontal = MonoDimens.spacingSm, vertical = 4.dp)
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = MonoDimens.spacingSm, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.mixer_routing_caps),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .liquidGlass(shape = MonoDimens.shapeSm, tintAlpha = if (bus.inputEnabled) 0.15f else 0.06f)
+                        .clickable { onBusInputToggle(bus.index, !bus.inputEnabled) }
+                        .padding(horizontal = MonoDimens.spacingSm, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(stringResource(R.string.mixer_player_input), fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        text = if (bus.inputEnabled) "ON" else "OFF",
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (bus.inputEnabled) Color(0xFF4CAF50)
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    )
+                }
+                val sends = bus.sends.entries.filter { it.value > 0f }
+                    .sortedBy { if (it.key == BusConfig.MASTER_INDEX) -1 else BusConfig.numberFor(it.key) }
+                if (sends.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.mixer_routed_nowhere),
+                        fontSize = 9.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                sends.forEach { (dst, level) ->
+                    val dstName = allBuses.firstOrNull { it.index == dst }?.name ?: BusConfig.nameFor(dst)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .liquidGlass(shape = MonoDimens.shapeSm, tintAlpha = 0.10f)
+                            .padding(horizontal = MonoDimens.spacingSm, vertical = 2.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "→ $dstName",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                text = if (level >= 0.995f) "0 dB"
+                                else "%.1f dB".format(20f * kotlin.math.log10(level.coerceAtLeast(0.001f))),
+                                fontSize = 9.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            IconButton(onClick = { onSendLevel(bus.index, dst, 0f) }, modifier = Modifier.size(24.dp)) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = stringResource(R.string.mixer_remove_route_to, dstName),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                        }
+                        // Removing is the × — the slider stops just above
+                        // silence, so dragging it down never deletes the cable.
+                        Slider(
+                            value = level,
+                            onValueChange = { onSendLevel(bus.index, dst, it.coerceAtLeast(0.01f)) },
+                            valueRange = 0.01f..1f,
+                            modifier = Modifier.height(24.dp),
+                            colors = SliderDefaults.colors(
+                                thumbColor = MaterialTheme.colorScheme.primary,
+                                activeTrackColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
                 }
             }
         }
@@ -181,23 +288,33 @@ fun InsertRack(
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
-                    text = "INPUT ROUTING",
+                    text = stringResource(R.string.mixer_input_routing_caps),
                     style = MaterialTheme.typography.labelSmall,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = 2.dp)
                 )
+                MultichannelModeRow(
+                    spread = spreadChannels,
+                    onChange = onSpreadChannelsChange,
+                )
                 val mixBuses = allBuses.filter { !it.isMaster }
                 mixBuses.forEach { mixBus ->
+                    // A bus a channel group is spread onto takes those channels,
+                    // whatever its switch says: shown as such, not toggleable.
+                    val routed = mixBus.channelGroup != null
+                    val takesInput = routed || mixBus.inputEnabled
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .liquidGlass(
                                 shape = MonoDimens.shapeSm,
-                                tintAlpha = if (mixBus.inputEnabled) 0.15f else 0.06f
+                                tintAlpha = if (takesInput) 0.15f else 0.06f
                             )
-                            .clickable { onBusInputToggle(mixBus.index, !mixBus.inputEnabled) }
+                            .clickable(enabled = !routed) {
+                                onBusInputToggle(mixBus.index, !mixBus.inputEnabled)
+                            }
                             .padding(horizontal = MonoDimens.spacingSm, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -211,7 +328,7 @@ fun InsertRack(
                                     .size(8.dp)
                                     .clip(CircleShape)
                                     .background(
-                                        if (mixBus.inputEnabled) Color(0xFF4CAF50)
+                                        if (takesInput) Color(0xFF4CAF50)
                                         else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
                                     )
                             )
@@ -220,22 +337,74 @@ fun InsertRack(
                                 style = MaterialTheme.typography.labelSmall,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = if (mixBus.inputEnabled) MaterialTheme.colorScheme.onSurface
+                                color = if (takesInput) MaterialTheme.colorScheme.onSurface
                                 else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Text(
-                            text = if (mixBus.inputEnabled) "ON" else "OFF",
+                            text = when {
+                                routed -> stringResource(R.string.mixer_channels_caps)
+                                mixBus.inputEnabled -> "ON"
+                                else -> "OFF"
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             fontSize = 8.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (mixBus.inputEnabled) Color(0xFF4CAF50)
+                            color = if (takesInput) Color(0xFF4CAF50)
                             else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                         )
                     }
                 }
             }
         }
+    }
+}
+
+// ── Multichannel mode ───────────────────────────────────────────────────
+
+/**
+ * How a stream wider than stereo (5.1, 7.1.4 Atmos…) meets the mixer: spread
+ * one channel group per bus — front, centre, LFE, surrounds and heights each
+ * on a strip of their own — or run whole through bus 1, as stereo does.
+ */
+@Composable
+private fun MultichannelModeRow(spread: Boolean, onChange: (Boolean) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Column(
+        modifier = Modifier.padding(bottom = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.mixer_multichannel),
+            style = MaterialTheme.typography.labelSmall,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Medium,
+            color = colors.onSurface
+        )
+        // Two equal glass chips; the caption below says what each does, so
+        // the labels stay one line and the pair stays symmetrical.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf(true to stringResource(R.string.mixer_spread), false to stringResource(R.string.mixer_one_bus)).forEach { (value, label) ->
+                GlassChoiceChip(
+                    label = label,
+                    selected = spread == value,
+                    accent = colors.primary,
+                    onClick = { if (spread != value) onChange(value) },
+                    modifier = Modifier.weight(1f),
+                    description = if (value) stringResource(R.string.mixer_spread_desc) else stringResource(R.string.mixer_one_bus_desc),
+                )
+            }
+        }
+        Text(
+            text = if (spread) stringResource(R.string.mixer_spread_on)
+                   else stringResource(R.string.mixer_spread_off),
+            style = MaterialTheme.typography.labelSmall,
+            fontSize = 9.sp,
+            color = colors.onSurfaceVariant
+        )
     }
 }
 
@@ -294,7 +463,7 @@ private fun InsertSlot(
 
             // Slot label / plugin name
             Text(
-                text       = plugin?.displayName ?: "Slot ${slotIndex + 1}",
+                text       = plugin?.displayName ?: stringResource(R.string.mixer_slot_n, slotIndex + 1),
                 style      = MaterialTheme.typography.labelSmall,
                 fontSize   = 10.sp,
                 fontWeight = if (plugin != null) FontWeight.Medium else FontWeight.Normal,
@@ -313,7 +482,7 @@ private fun InsertSlot(
                 ) {
                     Icon(
                         Icons.Default.PowerSettingsNew,
-                        contentDescription = "Bypass",
+                        contentDescription = stringResource(R.string.mixer_bypass),
                         tint     = if (plugin.bypassed)
                             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                         else MaterialTheme.colorScheme.primary,
@@ -324,7 +493,7 @@ private fun InsertSlot(
                 // Add hint for empty slots
                 Icon(
                     Icons.Default.Add,
-                    contentDescription = "Add Plugin",
+                    contentDescription = stringResource(R.string.mixer_add_plugin),
                     tint     = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
                     modifier = Modifier.size(14.dp)
                 )
@@ -337,7 +506,7 @@ private fun InsertSlot(
                 onDismissRequest = { showContextMenu = false }
             ) {
                 DropdownMenuItem(
-                    text = { Text("Replace") },
+                    text = { Text(stringResource(R.string.mixer_replace)) },
                     onClick = {
                         showContextMenu = false
                         // Defer removal to the picker's confirm — cancelling
@@ -346,7 +515,7 @@ private fun InsertSlot(
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("Remove") },
+                    text = { Text(stringResource(R.string.api_remove)) },
                     onClick = {
                         showContextMenu = false
                         onRemove()
@@ -400,6 +569,7 @@ private fun InlinePluginEditor(
     busIndex: Int,
     slotIndex: Int,
     onParameterChange: (Int, Int, Int, Float) -> Unit,
+    onApplyPreset: (FxPreset) -> Unit,
     onDismiss: () -> Unit
 ) {
     val paramDefs = getParamDefs(plugin.type)
@@ -432,12 +602,14 @@ private fun InlinePluginEditor(
             ) {
                 Icon(
                     Icons.Default.Close,
-                    contentDescription = "Close",
+                    contentDescription = stringResource(R.string.action_close),
                     tint     = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(14.dp)
                 )
             }
         }
+
+        FxPresetRow(plugin = plugin, accent = MaterialTheme.colorScheme.primary, onApply = onApplyPreset)
 
         // Parameter sliders
         paramDefs.forEachIndexed { paramIndex, def ->

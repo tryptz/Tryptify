@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -50,6 +53,8 @@ import tf.monochrome.android.audio.dsp.model.FxTapFrame
 import tf.monochrome.android.audio.dsp.model.PluginInstance
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /** One effect in the frozen visual snapshot. [uid] is a stable, unique LazyColumn key. */
 private class ChainItem(val uid: Long, val plugin: PluginInstance)
@@ -74,8 +79,10 @@ fun FxChainPage(
     onDryWet: (busIndex: Int, slotIndex: Int, dryWet: Float) -> Unit,
     onParam: (busIndex: Int, slotIndex: Int, paramIndex: Int, value: Float) -> Unit,
     onOversample: (busIndex: Int, slotIndex: Int, factor: Int) -> Unit,
+    onPreset: (busIndex: Int, slotIndex: Int, preset: FxPreset) -> Unit,
     onMove: (busIndex: Int, from: Int, to: Int) -> Unit,
 ) {
+    val nowhere = stringResource(R.string.mixer_out_nowhere)
     val bus = buses.getOrNull(selectedBusIndex)
     val plugins = bus?.plugins ?: emptyList()
     val accent = busAccent(selectedBusIndex)
@@ -173,6 +180,7 @@ fun FxChainPage(
                     onDryWet = { dw -> onDryWet(selectedBusIndex, index, dw) },
                     onParam = { pi, v -> onParam(selectedBusIndex, index, pi, v) },
                     onOversample = { f -> onOversample(selectedBusIndex, index, f) },
+                    onPreset = { p -> onPreset(selectedBusIndex, index, p) },
                     modifier = Modifier
                         .zIndex(if (isDragged) 1f else 0f)
                         .graphicsLayer {
@@ -187,7 +195,17 @@ fun FxChainPage(
 
             item(key = "out") {
                 ChainEndCap(
-                    label = if (bus?.isMaster == true) "OUT — Device" else "OUT — Master",
+                    // Where the chain's output goes: the device from the master,
+                    // else every bus this one is routed to.
+                    label = when {
+                        bus == null -> "OUT"
+                        bus.isMaster -> stringResource(R.string.mixer_out_device)
+                        else -> bus.sends.filterValues { it > 0f }.keys
+                            .sortedBy { if (it == BusConfig.MASTER_INDEX) Int.MAX_VALUE else BusConfig.numberFor(it) }
+                            .joinToString(", ") { dst -> buses.firstOrNull { it.index == dst }?.name ?: BusConfig.nameFor(dst) }
+                            .ifEmpty { nowhere }
+                            .let { "OUT — $it" }
+                    },
                     accent = accent,
                     isOutput = true,
                     modifier = Modifier.then(if (!dragState.isDragging) Modifier.animateItem() else Modifier)
@@ -214,25 +232,29 @@ private fun BusSelectorRow(
     busAccent: (Int) -> Color,
     onSelectBus: (Int) -> Unit,
 ) {
+    // Up to 17 tabs, so they scroll rather than share the width; in the
+    // strips' order (master last), selected by the bus's real index.
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
             .padding(horizontal = MonoDimens.spacingSm, vertical = MonoDimens.spacingXs),
         horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingXs)
     ) {
-        buses.forEachIndexed { index, bus ->
+        BusConfig.displayOrder(buses).forEach { bus ->
+            val index = bus.index
             val selected = index == selectedBusIndex
             val accent = busAccent(index)
             Box(
                 modifier = Modifier
-                    .weight(1f)
+                    .widthIn(min = 64.dp)
                     .clip(MonoDimens.shapePill)
                     .liquidGlass(
                         shape = MonoDimens.shapePill,
                         tintAlpha = if (selected) 0.22f else 0.08f
                     )
                     .clickable { onSelectBus(index) }
-                    .padding(vertical = 8.dp),
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Row(
@@ -323,7 +345,7 @@ private fun AddEffectBar(
             modifier = Modifier.size(18.dp)
         )
         Text(
-            text = if (atMax) "Chain full" else "Add Effect",
+            text = if (atMax) stringResource(R.string.mixer_chain_full) else stringResource(R.string.mixer_add_effect),
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,

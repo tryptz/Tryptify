@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.log10
 import kotlin.math.log2
@@ -52,12 +53,37 @@ class SpectrumAnalyzerTap @Inject constructor(
         const val FFT_SIZE_LOW = FFT_SIZE_8K
         const val FFT_SIZE_HIGH = FFT_SIZE_16K
         const val OUTPUT_BINS = 256
+
+        const val MIN_OVERLAP = 0.5f
+        const val MAX_OVERLAP = 0.99f
+        const val DEFAULT_OVERLAP = 0.96f
+
+        /**
+         * Milliseconds between analyses: the hop a window of [fftSize] samples
+         * at [sampleRate] leaves at [overlap], but never under [floorMs], the
+         * display-rate cap. At the default 96 % even a 16K window at 44.1 kHz
+         * hops in under a 60 Hz frame, so the default analyses as often as it
+         * always did.
+         */
+        internal fun analysisIntervalMs(fftSize: Int, sampleRate: Int, overlap: Float, floorMs: Long): Long {
+            val hopSamples = fftSize * (1f - overlap.coerceIn(MIN_OVERLAP, MAX_OVERLAP))
+            val hopMs = (hopSamples * 1000f / sampleRate.coerceAtLeast(1)).toLong()
+            return maxOf(floorMs, hopMs)
+        }
+        /** Frames handed to the native scope ring per push, at most. */
+        const val SCOPE_CHUNK = 4096
         private const val MIN_FREQ = 20f
         private const val MAX_FREQ = 20000f
         private const val PINK_SLOPE_DB_PER_OCT = 4.0f
         // Slow exponential smoothing → ~176 ms time constant @ 60 fps (SPAN-like Avg Time).
         private const val SMOOTH_ATTACK = 0.55f
         private const val SMOOTH_RELEASE = 0.09f
+        // Largest per-frame move, in dB, below which an idle ring's output
+        // counts as landed: far under a pixel on any of the spectrum views.
+        private const val SETTLED_DB = 0.005f
+        private const val LOUDNESS_CHUNK_FRAMES = 1024
+        // cpp/dsp/meter/loudness_meter.h: LoudnessMeter::kMaxChannels.
+        private const val LOUDNESS_MAX_CHANNELS = 24
     }
 
     // Frame cadence picked from the device tier: LOW=15 fps, MID=30 fps, HIGH=60 fps.
@@ -72,9 +98,28 @@ class SpectrumAnalyzerTap @Inject constructor(
     private var inputEnded = false
     private var sampleRate = 48000
 
+    /**
+     * Channels reaching this tap, which sits after the Atmos renderer and the
+     * downmix — and nothing after it changes the count — so this is what the
+     * platform receives. 0 before any stream. For the Audio Pipeline panel.
+     */
+    @Volatile var outputChannelCount: Int = 0
+        private set
+
     // Active ring buffer (mono samples)
     @Volatile private var ring: FloatArray = FloatArray(FFT_SIZE_HIGH)
     @Volatile private var ringWrite = 0
+
+    // Left/right for the Wave Candy scope, gathered per buffer and handed to
+    // the native ring (WaveScopeNative) — the mono FFT ring above has already
+    // summed the channels away. Preallocated: nothing here allocates on the
+    // audio thread.
+    private val scopeChunk = FloatArray(SCOPE_CHUNK * 2)
+
+    // Every channel, interleaved, for the loudness meter. Sized for the widest
+    // frame the tap sees (24 channels) at a 1024-frame chunk; preallocated for
+    // the same reason as the scope's.
+    private val loudnessChunk = FloatArray(LOUDNESS_CHUNK_FRAMES * LOUDNESS_MAX_CHANNELS)
 
     @Volatile var fftSize: Int = FFT_SIZE_8K
         set(value) {
@@ -89,6 +134,16 @@ class SpectrumAnalyzerTap @Inject constructor(
                 _analysisDirty = true
             }
         }
+
+    /**
+     * How much each FFT window overlaps the one before (0.5 … 0.99): the hop
+     * between analyses is the rest of the window. Set from the waterfall's
+     * settings. The analyzer never runs faster than [frameDelayMs] however
+     * high this goes, so above the point where it already reaches that, more
+     * overlap changes nothing.
+     */
+    @Volatile var overlap: Float = DEFAULT_OVERLAP
+        set(value) { field = value.coerceIn(MIN_OVERLAP, MAX_OVERLAP) }
 
     @Volatile private var _analysisDirty = true
     @Volatile private var analysisActive = false
@@ -159,6 +214,10 @@ class SpectrumAnalyzerTap @Inject constructor(
             // `out` array below cannot get the same treatment: consumers keep
             // the reference off the StateFlow, so that one must stay fresh.)
             val magnitudes = FloatArray(OUTPUT_BINS)
+            // Where the ring stood last frame, and whether the output has
+            // stopped moving since it last did. See the idle check below.
+            var lastWriteIdx = -1
+            var settled = false
 
             while (isActive) {
                 // Re-allocate work arrays if size changed
@@ -172,6 +231,7 @@ class SpectrumAnalyzerTap @Inject constructor(
                     binMap = buildBinMap(currentSize, sampleRate, OUTPUT_BINS)
                     smoothed = FloatArray(OUTPUT_BINS)
                     _analysisDirty = false
+                    settled = false
                 }
 
                 // Copy last N samples from ring buffer
@@ -179,6 +239,19 @@ class SpectrumAnalyzerTap @Inject constructor(
                 val ringLocal = ring
                 val ringLen = ringLocal.size
                 val writeIdx = ringWrite
+                // Paused (or between tracks) the player stops feeding this
+                // processor, so the ring holds still and every frame re-ran
+                // the same FFT and published a new — but equal — array. Each
+                // one is a new StateFlow value (arrays compare by identity),
+                // which woke every collector at this rate for a picture that
+                // was not changing. Keep going until the smoothing has landed
+                // on the stale spectrum, then stop until audio arrives again.
+                val idle = writeIdx == lastWriteIdx
+                if (idle && settled) {
+                    delay(frameDelayMs)
+                    continue
+                }
+                lastWriteIdx = writeIdx
                 var startIdx = writeIdx - n
                 if (startIdx < 0) startIdx += ringLen
 
@@ -256,9 +329,20 @@ class SpectrumAnalyzerTap @Inject constructor(
                     out[b] = g3 * (l3 + r3) + g2 * (l2 + r2) + g1 * (l1 + r1) + g0 * c
                 }
 
-                _spectrumBins.value = out
+                settled = if (idle) {
+                    val prev = _spectrumBins.value
+                    var largestStep = 0f
+                    for (b in 0 until minOf(prev.size, OUTPUT_BINS)) {
+                        largestStep = max(largestStep, abs(out[b] - prev[b]))
+                    }
+                    largestStep < SETTLED_DB
+                } else {
+                    // Fresh audio: whatever had landed before no longer has.
+                    false
+                }
+                if (!settled) _spectrumBins.value = out
 
-                delay(frameDelayMs)
+                delay(analysisIntervalMs(currentSize, sampleRate, overlap, frameDelayMs))
             }
         }
     }
@@ -305,18 +389,26 @@ class SpectrumAnalyzerTap @Inject constructor(
             val ringLocal = ring
             val ringLen = ringLocal.size
             var w = ringWrite
+            var cn = 0
             if (encoding == C.ENCODING_PCM_FLOAT) {
                 if (channels == 1) {
                     for (i in 0 until numFrames) {
-                        ringLocal[w] = inputBuffer.getFloat(startPos + i * 4)
+                        val m = inputBuffer.getFloat(startPos + i * 4)
+                        scopeChunk[cn * 2] = m; scopeChunk[cn * 2 + 1] = m
+                        if (++cn == SCOPE_CHUNK) { WaveScopeNative.nativePush(scopeChunk, cn, sampleRate); cn = 0 }
+                        ringLocal[w] = m
                         w++
                         if (w >= ringLen) w = 0
                     }
                 } else {
                     for (i in 0 until numFrames) {
-                        val off = startPos + i * 8
+                        // frameSize, not 8: a multichannel (Atmos) stream has
+                        // wider frames, and stepping by 8 read the wrong samples.
+                        val off = startPos + i * frameSize
                         val l = inputBuffer.getFloat(off)
                         val r = inputBuffer.getFloat(off + 4)
+                        scopeChunk[cn * 2] = l; scopeChunk[cn * 2 + 1] = r
+                        if (++cn == SCOPE_CHUNK) { WaveScopeNative.nativePush(scopeChunk, cn, sampleRate); cn = 0 }
                         ringLocal[w] = (l + r) * 0.5f
                         w++
                         if (w >= ringLen) w = 0
@@ -325,15 +417,20 @@ class SpectrumAnalyzerTap @Inject constructor(
             } else {
                 if (channels == 1) {
                     for (i in 0 until numFrames) {
-                        ringLocal[w] = inputBuffer.getShort(startPos + i * 2).toFloat() / 32768f
+                        val m = inputBuffer.getShort(startPos + i * 2).toFloat() / 32768f
+                        scopeChunk[cn * 2] = m; scopeChunk[cn * 2 + 1] = m
+                        if (++cn == SCOPE_CHUNK) { WaveScopeNative.nativePush(scopeChunk, cn, sampleRate); cn = 0 }
+                        ringLocal[w] = m
                         w++
                         if (w >= ringLen) w = 0
                     }
                 } else {
                     for (i in 0 until numFrames) {
-                        val off = startPos + i * 4
+                        val off = startPos + i * frameSize
                         val l = inputBuffer.getShort(off).toFloat() / 32768f
                         val r = inputBuffer.getShort(off + 2).toFloat() / 32768f
+                        scopeChunk[cn * 2] = l; scopeChunk[cn * 2 + 1] = r
+                        if (++cn == SCOPE_CHUNK) { WaveScopeNative.nativePush(scopeChunk, cn, sampleRate); cn = 0 }
                         ringLocal[w] = (l + r) * 0.5f
                         w++
                         if (w >= ringLen) w = 0
@@ -341,6 +438,11 @@ class SpectrumAnalyzerTap @Inject constructor(
                 }
             }
             ringWrite = w
+            if (cn > 0) WaveScopeNative.nativePush(scopeChunk, cn, sampleRate)
+        }
+
+        if (LoudnessNative.active) {
+            pushLoudness(inputBuffer, startPos, numFrames, channels, encoding == C.ENCODING_PCM_FLOAT)
         }
 
         // Pass through without allocating a duplicate ByteBuffer wrapper.
@@ -380,6 +482,7 @@ class SpectrumAnalyzerTap @Inject constructor(
             if (formatChanged) {
                 inputFormat = pendingFormat
                 sampleRate = inputFormat.sampleRate
+                outputChannelCount = inputFormat.channelCount
                 _analysisDirty = true
             }
             pendingFormat = AudioFormat.NOT_SET
@@ -390,6 +493,38 @@ class SpectrumAnalyzerTap @Inject constructor(
         flush()
         pendingFormat = AudioFormat.NOT_SET
         inputFormat = AudioFormat.NOT_SET
+    }
+
+    /**
+     * Hands the buffer to the loudness meter, every channel of it — loudness is
+     * weighted per channel (the LFE left out, the surrounds lifted), so the
+     * mono sum above and the scope's stereo pair are not enough. Absolute reads
+     * into one preallocated chunk; a stream wider than the meter takes is
+     * skipped rather than half-measured.
+     */
+    private fun pushLoudness(
+        buffer: ByteBuffer,
+        startPos: Int,
+        numFrames: Int,
+        channels: Int,
+        isFloat: Boolean,
+    ) {
+        if (channels <= 0 || channels > LOUDNESS_MAX_CHANNELS) return
+        val chunkFrames = loudnessChunk.size / channels
+        val bytesPerSample = if (isFloat) 4 else 2
+        var frame = 0
+        while (frame < numFrames) {
+            val n = minOf(chunkFrames, numFrames - frame)
+            val count = n * channels
+            var pos = startPos + frame * channels * bytesPerSample
+            if (isFloat) {
+                for (i in 0 until count) { loudnessChunk[i] = buffer.getFloat(pos); pos += 4 }
+            } else {
+                for (i in 0 until count) { loudnessChunk[i] = buffer.getShort(pos) / 32768f; pos += 2 }
+            }
+            LoudnessNative.nativePush(loudnessChunk, n, channels, sampleRate)
+            frame += n
+        }
     }
 
     // --- Helpers ---

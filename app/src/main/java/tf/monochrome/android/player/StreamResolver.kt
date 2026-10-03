@@ -11,6 +11,8 @@ import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.api.QobuzTrackMatch
 import tf.monochrome.android.data.cache.QobuzStreamUri
 import tf.monochrome.android.data.cache.QobuzStreamCacheManager
+import tf.monochrome.android.data.cache.DeezerStreamCacheManager
+import tf.monochrome.android.data.cache.DeezerStreamUri
 import tf.monochrome.android.data.local.coil.AudioFileCoverFetcher
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.domain.model.AudioQuality
@@ -43,8 +45,10 @@ data class ResolvedMedia(
 class StreamResolver @Inject constructor(
     private val repository: MusicRepository,
     private val qobuzCache: QobuzStreamCacheManager,
+    private val deezerCache: DeezerStreamCacheManager,
     private val qobuzIdRegistry: QobuzIdRegistry,
     private val localTrackLocator: LocalTrackLocator,
+    private val sourceConsent: SourceConsent,
 ) {
     private fun normalizeArtworkUri(raw: String?): Uri? {
         if (raw.isNullOrBlank()) return null
@@ -76,7 +80,11 @@ class StreamResolver @Inject constructor(
     // Legacy method for existing Track model. Returns (null, null) when the
     // stream couldn't be resolved — callers must skip instead of feeding an
     // empty MediaItem to ExoPlayer.
-    suspend fun resolveMediaItem(track: Track): Pair<MediaItem?, TrackStream?> {
+    //
+    // [askForOtherService]: when TIDAL cannot play the track, whether to ask
+    // the listener about the Qobuz copy (SourceConsent). False for background
+    // resolves of an upcoming track, which must not ask while another plays.
+    suspend fun resolveMediaItem(track: Track, askForOtherService: Boolean = true): Pair<MediaItem?, TrackStream?> {
         // On-device copy wins over the stream, whichever screen queued this.
         localFor(
             title = track.title,
@@ -86,7 +94,7 @@ class StreamResolver @Inject constructor(
             // DownloadManager keys downloads by Track.id, not by appleId.
             catalogTrackId = track.id,
         )?.let { local ->
-            return Pair(buildFileMediaItem(track, localUri(local.filePath)), null)
+            return Pair(buildFileMediaItem(track, localUri(local.filePath), playedFrom = PlayedFrom.LOCAL), null)
         }
 
         // Qobuz is its own catalogue, not a TIDAL fallback. Its track ids live
@@ -104,6 +112,15 @@ class StreamResolver @Inject constructor(
             return Pair(qobuzCachedMediaItem(track), null)
         }
 
+        // Deezer ids share the number range with TIDAL's, so this must come
+        // before the TIDAL lookup below — and before its Qobuz fallback, which
+        // would fetch the ISRC of the TIDAL track that has this number.
+        if (track.deezerId != null || qobuzIdRegistry.isDeezerTrack(track.id)) {
+            val uri = deezerStreamUri(track.deezerId ?: track.id, AudioQuality.LOSSLESS)
+                ?: return Pair(null, null)
+            return Pair(buildFileMediaItem(track, uri), null)
+        }
+
         val streamResult = repository.getTrackStream(track.id)
         val trackStream = streamResult.getOrNull()
 
@@ -116,9 +133,10 @@ class StreamResolver @Inject constructor(
         }
 
         // TIDAL is unavailable for this track (instance down, track pulled, no
-        // manifest) — fall back to the same song on Qobuz so a TIDAL-built
-        // playlist keeps playing.
-        val fallback = qobuzFallbackMediaItem(
+        // manifest). The same song on Qobuz plays only if the listener said so
+        // — otherwise they are asked, and the track is skipped meanwhile.
+        val fallback = qobuzWithConsent(
+            ask = askForOtherService,
             tidalId = track.id,
             knownIsrc = null,
             tidalAlbumId = track.album?.id,
@@ -167,12 +185,18 @@ class StreamResolver @Inject constructor(
             qobuzCache.openPartial(track.id, AudioQuality.LOSSLESS)
             return@runCatching true
         }
+        // Same for Deezer — but only when the full file is really coming. The
+        // preview fallback is a signed URL, which must not be pre-queued.
+        if (track.deezerId != null || qobuzIdRegistry.isDeezerTrack(track.id)) {
+            val started = deezerCache.openPartial(track.deezerId ?: track.id, AudioQuality.LOSSLESS)
+            return@runCatching started != null && started.failure == null
+        }
         false
     }.getOrDefault(false)
 
     // New method for UnifiedTrack
     @OptIn(UnstableApi::class)
-    suspend fun resolveUnifiedTrack(track: UnifiedTrack): ResolvedMedia {
+    suspend fun resolveUnifiedTrack(track: UnifiedTrack, askForOtherService: Boolean = true): ResolvedMedia {
         val source = track.source
 
         // Prefer the on-device copy over any remote source. This sits in the
@@ -195,21 +219,23 @@ class StreamResolver @Inject constructor(
                     is PlaybackSource.HiFiApi -> source.tidalId
                     is PlaybackSource.QobuzCached -> source.qobuzId
                     is PlaybackSource.AppleCached -> source.appleId
+                    is PlaybackSource.DeezerPreview -> source.deezerId
                     else -> null
                 },
                 isrc = track.isrc,
                 musicBrainzTrackId = track.musicBrainzTrackId,
             )?.let { local ->
-                return resolveLocalFile(track, local)
+                return resolveLocalFile(track, local, downloadedCopy = true)
             }
         }
 
         return when (source) {
             is PlaybackSource.LocalFile -> resolveLocalFile(track, source)
             is PlaybackSource.CollectionDirect -> resolveCollectionDirect(track, source)
-            is PlaybackSource.HiFiApi -> resolveHiFiApi(track, source)
+            is PlaybackSource.HiFiApi -> resolveHiFiApi(track, source, askForOtherService)
             is PlaybackSource.QobuzCached -> resolveQobuzCached(track, source)
             is PlaybackSource.AppleCached -> resolveAppleCached(track, source)
+            is PlaybackSource.DeezerPreview -> resolveDeezer(track, source)
             is PlaybackSource.RadioStream -> resolveRadioStream(track, source)
         }
     }
@@ -296,6 +322,51 @@ class StreamResolver @Inject constructor(
             mediaItem = mediaItem,
             isPlayable = !streamUrl.isNullOrBlank(),
         )
+    }
+
+    /**
+     * A Deezer pick, played the way a Qobuz pick is: fetched in full from
+     * /api/deezer/download into the Deezer cache and played off disk while it
+     * fills (see [resolveQobuzCached]). Only when the instance can't serve the
+     * full file does it fall back to the 30-second preview.
+     */
+    private suspend fun resolveDeezer(
+        track: UnifiedTrack,
+        source: PlaybackSource.DeezerPreview,
+    ): ResolvedMedia {
+        val uri = deezerStreamUri(source.deezerId, source.preferredQuality)
+
+        val metadata = MediaMetadata.Builder()
+            .setTitle(track.title)
+            .setArtist(track.artistName)
+            .setAlbumTitle(track.albumTitle)
+            .setArtworkUri(normalizeArtworkUri(track.artworkUri))
+            .setTrackNumber(track.trackNumber)
+            .setDiscNumber(track.discNumber)
+            .build()
+
+        val mediaItem = MediaItem.Builder()
+            .setMediaId(track.id)
+            .apply { if (uri != null) setUri(uri) }
+            .setMediaMetadata(metadata)
+            .build()
+
+        return ResolvedMedia(
+            mediaItem = mediaItem,
+            isLocalFile = uri?.scheme == DeezerStreamUri.SCHEME,
+            isPlayable = uri != null,
+        )
+    }
+
+    /**
+     * Where a Deezer track's audio comes from: the Deezer cache (full length,
+     * started here so a failure is known before the player opens it), else
+     * the instance's signed preview URL, else nowhere (null — callers skip it).
+     */
+    private suspend fun deezerStreamUri(deezerId: Long, quality: AudioQuality): Uri? {
+        val started = runCatching { deezerCache.openPartial(deezerId, quality) }.getOrNull()
+        if (started != null && started.failure == null) return DeezerStreamUri.build(deezerId, quality).toUri()
+        return repository.deezerPreviewUrl(deezerId)?.toUri()
     }
 
     // Qobuz resolution = "fetch via /api/download-music, park in app cache,
@@ -387,7 +458,7 @@ class StreamResolver @Inject constructor(
      * catalogue's — same title, same artwork — so swapping the stream for the
      * file is invisible in the player; only the loading spinner disappears.
      */
-    private fun buildFileMediaItem(track: Track, uri: Uri): MediaItem {
+    private fun buildFileMediaItem(track: Track, uri: Uri, playedFrom: String? = null): MediaItem {
         val artworkUri = track.album?.cover?.let { cover -> buildCoverUrl(cover, 640).toUri() }
 
         val metadata = MediaMetadata.Builder()
@@ -397,6 +468,7 @@ class StreamResolver @Inject constructor(
             .setArtworkUri(artworkUri)
             .setTrackNumber(track.trackNumber)
             .setDiscNumber(track.volumeNumber)
+            .apply { playedFrom?.let { setExtras(PlayedFrom.extras(it)) } }
             .build()
 
         return MediaItem.Builder()
@@ -421,7 +493,9 @@ class StreamResolver @Inject constructor(
 
     private fun resolveLocalFile(
         track: UnifiedTrack,
-        source: PlaybackSource.LocalFile
+        source: PlaybackSource.LocalFile,
+        /** A catalog pick played from its on-device copy, which the player tags as Local. */
+        downloadedCopy: Boolean = false,
     ): ResolvedMedia {
         val uri = localUri(source.filePath)
 
@@ -432,6 +506,7 @@ class StreamResolver @Inject constructor(
             .setArtworkUri(normalizeArtworkUri(track.artworkUri))
             .setTrackNumber(track.trackNumber)
             .setDiscNumber(track.discNumber)
+            .apply { if (downloadedCopy) setExtras(PlayedFrom.extras(PlayedFrom.LOCAL)) }
             .build()
 
         val mediaItem = MediaItem.Builder()
@@ -477,7 +552,8 @@ class StreamResolver @Inject constructor(
 
     private suspend fun resolveHiFiApi(
         track: UnifiedTrack,
-        source: PlaybackSource.HiFiApi
+        source: PlaybackSource.HiFiApi,
+        askForOtherService: Boolean,
     ): ResolvedMedia {
         val streamResult = repository.getTrackStream(source.tidalId)
         val trackStream = streamResult.getOrNull()
@@ -488,9 +564,10 @@ class StreamResolver @Inject constructor(
         val isPlayable = trackStream != null &&
             (isDash || trackStream.streamUrl.isNotBlank())
 
-        // TIDAL unavailable — try the same song on Qobuz before giving up.
+        // TIDAL unavailable — the same song on Qobuz, if the listener agrees.
         if (!isPlayable) {
-            val fallback = qobuzFallbackMediaItem(
+            val fallback = qobuzWithConsent(
+                ask = askForOtherService,
                 tidalId = source.tidalId,
                 knownIsrc = track.isrc,
                 // UnifiedTrack carries no numeric TIDAL album/artist ids, and
@@ -540,7 +617,57 @@ class StreamResolver @Inject constructor(
     }
 
     /**
-     * Last-resort fallback for TIDAL (HiFiApi) tracks: when the TIDAL stream
+     * The Qobuz copy of a TIDAL track TIDAL could not play — only with the
+     * listener's consent. Allowed already ([SourceConsent.isAllowed]): built
+     * and returned, marked as playing from Qobuz. Not yet: when [ask] and
+     * Qobuz really has the recording, the listener is asked, and null is
+     * returned so the track is skipped meanwhile. Never a silent switch.
+     */
+    private suspend fun qobuzWithConsent(
+        ask: Boolean,
+        tidalId: Long,
+        knownIsrc: String?,
+        tidalAlbumId: Long?,
+        tidalArtistId: Long?,
+        mediaId: String,
+        title: String,
+        artist: String,
+        durationSeconds: Int,
+        albumTitle: String?,
+        artworkUri: Uri?,
+        trackNumber: Int?,
+        discNumber: Int?,
+    ): MediaItem? {
+        if (sourceConsent.isAllowed(tidalId)) {
+            return qobuzFallbackMediaItem(
+                tidalId, knownIsrc, tidalAlbumId, tidalArtistId, mediaId, title, artist,
+                durationSeconds, albumTitle, artworkUri, trackNumber, discNumber,
+            )
+        }
+        if (ask) {
+            val hasCopy = runCatching { findQobuzMatch(tidalId, knownIsrc, title, artist, durationSeconds) }
+                .getOrNull() != null
+            if (hasCopy) sourceConsent.post(QobuzOffer(tidalId, title, artist))
+        }
+        return null
+    }
+
+    /** The same recording on Qobuz: by ISRC when there is one, else a strict metadata match. */
+    private suspend fun findQobuzMatch(
+        tidalId: Long,
+        knownIsrc: String?,
+        title: String,
+        artist: String,
+        durationSeconds: Int,
+    ): QobuzTrackMatch? {
+        val isrc = knownIsrc?.takeIf { it.isNotBlank() } ?: repository.getTidalIsrc(tidalId)
+        return isrc?.let { repository.findQobuzByIsrc(it) }
+            ?: metadataMatchQobuz(title, artist, durationSeconds)
+    }
+
+    /**
+     * The Qobuz copy of a TIDAL (HiFiApi) track, once the listener agreed to
+     * it (see [qobuzWithConsent]): when the TIDAL stream
      * can't be resolved (instance down, track pulled, no manifest), find the
      * same recording on Qobuz and play it from the Qobuz cache. This is what
      * lets a playlist built from TIDAL keep playing when TIDAL is down.
@@ -568,10 +695,7 @@ class StreamResolver @Inject constructor(
         trackNumber: Int?,
         discNumber: Int?,
     ): MediaItem? {
-        val isrc = knownIsrc?.takeIf { it.isNotBlank() } ?: repository.getTidalIsrc(tidalId)
-        val match = isrc?.let { repository.findQobuzByIsrc(it) }
-            ?: metadataMatchQobuz(title, artist, durationSeconds)
-            ?: return null
+        val match = findQobuzMatch(tidalId, knownIsrc, title, artist, durationSeconds) ?: return null
 
         // Bridge navigation: make the playing TIDAL album/artist ids resolve to
         // the matched Qobuz release/artist so "Go to album/artist" on the main
@@ -595,6 +719,7 @@ class StreamResolver @Inject constructor(
             .setArtworkUri(artworkUri)
             .setTrackNumber(trackNumber)
             .setDiscNumber(discNumber)
+            .setExtras(PlayedFrom.extras(PlayedFrom.QOBUZ))
             .build()
 
         return MediaItem.Builder()

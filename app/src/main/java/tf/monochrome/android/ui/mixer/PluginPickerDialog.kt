@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import tf.monochrome.android.audio.dsp.SnapinType
 import tf.monochrome.android.ui.mixer.fxchain.FxChainColors
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 @Composable
 fun PluginPickerDialog(
@@ -35,7 +37,7 @@ fun PluginPickerDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = MonoDimens.cardAlpha),
-        title = { Text("Add Plugin") },
+        title = { Text(stringResource(R.string.mixer_add_plugin)) },
         text = {
             Column(
                 modifier = Modifier
@@ -82,7 +84,7 @@ fun PluginPickerDialog(
         },
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         }
     )
 }

@@ -19,19 +19,21 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.LibraryMusic
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material3.Icon
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.Text
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -45,7 +47,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -96,6 +97,7 @@ import tf.monochrome.android.ui.profile.ProfileScreen
 import tf.monochrome.android.ui.stats.ListeningStatsScreen
 import tf.monochrome.android.ui.stats.StatsScreen
 import tf.monochrome.android.ui.search.SearchScreen
+import tf.monochrome.android.ui.theme.motionMillis
 import tf.monochrome.android.ui.settings.SettingsScreen
 import tf.monochrome.android.ui.carmode.CarModeScreen
 import tf.monochrome.android.ui.debug.DebugLogScreen
@@ -103,6 +105,8 @@ import tf.monochrome.android.ui.crossfeed.CrossfeedScreen
 import tf.monochrome.android.ui.crossfeed.CrossfeedViewModel
 import tf.monochrome.android.ui.oxford.OxfordEffectsTabs
 import tf.monochrome.android.ui.oxford.OxfordViewModel
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 sealed class Screen(val route: String) {
     data object Home : Screen("home")
@@ -185,13 +189,6 @@ sealed class Screen(val route: String) {
     data object HrtfDatabase : Screen("hrtf_database")
 }
 
-data class BottomNavItem(
-    val screen: Screen,
-    val label: String,
-    val selectedIcon: ImageVector,
-    val unselectedIcon: ImageVector
-)
-
 // The NavHost destinations the swipeable page list is drawn on. These are stubs
 // (their `composable {}` bodies are empty) — the pager below draws the pages, and
 // which page you are on is the pager's business, not the NavController's.
@@ -203,14 +200,18 @@ data class BottomNavItem(
 private val pagerRoutes =
     setOf(Screen.Home.route, Screen.Discover.route, Screen.Library.route)
 
-// Screens whose own controls run to the bottom edge, where the mini player would
-// sit on top of them. The player and the mixer are the transport itself; Oxford
-// puts CLIP / BAND SPLIT / EFFECT IN under the compressor and inflator faders.
-// Everywhere else the mini player stays — this list is the whole exception.
-private val miniPlayerHiddenRoutes = setOf(
+// Screens whose own controls run to the bottom edge, where the tab bar and the
+// mini player would sit on top of them. The player and the mixer are the
+// transport itself; Oxford puts CLIP / BAND SPLIT / EFFECT IN under the
+// compressor and inflator faders; car mode is a full-screen driving surface
+// with its own transport. Everywhere else the chrome stays — on pushed screens
+// too, the way Apple Music keeps its tab bar — and this list is the whole
+// exception.
+internal val chromeHiddenRoutes = setOf(
     Screen.NowPlaying.route,
     Screen.Mixer.route,
     Screen.Oxford.route,
+    Screen.CarMode.route,
 )
 
 @Composable
@@ -220,6 +221,32 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     val currentDestination = navBackStackEntry?.destination
 
     val playerViewModel: PlayerViewModel = hiltViewModel()
+
+    // TIDAL could not play a song Qobuz has. Asked here, at the root, so the
+    // question reaches the listener wherever they are — the skip that caused
+    // it may have come from the notification or a track ending on its own.
+    val qobuzOffer by playerViewModel.qobuzOffer.collectAsStateWithLifecycle()
+    qobuzOffer?.let { offer ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = playerViewModel::dismissQobuzOffer,
+            title = { androidx.compose.material3.Text(stringResource(R.string.tidal_offer_title)) },
+            text = {
+                androidx.compose.material3.Text(
+                    stringResource(R.string.tidal_offer_body, offer.title, offer.artist),
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = playerViewModel::acceptQobuzOffer) {
+                    androidx.compose.material3.Text(stringResource(R.string.play_from_qobuz))
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = playerViewModel::dismissQobuzOffer) {
+                    androidx.compose.material3.Text(stringResource(R.string.action_skip))
+                }
+            },
+        )
+    }
 
     val currentTrack by playerViewModel.currentTrack.collectAsStateWithLifecycle()
     val isPlaying by playerViewModel.isPlaying.collectAsStateWithLifecycle()
@@ -252,8 +279,10 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     // than a detail or tool screen pushed over it.
     val isOnMainTab = currentDestination?.route in pagerRoutes
 
-    val showMiniPlayer = currentTrack != null
-        && currentDestination?.route !in miniPlayerHiddenRoutes
+    // Null before the first destination is placed, which is not a reason to
+    // hide anything.
+    val showChrome = currentDestination?.route !in chromeHiddenRoutes
+    val showMiniPlayer = currentTrack != null && showChrome
 
     val scope = rememberCoroutineScope()
 
@@ -264,7 +293,15 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     val settingsViewModel: tf.monochrome.android.ui.settings.SettingsViewModel = hiltViewModel()
     val pageOrder by settingsViewModel.pageOrder.collectAsStateWithLifecycle()
     val hiddenPages by settingsViewModel.hiddenPages.collectAsStateWithLifecycle()
-    val pages = remember(pageOrder, hiddenPages) { visiblePages(pageOrder, hiddenPages) }
+    // The tabs and the mini player take turns instead of stacking — see TabChrome.
+    val miniPlayerHideWithTabs by settingsViewModel.miniPlayerHideWithTabs.collectAsStateWithLifecycle()
+    // The two pages between Home and Library in the nav bar.
+    val navBarSlots by settingsViewModel.navBarSlots.collectAsStateWithLifecycle()
+    // The pages the user can show or hide, then Search, which is always there:
+    // it is the round button beside the tab bar, not one of the ordered pages.
+    val pages = remember(pageOrder, hiddenPages) {
+        visiblePages(pageOrder, hiddenPages) + SEARCH_PAGE_ID
+    }
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { pages.size })
 
     // Keep the user on the same PAGE, not the same index, when the list changes
@@ -288,7 +325,11 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     // tapping a distant page opened the wrong one.
     // Read here, not in the coroutine: reduceMotion is a Composable.
     val slidePages = !reduceMotion()
-    val selectPage: (String) -> Unit = { id ->
+    // [animate] false is a tab switch, which jumps the way Apple's tabs do: a
+    // slide would say the two tabs are neighbours, and the bar's order is not
+    // the pager's. The Library switcher keeps the slide between adjacent
+    // sections, which really are next to each other.
+    val selectPageWith: (String, Boolean) -> Unit = { id, animate ->
         val page = pages.indexOf(id)
         // Slide to the page next door, jump to anything further.
         //
@@ -303,9 +344,60 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         // left the pager somewhere other than where the last pick put it.
         if (page >= 0) scope.launch {
             val adjacent = kotlin.math.abs(page - pagerState.currentPage) == 1
-            pagerState.goToPage(page, animated = slidePages && adjacent)
+            pagerState.goToPage(page, animated = animate && slidePages && adjacent)
         }
     }
+    val selectPage: (String) -> Unit = { id -> selectPageWith(id, true) }
+
+    // ── The tab bar ──────────────────────────────────────────────────────
+    val currentPageId = pages.getOrNull(pagerState.currentPage)
+    // The Library tab returns to the section that was open last, the way a tab
+    // keeps its place. Saveable: it is navigation state, like the page itself.
+    var lastLibrarySection by rememberSaveable { mutableStateOf<String?>(null) }
+    // A section pinned to its own button is not where Library goes back to:
+    // that button already opens it.
+    LaunchedEffect(currentPageId, navBarSlots) {
+        if (currentPageId in LIBRARY_PAGE_IDS && currentPageId !in navBarSlots) lastLibrarySection = currentPageId
+    }
+    // Set by a tap on Search and spent by the Search page's first composition,
+    // so the keyboard comes up for a tap and not for coming back to results.
+    var focusSearch by remember { mutableStateOf(false) }
+    val onTab: (AppTab) -> Unit = { tab ->
+        // A tab tapped from a pushed screen closes it, as in Apple Music: the
+        // pager is only drawn while the NavHost is on "home".
+        if (!isOnMainTab && !navController.popBackStack(Screen.Home.route, inclusive = false)) {
+            navController.navigate(Screen.Home.route)
+        }
+        if (tab == AppTab.SEARCH) focusSearch = true
+        selectPageWith(pageForTab(tab, pages, lastLibrarySection, navBarSlots), false)
+    }
+
+    // The bar folds the mini player into itself while the listener scrolls down
+    // through a page, and unfolds it when they scroll back up — measured from
+    // what the lists actually scroll, through nested scroll, so every list in
+    // the app drives it without knowing it exists. Only worth doing with a
+    // mini player to fold; without one the bar stays as it is.
+    var chromeCollapsed by remember { mutableStateOf(false) }
+    val collapseThresholdPx = with(LocalDensity.current) { 24.dp.toPx() }
+    val collapseOnScroll = remember(collapseThresholdPx) {
+        object : NestedScrollConnection {
+            // Distance travelled in the current direction; a reversal resets it,
+            // so a twitch the other way never flips the bar.
+            private var travel = 0f
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                val dy = consumed.y
+                if (dy == 0f) return Offset.Zero
+                if ((dy < 0f) != (travel < 0f)) travel = 0f
+                travel += dy
+                if (travel <= -collapseThresholdPx) chromeCollapsed = true
+                else if (travel >= collapseThresholdPx) chromeCollapsed = false
+                return Offset.Zero
+            }
+        }
+    }
+    // A new page or screen starts with the bar open: the fold belongs to the
+    // scroll that caused it, not to wherever the listener goes next.
+    LaunchedEffect(currentPageId, currentDestination?.route) { chromeCollapsed = false }
 
     // One-shot landing route handed over by onboarding. Keyed on Unit and not on
     // `pages`: keying it there would re-run the landing every time the user
@@ -365,6 +457,16 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
+    // How tall the floating chrome stands above the system bar, expanded: the
+    // tab bar, and the mini player stacked over it. Lists pad by the expanded
+    // height even while the bar is folded — following the fold would jolt them.
+    // Taking turns, nothing is ever stacked: both states are one row high.
+    val chromeHeight = when {
+        !showChrome -> 0.dp
+        showMiniPlayer && !miniPlayerHideWithTabs -> CHROME_GAP + TabBarHeight + CHROME_GAP + MINI_PLAYER_HEIGHT
+        else -> CHROME_GAP + TabBarHeight
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
 
         // ── Layer 0: Background ──────────────────────────────────────────
@@ -401,7 +503,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         // and read as an opaque container however transparent it was set.
         //
         // The reserve moves into each screen's own scroll, published below as
-        // [LocalMiniPlayerInset], where it is scrollable — content passes
+        // [LocalBottomChromeInset], where it is scrollable — content passes
         // behind the glass and the last row still comes clear of the bar. The
         // nav bar stays reserved out here, because that one is not glass and
         // nothing should ever be under it.
@@ -418,7 +520,11 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         val tabStateHolder = rememberSaveableStateHolder()
 
         CompositionLocalProvider(
-            LocalMiniPlayerInset provides if (showMiniPlayer) MINI_PLAYER_INSET else 0.dp,
+            // A pushed screen stops above the system bar (the NavHost is padded
+            // for it), so its lists need only the chrome. The pager and the
+            // full-bleed routes run underneath the system bar, and get it added
+            // — see the providers around each below.
+            LocalBottomChromeInset provides if (fullBleedRoute) navBarHeight + chromeHeight else chromeHeight,
             // So a song row anywhere in the app can show that it is the one
             // playing, without every list having to pass it down.
             LocalNowPlayingTrackId provides currentTrack?.id,
@@ -429,9 +535,11 @@ fun MonochromeNavHost(initialRoute: String? = null) {
             LocalMiniPlayerGlass provides miniPlayerGlass,
             LocalGlassOverlayHost provides glassOverlayHost,
         ) {
-        Box(modifier = Modifier.fillMaxSize().hazeSource(hazeState)) {
+        Box(modifier = Modifier.fillMaxSize().hazeSource(hazeState).nestedScroll(collapseOnScroll)) {
             // Pager for main tabs — fills entire screen
-            if (isOnMainTab) {
+            if (isOnMainTab) CompositionLocalProvider(
+                LocalBottomChromeInset provides navBarHeight + chromeHeight,
+            ) {
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
@@ -467,8 +575,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                                     DiscoverScreen(
                                         navController = navController,
                                         playerViewModel = playerViewModel,
-                                        pages = pages,
-                                        onSelectPage = selectPage,
+                                        onSelectPage = { id -> selectPageWith(id, false) },
                                     )
                                 // Its own branch rather than a Library section:
                                 // the globe is full-bleed and brings its own top
@@ -477,9 +584,20 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                                 RADIO_PAGE_ID ->
                                     tf.monochrome.android.ui.discover.WorldRadioScreen(
                                         playerViewModel = playerViewModel,
-                                        pages = pages,
-                                        onSelectPage = selectPage,
                                     )
+                                SEARCH_PAGE_ID -> {
+                                    SearchScreen(
+                                        navController = navController,
+                                        playerViewModel = playerViewModel,
+                                        autoFocus = focusSearch,
+                                    )
+                                    // Spent once the bar has had it. Keyed on the
+                                    // flag, so a second tap while already here
+                                    // is spent too — keyed on Unit it stayed set,
+                                    // and coming back from an album re-popped
+                                    // the keyboard over the results.
+                                    LaunchedEffect(focusSearch) { if (focusSearch) focusSearch = false }
+                                }
                                 // Everything else is a Library page.
                                 // reconcilePageOrder drops ids this build does
                                 // not know, so nothing else can arrive here.
@@ -656,7 +774,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             inflator = vm.inflator,
                             compressor = vm.compressor,
                             initialTab = tab,
-                            onBack = { navController.popBackStack() },
+                            onBack = { navController.popBackStackSafe() },
                             modifier = Modifier.fillMaxSize().padding(top = statusBarHeight),
                         )
                     }
@@ -666,7 +784,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                     tf.monochrome.android.devedit.DevEditScreen("crossfeed") {
                         CrossfeedScreen(
                             effect = vm.crossfeed,
-                            onBack = { navController.popBackStack() },
+                            onBack = { navController.popBackStackSafe() },
                             modifier = Modifier.fillMaxSize().padding(top = statusBarHeight),
                         )
                     }
@@ -688,7 +806,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 }
                 composable(Screen.ListeningStats.route) {
                     tf.monochrome.android.devedit.DevEditScreen("listening_stats") {
-                        ListeningStatsScreen(onBack = { navController.popBackStack() })
+                        ListeningStatsScreen(onBack = { navController.popBackStackSafe() })
                     }
                 }
                 composable(
@@ -792,13 +910,17 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         }
         }
 
-        // ── Layer 2: Navigation bar + mini player (overlays content) ──
-        if (isOnMainTab) {
-            Column(modifier = Modifier.align(Alignment.BottomCenter)) {
-                // Mini player — sits below nav bar with its own space
-                if (showMiniPlayer) {
+        // ── Layer 2: Tab bar + mini player (overlays content) ──
+        //
+        // A sibling of the haze source, never inside it: each pane frosts the
+        // content layer behind it, and a pane drawn inside its own source would
+        // be asked to blur a picture it is part of — the flat slab.
+        if (showChrome) {
+            val miniPlayer: (@Composable (Modifier) -> Unit)? = if (showMiniPlayer) {
+                { mod ->
                     // Mini player follows the album art (dynamic colours), while
-                    // the menus around it stay on the base theme.
+                    // the menus around it — the tab bar included — stay on the
+                    // base theme.
                     DynamicColorScope {
                         CompositionLocalProvider(
                             tf.monochrome.android.ui.player.LocalPlayerGlass provides miniPlayerGlass,
@@ -810,8 +932,13 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                                 onPlayPauseClick = { playerViewModel.togglePlayPause() },
                                 onSkipNextClick = { playerViewModel.skipToNext() },
                                 onSkipPreviousClick = { playerViewModel.skipToPrevious() },
-                                onClick = { navController.navigateTool(Screen.NowPlaying) },
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                // A plain push, not navigateTool: collapsing an
+                                // earlier player would take every screen above it
+                                // along. One left under the mixer is the only kind
+                                // there can be (see leavePlayerFor), and Back walks
+                                // through it.
+                                onClick = { navController.navigateSafe(Screen.NowPlaying.route) },
+                                modifier = mod,
                                 hazeState = hazeState,
                                 blendMillis = miniBlendMs,
                                 userTrackChanges = userTrackChanges,
@@ -819,48 +946,40 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                         }
                     }
                 }
+            } else null
 
-                // Fill the system nav bar area
-                Spacer(modifier = Modifier.height(navBarHeight))
-            }
-        } else if (showMiniPlayer) {
-            // Mini player on non-tab screens — pad above system nav bar
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = navBarHeight)
+            CompositionLocalProvider(
+                // The bar is the app's chrome, so it is the mini player's
+                // material — see LocalMiniPlayerGlass.
+                tf.monochrome.android.ui.player.LocalPlayerGlass provides miniPlayerGlass,
             ) {
-                DynamicColorScope {
-                    CompositionLocalProvider(
-                        tf.monochrome.android.ui.player.LocalPlayerGlass provides miniPlayerGlass,
-                    ) {
-                        MiniPlayer(
-                            track = currentTrack,
-                            isPlaying = isPlaying,
-                            progressProvider = progressProvider,
-                            onPlayPauseClick = { playerViewModel.togglePlayPause() },
-                            onSkipNextClick = { playerViewModel.skipToNext() },
-                            onSkipPreviousClick = { playerViewModel.skipToPrevious() },
-                            onClick = { navController.navigateTool(Screen.NowPlaying) },
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            // The frost is on everywhere now. It used to be
-                            // switched off here because detail screens stopped
-                            // above the bar and left it nothing real to sample,
-                            // so its base colour rendered as a solid slab —
-                            // true at the time, and fixed by putting content
-                            // under the bar rather than by hiding the frost.
-                            //
-                            // A full-bleed route is the exception, and the
-                            // reason it is full-bleed: the map runs underneath
-                            // the bar, so there IS content to blur and passing
-                            // null was throwing it away — the one screen built
-                            // to feed the frost was the one screen without it.
-                            hazeState = hazeState,
-                            blendMillis = miniBlendMs,
-                            userTrackChanges = userTrackChanges,
-                        )
-                    }
-                }
+                TabChrome(
+                    tabs = pillTabs(pages, navBarSlots),
+                    // On a pushed screen the bar lights the tab underneath it.
+                    selected = tabFor(currentPageId, navBarSlots),
+                    onTab = { tab ->
+                        // Taking turns, the open bar has no mini player, and a
+                        // page too short to scroll could never fold to show it.
+                        // So the tab you are already on — a tap that did nothing
+                        // — folds the bar instead: the player is always one tap
+                        // from anywhere, and switching tab is still one tap.
+                        if (miniPlayerHideWithTabs && miniPlayer != null && isOnMainTab &&
+                            !chromeCollapsed && tab == tabFor(currentPageId, navBarSlots)
+                        ) {
+                            chromeCollapsed = true
+                        } else {
+                            onTab(tab)
+                        }
+                    },
+                    collapsed = chromeCollapsed && miniPlayer != null,
+                    onExpand = { chromeCollapsed = false },
+                    stackMiniPlayer = !miniPlayerHideWithTabs,
+                    hazeState = hazeState,
+                    miniPlayer = miniPlayer,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = navBarHeight + CHROME_GAP),
+                )
             }
         }
 
@@ -873,16 +992,15 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         LaunchedEffect(activeDownloads.isNotEmpty()) {
             if (activeDownloads.isNotEmpty()) pillHidden = false
         }
-        val onChromeScreen = currentDestination?.route != Screen.NowPlaying.route &&
-            currentDestination?.route != Screen.Mixer.route &&
-            // Flow is full-bleed: a floating pill would sit over the artwork
-            // and the action rail, which is exactly the chrome it does without.
-            !fullBleedRoute
+        // The same screens the tab bar keeps off, for the same reason — their
+        // controls run to the bottom edge. Oxford used to be missing here, so
+        // the pill sat over its CLIP / BAND SPLIT row.
+        val onChromeScreen = showChrome
         if (onChromeScreen && activeDownloads.isNotEmpty() && !pillHidden) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = navBarHeight + if (showMiniPlayer) 80.dp else 12.dp)
+                    .padding(bottom = navBarHeight + chromeHeight + 8.dp)
                     .padding(horizontal = 8.dp)
             ) {
                 tf.monochrome.android.ui.downloads.DownloadProgressPill(
@@ -916,10 +1034,95 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     }
 }
 
+/** Space between the chrome's panes, and between the bar and the system bar. */
+private val CHROME_GAP = 8.dp
+
+/** The mini player's height with its progress line — see MiniPlayer's metrics. */
+private val MINI_PLAYER_HEIGHT = 66.dp
+
 /**
- * Room the floating mini player needs at the bottom of a scrolling screen.
+ * The floating bottom chrome: the mini player over the tab pill, with Search
+ * as its own round button beside it.
  *
- * Published as [LocalMiniPlayerInset] while a track is loaded, and zero
- * otherwise so no screen carries dead space for a bar that is not there.
+ * Folded ([collapsed]), the pill shrinks to the current tab's glyph alone and
+ * the mini player slides in between it and Search — iOS 26's tab bar. Tapping
+ * the shrunken pill opens it back up rather than switching tab: what it shows
+ * is the tab you are already on.
+ *
+ * Open, the mini player stacks over the pill unless [stackMiniPlayer] is off.
+ * Then the two take turns, and the bar only ever moves between two one-row
+ * states: the tabs, and the folded pill with the mini player beside it.
  */
-private val MINI_PLAYER_INSET = 72.dp
+@Composable
+private fun TabChrome(
+    tabs: List<AppTab>,
+    selected: AppTab,
+    onTab: (AppTab) -> Unit,
+    collapsed: Boolean,
+    onExpand: () -> Unit,
+    stackMiniPlayer: Boolean,
+    hazeState: dev.chrisbanes.haze.HazeState,
+    miniPlayer: (@Composable (Modifier) -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val accent = MaterialTheme.colorScheme.primary
+    val foldMillis = motionMillis(240)
+    Column(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(CHROME_GAP),
+    ) {
+        AnimatedVisibility(
+            visible = miniPlayer != null && !collapsed && stackMiniPlayer,
+            enter = fadeIn(tween(foldMillis)) + expandVertically(tween(foldMillis)),
+            exit = fadeOut(tween(foldMillis)) + shrinkVertically(tween(foldMillis)),
+        ) {
+            miniPlayer?.invoke(Modifier.fillMaxWidth())
+        }
+        AnimatedContent(
+            targetState = collapsed,
+            transitionSpec = {
+                fadeIn(tween(foldMillis)) togetherWith fadeOut(tween(foldMillis)) using
+                    SizeTransform(clip = false)
+            },
+            label = "tabChromeFold",
+        ) { folded ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(CHROME_GAP),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (folded && miniPlayer != null) {
+                    // The tab you are on, or Home while you are on Search —
+                    // Search is already showing itself beside the mini player.
+                    val shown = selected.takeIf { it in tabs } ?: tabs.first()
+                    GlassTabBar(
+                        tabs = listOf(shown),
+                        selected = selected,
+                        onSelect = { onExpand() },
+                        accent = accent,
+                        hazeState = hazeState,
+                        showLabels = false,
+                        modifier = Modifier.width(TabBarHeight),
+                    )
+                    miniPlayer(Modifier.weight(1f))
+                } else {
+                    GlassTabBar(
+                        tabs = tabs,
+                        selected = selected,
+                        onSelect = onTab,
+                        accent = accent,
+                        hazeState = hazeState,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                GlassTabBar(
+                    tabs = listOf(AppTab.SEARCH),
+                    selected = selected,
+                    onSelect = onTab,
+                    accent = accent,
+                    hazeState = hazeState,
+                    modifier = Modifier.width(TabBarHeight),
+                )
+            }
+        }
+    }
+}

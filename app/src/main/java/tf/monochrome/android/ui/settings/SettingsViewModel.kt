@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.settings
 
+import tf.monochrome.android.R
+import tf.monochrome.android.ui.components.UiText
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -27,9 +29,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
-import tf.monochrome.android.data.api.Instance
-import tf.monochrome.android.data.api.InstanceManager
-import tf.monochrome.android.data.api.InstanceType
 import tf.monochrome.android.data.auth.AuthRepository
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.auth.SupabaseAuthManager
@@ -48,7 +47,7 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val preferences: PreferencesManager,
-    private val instanceManager: InstanceManager,
+    private val apiServerProber: tf.monochrome.android.data.api.ApiServerProber,
     private val authRepository: AuthRepository,
     private val backupManager: BackupManager,
     private val projectMEngineRepository: ProjectMEngineRepository,
@@ -72,8 +71,8 @@ class SettingsViewModel @Inject constructor(
 
     /** One-shot user-facing messages (import success/failure, etc.) that the
      *  Settings screen shows as a toast. */
-    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
-    val messages: SharedFlow<String> = _messages.asSharedFlow()
+    private val _messages = MutableSharedFlow<UiText>(extraBufferCapacity = 4)
+    val messages: SharedFlow<UiText> = _messages.asSharedFlow()
 
     /** Honest live status of the libusb exclusive-output path. */
     val usbExclusiveStatus: StateFlow<tf.monochrome.android.audio.usb.UsbExclusiveController.Status> =
@@ -108,6 +107,16 @@ class SettingsViewModel @Inject constructor(
      * Settings over another screen that also uses the analyzer doesn't make
      * either preview flicker off when the first one disposes.
      */
+    val waveCandy: StateFlow<tf.monochrome.android.domain.model.WaveCandySettings> = preferences.waveCandy
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.WaveCandySettings.DEFAULT)
+    fun setWaveCandy(settings: tf.monochrome.android.domain.model.WaveCandySettings) {
+        viewModelScope.launch { preferences.setWaveCandy(settings) }
+    }
+    val spectrumWaterfall: StateFlow<tf.monochrome.android.domain.model.SpectrumWaterfallSettings> = preferences.spectrumWaterfall
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.SpectrumWaterfallSettings.DEFAULT)
+    fun setSpectrumWaterfall(settings: tf.monochrome.android.domain.model.SpectrumWaterfallSettings) {
+        viewModelScope.launch { preferences.setSpectrumWaterfall(settings) }
+    }
     fun acquireSpectrum() = spectrumAnalyzerTap.acquire()
     fun releaseSpectrum() = spectrumAnalyzerTap.release()
 
@@ -250,8 +259,6 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AudioQuality.HIGH)
     val normalizationEnabled: StateFlow<Boolean> = preferences.normalizationEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-    val dspMixerEnabled: StateFlow<Boolean> = preferences.dspEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val systemWideAutoEqEnabled: StateFlow<Boolean> = preferences.systemWideAutoEqEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val dspBlockSize: StateFlow<Int> = preferences.dspBlockSize
@@ -262,6 +269,11 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val usbExclusiveBitPerfectEnabled: StateFlow<Boolean> = preferences.usbExclusiveBitPerfectEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val hiResHalOutputEnabled: StateFlow<Boolean> = preferences.hiResHalOutputEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    fun setHiResHalOutputEnabled(enabled: Boolean) { viewModelScope.launch {
+        preferences.setHiResHalOutputEnabled(enabled)
+    } }
     /** Human-readable name of the attached USB DAC, or null when nothing is plugged in. */
     val usbOutputDeviceName: StateFlow<String?> =
         usbAudioRouter.usbOutputDevice
@@ -311,6 +323,8 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val playerBlurredBackground: StateFlow<Boolean> = preferences.playerBlurredBackground
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val miniPlayerHideWithTabs: StateFlow<Boolean> = preferences.miniPlayerHideWithTabs
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val immersiveFullScreen: StateFlow<Boolean> = preferences.immersiveFullScreen
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val lowPerformanceMode: StateFlow<Boolean> = preferences.lowPerformanceMode
@@ -362,35 +376,35 @@ class SettingsViewModel @Inject constructor(
 
     val visualizerEngineStatus: StateFlow<VisualizerEngineStatus> = projectMEngineRepository.engineStatus
     val visualizerPresets: StateFlow<List<VisualizerPreset>> = projectMEngineRepository.presets
+    /** The preset browser's hearts, shared with the player's browser. */
+    val visualizerFavoritePresetIds: StateFlow<Set<String>> = projectMEngineRepository.favoritePresetIds
+    val visualizerFlaggedPresetIds: StateFlow<Set<String>> = projectMEngineRepository.flaggedPresetIds
+    val visualizerDeviceFlaggedCount: StateFlow<Int> = projectMEngineRepository.deviceFlaggedCount
+    fun clearVisualizerCrashFlags() = projectMEngineRepository.clearDeviceCrashFlags()
+    fun toggleVisualizerFavoritePreset(presetId: String) = projectMEngineRepository.toggleFavoritePreset(presetId)
 
     /** Ensures presets are installed/loaded so the visualizer settings have data. */
     fun prepareVisualizerEngine() = projectMEngineRepository.requestPrepare()
 
-    // --- PocketBase Auth ---
+    // --- Account ---
     val isLoggedIn: StateFlow<Boolean> = authRepository.isLoggedIn
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val userEmail: StateFlow<String?> = authRepository.userEmail
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    // --- Instances ---
-    private val _apiInstances = MutableStateFlow<List<Instance>>(emptyList())
-    val apiInstances: StateFlow<List<Instance>> = _apiInstances.asStateFlow()
-    private val _streamingInstances = MutableStateFlow<List<Instance>>(emptyList())
-    val streamingInstances: StateFlow<List<Instance>> = _streamingInstances.asStateFlow()
-    val customEndpoint: StateFlow<String?> = preferences.customApiEndpoint
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-    val qobuzEndpoint: StateFlow<String?> = preferences.qobuzInstanceUrl
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    /** The APIs under Settings › Connections, in priority order. */
+    val apiServers: StateFlow<List<tf.monochrome.android.data.api.ApiServer>> = preferences.apiServers
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** URLs being re-checked right now, so their cards can show it. */
+    private val _apiChecking = MutableStateFlow<Set<String>>(emptySet())
+    val apiChecking: StateFlow<Set<String>> = _apiChecking.asStateFlow()
+
+    /** The Add API dialog's progress; see [addApi]. */
+    private val _addApiState = MutableStateFlow<AddApiState>(AddApiState.Idle)
+    val addApiState: StateFlow<AddApiState> = _addApiState.asStateFlow()
     val devModeEnabled: StateFlow<Boolean> = preferences.devModeEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-    val sourceMode: StateFlow<tf.monochrome.android.data.preferences.SourceMode> =
-        preferences.sourceMode.stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5000),
-            tf.monochrome.android.data.preferences.SourceMode.BOTH,
-        )
-    private val _instancesRefreshing = MutableStateFlow(false)
-    val instancesRefreshing: StateFlow<Boolean> = _instancesRefreshing.asStateFlow()
 
     // --- System ---
     private val _cacheSize = MutableStateFlow("")
@@ -407,7 +421,6 @@ class SettingsViewModel @Inject constructor(
         tf.monochrome.android.ui.theme.BundledFonts.ALL
 
     init {
-        loadInstances()
         calculateCacheSize()
         loadFonts()
     }
@@ -515,9 +528,9 @@ class SettingsViewModel @Inject constructor(
                 }
                 loadFonts()
                 preferences.setCustomFontUri(destFile.absolutePath)
-                _messages.tryEmit("Font imported")
+                _messages.tryEmit(UiText.Res(R.string.settings_font_imported))
             } catch (_: Exception) {
-                _messages.tryEmit("Couldn't import that font file")
+                _messages.tryEmit(UiText.Res(R.string.settings_font_import_failed))
             }
         }
     }
@@ -573,7 +586,6 @@ class SettingsViewModel @Inject constructor(
     fun setWifiQuality(quality: AudioQuality) { viewModelScope.launch { preferences.setWifiQuality(quality) } }
     fun setCellularQuality(quality: AudioQuality) { viewModelScope.launch { preferences.setCellularQuality(quality) } }
     fun setNormalizationEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setNormalizationEnabled(enabled) } }
-    fun setDspMixerEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setDspEnabled(enabled) } }
     fun setSystemWideAutoEq(enabled: Boolean) { viewModelScope.launch { preferences.setSystemWideAutoEqEnabled(enabled) } }
     fun setDspBlockSize(value: Int) { viewModelScope.launch { preferences.setDspBlockSize(value) } }
     // The two USB toggles are mutually exclusive — they fight for
@@ -626,6 +638,7 @@ class SettingsViewModel @Inject constructor(
     fun setLyricsBassReact(value: Float) { viewModelScope.launch { preferences.setLyricsBassReact(value) } }
     fun setPlayerDynamicColor(enabled: Boolean) { viewModelScope.launch { preferences.setPlayerDynamicColor(enabled) } }
     fun setPlayerBlurredBackground(enabled: Boolean) { viewModelScope.launch { preferences.setPlayerBlurredBackground(enabled) } }
+    fun setMiniPlayerHideWithTabs(enabled: Boolean) { viewModelScope.launch { preferences.setMiniPlayerHideWithTabs(enabled) } }
     fun setImmersiveFullScreen(enabled: Boolean) { viewModelScope.launch { preferences.setImmersiveFullScreen(enabled) } }
     // The master writes all three; each of the three re-derives the master.
     // Both directions are single DataStore transactions, so the four switches
@@ -753,8 +766,8 @@ class SettingsViewModel @Inject constructor(
             }.getOrNull()
             _availableUpdate.value = found
             _messages.tryEmit(
-                if (found != null) "Version ${found.versionName} is available"
-                else "You're on the latest version"
+                if (found != null) UiText.Res(R.string.settings_update_available, listOf(found.versionName))
+                else UiText.Res(R.string.settings_up_to_date)
             )
         }
     }
@@ -836,20 +849,35 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             preferences.hiddenPages.collect { _hiddenPages.value = it }
         }
+        viewModelScope.launch {
+            preferences.pageOrderRaw.collect { storedPageOrder = it }
+        }
     }
+
+    // The order exactly as stored, legacy ids included — see keepLegacyIds.
+    private var storedPageOrder: List<String>? = null
 
     fun setPageOrder(order: List<String>) {
         _pageOrder.value = order
-        viewModelScope.launch { preferences.setPageOrder(order) }
+        val toStore = tf.monochrome.android.ui.navigation.keepLegacyIds(order, storedPageOrder)
+        viewModelScope.launch { preferences.setPageOrder(toStore) }
     }
 
-    fun movePage(fromIndex: Int, toIndex: Int) {
-        val current = _pageOrder.value.toMutableList()
-        if (fromIndex in current.indices && toIndex in current.indices) {
-            val item = current.removeAt(fromIndex)
-            current.add(toIndex, item)
-            setPageOrder(current)
-        }
+    /** Move a Library section [by] places among the sections — the switcher's order. */
+    fun moveLibrarySection(id: String, by: Int) {
+        val current = _pageOrder.value
+        val next = tf.monochrome.android.ui.navigation.moveLibrarySection(current, id, by)
+        if (next != current) setPageOrder(next)
+    }
+
+    /** The nav bar's two middle buttons; see [tf.monochrome.android.ui.navigation.NAV_BAR_CHOICES]. */
+    val navBarSlots: StateFlow<List<String>> = preferences.navBarSlots
+        .stateIn(viewModelScope, SharingStarted.Eagerly, tf.monochrome.android.ui.navigation.DEFAULT_NAV_BAR_SLOTS)
+
+    /** Put [pageId] in slot [index]; picking the other slot's page swaps them. */
+    fun setNavBarSlot(index: Int, pageId: String) {
+        val next = tf.monochrome.android.ui.navigation.withNavBarSlot(navBarSlots.value, index, pageId)
+        viewModelScope.launch { preferences.setNavBarSlots(next) }
     }
 
     fun setPageVisible(id: String, visible: Boolean) {
@@ -862,7 +890,10 @@ class SettingsViewModel @Inject constructor(
         // on read would fight a device that is still syncing an older page list,
         // clearing hidden state this device was only holding on its behalf.
         viewModelScope.launch {
-            preferences.setHiddenPages(next.filterTo(mutableSetOf()) { it in APP_PAGE_TITLES })
+            // Legacy ids stay: an older device syncing this set still has them.
+            preferences.setHiddenPages(next.filterTo(mutableSetOf()) {
+                it in APP_PAGE_TITLES || it in tf.monochrome.android.ui.navigation.LEGACY_PAGE_IDS
+            })
         }
     }
  
@@ -925,8 +956,8 @@ class SettingsViewModel @Inject constructor(
                 File(appContext.getExternalFilesDir(null), "downloads").deleteRecursively()
             } catch (_: Exception) { }
             _messages.tryEmit(
-                if (deleted > 0) "Deleted $deleted download${if (deleted == 1) "" else "s"}"
-                else "No downloads to delete"
+                if (deleted > 0) UiText.Plural(R.plurals.settings_deleted_downloads, deleted)
+                else UiText.Res(R.string.settings_no_downloads_to_delete)
             )
         }
     }
@@ -939,7 +970,7 @@ class SettingsViewModel @Inject constructor(
             if (result.isFailure) {
                 // Report the real outcome instead of the old unconditional
                 // "Library imported" success toast fired on a corrupt file.
-                _messages.tryEmit("Import failed: invalid backup file")
+                _messages.tryEmit(UiText.Res(R.string.settings_import_invalid_backup))
                 return@launch
             }
             // Auto-sync to Supabase if signed in
@@ -952,7 +983,7 @@ class SettingsViewModel @Inject constructor(
             } else {
                 Log.w("ImportSync", "Not signed in - skipping Supabase sync")
             }
-            _messages.tryEmit("Library imported")
+            _messages.tryEmit(UiText.Res(R.string.settings_library_imported))
         }
     }
 
@@ -960,52 +991,78 @@ class SettingsViewModel @Inject constructor(
     // through SpotifyImportForegroundService — no in-ViewModel import path
     // should exist here, or a big playlist dies when the screen closes.
 
-    // --- Instance actions ---
-    private fun loadInstances() {
+    /**
+     * Check a typed-in address and add it when it serves anything.
+     *
+     * A server that serves nothing is not added: an entry that can never be
+     * used would sit in the list looking configured. The dialog shows why each
+     * service didn't answer instead, which is the part worth reading.
+     */
+    fun addApi(raw: String) {
+        val url = tf.monochrome.android.data.api.ApiServers.normalizeUrl(raw)
+        if (url == null) {
+            _addApiState.value = AddApiState.Invalid
+            return
+        }
+        if (apiServers.value.any { it.url.equals(url, ignoreCase = true) }) {
+            _addApiState.value = AddApiState.AlreadyAdded(url)
+            return
+        }
+        _addApiState.value = AddApiState.Checking(url)
         viewModelScope.launch {
-            try {
-                _apiInstances.value = instanceManager.getInstances(InstanceType.API)
-                _streamingInstances.value = instanceManager.getInstances(InstanceType.STREAMING)
-            } catch (_: Exception) {}
+            val result = apiServerProber.probe(url)
+            if (result.services.isNotEmpty()) {
+                val current = preferences.apiServers.first()
+                preferences.setApiServers(
+                    current + tf.monochrome.android.data.api.ApiServer(
+                        url = url,
+                        services = result.services,
+                        checkedAt = System.currentTimeMillis(),
+                    )
+                )
+            }
+            _addApiState.value = AddApiState.Done(result)
         }
     }
 
-    fun refreshInstances() {
+    fun resetAddApi() {
+        _addApiState.value = AddApiState.Idle
+    }
+
+    /** Ask a listed server again — after it gained a key, say, or lost one. */
+    fun recheckApi(url: String) {
+        if (url in _apiChecking.value) return
+        _apiChecking.value = _apiChecking.value + url
         viewModelScope.launch {
-            _instancesRefreshing.value = true
-            try {
-                instanceManager.refreshInstances()
-                _apiInstances.value = instanceManager.getInstances(InstanceType.API)
-                _streamingInstances.value = instanceManager.getInstances(InstanceType.STREAMING)
-            } catch (_: Exception) {}
-            _instancesRefreshing.value = false
+            val result = apiServerProber.probe(url)
+            val current = preferences.apiServers.first()
+            preferences.setApiServers(current.map {
+                if (it.url == url) it.copy(services = result.services, checkedAt = System.currentTimeMillis()) else it
+            })
+            _apiChecking.value = _apiChecking.value - url
         }
     }
 
-    fun setCustomEndpoint(endpoint: String?) {
+    fun removeApi(url: String) {
         viewModelScope.launch {
-            preferences.setCustomApiEndpoint(endpoint)
-            loadInstances()
+            preferences.setApiServers(preferences.apiServers.first().filterNot { it.url == url })
         }
     }
 
-    fun setQobuzEndpoint(endpoint: String?) {
+    /** Move a server one place up, so it wins the services it shares with the one above. */
+    fun moveApiUp(url: String) {
         viewModelScope.launch {
-            preferences.setQobuzInstanceUrl(endpoint)
-        }
-    }
-
-    fun setSourceMode(mode: tf.monochrome.android.data.preferences.SourceMode) {
-        viewModelScope.launch {
-            preferences.setSourceMode(mode)
-            loadInstances()
+            val list = preferences.apiServers.first().toMutableList()
+            val i = list.indexOfFirst { it.url == url }
+            if (i <= 0) return@launch
+            list.add(i - 1, list.removeAt(i))
+            preferences.setApiServers(list)
         }
     }
 
     fun setDevModeEnabled(enabled: Boolean) {
         viewModelScope.launch {
             preferences.setDevModeEnabled(enabled)
-            loadInstances()
         }
     }
 
@@ -1053,11 +1110,18 @@ class SettingsViewModel @Inject constructor(
     }
 
     private fun formatSize(bytes: Long): String {
-        return when {
-            bytes < 1024 -> "$bytes B"
-            bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-            bytes < 1024 * 1024 * 1024 -> String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
-            else -> String.format(Locale.US, "%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
-        }
+        // The platform's own units and number format ("1,2 Mo" in French).
+        return android.text.format.Formatter.formatShortFileSize(appContext, bytes)
     }
+}
+
+/** Where the Add API dialog is. */
+sealed interface AddApiState {
+    data object Idle : AddApiState
+    /** Not something that can be a server address. */
+    data object Invalid : AddApiState
+    data class AlreadyAdded(val url: String) : AddApiState
+    data class Checking(val url: String) : AddApiState
+    /** Checked; added when [ProbeResult.services] is non-empty. */
+    data class Done(val result: tf.monochrome.android.data.api.ProbeResult) : AddApiState
 }

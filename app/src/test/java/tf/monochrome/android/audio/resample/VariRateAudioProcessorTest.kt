@@ -199,4 +199,67 @@ class VariRateAudioProcessorTest {
     }
 
     private fun Double.pow(e: Double) = Math.pow(this, e)
+
+    // ── Multichannel ─────────────────────────────────────────────────────
+
+    /** The kernel's half-width: input frames held back until end of stream. */
+    private val LOOKAHEAD = 32
+
+    /** Interleaved float [frames] x [channels], channel c a sine at its own frequency. */
+    private fun multichannel(frames: Int, channels: Int): FloatArray =
+        FloatArray(frames * channels) { i ->
+            val c = i % channels
+            val n = i / channels
+            (0.5 * sin(2.0 * PI * (220.0 + 110.0 * c) * n / fs)).toFloat()
+        }
+
+    private fun resample(input: FloatArray, channels: Int, ratio: Float): FloatArray {
+        val p = VariRateAudioProcessor()
+        p.configure(AudioFormat(fs, channels, C.ENCODING_PCM_FLOAT))
+        p.setRatio(ratio)
+        p.flush()
+        assertTrue("$channels channels should be accepted", p.isActive)
+        val out = ArrayList<Float>()
+        val chunk = 1000 * channels
+        var at = 0
+        while (at < input.size) {
+            val n = minOf(chunk, input.size - at)
+            val buf = ByteBuffer.allocateDirect(n * 4).order(ByteOrder.nativeOrder())
+            for (k in 0 until n) buf.putFloat(input[at + k])
+            buf.flip()
+            p.queueInput(buf)
+            val o = p.output
+            while (o.hasRemaining()) out += o.float
+            at += n
+        }
+        return out.toFloatArray()
+    }
+
+    @Test
+    fun `a 5_1 bed is resampled channel for channel, exactly as each would be alone`() {
+        // Atmos beds and spatial-audio streams used to pass through at 1.00x
+        // while the clock ran at the new speed.
+        val channels = 6
+        val frames = 24_000
+        val input = multichannel(frames, channels)
+        val wide = resample(input, channels, 1.25f)
+        val outFrames = wide.size / channels
+        for (c in 0 until channels) {
+            val mono = resample(FloatArray(frames) { input[it * channels + c] }, 1, 1.25f)
+            assertEquals("channel $c length", mono.size, outFrames)
+            for (n in 0 until outFrames) {
+                assertEquals("channel $c frame $n", mono[n], wide[n * channels + c], 0f)
+            }
+        }
+        // Short by the filter's lookahead (32 input frames), which only
+        // comes out at end of stream.
+        assertEquals((frames - LOOKAHEAD) / 1.25, outFrames.toDouble(), 2.0)
+    }
+
+    @Test
+    fun `a 7_1_4 bed is accepted and keeps its channel count`() {
+        val out = resample(multichannel(4_800, 12), 12, 0.8f)
+        assertEquals(0, out.size % 12)
+        assertEquals((4_800 - LOOKAHEAD) / 0.8, (out.size / 12).toDouble(), 2.0)
+    }
 }

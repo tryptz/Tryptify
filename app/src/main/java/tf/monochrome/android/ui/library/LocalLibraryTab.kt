@@ -109,6 +109,9 @@ import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.util.safTreeUriToPath
 import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.detail.LocalFacet
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
@@ -267,7 +270,7 @@ fun LocalLibraryTab(
             open = showSearch,
             query = searchQuery,
             onQueryChange = { viewModel.setSearchQuery(it) },
-            placeholder = "Search local library…",
+            placeholder = stringResource(R.string.search_local_library),
             onClose = { showSearch = false; viewModel.setSearchQuery("") },
         ) { searchTopInset ->
         Column(modifier = Modifier.fillMaxSize().padding(top = searchTopInset)) {
@@ -301,11 +304,11 @@ fun LocalLibraryTab(
                 IconButton(onClick = { openCategoryId = null }) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back to library",
+                        contentDescription = stringResource(R.string.back_to_library),
                     )
                 }
                 Text(
-                    openCategory.label,
+                    stringResource(openCategory.label),
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
@@ -325,7 +328,7 @@ fun LocalLibraryTab(
                 SortMenu(keys = keys, current = current, onChange = onChange)
             }
             IconButton(onClick = { showSearch = !showSearch; if (!showSearch) viewModel.setSearchQuery("") }) {
-                Icon(Icons.Default.Search, contentDescription = "Search")
+                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.tab_search))
             }
             IconButton(
                 // The queue is fetched when it is needed, not held on the
@@ -337,10 +340,10 @@ fun LocalLibraryTab(
                 },
                 enabled = trackCount > 0
             ) {
-                Icon(Icons.Default.Shuffle, contentDescription = "Shuffle all")
+                Icon(Icons.Default.Shuffle, contentDescription = stringResource(R.string.shuffle_all))
             }
             IconButton(onClick = { folderPickerLauncher.launch(null) }) {
-                Icon(Icons.Default.CreateNewFolder, contentDescription = "Add folder")
+                Icon(Icons.Default.CreateNewFolder, contentDescription = stringResource(R.string.add_folder))
             }
             IconButton(
                 onClick = {
@@ -357,7 +360,7 @@ fun LocalLibraryTab(
                     }
                 }
             ) {
-                Icon(Icons.Default.Refresh, contentDescription = "Scan")
+                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.action_scan))
             }
         }
 
@@ -446,13 +449,13 @@ private fun SortMenu(
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true }) {
-            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort")
+            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = stringResource(R.string.action_sort))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             keys.forEach { key ->
                 val selected = key == current.key
                 DropdownMenuItem(
-                    text = { Text(key.label) },
+                    text = { Text(stringResource(key.label)) },
                     onClick = {
                         onChange(
                             if (selected) current.copy(ascending = !current.ascending)
@@ -465,7 +468,7 @@ private fun SortMenu(
                             Icon(
                                 if (current.ascending) Icons.Default.ArrowUpward
                                 else Icons.Default.ArrowDownward,
-                                contentDescription = if (current.ascending) "Ascending" else "Descending",
+                                contentDescription = if (current.ascending) stringResource(R.string.sort_ascending) else stringResource(R.string.sort_descending),
                                 modifier = Modifier.size(MonoDimens.iconSm),
                             )
                         }
@@ -498,12 +501,12 @@ private fun EmptyLocalLibrary() {
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                "No local music found",
+                stringResource(R.string.local_empty),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                "Tap the refresh button to scan your device",
+                stringResource(R.string.local_empty_detail),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
             )
@@ -532,23 +535,23 @@ private fun PermissionRequest(
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                "Audio permission required",
+                stringResource(R.string.audio_permission_title),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 if (shouldShowRationale)
-                    "Tryptify needs access to your audio files to scan and play local music. Please grant the permission."
+                    stringResource(R.string.audio_permission_denied)
                 else
-                    "Grant access to your audio files so Tryptify can scan and play your local music library.",
+                    stringResource(R.string.audio_permission_rationale),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
             Spacer(modifier = Modifier.height(24.dp))
             OutlinedButton(onClick = onRequestPermission) {
-                Text("Grant permission")
+                Text(stringResource(R.string.grant_permission))
             }
         }
     }
@@ -563,12 +566,12 @@ private fun ScanProgressBar(progress: ScanProgress?) {
     ) {
         when (progress) {
             is ScanProgress.Started -> {
-                Text("Scanning ${progress.totalFiles} files...", style = MaterialTheme.typography.bodySmall)
+                Text(pluralStringResource(R.plurals.scanning_files, progress.totalFiles, progress.totalFiles), style = MaterialTheme.typography.bodySmall)
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
             is ScanProgress.Processing -> {
                 Text(
-                    "Scanning: ${progress.currentFile}",
+                    stringResource(R.string.scanning_file, progress.currentFile),
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -584,14 +587,14 @@ private fun ScanProgressBar(progress: ScanProgress?) {
             }
             is ScanProgress.Complete -> {
                 Text(
-                    "Scan complete: ${progress.scanned} files, ${progress.added} new",
+                    stringResource(R.string.scan_complete, pluralStringResource(R.plurals.files_count, progress.scanned, progress.scanned), pluralStringResource(R.plurals.new_count, progress.added, progress.added)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary
                 )
             }
             is ScanProgress.Error -> {
                 Text(
-                    "Scan error: ${progress.message}",
+                    stringResource(R.string.scan_error, progress.message),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error
                 )
@@ -690,7 +693,7 @@ fun ArtistList(
     Box {
         LazyColumn(
             state = state,
-            contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
+            contentPadding = PaddingValues(bottom = tf.monochrome.android.ui.navigation.bottomChromePadding)
         ) {
             items(artists, key = { it.id }) { artist ->
                 Row(
@@ -727,7 +730,7 @@ fun ArtistList(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            "${artist.albumCount} albums, ${artist.trackCount} tracks",
+                            stringResource(R.string.count_pair, pluralStringResource(R.plurals.albums_count, artist.albumCount, artist.albumCount), pluralStringResource(R.plurals.track_count, artist.trackCount, artist.trackCount)),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -810,6 +813,8 @@ private fun SongRow(
                         onAlbumClick = { navController.openAlbum(track.albumId) },
                         modifier = Modifier.weight(1f, fill = false)
                     )
+                    Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
+                    tf.monochrome.android.ui.components.SourcePill(track.sourceType)
                     track.qualityBadge?.let { badge ->
                         Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
                         Text(
@@ -831,7 +836,7 @@ private fun SongRow(
             ) {
                 Icon(
                     Icons.Default.MoreVert,
-                    contentDescription = "More options",
+                    contentDescription = stringResource(R.string.action_more_options),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )
@@ -860,7 +865,7 @@ fun SongList(
     Box {
         LazyColumn(
             state = state,
-            contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
+            contentPadding = PaddingValues(bottom = tf.monochrome.android.ui.navigation.bottomChromePadding)
         ) {
             items(
                 count = tracks.itemCount,
@@ -905,7 +910,7 @@ fun SongList(
     Box {
         LazyColumn(
             state = state,
-            contentPadding = PaddingValues(bottom = MonoDimens.listBottomPadding)
+            contentPadding = PaddingValues(bottom = tf.monochrome.android.ui.navigation.bottomChromePadding)
         ) {
             items(tracks, key = { it.id }, contentType = { "track" }) { track ->
                 SongRow(
@@ -932,7 +937,7 @@ fun FolderList(
             state = state,
             contentPadding = PaddingValues(
                 top = 8.dp,
-                bottom = MonoDimens.listBottomPadding,
+                bottom = tf.monochrome.android.ui.navigation.bottomChromePadding,
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -990,7 +995,7 @@ fun FolderList(
                     // found nothing in, said before you tap it rather than by a
                     // blank screen afterwards.
                     Text(
-                        if (folder.trackCount == 1) "1 track" else "${folder.trackCount} tracks",
+                        pluralStringResource(R.plurals.track_count, folder.trackCount, folder.trackCount),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,

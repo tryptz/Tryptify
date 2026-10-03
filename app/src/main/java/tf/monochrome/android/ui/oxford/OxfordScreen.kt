@@ -45,8 +45,10 @@ import kotlin.math.log10
 import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.roundToInt
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 // ----------------------------------------------------------------------------
 // Shared M3 tokens — thin wrapper over MaterialTheme.colorScheme so the two
@@ -424,7 +426,7 @@ private fun OxfordPanel(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Outlined.HelpOutline,
-                            contentDescription = "Help",
+                            contentDescription = stringResource(R.string.eq_help),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp),
                         )
@@ -476,7 +478,7 @@ private fun PresetRail(
 // Tutorial bottom sheet
 // ----------------------------------------------------------------------------
 
-data class TutorialSection(val heading: String, val body: String)
+data class TutorialSection(@androidx.annotation.StringRes val heading: Int, @androidx.annotation.StringRes val body: Int)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -495,7 +497,7 @@ private fun TutorialSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(bottom = LocalMiniPlayerInset.current)
+                .padding(bottom = LocalBottomChromeInset.current)
                 .padding(horizontal = 20.dp, vertical = 4.dp)
                 .padding(bottom = 24.dp),
         ) {
@@ -513,14 +515,14 @@ private fun TutorialSheet(
             Spacer(Modifier.height(18.dp))
             sections.forEachIndexed { i, section ->
                 Text(
-                    text = section.heading,
+                    text = stringResource(section.heading),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = section.body,
+                    text = stringResource(section.body),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 if (i != sections.lastIndex) Spacer(Modifier.height(14.dp))
@@ -545,7 +547,7 @@ fun InflatorScreen(
     if (showHelp) {
         TutorialSheet(
             title = "Seap Inflator",
-            subtitle = "Psycho-acoustic enhancer — makes tracks feel louder and richer without raising true peak level.",
+            subtitle = stringResource(R.string.eq_psycho_acoustic_enhancer_makes_tracks_feel),
             sections = inflatorTutorialSections(),
             onDismiss = { showHelp = false },
         )
@@ -705,7 +707,7 @@ fun CompressorScreen(
     if (showHelp) {
         TutorialSheet(
             title = "Seap Compressor",
-            subtitle = "Dynamics processor — tames loud peaks and evens out levels.",
+            subtitle = stringResource(R.string.eq_dynamics_processor_tames_loud_peaks_and_evens),
             sections = compressorTutorialSections(),
             onDismiss = { showHelp = false },
         )
@@ -894,7 +896,7 @@ fun OxfordEffectsTabs(
                 IconButton(onClick = onBack) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
+                        contentDescription = stringResource(R.string.settings_back),
                     )
                 }
                 Text(
@@ -986,67 +988,22 @@ private fun matchesCompressor(a: CompressorState, b: CompressorState): Boolean =
 // ----------------------------------------------------------------------------
 
 private fun inflatorTutorialSections(): List<TutorialSection> = listOf(
-    TutorialSection(
-        "What it does",
-        "The Inflator shapes the waveform with low-order harmonic distortion driven by the CURVE knob. Unlike a limiter, it doesn't just cap peaks — it adds perceived loudness, density, and warmth or brightness depending on the curve's sign. Keep EFFECT IN lit to hear the processing.",
-    ),
-    TutorialSection(
-        "INPUT / OUTPUT",
-        "INPUT drives the signal into the shaping stage (harder drive = more effect). OUTPUT trims the result back to unity. On mixes, nudge INPUT up and OUTPUT down to taste — they're independent, not linked.",
-    ),
-    TutorialSection(
-        "EFFECT",
-        "How much of the shaped signal is blended in (0–100 %). Below ~30 % you're in parallel territory; above 60 % the effect becomes obvious. If in doubt, sweep EFFECT while A/B-ing the EFFECT IN button.",
-    ),
-    TutorialSection(
-        "CURVE",
-        "Negative values (-50…0) push even-order harmonics — warmer, analogue-ish. Positive values (0…+50) emphasise odd-order — sharper, more present. Zero is neutral and the mildest setting.",
-    ),
-    TutorialSection(
-        "CLIP 0 dB",
-        "Hard ceiling at 0 dBFS applied on the way out. Leave on for safety when mastering; turn off if you're feeding another plugin that has its own ceiling management.",
-    ),
-    TutorialSection(
-        "BAND SPLIT",
-        "Splits the signal into low / mid / high bands and processes each independently before recombining. Produces tighter results on full mixes and drum buses. More CPU — but worth it on masters.",
-    ),
-    TutorialSection(
-        "Start here",
-        "Try the WARMTH preset on a vocal or bass, PUNCH on a drum bus, and LOUD on a finished stereo mix. Once you hear what the curve does, you'll reach for it often.",
-    ),
+    TutorialSection(R.string.oxford_help_0_title, R.string.oxford_help_0_body),
+    TutorialSection(R.string.oxford_help_1_title, R.string.oxford_help_1_body),
+    TutorialSection(R.string.oxford_help_2_title, R.string.oxford_help_2_body),
+    TutorialSection(R.string.oxford_help_3_title, R.string.oxford_help_3_body),
+    TutorialSection(R.string.oxford_help_4_title, R.string.oxford_help_4_body),
+    TutorialSection(R.string.oxford_help_5_title, R.string.oxford_help_5_body),
+    TutorialSection(R.string.oxford_help_6_title, R.string.oxford_help_6_body),
 )
 
 private fun compressorTutorialSections(): List<TutorialSection> = listOf(
-    TutorialSection(
-        "What it does",
-        "A compressor reduces gain whenever the signal exceeds a threshold — quieter parts pass through untouched, louder parts get pushed down. Use it to even out performances, add punch, or glue a mix together. EFFECT IN lights up when the compressor is active.",
-    ),
-    TutorialSection(
-        "THRESH (Threshold)",
-        "The level above which compression engages. Lower threshold = more of the signal is compressed. Watch the GR meter — for musical results aim for 2–6 dB reduction on peaks.",
-    ),
-    TutorialSection(
-        "RATIO",
-        "How aggressively signal above threshold is reduced. 2:1 is gentle, 4:1 is classic, 8:1+ is heavy-handed. Ratios above 10:1 start to behave like a limiter.",
-    ),
-    TutorialSection(
-        "ATTACK",
-        "How fast the compressor clamps down once the signal crosses threshold. Fast (0.1–5 ms) catches transients — kills punch if over-used. Slow (20–50 ms) lets transients through for more snap.",
-    ),
-    TutorialSection(
-        "RELEASE",
-        "How fast the gain recovers after the signal drops back below threshold. Short releases (10–80 ms) pump and breathe with the music — great for drums. Long releases (200 ms+) are smoother, better for vocals and master buses.",
-    ),
-    TutorialSection(
-        "MAKEUP",
-        "Output gain applied after compression so the processed signal matches the bypass level. Bump it up by roughly the amount of reduction shown on the GR meter.",
-    ),
-    TutorialSection(
-        "GR meter",
-        "Gain Reduction display — tells you how many dB the compressor is currently pulling down. If it's pinned, your threshold is too low or ratio too high. If it never moves, threshold is too high.",
-    ),
-    TutorialSection(
-        "Start here",
-        "VOCAL preset for leads, DRUM BUS to tighten drums, GLUE on your stereo mix bus, LIMITER only on the final master-chain output.",
-    ),
+    TutorialSection(R.string.oxford_help_7_title, R.string.oxford_help_7_body),
+    TutorialSection(R.string.oxford_help_8_title, R.string.oxford_help_8_body),
+    TutorialSection(R.string.oxford_help_9_title, R.string.oxford_help_9_body),
+    TutorialSection(R.string.oxford_help_10_title, R.string.oxford_help_10_body),
+    TutorialSection(R.string.oxford_help_11_title, R.string.oxford_help_11_body),
+    TutorialSection(R.string.oxford_help_12_title, R.string.oxford_help_12_body),
+    TutorialSection(R.string.oxford_help_13_title, R.string.oxford_help_13_body),
+    TutorialSection(R.string.oxford_help_14_title, R.string.oxford_help_14_body),
 )

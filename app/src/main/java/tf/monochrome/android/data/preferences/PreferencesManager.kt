@@ -40,8 +40,6 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 
 /** Which catalog(s) drive search and discovery surfaces. BOTH runs TIDAL + Qobuz
  *  + Apple Music; the *_ONLY modes restrict to a single catalog. */
-enum class SourceMode { BOTH, TIDAL_ONLY, QOBUZ_ONLY }
-
 /**
  * Format asked of the Apple wrapper. These are the wrapper's own format codes,
  * not a mapping of [AudioQuality] — Apple's ladder doesn't line up with the
@@ -131,10 +129,6 @@ class PreferencesManager @Inject constructor(
         private val REPEAT_MODE = intPreferencesKey("repeat_mode")
         private val VOLUME = doublePreferencesKey("volume")
 
-        // Instance cache
-        private val INSTANCES_CACHE = stringPreferencesKey("instances_cache")
-        private val INSTANCES_CACHE_TIMESTAMP = longPreferencesKey("instances_cache_timestamp")
-
         // Theme
         private val THEME = stringPreferencesKey("theme")
         private val THEME_PAPER = stringPreferencesKey("theme_paper")
@@ -181,9 +175,10 @@ class PreferencesManager @Inject constructor(
         private val APPLE_WRAPPER_URL = stringPreferencesKey("apple_wrapper_url")
         private val APPLE_WRAPPER_SECRET = stringPreferencesKey("apple_wrapper_secret")
         private val APPLE_ATMOS_PREFERRED = booleanPreferencesKey("apple_atmos_preferred")
+        private val TIDAL_ATMOS_PREFERRED = booleanPreferencesKey("tidal_atmos_preferred")
         private val APPLE_QUALITY = stringPreferencesKey("apple_quality")
         private val DEV_MODE_ENABLED = booleanPreferencesKey("dev_mode_enabled")
-        private val SOURCE_MODE = stringPreferencesKey("source_mode")
+        private val API_SERVERS = stringPreferencesKey("api_servers")
 
         // Lyrics 3D appearance (legacy per-field keys, read for migration only)
         private val LYRICS_3D_ROTATION = floatPreferencesKey("lyrics_3d_rotation")
@@ -202,15 +197,21 @@ class PreferencesManager @Inject constructor(
         // Mini-player liquid-glass settings — same shape as PLAYER_GLASS_JSON but
         // tuned independently (Player Visuals Studio › "Mini Player" tab).
         private val MINI_PLAYER_GLASS_JSON = stringPreferencesKey("mini_player_glass_json")
+        private val WAVE_CANDY_JSON = stringPreferencesKey("wave_candy_json")
+        private val SPECTRUM_WATERFALL_JSON = stringPreferencesKey("spectrum_waterfall_json")
 
         // Atmos renderer profile (mode / target layout / HRTF profile). Kept
         // device-local — the layout tracks the connected DAC and the HRTF is a
         // local measurement — so it is deliberately NOT in SETTINGS_SYNC_KEYS.
         private val RENDERER_PROFILE_JSON = stringPreferencesKey("renderer_profile_json")
+        // The mixer's spatial map: where each channel of a multichannel bed sits.
+        private val SPATIAL_PLACEMENT_JSON = stringPreferencesKey("spatial_placement_json")
 
         // Player / display
         private val PLAYER_DYNAMIC_COLOR = booleanPreferencesKey("player_dynamic_color")
         private val PLAYER_BLURRED_BACKGROUND = booleanPreferencesKey("player_blurred_background")
+        // The bar only ever shows the tabs or the mini player, never both stacked.
+        private val MINI_PLAYER_HIDE_WITH_TABS = booleanPreferencesKey("mini_player_hide_with_tabs")
         // Device-local: which bars a panel has and whether you want them is a
         // property of the phone in your hand, not of the account. Deliberately
         // absent from SETTINGS_SYNC_KEYS.
@@ -272,6 +273,10 @@ class PreferencesManager @Inject constructor(
         private val PITCH_ENGINE = stringPreferencesKey("pitch_engine")
         private val PITCH_QUALITY = stringPreferencesKey("pitch_quality")
         private val SPEED_UNIT_SEMITONES = booleanPreferencesKey("speed_unit_semitones")
+        // BPM as the speed unit. A key of its own beside the semitone one rather
+        // than widening that to three values: a build from before it reads the
+        // semitone key alone and falls back cleanly.
+        private val SPEED_UNIT_BPM = booleanPreferencesKey("speed_unit_bpm")
 
         // Appearance extras
         private val FONT_SCALE = floatPreferencesKey("font_scale")
@@ -279,12 +284,6 @@ class PreferencesManager @Inject constructor(
         // used instead (Configuration.fontScale).
         private val FONT_SCALE_FOLLOW_SYSTEM = booleanPreferencesKey("font_scale_follow_system")
         private val CUSTOM_FONT_URI = stringPreferencesKey("custom_font_uri")
-
-        // Google Auth
-        private val GOOGLE_USER_ID = stringPreferencesKey("google_user_id")
-        private val GOOGLE_DISPLAY_NAME = stringPreferencesKey("google_display_name")
-        private val GOOGLE_EMAIL = stringPreferencesKey("google_email")
-        private val GOOGLE_PHOTO_URL = stringPreferencesKey("google_photo_url")
 
         // Parity features
         private val VISUALIZER_SENSITIVITY = intPreferencesKey("visualizer_sensitivity")
@@ -321,10 +320,10 @@ class PreferencesManager @Inject constructor(
         private val VISUALIZER_OVERLAY_BLEND = stringPreferencesKey("visualizer_overlay_blend")
         private val VISUALIZER_OVERLAY_HIDE_COVER = booleanPreferencesKey("visualizer_overlay_hide_cover")
         private val VISUALIZER_FAVORITE_PRESETS = stringSetPreferencesKey("visualizer_favorite_presets")
-
-        // AI
-        private val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
-        private val AI_RADIO_ENABLED = booleanPreferencesKey("ai_radio_enabled")
+        // Presets this device crashed on, as paths relative to the preset root.
+        // Never synced: a preset that kills one phone's GPU driver can be fine
+        // on the next.
+        private val VISUALIZER_CRASHED_PRESETS = stringSetPreferencesKey("visualizer_crashed_presets")
 
         // Radio ranking weights, all scored on-device by LocalRadioPlanner.
         private val RADIO_WEIGHT_LOCAL_LIBRARY = floatPreferencesKey("radio_weight_local_library")
@@ -344,12 +343,6 @@ class PreferencesManager @Inject constructor(
         private val SPOTIFY_REFRESH_TOKEN = stringPreferencesKey("spotify_refresh_token")
         private val SPOTIFY_TOKEN_EXPIRES_AT = longPreferencesKey("spotify_token_expires_at")
         private val SPOTIFY_USER_NAME = stringPreferencesKey("spotify_user_name")
-
-        // PocketBase
-        private val POCKETBASE_TOKEN = stringPreferencesKey("pocketbase_token")
-        private val POCKETBASE_USER_ID = stringPreferencesKey("pocketbase_user_id")
-        private val POCKETBASE_EMAIL = stringPreferencesKey("pocketbase_email")
-        // Home screen cache
 
         // EQ / AutoEQ
         private val EQ_TUTORIAL_SEEN = booleanPreferencesKey("eq_tutorial_seen")
@@ -395,6 +388,7 @@ class PreferencesManager @Inject constructor(
         private val DSP_STATE_JSON = stringPreferencesKey("dsp_state_json")
         private val MIXER_CHANNEL_DYNAMIC = booleanPreferencesKey("mixer_channel_dynamic")
         private val DSP_BLOCK_SIZE = intPreferencesKey("dsp_block_size")
+        private val DSP_SPREAD_CHANNELS = booleanPreferencesKey("dsp_spread_channels")
         private val DOWNLOAD_QUEUE_JSON = stringPreferencesKey("download_queue_json")
 
         // One-shot marker for the move of the cover store out of cacheDir.
@@ -407,6 +401,7 @@ class PreferencesManager @Inject constructor(
             booleanPreferencesKey("usb_exclusive_bit_perfect_enabled")
         private val MULTICHANNEL_DOWNMIX_ENABLED =
             booleanPreferencesKey("multichannel_downmix_enabled")
+        private val HIRES_HAL_OUTPUT_ENABLED = booleanPreferencesKey("hires_hal_output_enabled")
         // Powers of two mirroring the user-facing chip row in Settings.
         // Native engine's static MAX_BLOCK_SIZE caps the largest entry; bump
         // both together if you add another step.
@@ -426,6 +421,8 @@ class PreferencesManager @Inject constructor(
         // device's migration would fire again and drag Home back to the front.
         private val PAGE_ORDER = stringPreferencesKey("page_order")
         private val HIDDEN_PAGES = stringSetPreferencesKey("hidden_pages")
+        // The two pages between Home and Library in the nav bar, comma-separated.
+        private val NAV_BAR_SLOTS = stringPreferencesKey("nav_bar_slots")
 
         // Library sort selections (serialized "<KEY>:asc" / "<KEY>:desc")
         private val SONG_SORT = stringPreferencesKey("library_song_sort")
@@ -467,15 +464,17 @@ class PreferencesManager @Inject constructor(
             FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
             GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, SHOW_EXPLICIT_BADGES,
             NORMALIZATION_ENABLED, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
-            PLAYBACK_SPEED, PRESERVE_PITCH, PITCH_SEMITONES, SPEED_UNIT_SEMITONES,
+            PLAYBACK_SPEED, PRESERVE_PITCH, PITCH_SEMITONES, SPEED_UNIT_SEMITONES, SPEED_UNIT_BPM,
             PITCH_ENGINE, PITCH_QUALITY,
             DOWNLOAD_QUALITY, DOWNLOAD_LYRICS, AUTO_DOWNLOAD_LIKED,
             LASTFM_ENABLED, LASTFM_USERNAME, LISTENBRAINZ_ENABLED,
-            CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, APPLE_WRAPPER_URL, SOURCE_MODE, DEV_MODE_ENABLED,
+            CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, APPLE_WRAPPER_URL, API_SERVERS, DEV_MODE_ENABLED,
             NOW_PLAYING_VIEW_MODE, PLAYER_DYNAMIC_COLOR, PLAYER_BLURRED_BACKGROUND,
+            MINI_PLAYER_HIDE_WITH_TABS,
             ROMAJI_LYRICS, LYRICS_WORD_PROVIDER,
             LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON, GLOBE_FX_JSON, PLAYER_GLASS_JSON,
-            PLAYER_GLASS_CUSTOM_PRESETS_JSON, MINI_PLAYER_GLASS_JSON,
+            PLAYER_GLASS_CUSTOM_PRESETS_JSON, MINI_PLAYER_GLASS_JSON, WAVE_CANDY_JSON,
+            SPECTRUM_WATERFALL_JSON,
             VISUALIZER_SENSITIVITY, VISUALIZER_BRIGHTNESS, VISUALIZER_AUDIO_DELAY_MS,
             VISUALIZER_ENGINE_ENABLED, VISUALIZER_PRESET_ID,
             VISUALIZER_ROTATION_SECONDS, VISUALIZER_PRESET_ROTATION_MODE,
@@ -489,8 +488,7 @@ class PreferencesManager @Inject constructor(
             EQ_BANDS_R_JSON, EQ_STEREO_MODE, SYSTEM_TONE_CONTROLS_JSON,
             PARAM_EQ_ENABLED, PARAM_EQ_ACTIVE_PRESET_ID, PARAM_EQ_PREAMP, PARAM_EQ_BANDS_JSON,
             DSP_ENABLED, DSP_STATE_JSON, MIXER_CHANNEL_DYNAMIC,
-            LIBRARY_TAB_ORDER, PAGE_ORDER, HIDDEN_PAGES, CAR_MODE_BAND_COUNT,
-            AI_RADIO_ENABLED,
+            LIBRARY_TAB_ORDER, PAGE_ORDER, HIDDEN_PAGES, NAV_BAR_SLOTS, CAR_MODE_BAND_COUNT,
             RADIO_WEIGHT_LOCAL_LIBRARY, RADIO_WEIGHT_QOBUZ, RADIO_WEIGHT_SPOTIFY_DISCOVERY,
             RADIO_WEIGHT_CANONICAL_VERSION_BIAS, RADIO_WEIGHT_NOVELTY, RADIO_WEIGHT_FAMILIARITY,
             RADIO_WEIGHT_ARTIST_SIMILARITY, RADIO_WEIGHT_GENRE_TAG_SIMILARITY,
@@ -543,32 +541,12 @@ class PreferencesManager @Inject constructor(
         if (stored <= 0.0) 1.0 else stored
     }
 
-    suspend fun setShuffleEnabled(enabled: Boolean) {
-        dataStore.edit { it[SHUFFLE_ENABLED] = enabled }
-    }
-
     suspend fun setRepeatMode(mode: Int) {
         dataStore.edit { it[REPEAT_MODE] = mode }
     }
 
     suspend fun setVolume(volume: Double) {
         dataStore.edit { it[VOLUME] = volume }
-    }
-
-    // Instance cache
-    val instancesCache: Flow<String?> = dataStore.data.map { prefs ->
-        prefs[INSTANCES_CACHE]
-    }
-
-    val instancesCacheTimestamp: Flow<Long> = dataStore.data.map { prefs ->
-        prefs[INSTANCES_CACHE_TIMESTAMP] ?: 0L
-    }
-
-    suspend fun saveInstancesCache(json: String) {
-        dataStore.edit {
-            it[INSTANCES_CACHE] = json
-            it[INSTANCES_CACHE_TIMESTAMP] = System.currentTimeMillis()
-        }
     }
 
     // Theme
@@ -841,52 +819,10 @@ class PreferencesManager @Inject constructor(
         }
     }
 
-    // Custom API
-    val customApiEndpoint: Flow<String?> = dataStore.data.map { prefs ->
-        prefs[CUSTOM_API_ENDPOINT]
-    }
-
-    suspend fun setCustomApiEndpoint(endpoint: String?) {
-        dataStore.edit {
-            if (endpoint != null) {
-                it[CUSTOM_API_ENDPOINT] = endpoint
-            } else {
-                it.remove(CUSTOM_API_ENDPOINT)
-            }
-        }
-    }
-
     // Qobuz instance — used for downloads. Independent of Dev Mode: any
     // value set here is honored whenever the download path is invoked.
     val qobuzInstanceUrl: Flow<String?> = dataStore.data.map { prefs ->
         prefs[QOBUZ_INSTANCE_URL]
-    }
-
-    suspend fun setQobuzInstanceUrl(endpoint: String?) {
-        dataStore.edit {
-            if (endpoint != null) {
-                it[QOBUZ_INSTANCE_URL] = endpoint
-            } else {
-                it.remove(QOBUZ_INSTANCE_URL)
-            }
-        }
-    }
-
-    // Apple Music instance — the TrypT HiFi server that exposes /api/apple/*.
-    // Usually the same server as the Qobuz instance, so InstanceManager falls back
-    // to the Qobuz URL when this is unset (see appleInstanceOrNull).
-    val appleInstanceUrl: Flow<String?> = dataStore.data.map { prefs ->
-        prefs[APPLE_INSTANCE_URL]
-    }
-
-    suspend fun setAppleInstanceUrl(endpoint: String?) {
-        dataStore.edit {
-            if (endpoint != null) {
-                it[APPLE_INSTANCE_URL] = endpoint
-            } else {
-                it.remove(APPLE_INSTANCE_URL)
-            }
-        }
     }
 
     // Tailnet-direct wrapper/agent: when set, Apple tracks decrypt + stream
@@ -894,19 +830,7 @@ class PreferencesManager @Inject constructor(
     // agent's base URL; the secret matches the agent's AGENT_SECRET.
     val appleWrapperUrl: Flow<String?> = dataStore.data.map { it[APPLE_WRAPPER_URL] }
 
-    suspend fun setAppleWrapperUrl(endpoint: String?) {
-        dataStore.edit {
-            if (endpoint != null) it[APPLE_WRAPPER_URL] = endpoint else it.remove(APPLE_WRAPPER_URL)
-        }
-    }
-
     val appleWrapperSecret: Flow<String?> = dataStore.data.map { it[APPLE_WRAPPER_SECRET] }
-
-    suspend fun setAppleWrapperSecret(secret: String?) {
-        dataStore.edit {
-            if (secret != null) it[APPLE_WRAPPER_SECRET] = secret else it.remove(APPLE_WRAPPER_SECRET)
-        }
-    }
 
     /**
      * Prefer the Dolby Atmos master for Apple tracks. Atmos is a separate
@@ -917,8 +841,12 @@ class PreferencesManager @Inject constructor(
      */
     val appleAtmosPreferred: Flow<Boolean> = dataStore.data.map { it[APPLE_ATMOS_PREFERRED] ?: false }
 
-    suspend fun setAppleAtmosPreferred(enabled: Boolean) {
-        dataStore.edit { it[APPLE_ATMOS_PREFERRED] = enabled }
+    // Play TIDAL tracks' Dolby Atmos mix (via the TrypT HiFi instance) instead
+    // of the stereo stream when one exists.
+    val tidalAtmosPreferred: Flow<Boolean> = dataStore.data.map { it[TIDAL_ATMOS_PREFERRED] ?: false }
+
+    suspend fun setTidalAtmosPreferred(enabled: Boolean) {
+        dataStore.edit { it[TIDAL_ATMOS_PREFERRED] = enabled }
     }
 
     /**
@@ -932,28 +860,46 @@ class PreferencesManager @Inject constructor(
             ?: AppleQuality.ALAC
     }
 
-    suspend fun setAppleQuality(quality: AppleQuality) {
-        dataStore.edit { it[APPLE_QUALITY] = quality.name }
+    /**
+     * The APIs added under Settings › Connections, in the user's priority
+     * order, each with the services it was found to serve.
+     *
+     * Never saved yet means an install from before the list existed: it is
+     * seeded from the old per-catalog fields, so an update keeps a working
+     * setup without anyone re-entering it. The seed is not written back until
+     * the list is first edited.
+     */
+    val apiServers: Flow<List<tf.monochrome.android.data.api.ApiServer>> = dataStore.data.map { prefs ->
+        prefs[API_SERVERS]
+            ?.let { raw ->
+                runCatching { json.decodeFromString<List<tf.monochrome.android.data.api.ApiServer>>(raw) }.getOrNull()
+            }
+            ?: tf.monochrome.android.data.api.ApiServers.fromLegacy(
+                tidalUrl = prefs[CUSTOM_API_ENDPOINT],
+                qobuzUrl = prefs[QOBUZ_INSTANCE_URL],
+                appleUrl = prefs[APPLE_INSTANCE_URL],
+            )
     }
 
     /**
-     * Which catalog(s) drive search/discovery. BOTH (default) is the
-     * existing fan-out behavior; TIDAL_ONLY skips the Qobuz call so search
-     * doesn't surface Qobuz hits; QOBUZ_ONLY skips the TIDAL pool. Stream
-     * playback and downloads still follow the per-track PlaybackSource —
-     * the setting only governs which catalogs feed search results.
+     * Saves the list, and mirrors it onto the old per-catalog keys. Nothing
+     * here reads those for routing any more (InstanceManager reads the list),
+     * but a few call sites ask whether Qobuz is set up, and a downgrade should
+     * find the servers where that build looks for them.
      */
-    val sourceMode: Flow<SourceMode> = dataStore.data.map { prefs ->
-        // A stored "APPLE_ONLY" from before Apple was dropped no longer names a
-        // constant, so valueOf throws, getOrNull swallows it and it reads as
-        // BOTH — which is what anyone left on it should get, since neither the
-        // picker nor search can represent Apple any more.
-        prefs[SOURCE_MODE]?.let { runCatching { SourceMode.valueOf(it) }.getOrNull() }
-            ?: SourceMode.BOTH
-    }
-
-    suspend fun setSourceMode(mode: SourceMode) {
-        dataStore.edit { it[SOURCE_MODE] = mode.name }
+    suspend fun setApiServers(servers: List<tf.monochrome.android.data.api.ApiServer>) {
+        val encoded = json.encodeToString(servers)
+        fun urlFor(service: tf.monochrome.android.data.api.ApiService) =
+            tf.monochrome.android.data.api.ApiServers.serverFor(servers, service)?.url
+        dataStore.edit { prefs ->
+            prefs[API_SERVERS] = encoded
+            urlFor(tf.monochrome.android.data.api.ApiService.TIDAL)
+                ?.let { prefs[CUSTOM_API_ENDPOINT] = it } ?: prefs.remove(CUSTOM_API_ENDPOINT)
+            urlFor(tf.monochrome.android.data.api.ApiService.QOBUZ)
+                ?.let { prefs[QOBUZ_INSTANCE_URL] = it } ?: prefs.remove(QOBUZ_INSTANCE_URL)
+            urlFor(tf.monochrome.android.data.api.ApiService.APPLE)
+                ?.let { prefs[APPLE_INSTANCE_URL] = it } ?: prefs.remove(APPLE_INSTANCE_URL)
+        }
     }
 
     val devModeEnabled: Flow<Boolean> = dataStore.data.map { prefs ->
@@ -1104,6 +1050,34 @@ class PreferencesManager @Inject constructor(
         dataStore.edit { it[ARTWORK_STORE_MIGRATED] = migrated }
     }
 
+    /**
+     * Drops the stored values of settings whose features are gone: Google and
+     * PocketBase sign-in, AI radio and its Gemini key, and the API instance
+     * cache. Without this they would sit in every existing install for ever,
+     * the Gemini key and the PocketBase token among them, read by nothing.
+     *
+     * Writes only when one is still there, so after the first launch it costs
+     * one read. The keys live here and nowhere else: nothing may read them.
+     */
+    suspend fun retireRemovedKeys() {
+        val retired = listOf(
+            stringPreferencesKey("google_user_id"),
+            stringPreferencesKey("google_display_name"),
+            stringPreferencesKey("google_email"),
+            stringPreferencesKey("google_photo_url"),
+            stringPreferencesKey("pocketbase_token"),
+            stringPreferencesKey("pocketbase_user_id"),
+            stringPreferencesKey("pocketbase_email"),
+            stringPreferencesKey("gemini_api_key"),
+            booleanPreferencesKey("ai_radio_enabled"),
+            stringPreferencesKey("instances_cache"),
+            longPreferencesKey("instances_cache_timestamp"),
+        )
+        val stored = dataStore.data.first()
+        if (retired.none { it in stored }) return
+        dataStore.edit { prefs -> retired.forEach { prefs.remove(it) } }
+    }
+
     val crossfadeDuration: Flow<Int> = dataStore.data.map { prefs ->
         prefs[CROSSFADE_DURATION] ?: 0
     }
@@ -1174,19 +1148,18 @@ class PreferencesManager @Inject constructor(
         dataStore.edit { it[PITCH_QUALITY] = quality.name }
     }
 
-    /**
-     * Whether the speed control is expressed in semitones rather than as a
-     * multiplier. Presentation only — the stored speed is a ratio either way.
-     *
-     * It does change what the slider can reach, though: in semitone units it
-     * steps whole intervals at exact 2^(n/12) ratios, which is the difference
-     * between choosing a fifth and landing near one.
-     */
-    val speedUnitSemitones: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[SPEED_UNIT_SEMITONES] ?: false
+    /** Which unit the speed control reads in: BPM wins over semitones. */
+    val speedUnit: Flow<tf.monochrome.android.audio.SpeedUnit> = dataStore.data.map { prefs ->
+        tf.monochrome.android.audio.SpeedUnit.of(
+            semitones = prefs[SPEED_UNIT_SEMITONES] ?: false,
+            bpm = prefs[SPEED_UNIT_BPM] ?: false,
+        )
     }
-    suspend fun setSpeedUnitSemitones(enabled: Boolean) {
-        dataStore.edit { it[SPEED_UNIT_SEMITONES] = enabled }
+    suspend fun setSpeedUnit(unit: tf.monochrome.android.audio.SpeedUnit) {
+        dataStore.edit {
+            it[SPEED_UNIT_SEMITONES] = unit == tf.monochrome.android.audio.SpeedUnit.SEMITONES
+            it[SPEED_UNIT_BPM] = unit == tf.monochrome.android.audio.SpeedUnit.BPM
+        }
     }
     suspend fun setPreservePitch(enabled: Boolean) {
         dataStore.edit { it[PRESERVE_PITCH] = enabled }
@@ -1287,30 +1260,6 @@ class PreferencesManager @Inject constructor(
 
     suspend fun clearRadioSearchHistory() {
         dataStore.edit { it.remove(RADIO_SEARCH_HISTORY_JSON) }
-    }
-
-    // --- Google Auth ---
-    val googleUserId: Flow<String?> = dataStore.data.map { it[GOOGLE_USER_ID] }
-    val googleDisplayName: Flow<String?> = dataStore.data.map { it[GOOGLE_DISPLAY_NAME] }
-    val googleEmail: Flow<String?> = dataStore.data.map { it[GOOGLE_EMAIL] }
-    val googlePhotoUrl: Flow<String?> = dataStore.data.map { it[GOOGLE_PHOTO_URL] }
-
-    suspend fun setGoogleProfile(userId: String, displayName: String?, email: String?, photoUrl: String?) {
-        dataStore.edit {
-            it[GOOGLE_USER_ID] = userId
-            displayName?.let { name -> it[GOOGLE_DISPLAY_NAME] = name }
-            email?.let { e -> it[GOOGLE_EMAIL] = e }
-            photoUrl?.let { url -> it[GOOGLE_PHOTO_URL] = url }
-        }
-    }
-
-    suspend fun clearGoogleProfile() {
-        dataStore.edit {
-            it.remove(GOOGLE_USER_ID)
-            it.remove(GOOGLE_DISPLAY_NAME)
-            it.remove(GOOGLE_EMAIL)
-            it.remove(GOOGLE_PHOTO_URL)
-        }
     }
 
     // --- Parity features ---
@@ -1523,26 +1472,23 @@ class PreferencesManager @Inject constructor(
         }
     }
 
+    val visualizerCrashedPresets: Flow<Set<String>> = dataStore.data.map {
+        it[VISUALIZER_CRASHED_PRESETS] ?: emptySet()
+    }
+    suspend fun addVisualizerCrashedPreset(relativePath: String) {
+        dataStore.edit { prefs ->
+            prefs[VISUALIZER_CRASHED_PRESETS] = (prefs[VISUALIZER_CRASHED_PRESETS] ?: emptySet()) + relativePath
+        }
+    }
+    suspend fun clearVisualizerCrashedPresets() {
+        dataStore.edit { it.remove(VISUALIZER_CRASHED_PRESETS) }
+    }
+
     val nowPlayingViewMode: Flow<NowPlayingViewMode> = dataStore.data.map { prefs ->
         prefs[NOW_PLAYING_VIEW_MODE]?.let { NowPlayingViewMode.valueOf(it) } ?: NowPlayingViewMode.COVER_ART
     }
     suspend fun setNowPlayingViewMode(mode: NowPlayingViewMode) {
         dataStore.edit { it[NOW_PLAYING_VIEW_MODE] = mode.name }
-    }
-
-    // --- AI ---
-    val geminiApiKey: Flow<String?> = dataStore.data.map { it[GEMINI_API_KEY] }
-    val aiRadioEnabled: Flow<Boolean> = dataStore.data.map { it[AI_RADIO_ENABLED] ?: false }
-
-    suspend fun setGeminiApiKey(key: String?) {
-        dataStore.edit {
-            if (key.isNullOrBlank()) it.remove(GEMINI_API_KEY)
-            else it[GEMINI_API_KEY] = key
-        }
-    }
-
-    suspend fun setAiRadioEnabled(enabled: Boolean) {
-        dataStore.edit { it[AI_RADIO_ENABLED] = enabled }
     }
 
     // --- Radio ranking weights ---
@@ -1613,27 +1559,6 @@ class PreferencesManager @Inject constructor(
             it.remove(SPOTIFY_REFRESH_TOKEN)
             it.remove(SPOTIFY_TOKEN_EXPIRES_AT)
             it.remove(SPOTIFY_USER_NAME)
-        }
-    }
-
-    // --- PocketBase ---
-    val pocketBaseToken: Flow<String?> = dataStore.data.map { it[POCKETBASE_TOKEN] }
-    val pocketBaseUserId: Flow<String?> = dataStore.data.map { it[POCKETBASE_USER_ID] }
-    val pocketBaseEmail: Flow<String?> = dataStore.data.map { it[POCKETBASE_EMAIL] }
-
-    suspend fun setPocketBaseAuth(token: String, userId: String, email: String) {
-        dataStore.edit {
-            it[POCKETBASE_TOKEN] = token
-            it[POCKETBASE_USER_ID] = userId
-            it[POCKETBASE_EMAIL] = email
-        }
-    }
-
-    suspend fun clearPocketBaseAuth() {
-        dataStore.edit {
-            it.remove(POCKETBASE_TOKEN)
-            it.remove(POCKETBASE_USER_ID)
-            it.remove(POCKETBASE_EMAIL)
         }
     }
 
@@ -1857,6 +1782,16 @@ class PreferencesManager @Inject constructor(
     }
 
     /**
+     * Whether a multichannel stream is spread across the mixer, one bus per
+     * channel group (front, centre, LFE, surrounds, heights), or runs whole
+     * through bus 1 like stereo. Spread by default.
+     */
+    val dspSpreadChannels: Flow<Boolean> = dataStore.data.map { it[DSP_SPREAD_CHANNELS] ?: true }
+    suspend fun setDspSpreadChannels(value: Boolean) {
+        dataStore.edit { it[DSP_SPREAD_CHANNELS] = value }
+    }
+
+    /**
      * When on, PlaybackService pins the player's output to the
      * currently-attached USB Audio Class DAC (if any) via
      * setPreferredAudioDevice, bypassing the system's mix-rate downsampler
@@ -1883,6 +1818,17 @@ class PreferencesManager @Inject constructor(
     }
 
     /**
+     * Hi-res sources (24-bit, 32-bit, float) keep their resolution on the
+     * normal Android output — Bluetooth, speaker, wired — instead of being
+     * cut to 16 bits before the DSP. Default on; off restores the 16-bit path.
+     */
+    val hiResHalOutputEnabled: Flow<Boolean> =
+        dataStore.data.map { it[HIRES_HAL_OUTPUT_ENABLED] ?: true }
+    suspend fun setHiResHalOutputEnabled(enabled: Boolean) {
+        dataStore.edit { it[HIRES_HAL_OUTPUT_ENABLED] = enabled }
+    }
+
+    /**
      * Fold multichannel (5.1/7.1/16 ch) tracks down to stereo (fixed gain
      * matrix) at the head of the AudioProcessor chain. Default true — the DSP/EQ
      * stages are stereo-only. When false, multichannel PCM passes through
@@ -1897,9 +1843,6 @@ class PreferencesManager @Inject constructor(
 
     // --- Library / Local Media ---
     val excludedPathsJson: Flow<String> = dataStore.data.map { it[EXCLUDED_PATHS_JSON] ?: "[]" }
-    suspend fun setExcludedPaths(pathsJson: String) {
-        dataStore.edit { it[EXCLUDED_PATHS_JSON] = pathsJson }
-    }
 
     /** The excluded paths, decoded. The stored JSON is the source of truth. */
     val excludedPaths: Flow<Set<String>> = excludedPathsJson
@@ -1984,9 +1927,6 @@ class PreferencesManager @Inject constructor(
         prefs[LIBRARY_TAB_ORDER]?.split(",")?.filter { it.isNotBlank() }
             ?: listOf("overview", "local", "playlists", "favorites", "downloads")
     }
-    suspend fun setLibraryTabOrder(order: List<String>) {
-        dataStore.edit { it[LIBRARY_TAB_ORDER] = order.joinToString(",") }
-    }
 
     // --- Page order & visibility (the one flat swipe list) ---
     // Deliberately no default here. Null means "never set", which is the signal
@@ -2004,6 +1944,14 @@ class PreferencesManager @Inject constructor(
     val hiddenPages: Flow<Set<String>> = dataStore.data.map { it[HIDDEN_PAGES] ?: emptySet() }
     suspend fun setHiddenPages(hidden: Set<String>) {
         dataStore.edit { it[HIDDEN_PAGES] = hidden }
+    }
+
+    /** The nav bar's two middle buttons, always two different pages it can hold. */
+    val navBarSlots: Flow<List<String>> = dataStore.data.map { prefs ->
+        tf.monochrome.android.ui.navigation.sanitizeNavBarSlots(prefs[NAV_BAR_SLOTS]?.split(','))
+    }
+    suspend fun setNavBarSlots(slots: List<String>) {
+        dataStore.edit { it[NAV_BAR_SLOTS] = slots.joinToString(",") }
     }
 
     // --- Library sort selections (persist Songs/Albums/Artists sort order) ---
@@ -2191,6 +2139,36 @@ class PreferencesManager @Inject constructor(
         dataStore.edit { it[MINI_PLAYER_GLASS_JSON] = json.encodeToString(settings.clamped()) }
     }
 
+    /** The Wave Candy scope on the artwork and its kick punch. */
+    val waveCandy: Flow<tf.monochrome.android.domain.model.WaveCandySettings> = dataStore.data
+        .map { it[WAVE_CANDY_JSON] }
+        .distinctUntilChanged()
+        .map { raw ->
+            raw
+                ?.let { s -> runCatching { json.decodeFromString<tf.monochrome.android.domain.model.WaveCandySettings>(s) }.getOrNull() }
+                ?.clamped()
+                ?: tf.monochrome.android.domain.model.WaveCandySettings.DEFAULT
+        }
+
+    suspend fun setWaveCandy(settings: tf.monochrome.android.domain.model.WaveCandySettings) {
+        dataStore.edit { it[WAVE_CANDY_JSON] = json.encodeToString(settings.clamped()) }
+    }
+
+    /** The spectrum waterfall over the artwork: its depth, fade and angle. */
+    val spectrumWaterfall: Flow<tf.monochrome.android.domain.model.SpectrumWaterfallSettings> = dataStore.data
+        .map { it[SPECTRUM_WATERFALL_JSON] }
+        .distinctUntilChanged()
+        .map { raw ->
+            raw
+                ?.let { s -> runCatching { json.decodeFromString<tf.monochrome.android.domain.model.SpectrumWaterfallSettings>(s) }.getOrNull() }
+                ?.clamped()
+                ?: tf.monochrome.android.domain.model.SpectrumWaterfallSettings.DEFAULT
+        }
+
+    suspend fun setSpectrumWaterfall(settings: tf.monochrome.android.domain.model.SpectrumWaterfallSettings) {
+        dataStore.edit { it[SPECTRUM_WATERFALL_JSON] = json.encodeToString(settings.clamped()) }
+    }
+
     /** Atmos renderer profile (mode / target layout / HRTF profile id). */
     val rendererProfile: Flow<tf.monochrome.android.domain.model.RendererProfile> = dataStore.data
         .map { it[RENDERER_PROFILE_JSON] }
@@ -2204,6 +2182,20 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setRendererProfile(profile: tf.monochrome.android.domain.model.RendererProfile) {
         dataStore.edit { it[RENDERER_PROFILE_JSON] = json.encodeToString(profile.clamped()) }
+    }
+
+    /** The mixer's spatial map (off, at standard positions, until set). */
+    val spatialPlacement: Flow<tf.monochrome.android.audio.dsp.spatial.SpatialPlacement> = dataStore.data
+        .map { it[SPATIAL_PLACEMENT_JSON] }
+        .distinctUntilChanged()
+        .map { raw ->
+            raw
+                ?.let { s -> runCatching { json.decodeFromString<tf.monochrome.android.audio.dsp.spatial.SpatialPlacement>(s) }.getOrNull() }
+                ?: tf.monochrome.android.audio.dsp.spatial.SpatialPlacement.DEFAULT
+        }
+
+    suspend fun setSpatialPlacement(placement: tf.monochrome.android.audio.dsp.spatial.SpatialPlacement) {
+        dataStore.edit { it[SPATIAL_PLACEMENT_JSON] = json.encodeToString(placement) }
     }
 
     /** User-saved Player Glass themes (empty until the user saves one). */
@@ -2282,6 +2274,15 @@ class PreferencesManager @Inject constructor(
     // shader's uBackdropMix, so the default liquid glass lenses real album
     // tones instead of the flat wash.
     val playerBlurredBackground: Flow<Boolean> = dataStore.data.map { it[PLAYER_BLURRED_BACKGROUND] ?: true }
+    /**
+     * Whether the tab bar and the mini player take turns instead of stacking:
+     * scrolled up shows the tabs alone, scrolled down the folded bar with the
+     * mini player in it. Off by default, which keeps the stack.
+     */
+    val miniPlayerHideWithTabs: Flow<Boolean> = dataStore.data.map { it[MINI_PLAYER_HIDE_WITH_TABS] ?: false }
+    suspend fun setMiniPlayerHideWithTabs(enabled: Boolean) {
+        dataStore.edit { it[MINI_PLAYER_HIDE_WITH_TABS] = enabled }
+    }
     suspend fun setPlayerBlurredBackground(enabled: Boolean) {
         dataStore.edit { it[PLAYER_BLURRED_BACKGROUND] = enabled }
     }

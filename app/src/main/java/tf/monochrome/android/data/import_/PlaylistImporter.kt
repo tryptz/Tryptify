@@ -1,5 +1,6 @@
 package tf.monochrome.android.data.import_
 
+import tf.monochrome.android.R
 import tf.monochrome.android.data.api.SpotifyApiClient
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -12,9 +13,13 @@ import javax.inject.Singleton
  */
 @Singleton
 class PlaylistImporter @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val spotifyApiClient: SpotifyApiClient,
     private val importService: PlaylistImportService,
 ) {
+    /** Messages and the names given to new playlists, in the app's language. */
+    private fun text(id: Int): String = tf.monochrome.android.locale.AppLanguage.wrap(context).getString(id)
+
 
     /** Import from a pasted link — Spotify playlist URLs and spotify: URIs. */
     suspend fun importFromUrl(url: String, strictAlbumMatch: Boolean = false): Result<ImportProgress.Done> {
@@ -22,10 +27,9 @@ class PlaylistImporter @Inject constructor(
         if (playlistId == null) {
             val isYouTube = url.contains("youtube.com/playlist") || url.contains("music.youtube.com/playlist")
             val message = if (isYouTube) {
-                "YouTube Music import is not supported yet — only Spotify playlist links work."
+                text(R.string.import_youtube_unsupported)
             } else {
-                "Unrecognized playlist URL. Paste a Spotify playlist link like " +
-                    "https://open.spotify.com/playlist/…"
+                text(R.string.import_unrecognized_url)
             }
             importService.reportFailure(message)
             return Result.failure(Exception(message))
@@ -46,30 +50,30 @@ class PlaylistImporter @Inject constructor(
     ): Result<ImportProgress.Done> = runCatching {
         importService.reportFetching("Spotify")
         val tracks = spotifyApiClient.getPlaylistTracks(playlistId).getOrThrow()
-        if (tracks.isEmpty()) throw Exception("This Spotify playlist has no importable tracks.")
+        if (tracks.isEmpty()) throw Exception(text(R.string.import_no_tracks))
         val name = knownName?.takeIf { it.isNotBlank() }
             ?: spotifyApiClient.getPlaylistMeta(playlistId).getOrNull()?.name?.takeIf { it.isNotBlank() }
-            ?: "Spotify Playlist"
+            ?: text(R.string.import_default_playlist_name)
         importService.importTracks(
             name = name,
-            description = "Imported from Spotify",
+            description = text(R.string.import_from_spotify),
             tracks = tracks,
             strictAlbumMatch = strictAlbumMatch,
         )
-    }.onFailure { importService.reportFailure(it.message ?: "Spotify import failed") }
+    }.onFailure { importService.reportFailure(it.message ?: text(R.string.import_spotify_failed)) }
 
     suspend fun importSpotifyLikedSongs(strictAlbumMatch: Boolean = false): Result<ImportProgress.Done> =
         runCatching {
             importService.reportFetching("Spotify")
             val tracks = spotifyApiClient.getLikedSongs().getOrThrow()
-            if (tracks.isEmpty()) throw Exception("Your Spotify Liked Songs list is empty.")
+            if (tracks.isEmpty()) throw Exception(text(R.string.import_liked_empty))
             importService.importTracks(
-                name = "Liked Songs (Spotify)",
-                description = "Imported from Spotify",
+                name = text(R.string.import_liked_name),
+                description = text(R.string.import_from_spotify),
                 tracks = tracks,
                 strictAlbumMatch = strictAlbumMatch,
             )
-        }.onFailure { importService.reportFailure(it.message ?: "Spotify import failed") }
+        }.onFailure { importService.reportFailure(it.message ?: text(R.string.import_spotify_failed)) }
 
     companion object {
         // 22-char base62 ID from open.spotify.com/playlist/{id}, /intl-xx/playlist/{id},

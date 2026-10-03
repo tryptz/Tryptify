@@ -65,6 +65,9 @@ object WhatsNew {
     /** What travels between this device and the signed-in account, and when. */
     private const val ACCOUNT_SYNC = "Account sync"
 
+    /** The app as a whole: the languages it speaks, the size of its download. */
+    private const val APP = "The app"
+
     /** The one section heading in use — the Discover page and everything under it. */
     private const val DISCOVER = "Discover (Beta)"
 
@@ -83,6 +86,12 @@ object WhatsNew {
     /** The app's own surfaces — glass, themes, search. */
     private const val LOOK = "Look and feel"
 
+    /** The servers the app talks to, under Settings › Connections. */
+    private const val CONNECTIONS = "Connections"
+
+    /** What Search looks in, and how it shows where each result came from. */
+    private const val SEARCH = "Search and Deezer"
+
     /** The DSP mixer, its buses and the presets that ship with it. */
     private const val MIXER = "Mixer"
 
@@ -92,17 +101,305 @@ object WhatsNew {
     /** The now-playing screen: its artwork, its transport and its dock. */
     private const val PLAYER = "Now playing"
 
+    /** Where the sound goes after decoding, as the Audio Pipeline panel shows it. */
+    private const val PIPELINE = "Audio pipeline"
+
     /** The playback speed panel and the two engines behind it. */
     private const val SPEED = "Speed and pitch"
 
     /** Talking to a USB DAC directly, over UAC2, instead of through Android. */
     private const val USB_DAC = "Exclusive USB DAC"
 
+    /** Moving from one song to the next: crossfades and gapless. */
+    private const val PLAYBACK = "Playback"
+
     /** The projectM visualizer, its preset browser and its rotation. */
     private const val VISUALIZER = "Visualizer"
 
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
+        WhatsNewRelease(
+            versionCode = 192,
+            versionName = "1.9.2",
+            entries = listOf(
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = APP,
+                    title = "Seven languages",
+                    body = "English, Chinese, Japanese, French, Spanish, Turkish and German. Settings › Appearance › Language, or Android's app languages on 13 and later.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PAGES,
+                    title = "Glass nav bar",
+                    body = "Home, Library, Search and two pages you choose, in a glass bar. Scroll down and the mini player folds in.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PAGES,
+                    title = "New Home, Library and Search",
+                    body = "Home shows Recently Played and Liked Songs. Library switches sections with chips. Search is its own page.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PAGES,
+                    title = "Pick the nav bar's buttons",
+                    body = "The two between Home and Library can be Discover, World radio, Playlists, Local, Favorites or Downloads. Settings › Library › Nav bar.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PAGES,
+                    title = "Nav bar or mini player",
+                    body = "Turn on Hide mini player when the nav bar shows (Settings › Library › Nav bar): scroll up for the nav bar, down for the player. Tap the page you're on in the bar to bring the player back.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "Spectrum waterfall",
+                    body = "Older lines of the spectrum recede behind what you hear now. Lines, Ridgeline, Heat or Neon, in Player Visuals Studio.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "Glass and Legacy spectrum",
+                    body = "Glass draws the spectrum as one line of liquid glass over the cover. Legacy brings back the filled spectrum from before the waterfall.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "Spectrum analysis",
+                    body = "Live average, Live max, Average or Max, with knobs for the averaging time and overlap, and the line in the album's colour or one you pick.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "Wave Candy on the cover",
+                    body = "An FL-style oscilloscope along the bottom of the art: stereo or mono, neon or shadow. Settings › Equalizer.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "Kick punch",
+                    body = "The cover jumps on every kick drum. Strength and sensitivity in the Wave Candy settings.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SEARCH,
+                    title = "Deezer",
+                    body = "Search Deezer's songs, albums and artists when an API serves it.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SEARCH,
+                    title = "Source tags everywhere",
+                    body = "Every song, album and artist shows its catalog, and the player says \"via\" when it plays from another.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = DOWNLOADS,
+                    title = "Deezer in full",
+                    body = "Deezer songs play and download in full from Deezer, in FLAC or MP3 320.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = CONNECTIONS,
+                    title = "One list of APIs",
+                    body = "Add any server once; Tryptify finds out which catalogs it serves.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Route any bus to any bus",
+                    body = "Up to 48 buses, with cables, send knobs, and loops greyed out.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Atmos Upmix 9.1.6",
+                    body = "A preset that spreads stereo into 9.1.6 surround.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SPEED,
+                    title = "BPM",
+                    body = "Each song's tempo is measured once and then holds. Tap the BPM to measure again, long-press it to type the song's tempo. Set speed in BPM, multiplier or semitones.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SPEED,
+                    title = "Turntable bend",
+                    body = "Push the bar under the BPM to bend the tempo smoothly, with a click per beat.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = USB_DAC,
+                    title = "Crossfades on a USB DAC",
+                    body = "Crossfade works while Tryptify drives your DAC, across sample rates.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = APP,
+                    title = "31 MB smaller",
+                    body = "The visualizer's presets were packed into the app twice.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYER,
+                    title = "Smoother spectrum",
+                    body = "The waterfall no longer slows the player down.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYER,
+                    title = "Visual Studio in one tap",
+                    body = "Its chip in Settings opens the Studio straight away.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = VISUALIZER,
+                    title = "No more visualizer crashes",
+                    body = "Presets that use pictures Tryptify doesn't ship no longer crash the app. A preset that crashes your phone is flagged and skipped; clear the flags in the Studio's visualizer settings.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = SEARCH,
+                    title = "Cleaner search",
+                    body = "Source filters cover every result type, the bar no longer hides them, and albums open from their own catalog.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PAGES,
+                    title = "Steadier navigation",
+                    body = "A fast double back no longer blanks the screen, and local songs open their own artist and album.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "Mastering-style presets",
+                    body = "Master at 0 dB with a limiter last. Tap a strip to select, again to open.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = SPEED,
+                    title = "Clearer speed panel",
+                    body = "Same-shape buttons, values between − and +.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYBACK,
+                    title = "Smoother crossfades",
+                    body = "No dropouts as a fade starts, and speed and pitch carry through.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYBACK,
+                    title = "TIDAL asks before Qobuz",
+                    body = "When TIDAL can't play a song, you choose whether Qobuz does.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LIBRARY,
+                    title = "Better WAVs",
+                    body = "Float and 8-bit WAVs play right, tags and covers show, rows say \"WAV 24/48\", and \"Artist ~ Title\" names fill the artist.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.REMOVED,
+                    section = SPEED,
+                    title = "Nightcore button",
+                    body = "Use 1.10x with Preserve pitch off.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.REMOVED,
+                    section = CONNECTIONS,
+                    title = "Catalog picker and URL fields",
+                    body = "Replaced by the API list.",
+                ),
+            ),
+        ),
+        WhatsNewRelease(
+            versionCode = 191,
+            versionName = "1.9.1",
+            entries = listOf(
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Up to 16 buses",
+                    body = "Add buses with +, long-press to remove.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Surround across the mixer",
+                    body = "5.1, 7.1.4 and 9.1.6 tracks get a bus per channel group.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Place every channel",
+                    body = "Drag surround channels around a room map; on headphones you hear them there.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Drag the effect graphs",
+                    body = "Pull EQ bands, knees and tails by hand; double-tap to reset.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Five presets per effect",
+                    body = "Mastering-safe presets first, creative ones after.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "Every channel, every effect",
+                    body = "Mixer and EQs keep up to 16 channels.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "New knobs and cards",
+                    body = "Ticks, default marks, themed, with labelled graphs.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "Five effects fixed",
+                    body = "Pitch Shifter, Tape Stop, Dynamics, Resonator and Stereo behave.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "No more 6 dB drop",
+                    body = "The mixer is level with the mixer off.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "Cleaner oversampling",
+                    body = "Linear-phase 2x/4x that stays in time with the dry signal.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "Unbreakable mixer",
+                    body = "No setting can blow up an effect or crash a saved mix.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = SPEED,
+                    title = "Speed everywhere",
+                    body = "Works on hi-res, hi-res Bluetooth and Atmos.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PIPELINE,
+                    title = "Bluetooth explained",
+                    body = "The pipeline panel shows the Bluetooth link and spatial audio.",
+                ),
+            ),
+        ),
         WhatsNewRelease(
             versionCode = 190,
             versionName = "1.9.0",

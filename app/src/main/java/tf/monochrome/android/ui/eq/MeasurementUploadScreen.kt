@@ -46,7 +46,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tf.monochrome.android.domain.model.EqTarget
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
+import androidx.compose.ui.res.pluralStringResource
 
 /**
  * MeasurementUploadScreen - Advanced calibration with headphone measurement upload
@@ -65,7 +68,7 @@ fun MeasurementUploadScreen(
     onCalibrationComplete: () -> Unit
 ) {
     val isCalculating by viewModel.isCalculating.collectAsStateWithLifecycle()
-    val error by viewModel.error.collectAsStateWithLifecycle()
+    val error = viewModel.error.collectAsStateWithLifecycle().value?.resolve(androidx.compose.ui.platform.LocalContext.current)
     val selectedTarget by viewModel.selectedTarget.collectAsStateWithLifecycle()
     val availableTargets by viewModel.availableTargets.collectAsStateWithLifecycle()
     val currentBands by viewModel.currentBands.collectAsStateWithLifecycle()
@@ -84,7 +87,7 @@ fun MeasurementUploadScreen(
         try {
             val rawData = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
             if (rawData.isNullOrEmpty()) {
-                android.widget.Toast.makeText(context, "Couldn't read the selected file", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(context, context.getString(R.string.eq_couldnt_read_file), android.widget.Toast.LENGTH_SHORT).show()
             } else {
                 measurementData = rawData
                 // Pull the file's display name off the SAF URI and use it as
@@ -107,7 +110,7 @@ fun MeasurementUploadScreen(
                 }
             }
         } catch (_: Exception) {
-            android.widget.Toast.makeText(context, "Couldn't read the selected file", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(context, context.getString(R.string.eq_couldnt_read_file), android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -116,7 +119,7 @@ fun MeasurementUploadScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
             .verticalScroll(rememberScrollState())
-            .padding(bottom = LocalMiniPlayerInset.current)
+            .padding(bottom = LocalBottomChromeInset.current)
     ) {
         // Header
         Row(
@@ -126,13 +129,13 @@ fun MeasurementUploadScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "Advanced Calibration",
+                stringResource(R.string.eq_advanced_calibration),
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f)
             )
             IconButton(onClick = onDismiss) {
-                Icon(Icons.Default.Close, "Close")
+                Icon(Icons.Default.Close, stringResource(R.string.action_close))
             }
         }
 
@@ -151,31 +154,31 @@ fun MeasurementUploadScreen(
         ) {
             Column {
                 Text(
-                    "How it works:",
+                    stringResource(R.string.eq_how_it_works),
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 12.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "1. Measure your headphone's frequency response using an app like \"REW\" or \"GRAS\" (CSV format).",
+                    stringResource(R.string.eq_1_measure_your_headphone_s_frequency_response),
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "2. Paste the frequency response data below (format: Frequency (Hz), SPL (dB))",
+                    stringResource(R.string.eq_2_paste_the_frequency_response_data_below_format),
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "3. Select your target curve (Harman, Diffuse Field, etc.)",
+                    stringResource(R.string.eq_3_select_your_target_curve_harman_diffuse_field),
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "4. The algorithm calculates optimal EQ bands to match your target",
+                    stringResource(R.string.eq_4_the_algorithm_calculates_optimal_eq_bands_to),
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -188,7 +191,7 @@ fun MeasurementUploadScreen(
         OutlinedTextField(
             value = headphoneName,
             onValueChange = { headphoneName = it },
-            label = { Text("Headphone Name (Optional)") },
+            label = { Text(stringResource(R.string.eq_headphone_name_optional)) },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
@@ -199,7 +202,7 @@ fun MeasurementUploadScreen(
 
         // Measurement Data Input
         Text(
-            "Frequency Response CSV Data",
+            stringResource(R.string.eq_frequency_response_csv_data),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 16.dp)
@@ -209,7 +212,7 @@ fun MeasurementUploadScreen(
         OutlinedTextField(
             value = measurementData,
             onValueChange = { measurementData = it },
-            label = { Text("Paste measurement data (frequency, gain)") },
+            label = { Text(stringResource(R.string.eq_paste_measurement_data_frequency_gain)) },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(150.dp)
@@ -233,7 +236,7 @@ fun MeasurementUploadScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "Example: 20,80.5\\n25,79.2\\n31.5,78.1\\n...",
+                stringResource(R.string.eq_example_data),
                 fontSize = 10.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -245,7 +248,7 @@ fun MeasurementUploadScreen(
                     contentDescription = null,
                     modifier = Modifier.padding(end = 4.dp)
                 )
-                Text("Import File", fontSize = 12.sp)
+                Text(stringResource(R.string.eq_import_file), fontSize = 12.sp)
             }
         }
 
@@ -257,7 +260,7 @@ fun MeasurementUploadScreen(
 
         // Target Curve Selector
         Text(
-            "Target Curve",
+            stringResource(R.string.settings_target_curve),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 16.dp)
@@ -311,7 +314,7 @@ fun MeasurementUploadScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Number of Bands",
+                    stringResource(R.string.eq_number_of_bands),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
@@ -331,7 +334,7 @@ fun MeasurementUploadScreen(
                 modifier = Modifier.fillMaxWidth()
             )
             Text(
-                "3-31 bands (more bands = more precise but harder to adjust)",
+                stringResource(R.string.eq_3_31_bands_more_bands_more_precise_but_harder_to),
                 fontSize = 10.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -374,7 +377,7 @@ fun MeasurementUploadScreen(
                     .padding(12.dp)
             ) {
                 Text(
-                    "✓ Calibration complete! ${currentBands.size} optimal bands calculated",
+                    pluralStringResource(R.plurals.eq_calibration_done, currentBands.size, currentBands.size),
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                     fontSize = 12.sp
                 )
@@ -393,7 +396,7 @@ fun MeasurementUploadScreen(
                 onClick = onDismiss,
                 modifier = Modifier.weight(1f)
             ) {
-                Text("Cancel")
+                Text(stringResource(R.string.action_cancel))
             }
 
             Spacer(modifier = Modifier.width(8.dp))
@@ -409,7 +412,7 @@ fun MeasurementUploadScreen(
                 modifier = Modifier.weight(1f),
                 enabled = !isCalculating
             ) {
-                Text("Clear")
+                Text(stringResource(R.string.eq_clear))
             }
 
             Spacer(modifier = Modifier.width(8.dp))
@@ -442,7 +445,7 @@ fun MeasurementUploadScreen(
                         modifier = Modifier.padding(end = 8.dp)
                     )
                 }
-                Text(if (isCalculating) "Calculating..." else "Calculate EQ")
+                Text(if (isCalculating) stringResource(R.string.eq_calculating) else stringResource(R.string.eq_calculate))
             }
         }
 
@@ -458,7 +461,7 @@ fun MeasurementUploadScreen(
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 16.dp)
             ) {
-                Text("Apply EQ & Close")
+                Text(stringResource(R.string.eq_apply_eq_close))
             }
         }
 

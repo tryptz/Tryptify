@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import tf.monochrome.android.R
 import tf.monochrome.android.performance.LocalPerformanceProfile
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
 
 /**
  * When to offer the tip bar.
@@ -123,14 +124,14 @@ fun DonateBar(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Enjoying Tryptify?",
+                        text = stringResource(R.string.donate_title),
                         style = MaterialTheme.typography.bodyLarge,
                         color = content,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = "A tip keeps it going",
+                        text = stringResource(R.string.donate_detail),
                         style = MaterialTheme.typography.bodyMedium,
                         color = content.copy(alpha = 0.8f),
                         maxLines = 1,
@@ -140,7 +141,7 @@ fun DonateBar(
                 IconButton(onClick = { onDismiss(neverAgain) }) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = if (neverAgain) "Dismiss for good" else "Dismiss",
+                        contentDescription = if (neverAgain) stringResource(R.string.dismiss_for_good) else stringResource(R.string.action_dismiss),
                         tint = content,
                     )
                 }
@@ -194,7 +195,7 @@ fun DonateBar(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Don't ask again",
+                    text = stringResource(R.string.dont_ask_again),
                     style = MaterialTheme.typography.bodySmall,
                     color = content.copy(alpha = 0.9f),
                 )

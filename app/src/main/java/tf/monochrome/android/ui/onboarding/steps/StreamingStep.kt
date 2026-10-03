@@ -26,11 +26,12 @@ import tf.monochrome.android.R
 import tf.monochrome.android.ui.onboarding.OnboardingStepScaffold
 import tf.monochrome.android.ui.onboarding.OnboardingViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
 
 /**
  * Optional streaming hookups. The catalog sources — TIDAL and Qobuz — both
- * resolve through the self-hosted TrypT HiFi instance (set up in
- * Settings → Instances). Spotify is a separate radio/recommendations connector
+ * resolve through the self-hosted servers added under
+ * Settings → Connections → APIs. Spotify is a separate radio/recommendations connector
  * that runs the PKCE flow in a Custom Tab; its singleTop activity survives the
  * round-trip, so `isConnected` flips live when the callback lands.
  */
@@ -46,11 +47,11 @@ fun StreamingStep(
     val spotifyError by viewModel.spotifyError.collectAsStateWithLifecycle()
 
     OnboardingStepScaffold(
-        title = "Streaming",
-        subtitle = "Optional — connect services now or any time in Settings.",
-        primaryLabel = "Continue",
+        title = stringResource(R.string.streaming),
+        subtitle = stringResource(R.string.streaming_subtitle),
+        primaryLabel = stringResource(R.string.action_continue),
         onPrimary = { viewModel.next() },
-        secondaryLabel = "Skip for now",
+        secondaryLabel = stringResource(R.string.skip_for_now),
         onSecondary = { viewModel.next() }
     ) {
         ServiceCard(
@@ -58,10 +59,9 @@ fun StreamingStep(
             // TIDAL's mark is monochrome — tint it so it reads in light and dark themes.
             tinted = true,
             title = "TIDAL",
-            description = "Hi-res & lossless catalog through your TrypT HiFi instance — " +
-                "the default source, ready once your instance is connected.",
+            description = stringResource(R.string.tidal_service_detail),
             connected = false,
-            buttonLabel = "Set up in Settings",
+            buttonLabel = stringResource(R.string.set_up_in_settings),
             buttonEnabled = true,
             onButtonClick = onQobuzSetup,
             errorText = null
@@ -69,10 +69,9 @@ fun StreamingStep(
         ServiceCard(
             iconRes = R.drawable.logo_qobuz,
             title = "Qobuz",
-            description = "Lossless & hi-res streaming through your TrypT HiFi instance. " +
-                "Setup happens in Settings → Instances — this finishes onboarding and takes you there.",
+            description = stringResource(R.string.qobuz_service_detail),
             connected = false,
-            buttonLabel = "Set up in Settings",
+            buttonLabel = stringResource(R.string.set_up_in_settings),
             buttonEnabled = true,
             onButtonClick = onQobuzSetup,
             errorText = null
@@ -81,14 +80,13 @@ fun StreamingStep(
             iconRes = R.drawable.logo_spotify,
             title = "Spotify",
             description = when {
-                spotifyConnected -> "Connected" +
-                    (spotifyUserName?.let { " as $it" } ?: "") +
-                    " — radio & recommendations, resolved to tracks you own."
-                spotifyConnecting -> "Waiting for Spotify…"
-                else -> "Radio & recommendations, resolved to your local and Qobuz tracks."
+                spotifyConnected -> spotifyUserName?.let { stringResource(R.string.spotify_connected_as, it) }
+                    ?: stringResource(R.string.spotify_connected_plain)
+                spotifyConnecting -> stringResource(R.string.waiting_for_spotify)
+                else -> stringResource(R.string.spotify_service_detail)
             },
             connected = spotifyConnected,
-            buttonLabel = if (spotifyConnected) null else "Connect Spotify",
+            buttonLabel = if (spotifyConnected) null else stringResource(R.string.connect_spotify),
             buttonEnabled = !spotifyConnecting,
             onButtonClick = { viewModel.connectSpotify(context) },
             errorText = spotifyError
@@ -145,7 +143,7 @@ private fun ServiceCard(
                 if (connected) {
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
-                        contentDescription = "Connected",
+                        contentDescription = stringResource(R.string.connected),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(MonoDimens.iconSm)
                     )

@@ -5,8 +5,9 @@ this is style preference: every rule is a bug that was found the hard way,
 usually from a screenshot, and reverting one brings the bug back.
 
 The build these describe is commit `5ec5b072` ("Match the search bars to the mini
-player, and undo the player haze"), so the accepted state can be diffed against
-rather than argued about:
+player, and undo the player haze"), plus the glass tab bar that replaced the page
+list on Home (see "Pages and the tab bar"), so the accepted state can be diffed
+against rather than argued about:
 
 ```
 git diff 5ec5b072 -- app/src/main/java/tf/monochrome/android/ui
@@ -87,6 +88,33 @@ it is not gated on the blurred-background setting either. Its scrim is flat
 (zero height in `uArtScreen`) and read off the bar's own position on screen,
 because the gradient it stands in for is not really there.
 
+The **Glass spectrum on the hero art is the other exception**. It lies on the
+cover itself, so the cover is behind it whatever the blurred-background setting
+says, and the hero hands it the art unconditionally while that style is on. The
+mapping is still honest: the cover box records itself with `backdropFrame`, and
+`playerGlass(artFrame = …)` resolves the pane against that box through
+`anchorInFrame` rather than against the window, so the band lenses the bottom of
+the cover it actually covers. `GlassSpectrumTest` holds the arithmetic.
+
+Its body is drawn solid like every other slab, but **with an inner alpha ramp**:
+nested `DST_OUT` strokes clipped to the body take the rim down to about two
+thirds while the core stays opaque. The shader reads normals off the alpha
+gradient a few pixels either side of each point, which is a hairline on a body
+the width of the cover. Do not replace the ramp with a blur of the edge: the
+output alpha is capped by the input alpha, so a soft edge comes out as a smudge,
+and do not drop it — without it the body reads as a flat pane.
+
+The **waterfall is one mesh, drawn with `drawVertices`**, not a `drawLines`
+and a `drawPath` per line. A stroke wider than a hairline with round caps is
+something the renderer cannot batch: `drawLines` strokes every segment as a
+path of its own, about six thousand a frame across 49 lines, and Ridgeline's
+ground added 49 concave anti-aliased fills on paths that change every frame.
+That halved the player's frame rate. `WaterfallMesh` builds every line as a
+ribbon with a one-pixel transparent fringe (its anti-aliasing) and the ground
+as a strip under it, in back-to-front order, in one or two draws.
+`WaterfallMeshTest` holds the geometry. Below Android 10, where a mesh is not
+hardware-drawn, each line is one stroked path, never `drawLines`.
+
 It is a bitmap and not a live layer capture because it cannot be one:
 `RenderEffect.createRuntimeShaderEffect` binds exactly one input, this shader
 spends it on `content` (the alpha heightfield every bevel normal comes from),
@@ -144,32 +172,78 @@ width) is for picking one icon out of a row, like the transport and dock.
 List rows keep the quieter scale squeeze; a full dome on a wide text row reads
 heavy.
 
-### Pages
+### Pages and the tab bar
 
-**The app has ONE pager over one flat list of pages** — Home, Discover and the
-five former Library sections — held in `APP_PAGES` (`ui/navigation/AppPages.kt`)
-and ordered by the `page_order` preference. There used to be two nested pagers,
-an outer Home/Discover/Library and an inner one over the Library's sections, and
-the whole indicator existed to fold them onto one axis by hand. Do not
-reintroduce a second pager, and do not pin any page to an index: `local` was
-pinned to page 0 for a long time, which is why moving it in Settings did nothing
-and why its arrows were decorative.
+**The app has ONE pager over one flat list of pages** — Home, Discover, World
+radio and the Library sections — held in `APP_PAGES` (`ui/navigation/AppPages.kt`)
+and ordered by the `page_order` preference, plus Search, which is always there.
+There used to be two nested pagers, an outer Home/Discover/Library and an inner
+one over the Library's sections. Do not reintroduce a second pager, and do not
+pin any page to an index: `local` was pinned to page 0 for a long time, which is
+why moving it in Settings did nothing.
 
-**Every page's top bar is a way into Settings.** Pages can be hidden, so any page
-can be the only visible one — and Settings is the only place to make another
-visible again. Discover shipped without a Settings button, which made "hide
-everything but Discover" a three-tap way to strand yourself with no bottom nav
-and no drawer to fall back on. A new page without that button is the same bug.
+**The nav bar and the Library switcher both drive that one pager.** (Users see
+it called the nav bar; the code and this file still say tab bar.) The bar is
+Home · two chosen pages · Library in a glass pill, with Search as a round button
+beside it (`GlassTabBar`, `AppTabs.kt`). Library is one tab over every Library
+section; the chip row at the top of the Library page (`LibrarySectionSwitcher`)
+moves the same pager to a section, and is not a pager of its own. A tab tapped
+from a pushed screen pops back to `home` first, because the pager is only drawn
+while the NavHost is there.
 
-**Never let the visible page list reach zero.** Three layers stop it — Settings
-disables the last eye, the view model refuses the write, and `visiblePages()`
-returns one page regardless — because a pager with no pages is a blank screen
-with no top bar and therefore no way back. The third layer is not redundant: a
-hidden set can arrive from another device's settings sync without either of the
-first two ever running on this one.
+**The bar is the mini player's material, built the mini player's way.** It is a
+sibling of the haze source, never inside it; its slab is drawn solid and its
+glyphs are punched out of it, as the player's action dock does; and it asks
+`rememberLiquidGlassAvailable()` before drawing that slab, falling back to the
+frosted pane with ordinary icons, because a solid slab without the shader is an
+opaque block with holes in it. Its titles are plain text, not punched: the
+glyphs are chunky because the bevel needs about 3dp of stroke to read as an
+edge, and an 11sp title's strokes are thinner than the bevel.
 
-**The indicator counts visible pages and nothing else.** One slot per page,
-position straight off the single pager.
+**Scrolling down folds the mini player into the bar; scrolling up unfolds it.**
+It is driven by nested scroll at the nav host, so every list drives it without
+knowing. Lists pad by the bar's *expanded* height even while it is folded — a
+padding that followed the fold would jolt the list mid-scroll.
+
+**The two middle buttons are the listener's choice**, from `NAV_BAR_CHOICES`:
+Discover, World radio and the Library sections, Discover and World radio by
+default (`nav_bar_slots`, synced). Read them through `sanitizeNavBarSlots`,
+never raw: it guarantees two different pages the bar can hold, whatever came
+from storage or sync. A pinned Library section lights its own button, not
+Library's, and Library skips it, so two buttons never open the same page. A
+hidden page loses its button but keeps its slot.
+
+**"Hide mini player when the nav bar shows" makes the two take turns.** The open bar
+is the tabs alone, with no mini player stacked over them. The folded bar is
+unchanged: the current tab's bubble, the mini player, then Search. Both states
+are one row, so the expanded height lists pad by drops the mini player's row.
+The open bar then has no way to the player except scrolling, which a short page
+cannot do. So a tap on the tab you are already on (otherwise a no-op) folds
+the bar. Do not make that tap switch or reload the page instead, and do not
+start pages folded: tab switching would become two taps.
+
+**The bar is on every screen but four**: the player, the mixer, Oxford and car
+mode, whose own controls run to the bottom edge (`chromeHiddenRoutes`). The
+download pill follows the same list.
+
+**Bottom padding comes from `LocalBottomChromeInset`, never a number.** It is
+measured from where the reading screen ends: pager pages and full-bleed routes
+run under the system bar, so theirs includes it; pushed screens stop above it,
+so theirs does not. Use `bottomChromePadding` for a list's last row. A screen
+that pads the navigation bar itself as well must consume those insets first, as
+the genre map's panel does, or the bar is counted twice. The old flat 80dp fell
+short of the system bar plus the mini player on every page that runs under both.
+
+**Every page's top bar is a way into Settings**, Search's included. The tab bar
+keeps Home reachable from anywhere, which is what makes this hold even with
+pages hidden — but a page without the button is still a page whose own chrome
+cannot reach Settings.
+
+**Home is never hidden, and the Library keeps at least one section.** Settings
+disables those eyes, the view model refuses the write, and `visiblePages()`
+restores them regardless — the third layer is not redundant: a hidden set can
+arrive from another device's settings sync without either of the first two ever
+running on this one. Hiding Discover or Radio removes its tab, nothing more.
 
 ### List rows
 

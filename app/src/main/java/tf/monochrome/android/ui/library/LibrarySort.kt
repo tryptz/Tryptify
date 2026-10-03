@@ -3,19 +3,20 @@ package tf.monochrome.android.ui.library
 import tf.monochrome.android.domain.model.UnifiedAlbum
 import tf.monochrome.android.domain.model.UnifiedArtist
 import tf.monochrome.android.domain.model.UnifiedTrack
+import tf.monochrome.android.R
 
 /**
  * The dimensions the local-library tabs can be sorted by. Not every key applies
  * to every tab — each tab exposes the subset that makes sense for its data (see
  * [SONG_SORT_KEYS] / [ALBUM_SORT_KEYS] / [ARTIST_SORT_KEYS]).
  */
-enum class LibrarySortKey(val label: String) {
-    NAME("Name"),
-    DATE("Date"),
-    FILE_TYPE("File type"),
-    TIME("Time"),
-    TRACKS("Tracks"),
-    ALBUMS("Albums"),
+enum class LibrarySortKey(@androidx.annotation.StringRes val label: Int) {
+    NAME(R.string.sort_name),
+    DATE(R.string.sort_date),
+    FILE_TYPE(R.string.sort_file_type),
+    TIME(R.string.sort_time),
+    TRACKS(R.string.filter_tracks),
+    ALBUMS(R.string.filter_albums),
 }
 
 /** A sort selection: which [key] and the direction. */

@@ -34,8 +34,6 @@ import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.UnifiedAlbum
 import tf.monochrome.android.domain.model.UnifiedArtist
 import tf.monochrome.android.domain.model.UnifiedTrack
-import tf.monochrome.android.domain.usecase.ImportCollectionUseCase
-import tf.monochrome.android.data.sync.BackupManager
 import javax.inject.Inject
 
 /**
@@ -55,8 +53,6 @@ class LocalLibraryViewModel @Inject constructor(
     private val localMediaRepository: LocalMediaRepository,
     private val collectionRepository: CollectionRepository,
     private val scanCoordinator: ScanCoordinator,
-    private val importCollectionUseCase: ImportCollectionUseCase,
-    private val backupManager: BackupManager,
     private val preferencesManager: PreferencesManager
 ) : ViewModel() {
 
@@ -286,10 +282,6 @@ class LocalLibraryViewModel @Inject constructor(
         viewModelScope.launch { scanCoordinator.runFullScan() }
     }
 
-    fun startIncrementalScan() {
-        viewModelScope.launch { scanCoordinator.runIncrementalScan() }
-    }
-
     /** Drops a folder from the library. The files on disk are not touched. */
     fun excludeFolder(path: String) {
         viewModelScope.launch { scanCoordinator.excludeFolder(path) }
@@ -297,36 +289,6 @@ class LocalLibraryViewModel @Inject constructor(
 
     /** Dismiss the terminal scan-progress bar (Complete/Error). */
     fun clearScanProgress() { scanCoordinator.clearProgress() }
-
-    // ── Collection import ───────────────────────────────────────────
-
-    private val _importResult = MutableStateFlow<Result<String>?>(null)
-    val importResult: StateFlow<Result<String>?> = _importResult.asStateFlow()
-
-    fun importCollection(manifestJson: String) {
-        viewModelScope.launch {
-            if (manifestJson.contains("\"favoriteTracks\"") || manifestJson.contains("\"favorites_tracks\"") || manifestJson.contains("\"playlists\"")) {
-                val result = backupManager.importLibrary(manifestJson)
-                if (result.isSuccess) {
-                    _importResult.value = Result.success("Library Backup imported successfully")
-                } else {
-                    _importResult.value = Result.failure(result.exceptionOrNull() ?: Exception("Unknown backup import error"))
-                }
-            } else {
-                _importResult.value = importCollectionUseCase.import(manifestJson)
-            }
-        }
-    }
-
-    fun deleteCollection(collectionId: String) {
-        viewModelScope.launch {
-            importCollectionUseCase.delete(collectionId)
-        }
-    }
-
-    fun clearImportResult() {
-        _importResult.value = null
-    }
 
     // ── Folder browsing ─────────────────────────────────────────────
 

@@ -384,10 +384,6 @@ class GenreChartUseCase @Inject constructor(
         return tagChart(shownAs = ChartWindow.ALL_TIME) ?: windowed
     }
 
-    /** Renumber after filtering so ranks read 1..n rather than the source's gaps. */
-    private fun List<ChartEntry>.reranked(): List<ChartEntry> =
-        mapIndexed { index, entry -> entry.copy(rank = index + 1) }
-
     /**
      * Which of these artists genuinely belong to [genreId].
      *

@@ -271,10 +271,11 @@ class SystemAudioEqController @Inject constructor(
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
         }
+        val text = tf.monochrome.android.locale.AppLanguage.wrap(context)
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("System-wide EQ active")
-            .setContentText("Your AutoEQ correction is being applied to all audio on this device.")
+            .setContentTitle(text.getString(R.string.notif_system_eq_title))
+            .setContentText(text.getString(R.string.notif_system_eq_text))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
@@ -289,10 +290,11 @@ class SystemAudioEqController @Inject constructor(
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_ID,
-                "System-wide EQ",
+                tf.monochrome.android.locale.AppLanguage.wrap(context).getString(R.string.notif_system_eq_channel),
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = "Shown while the system-wide equalizer is applied to all audio."
+                description = tf.monochrome.android.locale.AppLanguage.wrap(context)
+                    .getString(R.string.notif_system_eq_channel_desc)
                 setShowBadge(false)
                 enableVibration(false)
                 setSound(null, null)

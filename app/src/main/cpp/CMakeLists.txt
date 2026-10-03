@@ -6,8 +6,23 @@ project("monochrome_native")
 link_libraries(c++_shared)
 
 # ── ProjectM Visualizer ──────────────────────────────────────────────────
+# projectM's version.h is generated from CMAKE_PROJECT_VERSION_*, which CMake
+# takes from the TOP-level project() — this file's, which has no version — not
+# from projectM's own project(VERSION 4.1.6). They came out empty and
+# ProjectMCWrapper.cpp failed with "expected expression" on any fresh
+# configure; earlier builds only passed on a configure cached before that.
+# Pin them to the vendored projectM's version; keep in step with
+# third_party/projectm/CMakeLists.txt.
+set(CMAKE_PROJECT_VERSION 4.1.6)
+set(CMAKE_PROJECT_VERSION_MAJOR 4)
+set(CMAKE_PROJECT_VERSION_MINOR 1)
+set(CMAKE_PROJECT_VERSION_PATCH 6)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/projectm
     ${CMAKE_CURRENT_BINARY_DIR}/projectm)
+
+# Crash fixes to projectM's own sources, swapped in without touching the
+# submodule. See projectm_patches/projectm_patches.cmake for what and why.
+include(${CMAKE_CURRENT_SOURCE_DIR}/projectm_patches/projectm_patches.cmake)
 
 # The ProjectM subproject defaults to appending 'd' to the library name in
 # debug builds (libprojectM-4d.so / libprojectM-4-playlistd.so), which means
@@ -44,6 +59,12 @@ add_library(monochrome_dsp SHARED
     dsp/dsp_engine.cpp
     dsp/dsp_jni.cpp
     dsp/oxford/oxford_jni.cpp
+    # Wave Candy scope on the artwork: ring + per-frame segment render.
+    dsp/scope/wave_scope.cpp
+    # The spectrum waterfall on the artwork: history + perspective segments.
+    dsp/scope/spectrum_waterfall_jni.cpp
+    # EBU R128 loudness for the Audio Pipeline panel and the master strip.
+    dsp/meter/loudness_jni.cpp
 )
 
 target_include_directories(monochrome_dsp PRIVATE
@@ -168,6 +189,7 @@ target_link_libraries(mysofa z)
 # upmix on the decoded bed PCM. No FFmpeg dependency here.
 add_library(monochrome_atmos_jni SHARED
     atmos/atmos_jni.cpp
+    atmos/placer_jni.cpp
     atmos/render/sofa_loader.cpp
 )
 target_include_directories(monochrome_atmos_jni PRIVATE

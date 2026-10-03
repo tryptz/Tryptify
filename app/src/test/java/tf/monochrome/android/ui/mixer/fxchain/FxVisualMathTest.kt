@@ -80,6 +80,35 @@ class FxVisualMathTest {
     }
 
     @Test
+    fun `the dynamics knee meets the upward curve and the lift is capped`() {
+        // Lo Thr -40, ratio 2, knee 6: at the knee's lower edge (-43 dB) the
+        // curve below gives +1.5 dB; the knee must start from the same value.
+        val below = M.dynamicsGainDb(-43.001f, -40f, 2f, -12f, 4f, 6f)
+        val knee = M.dynamicsGainDb(-42.999f, -40f, 2f, -12f, 4f, 6f)
+        assertEquals(1.5f, below, 0.01f)
+        assertEquals(below, knee, 0.01f)
+        // Silence would be lifted by 80 dB on the bare curve; never past 24.
+        assertEquals(24f, M.dynamicsGainDb(-200f, -40f, 2f, -12f, 4f, 6f), 0.001f)
+    }
+
+    @Test
+    fun `a steeper slope does not stack the resonance`() {
+        // Q 10 at cutoff is one resonant peak, however many stages follow it:
+        // four stacked would be +80 dB; one plus three Butterworth stages at
+        // their -3 dB points is the single peak less 9 dB.
+        val one = M.filterDb(0, 2000f, 2000f, 10f, 0f, 0)
+        val four = M.filterDb(0, 2000f, 2000f, 10f, 0f, 3)
+        assertEquals(one - 9f, four, 0.2f)
+    }
+
+    @Test
+    fun `a shelf's gain is the knob's at any slope`() {
+        for (slope in 0..3) {
+            assertEquals(12f, M.filterDb(6, 19000f, 1000f, 0.707f, 12f, slope), 0.5f)
+        }
+    }
+
+    @Test
     fun `ladder resonance raises a peak at cutoff`() {
         val flat = M.ladderDb(1000f, 1000f, 0f)
         val resonant = M.ladderDb(1000f, 1000f, 80f)

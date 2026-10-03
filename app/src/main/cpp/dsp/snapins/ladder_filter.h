@@ -1,6 +1,6 @@
 #pragma once
 #include "snapin_processor.h"
-#include "oversampler.h"
+#include "iir_oversampler.h"
 #include <cmath>
 #include <algorithm>
 
@@ -34,7 +34,10 @@ public:
 
     void process(float* left, float* right, int numFrames) override {
         // Cutoff to coefficient (bilinear transform approximation)
-        float wc = 2.0f * static_cast<float>(M_PI) * cutoff_ / static_cast<float>(sampleRate_);
+        // Below Nyquist, or tan() below turns negative and the ladder
+        // unstable: 20 kHz at an 8 kHz stream did exactly that.
+        const float fc = std::min(cutoff_, 0.45f * static_cast<float>(sampleRate_));
+        float wc = 2.0f * static_cast<float>(M_PI) * fc / static_cast<float>(sampleRate_);
         // Compensate for 2x oversampling
         float g = std::tan(wc * 0.25f);  // half because 2x OS
         float gComp = g / (1.0f + g);
@@ -58,7 +61,7 @@ public:
             // interpolation gain (a factor of L) and the old hand-rolled path
             // never applied it, so the ladder's own passband sat 6 dB below
             // unity — a 220 Hz tone through an 8 kHz lowpass at resonance 0 came
-            // out at half amplitude. ChannelOversampler applies the x2 in up2
+            // out at half amplitude. IirOversampler applies the x2 in up2
             // and measures dead unity end to end, so what is here now is right.
             //
             // Measured old vs new across cutoff (500/2k/8k), resonance (0/40/80)
@@ -81,8 +84,13 @@ public:
                 inR += bias_;
 
                 // Feedback with resonance
-                inL -= res * feedbackL_;
-                inR -= res * feedbackR_;
+                // The feedback through a soft clip, as the transistors of the
+                // original clip it: at full resonance (k = 4) the loop sits
+                // on the edge of oscillation, and with saturation off nothing
+                // else stopped it growing — to 1e10 at 44.1 kHz. Bounded
+                // feedback lets it self-oscillate at a steady level instead.
+                inL -= res * std::tanh(feedbackL_);
+                inR -= res * std::tanh(feedbackR_);
 
                 // 4 cascaded one-pole filters
                 for (int s = 0; s < 4; s++) {
@@ -179,5 +187,5 @@ private:
     float stageL_[4] = {};
     float stageR_[4] = {};
     float feedbackL_ = 0.0f, feedbackR_ = 0.0f;
-    ChannelOversampler osL_, osR_;
+    IirOversampler osL_, osR_;
 };

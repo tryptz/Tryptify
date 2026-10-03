@@ -53,10 +53,10 @@ class VariRateAudioProcessor @Inject constructor() : AudioProcessor {
 
     // Audio-thread state.
     private var active: Table = tableRef.get()
-    private var histL = FloatArray(0)
-    private var histR = FloatArray(0)
-    private var workL = FloatArray(0)
-    private var workR = FloatArray(0)
+    // One history and one work buffer per channel. Sized when the channel
+    // count or block size grows, never per block.
+    private var hist: Array<FloatArray> = emptyArray()
+    private var work: Array<FloatArray> = emptyArray()
     private var pos = 0.0
 
     /**
@@ -88,9 +88,12 @@ class VariRateAudioProcessor @Inject constructor() : AudioProcessor {
         ) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }
-        if (inputAudioFormat.channelCount != 1 && inputAudioFormat.channelCount != 2) {
-            // Anything wider passes through untouched rather than failing
-            // playback; the sink's own path still applies the speed.
+        // Any channel count up to a 7.1.4 Atmos bed and beyond: the filter is
+        // per channel. This used to stop at stereo, and a wider stream passed
+        // through at 1.00x while the sink's clock ran at the new speed —
+        // spatial-audio and unfolded Atmos beds drifted off their own
+        // progress bar.
+        if (inputAudioFormat.channelCount !in 1..MAX_CHANNELS) {
             pendingFormat = AudioFormat.NOT_SET
             inputFormat = AudioFormat.NOT_SET
             return AudioFormat.NOT_SET
@@ -125,8 +128,7 @@ class VariRateAudioProcessor @Inject constructor() : AudioProcessor {
         ensureBuffers(histLen, numFrames, channels)
 
         // work = carried history followed by this block.
-        System.arraycopy(histL, 0, workL, 0, histLen)
-        if (channels == 2) System.arraycopy(histR, 0, workR, 0, histLen)
+        for (c in 0 until channels) System.arraycopy(hist[c], 0, work[c], 0, histLen)
         readInterleaved(inputBuffer, numFrames, channels, encoding, histLen)
         inputBuffer.position(inputBuffer.position() + numFrames * frameSize)
 
@@ -141,17 +143,16 @@ class VariRateAudioProcessor @Inject constructor() : AudioProcessor {
         while (floor(pos) <= last && produced < maxOut) {
             val i = floor(pos).toInt()
             val frac = pos - i
-            val l = filter(workL, i, frac, active.kernel)
-            val r = if (channels == 2) filter(workR, i, frac, active.kernel) else l
-            writeFrame(produced, channels, encoding, l, r)
+            for (c in 0 until channels) {
+                writeSample(produced * channels + c, encoding, filter(work[c], i, frac, active.kernel))
+            }
             produced++
             pos += step
         }
 
         // Slide the window: keep the last histLen frames, and move the read
         // position into their coordinates.
-        System.arraycopy(workL, total - histLen, histL, 0, histLen)
-        if (channels == 2) System.arraycopy(workR, total - histLen, histR, 0, histLen)
+        for (c in 0 until channels) System.arraycopy(work[c], total - histLen, hist[c], 0, histLen)
         pos -= numFrames
 
         outputBuffer.position(0)
@@ -195,8 +196,8 @@ class VariRateAudioProcessor @Inject constructor() : AudioProcessor {
         }
         active = tableRef.get()
         val histLen = 2 * active.kernel.halfWidth
-        histL = FloatArray(histLen)
-        histR = FloatArray(histLen)
+        val channels = inputFormat.channelCount.coerceAtLeast(1)
+        hist = Array(channels) { FloatArray(histLen) }
         // Start reading at the first real input frame; the zeroed history in
         // front of it is the filter's ramp-in.
         pos = histLen.toDouble()
@@ -206,10 +207,8 @@ class VariRateAudioProcessor @Inject constructor() : AudioProcessor {
         flush()
         pendingFormat = AudioFormat.NOT_SET
         inputFormat = AudioFormat.NOT_SET
-        histL = FloatArray(0)
-        histR = FloatArray(0)
-        workL = FloatArray(0)
-        workR = FloatArray(0)
+        hist = emptyArray()
+        work = emptyArray()
     }
 
     // ── internals ────────────────────────────────────────────────────────
@@ -237,16 +236,13 @@ class VariRateAudioProcessor @Inject constructor() : AudioProcessor {
 
     private fun ensureBuffers(histLen: Int, numFrames: Int, channels: Int) {
         val need = histLen + numFrames
-        if (workL.size < need) {
-            workL = FloatArray(need)
-            workR = FloatArray(need)
+        if (work.size != channels || work[0].size < need) {
+            work = Array(channels) { FloatArray(need) }
         }
-        if (histL.size != histLen) {
-            histL = FloatArray(histLen)
-            histR = FloatArray(histLen)
+        if (hist.size != channels || hist[0].size != histLen) {
+            hist = Array(channels) { FloatArray(histLen) }
             pos = histLen.toDouble()
         }
-        if (channels == 1 && histR.size != histLen) histR = FloatArray(histLen)
     }
 
     private fun ensureOutput(bytes: Int) {
@@ -265,48 +261,26 @@ class VariRateAudioProcessor @Inject constructor() : AudioProcessor {
         offset: Int,
     ) {
         val start = buf.position()
-        if (channels == 1) {
-            if (encoding == C.ENCODING_PCM_FLOAT) {
-                for (n in 0 until numFrames) workL[offset + n] = buf.getFloat(start + n * 4)
-            } else {
-                for (n in 0 until numFrames) {
-                    workL[offset + n] = buf.getShort(start + n * 2).toFloat() / 32768f
-                }
+        if (encoding == C.ENCODING_PCM_FLOAT) {
+            for (n in 0 until numFrames) {
+                val o = start + n * channels * 4
+                for (c in 0 until channels) work[c][offset + n] = buf.getFloat(o + c * 4)
             }
         } else {
-            if (encoding == C.ENCODING_PCM_FLOAT) {
-                for (n in 0 until numFrames) {
-                    val o = start + n * 8
-                    workL[offset + n] = buf.getFloat(o)
-                    workR[offset + n] = buf.getFloat(o + 4)
-                }
-            } else {
-                for (n in 0 until numFrames) {
-                    val o = start + n * 4
-                    workL[offset + n] = buf.getShort(o).toFloat() / 32768f
-                    workR[offset + n] = buf.getShort(o + 2).toFloat() / 32768f
+            for (n in 0 until numFrames) {
+                val o = start + n * channels * 2
+                for (c in 0 until channels) {
+                    work[c][offset + n] = buf.getShort(o + c * 2).toFloat() / 32768f
                 }
             }
         }
     }
 
-    private fun writeFrame(index: Int, channels: Int, encoding: Int, l: Float, r: Float) {
+    private fun writeSample(sampleIndex: Int, encoding: Int, value: Float) {
         if (encoding == C.ENCODING_PCM_FLOAT) {
-            if (channels == 1) {
-                outputBuffer.putFloat(index * 4, l)
-            } else {
-                val o = index * 8
-                outputBuffer.putFloat(o, l)
-                outputBuffer.putFloat(o + 4, r)
-            }
+            outputBuffer.putFloat(sampleIndex * 4, value)
         } else {
-            if (channels == 1) {
-                outputBuffer.putShort(index * 2, toPcm16(l))
-            } else {
-                val o = index * 4
-                outputBuffer.putShort(o, toPcm16(l))
-                outputBuffer.putShort(o + 2, toPcm16(r))
-            }
+            outputBuffer.putShort(sampleIndex * 2, toPcm16(value))
         }
     }
 
@@ -318,6 +292,7 @@ class VariRateAudioProcessor @Inject constructor() : AudioProcessor {
         const val PHASES = 256
         const val MIN_RATIO = 0.05f
         const val MAX_RATIO = 20f
+        const val MAX_CHANNELS = 16
 
         /** Matches Sonic's own tolerance for "close enough to 1 to skip". */
         const val RATIO_DEADZONE = 1e-4f

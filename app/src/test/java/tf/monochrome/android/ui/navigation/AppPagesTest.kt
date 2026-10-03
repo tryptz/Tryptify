@@ -24,17 +24,15 @@ class AppPagesTest {
     // ── Migration off library_tab_order ──────────────────────────────────
 
     /**
-     * The one that catches getting Local and Overview the wrong way round.
-     *
      * The legacy CSV started with `overview`, but `legacyLibrarySections` pinned
-     * `local` to the front, so Local is what people saw after Home and Discover.
-     * If [DEFAULT_PAGE_ORDER] ever lists Overview first, this fails — and it
-     * should, because that silently moves every upgrader's landing page.
+     * `local` to the front, so Local is what people saw first among the Library
+     * sections, and it still leads them. Overview itself is not a page any
+     * more — Home draws it — so the migration drops it.
      */
     @Test
     fun `the legacy default migrates to Home, Discover, then Local`() {
         assertEquals(
-            listOf("home", "discover", "local", "overview", "playlists", "favorites", "downloads"),
+            listOf("home", "discover", "local", "playlists", "favorites", "downloads"),
             migrateLegacyPageOrder(legacyDefault),
         )
     }
@@ -50,7 +48,7 @@ class AppPagesTest {
     @Test
     fun `migration restores the pinned local page a reordered CSV dropped`() {
         assertEquals(
-            listOf("home", "discover", "local", "downloads", "overview", "playlists", "favorites"),
+            listOf("home", "discover", "local", "downloads", "playlists", "favorites"),
             migrateLegacyPageOrder(listOf("downloads", "overview", "playlists", "favorites")),
         )
     }
@@ -83,15 +81,15 @@ class AppPagesTest {
     /** A legacy order missing sections still ends up with every page. */
     @Test
     fun `migrating a partial legacy order then reconciling restores every page`() {
-        val resolved = resolvePageOrder(stored = null, legacyLibraryOrder = listOf("downloads", "overview"))
+        val resolved = resolvePageOrder(stored = null, legacyLibraryOrder = listOf("favorites", "playlists"))
         assertEquals(APP_PAGE_IDS.sorted(), resolved.sorted())
         // The pages it did name keep the relative order it had them in.
-        assertTrue(resolved.indexOf("downloads") < resolved.indexOf("overview"))
+        assertTrue(resolved.indexOf("favorites") < resolved.indexOf("playlists"))
     }
 
     @Test
     fun `a stored order wins over the legacy one`() {
-        val stored = listOf("downloads", "home", "discover", "local", "overview", "playlists", "favorites")
+        val stored = listOf("downloads", "home", "discover", "local", "playlists", "favorites")
         val resolved = resolvePageOrder(stored, legacyDefault)
         // Downloads stays first, where this user put it, rather than where the
         // legacy default would have had it.
@@ -99,6 +97,44 @@ class AppPagesTest {
         // A page that install predates is still added — that is reconcile's
         // job, and it does not make the legacy order win.
         assertEquals(listOf(RADIO_PAGE_ID), resolved - stored.toSet())
+    }
+
+    /**
+     * Overview left the page list for Home. A stored order from before that
+     * still names it, and must simply lose it — with every other page left
+     * exactly where the user put it.
+     */
+    @Test
+    fun `a stored order that still names Overview drops it and nothing else moves`() {
+        val stored = listOf("home", "discover", RADIO_PAGE_ID, "overview", "downloads", "local", "playlists", "favorites")
+        assertEquals(stored - "overview", resolvePageOrder(stored, legacyDefault))
+    }
+
+    // ── Older devices on the same account ───────────────────────────────
+
+    /** A reorder here must not move Overview on a synced device that still has it. */
+    @Test
+    fun `a written order keeps Overview where the stored order had it`() {
+        val stored = listOf("home", "discover", RADIO_PAGE_ID, "local", "overview", "playlists", "favorites", "downloads")
+        val reordered = moveLibrarySection(reconcilePageOrder(stored), "playlists", -1)
+        assertEquals(
+            listOf("home", "discover", RADIO_PAGE_ID, "playlists", "local", "overview", "favorites", "downloads"),
+            keepLegacyIds(reordered, stored),
+        )
+    }
+
+    @Test
+    fun `nothing is added when the stored order had no legacy id`() {
+        assertEquals(DEFAULT_PAGE_ORDER, keepLegacyIds(DEFAULT_PAGE_ORDER, DEFAULT_PAGE_ORDER))
+        assertEquals(DEFAULT_PAGE_ORDER, keepLegacyIds(DEFAULT_PAGE_ORDER, null))
+    }
+
+    /** Kept on write, never shown: reading the written order drops it again. */
+    @Test
+    fun `a kept legacy id is still never a page`() {
+        val written = keepLegacyIds(DEFAULT_PAGE_ORDER, listOf("overview") + DEFAULT_PAGE_ORDER)
+        assertTrue("overview" in written)
+        assertEquals(DEFAULT_PAGE_ORDER, reconcilePageOrder(written))
     }
 
     // ── Forward compatibility ────────────────────────────────────────────
@@ -174,15 +210,22 @@ class AppPagesTest {
     }
 
     /**
-     * The brick guard. A pager with no pages is a blank screen with no top bar,
-     * and every route into Settings is a top bar — so there would be no way back.
+     * The brick guard. Home is the tab bar's first tab and where Back lands, and
+     * the Library tab needs a section to open — so a hidden set that claims all
+     * of them (one synced from another device, say) still leaves both.
      */
     @Test
-    fun `hiding every page still leaves one to draw`() {
+    fun `hiding every page still leaves Home and a Library section`() {
         assertEquals(
-            listOf(DEFAULT_PAGE_ORDER.first()),
+            listOf("home", "local"),
             visiblePages(DEFAULT_PAGE_ORDER, DEFAULT_PAGE_ORDER.toSet()),
         )
+    }
+
+    /** An older build let Home be hidden; that state must not hide it now. */
+    @Test
+    fun `a stored hidden Home is shown anyway`() {
+        assertTrue("home" in visiblePages(DEFAULT_PAGE_ORDER, setOf("home")))
     }
 
     @Test
@@ -198,10 +241,46 @@ class AppPagesTest {
     }
 
     @Test
-    fun `any page can be hidden while two are visible`() {
-        val hidden = DEFAULT_PAGE_ORDER.toSet() - "home" - "local"
-        assertTrue(canTogglePageVisibility(DEFAULT_PAGE_ORDER, hidden, "home"))
-        assertTrue(canTogglePageVisibility(DEFAULT_PAGE_ORDER, hidden, "local"))
+    fun `Home can never be hidden`() {
+        assertFalse(canTogglePageVisibility(DEFAULT_PAGE_ORDER, emptySet(), "home"))
+    }
+
+    @Test
+    fun `the last visible Library section cannot be hidden`() {
+        val allSectionsButLocal = LIBRARY_PAGE_IDS.toSet() - "local"
+        assertFalse(canTogglePageVisibility(DEFAULT_PAGE_ORDER, allSectionsButLocal, "local"))
+        assertTrue(canTogglePageVisibility(DEFAULT_PAGE_ORDER, emptySet(), "local"))
+    }
+
+    /** Hiding Discover or Radio only removes a tab; Home and Library remain. */
+    @Test
+    fun `Discover and Radio can always be hidden`() {
+        val everythingElse = DEFAULT_PAGE_ORDER.toSet() - "discover" - RADIO_PAGE_ID - "home" - "local"
+        assertTrue(canTogglePageVisibility(DEFAULT_PAGE_ORDER, everythingElse, "discover"))
+        assertTrue(canTogglePageVisibility(DEFAULT_PAGE_ORDER, everythingElse + "discover", RADIO_PAGE_ID))
+    }
+
+    // ── Moving Library sections ──────────────────────────────────────────
+
+    @Test
+    fun `a section moves among the sections only, past the tab pages`() {
+        val order = listOf("home", "local", "discover", RADIO_PAGE_ID, "playlists", "favorites", "downloads")
+        // Local's next section is Playlists, two tab pages away in the full order.
+        assertEquals(
+            listOf("home", "playlists", "discover", RADIO_PAGE_ID, "local", "favorites", "downloads"),
+            moveLibrarySection(order, "local", +1),
+        )
+    }
+
+    @Test
+    fun `a section cannot move past either end`() {
+        assertEquals(DEFAULT_PAGE_ORDER, moveLibrarySection(DEFAULT_PAGE_ORDER, "local", -1))
+        assertEquals(DEFAULT_PAGE_ORDER, moveLibrarySection(DEFAULT_PAGE_ORDER, "downloads", +1))
+    }
+
+    @Test
+    fun `only Library sections move`() {
+        assertEquals(DEFAULT_PAGE_ORDER, moveLibrarySection(DEFAULT_PAGE_ORDER, "discover", +1))
     }
 
     // ── Landing and restore ──────────────────────────────────────────────
@@ -217,13 +296,14 @@ class AppPagesTest {
     @Test
     fun `with Local hidden the library route lands on the next library page`() {
         val pages = visiblePages(DEFAULT_PAGE_ORDER, setOf("local"))
-        assertEquals(pages.indexOf("overview"), landingPageIndex(pages, Screen.Library.route))
+        assertEquals(pages.indexOf("playlists"), landingPageIndex(pages, Screen.Library.route))
     }
 
+    /** visiblePages keeps one section, so the route still lands in the Library. */
     @Test
-    fun `with every library page hidden the library route lands on the first page`() {
+    fun `with every library page hidden the library route still lands on a section`() {
         val pages = visiblePages(DEFAULT_PAGE_ORDER, LIBRARY_PAGE_IDS.toSet())
-        assertEquals(0, landingPageIndex(pages, Screen.Library.route))
+        assertEquals(pages.indexOf("local"), landingPageIndex(pages, Screen.Library.route))
     }
 
     @Test
@@ -254,9 +334,12 @@ class AppPagesTest {
     @Test
     fun `every page has a unique id and a name`() {
         assertEquals(APP_PAGE_IDS.size, APP_PAGE_IDS.distinct().size)
+        // Titles are string resources now; the generator refuses to write a
+        // language with a missing string, so a real id is a name in all of them.
         for (page in APP_PAGES) {
-            assertTrue("${page.id} has no title", page.title.isNotBlank())
+            assertTrue("${page.id} has no title", page.title != 0)
         }
+        assertEquals("two pages share a name", APP_PAGES.size, APP_PAGES.map { it.title }.distinct().size)
         assertEquals(APP_PAGE_IDS.toSet(), APP_PAGE_TITLES.keys)
     }
 
@@ -267,8 +350,8 @@ class AppPagesTest {
     }
 
     @Test
-    fun `the library pages are everything but Home and Discover`() {
-        assertEquals(listOf("local", "overview", "playlists", "favorites", "downloads"), LIBRARY_PAGE_IDS)
+    fun `the library pages are everything but Home, Discover and Radio`() {
+        assertEquals(listOf("local", "playlists", "favorites", "downloads"), LIBRARY_PAGE_IDS)
     }
 
     // ── Cross-file guards ────────────────────────────────────────────────
@@ -321,7 +404,7 @@ class AppPagesTest {
         // creeping back would quietly restore the old behaviour alongside the
         // new one.
         assertTrue("World radio is missing from the page list", RADIO_PAGE_ID in APP_PAGE_IDS)
-        assertEquals("World radio", APP_PAGE_TITLES[RADIO_PAGE_ID])
+        assertEquals(tf.monochrome.android.R.string.page_world_radio, APP_PAGE_TITLES[RADIO_PAGE_ID])
         val source = File("src/main/java/tf/monochrome/android/ui/navigation/MonochromeNavHost.kt")
             .readText()
         assertFalse(

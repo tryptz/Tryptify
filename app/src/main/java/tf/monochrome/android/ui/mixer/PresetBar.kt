@@ -31,6 +31,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.audio.dsp.model.MixPreset
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * Horizontal preset management bar: current name, save, load, import.
@@ -66,7 +68,7 @@ fun PresetBar(
     ) {
         // Current preset name
         Text(
-            text = currentPresetName ?: "Default",
+            text = currentPresetName ?: stringResource(R.string.mixer_default_preset),
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface,
@@ -77,7 +79,7 @@ fun PresetBar(
         IconButton(onClick = onImport, modifier = Modifier.size(36.dp)) {
             Icon(
                 Icons.Default.FileDownload,
-                contentDescription = "Import Preset",
+                contentDescription = stringResource(R.string.mixer_import_preset),
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp)
             )
@@ -87,7 +89,7 @@ fun PresetBar(
         IconButton(onClick = { showSaveDialog = true }, modifier = Modifier.size(36.dp)) {
             Icon(
                 Icons.Default.Save,
-                contentDescription = "Save Preset",
+                contentDescription = stringResource(R.string.fx_save_preset),
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp)
             )
@@ -97,7 +99,7 @@ fun PresetBar(
         IconButton(onClick = { showLoadMenu = true }, modifier = Modifier.size(36.dp)) {
             Icon(
                 Icons.Default.FolderOpen,
-                contentDescription = "Load Preset",
+                contentDescription = stringResource(R.string.mixer_load_preset),
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp)
             )
@@ -107,7 +109,7 @@ fun PresetBar(
                 onDismissRequest = { showLoadMenu = false }
             ) {
                 if (builtInPresets.isNotEmpty()) {
-                    PresetMenuHeader("Presets")
+                    PresetMenuHeader(stringResource(R.string.visualizer_presets))
                     builtInPresets.forEach { preset ->
                         PresetMenuRow(
                             preset = preset,
@@ -118,10 +120,10 @@ fun PresetBar(
                     }
                 }
 
-                PresetMenuHeader("My Presets")
+                PresetMenuHeader(stringResource(R.string.mixer_my_presets))
                 if (customPresets.isEmpty()) {
                     DropdownMenuItem(
-                        text = { Text("No presets saved") },
+                        text = { Text(stringResource(R.string.mixer_no_presets)) },
                         onClick = { showLoadMenu = false },
                         enabled = false
                     )
@@ -144,12 +146,12 @@ fun PresetBar(
         var name by remember { mutableStateOf(currentPresetName ?: "") }
         AlertDialog(
             onDismissRequest = { showSaveDialog = false },
-            title = { Text("Save Preset") },
+            title = { Text(stringResource(R.string.fx_save_preset)) },
             text = {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Preset name") },
+                    label = { Text(stringResource(R.string.fx_preset_name)) },
                     singleLine = true
                 )
             },
@@ -161,10 +163,10 @@ fun PresetBar(
                             showSaveDialog = false
                         }
                     }
-                ) { Text("Save") }
+                ) { Text(stringResource(R.string.action_save)) }
             },
             dismissButton = {
-                TextButton(onClick = { showSaveDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showSaveDialog = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -173,16 +175,16 @@ fun PresetBar(
     showDeleteConfirm?.let { preset ->
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = null },
-            title = { Text("Delete Preset") },
-            text = { Text("Delete \"${preset.name}\"?") },
+            title = { Text(stringResource(R.string.settings_delete_preset)) },
+            text = { Text(stringResource(R.string.settings_delete_named, preset.name)) },
             confirmButton = {
                 TextButton(onClick = {
                     onDelete(preset.id)
                     showDeleteConfirm = null
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = null }) { Text("Cancel") }
+                TextButton(onClick = { showDeleteConfirm = null }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -214,7 +216,7 @@ private fun PresetMenuRow(
                 IconButton(onClick = onExport, modifier = Modifier.size(24.dp)) {
                     Icon(
                         Icons.Default.IosShare,
-                        contentDescription = "Export",
+                        contentDescription = stringResource(R.string.mixer_export),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(16.dp)
                     )
@@ -223,7 +225,7 @@ private fun PresetMenuRow(
                     IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
                         Icon(
                             Icons.Default.Delete,
-                            contentDescription = "Delete",
+                            contentDescription = stringResource(R.string.action_delete),
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(16.dp)
                         )

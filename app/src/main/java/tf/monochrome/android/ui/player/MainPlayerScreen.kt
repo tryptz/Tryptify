@@ -99,6 +99,8 @@ import tf.monochrome.android.domain.model.UnifiedArtistRef
 import tf.monochrome.android.domain.usecase.uiArtistRefs
 import tf.monochrome.android.ui.components.ClickableArtists
 import tf.monochrome.android.ui.components.liquidGlass
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /** Flattened, design-ready snapshot of everything the main player renders. */
 data class MainPlayerUiState(
@@ -788,9 +790,10 @@ fun MainPlayerScreen(
 /**
  * The scrubber and its time labels — the only part of the player that needs the
  * play head. Split out so a position tick recomposes this and nothing above it.
+ * Internal so the mixer's timeline is this same control, not a copy of it.
  */
 @Composable
-private fun PlayerProgressSection(
+internal fun PlayerProgressSection(
     positionState: State<Long>,
     durationState: State<Long>,
     centerLabel: String,
@@ -869,7 +872,7 @@ private fun SwipeUpHandle(onClick: () -> Unit) {
                 modifier = Modifier.size(16.dp),
             )
             Text(
-                text = "Audio tools",
+                text = stringResource(R.string.audio_tools),
                 style = MaterialTheme.typography.labelMedium,
                 color = Color.White.copy(alpha = 0.55f),
             )
@@ -1011,7 +1014,7 @@ private fun StatusOverlayPanel(
             Column(modifier = Modifier.fillMaxWidth()) {
                 ToggleRow(
                     "AutoEQ",
-                    "Headphone EQ correction",
+                    stringResource(R.string.autoeq_detail),
                     autoEqEnabled,
                     accent,
                     onAutoEqToggle,
@@ -1027,14 +1030,13 @@ private fun StatusOverlayPanel(
                         // toggle is actually reachable mid-listen, so it cannot
                         // be the one place that stays silent about it.
                         ToggleRow(
-                            "System-wide",
-                            "Apply to all device audio",
+                            stringResource(R.string.system_wide),
+                            stringResource(R.string.system_wide_detail),
                             systemWideAutoEqEnabled,
                             accent,
                             onSystemWideAutoEqToggle,
-                            badge = "Beta",
-                            caution = "Swaps the app's exact correction for a coarser " +
-                                "global one. For correcting other apps.",
+                            badge = stringResource(R.string.badge_beta),
+                            caution = stringResource(R.string.system_wide_caution),
                         )
                     }
                 }
@@ -1063,16 +1065,16 @@ private fun StatusOverlayPanel(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                OverlayAction(Icons.Default.Animation, "Visualizer", accent, visualizerActive, onVisualizer)
-                OverlayAction(Icons.Default.GraphicEq, "Waveform", accent, waveformActive, onWaveform)
+                OverlayAction(Icons.Default.Animation, stringResource(R.string.visualizer), accent, visualizerActive, onVisualizer)
+                OverlayAction(Icons.Default.GraphicEq, stringResource(R.string.waveform), accent, waveformActive, onWaveform)
             }
 
             // Effects toggles — long-press a row to open that tool's page.
-            ToggleRow("Compressor", "Oxford dynamics. Hold to configure", compressorEnabled, accent,
+            ToggleRow(stringResource(R.string.compressor), stringResource(R.string.compressor_detail), compressorEnabled, accent,
                 onCompressorToggle, onLongPress = onCompressorOpen)
-            ToggleRow("Inflator", "Oxford loudness. Hold to configure", inflatorEnabled, accent,
+            ToggleRow("Inflator", stringResource(R.string.inflator_detail), inflatorEnabled, accent,
                 onInflatorToggle, onLongPress = onInflatorOpen)
-            ToggleRow("Crossfeed", "Speaker simulation. Hold to configure", crossfeedEnabled, accent,
+            ToggleRow(stringResource(R.string.crossfeed), stringResource(R.string.crossfeed_detail), crossfeedEnabled, accent,
                 onCrossfeedToggle, onLongPress = onCrossfeedOpen)
         }
             }
@@ -1206,7 +1208,7 @@ private fun PlayerTrackInfo(
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                text = track?.title ?: "No track playing",
+                text = track?.title ?: stringResource(R.string.no_track_playing),
                 style = MaterialTheme.typography.titleLarge,
                 color = Color.White,
                 maxLines = 1,
@@ -1218,7 +1220,7 @@ private fun PlayerTrackInfo(
                 val refs = artists.ifEmpty { track.uiArtistRefs() }
                 ClickableArtists(
                     artists = refs,
-                    fallbackName = track.displayArtist.ifBlank { "Unknown" },
+                    fallbackName = track.displayArtist.ifBlank { stringResource(R.string.unknown) },
                     // The name goes with the id, because the id is sometimes
                     // 0: a catalogue row can reach the player identified only
                     // by what it is called, and the artist page can search for
@@ -1228,9 +1230,18 @@ private fun PlayerTrackInfo(
                     color = Color.White.copy(alpha = 0.6f),
                     linkColor = Color.White.copy(alpha = 0.85f),
                 )
+                // Where it plays from, and "via" when that is another
+                // service or the device — never a silent switch.
+                tf.monochrome.android.ui.components.LocalPlayerSource.current?.let { (picked, via) ->
+                    tf.monochrome.android.ui.components.PlayerSourceTag(
+                        source = picked,
+                        via = via,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
             } else {
                 Text(
-                    text = "Unknown",
+                    text = stringResource(R.string.unknown),
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color.White.copy(alpha = 0.6f),
                     maxLines = 1,
@@ -1244,25 +1255,10 @@ private fun PlayerTrackInfo(
             IconButton(onClick = onToggleLike) {
                 Icon(
                     imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = if (isLiked) "Unlike" else "Like",
+                    contentDescription = if (isLiked) stringResource(R.string.action_unlike) else stringResource(R.string.action_like),
                     tint = if (isLiked) accent else Color.White,
                 )
             }
         }
-    }
-}
-
-@Composable
-internal fun MetaChip(label: String, accent: Color) {
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = accent.copy(alpha = 0.14f),
-        contentColor = accent,
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            style = MaterialTheme.typography.labelMedium,
-        )
     }
 }

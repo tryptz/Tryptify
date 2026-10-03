@@ -1,9 +1,12 @@
 package tf.monochrome.android.ui.settings
 
+import tf.monochrome.android.ui.components.UiText
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import tf.monochrome.android.ui.theme.goToPage
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.widget.Toast
+import androidx.annotation.StringRes
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tf.monochrome.android.BuildConfig
@@ -118,6 +121,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -145,7 +149,7 @@ import tf.monochrome.android.ui.theme.themeDisplayNames
 import tf.monochrome.android.visualizer.PresetRotationMode
 import tf.monochrome.android.visualizer.ProjectMAudioBus
 import tf.monochrome.android.ui.navigation.navigateTool
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.components.SearchOverlay
 import androidx.compose.material3.LocalContentColor
@@ -162,6 +166,8 @@ import tf.monochrome.android.ui.theme.ColorBlend
 import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.Box
 import kotlinx.coroutines.delay
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 
 // Ordered by how often they're reached for, not by how the code grew:
 // the look of the app, then how it sounds, then what it plays, then the
@@ -173,7 +179,28 @@ import kotlinx.coroutines.delay
 // specific tab must go through a named constant derived from this list (see
 // SETTINGS_TAB_ABOUT), never a literal — a hardcoded index has silently broken
 // twice now, once per reorder.
+//
+// The labels here are ids — English, stable, what the search index and the dev
+// editor key on. What a chip says comes from [settingsTabLabelRes].
 private val settingsTabs = listOf("Appearance", "Visual Studio", "Audio", "Equalizer", "Library", "Downloads", "Connections", "Radio", "System", "About")
+
+private val settingsTabLabels: Map<String, Int> = mapOf(
+    "Appearance" to R.string.settings_tab_appearance,
+    "Visual Studio" to R.string.settings_tab_visual_studio,
+    "Audio" to R.string.settings_tab_audio,
+    "Equalizer" to R.string.settings_tab_equalizer,
+    "Library" to R.string.settings_tab_library,
+    "Downloads" to R.string.settings_tab_downloads,
+    "Connections" to R.string.settings_tab_connections,
+    "Radio" to R.string.settings_tab_radio,
+    "System" to R.string.settings_tab_system,
+    "About" to R.string.settings_tab_about,
+)
+
+/** The chip text for the tab with id [label], in the reader's language. */
+@StringRes
+internal fun settingsTabLabelRes(label: String): Int =
+    requireNotNull(settingsTabLabels[label]) { "no settings tab called \"$label\"" }
 
 /**
  * Which tab carries a given label, for the search index to point at.
@@ -183,19 +210,38 @@ private val settingsTabs = listOf("Appearance", "Visual Studio", "Audio", "Equal
  * a test turns into a build failure rather than a result that goes nowhere.
  */
 internal fun settingsTabIndex(label: String): Int =
-    settingsTabs.indexOf(label).also {
-        require(it >= 0) { "no settings tab called \"$label\"" }
+    settingsPages.indexOf(label).also {
+        require(it >= 0) { "no settings page called \"$label\"" }
     }
+
+/**
+ * Chips that open a screen of their own instead of a page, by the route they
+ * open.
+ *
+ * Visual Studio was a page holding one row that opened the Player Visuals
+ * Studio — a tap to reach the page and another to reach the only thing on it.
+ * Its chip goes there directly now, and the pager does not have a page for it,
+ * so a swipe never lands on an empty one either.
+ */
+private val settingsLinkTabs: Map<String, Screen> = mapOf(
+    "Visual Studio" to Screen.LyricsFxStudio,
+)
+
+/** The route a chip opens when it is a link rather than a page, else null. */
+internal fun settingsLinkRoute(label: String): String? = settingsLinkTabs[label]?.route
+
+/** The tabs that are pages of the pager, in chip order. */
+private val settingsPages: List<String> = settingsTabs.filter { it !in settingsLinkTabs }
 
 /**
  * Index of the About tab, where the What's New panel lives. Derived from
  * [settingsTabs] rather than written down, so reordering the tabs can't leave a
  * caller pointing at the wrong page.
  */
-val SETTINGS_TAB_ABOUT: Int = settingsTabs.indexOf("About")
+val SETTINGS_TAB_ABOUT: Int = settingsTabIndex("About")
 
 /** One selectable step in the Appearance › Font Size picker. */
-private data class FontScalePreset(val label: String, val scale: Float)
+private data class FontScalePreset(@StringRes val label: Int, val scale: Float)
 
 // Five fixed steps replace the old 0.50-2.00 free slider. The range is
 // deliberately narrower than before: below ~0.85 the mini player and lyrics
@@ -203,11 +249,11 @@ private data class FontScalePreset(val label: String, val scale: Float)
 // overlap. Anyone who genuinely needs larger type should turn on "Use system
 // font size", which honours the OS accessibility setting all the way up.
 private val FONT_SCALE_PRESETS = listOf(
-    FontScalePreset("Small", 0.85f),
-    FontScalePreset("Default", 1.00f),
-    FontScalePreset("Large", 1.15f),
-    FontScalePreset("Larger", 1.30f),
-    FontScalePreset("Largest", 1.50f),
+    FontScalePreset(R.string.settings_font_small, 0.85f),
+    FontScalePreset(R.string.settings_font_default, 1.00f),
+    FontScalePreset(R.string.settings_font_large, 1.15f),
+    FontScalePreset(R.string.settings_font_larger, 1.30f),
+    FontScalePreset(R.string.settings_font_largest, 1.50f),
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -222,8 +268,8 @@ fun SettingsScreen(
     // disagree. rememberPagerState saves its own page across process death,
     // which is what the old rememberSaveable int was doing here.
     val settingsPager = rememberPagerState(
-        initialPage = initialTab.coerceIn(0, settingsTabs.lastIndex),
-        pageCount = { settingsTabs.size },
+        initialPage = initialTab.coerceIn(0, settingsPages.lastIndex),
+        pageCount = { settingsPages.size },
     )
     val settingsScope = rememberCoroutineScope()
     // Tab changes slide normally; with "Disable animations" on they jump.
@@ -235,22 +281,29 @@ fun SettingsScreen(
     val messageContext = LocalContext.current
     LaunchedEffect(Unit) {
         viewModel.messages.collect { msg ->
-            android.widget.Toast.makeText(messageContext, msg, android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(messageContext, msg.resolve(messageContext), android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
     val settingsAnchors = remember { SettingsAnchors() }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
-    val searchHits = remember(searchQuery) { searchSettings(searchQuery) }
+    // Resolved through the activity's context, which carries the app language
+    // on every Android version; keyed on the configuration so a language
+    // change re-runs the search instead of serving the old language's hits.
+    val searchContext = LocalContext.current
+    val searchConfig = LocalConfiguration.current
+    val searchHits = remember(searchQuery, searchConfig) {
+        searchSettings(searchQuery) { searchContext.getString(it) }
+    }
 
     CompositionLocalProvider(LocalSettingsAnchors provides settingsAnchors) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("Settings") },
+            title = { Text(stringResource(R.string.settings)) },
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                IconButton(onClick = { navController.popBackStackSafe() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.settings_back))
                 }
             },
             actions = {
@@ -260,7 +313,7 @@ fun SettingsScreen(
                 }) {
                     Icon(
                         Icons.Default.Search,
-                        contentDescription = if (searchOpen) "Close search" else "Find a setting",
+                        contentDescription = if (searchOpen) stringResource(R.string.settings_close_search) else stringResource(R.string.settings_find_a_setting),
                         tint = if (searchOpen) MaterialTheme.colorScheme.primary
                         else LocalContentColor.current,
                     )
@@ -286,18 +339,38 @@ fun SettingsScreen(
         // be moved between them. The form below is what the glass should be
         // frosting; the tab rail is chrome, and chrome stays put.
         val chipRow = rememberLazyListState()
-        LaunchedEffect(selectedTab) { chipRow.animateScrollToItem(selectedTab) }
+        LaunchedEffect(selectedTab) {
+            chipRow.animateScrollToItem(settingsTabs.indexOf(settingsPages[selectedTab]).coerceAtLeast(0))
+        }
         LazyRow(
             state = chipRow,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            itemsIndexed(settingsTabs) { index, tab ->
+            itemsIndexed(settingsTabs) { _, tab ->
+                val link = settingsLinkTabs[tab]
                 FilterChip(
-                    selected = selectedTab == index,
-                    onClick = { settingsScope.launch { settingsPager.goToPage(index, animateTabs) } },
-                    label = { Text(tab, style = MaterialTheme.typography.labelMedium) },
+                    selected = link == null && settingsPages[selectedTab] == tab,
+                    onClick = {
+                        if (link != null) {
+                            navController.navigateTool(link)
+                        } else {
+                            settingsScope.launch { settingsPager.goToPage(settingsTabIndex(tab), animateTabs) }
+                        }
+                    },
+                    label = { Text(stringResource(settingsTabLabelRes(tab)), style = MaterialTheme.typography.labelMedium) },
+                    // The arrow the search pills use for "opens a screen": this
+                    // chip leaves Settings rather than switching its page.
+                    trailingIcon = if (link != null) {
+                        {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                modifier = Modifier.size(FilterChipDefaults.IconSize),
+                            )
+                        }
+                    } else null,
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.primary,
                         selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -314,14 +387,14 @@ fun SettingsScreen(
             open = searchOpen,
             query = searchQuery,
             onQueryChange = { searchQuery = it },
-            placeholder = "Find a setting",
+            placeholder = stringResource(R.string.settings_find_a_setting),
             onClose = { searchOpen = false; searchQuery = "" },
             modifier = Modifier.weight(1f),
             barContent = {
                 if (searchQuery.trim().length >= 2) {
                     if (searchHits.isEmpty()) {
                         Text(
-                            text = "No setting by that name.",
+                            text = stringResource(R.string.settings_no_setting_by_that_name),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 8.dp),
@@ -342,7 +415,7 @@ fun SettingsScreen(
                                                 // it lays out, and a request
                                                 // made afterwards would arrive
                                                 // one frame too late.
-                                                settingsAnchors.request(hit.title)
+                                                settingsAnchors.request(hit.displayTitle(searchContext))
                                                 settingsScope.launch {
                                                     settingsPager.goToPage(d.index, animateTabs)
                                                 }
@@ -373,18 +446,20 @@ fun SettingsScreen(
                     // would mean building all nine of them up front.
                     beyondViewportPageCount = 0,
                 ) { page ->
-                    tf.monochrome.android.devedit.DevEditScreen("settings/${devSlug(settingsTabs[page])}") {
-                        when (page) {
-                            0 -> AppearanceTab(viewModel, navController)
-                            1 -> VisualStudioTab(navController)
-                            2 -> AudioTab(viewModel, navController)
-                            3 -> EqualizerTab(navController, viewModel)
-                            4 -> LibrarySettingsTab(viewModel)
-                            5 -> DownloadsTab(viewModel)
-                            6 -> ConnectionsTab(viewModel)
-                            7 -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
-                            8 -> SystemTab(viewModel, navController)
-                            9 -> AboutTab(viewModel)
+                    tf.monochrome.android.devedit.DevEditScreen("settings/${devSlug(settingsPages[page])}") {
+                        // By name, not position: the pages are the chips minus
+                        // the links, so a position here would silently shift
+                        // every time a chip became one.
+                        when (settingsPages[page]) {
+                            "Appearance" -> AppearanceTab(viewModel, navController)
+                            "Audio" -> AudioTab(viewModel, navController)
+                            "Equalizer" -> EqualizerTab(navController, viewModel)
+                            "Library" -> LibrarySettingsTab(viewModel)
+                            "Downloads" -> DownloadsTab(viewModel)
+                            "Connections" -> ConnectionsTab(viewModel)
+                            "Radio" -> tf.monochrome.android.ui.settings.radio.RadioSettingsTab()
+                            "System" -> SystemTab(viewModel, navController)
+                            "About" -> AboutTab(viewModel)
                         }
                     }
                 }
@@ -413,13 +488,13 @@ private fun EqualizerTab(
     var presetToDelete by remember { mutableStateOf<EqPreset?>(null) }
 
     SettingsTabContent {
-        SettingsGroupHeader("Equalizer")
+        SettingsGroupHeader(stringResource(R.string.settings_equalizer))
         // "Enable Equalizer" undersold it: the same switch is the master for the
         // AutoEQ headphone correction, the tone shelves and the graphic bands —
         // Target Curve and Headphone below it are all downstream of this one.
         SettingSwitchItem(
-            title = "Enable AutoEQ/Equalizer",
-            subtitle = "Apply EQ processing to playback",
+            title = stringResource(R.string.settings_enable_autoeq_equalizer),
+            subtitle = stringResource(R.string.settings_apply_eq_processing_to_playback),
             checked = eqEnabled,
             onCheckedChange = { eqViewModel.toggleEq() }
         )
@@ -433,14 +508,12 @@ private fun EqualizerTab(
         AnimatedVisibility(visible = eqEnabled) {
             Column(modifier = Modifier.fillMaxWidth().padding(start = 12.dp)) {
                 SettingSwitchItem(
-                    title = "System-wide AutoEQ",
-                    subtitle = "Apply your AutoEQ + tone to all device audio (device-permitting)",
+                    title = stringResource(R.string.settings_system_wide_autoeq),
+                    subtitle = stringResource(R.string.settings_apply_your_autoeq_tone_to_all_device_audio),
                     checked = systemWideAutoEq,
                     onCheckedChange = viewModel::setSystemWideAutoEq,
-                    badge = "Beta",
-                    caution = "Swaps the app's exact correction for a coarser global " +
-                        "one, and some devices ignore it entirely. Turn it on to " +
-                        "correct other apps.",
+                    badge = stringResource(R.string.settings_beta),
+                    caution = stringResource(R.string.settings_swaps_the_app_s_exact_correction_for_a_coarser),
                 )
             }
         }
@@ -448,14 +521,16 @@ private fun EqualizerTab(
         Spacer(modifier = Modifier.height(12.dp))
 
         SettingItem(
-            title = "Target Curve",
+            title = stringResource(R.string.settings_target_curve),
             subtitle = selectedTarget.label,
         )
 
-        SettingItem(
-            title = "Headphone",
-            subtitle = selectedHeadphone?.name ?: "None selected",
-        )
+        Box(Modifier.settingsAnchor(stringResource(R.string.search_autoeq_headphone_profile))) {
+            SettingItem(
+                title = stringResource(R.string.settings_headphone),
+                subtitle = selectedHeadphone?.name ?: stringResource(R.string.settings_none_selected),
+            )
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -470,7 +545,7 @@ private fun EqualizerTab(
             onClick = { navController.navigateTool(Screen.Equalizer) },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Open Precision AutoEQ")
+            Text(stringResource(R.string.settings_open_precision_autoeq))
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -479,13 +554,13 @@ private fun EqualizerTab(
             onClick = { navController.navigateTool(Screen.ParametricEq) },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Open Parametric EQ")
+            Text(stringResource(R.string.settings_open_parametric_eq))
         }
 
         // ─── Saved Profiles ───
         if (allPresets.isNotEmpty()) {
             Spacer(modifier = Modifier.height(24.dp))
-            SettingsGroupHeader("Saved Profiles")
+            SettingsGroupHeader(stringResource(R.string.settings_saved_profiles))
 
             allPresets.forEach { preset ->
                 val isActive = activePreset?.id == preset.id
@@ -514,7 +589,7 @@ private fun EqualizerTab(
                         if (isActive) {
                             Icon(
                                 Icons.Default.CheckCircle,
-                                contentDescription = "Active",
+                                contentDescription = stringResource(R.string.settings_active),
                                 modifier = Modifier.size(16.dp),
                                 tint = MaterialTheme.colorScheme.primary
                             )
@@ -530,7 +605,7 @@ private fun EqualizerTab(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                "${preset.bands.size} bands · ${preset.targetName}",
+                                stringResource(R.string.settings_eq_preset_summary, pluralStringResource(R.plurals.settings_band_count, preset.bands.size, preset.bands.size), preset.targetName),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -542,7 +617,7 @@ private fun EqualizerTab(
                             ) {
                                 Icon(
                                     Icons.Default.Delete,
-                                    contentDescription = "Delete preset",
+                                    contentDescription = stringResource(R.string.settings_delete_preset),
                                     modifier = Modifier.size(16.dp),
                                     tint = MaterialTheme.colorScheme.error
                                 )
@@ -557,41 +632,22 @@ private fun EqualizerTab(
     presetToDelete?.let { preset ->
         AlertDialog(
             onDismissRequest = { presetToDelete = null },
-            title = { Text("Delete Profile") },
-            text = { Text("Delete \"${preset.name}\"?") },
+            title = { Text(stringResource(R.string.settings_delete_profile)) },
+            text = { Text(stringResource(R.string.settings_delete_named, preset.name)) },
             confirmButton = {
                 TextButton(onClick = {
                     eqViewModel.deletePreset(preset.id)
                     presetToDelete = null
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { presetToDelete = null }) { Text("Cancel") }
+                TextButton(onClick = { presetToDelete = null }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
 }
 
-/**
- * The Visual Studio tab: what the player looks like while it is playing.
- *
- * Its own category rather than a "Now Playing Appearance" group at the bottom
- * of Appearance, where it was one row under a header of its own — a heading
- * over a single item is a category that has not been admitted to yet.
- * Appearance is the app's chrome: theme, fonts, colours. This is the player's
- * surface, which is a different thing to go looking for.
- */
-@Composable
-private fun VisualStudioTab(navController: NavController) {
-    SettingsTabContent {
-        SettingItem(
-            title = "Player Visuals Studio",
-            subtitle = "Lyric type, 3D wave and beat FX; the player and panel glass; " +
-                "and the ambient MilkDrop background",
-            onClick = { navController.navigateTool(Screen.LyricsFxStudio) },
-        )
-    }
-}
+
 
 // ─── Tab 1: Appearance ─────────────────────────────────────────────────
 //
@@ -602,6 +658,53 @@ private fun VisualStudioTab(navController: NavController) {
 // They are one page now, in reading order from the app-wide look down to the
 // individual surfaces. The one group that genuinely belonged elsewhere,
 // Playback, moved to Audio.
+/**
+ * The app's display language: the phone's, or one of the translations, each
+ * listed by its own name. Applying it recreates the activity, so the choice
+ * shows at once; see [tf.monochrome.android.locale.AppLanguage].
+ */
+@Composable
+private fun LanguageSetting() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val current = remember { tf.monochrome.android.locale.AppLanguage.current(context) }
+    var open by remember { mutableStateOf(false) }
+    val options = tf.monochrome.android.locale.AppLanguage.OPTIONS
+    val followPhone = androidx.compose.ui.res.stringResource(tf.monochrome.android.R.string.settings_language_follow_phone)
+    SettingsGroupHeader(androidx.compose.ui.res.stringResource(tf.monochrome.android.R.string.settings_language))
+    Box(Modifier.settingsAnchor(stringResource(R.string.settings_language_title))) {
+        SettingItem(
+            title = androidx.compose.ui.res.stringResource(tf.monochrome.android.R.string.settings_language_title),
+            subtitle = options.firstOrNull { it.tag == current }?.nativeName ?: followPhone,
+            onClick = { open = true },
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text(followPhone) },
+                onClick = {
+                    open = false
+                    tf.monochrome.android.locale.AppLanguage.set(context.findActivityOrSelf(), "")
+                },
+            )
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.nativeName) },
+                    onClick = {
+                        open = false
+                        tf.monochrome.android.locale.AppLanguage.set(context.findActivityOrSelf(), option.tag)
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** The activity behind a Compose context, which may be wrapped; the context itself if there is none. */
+private tailrec fun android.content.Context.findActivityOrSelf(): android.content.Context = when (this) {
+    is android.app.Activity -> this
+    is android.content.ContextWrapper -> if (baseContext === this) this else baseContext.findActivityOrSelf()
+    else -> this
+}
+
 @Composable
 private fun AppearanceTab(viewModel: SettingsViewModel, navController: NavController) {
     SettingsTabContent {
@@ -646,8 +749,10 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
         uri?.let { viewModel.importFont(it) }
     }
 
-        SettingsGroupHeader("Theme")
-        SettingItem(title = "Color Theme", subtitle = themeDisplayNames[themeName] ?: themeName, onClick = { showThemeDropdown = true })
+        LanguageSetting()
+
+        SettingsGroupHeader(stringResource(R.string.settings_theme))
+        SettingItem(title = stringResource(R.string.settings_color_theme), subtitle = themeDisplayNames[themeName] ?: themeName, onClick = { showThemeDropdown = true })
         DropdownMenu(expanded = showThemeDropdown, onDismissRequest = { showThemeDropdown = false }) {
             // What may be *chosen* is narrower than what may be *named*: the
             // subtitle above still reads the full catalogue, so a stored key
@@ -677,20 +782,20 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
         // the ground's own brightness, and every foreground is floored for
         // contrast against it, so even a poorly chosen pair stays legible.
         SettingSwitchItem(
-            title = "Custom colors",
-            subtitle = "Pick your own accent and background. Overrides the theme above",
+            title = stringResource(R.string.settings_custom_colors),
+            subtitle = stringResource(R.string.settings_pick_your_own_accent_and_background_overrides),
             checked = customThemeEnabled,
             onCheckedChange = { viewModel.setCustomThemeEnabled(it) },
         )
         AnimatedVisibility(visible = customThemeEnabled) {
             Column {
                 ColorSwatchRow(
-                    label = "Accent",
+                    label = stringResource(R.string.settings_accent),
                     color = Color(customAccent),
                     onClick = { editingColor = CustomColorTarget.Accent },
                 )
                 ColorSwatchRow(
-                    label = "Background",
+                    label = stringResource(R.string.settings_background),
                     color = Color(customBackground),
                     onClick = { editingColor = CustomColorTarget.Background },
                 )
@@ -699,7 +804,7 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
         when (editingColor) {
             CustomColorTarget.Accent -> ColorPickerDialog(
                 initial = Color(customAccent),
-                title = "Accent color",
+                title = stringResource(R.string.settings_accent_color),
                 onDismiss = { editingColor = null },
                 onConfirm = {
                     viewModel.setCustomAccentColor(it.toArgb())
@@ -708,7 +813,7 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
             )
             CustomColorTarget.Background -> ColorPickerDialog(
                 initial = Color(customBackground),
-                title = "Background color",
+                title = stringResource(R.string.settings_background_color),
                 onDismiss = { editingColor = null },
                 onConfirm = {
                     viewModel.setCustomBackgroundColor(it.toArgb())
@@ -718,8 +823,8 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
             null -> Unit
         }
         SettingSwitchItem(
-            title = "Dynamic Colors",
-            subtitle = "Tint the player, mini player and lyrics from album art. The menus keep the theme color. Off, everything uses the theme color",
+            title = stringResource(R.string.settings_dynamic_colors),
+            subtitle = stringResource(R.string.settings_tint_the_player_mini_player_and_lyrics_from),
             checked = dynamicColors,
             onCheckedChange = { viewModel.setDynamicColors(it) }
         )
@@ -729,15 +834,15 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
         AnimatedVisibility(visible = dynamicColors) {
             Column {
                 SettingSwitchItem(
-                    title = "Tint the menus too",
-                    subtitle = "Let the cover set the app's accent and background everywhere, not just the player",
+                    title = stringResource(R.string.settings_tint_the_menus_too),
+                    subtitle = stringResource(R.string.settings_let_the_cover_set_the_app_s_accent_and),
                     checked = dynamicColorMenus,
                     onCheckedChange = { viewModel.setDynamicColorMenus(it) },
                 )
                 AnimatedVisibility(visible = dynamicColorMenus) {
                     SettingSwitchItem(
-                        title = "Keep the theme background",
-                        subtitle = "Accent only. The background stays the color your theme chose",
+                        title = stringResource(R.string.settings_keep_the_theme_background),
+                        subtitle = stringResource(R.string.settings_accent_only_the_background_stays_the_color_your),
                         checked = dynamicColorKeepBackground,
                         onCheckedChange = { viewModel.setDynamicColorKeepBackground(it) },
                     )
@@ -745,8 +850,8 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
             }
         }
         SettingSwitchItem(
-            title = "Glow behind album art",
-            subtitle = "Bloom the bass-reactive glow around the album cover too, pumping with the kick.",
+            title = stringResource(R.string.settings_glow_behind_album_art),
+            subtitle = stringResource(R.string.settings_bloom_the_bass_reactive_glow_around_the_album),
             checked = glowBehindArt,
             onCheckedChange = { viewModel.setGlowBehindArt(it) }
         )
@@ -760,33 +865,33 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
                     value = artGlowRadius,
                     valueRange = 0f..160f,
                     onCommit = { viewModel.setArtGlowRadius(it) },
-                    label = { "Glow radius  +$it dp" },
-                    subtitle = "How far the halo reaches past the cover's edge",
+                    label = { stringResource(R.string.settings_glow_radius_value, it) },
+                    subtitle = stringResource(R.string.settings_how_far_the_halo_reaches_past_the_cover_s_edge),
                 )
                 IntSettingSlider(
                     value = artGlowBrightness,
                     valueRange = 0f..60f,
                     onCommit = { viewModel.setArtGlowBrightness(it) },
-                    label = { "Glow brightness  $it%" },
-                    subtitle = "Peak strength of the halo on a kick",
+                    label = { stringResource(R.string.settings_glow_brightness_value, it) },
+                    subtitle = stringResource(R.string.settings_peak_strength_of_the_halo_on_a_kick),
                 )
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Typography")
+        SettingsGroupHeader(stringResource(R.string.settings_typography))
 
         // Font size: five fixed steps, or hand over to the OS setting.
         SettingSwitchItem(
-            title = "Use system font size",
-            subtitle = "Follow the size set in Android Settings › Display › Font size",
+            title = stringResource(R.string.settings_use_system_font_size),
+            subtitle = stringResource(R.string.settings_follow_the_size_set_in_android_settings_display),
             checked = followSystemFontScale,
             onCheckedChange = { viewModel.setFontScaleFollowSystem(it) }
         )
 
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             Text(
-                "Font Size",
+                stringResource(R.string.settings_font_size),
                 style = MaterialTheme.typography.bodyLarge,
                 color = if (followSystemFontScale) MaterialTheme.colorScheme.onSurfaceVariant
                         else MaterialTheme.colorScheme.onSurface
@@ -811,13 +916,13 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
                         selected = !followSystemFontScale && preset == selectedPreset,
                         enabled = !followSystemFontScale,
                         onClick = { viewModel.setFontScale(preset.scale) },
-                        label = { Text(preset.label) }
+                        label = { Text(stringResource(preset.label)) }
                     )
                 }
             }
 
             Text(
-                "Preview: The quick brown fox jumps over the lazy dog",
+                stringResource(R.string.settings_preview_the_quick_brown_fox_jumps_over_the_lazy),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 12.dp)
@@ -832,7 +937,7 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
         // font's name so the section still answers "what am I using?" shut.
         var fontLibraryExpanded by rememberSaveable { mutableStateOf(false) }
         val activeFontName = tf.monochrome.android.ui.theme.BundledFonts
-            .displayNameOf(customFontUri) ?: "Inter (default)"
+            .displayNameOf(customFontUri) ?: stringResource(R.string.settings_inter_default)
 
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
             Row(
@@ -844,7 +949,7 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "Font Library",
+                        stringResource(R.string.settings_font_library),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
@@ -857,8 +962,8 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
                 Icon(
                     imageVector = if (fontLibraryExpanded) Icons.Default.KeyboardArrowUp
                         else Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (fontLibraryExpanded) "Collapse font library"
-                        else "Expand font library",
+                    contentDescription = if (fontLibraryExpanded) stringResource(R.string.settings_collapse_font_library)
+                        else stringResource(R.string.settings_expand_font_library),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -868,14 +973,14 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
                 // other rather than a separate "Reset" the user has to find.
                 FontRow(
                     name = "Inter",
-                    note = "The default. Neutral UI grotesque.",
+                    note = stringResource(R.string.settings_the_default_neutral_ui_grotesque),
                     selected = customFontUri == null,
                     onSelect = { viewModel.resetDefaultFont() },
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "Included",
+                    stringResource(R.string.settings_included),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
@@ -892,7 +997,7 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
 
                 if (availableFonts.isNotEmpty()) {
                     Text(
-                        "Imported",
+                        stringResource(R.string.settings_imported),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
@@ -916,7 +1021,7 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
                     },
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                 ) {
-                    Text("Import a font (.ttf / .otf)")
+                    Text(stringResource(R.string.settings_import_a_font_ttf_otf))
                 }
             }
         }
@@ -969,7 +1074,7 @@ private fun FontRow(
             IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
                 Icon(
                     Icons.Default.Delete,
-                    contentDescription = "Delete $name",
+                    contentDescription = stringResource(R.string.settings_delete_font, name),
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(20.dp),
                 )
@@ -984,17 +1089,17 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
     val playerDynamicColor by viewModel.playerDynamicColor.collectAsStateWithLifecycle()
     val playerBlurredBackground by viewModel.playerBlurredBackground.collectAsStateWithLifecycle()
 
-    SettingsGroupHeader("Display")
+    SettingsGroupHeader(stringResource(R.string.settings_display))
     SettingSwitchItem(
-        title = "Show Explicit Badges",
-        subtitle = "Display 'E' badge on explicit tracks",
+        title = stringResource(R.string.settings_show_explicit_badges),
+        subtitle = stringResource(R.string.settings_display_e_badge_on_explicit_tracks),
         checked = explicit,
         onCheckedChange = { viewModel.setShowExplicitBadges(it) }
     )
     val romaji by viewModel.romajiLyrics.collectAsStateWithLifecycle()
     SettingSwitchItem(
-        title = "Romaji Lyrics",
-        subtitle = "Transliterate Japanese lyrics to Latin characters",
+        title = stringResource(R.string.settings_romaji_lyrics),
+        subtitle = stringResource(R.string.settings_transliterate_japanese_lyrics_to_latin),
         checked = romaji,
         onCheckedChange = { viewModel.setRomajiLyrics(it) }
     )
@@ -1004,12 +1109,12 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
     val lyricsProvider by viewModel.lyricsWordProvider.collectAsStateWithLifecycle()
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Text(
-            text = "Word-level lyrics provider",
+            text = stringResource(R.string.settings_word_level_lyrics_provider),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface
         )
         Text(
-            text = "Karaoke-timing source when your instance has no synced lyrics. Both = each falls back to the other.",
+            text = stringResource(R.string.settings_karaoke_timing_source_when_your_instance_has_no),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -1033,31 +1138,31 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
     }
 
     Spacer(modifier = Modifier.height(16.dp))
-    SettingsGroupHeader("Now Playing")
+    SettingsGroupHeader(stringResource(R.string.settings_now_playing))
     val viewMode by viewModel.nowPlayingViewMode.collectAsStateWithLifecycle()
     var showModeDropdown by remember { mutableStateOf(false) }
     SettingItem(
-        title = "View Mode", 
-        subtitle = "Action when clicking album art: ${viewMode.displayName}", 
+        title = stringResource(R.string.settings_view_mode), 
+        subtitle = stringResource(R.string.settings_view_mode_summary, viewModeLabel(viewMode)), 
         onClick = { showModeDropdown = true }
     )
     DropdownMenu(expanded = showModeDropdown, onDismissRequest = { showModeDropdown = false }) {
         NowPlayingViewMode.entries.forEach { mode ->
             DropdownMenuItem(
-                text = { Text(mode.displayName) },
+                text = { Text(viewModeLabel(mode)) },
                 onClick = { viewModel.setNowPlayingViewMode(mode); showModeDropdown = false }
             )
         }
     }
     SettingSwitchItem(
-        title = "Dynamic Player Color",
-        subtitle = "Tint the player from album art (needs Dynamic Colors on); off keeps the player on the theme color",
+        title = stringResource(R.string.settings_dynamic_player_color),
+        subtitle = stringResource(R.string.settings_tint_the_player_from_album_art_needs_dynamic),
         checked = playerDynamicColor,
         onCheckedChange = { viewModel.setPlayerDynamicColor(it) }
     )
     SettingSwitchItem(
-        title = "Blurred Album Background",
-        subtitle = "Behind the player and the mixer: the album art stretched and heavily blurred",
+        title = stringResource(R.string.settings_blurred_album_background),
+        subtitle = stringResource(R.string.settings_behind_the_player_and_the_mixer_the_album_art),
         checked = playerBlurredBackground,
         onCheckedChange = { viewModel.setPlayerBlurredBackground(it) }
     )
@@ -1086,7 +1191,11 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
  * settings-row helpers below.
  */
 @Composable
-internal fun VisualizerSettings(viewModel: SettingsViewModel) {
+internal fun VisualizerSettings(
+    viewModel: SettingsViewModel,
+    /** Opens the glass preset browser the hosting screen draws over itself. */
+    onOpenPresetBrowser: () -> Unit,
+) {
     val sensitivity by viewModel.visualizerSensitivity.collectAsStateWithLifecycle()
     val brightness by viewModel.visualizerBrightness.collectAsStateWithLifecycle()
     val engineEnabled by viewModel.visualizerEngineEnabled.collectAsStateWithLifecycle()
@@ -1108,9 +1217,8 @@ internal fun VisualizerSettings(viewModel: SettingsViewModel) {
     val spectrumShowOnNowPlaying by viewModel.spectrumShowOnNowPlaying.collectAsStateWithLifecycle()
     val spectrumFftSize by viewModel.spectrumFftSize.collectAsStateWithLifecycle()
     val spectrumBins by viewModel.spectrumBins.collectAsStateWithLifecycle()
-    val selectedPresetName = presets.firstOrNull { it.id == presetId }?.displayName ?: "Auto-select bundled preset"
+    val selectedPresetName = presets.firstOrNull { it.id == presetId }?.displayName ?: stringResource(R.string.settings_auto_select_bundled_preset)
     var showTextureDropdown by remember { mutableStateOf(false) }
-    var showPresetDropdown by remember { mutableStateOf(false) }
     var showFftDropdown by remember { mutableStateOf(false) }
 
     // Presets install lazily; make sure the preset dropdown has data.
@@ -1119,34 +1227,34 @@ internal fun VisualizerSettings(viewModel: SettingsViewModel) {
     }
 
         Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Spectrum Analyzer")
+        SettingsGroupHeader(stringResource(R.string.settings_spectrum_analyzer))
         SettingSwitchItem(
-            title = "Show Spectrum Analyzer",
-            subtitle = "Display live audio spectrum on the player and the parametric EQ screen",
+            title = stringResource(R.string.settings_show_spectrum_analyzer),
+            subtitle = stringResource(R.string.settings_display_live_audio_spectrum_on_the_player_and),
             checked = spectrumEnabled,
             onCheckedChange = { viewModel.setSpectrumAnalyzerEnabled(it) }
         )
         SettingSwitchItem(
-            title = "Show on Now Playing",
-            subtitle = "Overlay the spectrum on the album-art hero",
+            title = stringResource(R.string.settings_show_on_now_playing),
+            subtitle = stringResource(R.string.settings_overlay_the_spectrum_on_the_album_art_hero),
             checked = spectrumShowOnNowPlaying,
             onCheckedChange = { viewModel.setSpectrumShowOnNowPlaying(it) }
         )
         val fftLabel = when (spectrumFftSize) {
-            4096 -> "Low (4096)"
-            16384 -> "High (16384)"
-            else -> "Medium (8192)"
+            4096 -> stringResource(R.string.settings_fft_low)
+            16384 -> stringResource(R.string.settings_fft_high)
+            else -> stringResource(R.string.settings_fft_medium)
         }
         SettingItem(
-            title = "FFT Size",
+            title = stringResource(R.string.settings_fft_size),
             subtitle = fftLabel,
             onClick = { showFftDropdown = true }
         )
         DropdownMenu(expanded = showFftDropdown, onDismissRequest = { showFftDropdown = false }) {
             listOf(
-                4096 to "Low (4096)",
-                8192 to "Medium (8192)",
-                16384 to "High (16384)"
+                4096 to stringResource(R.string.settings_fft_low),
+                8192 to stringResource(R.string.settings_fft_medium),
+                16384 to stringResource(R.string.settings_fft_high)
             ).forEach { (size, label) ->
                 DropdownMenuItem(
                     text = { Text(label) },
@@ -1162,50 +1270,74 @@ internal fun VisualizerSettings(viewModel: SettingsViewModel) {
                 viewModel.acquireSpectrum()
                 onDispose { viewModel.releaseSpectrum() }
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            tf.monochrome.android.ui.player.SpectrumOverlay(
-                bins = spectrumBins,
-                color = MaterialTheme.colorScheme.primary,
-                height = 96.dp
-            )
+        }
+
+        // The spectrum's own preview lives in the waterfall section now: with
+        // depth, fade and angle beside it, a second, smaller copy above would
+        // be the same picture without the explanation.
+        Spacer(modifier = Modifier.height(16.dp))
+        // One arbiter for the two live previews below, so only the one most
+        // on screen runs. See PreviewArbiter.
+        val previewArbiter = remember { PreviewArbiter() }
+        androidx.compose.runtime.CompositionLocalProvider(LocalPreviewArbiter provides previewArbiter) {
+        val waterfall by viewModel.spectrumWaterfall.collectAsStateWithLifecycle()
+        SpectrumWaterfallSettingsSection(
+            settings = waterfall,
+            onChange = viewModel::setSpectrumWaterfall,
+            liveBins = if (spectrumEnabled) ({ spectrumBins }) else null,
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        val waveCandy by viewModel.waveCandy.collectAsStateWithLifecycle()
+        WaveCandySettingsSection(
+            settings = waveCandy,
+            onChange = viewModel::setWaveCandy,
+            // Drawn from the same analyzer, so it previews while that runs.
+            preview = spectrumEnabled,
+        )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Audio Visualizer")
+        SettingsGroupHeader(stringResource(R.string.settings_audio_visualizer))
         SettingSwitchItem(
-            title = "Use projectM Visualizer",
-            subtitle = "Use the native OpenGL renderer when the bridge is available",
+            title = stringResource(R.string.settings_use_projectm_visualizer),
+            subtitle = stringResource(R.string.settings_use_the_native_opengl_renderer_when_the_bridge),
             checked = engineEnabled,
             onCheckedChange = { viewModel.setVisualizerEngineEnabled(it) }
         )
+        // The preset library is the player's glass browser, opened over this
+        // screen: categories, authors, favourites and search across all of
+        // it. The dropdown it replaces listed every preset in one menu — over
+        // nine thousand rows with no way to search or group them.
         SettingItem(
-            title = "Default Preset",
+            title = stringResource(R.string.settings_default_preset),
             subtitle = selectedPresetName,
-            onClick = { showPresetDropdown = true }
+            onClick = onOpenPresetBrowser,
         )
-        DropdownMenu(expanded = showPresetDropdown, onDismissRequest = { showPresetDropdown = false }) {
-            DropdownMenuItem(
-                text = { Text("Auto-select bundled preset") },
-                onClick = {
-                    viewModel.setVisualizerPresetId(null)
-                    showPresetDropdown = false
-                }
+        // Presets that crash projectM are never loaded. The count says how many
+        // the browser will show flagged; the ones this phone flagged itself can
+        // be forgiven here, say after a GPU driver update.
+        val flaggedCount = viewModel.visualizerFlaggedPresetIds.collectAsStateWithLifecycle().value.size
+        val deviceFlagged by viewModel.visualizerDeviceFlaggedCount.collectAsStateWithLifecycle()
+        if (flaggedCount > 0 || deviceFlagged > 0) {
+            val summary = pluralStringResource(R.plurals.settings_flagged_presets_summary, flaggedCount, flaggedCount)
+            SettingItem(
+                title = stringResource(R.string.settings_flagged_presets),
+                subtitle = if (deviceFlagged > 0) {
+                    summary + " " + pluralStringResource(
+                        R.plurals.settings_flagged_presets_device, deviceFlagged, deviceFlagged,
+                    )
+                } else {
+                    summary
+                },
+                onClick = { if (deviceFlagged > 0) viewModel.clearVisualizerCrashFlags() },
             )
-            presets.forEach { preset ->
-                DropdownMenuItem(
-                    text = { Text(preset.displayName) },
-                    onClick = {
-                        viewModel.setVisualizerPresetId(preset.id)
-                        showPresetDropdown = false
-                    }
-                )
-            }
         }
         Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Visualizer Graphics")
+        SettingsGroupHeader(stringResource(R.string.settings_visualizer_graphics))
         
         SettingItem(
-            title = "Texture Size",
+            title = stringResource(R.string.settings_texture_size),
             subtitle = "$textureSize",
             onClick = { showTextureDropdown = true }
         )
@@ -1225,26 +1357,25 @@ internal fun VisualizerSettings(viewModel: SettingsViewModel) {
             value = meshX,
             valueRange = 8f..128f,
             onCommit = { viewModel.setVisualizerMeshX(it) },
-            label = { "Mesh X: $it" },
+            label = { stringResource(R.string.settings_mesh_x, it) },
         )
 
         IntSettingSlider(
             value = meshY,
             valueRange = 8f..128f,
             onCommit = { viewModel.setVisualizerMeshY(it) },
-            label = { "Mesh Y: $it" },
+            label = { stringResource(R.string.settings_mesh_y, it) },
         )
 
         IntSettingSlider(
             value = targetFps,
             valueRange = 30f..240f,
             onCommit = { viewModel.setVisualizerTargetFps(it) },
-            label = { "Target FPS: $it" },
+            label = { stringResource(R.string.settings_target_fps, it) },
             subtitle = if (vsyncEnabled) {
-                "Applies with vsync off. While the visualizer is display-synced " +
-                    "the panel sets the rate and this is not used."
+                stringResource(R.string.settings_target_fps_vsync)
             } else {
-                "Caps the visualizer while it is free-running."
+                stringResource(R.string.settings_target_fps_free)
             },
         )
 
@@ -1255,53 +1386,51 @@ internal fun VisualizerSettings(viewModel: SettingsViewModel) {
             value = audioDelayMs,
             valueRange = 0f..ProjectMAudioBus.MAX_DELAY_MS.toFloat(),
             onCommit = { viewModel.setVisualizerAudioDelayMs(it) },
-            label = { if (it == 0) "Audio delay: off" else "Audio delay: $it ms" },
-            subtitle = "Holds the visualizer back to match what you hear. Raise it " +
-                "on Bluetooth, where the headphones add their own delay; leave it " +
-                "at zero on speaker or wired.",
+            label = { if (it == 0) stringResource(R.string.settings_audio_delay_off) else stringResource(R.string.settings_audio_delay_ms, it) },
+            subtitle = stringResource(R.string.settings_holds_the_visualizer_back_to_match_what_you_hear),
         )
 
         SettingSwitchItem(
-            title = "Disable vsync",
-            subtitle = "Let the visualizer exceed display refresh (capped by Target FPS). Increases battery and heat. Adreno honours this; some GPUs ignore it.",
+            title = stringResource(R.string.settings_disable_vsync),
+            subtitle = stringResource(R.string.settings_let_the_visualizer_exceed_display_refresh_capped),
             checked = !vsyncEnabled,
             onCheckedChange = { viewModel.setVisualizerVsyncEnabled(!it) }
         )
 
         SettingSwitchItem(
-            title = "Show FPS",
-            subtitle = "Display visualizer framerate counter",
+            title = stringResource(R.string.settings_show_fps),
+            subtitle = stringResource(R.string.settings_display_visualizer_framerate_counter),
             checked = showFps,
             onCheckedChange = { viewModel.setVisualizerShowFps(it) }
         )
 
         SettingSwitchItem(
-            title = "Fullscreen",
-            subtitle = "Fill screen in Now Playing visualizer view",
+            title = stringResource(R.string.settings_fullscreen),
+            subtitle = stringResource(R.string.settings_fill_screen_in_now_playing_visualizer_view),
             checked = fullscreen,
             onCheckedChange = { viewModel.setVisualizerFullscreen(it) }
         )
         SettingSwitchItem(
-            title = "Touch Waveform",
-            subtitle = "Draw audio waveforms between touch points on the visualizer",
+            title = stringResource(R.string.settings_touch_waveform),
+            subtitle = stringResource(R.string.settings_draw_audio_waveforms_between_touch_points_on_the),
             checked = touchWaveform,
             onCheckedChange = { viewModel.setVisualizerTouchWaveform(it) }
         )
         SettingItem(
-            title = "Engine Status",
-            subtitle = "${engineStatus.badge} • assets ${engineStatus.assetVersion}",
+            title = stringResource(R.string.settings_engine_status),
+            subtitle = stringResource(R.string.settings_engine_status_summary, engineStatus.badge, engineStatus.assetVersion),
             onClick = {}
         )
 
-        SettingsGroupHeader("Preset rotation")
+        SettingsGroupHeader(stringResource(R.string.settings_preset_rotation))
         Text(
             text = when (rotationMode) {
                 PresetRotationMode.Off ->
-                    "Nothing changes the preset. Picking one, and Next, still work."
+                    stringResource(R.string.settings_rotation_off_desc)
                 PresetRotationMode.Timer ->
-                    "A new preset every so often, for as long as the visualizer is up."
+                    stringResource(R.string.settings_rotation_timer_desc)
                 PresetRotationMode.Track ->
-                    "A new preset when the track changes, and nothing in between."
+                    stringResource(R.string.settings_rotation_track_desc)
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1316,9 +1445,9 @@ internal fun VisualizerSettings(viewModel: SettingsViewModel) {
                 ) {
                     Text(
                         when (mode) {
-                            PresetRotationMode.Off -> "Off"
-                            PresetRotationMode.Timer -> "On a timer"
-                            PresetRotationMode.Track -> "Each track"
+                            PresetRotationMode.Off -> stringResource(R.string.state_off)
+                            PresetRotationMode.Timer -> stringResource(R.string.settings_rotation_timer)
+                            PresetRotationMode.Track -> stringResource(R.string.settings_rotation_track)
                         }
                     )
                 }
@@ -1331,7 +1460,7 @@ internal fun VisualizerSettings(viewModel: SettingsViewModel) {
                 value = rotationSeconds,
                 valueRange = 5f..120f,
                 onCommit = { viewModel.setVisualizerRotationSeconds(it) },
-                label = { "Every ${it}s" },
+                label = { stringResource(R.string.settings_every_seconds, it) },
             )
         }
 
@@ -1339,15 +1468,15 @@ internal fun VisualizerSettings(viewModel: SettingsViewModel) {
             value = sensitivity,
             valueRange = 0f..100f,
             onCommit = { viewModel.setVisualizerSensitivity(it) },
-            label = { "Sensitivity: $it%" },
-            subtitle = "Controls intensity (High = Epilepsy Warning)",
+            label = { stringResource(R.string.settings_sensitivity_value, it) },
+            subtitle = stringResource(R.string.settings_controls_intensity_high_epilepsy_warning),
         )
 
         IntSettingSlider(
             value = brightness,
             valueRange = 0f..100f,
             onCommit = { viewModel.setVisualizerBrightness(it) },
-            label = { "Brightness: $it%" },
+            label = { stringResource(R.string.settings_brightness_value, it) },
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -1365,7 +1494,7 @@ private fun IntSettingSlider(
     value: Int,
     valueRange: ClosedFloatingPointRange<Float>,
     onCommit: (Int) -> Unit,
-    label: (Int) -> String,
+    label: @Composable (Int) -> String,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
 ) {
@@ -1423,7 +1552,7 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
         var secretInput by rememberSaveable { mutableStateOf(apiSecret) }
         AlertDialog(
             onDismissRequest = { showApiKeyDialog = false },
-            title = { Text("Your Last.fm API key") },
+            title = { Text(stringResource(R.string.settings_your_last_fm_api_key)) },
             text = {
                 Column {
                     Text(
@@ -1431,19 +1560,13 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
                         // listener who conflates them gets silent failures. This
                         // is an *application* key, not the session key above and
                         // not an account login.
-                        "Needed to scrobble. Scrobbles are signed with your own " +
-                            "secret and posted to your own listening history, so " +
-                            "they use your credentials rather than a key shared " +
-                            "by everyone. Create a pair free at " +
-                            "last.fm/api/account/create.",
+                        stringResource(R.string.settings_lastfm_key_needed),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "Genre charts don't need this. They read public data " +
-                            "with a key built into the app. Entering one here " +
-                            "makes charts use yours instead.",
+                        stringResource(R.string.settings_genre_charts_don_t_need_this_they_read_public),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1453,21 +1576,19 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
                     // never redirects — the connection just never completes,
                     // with nothing on either side saying why.
                     Text(
-                        "Set the application's Callback URL to " +
-                            viewModel.lastFmCallbackUrl +
-                            " so authorising returns to Tryptify.",
+                        stringResource(R.string.settings_lastfm_callback, viewModel.lastFmCallbackUrl),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = keyInput, onValueChange = { keyInput = it },
-                        label = { Text("API key") }, modifier = Modifier.fillMaxWidth()
+                        label = { Text(stringResource(R.string.settings_api_key)) }, modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = secretInput, onValueChange = { secretInput = it },
-                        label = { Text("Shared secret") },
+                        label = { Text(stringResource(R.string.settings_shared_secret)) },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -1476,10 +1597,10 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
                 TextButton(onClick = {
                     viewModel.setLastFmApiCredentials(keyInput, secretInput)
                     showApiKeyDialog = false
-                }) { Text("Save") }
+                }) { Text(stringResource(R.string.action_save)) }
             },
             dismissButton = {
-                TextButton(onClick = { showApiKeyDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showApiKeyDialog = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -1488,11 +1609,11 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
         var tokenInput by rememberSaveable { mutableStateOf(lbToken ?: "") }
         AlertDialog(
             onDismissRequest = { showLbDialog = false },
-            title = { Text("ListenBrainz Token") },
+            title = { Text(stringResource(R.string.settings_listenbrainz_token)) },
             text = {
                 OutlinedTextField(
                     value = tokenInput, onValueChange = { tokenInput = it },
-                    label = { Text("User Token") }, modifier = Modifier.fillMaxWidth()
+                    label = { Text(stringResource(R.string.settings_user_token)) }, modifier = Modifier.fillMaxWidth()
                 )
             },
             confirmButton = {
@@ -1500,35 +1621,37 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
                     if (tokenInput.isNotBlank()) viewModel.setListenBrainzToken(tokenInput)
                     else viewModel.clearListenBrainzToken()
                     showLbDialog = false
-                }) { Text("Save") }
+                }) { Text(stringResource(R.string.action_save)) }
             },
             dismissButton = {
-                TextButton(onClick = { showLbDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showLbDialog = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
 
-    SettingsGroupHeader("Last.fm")
+    Box(Modifier.settingsAnchor(stringResource(R.string.search_lastfm_scrobbling))) {
+        SettingsGroupHeader("Last.fm")
+    }
     SettingItem(
-        title = "Your API key",
+        title = stringResource(R.string.settings_your_api_key),
         subtitle = when {
             apiKey.isNotBlank() && apiSecret.isNotBlank() ->
-                "Set. Scrobbling can sign as you"
+                stringResource(R.string.settings_lastfm_key_set)
             apiKey.isNotBlank() ->
-                "Key set, secret missing. Scrobbling still can't sign"
+                stringResource(R.string.settings_lastfm_secret_missing)
             chartsKeyAvailable ->
-                "Not set. Charts use the built-in key; scrobbling needs yours"
+                stringResource(R.string.settings_lastfm_not_set_charts)
             else ->
-                "Not set. Needed for scrobbling and for all-time charts"
+                stringResource(R.string.settings_lastfm_not_set)
         },
         onClick = { showApiKeyDialog = true }
     )
     SettingItem(
         title = "Last.fm",
         subtitle = when {
-            lastFmEnabled -> "Connected as ${lastFmUsername ?: "user"}"
-            lastFmConnecting -> "Waiting for Last.fm…"
-            else -> "Not connected. Tap to authorise in your browser"
+            lastFmEnabled -> stringResource(R.string.settings_connected_as, lastFmUsername ?: stringResource(R.string.settings_user))
+            lastFmConnecting -> stringResource(R.string.settings_waiting_for_lastfm)
+            else -> stringResource(R.string.settings_lastfm_tap_to_authorise)
         },
         // No text box. A session key is not something a person has — it comes
         // out of auth.getSession, which needs the browser handshake this
@@ -1538,7 +1661,7 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
     )
     if (lastFmEnabled) {
         TextButton(onClick = { viewModel.clearLastFmSession() }) {
-            Text("Disconnect", color = MaterialTheme.colorScheme.error)
+            Text(stringResource(R.string.settings_disconnect), color = MaterialTheme.colorScheme.error)
         }
     }
     lastFmAuthError?.let { message ->
@@ -1548,19 +1671,19 @@ private fun ScrobblingControls(viewModel: SettingsViewModel) {
             color = MaterialTheme.colorScheme.error,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         )
-        TextButton(onClick = { viewModel.clearLastFmError() }) { Text("Dismiss") }
+        TextButton(onClick = { viewModel.clearLastFmError() }) { Text(stringResource(R.string.action_dismiss)) }
     }
 
     Spacer(modifier = Modifier.height(16.dp))
     SettingsGroupHeader("ListenBrainz")
     SettingItem(
         title = "ListenBrainz",
-        subtitle = if (lbEnabled) "Connected" else "Not connected",
+        subtitle = if (lbEnabled) stringResource(R.string.connected) else stringResource(R.string.settings_not_connected),
         onClick = { showLbDialog = true }
     )
     if (lbEnabled) {
         TextButton(onClick = { viewModel.clearListenBrainzToken() }) {
-            Text("Disconnect", color = MaterialTheme.colorScheme.error)
+            Text(stringResource(R.string.settings_disconnect), color = MaterialTheme.colorScheme.error)
         }
     }
 }
@@ -1602,19 +1725,17 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
     }
 
     SettingsTabContent {
-        SettingsGroupHeader("Playback")
+        SettingsGroupHeader(stringResource(R.string.settings_playback))
         SettingSwitchItem(
-            title = "Gapless Playback",
-            subtitle = "Remove silence between tracks",
+            title = stringResource(R.string.settings_gapless_playback),
+            subtitle = stringResource(R.string.settings_remove_silence_between_tracks),
             checked = gapless,
             onCheckedChange = { viewModel.setGaplessPlayback(it) }
         )
 
         SettingSwitchItem(
-            title = "Never Resample Between Tracks",
-            subtitle = "A track at a different sample rate starts after a brief gap " +
-                "instead of being resampled to match, keeping output bit-perfect. " +
-                "Turn off to keep every transition seamless and let the system resample.",
+            title = stringResource(R.string.settings_never_resample_between_tracks),
+            subtitle = stringResource(R.string.settings_a_track_at_a_different_sample_rate_starts_after),
             checked = gaplessNoResample,
             onCheckedChange = { viewModel.setGaplessNoResample(it) }
         )
@@ -1624,16 +1745,16 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         // exclusive in effect — any blend above 0s overlaps the tracks, so the
         // gapless hand-off steps aside for it.
         Text(
-            text = if (crossfade == 0) "Blend Between Tracks: Gapless" else "Blend Between Tracks: ${crossfade}s",
+            text = if (crossfade == 0) stringResource(R.string.settings_blend_gapless) else stringResource(R.string.settings_blend_seconds, crossfade),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.settingsAnchor(stringResource(R.string.search_crossfade)),
         )
         Text(
             text = if (crossfade == 0) {
-                "At zero, tracks run straight into each other with no gap. " +
-                    "Add time to overlap them instead."
+                stringResource(R.string.settings_blend_zero_desc)
             } else {
-                "The outgoing track fades out while the next fades in over ${crossfade}s."
+                stringResource(R.string.settings_blend_desc, crossfade)
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1647,15 +1768,15 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Streaming Quality")
-        SettingItem(title = "Wi-Fi Streaming", subtitle = wifiQuality.displayName, onClick = { showWifiDropdown = true })
+        SettingsGroupHeader(stringResource(R.string.settings_streaming_quality))
+        SettingItem(title = stringResource(R.string.settings_wi_fi_streaming), subtitle = wifiQuality.displayName, onClick = { showWifiDropdown = true })
         DropdownMenu(expanded = showWifiDropdown, onDismissRequest = { showWifiDropdown = false }) {
             AudioQuality.entries.forEach { q ->
                 DropdownMenuItem(text = { Text(q.displayName) }, onClick = { viewModel.setWifiQuality(q); showWifiDropdown = false })
             }
         }
 
-        SettingItem(title = "Cellular Streaming", subtitle = cellularQuality.displayName, onClick = { showCellularDropdown = true })
+        SettingItem(title = stringResource(R.string.settings_cellular_streaming), subtitle = cellularQuality.displayName, onClick = { showCellularDropdown = true })
         DropdownMenu(expanded = showCellularDropdown, onDismissRequest = { showCellularDropdown = false }) {
             AudioQuality.entries.forEach { q ->
                 DropdownMenuItem(text = { Text(q.displayName) }, onClick = { viewModel.setCellularQuality(q); showCellularDropdown = false })
@@ -1663,7 +1784,7 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Audio Processing")
+        SettingsGroupHeader(stringResource(R.string.settings_audio_processing))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1688,7 +1809,7 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         // switch that decides whether any of it runs, so it sits directly
         // above the downmix toggle instead of under a heading of its own.
         Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Output")
+        SettingsGroupHeader(stringResource(R.string.settings_output))
         DspBlockSizeSelector(viewModel)
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -1696,8 +1817,8 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
 
         Spacer(modifier = Modifier.height(8.dp))
         SettingItem(
-            title = "Atmos Renderer Configuration",
-            subtitle = "Channel map, coefficient downmix & optional SOFA binaural render",
+            title = stringResource(R.string.settings_atmos_renderer_configuration),
+            subtitle = stringResource(R.string.settings_channel_map_coefficient_downmix_optional_sofa),
             onClick = { navController.navigateTool(Screen.AtmosRenderer) },
         )
 
@@ -1708,7 +1829,7 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         ChannelDetectorCard(viewModel)
 
         Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Playback Speed")
+        SettingsGroupHeader(stringResource(R.string.settings_playback_speed))
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -1748,7 +1869,7 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
                 viewModel.setPlaybackSpeed(1.0f)
                 speedText = "1.00"
             }) {
-                Text("Reset")
+                Text(stringResource(R.string.action_reset))
             }
         }
 
@@ -1758,11 +1879,12 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         if (!preservePitch) {
             Text(
                 text = if (PitchRatio.isOnSemitone(playbackSpeed)) {
-                    "Pitch: ${PitchRatio.formatSemitones(PitchRatio.nearestSemitone(playbackSpeed))} semitones (exact)"
-                } else {
-                    String.format(
-                        Locale.US, "Pitch: %+.2f semitones", PitchRatio.semitonesFor(playbackSpeed),
+                    val semitones = PitchRatio.nearestSemitone(playbackSpeed)
+                    pluralStringResource(
+                        R.plurals.settings_pitch_exact, kotlin.math.abs(semitones), PitchRatio.formatSemitones(semitones),
                     )
+                } else {
+                    stringResource(R.string.settings_pitch_fraction, PitchRatio.semitonesFor(playbackSpeed))
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1771,8 +1893,8 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         }
 
         SettingSwitchItem(
-            title = "Preserve Pitch",
-            subtitle = "Keep original pitch when changing speed",
+            title = stringResource(R.string.settings_preserve_pitch),
+            subtitle = stringResource(R.string.settings_keep_original_pitch_when_changing_speed),
             checked = preservePitch,
             onCheckedChange = { viewModel.setPreservePitch(it) }
         )
@@ -1790,12 +1912,12 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
 private fun DspBlockSizeSelector(viewModel: SettingsViewModel) {
     val current by viewModel.dspBlockSize.collectAsStateWithLifecycle()
     Text(
-        text = "DSP Block Size",
+        text = stringResource(R.string.settings_dsp_block_size),
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurface,
     )
     Text(
-        text = "Smaller = lower latency, more CPU. Default 1024.",
+        text = stringResource(R.string.settings_smaller_lower_latency_more_cpu_default_1024),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -1829,11 +1951,11 @@ private fun formatBlockSize(size: Int): String = when {
 private fun MultichannelDownmixToggle(viewModel: SettingsViewModel) {
     val enabled by viewModel.multichannelDownmixEnabled.collectAsStateWithLifecycle()
     SettingSwitchItem(
-        title = "Downmix multichannel to stereo",
+        title = stringResource(R.string.settings_downmix_multichannel_to_stereo),
         subtitle = if (enabled) {
-            "Multichannel tracks fold into stereo (fixed matrix) and run through DSP/EQ."
+            stringResource(R.string.settings_downmix_on)
         } else {
-            "Off. Multichannel passes to the device untouched; DSP/EQ bypassed for those tracks."
+            stringResource(R.string.settings_downmix_off)
         },
         checked = enabled,
         onCheckedChange = { viewModel.setMultichannelDownmixEnabled(it) },
@@ -1874,11 +1996,11 @@ private fun DebugScreenRecorderRow() {
     }
 
     SettingItem(
-        title = if (recording) "Stop debug screen recording" else "Debug screen recording",
+        title = if (recording) stringResource(R.string.settings_stop_debug_recording) else stringResource(R.string.settings_debug_recording),
         subtitle = when {
-            recording -> "Recording… native resolution/fps, stereo media audio. Tap to stop."
-            lastSaved != null -> "Saved: $lastSaved. Tap to record again."
-            else -> "Native resolution & fps, stereo internal audio (no mic) → Movies/Tryptify."
+            recording -> stringResource(R.string.settings_debug_recording_active)
+            lastSaved != null -> stringResource(R.string.settings_debug_recording_saved, lastSaved!!)
+            else -> stringResource(R.string.settings_debug_recording_idle)
         },
         onClick = {
             if (recording) {
@@ -1906,14 +2028,14 @@ private fun ChannelDetectorCard(viewModel: SettingsViewModel) {
         onDispose { viewModel.releaseChannelDetector() }
     }
     Text(
-        text = "Channel detector",
+        text = stringResource(R.string.settings_channel_detector),
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurface,
     )
     val s = state
     if (s == null) {
         Text(
-            text = "Idle. Play a track to detect its channel layout.",
+            text = stringResource(R.string.settings_idle_play_a_track_to_detect_its_channel_layout),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -2002,14 +2124,26 @@ private fun UsbBitPerfectToggle(viewModel: SettingsViewModel) {
     val enabled by viewModel.usbBitPerfectEnabled.collectAsStateWithLifecycle()
     val deviceName by viewModel.usbOutputDeviceName.collectAsStateWithLifecycle()
     SettingSwitchItem(
-        title = "USB DAC bit-perfect routing",
+        title = stringResource(R.string.settings_usb_dac_bit_perfect_routing),
         subtitle = when {
-            !enabled -> "Off. Uses system audio output."
-            deviceName != null -> "On → $deviceName"
-            else -> "On. Plug in a USB DAC to start routing."
+            !enabled -> stringResource(R.string.settings_usb_off)
+            deviceName != null -> stringResource(R.string.settings_usb_on_device, deviceName!!)
+            else -> stringResource(R.string.settings_usb_on_waiting)
         },
         checked = enabled,
         onCheckedChange = { viewModel.setUsbBitPerfectEnabled(it) },
+    )
+
+    val hiResHal by viewModel.hiResHalOutputEnabled.collectAsStateWithLifecycle()
+    SettingSwitchItem(
+        title = stringResource(R.string.settings_hi_res_output_bluetooth_speaker),
+        subtitle = if (hiResHal) {
+            stringResource(R.string.settings_hires_on)
+        } else {
+            stringResource(R.string.settings_hires_off)
+        },
+        checked = hiResHal,
+        onCheckedChange = { viewModel.setHiResHalOutputEnabled(it) },
     )
 
     val exclusiveEnabled by viewModel.usbExclusiveBitPerfectEnabled.collectAsStateWithLifecycle()
@@ -2019,7 +2153,7 @@ private fun UsbBitPerfectToggle(viewModel: SettingsViewModel) {
     val supportedRates by viewModel.usbBypassSupportedRates.collectAsStateWithLifecycle()
     val dacInfo by viewModel.usbDacInfo.collectAsStateWithLifecycle()
     SettingSwitchItem(
-        title = "Exclusive USB DAC (bypass Android audio)",
+        title = stringResource(R.string.settings_exclusive_usb_dac_bypass_android_audio),
         subtitle = exclusiveSubtitle(
             exclusiveEnabled, exclusiveStatus, failure
         ),
@@ -2107,7 +2241,7 @@ private fun BypassDiagnosticsCard(
             }
             if (diagnostics != null) {
                 Text(
-                    text = "Active stream",
+                    text = stringResource(R.string.settings_active_stream),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold,
@@ -2155,7 +2289,7 @@ private fun BypassDiagnosticsCard(
             } else if (failure != null && failure.code !=
                 tf.monochrome.android.audio.usb.StartError.Ok) {
                 Text(
-                    text = "Bypass failed",
+                    text = stringResource(R.string.settings_bypass_failed),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.SemiBold,
@@ -2192,7 +2326,7 @@ private fun BypassDiagnosticsCard(
                     Spacer(modifier = Modifier.height(8.dp))
                 }
                 Text(
-                    text = "Supported rates",
+                    text = stringResource(R.string.settings_supported_rates),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold,
@@ -2226,30 +2360,28 @@ private fun BypassDiagnosticsCard(
  * iso pump isn't running yet so audio is still going through the
  * standard sink. The DeviceOpen string says so.
  */
+@Composable
 private fun exclusiveSubtitle(
     enabled: Boolean,
     status: tf.monochrome.android.audio.usb.UsbExclusiveController.Status,
     failure: tf.monochrome.android.audio.usb.StartFailure?,
 ): String {
     if (!enabled) {
-        return "Off. UAPP-style libusb output. Needs Developer Options " +
-            "→ Disable USB audio routing → ON, otherwise Android's audio " +
-            "HAL will keep grabbing the DAC and fight us for it."
+        return stringResource(R.string.settings_exclusive_off)
     }
     return when (status) {
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.Disabled ->
-            "Starting up…"
+            stringResource(R.string.settings_exclusive_starting)
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.NoDevice ->
-            "On, waiting for a USB DAC to be plugged in."
+            stringResource(R.string.settings_exclusive_no_device)
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.AwaitingPermission ->
-            "DAC detected. Accept the system USB-permission prompt."
+            stringResource(R.string.settings_exclusive_permission)
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.DeviceOpen ->
-            "DAC handle acquired ✓. Bypass engages on the next " +
-            "track (or skip the current track to engage now)."
+            stringResource(R.string.settings_exclusive_open)
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.InterfaceClaimed ->
-            "Streaming interface claimed ✓"
+            stringResource(R.string.settings_exclusive_claimed)
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.Streaming ->
-            "Bit-perfect: bypassing Android audio ✓ (EQ / DSP still active)"
+            stringResource(R.string.settings_exclusive_streaming)
         // The Error subtitle used to hardcode the kernel-claim story.
         // Now we defer to whichever StartFailure category the native
         // side reported — claim failures, rate-negotiation failures,
@@ -2258,8 +2390,7 @@ private fun exclusiveSubtitle(
         // happen but: defensive), fall back to the old text.
         tf.monochrome.android.audio.usb.UsbExclusiveController.Status.Error ->
             failure?.actionableMessage()?.takeIf { it.isNotBlank() }
-                ?: ("Bypass couldn't engage. See logcat tagged " +
-                    "'LibusbUacDriver' for details.")
+                ?: stringResource(R.string.settings_exclusive_error)
     }
 }
 
@@ -2290,34 +2421,26 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
     if (showClearDialog) {
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
-            title = { Text("Clear Downloads") },
+            title = { Text(stringResource(R.string.settings_clear_downloads)) },
             // Named, not "all downloaded tracks". A number and a size are what
             // tell you whether this is the three podcasts you meant or the
             // album you spent an evening on a hotel connection fetching.
             text = {
                 Text(
-                    buildString {
-                        append(
-                            when (downloadedCount) {
-                                1 -> "1 downloaded track"
-                                else -> "$downloadedCount downloaded tracks"
-                            }
-                        )
-                        downloadedSize?.let { append(" ($it)") }
-                        append(" will be deleted from your device. ")
-                        append("Streaming them again needs a connection, and re-downloading ")
-                        append("them needs the same data over again. This cannot be undone.")
-                    }
+                    pluralStringResource(
+                        R.plurals.settings_clear_downloads_warning, downloadedCount, downloadedCount,
+                        downloadedSize?.let { stringResource(R.string.settings_size_suffix, it) } ?: "",
+                    )
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.clearAllDownloads()
                     showClearDialog = false
-                }) { Text("Delete All", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.settings_delete_all), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { showClearDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showClearDialog = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -2326,20 +2449,18 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
         // Moved off Library, which had it under a "Liked Songs" header of its
         // own. Liking a song is a library action; downloading one is not, and
         // every other download setting was already here.
-        SettingsGroupHeader("Automatic Downloads")
+        SettingsGroupHeader(stringResource(R.string.settings_automatic_downloads))
         val autoDownloadLiked by viewModel.autoDownloadLikedSongs.collectAsStateWithLifecycle()
         SettingSwitchItem(
-            title = "Auto-Download Liked Songs",
-            subtitle = "Keep a copy of every song you like from now on. " +
-                "Songs you liked earlier are left alone. Turning this on " +
-                "never starts a bulk download.",
+            title = stringResource(R.string.settings_auto_download_liked_songs),
+            subtitle = stringResource(R.string.settings_keep_a_copy_of_every_song_you_like_from_now_on),
             checked = autoDownloadLiked,
             onCheckedChange = { viewModel.setAutoDownloadLikedSongs(it) }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Download Quality")
-        SettingItem(title = "Quality", subtitle = downloadQuality.displayName, onClick = { showQualityDropdown = true })
+        SettingsGroupHeader(stringResource(R.string.settings_download_quality))
+        SettingItem(title = stringResource(R.string.settings_quality), subtitle = downloadQuality.displayName, onClick = { showQualityDropdown = true })
         DropdownMenu(expanded = showQualityDropdown, onDismissRequest = { showQualityDropdown = false }) {
             AudioQuality.entries.forEach { q ->
                 DropdownMenuItem(text = { Text(q.displayName) }, onClick = { viewModel.setDownloadQuality(q); showQualityDropdown = false })
@@ -2348,36 +2469,38 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
 
         val dlLyrics by viewModel.downloadLyrics.collectAsStateWithLifecycle()
         SettingSwitchItem(
-            title = "Download Lyrics",
-            subtitle = "Bundle .lrc files with downloaded tracks",
+            title = stringResource(R.string.settings_download_lyrics),
+            subtitle = stringResource(R.string.settings_bundle_lrc_files_with_downloaded_tracks),
             checked = dlLyrics,
             onCheckedChange = { viewModel.setDownloadLyrics(it) }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Download Folder")
+        SettingsGroupHeader(stringResource(R.string.settings_download_folder))
 
         // remember so the DocumentFile ContentResolver lookup runs only when the
         // folder actually changes, not on every recomposition of this screen.
-        val folderDisplay = remember(downloadFolder, context) {
+        val customFolderLabel = stringResource(R.string.settings_custom_folder)
+        val internalStorageLabel = stringResource(R.string.settings_internal_storage_default)
+        val folderDisplay = remember(downloadFolder, context, customFolderLabel) {
             downloadFolder?.let { folder ->
                 try {
                     val uri = folder.toUri()
                     val docFile = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, uri)
-                    docFile?.name ?: "Custom folder"
-                } catch (_: Exception) { "Custom folder" }
-            } ?: "Internal app storage (default)"
+                    docFile?.name ?: customFolderLabel
+                } catch (_: Exception) { customFolderLabel }
+            } ?: internalStorageLabel
         }
 
         SettingItem(
-            title = "Save location",
+            title = stringResource(R.string.settings_save_location),
             subtitle = folderDisplay,
             onClick = { folderPickerLauncher.launch(null) }
         )
 
         if (downloadFolder != null) {
             TextButton(onClick = { viewModel.setDownloadFolderUri(null) }) {
-                Text("Reset to default", color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.settings_reset_to_default), color = MaterialTheme.colorScheme.primary)
             }
         }
 
@@ -2385,23 +2508,21 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
         // Not "Storage" — System has a group by that name for the cache, and
         // two identically-titled headers in different tabs read as the same
         // setting reachable from two places. This one is about the files.
-        SettingsGroupHeader("Downloaded Files")
+        SettingsGroupHeader(stringResource(R.string.settings_downloaded_files))
         // The warning goes above the button, not only in the dialog it opens.
         // A confirmation you meet after committing to the tap is a speed bump;
         // what stops the wrong tap is knowing beforehand that there is
         // something here to lose, and how much of it.
         if (downloadedCount > 0) {
             SettingCaution(
-                buildString {
-                    append("Deletes ")
-                    append(if (downloadedCount == 1) "1 track" else "$downloadedCount tracks")
-                    downloadedSize?.let { append(" ($it)") }
-                    append(" from this device. They have to be downloaded again to play offline.")
-                }
+                pluralStringResource(
+                    R.plurals.settings_clear_downloads_caution, downloadedCount, downloadedCount,
+                    downloadedSize?.let { stringResource(R.string.settings_size_suffix, it) } ?: "",
+                )
             )
         } else {
             Text(
-                "Nothing downloaded.",
+                stringResource(R.string.settings_nothing_downloaded),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 8.dp),
@@ -2416,7 +2537,7 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
         ) {
             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Clear All Downloads")
+            Text(stringResource(R.string.settings_clear_all_downloads))
         }
     }
 }
@@ -2462,31 +2583,24 @@ private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
         var input by rememberSaveable { mutableStateOf(uploadChannel) }
         AlertDialog(
             onDismissRequest = { showChannelDialog = false },
-            title = { Text("Spectrum over the artwork") },
+            title = { Text(stringResource(R.string.settings_spectrum_over_the_artwork)) },
             text = {
                 Column {
                     Text(
-                        "With a channel set, the spectrum is drawn across the album " +
-                            "art itself instead of in the small circle. That means an " +
-                            "image per track, and Discord only shows images it can " +
-                            "fetch, so each one is posted here as an attachment and " +
-                            "the card points at it.",
+                        stringResource(R.string.settings_with_a_channel_set_the_spectrum_is_drawn_across),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "Use a channel you don't mind filling up. A private server of " +
-                            "your own is the usual answer. Enable Developer Mode in " +
-                            "Discord, then right-click the channel and Copy Channel ID. " +
-                            "Leave it empty to keep the plain cover and the circle.",
+                        stringResource(R.string.settings_use_a_channel_you_don_t_mind_filling_up_a),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = input, onValueChange = { input = it },
-                        label = { Text("Channel ID") },
+                        label = { Text(stringResource(R.string.settings_channel_id)) },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -2495,10 +2609,10 @@ private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
                 TextButton(onClick = {
                     viewModel.setDiscordUploadChannel(input)
                     showChannelDialog = false
-                }) { Text("Save") }
+                }) { Text(stringResource(R.string.action_save)) }
             },
             dismissButton = {
-                TextButton(onClick = { showChannelDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showChannelDialog = false }) { Text(stringResource(R.string.action_cancel)) }
             },
         )
     }
@@ -2510,31 +2624,24 @@ private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
         var appIdInput by rememberSaveable { mutableStateOf(applicationId) }
         AlertDialog(
             onDismissRequest = { showDialog = false },
-            title = { Text("Discord token") },
+            title = { Text(stringResource(R.string.settings_discord_token)) },
             text = {
                 Column {
                     Text(
-                        "This is your Discord account token, not a password and not " +
-                            "an app password. Anything holding it can read your messages " +
-                            "and act as you. Tryptify keeps it on this device only and " +
-                            "never syncs it, but paste it only if that trade is one you " +
-                            "want to make.",
+                        stringResource(R.string.settings_this_is_your_discord_account_token_not_a),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "Discord has no presence API for phones, so the only way to do " +
-                            "this is to connect as you. That is against Discord's terms, " +
-                            "and while presence-only use has gone unpunished for years, " +
-                            "the risk of losing the account is yours.",
+                        stringResource(R.string.settings_discord_has_no_presence_api_for_phones_so_the),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = tokenInput, onValueChange = { tokenInput = it },
-                        label = { Text("User token") },
+                        label = { Text(stringResource(R.string.settings_user_token)) },
                         // Replacing one is the common case, not entering the
                         // first: tokens rotate on every password change, and
                         // selecting seventy characters by hand to overwrite
@@ -2542,7 +2649,7 @@ private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
                         trailingIcon = {
                             if (tokenInput.isNotEmpty()) {
                                 IconButton(onClick = { tokenInput = "" }) {
-                                    Icon(Icons.Default.Close, contentDescription = "Clear token")
+                                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.settings_clear_token))
                                 }
                             }
                         },
@@ -2551,15 +2658,12 @@ private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = appIdInput, onValueChange = { appIdInput = it },
-                        label = { Text("Application ID (optional)") },
+                        label = { Text(stringResource(R.string.settings_application_id_optional)) },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        "Album art needs an application ID. A presence set this way can " +
-                            "only show an image Discord itself hosts, and an application " +
-                            "is what turns a cover URL into one. Without it you still get " +
-                            "the track, artist, album and progress bar.",
+                        stringResource(R.string.settings_album_art_needs_an_application_id_a_presence_set),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -2569,56 +2673,55 @@ private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
                 TextButton(onClick = {
                     viewModel.setDiscordCredentials(tokenInput, appIdInput)
                     showDialog = false
-                }) { Text("Save") }
+                }) { Text(stringResource(R.string.action_save)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showDialog = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
 
     SettingsGroupHeader("Discord")
     SettingItem(
-        title = "Token",
+        title = stringResource(R.string.settings_token),
         subtitle = when {
-            token.isBlank() -> "Not set. Needed to show what you're playing"
+            token.isBlank() -> stringResource(R.string.settings_discord_not_set)
             discordUser != null && applicationId.isBlank() ->
-                "$discordUser, album art off (no application ID)"
+                stringResource(R.string.settings_discord_user_no_art, discordUser!!)
             discordUser != null -> "$discordUser"
-            applicationId.isBlank() -> "Set. Album art off (no application ID)"
-            else -> "Set"
+            applicationId.isBlank() -> stringResource(R.string.settings_discord_set_no_art)
+            else -> stringResource(R.string.settings_set)
         },
         onClick = { showDialog = true }
     )
     SettingSwitchItem(
-        title = "Show what I'm playing",
+        title = stringResource(R.string.settings_show_what_i_m_playing),
         subtitle = when {
-            token.isBlank() -> "Add a token first"
+            token.isBlank() -> stringResource(R.string.settings_discord_add_token_first)
             status == tf.monochrome.android.data.presence.DiscordPresenceManager.Status.CONNECTED ->
-                "On. Your profile is showing the current track"
+                stringResource(R.string.settings_discord_on_showing)
             status == tf.monochrome.android.data.presence.DiscordPresenceManager.Status.CONNECTING ->
-                "Connecting…"
+                stringResource(R.string.settings_connecting)
             status == tf.monochrome.android.data.presence.DiscordPresenceManager.Status.FAILED ->
-                "Couldn't connect"
-            enabled -> "On. Connects when something plays"
-            else -> "Off"
+                stringResource(R.string.settings_couldnt_connect)
+            enabled -> stringResource(R.string.settings_discord_on_waiting)
+            else -> stringResource(R.string.state_off)
         },
         checked = enabled,
         onCheckedChange = { viewModel.setDiscordPresenceEnabled(it && token.isNotBlank()) }
     )
     SettingItem(
-        title = "Spectrum over the artwork",
+        title = stringResource(R.string.settings_spectrum_over_the_artwork),
         subtitle = if (uploadChannel.isBlank()) {
-            "Off. The spectrum sits in the small circle"
+            stringResource(R.string.settings_spectrum_circle)
         } else {
-            "Posting to channel $uploadChannel"
+            stringResource(R.string.settings_posting_to_channel, uploadChannel)
         },
         onClick = { showChannelDialog = true },
     )
     SettingSwitchItem(
-        title = "Animated spectrum",
-        subtitle = "A moving spectrum beside the artwork, matched to the genre's " +
-            "rhythm and the cover's colour. Off leaves the card still.",
+        title = stringResource(R.string.settings_animated_spectrum),
+        subtitle = stringResource(R.string.settings_a_moving_spectrum_beside_the_artwork_matched_to),
         checked = animated,
         onCheckedChange = { viewModel.setDiscordPresenceAnimated(it) }
     )
@@ -2629,11 +2732,11 @@ private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
             color = MaterialTheme.colorScheme.error,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         )
-        TextButton(onClick = { viewModel.clearDiscordError() }) { Text("Dismiss") }
+        TextButton(onClick = { viewModel.clearDiscordError() }) { Text(stringResource(R.string.action_dismiss)) }
     }
     if (token.isNotBlank()) {
         TextButton(onClick = { viewModel.clearDiscordCredentials() }) {
-            Text("Forget token", color = MaterialTheme.colorScheme.error)
+            Text(stringResource(R.string.settings_forget_token), color = MaterialTheme.colorScheme.error)
         }
     }
 }
@@ -2641,7 +2744,7 @@ private fun DiscordPresenceControls(viewModel: SettingsViewModel) {
 @Composable
 private fun ConnectionsTab(viewModel: SettingsViewModel) {
     SettingsTabContent {
-        CatalogControls(viewModel)
+        ApiServersSection(viewModel)
         Spacer(modifier = Modifier.height(20.dp))
         ScrobblingControls(viewModel)
         Spacer(modifier = Modifier.height(20.dp))
@@ -2673,16 +2776,14 @@ private fun SpotifyAccountControls() {
     if (connected) {
         SettingItem(
             title = "Spotify",
-            subtitle = "Connected as ${userName ?: "…"}",
+            subtitle = stringResource(R.string.settings_connected_as, userName ?: "…"),
         )
         OutlinedButton(onClick = { spotifyViewModel.disconnect() }) {
-            Text("Disconnect Spotify")
+            Text(stringResource(R.string.settings_disconnect_spotify))
         }
     } else {
         Text(
-            "Connect your Spotify account to import playlists from Library. "
-                + "Note: only Spotify accounts allowlisted for this app can "
-                + "connect while it is in Development mode.",
+            stringResource(R.string.settings_connect_your_spotify_account_to_import_playlists),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)
@@ -2691,7 +2792,7 @@ private fun SpotifyAccountControls() {
             onClick = { spotifyViewModel.connect(context) },
             enabled = !connecting
         ) {
-            Text(if (connecting) "Connecting…" else "Connect Spotify")
+            Text(if (connecting) stringResource(R.string.settings_connecting) else stringResource(R.string.settings_connect_spotify))
         }
     }
     authError?.let { error ->
@@ -2718,215 +2819,41 @@ private fun AccountControls(viewModel: SettingsViewModel) {
     if (showSignOutDialog) {
         AlertDialog(
             onDismissRequest = { showSignOutDialog = false },
-            title = { Text("Sign out?") },
-            text = { Text("You'll stop syncing favorites and playlists across devices until you sign back in.") },
+            title = { Text(stringResource(R.string.settings_sign_out)) },
+            text = { Text(stringResource(R.string.settings_you_ll_stop_syncing_favorites_and_playlists)) },
             confirmButton = {
                 TextButton(onClick = {
                     showSignOutDialog = false
                     viewModel.logout()
-                }) { Text("Sign Out", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.sign_out), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { showSignOutDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showSignOutDialog = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
 
-    SettingsGroupHeader("Account")
+    SettingsGroupHeader(stringResource(R.string.account))
     if (isLoggedIn) {
         SettingItem(
-            title = "Signed in as",
-            subtitle = userEmail ?: "Unknown",
+            title = stringResource(R.string.settings_signed_in_as),
+            subtitle = userEmail ?: stringResource(R.string.unknown),
         )
         OutlinedButton(onClick = { showSignOutDialog = true }) {
-            Text("Sign Out")
+            Text(stringResource(R.string.sign_out))
         }
     } else {
         Text(
-            "Sign in to sync favorites and playlists across devices.",
+            stringResource(R.string.settings_sign_in_to_sync_favorites_and_playlists_across),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)
         )
         Text(
-            "Use the Account page to sign in with Google or email.",
+            stringResource(R.string.settings_use_the_account_page_to_sign_in_with_google_or),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-    }
-}
-
-/**
- * Catalog picker + the self-hosted server URLs, unwrapped from any scroll
- * container so [ConnectionsTab] can stack it with the scrobbler, Spotify and
- * account groups — [SettingsTabContent] is a LazyColumn and two cannot nest.
- *
- * Depends on nothing but [viewModel]; both text fields own their own state.
- */
-@Composable
-private fun CatalogControls(viewModel: SettingsViewModel) {
-    val customEndpoint by viewModel.customEndpoint.collectAsStateWithLifecycle()
-    val qobuzEndpoint by viewModel.qobuzEndpoint.collectAsStateWithLifecycle()
-    val sourceMode by viewModel.sourceMode.collectAsStateWithLifecycle()
-    var customInput by remember(customEndpoint) { mutableStateOf(customEndpoint ?: "") }
-    var qobuzInput by remember(qobuzEndpoint) { mutableStateOf(qobuzEndpoint ?: "") }
-
-    SettingsGroupHeader("Catalog Source")
-    // Source mode picker — controls which catalogs feed search/discovery.
-    // Plays/downloads still follow the per-track PlaybackSource so a
-    // download you triggered earlier keeps working regardless of this
-    // setting.
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Text(
-            text = "Catalog source",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = "Which catalogs power Search and Browse.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        val sourceOptions = listOf(
-            tf.monochrome.android.data.preferences.SourceMode.BOTH to "Both",
-            tf.monochrome.android.data.preferences.SourceMode.TIDAL_ONLY to "TIDAL only",
-            tf.monochrome.android.data.preferences.SourceMode.QOBUZ_ONLY to "Qobuz only",
-        )
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            sourceOptions.forEachIndexed { index, (mode, label) ->
-                SegmentedButton(
-                    selected = sourceMode == mode,
-                    onClick = { viewModel.setSourceMode(mode) },
-                    shape = SegmentedButtonDefaults.itemShape(index, sourceOptions.size),
-                ) {
-                    Text(label)
-                }
-            }
-        }
-    }
-
-    Spacer(modifier = Modifier.height(20.dp))
-    SettingsGroupHeader("Servers")
-
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Tidal HiFi URL",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "Your own Tidal HiFi server, used for search, browse, and streaming.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        // Snapshot the latest input/saved value into stable holders so the
-        // onFocusChanged closure captured by the OutlinedTextField doesn't
-        // need to re-allocate on every keystroke recomposition.
-        val latestInput = rememberUpdatedState(customInput)
-        val latestSaved = rememberUpdatedState(customEndpoint)
-        OutlinedTextField(
-            value = customInput,
-            onValueChange = { customInput = it },
-            placeholder = {
-                Text(
-                    "API endpoint",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = {
-                viewModel.setCustomEndpoint(latestInput.value.trim().ifBlank { null })
-            }),
-            modifier = Modifier
-                .widthIn(max = 240.dp)
-                .onFocusChanged { focusState ->
-                    if (!focusState.isFocused) {
-                        val trimmed = latestInput.value.trim().ifBlank { null }
-                        if (trimmed != latestSaved.value) {
-                            viewModel.setCustomEndpoint(trimmed)
-                        }
-                    }
-                }
-        )
-    }
-
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Qobuz URL",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "Used for downloads. Honored whenever set, independent of Dev Mode.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        val latestQobuzInput = rememberUpdatedState(qobuzInput)
-        val latestQobuzSaved = rememberUpdatedState(qobuzEndpoint)
-        OutlinedTextField(
-            value = qobuzInput,
-            onValueChange = { qobuzInput = it },
-            placeholder = {
-                Text(
-                    "Qobuz instance",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = {
-                viewModel.setQobuzEndpoint(latestQobuzInput.value.trim().ifBlank { null })
-            }),
-            modifier = Modifier
-                .widthIn(max = 240.dp)
-                .onFocusChanged { focusState ->
-                    if (!focusState.isFocused) {
-                        val trimmed = latestQobuzInput.value.trim().ifBlank { null }
-                        if (trimmed != latestQobuzSaved.value) {
-                            viewModel.setQobuzEndpoint(trimmed)
-                        }
-                    }
-                }
-        )
-    }
-}
-
-@Composable
-private fun InstanceCard(url: String, version: String?) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
-            .liquidGlass(shape = RoundedCornerShape(8.dp)),
-        colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.Cloud, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(10.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(url, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
-                if (version != null) {
-                    Text("v$version", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            Icon(Icons.Default.Check, contentDescription = "Online", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-        }
     }
 }
 
@@ -2956,12 +2883,12 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
                         }
                     } else {
                         withContext(Dispatchers.Main) {
-                            android.widget.Toast.makeText(context, "Failed to read file", android.widget.Toast.LENGTH_SHORT).show()
+                            android.widget.Toast.makeText(context, context.getString(R.string.settings_failed_to_read_file), android.widget.Toast.LENGTH_SHORT).show()
                         }
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
-                        android.widget.Toast.makeText(context, "Error reading file", android.widget.Toast.LENGTH_SHORT).show()
+                        android.widget.Toast.makeText(context, context.getString(R.string.settings_error_reading_file), android.widget.Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -2988,7 +2915,7 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
                 withContext(Dispatchers.Main) {
                     android.widget.Toast.makeText(
                         context,
-                        if (ok) "Backup saved" else "Failed to save backup",
+                        context.getString(if (ok) R.string.settings_backup_saved else R.string.settings_failed_to_save_backup),
                         android.widget.Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -2999,38 +2926,38 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
     if (showClearAllDialog) {
         AlertDialog(
             onDismissRequest = { showClearAllDialog = false },
-            title = { Text("Reset Settings & Cache") },
+            title = { Text(stringResource(R.string.settings_reset_settings_cache)) },
             // Reworded to match what clearAllData() actually does: it resets
             // preferences and wipes the cache but leaves the Room library
             // untouched, and the app does not restart. The old copy promised
             // to clear "all local data" and restart, neither of which happened.
-            text = { Text("This resets all app settings and clears cached data. Your saved library, playlists, favorites, and downloads are kept.") },
+            text = { Text(stringResource(R.string.settings_this_resets_all_app_settings_and_clears_cached)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.clearAllData()
                     showClearAllDialog = false
-                }) { Text("Reset", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.action_reset), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { showClearAllDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showClearAllDialog = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
 
     SettingsTabContent {
-        SettingsGroupHeader("Storage")
-        SettingItem(title = "Cache Size", subtitle = cacheSize)
+        SettingsGroupHeader(stringResource(R.string.settings_storage))
+        SettingItem(title = stringResource(R.string.settings_cache_size), subtitle = cacheSize)
         OutlinedButton(onClick = { viewModel.clearCache() }) {
             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Clear Cache")
+            Text(stringResource(R.string.settings_clear_cache))
         }
 
         Spacer(modifier = Modifier.height(20.dp))
-        SettingsGroupHeader("Data")
+        SettingsGroupHeader(stringResource(R.string.settings_data))
         SettingItem(
-            title = "Restart onboarding",
-            subtitle = "Run the first-time setup again. Your library and settings are kept.",
+            title = stringResource(R.string.settings_restart_onboarding),
+            subtitle = stringResource(R.string.settings_run_the_first_time_setup_again_your_library_and),
             onClick = { viewModel.restartOnboarding() }
         )
         OutlinedButton(
@@ -3039,13 +2966,13 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         ) {
             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Reset Settings & Cache")
+            Text(stringResource(R.string.settings_reset_settings_cache))
         }
 
         Spacer(modifier = Modifier.height(20.dp))
-        SettingsGroupHeader("Backup & Restore")
+        SettingsGroupHeader(stringResource(R.string.settings_backup_restore))
         Text(
-            "Export or import your library and history as a JSON file",
+            stringResource(R.string.settings_export_or_import_your_library_and_history_as_a),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)
@@ -3059,12 +2986,12 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
                     exportSaveLauncher.launch("monochrome-backup.json")
                 }
             }) {
-                Text("Export JSON")
+                Text(stringResource(R.string.settings_export_json))
             }
             OutlinedButton(onClick = {
                 filePickerLauncher.launch(arrayOf("application/json", "*/*"))
             }) {
-                Text("Import JSON")
+                Text(stringResource(R.string.settings_import_json))
             }
         }
 
@@ -3074,7 +3001,7 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         // toggle. They cost battery and heat, which makes them System's
         // business — the visualizer's own GPU settings stay with the visualizer.
         Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Performance")
+        SettingsGroupHeader(stringResource(R.string.settings_performance))
 
         // Low performance mode. The master owns nothing of its own — it writes
         // the three switches below it, and they write it back — so the row is
@@ -3084,51 +3011,51 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         val legacyPlayer by viewModel.legacyPlayer.collectAsStateWithLifecycle()
         val disableLiquidGlass by viewModel.disableLiquidGlass.collectAsStateWithLifecycle()
         SettingSwitchItem(
-            title = "Low performance mode",
-            subtitle = "Turns off animations, the liquid glass effect and the new player design in one go. Saves battery and helps on older or slower devices.",
+            title = stringResource(R.string.settings_low_performance_mode),
+            subtitle = stringResource(R.string.settings_turns_off_animations_the_liquid_glass_effect_and),
             checked = lowPerformanceMode,
             onCheckedChange = { viewModel.setLowPerformanceMode(it) }
         )
         Column(modifier = Modifier.padding(start = 16.dp)) {
             SettingSwitchItem(
-                title = "Disable animations",
-                subtitle = "No transitions, bounces, glass motion or colour blends anywhere in the app.",
+                title = stringResource(R.string.settings_disable_animations),
+                subtitle = stringResource(R.string.settings_no_transitions_bounces_glass_motion_or_colour),
                 checked = disableAnimations,
                 onCheckedChange = { viewModel.setDisableAnimations(it) }
             )
             SettingSwitchItem(
-                title = "Legacy player",
-                subtitle = "Use the flat player design from before liquid glass.",
+                title = stringResource(R.string.settings_legacy_player),
+                subtitle = stringResource(R.string.settings_use_the_flat_player_design_from_before_liquid),
                 checked = legacyPlayer,
                 onCheckedChange = { viewModel.setLegacyPlayer(it) }
             )
             SettingSwitchItem(
-                title = "Remove liquid glass",
-                subtitle = "Flat, opaque surfaces instead of blurred, refractive glass throughout the app.",
+                title = stringResource(R.string.settings_remove_liquid_glass),
+                subtitle = stringResource(R.string.settings_flat_opaque_surfaces_instead_of_blurred),
                 checked = disableLiquidGlass,
                 onCheckedChange = { viewModel.setDisableLiquidGlass(it) }
             )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Display")
+        SettingsGroupHeader(stringResource(R.string.settings_display))
 
         // Game-style full screen: no status bar, no gesture bar. Every screen
         // pads from WindowInsets, so hiding the bars collapses those insets and
         // the content grows into the space on its own.
         val immersiveFullScreen by viewModel.immersiveFullScreen.collectAsStateWithLifecycle()
         SettingSwitchItem(
-            title = "Full screen",
-            subtitle = "Hides the notification bar and the bottom gesture bar everywhere in the app. Swipe in from an edge to bring them back for a moment.",
+            title = stringResource(R.string.settings_full_screen),
+            subtitle = stringResource(R.string.settings_hides_the_notification_bar_and_the_bottom),
             checked = immersiveFullScreen,
             onCheckedChange = { viewModel.setImmersiveFullScreen(it) }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Diagnostics")
+        SettingsGroupHeader(stringResource(R.string.settings_diagnostics))
         SettingItem(
-            title = "View debug log",
-            subtitle = "Live logcat stream for this process. Copy or export as a file for bug reports",
+            title = stringResource(R.string.settings_view_debug_log),
+            subtitle = stringResource(R.string.settings_live_logcat_stream_for_this_process_copy_or),
             onClick = { navController.navigateTool(Screen.DebugLog) },
         )
 
@@ -3161,28 +3088,29 @@ private fun AboutTab(viewModel: SettingsViewModel) {
         WhatsNewPanel(highlight = arrivedUnread)
 
         Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Updates")
+        SettingsGroupHeader(stringResource(R.string.settings_updates))
         SettingItem(
-            title = "Check for updates",
-            subtitle = "Look on GitHub for a newer release now",
+            title = stringResource(R.string.settings_check_for_updates),
+            subtitle = stringResource(R.string.settings_look_on_github_for_a_newer_release_now),
             onClick = { viewModel.checkForUpdatesNow() },
         )
 
         Spacer(modifier = Modifier.height(24.dp))
-        SettingsGroupHeader("About Tryptify")
+        SettingsGroupHeader(stringResource(R.string.settings_about_tryptify))
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Tryptify version ${BuildConfig.VERSION_NAME} · 2026",
+                text = stringResource(R.string.settings_version_line, BuildConfig.VERSION_NAME),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.settingsAnchor(stringResource(R.string.search_version)),
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Open-source, ad-free music streaming",
+                text = stringResource(R.string.settings_open_source_ad_free_music_streaming),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -3193,7 +3121,7 @@ private fun AboutTab(viewModel: SettingsViewModel) {
 /** The tip jar, and who's asking. */
 @Composable
 private fun SupportSection(onKofi: () -> Unit, onPatreon: () -> Unit) {
-    SettingsGroupHeader("Support the app")
+    SettingsGroupHeader(stringResource(R.string.settings_support_the_app))
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -3201,7 +3129,7 @@ private fun SupportSection(onKofi: () -> Unit, onPatreon: () -> Unit) {
         Spacer(modifier = Modifier.height(8.dp))
         Image(
             painter = painterResource(id = R.drawable.trypt_pfp),
-            contentDescription = "trypt avatar",
+            contentDescription = stringResource(R.string.settings_trypt_avatar),
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .size(120.dp)
@@ -3209,9 +3137,7 @@ private fun SupportSection(onKofi: () -> Unit, onPatreon: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "Tryptify is built and maintained by trypt. If it's "
-                + "earned a place in your day, a tip keeps the lights on "
-                + "and the next features shipping.",
+            text = stringResource(R.string.settings_tryptify_is_built_and_maintained_by_trypt_if_it),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -3323,7 +3249,7 @@ private fun SettingsTabContent(content: @Composable () -> Unit) {
             // the bar's glass — giving it something real to frost — instead of
             // stopping at a hard line below it.
             top = 16.dp + LocalSettingsSearchInset.current,
-            bottom = 16.dp + LocalMiniPlayerInset.current + navBar,
+            bottom = 16.dp + LocalBottomChromeInset.current + navBar,
         ),
     ) {
         item { content() }
@@ -3338,7 +3264,7 @@ internal fun devSlug(text: String): String =
     text.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_').ifEmpty { "item" }
 
 @Composable
-private fun SettingsGroupHeader(title: String) {
+internal fun SettingsGroupHeader(title: String) {
     tf.monochrome.android.devedit.DevEditable("hdr_${devSlug(title)}", Modifier.fillMaxWidth()) {
         Text(
             text = title,
@@ -3502,11 +3428,13 @@ private fun PageOrderRow(
     title: String,
     visible: Boolean,
     canToggle: Boolean,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
-    onUp: () -> Unit,
-    onDown: () -> Unit,
     onToggleVisible: () -> Unit,
+    // A tab row only shows or hides; its place in the bar is fixed.
+    reorderable: Boolean = true,
+    canMoveUp: Boolean = false,
+    canMoveDown: Boolean = false,
+    onUp: () -> Unit = {},
+    onDown: () -> Unit = {},
 ) {
     val dim = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
     tf.monochrome.android.devedit.DevEditable("page_${devSlug(title)}", Modifier.fillMaxWidth()) {
@@ -3524,25 +3452,62 @@ private fun PageOrderRow(
             IconButton(onClick = onToggleVisible, enabled = canToggle) {
                 Icon(
                     if (visible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                    // Disabled only on the last visible page: hiding it would
-                    // leave a pager with nothing in it, and every way into
-                    // Settings is a page's top bar.
+                    // Disabled on the last visible Library section: hiding it
+                    // would leave the Library tab nothing to open.
                     contentDescription = if (visible) "Hide $title" else "Show $title",
                     tint = if (canToggle) MaterialTheme.colorScheme.onSurface else dim,
                 )
             }
-            IconButton(onClick = onUp, enabled = canMoveUp) {
+            if (reorderable) IconButton(onClick = onUp, enabled = canMoveUp) {
                 Icon(
                     Icons.Default.KeyboardArrowUp,
-                    contentDescription = "Move $title up",
+                    contentDescription = stringResource(R.string.settings_move_up, title),
                     tint = if (canMoveUp) MaterialTheme.colorScheme.onSurface else dim,
                 )
             }
-            IconButton(onClick = onDown, enabled = canMoveDown) {
+            if (reorderable) IconButton(onClick = onDown, enabled = canMoveDown) {
                 Icon(
                     Icons.Default.KeyboardArrowDown,
-                    contentDescription = "Move $title down",
+                    contentDescription = stringResource(R.string.settings_move_down, title),
                     tint = if (canMoveDown) MaterialTheme.colorScheme.onSurface else dim,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * One of the nav bar's two middle buttons: what it holds now, and a menu of
+ * what it can hold. A hidden page is listed but can't be picked — it has no
+ * page to open — and picking the other slot's page swaps the two.
+ */
+@Composable
+private fun NavBarSlotRow(
+    title: String,
+    current: String?,
+    choices: List<String>,
+    hidden: Set<String>,
+    onPick: (String) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        SettingItem(
+            title = title,
+            subtitle = current?.let { tf.monochrome.android.ui.navigation.pageTitle(it) }.orEmpty(),
+            onClick = { open = true },
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            choices.forEach { id ->
+                DropdownMenuItem(
+                    text = { Text(tf.monochrome.android.ui.navigation.pageTitle(id)) },
+                    enabled = id !in hidden,
+                    trailingIcon = if (id == current) {
+                        { Icon(Icons.Default.Check, contentDescription = null) }
+                    } else null,
+                    onClick = {
+                        open = false
+                        onPick(id)
+                    },
                 )
             }
         }
@@ -3611,7 +3576,7 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
     // wrapper, SettingsGroupHeader throughout — which also gives the rows
     // stable DevEdit ids like everywhere else.
     SettingsTabContent {
-        SettingsGroupHeader("Local Media Scanning")
+        SettingsGroupHeader(stringResource(R.string.settings_local_media_scanning))
 
         Spacer(modifier = Modifier.height(8.dp))
         val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
@@ -3619,7 +3584,7 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
         OutlinedButton(
             onClick = {
                 viewModel.rescanLibrary()
-                android.widget.Toast.makeText(scanContext, "Scanning library…", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(scanContext, scanContext.getString(R.string.settings_scanning_library), android.widget.Toast.LENGTH_SHORT).show()
             },
             enabled = !isScanning,
             modifier = Modifier.fillMaxWidth()
@@ -3630,37 +3595,75 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        // Was "Library Tab Order", when the five Library sections were the only
-        // pages this list could reach. It covers Home and Discover now, neither
-        // of which is a library tab. The entry in SettingsSearchIndex has to be
-        // renamed with it — a test greps these files for every index title.
-        //
-        // It no longer orders a swipe: pages are picked from the list on Home,
-        // and this is that list's order. Which is less than it used to do, and
-        // not nothing — the order here is the order you read there, and a page
-        // grayed out leaves the list altogether.
-        SettingsGroupHeader("Page Order")
+        // This was one "Page Order" list over every page, back when pages were
+        // picked from a list on Home. With the tab bar the stored order does two
+        // separate jobs, so it is shown as two groups. Both titles are entries
+        // in SettingsSearchIndex — a test greps these files for every one.
+        SettingsGroupHeader(stringResource(R.string.settings_tab_bar))
         Text(
-            "The order of the page list on Home. Gray out the ones you don't use " +
-                "and they leave the list.",
+            stringResource(R.string.settings_home_library_and_search_are_always_there_turn),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)
         )
-
-        // The FULL order, hidden pages included: the arrows move within this
-        // list, so the indices these rows hand back are the indices the stored
-        // order uses. A hidden page also keeps its slot, so showing it again
-        // puts it back where it was rather than at the end.
-        pageOrder.forEachIndexed { index, pageId ->
+        // The two buttons between Home and Library. Each slot is a menu of the
+        // pages that can go there, in the order Settings lists them: Discover,
+        // World radio, then the Library sections as the switcher orders them.
+        val navBarSlots by viewModel.navBarSlots.collectAsStateWithLifecycle()
+        val navChoices = tf.monochrome.android.ui.navigation.NAV_BAR_CHOICES
+            .sortedBy { id -> pageOrder.indexOf(id).let { if (it < 0) Int.MAX_VALUE else it } }
+        listOf(
+            R.string.settings_nav_bar_slot_first,
+            R.string.settings_nav_bar_slot_second,
+        ).forEachIndexed { index, label ->
+            NavBarSlotRow(
+                title = stringResource(label),
+                current = navBarSlots.getOrNull(index),
+                choices = navChoices,
+                hidden = hiddenPages,
+                onPick = { viewModel.setNavBarSlot(index, it) },
+            )
+        }
+        listOf(
+            tf.monochrome.android.ui.navigation.Screen.Discover.route,
+            tf.monochrome.android.ui.navigation.RADIO_PAGE_ID,
+        ).forEach { pageId ->
             PageOrderRow(
-                title = APP_PAGE_TITLES[pageId] ?: pageId,
+                title = tf.monochrome.android.ui.navigation.pageTitle(pageId),
+                visible = pageId !in hiddenPages,
+                canToggle = canTogglePageVisibility(pageOrder, hiddenPages, pageId),
+                reorderable = false,
+                onToggleVisible = { viewModel.setPageVisible(pageId, pageId in hiddenPages) },
+            )
+        }
+        val hideMiniWithTabs by viewModel.miniPlayerHideWithTabs.collectAsStateWithLifecycle()
+        SettingSwitchItem(
+            title = stringResource(R.string.settings_mini_player_hide_with_tabs),
+            subtitle = stringResource(R.string.settings_mini_player_hide_with_tabs_desc),
+            checked = hideMiniWithTabs,
+            onCheckedChange = viewModel::setMiniPlayerHideWithTabs,
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsGroupHeader(stringResource(R.string.settings_library_sections))
+        Text(
+            stringResource(R.string.settings_the_order_of_the_switcher_at_the_top_of_library),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        // Hidden sections included and kept in their slot, so showing one again
+        // puts it back where it was rather than at the end.
+        val sections = pageOrder.filter { it in tf.monochrome.android.ui.navigation.LIBRARY_PAGE_IDS }
+        sections.forEachIndexed { index, pageId ->
+            PageOrderRow(
+                title = tf.monochrome.android.ui.navigation.pageTitle(pageId),
                 visible = pageId !in hiddenPages,
                 canToggle = canTogglePageVisibility(pageOrder, hiddenPages, pageId),
                 canMoveUp = index > 0,
-                canMoveDown = index < pageOrder.lastIndex,
-                onUp = { viewModel.movePage(index, index - 1) },
-                onDown = { viewModel.movePage(index, index + 1) },
+                canMoveDown = index < sections.lastIndex,
+                onUp = { viewModel.moveLibrarySection(pageId, -1) },
+                onDown = { viewModel.moveLibrarySection(pageId, +1) },
                 onToggleVisible = { viewModel.setPageVisible(pageId, pageId in hiddenPages) },
             )
         }
@@ -3686,7 +3689,7 @@ private fun WhatsNewPanel(highlight: Boolean) {
     if (releases.isEmpty()) return
 
     LitGroupHeader(
-        title = "What's New",
+        title = stringResource(R.string.settings_what_s_new),
         // Only badged when you haven't read this build's notes yet. A permanent
         // "new" flag is one nobody looks at twice.
         badge = releases.first().versionName.takeIf { highlight },
@@ -3805,7 +3808,7 @@ private fun PlaylistImportSection() {
         // SystemTab declared this once at the top and the block borrowed it;
         // lifted out, the section has to own it.
         val context = LocalContext.current
-        SettingsGroupHeader("Playlist Import")
+        SettingsGroupHeader(stringResource(R.string.settings_playlist_import))
         val spotifyViewModel: SpotifyImportViewModel = hiltViewModel()
         val spotifyConnected by spotifyViewModel.isConnected.collectAsStateWithLifecycle()
         val spotifyUserName by spotifyViewModel.userName.collectAsStateWithLifecycle()
@@ -3814,8 +3817,8 @@ private fun PlaylistImportSection() {
         var showSpotifyPicker by remember { mutableStateOf(false) }
         var importUrl by remember { mutableStateOf("") }
 
-        val onImportResult: (Boolean, String) -> Unit = { success, msg ->
-            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+        val onImportResult: (Boolean, UiText) -> Unit = { success, msg ->
+            android.widget.Toast.makeText(context, msg.resolve(context), android.widget.Toast.LENGTH_LONG).show()
             if (success) importUrl = ""
         }
 
@@ -3838,12 +3841,12 @@ private fun PlaylistImportSection() {
         androidx.compose.material3.OutlinedTextField(
             value = importUrl,
             onValueChange = { importUrl = it },
-            label = { Text("Spotify playlist URL") },
+            label = { Text(stringResource(R.string.settings_spotify_playlist_url)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             enabled = spotifyConnected,
             supportingText = if (!spotifyConnected) {
-                { Text("Connect Spotify on the Connections tab to enable URL import") }
+                { Text(stringResource(R.string.settings_connect_spotify_on_the_connections_tab_to_enable)) }
             } else null
         )
         Spacer(modifier = Modifier.height(8.dp))
@@ -3852,7 +3855,7 @@ private fun PlaylistImportSection() {
                 onClick = { spotifyViewModel.importByUrl(context, importUrl, onResult = onImportResult) },
                 enabled = spotifyConnected && importUrl.isNotBlank() && !isImporting
             ) {
-                Text("Import Playlist")
+                Text(stringResource(R.string.settings_import_playlist))
             }
             OutlinedButton(
                 onClick = {
@@ -3861,7 +3864,7 @@ private fun PlaylistImportSection() {
                 },
                 enabled = spotifyConnected && !isImporting
             ) {
-                Text("Browse My Playlists")
+                Text(stringResource(R.string.settings_browse_my_playlists))
             }
         }
 
@@ -3966,7 +3969,7 @@ private fun SettingsHitPill(entry: SettingsEntry, onClick: () -> Unit) {
             )
             Spacer(Modifier.width(6.dp))
             Text(
-                text = entry.title,
+                text = entry.displayTitle(),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
@@ -3978,7 +3981,7 @@ private fun SettingsHitPill(entry: SettingsEntry, onClick: () -> Unit) {
             // you tap it to find out whether you are about to change tab or
             // leave the screen.
             Text(
-                text = entry.tabLabel,
+                text = stringResource(settingsTabLabelRes(entry.tabLabel)),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -4013,29 +4016,28 @@ private const val ANCHOR_TIMEOUT_MS = 700L
  */
 @Composable
 private fun LightPaperSetting(paper: String, onPaperChange: (String) -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().settingsAnchor("Light paper")) {
+    Column(modifier = Modifier.fillMaxWidth().settingsAnchor(stringResource(R.string.settings_light_paper))) {
         Text(
-            text = "Light paper",
+            text = stringResource(R.string.settings_light_paper),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            text = "The ground every light theme is printed on. Crisp is true white; " +
-                "warm is off-white, for less glare.",
+            text = stringResource(R.string.settings_the_ground_every_light_theme_is_printed_on_crisp),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             PaperSwatch(
-                label = "Crisp",
+                label = stringResource(R.string.settings_crisp),
                 paper = Paper.Crisp,
                 selected = paper != "warm",
                 onClick = { onPaperChange("crisp") },
                 modifier = Modifier.weight(1f),
             )
             PaperSwatch(
-                label = "Warm",
+                label = stringResource(R.string.settings_warm),
                 paper = Paper.Warm,
                 selected = paper == "warm",
                 onClick = { onPaperChange("warm") },
@@ -4080,14 +4082,14 @@ private fun ColorTransitionSetting(
     fun seconds(ms: Int) = String.format(Locale.US, "%.2f s", ms / 1000f)
     val readout = if (selected == 0) "Instant" else seconds(selected)
 
-    Column(modifier = Modifier.fillMaxWidth().settingsAnchor("Color transition")) {
+    Column(modifier = Modifier.fillMaxWidth().settingsAnchor(stringResource(R.string.settings_color_transition))) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = "Color transition",
+                text = stringResource(R.string.settings_color_transition),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
             )
@@ -4098,8 +4100,7 @@ private fun ColorTransitionSetting(
             )
         }
         Text(
-            text = "How long the album's colours take to cross over when the track changes. " +
-                "Longer means more of the screen repainting for longer.",
+            text = stringResource(R.string.settings_how_long_the_album_s_colours_take_to_cross_over),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -4166,3 +4167,14 @@ private fun PaperSwatch(
         )
     }
 }
+
+/** What the player's view-mode picker calls each mode, in the reader's language. */
+@Composable
+private fun viewModeLabel(mode: NowPlayingViewMode): String = stringResource(
+    when (mode) {
+        NowPlayingViewMode.COVER_ART -> R.string.settings_view_cover_art
+        NowPlayingViewMode.LYRICS -> R.string.mode_lyrics
+        NowPlayingViewMode.QUEUE -> R.string.queue
+        NowPlayingViewMode.VISUALIZER -> R.string.visualizer
+    }
+)

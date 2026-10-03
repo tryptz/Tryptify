@@ -1,5 +1,9 @@
 #include <jni.h>
 
+#include <string>
+#include <unordered_set>
+#include <utility>
+
 #include "projectm_bridge.h"
 
 namespace {
@@ -25,7 +29,29 @@ Java_tf_monochrome_android_visualizer_ProjectMNativeBridge_nativeCreate(
         jint width,
         jint height,
         jint mesh_width,
-        jint mesh_height) {
+        jint mesh_height,
+        jobjectArray excluded_presets,
+        jstring crash_sentinel_path) {
+    std::unordered_set<std::string> excluded;
+    const jsize excluded_count = excluded_presets != nullptr ? env->GetArrayLength(excluded_presets) : 0;
+    excluded.reserve(static_cast<size_t>(excluded_count));
+    for (jsize i = 0; i < excluded_count; ++i) {
+        auto path = static_cast<jstring>(env->GetObjectArrayElement(excluded_presets, i));
+        if (path == nullptr) {
+            continue;
+        }
+        const char* chars = env->GetStringUTFChars(path, nullptr);
+        excluded.emplace(chars);
+        env->ReleaseStringUTFChars(path, chars);
+        env->DeleteLocalRef(path);
+    }
+    std::string sentinel;
+    if (crash_sentinel_path != nullptr) {
+        const char* chars = env->GetStringUTFChars(crash_sentinel_path, nullptr);
+        sentinel = chars;
+        env->ReleaseStringUTFChars(crash_sentinel_path, chars);
+    }
+
     const char* asset_root_chars = env->GetStringUTFChars(asset_root, nullptr);
     const char* preset_root_chars = env->GetStringUTFChars(preset_root, nullptr);
     const char* texture_root_chars = env->GetStringUTFChars(texture_root, nullptr);
@@ -37,7 +63,9 @@ Java_tf_monochrome_android_visualizer_ProjectMNativeBridge_nativeCreate(
             width,
             height,
             mesh_width,
-            mesh_height
+            mesh_height,
+            std::move(excluded),
+            std::move(sentinel)
     );
 
     env->ReleaseStringUTFChars(asset_root, asset_root_chars);

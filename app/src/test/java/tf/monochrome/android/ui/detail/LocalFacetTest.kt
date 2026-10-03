@@ -48,12 +48,15 @@ class LocalFacetTest {
     }
 
     @Test
-    fun `every facet has a noun the hero can print`() {
-        // Used as "Search this $noun" and "Unknown $noun", so it has to read as
-        // a singular thing, lower case.
+    fun `every facet has its own search hint and unknown label`() {
+        // Whole phrases per facet, not one noun in a template: the article and
+        // adjective agree with the noun in French, Spanish and German. So each
+        // facet needs its own two strings, and no two facets may share one.
         LocalFacet.entries.forEach { facet ->
-            assert(facet.noun.isNotBlank()) { "${facet.name} has no noun" }
-            assertEquals(facet.noun.lowercase(), facet.noun)
+            assert(facet.searchHint != 0) { "${facet.name} has no search hint" }
+            assert(facet.unknownLabel != 0) { "${facet.name} has no unknown label" }
         }
+        val ids = LocalFacet.entries.flatMap { listOf(it.searchHint, it.unknownLabel) }
+        assertEquals("facets share a string", ids.size, ids.distinct().size)
     }
 }

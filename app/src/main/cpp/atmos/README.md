@@ -145,3 +145,104 @@ worth knowing when debugging:
 Host tests live in `tests/` (each file states its compile line); the render
 suite is `hrtf_render_test`, `hrtf_motion_test`, `hrtf_polish_test`,
 `atmos_pipeline_test`, `object_engine_test`.
+
+## Loudspeaker render (5.1 .. 9.1.6)
+
+`speaker_renderer.h` renders the reconstructed objects to a physical layout —
+5.1, 7.1, 5.1.2, 5.1.4, 7.1.2, 7.1.4, 9.1.4, 9.1.6 — for HDMI receivers and
+multichannel USB interfaces (`AtmosPipeline::process_frame_speakers`, JNI
+`nativeSetOutputLayout` / `nativeProcessFrameSpeakers`). Output is interleaved
+in Android channel-mask order so the Kotlin side hands it to the AudioTrack
+unchanged (`AtmosAudioTrackProvider` sets the exact mask; 9.1.x travels as a
+24-channel frame whose extra positions are silent, because Media3 1.5 only
+accepts 1-8, 10, 12 and 24 channels).
+
+- **Positions**: OAMD room-cube coordinates are warped onto the Dolby home
+  speaker angles (cube azimuth 45 -> 30 deg, 135 -> 150 deg; the top of a wall
+  lands on the 45-degree top speakers) before panning — raw cube angles would
+  put the front corners at 45 degrees, between L and the side.
+- **Panning**: VBAP over the precomputed convex hull of the layout, closed with
+  imaginary zenith/nadir speakers whose gain is shared out, so every direction
+  has a solution on every layout (the constant-power grid test checks this).
+- **Object properties (TS 103 420 clause 5.2)**: size (box sampling, power
+  sum), divergence (power-preserving centre + two sides, BS.2127-style), zone
+  constraints (one hull per constraint over the permitted speakers, speaker ->
+  zone map of Table A.7), channel lock (nearest speaker). Bed objects play from
+  their own channel when the layout has it; the LFE object goes to the LFE.
+- **Fallback**: frames without JOC play the decoded bed on the layout, delayed
+  by the same 577-sample QMF latency and crossfaded, exactly like the stereo path.
+
+Host tests: `speaker_renderer_test`, `atmos_speaker_pipeline_test`.
+
+## OAMD decode fixes against TS 103 420
+
+Cavern's decode (and this port) disagreed with the spec in places that change
+what is heard. Fixed, with tests in `cavern_oamd_resolve_test`:
+
+- `read_signed` returned 0 for every input (a C# precedence bug upstream), so
+  every differential position update was dropped and moving objects froze
+  between absolute updates. It is now the spec's two's-complement delta.
+- Differential positions are relative to the PREVIOUS metadata block (clause
+  5.3), not the same block slot of the previous frame; Z clamps to [-1, 1].
+- `oa_element_size` counts BYTES after the size field (clause 5.6.4.3). The port
+  seeked `size + 1` BITS from before it — harmless with one element, but it
+  desynchronised any element after the first. Seeking is now forward-only.
+- `object_gain_idx == 3` is the previous OBJECT's gain in the same block
+  (Table 18), not a hold; inactive objects are silent (Table 28).
+- Blocks follow the default / full / reuse / mixed rules of Tables 28-29, so
+  unsignalled fields hold instead of resetting.
+- Newly decoded and applied: zone constraints + elevation, per-axis size, snap,
+  screen anchoring (clause 5.2.1.3, with Cavern's default screen), room-distance
+  projection (clause 5.2.1.2), and the extended_object_element (divergence and
+  extended-precision position).
+- Bed objects take their channel's position (they used to sit at the cube
+  origin, the front-left corner), in the binaural path as well.
+
+Still open / approximate:
+
+- ISF (stacked-ring) objects: the spec gives ring sizes and order but not the
+  ring azimuths, so rings are spaced evenly from the front.
+- The obj_render_info[] bit order: the syntax (index 0 = position) and Table 31
+  (index 3 = position) disagree; the port keeps Cavern's reading, which matches
+  the syntax and the other flag arrays. Confirm against reference content.
+- Not compared with Dolby's reference renderer or certified test content (both
+  need a Dolby licence). What IS checked against Dolby is below.
+- AC-4 is not decoded natively (there is no AC-4 decoder in FFmpeg); it plays
+  through the platform decoder or HDMI passthrough.
+
+Run every host test with CTest: see `tests/CMakeLists.txt`.
+
+## Real-content reference check
+
+`tools/reference_check/run.sh` decodes the bundled `assets/atmos_test.mp4` (a
+real 768 kb/s E-AC-3 JOC stream, the profile TIDAL serves) with FFmpeg, runs
+this code over it, renders the objects to 5.1 and compares with the stream's
+own 5.1 core — which is Dolby's encoder rendering the same objects to 5.1. It
+exits non-zero when an audible moving object's path stops tracking the core,
+when a speaker stops tracking the same speaker of the core, or when the energy
+distribution across speakers diverges.
+
+It found two bugs that no synthetic test could, both in ObjectEngine and both
+present in the binaural path too:
+
+- JOC's inputs are FL FR FC SL SR [RL RR] with no LFE, but the decoded bed
+  (FL FR FC LFE SL SR ...) was fed straight in, so JOC's left surround was the
+  LFE and its right surround the left surround.
+- OAMD numbers objects with the LFE bed object included; JOC reconstructs only
+  the others. Objects were paired 1:1, so every object got the next one's
+  metadata — on the test clip the audible voice sat frozen at the front-left
+  corner while the silent objects moved. The core LFE is now spliced in at the
+  OAMD LFE slot (latency-matched), as Cavern's EnhancedAC3Renderer does.
+
+Results on the test clip after the fixes: the moving objects' paths track the
+core at +0.91..+0.99; each 5.1 speaker tracks the core at +0.88..+0.96 (LFE
++1.00); the per-window speaker-energy distribution matches with median
+similarity 1.00; on 7.1.4, top-speaker energy follows object height at +0.999.
+Levels sit about 3 dB under the core on every channel — Cavern's anti-clip
+trim — with the centre about 1 dB lower still. Before the fixes the same check
+fails outright (everything out of L; similarity 0.02). It also picked the
+layout-aware cube warp in speaker_renderer.h over a fixed one (5.1 surrounds
++0.86 -> +0.95).
+
+The clip exercises no mixed-update blocks, zones, size, snap or divergence, so
+those paths remain spec-checked only.

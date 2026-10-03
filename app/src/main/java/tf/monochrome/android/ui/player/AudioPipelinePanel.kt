@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Memory
@@ -71,6 +72,8 @@ import tf.monochrome.android.audio.pipeline.PipelineField
 import tf.monochrome.android.audio.pipeline.PipelineSection
 import tf.monochrome.android.audio.pipeline.PipelineStage
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * The signal path, stage by stage, for the track that is playing.
@@ -161,6 +164,7 @@ private fun iconFor(stage: PipelineStage): ImageVector = when (stage) {
     PipelineStage.DECODER -> Icons.Default.Memory
     PipelineStage.RESAMPLER -> Icons.Default.Tune
     PipelineStage.DSP -> Icons.Default.GraphicEq
+    PipelineStage.LOUDNESS -> Icons.Default.BarChart
     PipelineStage.OUTPUT -> Icons.Default.Headphones
 }
 
@@ -450,7 +454,7 @@ internal fun BoxScope.AudioPipelinePanel(
                             ) {}
                             Spacer(Modifier.height(10.dp))
                             Text(
-                                "Audio Pipeline",
+                                stringResource(R.string.audio_pipeline),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                             )

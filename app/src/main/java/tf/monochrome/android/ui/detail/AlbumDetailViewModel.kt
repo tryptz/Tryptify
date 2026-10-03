@@ -13,6 +13,8 @@ import tf.monochrome.android.data.downloads.DownloadManager
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.domain.model.AlbumDetail
 import javax.inject.Inject
+import tf.monochrome.android.R
+import tf.monochrome.android.ui.components.errorText
 
 @HiltViewModel
 class AlbumDetailViewModel @Inject constructor(
@@ -30,46 +32,59 @@ class AlbumDetailViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
+    private val _error = MutableStateFlow<tf.monochrome.android.ui.components.UiText?>(null)
+    val error: StateFlow<tf.monochrome.android.ui.components.UiText?> = _error.asStateFlow()
 
     init {
         loadAlbum()
     }
 
     /**
-     * Qobuz-aware load: when the registry has an alphanumeric slug for this
-     * numeric id (i.e. the user navigated from a Qobuz search hit), hit the
-     * trypt-hifi /api/get-album endpoint. Otherwise — and on Qobuz failure
-     * — fall back to the TIDAL pool's /album endpoint. Either branch
-     * surfaces a clean error string instead of crashing on HTML responses,
-     * because both repository methods return Result.
+     * Loads the album from the catalog its id belongs to — Deezer, Apple,
+     * Qobuz (when the registry has its slug), else TIDAL — and only there.
+     * Every branch surfaces a clean error string instead of crashing on HTML
+     * responses, because the repository methods return Result.
      */
+    private val _source = kotlinx.coroutines.flow.MutableStateFlow<tf.monochrome.android.domain.model.SourceType?>(null)
+
+    /** The catalog this album was loaded from, for its source tag. */
+    val source: kotlinx.coroutines.flow.StateFlow<tf.monochrome.android.domain.model.SourceType?> = _source
+
     private fun loadAlbum() {
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
 
-            // Apple first when this id came out of the Apple catalog: Apple and
-            // Qobuz ids share no namespace, so trying Qobuz with an Apple id
-            // just wastes a round trip and returns an error.
-            val appleResult = if (qobuzIdRegistry.isAppleAlbum(albumId)) {
-                repository.getAppleAlbum(albumId)
-            } else null
+            // A Deezer album is only ever a Deezer album. Its id is a plain
+            // number that Qobuz or TIDAL would happily resolve to some other
+            // record, so there is no fallback: a miss is reported as a miss.
+            if (qobuzIdRegistry.isDeezerAlbum(albumId)) {
+                repository.getDeezerAlbum(albumId)
+                    .onSuccess { _albumDetail.value = it; _source.value = tf.monochrome.android.domain.model.SourceType.DEEZER }
+                    .onFailure { _error.value = errorText(it, R.string.error_load_album) }
+                _isLoading.value = false
+                return@launch
+            }
 
+            // Every album loads from its own catalog and no other. This used to
+            // fall through Apple -> Qobuz -> TIDAL, and the last step asked
+            // TIDAL for the Apple or Qobuz *number* — ids overlap across
+            // catalogs, so a failed Apple or Qobuz album could open some
+            // unrelated TIDAL album in its place. Now a miss is a miss, as it
+            // already was for Deezer.
             val qobuzSlug = qobuzIdRegistry.albumSlugFor(albumId)
-            val qobuzResult = if (appleResult?.isSuccess == true) null
-                else qobuzSlug?.let { repository.getQobuzAlbum(it) }
-
-            val finalResult = when {
-                appleResult?.isSuccess == true -> appleResult
-                qobuzResult?.isSuccess == true -> qobuzResult
-                else -> repository.getAlbum(albumId)
+            val (source, finalResult) = when {
+                qobuzIdRegistry.isAppleAlbum(albumId) ->
+                    tf.monochrome.android.domain.model.SourceType.APPLE to repository.getAppleAlbum(albumId)
+                qobuzSlug != null ->
+                    tf.monochrome.android.domain.model.SourceType.QOBUZ to repository.getQobuzAlbum(qobuzSlug)
+                else ->
+                    tf.monochrome.android.domain.model.SourceType.API to repository.getAlbum(albumId)
             }
 
             finalResult
-                .onSuccess { _albumDetail.value = it }
-                .onFailure { _error.value = it.message ?: "Failed to load album" }
+                .onSuccess { _albumDetail.value = it; _source.value = source }
+                .onFailure { _error.value = errorText(it, R.string.error_load_album) }
             _isLoading.value = false
         }
     }

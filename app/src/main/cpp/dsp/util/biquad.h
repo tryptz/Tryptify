@@ -1,5 +1,8 @@
 #pragma once
+#include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <cstring>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -27,6 +30,20 @@ public:
     }
 
     void configure(BiquadType type, double sampleRate, double freq, double q, double gainDb = 0.0) {
+        // Every effect built on this passes its knob straight in, and the
+        // knobs reach 20 kHz at every rate. At or above Nyquist the cookbook's
+        // alpha turns zero or negative and the poles leave the unit circle:
+        // a 20 kHz band on a 22.05 kHz stream went to 1e18 in a tenth of a
+        // second. So the frequency stops just short of Nyquist, Q and gain
+        // stay where the maths holds, and a non-finite input changes nothing.
+        if (!(sampleRate > 0.0) || !finite(freq) || !finite(q) || !finite(gainDb)) return;
+        freq = std::max(1e-3 * sampleRate, std::min(0.49 * sampleRate, freq));
+        q = std::max(0.025, std::min(200.0, q));
+        // A shelf's Q is its slope, and past about 2 the cookbook shelf grows
+        // a resonant bump on top of its gain: +24 dB at Q 20 came out 60 dB
+        // louder. AutoEQ's shelves sit near 0.7, far inside.
+        if (type == BiquadType::LowShelf || type == BiquadType::HighShelf) q = std::min(2.0, q);
+        gainDb = std::max(-60.0, std::min(60.0, gainDb));
         double w0 = 2.0 * M_PI * freq / sampleRate;
         double cosw0 = std::cos(w0);
         double sinw0 = std::sin(w0);
@@ -133,6 +150,13 @@ public:
     }
 
 private:
+    static bool finite(double x) {
+        // Bit test, not std::isfinite: see util/finite.h.
+        uint64_t bits;
+        std::memcpy(&bits, &x, sizeof bits);
+        return (bits & 0x7FF0000000000000ull) != 0x7FF0000000000000ull;
+    }
+
     float b0_ = 1.0f, b1_ = 0.0f, b2_ = 0.0f;
     float a1_ = 0.0f, a2_ = 0.0f;
     float z1_ = 0.0f, z2_ = 0.0f;

@@ -189,9 +189,6 @@ class GenreGraph(private val data: GenreGraphData, private val vocabulary: Map<S
         return null
     }
 
-    /** True when this text names a genre we know, curated or merely recognised. */
-    fun isGenreTerm(text: String): Boolean = resolve(text) != null
-
     /**
      * Genres within [maxHops] of [id], strongest first, excluding the start.
      *

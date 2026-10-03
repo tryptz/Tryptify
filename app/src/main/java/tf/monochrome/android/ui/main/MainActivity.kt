@@ -55,6 +55,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var spotifyAuthManager: tf.monochrome.android.data.auth.SpotifyAuthManager
     @Inject lateinit var lastFmAuthManager: tf.monochrome.android.data.auth.LastFmAuthManager
     @Inject lateinit var queueManager: QueueManager
+    @Inject lateinit var trackSourceResolver: tf.monochrome.android.ui.components.TrackSourceResolver
     @Inject lateinit var performanceProfile: PerformanceProfile
     @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
     @Inject lateinit var bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController
@@ -74,6 +75,12 @@ class MainActivity : ComponentActivity() {
     // itself still works.
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* result ignored */ }
+
+    // The app's chosen language below Android 13; above it the system has
+    // already applied it and this hands the context straight back.
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(tf.monochrome.android.locale.AppLanguage.wrap(newBase))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
@@ -218,6 +225,8 @@ class MainActivity : ComponentActivity() {
                 tf.monochrome.android.performance.LocalLowPerformance provides lowPerformance,
                 tf.monochrome.android.ui.theme.LocalShowExplicitBadges provides showExplicitBadges,
                 LocalImmersiveFullScreen provides immersiveFullScreen,
+                // Every list row's source tag reads its catalog from here.
+                tf.monochrome.android.ui.components.LocalTrackSource provides trackSourceResolver::of,
             ) {
                 MonochromeTheme(
                     themeName = themeName,

@@ -53,8 +53,8 @@ android {
         applicationId = "tf.monotrypt.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 190
-        versionName = "1.9.0"
+        versionCode = 192
+        versionName = "1.9.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -172,6 +172,10 @@ android {
     }
 
     androidResources {
+        // Lists the app's languages for the system, from the values-* folders,
+        // so Android 13+ offers it under Settings › App languages. Needs
+        // src/main/res/resources.properties to name the default folder's locale.
+        generateLocaleConfig = true
         // Stored as-is in the APK; the zip's entries are already deflated, so
         // letting AAPT re-compress it would only slow down runtime extraction.
         noCompress += "presets.zip"

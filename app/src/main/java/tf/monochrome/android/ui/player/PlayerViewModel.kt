@@ -37,6 +37,7 @@ import tf.monochrome.android.data.downloads.DownloadManager
 import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.data.preferences.PreferencesManager
+import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.domain.model.Lyrics
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.NowPlayingViewMode
@@ -54,6 +55,7 @@ import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.visualizer.AmbientVisualizerSettings
 import tf.monochrome.android.visualizer.ProjectMEngineRepository
 import javax.inject.Inject
+import tf.monochrome.android.R
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
@@ -77,6 +79,8 @@ class PlayerViewModel @Inject constructor(
     private val crossfeedEffect: tf.monochrome.android.audio.dsp.crossfeed.CrossfeedEffect,
     private val nowPlayingLyrics: tf.monochrome.android.player.NowPlayingLyricsHolder,
     private val playbackState: tf.monochrome.android.player.PlaybackStateRepository,
+    private val bpmTap: tf.monochrome.android.audio.tempo.BpmTapProcessor,
+    private val sourceConsent: tf.monochrome.android.player.SourceConsent,
 ) : ViewModel() {
 
     /**
@@ -166,8 +170,10 @@ class PlayerViewModel @Inject constructor(
     // Surfaced to the player UI when a track can't be resolved/streamed. Also
     // used to break the resolve→fail→skip→resolve loop that otherwise ran
     // forever under repeat modes (offline / dead instance).
-    private val _playbackError = MutableStateFlow<String?>(null)
-    val playbackError: StateFlow<String?> = _playbackError.asStateFlow()
+    // A string resource, not text: the toast resolves it with the activity's
+    // context, which is in the app's chosen language; this one's may not be.
+    private val _playbackError = MutableStateFlow<Int?>(null)
+    val playbackError: StateFlow<Int?> = _playbackError.asStateFlow()
     private var consecutiveResolveFailures = 0
     fun clearPlaybackError() { _playbackError.value = null }
 
@@ -219,6 +225,16 @@ class PlayerViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT)
     val miniPlayerGlass: StateFlow<tf.monochrome.android.domain.model.PlayerGlassSettings> = preferences.miniPlayerGlass
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT)
+    val waveCandy: StateFlow<tf.monochrome.android.domain.model.WaveCandySettings> = preferences.waveCandy
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.WaveCandySettings.DEFAULT)
+    fun setWaveCandy(settings: tf.monochrome.android.domain.model.WaveCandySettings) {
+        viewModelScope.launch { preferences.setWaveCandy(settings) }
+    }
+    val spectrumWaterfall: StateFlow<tf.monochrome.android.domain.model.SpectrumWaterfallSettings> = preferences.spectrumWaterfall
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.SpectrumWaterfallSettings.DEFAULT)
+    fun setSpectrumWaterfall(settings: tf.monochrome.android.domain.model.SpectrumWaterfallSettings) {
+        viewModelScope.launch { preferences.setSpectrumWaterfall(settings) }
+    }
     val lyricsFx: StateFlow<LyricsFxSettings> = preferences.lyricsFx
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LyricsFxSettings())
     val nowPlayingViewMode: StateFlow<NowPlayingViewMode> = preferences.nowPlayingViewMode
@@ -287,6 +303,7 @@ class PlayerViewModel @Inject constructor(
     val visualizerPresets: StateFlow<List<VisualizerPreset>> = projectMEngineRepository.presets
     val currentVisualizerPreset: StateFlow<VisualizerPreset?> = projectMEngineRepository.currentPreset
     val visualizerFavoritePresetIds: StateFlow<Set<String>> = projectMEngineRepository.favoritePresetIds
+    val visualizerFlaggedPresetIds: StateFlow<Set<String>> = projectMEngineRepository.flaggedPresetIds
     val canGoToPreviousVisualizerPreset: StateFlow<Boolean> =
         projectMEngineRepository.canGoToPreviousPreset
     val visualizerRepository: ProjectMEngineRepository
@@ -333,13 +350,25 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch { preferences.setPitchQuality(quality) }
     }
 
-    // Whether the speed control reads in semitones or as a multiplier.
-    val speedUnitSemitones: StateFlow<Boolean> = preferences.speedUnitSemitones
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    // What the speed control reads in: a multiplier, semitones, or BPM.
+    val speedUnit: StateFlow<tf.monochrome.android.audio.SpeedUnit> = preferences.speedUnit
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.audio.SpeedUnit.MULTIPLIER)
 
-    fun setSpeedUnitSemitones(enabled: Boolean) {
-        viewModelScope.launch { preferences.setSpeedUnitSemitones(enabled) }
+    fun setSpeedUnit(unit: tf.monochrome.android.audio.SpeedUnit) {
+        viewModelScope.launch { preferences.setSpeedUnit(unit) }
     }
+
+    /**
+     * The playing track's own tempo: measured once a few seconds into the
+     * track, then held. Null until known, and while a measurement is running.
+     */
+    val trackBpm: StateFlow<Float?> = bpmTap.bpm
+
+    /** Measure the playing track's tempo again (a tap on the BPM number). */
+    fun measureTrackBpm() = bpmTap.measure()
+
+    /** The listener's own figure for the playing track's tempo; speed is untouched. */
+    fun setTrackBpm(bpm: Float) = bpmTap.setTempo(bpm)
 
     // --- Oxford DSP effect toggles (compressor / inflator) ---
     // The effects are @Singleton, so these flows stay in sync with the Oxford
@@ -484,6 +513,11 @@ class PlayerViewModel @Inject constructor(
                 spectrumAnalyzer.fftSize = size
             }
         }
+        viewModelScope.launch {
+            preferences.spectrumWaterfall.collect { w ->
+                spectrumAnalyzer.overlap = w.clamped().overlapPct / 100f
+            }
+        }
     }
 
     private fun observeCurrentTrackMeta() {
@@ -520,9 +554,14 @@ class PlayerViewModel @Inject constructor(
                                 // so its (synced) lyrics would never match. The
                                 // resolved source is the authoritative signal;
                                 // qobuzIdRegistry is a backstop.
-                                val skipTidal = unifiedTrackRegistry[track.id]?.sourceType ==
+                                // Deezer ids have the same problem.
+                                val resolvedSource = unifiedTrackRegistry[track.id]?.sourceType
+                                val skipTidal = resolvedSource ==
                                     tf.monochrome.android.domain.model.SourceType.QOBUZ ||
-                                    qobuzIdRegistry.isQobuzTrack(track.id)
+                                    resolvedSource == tf.monochrome.android.domain.model.SourceType.DEEZER ||
+                                    track.deezerId != null ||
+                                    qobuzIdRegistry.isQobuzTrack(track.id) ||
+                                    qobuzIdRegistry.isDeezerTrack(track.id)
                                 // Pass the full Track so the repository can fall
                                 // back to LRCLib (track + artist + album +
                                 // duration) when TIDAL returns no lyrics.
@@ -598,8 +637,32 @@ class PlayerViewModel @Inject constructor(
                 reason: Int
             ) {
                 syncState()
+                syncPlayedFrom()
+            }
+
+            override fun onMediaMetadataChanged(mediaMetadata: androidx.media3.common.MediaMetadata) {
+                syncPlayedFrom()
             }
         })
+        syncPlayedFrom()
+    }
+
+    private val _playedFrom = MutableStateFlow<SourceType?>(null)
+
+    /**
+     * Where the playing song's audio comes from when that is not the catalog
+     * it was picked from (Qobuz for a Deezer pick, the device for a download),
+     * else null. Shown beside the source tag on the player.
+     */
+    val playedFrom: StateFlow<SourceType?> = _playedFrom.asStateFlow()
+
+    private fun syncPlayedFrom() {
+        val mark = tf.monochrome.android.player.PlayedFrom.of(mediaController?.currentMediaItem?.mediaMetadata)
+        _playedFrom.value = when (mark) {
+            tf.monochrome.android.player.PlayedFrom.QOBUZ -> SourceType.QOBUZ
+            tf.monochrome.android.player.PlayedFrom.LOCAL -> SourceType.LOCAL
+            else -> null
+        }
     }
 
     private fun syncState() {
@@ -875,25 +938,6 @@ class PlayerViewModel @Inject constructor(
         radioQueueManager.startRadio(track)
     }
 
-    /**
-     * Home-screen "Play radio": seed from whatever is playing, else the most
-     * recent history entry, else a favorite — and start playback when the
-     * seed isn't already playing. No-op only for a completely fresh library.
-     */
-    fun playRadio() {
-        viewModelScope.launch {
-            currentTrack.value?.let {
-                radioQueueManager.startRadio(it)
-                return@launch
-            }
-            val seed = libraryRepository.getHistory().firstOrNull()?.firstOrNull()
-                ?: libraryRepository.getFavoriteTracks().firstOrNull()?.firstOrNull()
-                ?: return@launch
-            playTrack(seed)
-            radioQueueManager.startRadio(seed)
-        }
-    }
-
     fun stopRadio() {
         radioQueueManager.stopRadio()
     }
@@ -993,22 +1037,6 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    fun cycleNowPlayingViewMode() {
-        viewModelScope.launch {
-            val current = nowPlayingViewMode.value
-            val next = when (current) {
-                NowPlayingViewMode.COVER_ART -> NowPlayingViewMode.VISUALIZER
-                NowPlayingViewMode.VISUALIZER -> NowPlayingViewMode.COVER_ART
-                NowPlayingViewMode.LYRICS -> NowPlayingViewMode.COVER_ART
-                NowPlayingViewMode.QUEUE -> NowPlayingViewMode.COVER_ART
-            }
-            if (next == NowPlayingViewMode.VISUALIZER) {
-                preferences.setVisualizerEngineEnabled(true)
-            }
-            preferences.setNowPlayingViewMode(next)
-        }
-    }
-
     fun setNowPlayingViewMode(mode: NowPlayingViewMode) {
         viewModelScope.launch {
             if (mode == NowPlayingViewMode.VISUALIZER) {
@@ -1053,6 +1081,24 @@ class PlayerViewModel @Inject constructor(
         queueManager.skipToIndex(index)
         resolveAndPlay()
     }
+
+    /** A TIDAL track TIDAL could not play, which Qobuz has: waiting for a yes or no. */
+    val qobuzOffer: StateFlow<tf.monochrome.android.player.QobuzOffer?> = sourceConsent.offer
+
+    /**
+     * Yes: play that song from Qobuz. Allowed for the rest of the session, and
+     * played again from its place in the queue — it was skipped while the
+     * question was open.
+     */
+    fun acceptQobuzOffer() {
+        val offer = qobuzOffer.value ?: return
+        sourceConsent.allow(offer.tidalId)
+        val index = queueManager.queue.value.indexOfFirst { it.id == offer.tidalId }
+        if (index >= 0) skipToQueueIndex(index)
+    }
+
+    /** No: it stays skipped. */
+    fun dismissQobuzOffer() = sourceConsent.dismiss()
 
     fun setPlaybackSpeed(speed: Float) {
         viewModelScope.launch { preferences.setPlaybackSpeed(speed) }
@@ -1193,12 +1239,12 @@ class PlayerViewModel @Inject constructor(
         playbackState.clearPendingStart()
         val queueSize = queueManager.queue.value.size.coerceAtLeast(1)
         if (repeatMode.value == RepeatMode.ONE) {
-            _playbackError.value = "Couldn't play this track."
+            _playbackError.value = R.string.error_play_track
             consecutiveResolveFailures = 0
             return
         }
         if (consecutiveResolveFailures >= queueSize) {
-            _playbackError.value = "Couldn't play these tracks. Check your connection."
+            _playbackError.value = R.string.error_play_tracks
             consecutiveResolveFailures = 0
             return
         }
@@ -1212,6 +1258,9 @@ class PlayerViewModel @Inject constructor(
      * cache-on-demand path rather than TIDAL streaming.
      */
     private fun synthesizeQobuzUnifiedTrack(track: Track): UnifiedTrack? {
+        // A Deezer pick whose number is also a known Qobuz id is still the
+        // Deezer pick; StreamResolver's legacy path routes it by deezerId.
+        if (track.deezerId != null) return null
         if (!qobuzIdRegistry.isQobuzTrack(track.id)) return null
         return UnifiedTrack(
             id = "qobuz_${track.id}",
@@ -1275,6 +1324,14 @@ class PlayerViewModel @Inject constructor(
      * The registry is rehydrated from history/queue state, so this covers
      * local tracks surfaced through Recently Played and playlists too.
      */
+    /**
+     * Where a legacy [Track] really comes from, when the app knows. Navigation
+     * needs it: a local song's `Track` ids are made up, so "Go to artist"
+     * routes by this rather than by them — see `trackArtistAction`.
+     */
+    fun unifiedFor(track: Track?): tf.monochrome.android.domain.model.UnifiedTrack? =
+        track?.let { unifiedTrackRegistry[it.id] }
+
     fun isLocalTrack(track: Track): Boolean =
         unifiedTrackRegistry[track.id]?.source is tf.monochrome.android.domain.model.PlaybackSource.LocalFile
 

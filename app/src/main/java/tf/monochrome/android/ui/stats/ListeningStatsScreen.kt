@@ -24,7 +24,10 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,10 +42,10 @@ fun ListeningStatsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Listening Stats", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(stringResource(R.string.listening_stats), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -63,7 +66,7 @@ fun ListeningStatsScreen(
                         )
                     )
                 ),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + LocalMiniPlayerInset.current),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + LocalBottomChromeInset.current),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             // Summary Card
@@ -77,7 +80,7 @@ fun ListeningStatsScreen(
             if (topArtists.isNotEmpty()) {
                 item {
                     tf.monochrome.android.devedit.DevEditable("section_header_top_artists", Modifier.fillMaxWidth()) {
-                        SectionHeader("Top Artists")
+                        SectionHeader(stringResource(R.string.top_artists))
                     }
                 }
                 itemsIndexed(topArtists) { index, artist ->
@@ -89,7 +92,7 @@ fun ListeningStatsScreen(
             if (topAlbums.isNotEmpty()) {
                 item {
                     tf.monochrome.android.devedit.DevEditable("section_header_top_albums", Modifier.fillMaxWidth()) {
-                        SectionHeader("Top Albums")
+                        SectionHeader(stringResource(R.string.top_albums))
                     }
                 }
                 itemsIndexed(topAlbums) { index, album ->
@@ -118,7 +121,7 @@ private fun StatsSummaryCard(totalPlays: Int) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                "Total Plays",
+                stringResource(R.string.total_plays),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
@@ -129,7 +132,7 @@ private fun StatsSummaryCard(totalPlays: Int) {
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
             Text(
-                "You're a music enthusiast!",
+                stringResource(R.string.music_enthusiast),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
             )
@@ -187,7 +190,7 @@ private fun ArtistRankCard(rank: Int, artist: tf.monochrome.android.data.db.dao.
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(artist.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                Text("${artist.count} plays", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(pluralStringResource(R.plurals.plays_count, artist.count, java.text.NumberFormat.getIntegerInstance().format(artist.count.toLong())), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -228,7 +231,7 @@ private fun AlbumRankCard(rank: Int, album: tf.monochrome.android.data.db.dao.Hi
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(album.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                Text("${album.artistName ?: "Unknown Artist"} • ${album.count} plays", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${album.artistName ?: stringResource(R.string.unknown_artist)} • " + pluralStringResource(R.plurals.plays_count, album.count, java.text.NumberFormat.getIntegerInstance().format(album.count.toLong())), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

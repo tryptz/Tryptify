@@ -1,5 +1,8 @@
 package tf.monochrome.android.ui.library
 
+import tf.monochrome.android.ui.navigation.openTrackArtist
+import tf.monochrome.android.ui.navigation.trackArtistAction
+import tf.monochrome.android.ui.navigation.trackAlbumAction
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
@@ -23,7 +26,6 @@ import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -65,6 +67,9 @@ import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.navigation.navigateTool
 import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.components.SearchAction
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.R
 
 // LOCAL_SECTION and LIBRARY_SECTION_NAMES used to live here. Page identity and
 // page names belong to APP_PAGES in ui/navigation now, because Home and Discover
@@ -80,6 +85,12 @@ import tf.monochrome.android.ui.components.SearchAction
  * said. Nothing renders from this any more and Local is genuinely movable now —
  * do not reintroduce the pin.
  */
+/**
+ * The Overview section's id. Not a page any more — Home draws it, embedded,
+ * under its banners — but LibraryScreen still renders it, so it keeps an id.
+ */
+internal const val OVERVIEW_SECTION = "overview"
+
 internal fun legacyLibrarySections(order: List<String>): List<String> =
     listOf("local") + order.filter { it != "local" && it in APP_PAGE_TITLES }
 
@@ -149,9 +160,13 @@ fun LibraryScreen(
     // over five. All instances share one LibraryViewModel: the pager sits outside
     // the NavHost, so hiltViewModel() resolves against the Activity store.
     sectionId: String,
-    // The page list and the nav host's way of opening one, for the jump sheet.
+    // The visible pages and the nav host's way of opening one, for the section
+    // switcher: its chips are the Library pages among them.
     pages: List<String>,
     onSelectPage: (String) -> Unit,
+    // Home draws Overview inside its own chrome, so it asks for the section
+    // alone — no Library title, no switcher.
+    embedded: Boolean = false,
     viewModel: LibraryViewModel = hiltViewModel(),
     localLibraryViewModel: LocalLibraryViewModel = hiltViewModel(),
 ) {
@@ -205,12 +220,8 @@ fun LibraryScreen(
             onDownloadTrack = if (playerViewModel.isLocalTrack(track)) null
             else ({ playerViewModel.downloadTrack(track) }),
             onShareFile = { playerViewModel.shareTrack(track) },
-            onGoToAlbum = track.album?.id?.let { albumId ->
-                { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
-            },
-            onGoToArtist = track.artist?.id?.let { artistId ->
-                { navController.navigateSafe(Screen.ArtistDetail.createRoute(artistId)) }
-            }
+            onGoToAlbum = navController.trackAlbumAction(track, playerViewModel.unifiedFor(track)),
+            onGoToArtist = navController.trackArtistAction(track, playerViewModel.unifiedFor(track))
         )
     }
 
@@ -237,13 +248,18 @@ fun LibraryScreen(
             is tf.monochrome.android.data.import_.ImportProgress.Done -> {
                 android.widget.Toast.makeText(
                     importMsgContext,
-                    "Imported ${p.matched}/${p.total} tracks into \"${p.playlistName}\"",
+                    importMsgContext.getString(
+                        R.string.import_done_toast,
+                        importMsgContext.resources.getQuantityString(R.plurals.tracks_of_total, p.total, p.matched, p.total),
+                        p.playlistName,
+                    ),
                     android.widget.Toast.LENGTH_LONG
                 ).show()
                 viewModel.resetImportProgress()
             }
             is tf.monochrome.android.data.import_.ImportProgress.Failed -> {
-                android.widget.Toast.makeText(importMsgContext, "Import failed: ${p.message}", android.widget.Toast.LENGTH_LONG).show()
+                val reason = p.message.ifBlank { importMsgContext.getString(R.string.playlist_file_unreadable) }
+                android.widget.Toast.makeText(importMsgContext, importMsgContext.getString(R.string.import_failed_toast, reason), android.widget.Toast.LENGTH_LONG).show()
                 viewModel.resetImportProgress()
             }
             else -> {}
@@ -281,7 +297,7 @@ fun LibraryScreen(
 
     if (showAddToPlaylistForSelection) {
         AddToPlaylistSheet(
-            title = "Add ${selection.count} tracks to playlist",
+            title = pluralStringResource(R.plurals.add_n_tracks_to_playlist, selection.count, selection.count),
             playlists = playlists,
             onDismiss = { showAddToPlaylistForSelection = false },
             onPlaylistSelected = { playlist ->
@@ -300,43 +316,19 @@ fun LibraryScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        var sectionMenuOpen by remember { mutableStateOf(false) }
-        // The same list Home renders, over this page. It used to be a
-        // DropdownMenu of small rows hung off a three-dot icon, and it existed
-        // on these five pages only.
-        if (sectionMenuOpen) {
-            tf.monochrome.android.ui.navigation.PageJumpSheet(
-                pages = pages,
-                onSelect = onSelectPage,
-                current = sectionId,
-                onDismiss = { sectionMenuOpen = false },
-            )
-        }
-
-        tf.monochrome.android.devedit.DevEditable("library_header", Modifier.fillMaxWidth()) {
+        if (!embedded) tf.monochrome.android.devedit.DevEditable("library_header", Modifier.fillMaxWidth()) {
             TopAppBar(
                 title = {
+                    // One title for every section: they are all the Library
+                    // tab, and the switcher under the bar says which is open.
                     Text(
-                        // The local library keeps calling itself "Library".
-                        // That IS a special case, and a deliberate one — it is
-                        // not a leftover of the old pin that made Local page 0.
-                        // Every other page uses its registry title.
-                        text = if (sectionId == "local") "Library"
-                               else APP_PAGE_TITLES[sectionId] ?: "Library",
+                        text = stringResource(R.string.tab_library),
                         style = MaterialTheme.typography.headlineMedium
                     )
                 },
-                // No back arrow: there is no page this one is "inside" any
-                // more. Every page is a peer in one swipe list, and back is the
-                // nav host's — it returns to the first page from any of them.
+                // No back arrow: Library is a tab, not a screen inside one.
+                // Back is the nav host's, and goes to Home.
                 actions = {
-                    IconButton(onClick = { sectionMenuOpen = true }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.List,
-                            contentDescription = "Go to page",
-                            tint = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
                     // Only where there is a list to search. The other sections
                     // are grids of albums and artists with no filter behind
                     // them, and an icon that does nothing is worse than none.
@@ -349,7 +341,7 @@ fun LibraryScreen(
                     IconButton(onClick = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) }) {
                         Icon(
                             Icons.Default.Settings,
-                            contentDescription = "Settings",
+                            contentDescription = stringResource(R.string.settings),
                             tint = MaterialTheme.colorScheme.onBackground
                         )
                     }
@@ -359,6 +351,12 @@ fun LibraryScreen(
                 )
             )
         }
+
+        if (!embedded) LibrarySectionSwitcher(
+            sections = pages.filter { it in tf.monochrome.android.ui.navigation.LIBRARY_PAGE_IDS },
+            current = sectionId,
+            onSelect = onSelectPage,
+        )
 
         AnimatedVisibility(visible = selection.active) {
             TrackSelectionBar(
@@ -375,7 +373,7 @@ fun LibraryScreen(
                         selection.clear()
                     }
                 } else null,
-                deleteContentDescription = "Unlike"
+                deleteContentDescription = stringResource(R.string.action_unlike)
             )
         }
 
@@ -383,15 +381,15 @@ fun LibraryScreen(
         // page, and the nav host's single pager wraps it in the
         // SaveableStateProvider that keeps its scroll position.
         when (sectionId) {
-            "overview" ->
+            OVERVIEW_SECTION ->
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 80.dp)
+                    contentPadding = PaddingValues(bottom = tf.monochrome.android.ui.navigation.bottomChromePadding)
                 ) {
                     if (recentTracks.isNotEmpty()) {
                         item(key = LibraryKeys.header("recent"), contentType = LibraryContentType.HEADER) {
                             SectionHeader(
-                                title = "Recently Played",
+                                title = stringResource(R.string.recently_played),
                                 // Home used to carry the full history; it is
                                 // the page list now, and five rows here was
                                 // all that was left of it. Rather than a
@@ -401,7 +399,7 @@ fun LibraryScreen(
                                 onSeeAllClick = if (recentTracks.size > RECENT_PREVIEW) {
                                     { allRecentShown = !allRecentShown }
                                 } else null,
-                                seeAllLabel = if (allRecentShown) "Show less" else "See All",
+                                seeAllLabel = if (allRecentShown) stringResource(R.string.action_show_less) else stringResource(R.string.action_see_all),
                             )
                         }
                         items(
@@ -419,10 +417,8 @@ fun LibraryScreen(
                                 },
                                 onLongClick = { selection.toggle(track.id) },
                                 onMoreClick = { showContextMenuForTrack = track },
-                                onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
-                                onAlbumClick = track.album?.id?.let { albumId ->
-                                    { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
-                                },
+                                onArtistClick = { artistId -> navController.openTrackArtist(track, playerViewModel.unifiedFor(track), artistId) },
+                                onAlbumClick = navController.trackAlbumAction(track, playerViewModel.unifiedFor(track)),
                                 downloadState = activeDownloads[track.id],
                                 isDownloaded = track.id in downloadedTrackIds,
                                 selectionMode = selection.active,
@@ -433,7 +429,7 @@ fun LibraryScreen(
 
                     if (favoriteTracks.isNotEmpty()) {
                         item(key = LibraryKeys.header("liked"), contentType = LibraryContentType.HEADER) {
-                            SectionHeader(title = "Liked Songs")
+                            SectionHeader(title = stringResource(R.string.liked_songs))
                         }
                         items(
                             favoriteTracks.take(5),
@@ -450,10 +446,8 @@ fun LibraryScreen(
                                 },
                                 onLongClick = { selection.toggle(track.id) },
                                 onMoreClick = { showContextMenuForTrack = track },
-                                onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
-                                onAlbumClick = track.album?.id?.let { albumId ->
-                                    { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
-                                },
+                                onArtistClick = { artistId -> navController.openTrackArtist(track, playerViewModel.unifiedFor(track), artistId) },
+                                onAlbumClick = navController.trackAlbumAction(track, playerViewModel.unifiedFor(track)),
                                 downloadState = activeDownloads[track.id],
                                 isDownloaded = track.id in downloadedTrackIds,
                                 selectionMode = selection.active,
@@ -463,7 +457,7 @@ fun LibraryScreen(
                     }
 
                     if (favoriteTracks.isEmpty() && recentTracks.isEmpty()) {
-                        item { EmptyState("Start playing music to build your library.") }
+                        item { EmptyState(stringResource(R.string.library_empty)) }
                     }
                 }
 
@@ -501,7 +495,7 @@ fun LibraryScreen(
             "playlists" ->
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 80.dp)
+                    contentPadding = PaddingValues(bottom = tf.monochrome.android.ui.navigation.bottomChromePadding)
                 ) {
                     item {
                         Row(
@@ -513,20 +507,20 @@ fun LibraryScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Add,
-                                contentDescription = "New Playlist",
+                                contentDescription = stringResource(R.string.new_playlist),
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(32.dp)
                             )
                             Spacer(modifier = Modifier.width(16.dp))
                             Text(
-                                text = "Create Playlist",
+                                text = stringResource(R.string.create_playlist_title),
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
                     if (playlists.isEmpty()) {
-                        item { EmptyState("Create a playlist to organize your music.") }
+                        item { EmptyState(stringResource(R.string.playlists_empty)) }
                     } else {
                         items(playlists, key = { it.id }) { playlist ->
                             Row(
@@ -538,7 +532,7 @@ fun LibraryScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.PlaylistPlay,
-                                    contentDescription = "Playlist",
+                                    contentDescription = stringResource(R.string.playlist),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(48.dp)
                                 )
@@ -585,7 +579,7 @@ fun LibraryScreen(
                                 }) {
                                     Icon(
                                         Icons.Default.Download,
-                                        contentDescription = "Download All",
+                                        contentDescription = stringResource(R.string.download_all),
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 }
@@ -596,12 +590,12 @@ fun LibraryScreen(
                     open = likedSearchOpen,
                     query = likedQuery,
                     onQueryChange = { likedQuery = it },
-                    placeholder = "Search liked songs",
+                    placeholder = stringResource(R.string.search_liked_songs),
                     onClose = { likedSearchOpen = false; likedQuery = "" },
                 ) { searchTopInset ->
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(top = searchTopInset, bottom = 80.dp)
+                    contentPadding = PaddingValues(top = searchTopInset, bottom = tf.monochrome.android.ui.navigation.bottomChromePadding)
                 ) {
                     if (favoriteTracks.isNotEmpty()) {
                         items(
@@ -619,10 +613,8 @@ fun LibraryScreen(
                                 },
                                 onLongClick = { selection.toggle(track.id) },
                                 onMoreClick = { showContextMenuForTrack = track },
-                                onArtistClick = { artistId -> navController.openCatalogArtist(artistId) },
-                                onAlbumClick = track.album?.id?.let { albumId ->
-                                    { navController.navigateSafe(Screen.AlbumDetail.createRoute(albumId)) }
-                                },
+                                onArtistClick = { artistId -> navController.openTrackArtist(track, playerViewModel.unifiedFor(track), artistId) },
+                                onAlbumClick = navController.trackAlbumAction(track, playerViewModel.unifiedFor(track)),
                                 downloadState = activeDownloads[track.id],
                                 isDownloaded = track.id in downloadedTrackIds,
                                 selectionMode = selection.active,
@@ -636,7 +628,7 @@ fun LibraryScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                         }
                         item(key = LibraryKeys.header("albums"), contentType = LibraryContentType.HEADER) {
-                            SectionHeader(title = "Liked Albums")
+                            SectionHeader(title = stringResource(R.string.liked_albums))
                         }
                         items(
                             favoriteAlbums,
@@ -659,7 +651,7 @@ fun LibraryScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                         }
                         item(key = LibraryKeys.header("artists"), contentType = LibraryContentType.HEADER) {
-                            SectionHeader(title = "Liked Artists")
+                            SectionHeader(title = stringResource(R.string.liked_artists))
                         }
                         items(
                             favoriteArtists,
@@ -679,7 +671,7 @@ fun LibraryScreen(
 
                     if (favoriteTracks.isEmpty() && favoriteAlbums.isEmpty() && favoriteArtists.isEmpty()) {
                         item(key = LibraryKeys.EMPTY, contentType = LibraryContentType.EMPTY) {
-                            EmptyState("Like tracks, albums, and artists to see them here.")
+                            EmptyState(stringResource(R.string.favorites_empty))
                         }
                     }
                 }
@@ -688,6 +680,37 @@ fun LibraryScreen(
 
             "downloads" ->
                 DownloadsScreen(navController = navController)
+        }
+    }
+}
+
+/**
+ * The Library tab's sections, as a row of glass chips under its title.
+ *
+ * Not a second pager, and it must not become one: each chip moves the nav host's
+ * one pager to that section's page, exactly as the tab bar does for its tabs.
+ * Scrolls sideways rather than squeezing, so a long section name at a large
+ * text size still reads whole.
+ */
+@Composable
+private fun LibrarySectionSwitcher(
+    sections: List<String>,
+    current: String,
+    onSelect: (String) -> Unit,
+) {
+    if (sections.size < 2) return
+    androidx.compose.foundation.lazy.LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+    ) {
+        items(sections, key = { it }) { id ->
+            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                label = tf.monochrome.android.ui.navigation.pageTitle(id),
+                selected = id == current,
+                accent = MaterialTheme.colorScheme.primary,
+                onClick = { if (id != current) onSelect(id) },
+            )
         }
     }
 }

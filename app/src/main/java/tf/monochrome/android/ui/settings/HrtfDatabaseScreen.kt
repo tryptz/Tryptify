@@ -1,5 +1,9 @@
 package tf.monochrome.android.ui.settings
 
+import androidx.compose.ui.platform.LocalContext
+import tf.monochrome.android.ui.components.errorText
+import tf.monochrome.android.ui.components.UiText
+import tf.monochrome.android.ui.navigation.popBackStackSafe
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
@@ -52,15 +56,18 @@ import tf.monochrome.android.data.api.SofaHrtfApi
 import tf.monochrome.android.data.preferences.PreferencesManager
 import java.io.File
 import javax.inject.Inject
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 data class HrtfBrowseState(
     val loading: Boolean = true,
     val listing: HrtfListing? = null,
-    val error: String? = null,
-    val location: String = "HRTF databases",
+    val error: UiText? = null,
+    /** Null at the root, which the screen names in the reader's language. */
+    val location: String? = null,
     val query: String = "",
     val busyFile: String? = null,   // href currently downloading
-    val status: String? = null,     // last apply result
+    val status: UiText? = null,     // last apply result
 )
 
 @HiltViewModel
@@ -86,8 +93,8 @@ class HrtfDatabaseViewModel @Inject constructor(
             _state.value = _state.value.copy(
                 loading = false,
                 listing = result.getOrNull(),
-                error = result.exceptionOrNull()?.let { "Couldn't reach the HRTF database." },
-                location = if (stack.isEmpty()) "HRTF databases"
+                error = result.exceptionOrNull()?.let { UiText.Res(R.string.hrtf_unreachable) },
+                location = if (stack.isEmpty()) null
                     else stack.joinToString(" / ") { it.display },
             )
         }
@@ -112,7 +119,7 @@ class HrtfDatabaseViewModel @Inject constructor(
             val result = api.download(path)
             val bytes = result.getOrNull()
             val status = if (bytes == null || bytes.isEmpty()) {
-                result.exceptionOrNull()?.message ?: "Download failed"
+                result.exceptionOrNull()?.let { errorText(it, R.string.hrtf_download_failed) } ?: UiText.Res(R.string.hrtf_download_failed)
             } else withContext(Dispatchers.IO) {
                 runCatching {
                     val dir = File(context.filesDir, "hrtf").apply { mkdirs() }
@@ -126,8 +133,8 @@ class HrtfDatabaseViewModel @Inject constructor(
                     preferences.setRendererProfile(
                         profile.copy(hrtfProfileId = dest.absolutePath, hrtfEnabled = true)
                     )
-                    "Applied ${file.display} (${bytes.size / 1024} KB)"
-                }.getOrElse { "Couldn't save the HRTF" }
+                    UiText.Res(R.string.hrtf_applied, listOf(file.display, bytes.size / 1024))
+                }.getOrElse { UiText.Res(R.string.hrtf_save_failed) }
             }
             _state.value = _state.value.copy(busyFile = null, status = status)
         }
@@ -143,23 +150,23 @@ fun HrtfDatabaseScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     // Hardware back navigates up a folder before leaving the screen.
-    BackHandler(enabled = true) { if (!viewModel.up()) navController.popBackStack() }
+    BackHandler(enabled = true) { if (!viewModel.up()) navController.popBackStackSafe() }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = {
                 Column {
-                    Text("HRTF Database")
+                    Text(stringResource(R.string.hrtf_hrtf_database))
                     Text(
-                        state.location,
+                        state.location ?: stringResource(R.string.hrtf_databases),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             },
             navigationIcon = {
-                IconButton(onClick = { if (!viewModel.up()) navController.popBackStack() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                IconButton(onClick = { if (!viewModel.up()) navController.popBackStackSafe() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.settings_back))
                 }
             },
         )
@@ -172,14 +179,14 @@ fun HrtfDatabaseScreen(
         OutlinedTextField(
             value = state.query,
             onValueChange = viewModel::setQuery,
-            label = { Text("Filter") },
+            label = { Text(stringResource(R.string.hrtf_filter)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         )
 
         state.status?.let {
             Text(
-                it,
+                it.resolve(LocalContext.current),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -191,11 +198,17 @@ fun HrtfDatabaseScreen(
                 CircularProgressIndicator(Modifier.align(Alignment.Center))
             }
             state.error != null -> Text(
-                state.error!!,
+                state.error!!.resolve(LocalContext.current),
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(16.dp),
             )
-            else -> LazyColumn(Modifier.fillMaxSize()) {
+            else -> LazyColumn(
+                Modifier.fillMaxSize(),
+                // The last databases clear the floating tab bar and mini player.
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                    bottom = tf.monochrome.android.ui.navigation.bottomChromePadding,
+                ),
+            ) {
                 items(folders, key = { "d/" + it.href }) { folder ->
                     ListItem(
                         headlineContent = { Text(folder.display) },
@@ -208,7 +221,7 @@ fun HrtfDatabaseScreen(
                     ListItem(
                         headlineContent = { Text(file.display) },
                         supportingContent = {
-                            Text(listOfNotNull(file.size, "tap to use as HRTF").joinToString(" · "))
+                            Text(listOfNotNull(file.size, stringResource(R.string.hrtf_tap_to_use)).joinToString(" · "))
                         },
                         leadingContent = { Icon(Icons.Filled.GraphicEq, contentDescription = null) },
                         trailingContent = {
@@ -218,7 +231,7 @@ fun HrtfDatabaseScreen(
                     )
                 }
                 if (folders.isEmpty() && files.isEmpty()) {
-                    item { Text("Nothing here.", modifier = Modifier.padding(16.dp)) }
+                    item { Text(stringResource(R.string.hrtf_nothing_here), modifier = Modifier.padding(16.dp)) }
                 }
             }
         }

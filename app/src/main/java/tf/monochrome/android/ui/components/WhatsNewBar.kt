@@ -23,6 +23,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 /**
  * The "this app just updated" bar.
@@ -82,7 +84,7 @@ fun WhatsNewBar(
                 IconButton(onClick = onDismiss) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Dismiss",
+                        contentDescription = stringResource(R.string.action_dismiss),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
@@ -93,7 +95,7 @@ fun WhatsNewBar(
             ) {
                 TextButton(onClick = onNeverShow) {
                     Text(
-                        text = "Don't show again",
+                        text = stringResource(R.string.dont_show_again),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.9f),
                     )

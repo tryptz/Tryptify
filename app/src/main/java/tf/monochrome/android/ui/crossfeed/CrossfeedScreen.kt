@@ -53,7 +53,9 @@ import tf.monochrome.android.audio.dsp.crossfeed.CrossfeedState
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
 
 @Composable
 fun CrossfeedScreen(
@@ -74,11 +76,11 @@ fun CrossfeedScreen(
                 IconButton(onClick = onBack) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
+                        contentDescription = stringResource(R.string.action_back),
                     )
                 }
                 Text(
-                    text = "Crossfeed",
+                    text = stringResource(R.string.crossfeed),
                     style = MaterialTheme.typography.titleLarge,
                 )
             }
@@ -88,7 +90,7 @@ fun CrossfeedScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(bottom = LocalMiniPlayerInset.current)
+                .padding(bottom = LocalBottomChromeInset.current)
                 .padding(horizontal = 12.dp, vertical = 4.dp),
         ) {
             ElevatedCard(
@@ -106,15 +108,12 @@ fun CrossfeedScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Speaker simulation",
+                                text = stringResource(R.string.speaker_simulation),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                             )
                             Text(
-                                text = "Feeds a small amount of each channel into " +
-                                    "the opposite ear, slightly delayed and " +
-                                    "low-pass filtered, so headphones sound more " +
-                                    "like a pair of speakers.",
+                                text = stringResource(R.string.crossfeed_explainer),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -131,7 +130,7 @@ fun CrossfeedScreen(
                     // Algorithm picker — the physical speaker model plus the
                     // classic fixed networks (BS2B / Chu Moy / Jan Meier).
                     Text(
-                        text = "Algorithm",
+                        text = stringResource(R.string.algorithm),
                         style = MaterialTheme.typography.labelLarge,
                     )
                     Spacer(Modifier.height(8.dp))
@@ -180,7 +179,7 @@ fun CrossfeedScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = "Speaker angle",
+                                text = stringResource(R.string.speaker_angle),
                                 style = MaterialTheme.typography.labelLarge,
                                 modifier = Modifier.weight(1f),
                             )
@@ -199,13 +198,13 @@ fun CrossfeedScreen(
                         )
                         Row(modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                text = "30° narrow",
+                                text = stringResource(R.string.crossfeed_angle_narrow),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.weight(1f),
                             )
                             Text(
-                                text = "180° headphones",
+                                text = stringResource(R.string.crossfeed_angle_headphones),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -213,9 +212,7 @@ fun CrossfeedScreen(
 
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            text = "Narrow angles give the strongest crossfeed. " +
-                                "At 180° the speakers sit at your ears and no " +
-                                "crossfeed is applied.",
+                            text = stringResource(R.string.speaker_angle_note),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

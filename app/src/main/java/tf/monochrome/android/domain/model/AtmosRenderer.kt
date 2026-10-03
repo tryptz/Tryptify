@@ -47,27 +47,146 @@ enum class RendererMode(val displayName: String, val description: String) {
 }
 
 /**
- * Loudspeaker / output layout the renderer targets. Channel counts match the
- * bed layouts implemented by the native VBAP panner (`cpp/atmos/vbap.h`).
+ * Android `AudioFormat.CHANNEL_OUT_*` position bits. Kept here as plain values so
+ * the domain model stays free of Android types (they are fixed framework
+ * constants). PCM for a position mask is interleaved in ascending bit order.
  */
-enum class ChannelLayout(val channelCount: Int, val label: String) {
-    STEREO(2, "2.0"),
-    SURROUND_5_1(6, "5.1"),
-    SURROUND_7_1(8, "7.1"),
-    ATMOS_7_1_4(12, "7.1.4");
+object AndroidChannelBits {
+    const val FRONT_LEFT = 0x4
+    const val FRONT_RIGHT = 0x8
+    const val FRONT_CENTER = 0x10
+    const val LOW_FREQUENCY = 0x20
+    const val BACK_LEFT = 0x40
+    const val BACK_RIGHT = 0x80
+    const val FRONT_LEFT_OF_CENTER = 0x100
+    const val FRONT_RIGHT_OF_CENTER = 0x200
+    const val BACK_CENTER = 0x400
+    const val SIDE_LEFT = 0x800
+    const val SIDE_RIGHT = 0x1000
+    const val TOP_CENTER = 0x2000
+    const val TOP_FRONT_LEFT = 0x4000
+    const val TOP_FRONT_CENTER = 0x8000
+    const val TOP_FRONT_RIGHT = 0x10000
+    const val TOP_BACK_LEFT = 0x20000
+    const val TOP_BACK_CENTER = 0x40000
+    const val TOP_BACK_RIGHT = 0x80000
+    const val TOP_SIDE_LEFT = 0x100000
+    const val TOP_SIDE_RIGHT = 0x200000
+    const val BOTTOM_FRONT_LEFT = 0x400000
+    const val BOTTOM_FRONT_CENTER = 0x800000
+    const val BOTTOM_FRONT_RIGHT = 0x1000000
+    const val LOW_FREQUENCY_2 = 0x2000000
+    const val FRONT_WIDE_LEFT = 0x4000000
+    const val FRONT_WIDE_RIGHT = 0x8000000
+}
+
+/**
+ * Loudspeaker / output layout the renderer targets. The speakers, their order
+ * and angles match the native speaker renderer (`cpp/atmos/speaker_renderer.h`,
+ * `layout_speakers`), whose output is interleaved in Android mask-bit order.
+ *
+ * @property nativeId the native `OutputLayout` id (crosses JNI; not the ordinal)
+ * @property channelCount real speakers, LFE included
+ * @property speakerMask the Android position bits of those speakers
+ * @property sinkChannelCount what the audio processor actually outputs. Media3
+ *   1.5 only accepts 1-8, 10, 12 and 24 PCM channels (it derives the mask from
+ *   the count), so 9.1.4 (14) and 9.1.6 (16) travel as 24-channel frames whose
+ *   extra positions are silent; [sinkChannelMask] names all 24 positions so
+ *   Android still routes every speaker to its real place.
+ */
+enum class ChannelLayout(
+    val channelCount: Int,
+    val label: String,
+    val nativeId: Int,
+    val speakerMask: Int,
+    val sinkChannelCount: Int = channelCount,
+) {
+    STEREO(2, "2.0", 0, B.FL or B.FR),
+    SURROUND_5_1(6, "5.1", 1, B.S51),
+    SURROUND_7_1(8, "7.1", 2, B.S71),
+    SURROUND_5_1_2(8, "5.1.2", 3, B.S51 or B.TOP_SIDES),
+    SURROUND_5_1_4(10, "5.1.4", 4, B.S51 or B.TOP_QUAD),
+    SURROUND_7_1_2(10, "7.1.2", 5, B.S71 or B.TOP_SIDES),
+    ATMOS_7_1_4(12, "7.1.4", 6, B.S71 or B.TOP_QUAD),
+    ATMOS_9_1_4(14, "9.1.4", 7, B.S71 or B.TOP_QUAD or B.WIDES, sinkChannelCount = 24),
+    ATMOS_9_1_6(16, "9.1.6", 8, B.S71 or B.TOP_QUAD or B.TOP_SIDES or B.WIDES, sinkChannelCount = 24);
+
+    /** Carries more than a stereo pair, i.e. a real speaker render. */
+    val isMultichannel: Boolean get() = this != STEREO
+
+    /** Has overhead speakers (needs API 32+ for a positional mask). */
+    val hasHeight: Boolean get() = speakerMask and B.ALL_TOPS != 0
+
+    /** Android position mask for the [sinkChannelCount]-wide frame. */
+    val sinkChannelMask: Int
+        get() {
+            var mask = speakerMask
+            // Pad with positions no layout here uses, lowest bits first, so the
+            // speakers keep their mask-order slots.
+            for (bit in B.PADDING) {
+                if (Integer.bitCount(mask) >= sinkChannelCount) break
+                mask = mask or bit
+            }
+            return mask
+        }
+
+    /**
+     * Sink slot of each speaker (in [speakers] order): its bit's rank within
+     * [sinkChannelMask]. Identity except for the padded 24-channel layouts.
+     */
+    fun speakerSlots(): IntArray {
+        val sink = sinkChannelMask
+        val slots = IntArray(channelCount)
+        var speaker = 0
+        var slot = 0
+        for (bit in 0 until 31) {
+            val b = 1 shl bit
+            if (sink and b == 0) continue
+            if (speakerMask and b != 0) slots[speaker++] = slot
+            slot++
+        }
+        return slots
+    }
 
     companion object {
         /**
-         * Best layout for a raw channel count. Falls back to stereo for
-         * mono/unknown and to the nearest known layout otherwise.
+         * Best layout for a device's reported maximum channel count. Falls back
+         * to stereo for mono/unknown and to the largest layout that fits
+         * otherwise. 8 and 10 channels are ambiguous (7.1 vs 5.1.2, 5.1.4 vs
+         * 7.1.2); the more common home layout wins — pick the other manually.
          */
         fun fromChannelCount(channels: Int?): ChannelLayout = when {
             channels == null || channels <= 2 -> STEREO
-            channels <= 6 -> SURROUND_5_1
-            channels <= 8 -> SURROUND_7_1
-            else -> ATMOS_7_1_4
+            channels < 8 -> SURROUND_5_1
+            channels < 10 -> SURROUND_7_1
+            channels < 12 -> SURROUND_5_1_4
+            channels < 14 -> ATMOS_7_1_4
+            channels < 16 -> ATMOS_9_1_4
+            else -> ATMOS_9_1_6
         }
     }
+}
+
+// Short aliases for the mask table above.
+private object B {
+    const val FL = AndroidChannelBits.FRONT_LEFT
+    const val FR = AndroidChannelBits.FRONT_RIGHT
+    const val S51 = FL or FR or AndroidChannelBits.FRONT_CENTER or AndroidChannelBits.LOW_FREQUENCY or
+        AndroidChannelBits.BACK_LEFT or AndroidChannelBits.BACK_RIGHT
+    const val S71 = S51 or AndroidChannelBits.SIDE_LEFT or AndroidChannelBits.SIDE_RIGHT
+    const val TOP_SIDES = AndroidChannelBits.TOP_SIDE_LEFT or AndroidChannelBits.TOP_SIDE_RIGHT
+    const val TOP_QUAD = AndroidChannelBits.TOP_FRONT_LEFT or AndroidChannelBits.TOP_FRONT_RIGHT or
+        AndroidChannelBits.TOP_BACK_LEFT or AndroidChannelBits.TOP_BACK_RIGHT
+    const val WIDES = AndroidChannelBits.FRONT_WIDE_LEFT or AndroidChannelBits.FRONT_WIDE_RIGHT
+    const val ALL_TOPS = TOP_SIDES or TOP_QUAD or AndroidChannelBits.TOP_CENTER or
+        AndroidChannelBits.TOP_FRONT_CENTER or AndroidChannelBits.TOP_BACK_CENTER
+    val PADDING = intArrayOf(
+        AndroidChannelBits.FRONT_LEFT_OF_CENTER, AndroidChannelBits.FRONT_RIGHT_OF_CENTER,
+        AndroidChannelBits.BACK_CENTER, AndroidChannelBits.TOP_CENTER,
+        AndroidChannelBits.TOP_FRONT_CENTER, AndroidChannelBits.TOP_BACK_CENTER,
+        AndroidChannelBits.BOTTOM_FRONT_LEFT, AndroidChannelBits.BOTTOM_FRONT_RIGHT,
+        AndroidChannelBits.BOTTOM_FRONT_CENTER, AndroidChannelBits.LOW_FREQUENCY_2,
+    )
 }
 
 /**
@@ -120,6 +239,12 @@ enum class DrcMode(val displayName: String) {
 data class RendererProfile(
     /** How spatial content becomes speaker feeds. */
     val mode: RendererMode = RendererMode.DEFAULT,
+    /**
+     * Render Atmos objects to physical speakers (5.1 .. 9.1.6) instead of
+     * headphones/stereo. Off by default: with it off nothing about the stereo
+     * path changes, whatever a connected device reports.
+     */
+    val speakerRender: Boolean = false,
     /** Take the channel count from the connected DAC instead of [layout]. */
     val autoDetectLayout: Boolean = true,
     /** Target loudspeaker layout when not auto-detecting. */
@@ -179,15 +304,23 @@ data class RendererProfile(
     fun effectiveLayout(dacChannelCount: Int?): ChannelLayout =
         if (autoDetectLayout) ChannelLayout.fromChannelCount(dacChannelCount) else layout
 
+    /**
+     * The loudspeaker layout Atmos renders to, or [ChannelLayout.STEREO] when
+     * the speaker render is off or the effective layout has no more than two
+     * channels (then the existing binaural / fold-down path runs unchanged).
+     */
+    fun speakerLayout(dacChannelCount: Int?): ChannelLayout =
+        if (!speakerRender) ChannelLayout.STEREO else effectiveLayout(dacChannelCount)
+
     companion object {
         val DEFAULT = RendererProfile()
     }
 }
 
 /**
- * One loudspeaker position in a bed layout, used to draw the channel map. Angles
- * mirror the native VBAP layout in `cpp/atmos/vbap.h`: azimuth 0 = front, growing
- * clockwise (+ = right); elevation up from the horizontal plane.
+ * One loudspeaker position in a layout, used to draw the channel map. Angles
+ * mirror the native speaker renderer (`cpp/atmos/speaker_renderer.h`): azimuth
+ * 0 = front, growing clockwise (+ = right); elevation up from ear level.
  */
 data class SpeakerChannel(
     val label: String,
@@ -199,43 +332,61 @@ data class SpeakerChannel(
 }
 
 /**
- * The speakers that make up a layout, in channel order. The count matches
- * [ChannelLayout.channelCount], and the set matches the native bed layouts.
+ * The speakers that make up a layout, in output channel order — Android
+ * mask-bit order (FL FR FC LFE BL BR SL SR TFL TFR TBL TBR TSL TSR FWL FWR),
+ * which is also the order the native renderer writes. The count matches
+ * [ChannelLayout.channelCount]. Note the 7.x rears (Android BACK_*) come
+ * before the sides (SIDE_*), and a 5.x layout's surrounds are the BACK pair.
  */
-fun ChannelLayout.speakers(): List<SpeakerChannel> = when (this) {
-    ChannelLayout.STEREO -> listOf(
-        SpeakerChannel("L", -30f), SpeakerChannel("R", 30f),
-    )
-    ChannelLayout.SURROUND_5_1 -> listOf(
+fun ChannelLayout.speakers(): List<SpeakerChannel> {
+    val front = listOf(
         SpeakerChannel("L", -30f), SpeakerChannel("R", 30f), SpeakerChannel("C", 0f),
         SpeakerChannel("LFE", 0f, isLfe = true),
-        SpeakerChannel("Ls", -110f), SpeakerChannel("Rs", 110f),
     )
-    ChannelLayout.SURROUND_7_1 -> listOf(
-        SpeakerChannel("L", -30f), SpeakerChannel("R", 30f), SpeakerChannel("C", 0f),
-        SpeakerChannel("LFE", 0f, isLfe = true),
-        SpeakerChannel("Lss", -90f), SpeakerChannel("Rss", 90f),
+    val surr5 = listOf(SpeakerChannel("Ls", -110f), SpeakerChannel("Rs", 110f))
+    val surr7 = listOf(
         SpeakerChannel("Lrs", -150f), SpeakerChannel("Rrs", 150f),
-    )
-    ChannelLayout.ATMOS_7_1_4 -> listOf(
-        SpeakerChannel("L", -30f), SpeakerChannel("R", 30f), SpeakerChannel("C", 0f),
-        SpeakerChannel("LFE", 0f, isLfe = true),
         SpeakerChannel("Lss", -90f), SpeakerChannel("Rss", 90f),
-        SpeakerChannel("Lrs", -150f), SpeakerChannel("Rrs", 150f),
+    )
+    val topQuad = listOf(
         SpeakerChannel("Ltf", -45f, 45f), SpeakerChannel("Rtf", 45f, 45f),
         SpeakerChannel("Ltr", -135f, 45f), SpeakerChannel("Rtr", 135f, 45f),
     )
+    // x.1.2's single top pair sits overhead ("top middle"); 9.1.6's is the
+    // middle of three rows, level with the others.
+    val topMiddle = listOf(SpeakerChannel("Ltm", -90f, 60f), SpeakerChannel("Rtm", 90f, 60f))
+    val topSides = listOf(SpeakerChannel("Lts", -90f, 45f), SpeakerChannel("Rts", 90f, 45f))
+    val wides = listOf(SpeakerChannel("Lw", -60f), SpeakerChannel("Rw", 60f))
+    return when (this) {
+        ChannelLayout.STEREO -> listOf(SpeakerChannel("L", -30f), SpeakerChannel("R", 30f))
+        ChannelLayout.SURROUND_5_1 -> front + surr5
+        ChannelLayout.SURROUND_7_1 -> front + surr7
+        ChannelLayout.SURROUND_5_1_2 -> front + surr5 + topMiddle
+        ChannelLayout.SURROUND_5_1_4 -> front + surr5 + topQuad
+        ChannelLayout.SURROUND_7_1_2 -> front + surr7 + topMiddle
+        ChannelLayout.ATMOS_7_1_4 -> front + surr7 + topQuad
+        ChannelLayout.ATMOS_9_1_4 -> front + surr7 + topQuad + wides
+        ChannelLayout.ATMOS_9_1_6 -> front + surr7 + topQuad + topSides + wides
+    }
 }
 
 private val DOLBY_ATMOS_REGEX = Regex("""dolby\s*atmos""", RegexOption.IGNORE_CASE)
 
 /**
- * True for the E-AC-3 (Dolby Digital Plus) family — the container that *can*
- * carry Atmos JOC side-data. Being EC-3 does not by itself mean a track is
- * Atmos (plain DD+ 5.1 is also EC-3); use [isDolbyAtmos] for that. Matches on
- * the codec name, MIME type, or file extension.
+ * True for the Dolby codecs that *can* carry Atmos: the E-AC-3 (Dolby Digital
+ * Plus) family, whose JOC side-data this app's renderer decodes, and AC-4.
+ * Neither alone means a track is Atmos (plain DD+ 5.1 is also EC-3, and AC-4 is
+ * often stereo); use [isDolbyAtmos] for that. Matches on the codec name, MIME
+ * type, or file extension.
  */
 fun isAtmosCapableCodec(
+    codec: String? = null,
+    mimeType: String? = null,
+    fileExtension: String? = null,
+): Boolean = isEac3Codec(codec, mimeType, fileExtension) || isAc4Codec(codec, mimeType, fileExtension)
+
+/** E-AC-3 (Dolby Digital Plus, incl. Atmos JOC) by codec name, MIME or extension. */
+fun isEac3Codec(
     codec: String? = null,
     mimeType: String? = null,
     fileExtension: String? = null,
@@ -250,6 +401,24 @@ fun isAtmosCapableCodec(
     val extHit = fileExtension?.trimStart('.')?.lowercase()?.let {
         it == "ec3" || it == "eac3"
     } ?: false
+    return codecHit || mimeHit || extHit
+}
+
+/**
+ * Dolby AC-4 (ETSI TS 103 190) by codec name ("ac-4", MP4 sample entry
+ * "ac-4"), MIME ("audio/ac4") or extension. There is no software AC-4 decoder
+ * in the bundled FFmpeg (upstream has none), so AC-4 plays through the
+ * platform decoder where the device has one, or as a passthrough bitstream to
+ * an HDMI receiver that decodes it; the object renderer never sees AC-4.
+ */
+fun isAc4Codec(
+    codec: String? = null,
+    mimeType: String? = null,
+    fileExtension: String? = null,
+): Boolean {
+    val codecHit = codec?.lowercase()?.let { it.contains("ac-4") || it == "ac4" } ?: false
+    val mimeHit = mimeType?.lowercase()?.let { it.contains("ac4") || it.contains("ac-4") } ?: false
+    val extHit = fileExtension?.trimStart('.')?.lowercase()?.let { it == "ac4" } ?: false
     return codecHit || mimeHit || extHit
 }
 

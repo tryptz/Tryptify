@@ -63,6 +63,18 @@ class AtmosRendererTest {
         assertFalse(isAtmosCapableCodec())
     }
 
+    @Test
+    fun `AC-4 is Atmos-capable but not E-AC-3`() {
+        assertTrue(isAtmosCapableCodec(mimeType = "audio/ac4"))
+        assertTrue(isAtmosCapableCodec(codec = "ac-4"))
+        assertTrue(isAtmosCapableCodec(fileExtension = ".ac4"))
+        assertTrue(isAc4Codec(mimeType = "audio/ac4"))
+        assertFalse(isEac3Codec(mimeType = "audio/ac4"))
+        assertFalse(isAc4Codec(mimeType = "audio/eac3"))
+        // Codec alone never makes a track Atmos.
+        assertFalse(isDolbyAtmos(mimeType = "audio/ac4"))
+    }
+
     // ---- ChannelLayout -----------------------------------------------------
 
     @Test
@@ -72,8 +84,61 @@ class AtmosRendererTest {
         assertEquals(ChannelLayout.STEREO, ChannelLayout.fromChannelCount(2))
         assertEquals(ChannelLayout.SURROUND_5_1, ChannelLayout.fromChannelCount(6))
         assertEquals(ChannelLayout.SURROUND_7_1, ChannelLayout.fromChannelCount(8))
+        assertEquals(ChannelLayout.SURROUND_5_1_4, ChannelLayout.fromChannelCount(10))
         assertEquals(ChannelLayout.ATMOS_7_1_4, ChannelLayout.fromChannelCount(12))
-        assertEquals(ChannelLayout.ATMOS_7_1_4, ChannelLayout.fromChannelCount(16))
+        assertEquals(ChannelLayout.ATMOS_9_1_4, ChannelLayout.fromChannelCount(14))
+        assertEquals(ChannelLayout.ATMOS_9_1_6, ChannelLayout.fromChannelCount(16))
+        assertEquals(ChannelLayout.ATMOS_9_1_6, ChannelLayout.fromChannelCount(24))
+    }
+
+    @Test
+    fun `speaker masks name exactly the layout's speakers`() {
+        for (layout in ChannelLayout.entries) {
+            assertEquals(layout.label, layout.channelCount, Integer.bitCount(layout.speakerMask))
+            assertEquals(layout.label, layout.sinkChannelCount, Integer.bitCount(layout.sinkChannelMask))
+            // Padding only ever adds positions; every speaker keeps its bit.
+            assertEquals(layout.speakerMask, layout.sinkChannelMask and layout.speakerMask)
+        }
+        assertEquals(0xFC, ChannelLayout.SURROUND_5_1.speakerMask)       // Android CHANNEL_OUT_5POINT1
+        assertEquals(0x18FC, ChannelLayout.SURROUND_7_1.speakerMask)     // CHANNEL_OUT_7POINT1_SURROUND
+        assertEquals(0xB58FC, ChannelLayout.ATMOS_7_1_4.speakerMask)     // CHANNEL_OUT_7POINT1POINT4
+    }
+
+    @Test
+    fun `sink channel counts are ones Media3 accepts`() {
+        val accepted = setOf(1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 24)
+        for (layout in ChannelLayout.entries) {
+            assertTrue(layout.label, layout.sinkChannelCount in accepted)
+        }
+        assertEquals(24, ChannelLayout.ATMOS_9_1_4.sinkChannelCount)
+        assertEquals(24, ChannelLayout.ATMOS_9_1_6.sinkChannelCount)
+    }
+
+    @Test
+    fun `speaker slots follow mask order and skip the padding`() {
+        for (layout in ChannelLayout.entries) {
+            val slots = layout.speakerSlots()
+            assertEquals(layout.channelCount, slots.size)
+            for (i in 1 until slots.size) assertTrue(slots[i] > slots[i - 1])
+            assertTrue(slots.last() < layout.sinkChannelCount)
+        }
+        // Unpadded layouts are the identity.
+        assertEquals((0 until 12).toList(), ChannelLayout.ATMOS_7_1_4.speakerSlots().toList())
+        // 9.1.6: FL FR FC LFE BL BR (0-5), then FLC FRC BC pad (6-8), SL SR (9-10), ...
+        val s916 = ChannelLayout.ATMOS_9_1_6.speakerSlots()
+        assertEquals(listOf(0, 1, 2, 3, 4, 5), s916.take(6))
+        assertEquals(9, s916[6])  // SL after the three front/back-centre pads
+    }
+
+    @Test
+    fun `speaker render is opt-in`() {
+        // Whatever a device reports, the default profile stays on the stereo path.
+        assertEquals(ChannelLayout.STEREO, RendererProfile.DEFAULT.speakerLayout(12))
+        val on = RendererProfile.DEFAULT.copy(speakerRender = true)
+        assertEquals(ChannelLayout.ATMOS_7_1_4, on.speakerLayout(12))
+        assertEquals(ChannelLayout.STEREO, on.speakerLayout(2))
+        val manual = on.copy(autoDetectLayout = false, layout = ChannelLayout.ATMOS_9_1_4)
+        assertEquals(ChannelLayout.ATMOS_9_1_4, manual.speakerLayout(2))
     }
 
     @Test
@@ -96,6 +161,8 @@ class AtmosRendererTest {
         assertEquals(6, ChannelLayout.SURROUND_5_1.channelCount)
         assertEquals(8, ChannelLayout.SURROUND_7_1.channelCount)
         assertEquals(12, ChannelLayout.ATMOS_7_1_4.channelCount)
+        assertEquals(14, ChannelLayout.ATMOS_9_1_4.channelCount)
+        assertEquals(16, ChannelLayout.ATMOS_9_1_6.channelCount)
     }
 
     // ---- RendererProfile ---------------------------------------------------

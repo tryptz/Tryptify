@@ -38,6 +38,7 @@ sealed interface DiscoveryItem {
  */
 data class DiscoveryShelf(
     val id: String,
+    /** [titleLine] in English; what everything but the screen reads. */
     val title: String,
     val reason: String? = null,
     val items: List<DiscoveryItem> = emptyList(),
@@ -56,6 +57,9 @@ data class DiscoveryShelf(
      * [depth] + 1; see DiscoveryFeedUseCase.moreForGenre.
      */
     val depth: Int = 0,
+    /** The title as phrases, for the screen to word in the listener's language; see [ShelfLine]. */
+    val titleLine: ShelfLine? = null,
+    val reasonLine: ShelfLine? = null,
 )
 
 /**

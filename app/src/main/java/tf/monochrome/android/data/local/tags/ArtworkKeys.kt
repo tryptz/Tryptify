@@ -48,19 +48,6 @@ object ArtworkKeys {
         key != null && key.contains("/$DIR_NAME/$LEGACY_DIR_NAME/")
 
     /**
-     * Repoint a key from [oldDir] to [newDir], leaving anything else alone — the
-     * column also holds sidecar covers and raw audio paths, and neither moves.
-     *
-     * Boundary-aware both ways: a trailing slash on [oldDir] must not change the
-     * result, and `/cache/artwork_backup/x.jpg` must not match `/cache/artwork`.
-     */
-    fun rewriteKey(key: String, oldDir: String, newDir: String): String {
-        val from = oldDir.trimEnd('/') + "/"
-        val to = newDir.trimEnd('/') + "/"
-        return if (key.startsWith(from)) to + key.removePrefix(from) else key
-    }
-
-    /**
      * Largest power-of-two downscale that still leaves the image at or above
      * [maxEdgePx] on its longest edge, for `BitmapFactory.Options.inSampleSize`.
      */

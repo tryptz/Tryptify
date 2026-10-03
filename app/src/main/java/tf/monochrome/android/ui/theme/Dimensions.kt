@@ -51,10 +51,6 @@ object MonoDimens {
     val iconSm = 24.dp
     /** List-item leading icons (genre, folder, etc.) */
     val iconMd = 32.dp
-    /** Cover thumbnails in lists */
-    val iconLg = 48.dp
-    /** Primary action buttons (play/pause) */
-    val iconXl = 64.dp
 
     // ── Cover Art Sizes ──────────────────────────────────────────────
     /** Mini player artwork */
@@ -63,18 +59,13 @@ object MonoDimens {
     val coverList = 48.dp
     /** Album grid / artist card artwork */
     val coverCard = 160.dp
-    /** Album detail hero artwork */
-    val coverHero = 240.dp
-    /** Now playing artwork */
-    val coverPlayer = 300.dp
 
     // ── List Item Dimensions ─────────────────────────────────────────
     /** Standard horizontal padding for list items */
     val listItemPaddingH = 16.dp
-    /** Standard vertical padding for list items */
-    val listItemPaddingV = 10.dp
-    /** Bottom padding to clear mini player / nav bar */
-    val listBottomPadding = 80.dp
+    // listBottomPadding (a flat 80dp) lived here. It fell short of the system bar
+    // plus the mini player on every page that runs under both; lists use
+    // ui.navigation.bottomChromePadding now, which knows what floats over them.
     /**
      * Vertical inset on an inline artist/album link's hit box. Lives here
      * rather than in `ClickableArtists` because [listRowHeight] has to budget
@@ -162,8 +153,6 @@ object MonoDimens {
     val glassBorderWidth = 0.5.dp
     /** Backdrop blur radius for glass surfaces */
     val glassBlurRadius = 80.dp
-    /** Soft shadow elevation for glass cards */
-    val glassElevation = 4.dp
 }
 
 /**
