@@ -34,6 +34,19 @@ class PlayerGlassSettingsTest {
     }
 
     @Test
+    fun `the mini player and panels start from Liquid, not the transport default`() {
+        val m = PlayerGlassSettings.MINI_DEFAULT
+        assertEquals(PlayerGlassSettings.LIQUID, m)
+        assertEquals(m, m.clamped())
+        assertTrue(PlayerGlassSettings.PRESETS.any { (name, p) -> name == "Liquid" && p == m })
+        // Still until touched: on the app-wide bar a moving surface runs a
+        // frame clock and tilt holds the gravity sensor, on every screen.
+        assertEquals(0f, m.surfaceMotion)
+        assertEquals(0f, m.tiltReactivity)
+        assertTrue(m != PlayerGlassSettings.DEFAULT)
+    }
+
+    @Test
     fun `clamped coerces out-of-range values`() {
         val c = PlayerGlassSettings(
             bodyOpacity = 9f,

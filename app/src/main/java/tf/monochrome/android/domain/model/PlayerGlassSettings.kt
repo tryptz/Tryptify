@@ -136,6 +136,32 @@ data class PlayerGlassSettings(
         val DEFAULT = PlayerGlassSettings()
 
         /**
+         * Liquid — clear glass for the panes that bend the live screen (the
+         * mini player and every glass panel, see LiveGlassLens). Full rim
+         * refraction over a thin tint, so what is behind the pane shows
+         * through and bends at its edge; a crisp, moderate rim light from the
+         * upper left; a whisper of dispersion rather than the default's
+         * rainbow; a calm room reflection that lights the rim without
+         * whitening it. Still until touched: no surface motion and no tilt,
+         * which on the app-wide mini player also means no frame clock and no
+         * gravity sensor. A lighter backdrop blur — the live lens takes a
+         * twentieth of it, the haze fallback all of it.
+         */
+        val LIQUID = PlayerGlassSettings(
+            bodyOpacity = 0.16f, refraction = 0.4f, rimBrightness = 1f, dispersion = 0.35f,
+            roundness = 2f, depth = 1.2f, reflection = 0.9f, gloss = 0.85f,
+            surfaceMotion = 0f, tiltReactivity = 0f, lightAngleDeg = 135f, edgeWidth = 0.25f,
+            frost = 0f, hazeBlurDp = 32f, hazeTint = 0.8f,
+        )
+
+        /**
+         * What the mini player and the glass panels start from. Not [DEFAULT]:
+         * these are the surfaces that bend the live screen, and DEFAULT is the
+         * player transport's shipped material, tuned for a stand-in backdrop.
+         */
+        val MINI_DEFAULT = LIQUID
+
+        /**
          * Built-in glass MATERIAL themes — one unified roster, paired 1:1 with
          * the Lyrics FX presets of the SAME NAME so picking a theme on both
          * tabs composes a single look. Each varies only the aesthetic fields;
@@ -152,6 +178,8 @@ data class PlayerGlassSettings(
         val PRESETS: List<Pair<String, PlayerGlassSettings>> = listOf(
             // The shipped look.
             "Default" to DEFAULT,
+            // Clear live-lens glass; the mini player and panels' default.
+            "Liquid" to LIQUID,
             // Chrome — liquid metal: polished mirror body, steady surface,
             // tight bright glint. (Name pinned by tests.)
             "Chrome" to PlayerGlassSettings(

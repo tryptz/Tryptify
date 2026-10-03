@@ -156,13 +156,13 @@ fun GlassPanel(
                 },
         )
 
+        val liveLens = LIVE_LENS_GLASS && liveLensCompiles && hazeState != null && allowHaze &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
         if (shaderGlass) {
             // Only with a real backdrop. Frosting an unfed state draws the
             // frost's own base colour as a flat pane, which is the slab this
             // whole component exists not to be.
-            if (LIVE_LENS_GLASS && liveLensCompiles && hazeState != null && allowHaze &&
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-            ) {
+            if (liveLens && hazeState != null) {
                 // The mini player's live lens, for the same reason this panel
                 // takes its frost: one material, usually side by side. See
                 // LiveGlassLens.
@@ -220,7 +220,7 @@ fun GlassPanel(
             Canvas(
                 modifier = Modifier
                     .matchParentSize()
-                    .playerGlass(tint = tint, lensCorner = MonoDimens.radiusLg),
+                    .playerGlass(tint = tint, lensCorner = MonoDimens.radiusLg, liveUnder = liveLens),
             ) {
                 val r = MonoDimens.radiusLg.toPx()
                 drawRoundRect(

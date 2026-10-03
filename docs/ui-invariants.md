@@ -58,9 +58,16 @@ output is bit-identical to the alpha-only glass.
 **Prototype: the mini player and `GlassPanel` bend the live screen**
 (`LiveGlassLens.kt`, behind `LIVE_LENS_GLASS`). Their haze pane is replaced by a
 layer that draws Haze's own capture of the screen behind them
-(`HazeState.areas[i].contentLayer`, offset by `positionOnScreen`), blurs it
-lightly (a fifth of `hazeBlurDp`) and bends it with the same lens rim, under the
-same frost tint. This is possible only because the lens rim is computed from the
+(`HazeState.areas[i].contentLayer`, offset by `positionOnScreen`), blurs it very
+lightly (a twentieth of `hazeBlurDp`) and bends it with the same lens rim, under
+half the haze pane's frost. Heavier was tried and failed on device: an 8dp blur,
+full frost and the slab's own 20% veil on top flattened the bend into a dark
+smear. For the same reason the slab over a live lens is told so
+(`playerGlass(liveUnder = true)`): it drops its stand-in refraction and draws its
+body as plain tint at half the body opacity, leaving the rim, reflection and
+glint to carry the glass. With `liveUnder` false the slab is bit-identical. These
+surfaces start from the `Liquid` preset (`PlayerGlassSettings.MINI_DEFAULT`), not
+from `DEFAULT`, which stays the transport's material. This is possible only because the lens rim is computed from the
 corner: the slab shader spends its single RenderEffect input on the alpha
 heightfield, while this layer spends its input on the backdrop. The slab still
 draws on top for the tint, the rim light and the control holes. Same sibling

@@ -36,7 +36,7 @@ import dev.chrisbanes.haze.HazeState
  *
  * So this layer draws Haze's own capture of the screen behind it (the
  * [HazeState] areas' content layers, the same recording the haze blur samples),
- * offset to where this pane sits, and runs a light blur and then
+ * offset to where this pane sits, and runs a very light blur and then
  * [LIVE_LENS_SRC] over it. What comes out is the live backdrop, bent by the same
  * squircle rim as the slab, under the same frost tint the haze pane used.
  *
@@ -103,16 +103,14 @@ internal fun Modifier.liveGlassLens(
             shader.setFloatUniform("uDepth", glass.depth)
             shader.setFloatUniform("uDispersion", glass.dispersion)
             // Premultiplied, for a plain src-over in the shader.
-            shader.setFloatUniform(
-                "uFrost",
-                frost.red * frost.alpha, frost.green * frost.alpha, frost.blue * frost.alpha, frost.alpha,
-            )
+            // Half the haze pane's frost: over a sharp backdrop the full 0.32
+            // black flattened the bend into a dark smear.
+            val fa = frost.alpha * LIVE_LENS_FROST_SHARE
+            shader.setFloatUniform("uFrost", frost.red * fa, frost.green * fa, frost.blue * fa, fa)
             val lens = RenderEffect.createRuntimeShaderEffect(shader, "content")
-            // A fifth of the haze pane's blur. The haze is 40dp by default,
-            // which is frost: it smears away the very detail a lens bends.
-            // Light enough that the rim visibly bends what is behind it, heavy
-            // enough that rows behind the bar do not fight its own text. Zero
-            // in the Studio gives clear glass.
+            // A twentieth of the haze pane's blur, 2dp at the default 40. Any
+            // more smears away the very detail the rim bends — 8dp made the
+            // bend unreadable on device. Zero in the Studio is clear glass.
             val blurPx = glass.hazeBlurDp * LIVE_LENS_BLUR_SHARE * density
             renderEffect = if (blurPx >= 0.5f) {
                 RenderEffect.createChainEffect(
@@ -145,7 +143,10 @@ internal fun Modifier.liveGlassLens(
 internal const val LIVE_LENS_GLASS = true
 
 /** The live lens's blur as a share of the haze pane's (`hazeBlurDp`). */
-private const val LIVE_LENS_BLUR_SHARE = 0.2f
+private const val LIVE_LENS_BLUR_SHARE = 0.05f
+
+/** The live lens's frost as a share of the haze pane's tint alpha. */
+private const val LIVE_LENS_FROST_SHARE = 0.5f
 
 private class LensAnchor {
     var screen: Offset = Offset.Zero

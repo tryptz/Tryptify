@@ -276,6 +276,7 @@ private fun liquidGlassModifier(
             // the right shape for a letter.
             shader.setFloatUniform("uLensR", 0f)
             shader.setFloatUniform("uLensW", 0f)
+            shader.setFloatUniform("uLiveUnder", 0f)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -521,12 +522,18 @@ internal fun Modifier.playerGlass(
      * rim lands where its edge is not.
      */
     lensCorner: Dp = Dp.Unspecified,
+    /**
+     * True when a [liveGlassLens] draws the real backdrop under this slab. The
+     * slab then drops its stand-in refraction and keeps only a thin tint and
+     * the rim light, so the bent backdrop is what shows through.
+     */
+    liveUnder: Boolean = false,
 ): Modifier {
     val g = LocalPlayerGlass.current
     if (LocalLowPerformance.current.disableLiquidGlass) return this
     if (!g.enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
     return this.then(
-        playerGlassModifier(tint, g, bulgeCenter, bulgeAmount, bulgeRadiusFraction, artFrame, lensCorner),
+        playerGlassModifier(tint, g, bulgeCenter, bulgeAmount, bulgeRadiusFraction, artFrame, lensCorner, liveUnder),
     )
 }
 
@@ -540,6 +547,7 @@ private fun playerGlassModifier(
     bulgeRadiusFraction: Float,
     artFrame: BackdropAnchor?,
     lensCorner: Dp,
+    liveUnder: Boolean,
 ): Modifier {
     val shader = remember { runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() } ?: return Modifier
     // Unlike the lyric glass and the panel, which pin uLiquid to 1, this
@@ -618,6 +626,7 @@ private fun playerGlassModifier(
             val (lensR, lensW) = lensRimPx(lensCorner, size, g.roundness)
             shader.setFloatUniform("uLensR", lensR)
             shader.setFloatUniform("uLensW", lensW)
+            shader.setFloatUniform("uLiveUnder", if (liveUnder) 1f else 0f)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -886,6 +895,7 @@ uniform float uBulgeAmt;      // press-bulge swell, 0 = none .. 1 = full dome
 uniform float uBulgeR;        // press-bulge dome radius in px; <=0 falls back to uSize.x/6
 uniform float uLensR;         // lens rim: the slab's corner radius in px (rounded rect filling uSize)
 uniform float uLensW;         // lens rim: bevel band width in px, <= uLensR; 0 = alpha-only bevel
+uniform float uLiveUnder;     // 1 = a LiveGlassLens draws the real backdrop under this slab
 
 // The real backdrop, when there is one to lens. uArt is ALWAYS bound (SkSL
 // requires every child shader to be set); uArtMix is what decides whether it
@@ -1178,6 +1188,16 @@ half4 main(float2 p) {
     float3 glyphTint = float3(src.rgb) / a;
     float bodyMix = mix(0.72, 0.42, uBackdropMix);
     float3 bodyCol = mix(refr, glyphTint, bodyMix);
+    // Over a live lens the real, bent backdrop is already underneath, so the
+    // stand-in refraction here would only veil it with a smeared copy of the
+    // cover. The body becomes a thin wash of plain tint (half the body
+    // opacity, 10% at the default) and the rim, reflection and glint carry the
+    // glass, as the demo's live-screen mode draws it.
+    float bodyA = uBodyOpacity;
+    if (uLiveUnder > 0.5) {
+        bodyCol = glyphTint;
+        bodyA = uBodyOpacity * 0.5;
+    }
 
     // Fresnel-blend the reflection over the body (edges reflect, the face
     // transmits), then add the dispersed glint. uRimGain scales both the
@@ -1216,7 +1236,7 @@ half4 main(float2 p) {
     // instead of snapping, so the rim doesn't etch a hard 1px contour.
     float rimSum = fres * 1.2 + spec;
     float rim = min(rimSum, 0.82) + 0.18 * (1.0 - exp(-max(rimSum - 0.82, 0.0) / 0.18));
-    float outA = clamp(a * (uBodyOpacity + (1.0 - uBodyOpacity) * rim), 0.0, a);
+    float outA = clamp(a * (bodyA + (1.0 - bodyA) * rim), 0.0, a);
 
     float3 col = col3 * outA;              // premultiplied
     col = min(col, float3(outA));          // keep rgb <= alpha (premult-valid)

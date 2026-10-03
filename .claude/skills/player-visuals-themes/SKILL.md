@@ -92,8 +92,13 @@ Both lists currently run …`Halo`, `Ticker`, `Static` and end there; append aft
 - Lyrics FX: append inside `PRESETS = listOf(…)` in `LyricsFxSettings.kt`
   (17 presets today).
 - Player Glass: append inside `PRESETS = listOf(…)` in `PlayerGlassSettings.kt`
-  (16 today — this list opens with `"Default" to DEFAULT`, which the Lyrics one
-  does not).
+  (17 today — this list opens with `"Default" to DEFAULT` and `"Liquid" to
+  LIQUID`, which the Lyrics one does not; the validator only parses inline
+  presets, so it counts 16 and leaves those two to the unit tests).
+- `LIQUID` is also `MINI_DEFAULT`, what the mini player and every glass panel
+  start from. Changing its values restyles those surfaces for everyone who has
+  not customised them; the test `the mini player and panels start from Liquid`
+  pins that it stays still (no surface motion, no tilt).
 
 ## Lyrics FX parameter reference
 
