@@ -23,30 +23,30 @@
 <table>
   <tr>
     <td width="33%" valign="top">
-      <img src="docs/screenshots/player-ridgeline-ambient.jpg" alt="Now playing a Qobuz track: a purple Ridgeline spectrum over the cover, the projectM visualizer moving behind the player">
-      <b>Ridgeline spectrum.</b> "SOULFLUX" by 4evrx, a Qobuz track, on the player. Purple ridgelines rise over the bottom of the cover, and a white visualizer swirl moves behind the player. 164 BPM in the top bar.
+      <img src="docs/screenshots/player-ridgeline-ambient.jpg" alt="Ridgeline spectrum. The player with the Ridgeline waterfall over the cover and the MilkDrop visualizer as the ambient background. BPM readout in the top bar, source pill under the artist.">
+      <b>Ridgeline spectrum.</b> The player with the Ridgeline waterfall over the cover and the MilkDrop visualizer as the ambient background. BPM readout in the top bar, source pill under the artist.
     </td>
     <td width="33%" valign="top">
-      <img src="docs/screenshots/player-glass-spectrum.jpg" alt="Now playing: a single glass spectrum line across the bottom of the cover, a visualizer behind, +1 st in the top bar">
-      <b>Glass spectrum.</b> "Black Eagle" by Otto Drum, track 6 of 7. A single glass spectrum line runs across the bottom of the cover, a blue visualizer pattern behind. +1 st in the top bar.
+      <img src="docs/screenshots/player-glass-spectrum.jpg" alt="Glass spectrum. The player with the single-line Glass spectrum over the cover and the visualizer as the ambient background. Pitch readout in the top bar, glass dock with lyrics, shuffle, mixer and queue.">
+      <b>Glass spectrum.</b> The player with the single-line Glass spectrum over the cover and the visualizer as the ambient background. Pitch readout in the top bar, glass dock with lyrics, shuffle, mixer and queue.
     </td>
     <td width="33%" valign="top">
-      <img src="docs/screenshots/player-deezer-waterfall.jpg" alt="Now playing a Deezer track: the spectrum waterfall over the cover, a Deezer pill under the title">
-      <b>Waterfall.</b> "Vorfreude — Original Mix" by Dj Pastis, a Deezer track. A purple waterfall over the Hardtrance Squad cover. 0 st in the top bar.
+      <img src="docs/screenshots/player-deezer-waterfall.jpg" alt="Waterfall spectrum. The player with the waterfall over the cover, a Deezer source pill and the pitch readout in the top bar.">
+      <b>Waterfall spectrum.</b> The player with the waterfall over the cover, a Deezer source pill and the pitch readout in the top bar.
     </td>
   </tr>
   <tr>
     <td valign="top">
-      <img src="docs/screenshots/home-nav-bar.jpg" alt="Home: Recently Played and Liked Songs with TIDAL, Deezer, Qobuz and Local pills, the mini player and the glass nav bar">
-      <b>Home.</b> Recently Played and Liked Songs, each row with a TIDAL, Deezer, Qobuz or Local pill. The mini player above the glass nav bar: Home, Discover, Radio, Library and Search.
+      <img src="docs/screenshots/home-nav-bar.jpg" alt="Home. Recently Played and Liked Songs with TIDAL, Deezer, Qobuz and Local source pills, the mini player, and the glass nav bar with the Search button.">
+      <b>Home.</b> Recently Played and Liked Songs with TIDAL, Deezer, Qobuz and Local source pills, the mini player, and the glass nav bar with the Search button.
     </td>
     <td valign="top">
-      <img src="docs/screenshots/mixer-add-plugin.jpg" alt="The mixer with Front, Centre and LFE buses, the Centre bus running a Reverb, and the Add Plugin sheet listing Utility, EQ and Filter, and Dynamics processors">
-      <b>Mixer.</b> The Add Plugin sheet open over the bus strips, listing Utility, EQ & Filter and Dynamics processors. Behind it, the Centre bus with a Reverb on its Mastering Ambience preset.
+      <img src="docs/screenshots/mixer-add-plugin.jpg" alt="Mixer. Surround buses (Front, Centre, LFE), a Reverb plugin editor, and the Add Plugin sheet with Utility, EQ &amp; Filter and Dynamics processors.">
+      <b>Mixer.</b> Surround buses (Front, Centre, LFE), a Reverb plugin editor, and the Add Plugin sheet with Utility, EQ &amp; Filter and Dynamics processors.
     </td>
     <td valign="top">
-      <img src="docs/screenshots/autoeq.jpg" alt="Precision AutoEQ: original, target and corrected frequency-response curves, a preamp slider, Peaking and Shelf ends algorithms">
-      <b>AutoEQ.</b> Precision AutoEQ with the Original, Target and Corrected curves, the Preamp slider, Peaking and Shelf ends, and the AutoEq button. The nav bar holds Local and Playlists.
+      <img src="docs/screenshots/autoeq.jpg" alt="AutoEQ. Original, Target and Corrected response curves, smoothing, preamp, Peaking or Shelf ends algorithm, tone, automatic preamp and 2-channel calibration.">
+      <b>AutoEQ.</b> Original, Target and Corrected response curves, smoothing, preamp, Peaking or Shelf ends algorithm, tone, automatic preamp and 2-channel calibration.
     </td>
   </tr>
 </table>
