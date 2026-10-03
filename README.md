@@ -17,36 +17,36 @@
   &nbsp;·&nbsp;
   <a href="https://github.com/tryptz/Tryptify/releases/latest">Release notes</a>
   <br>
-  <sub>Android 8.0 or newer · formerly <b>MonoTrypT</b>, existing installs upgrade in place</sub>
+  <sub>Android 13+ · formerly <b>MonoTrypT</b>, existing installs upgrade in place</sub>
 </p>
 
 <table>
   <tr>
     <td width="33%" valign="top">
       <img src="docs/screenshots/player-ridgeline-ambient.jpg" alt="Now playing a Qobuz track: a purple Ridgeline spectrum over the cover, the projectM visualizer moving behind the player">
-      <b>Ridgeline spectrum + ambient visualizer.</b> The last few seconds of the song rise over the cover as stacked ridges. Behind the player, a MilkDrop preset runs as an ambient layer. The pill under the artist names the catalog, here Qobuz.
+      <b>Ridgeline spectrum.</b> "SOULFLUX" by 4evrx, a Qobuz track, on the player. Purple ridgelines rise over the bottom of the cover, and a white visualizer swirl moves behind the player. 164 BPM in the top bar.
     </td>
     <td width="33%" valign="top">
       <img src="docs/screenshots/player-glass-spectrum.jpg" alt="Now playing: a single glass spectrum line across the bottom of the cover, a visualizer behind, +1 st in the top bar">
-      <b>Glass spectrum.</b> The single-line style: one refractive line across the cover instead of a waterfall. <code>+1 st</code> in the top bar means the song is pitched up one semitone; the four buttons below open lyrics, shuffle, the mixer and the queue.
+      <b>Glass spectrum.</b> "Black Eagle" by Otto Drum, track 6 of 7. A single glass spectrum line runs across the bottom of the cover, a blue visualizer pattern behind. +1 st in the top bar.
     </td>
     <td width="33%" valign="top">
       <img src="docs/screenshots/player-deezer-waterfall.jpg" alt="Now playing a Deezer track: the spectrum waterfall over the cover, a Deezer pill under the title">
-      <b>Waterfall on a stream.</b> The same player on a Deezer track. Every song carries its source, and the player says "via" when it plays from a different catalog than the one it was found in.
+      <b>Waterfall.</b> "Vorfreude — Original Mix" by Dj Pastis, a Deezer track. A purple waterfall over the Hardtrance Squad cover. 0 st in the top bar.
     </td>
   </tr>
   <tr>
     <td valign="top">
       <img src="docs/screenshots/home-nav-bar.jpg" alt="Home: Recently Played and Liked Songs with TIDAL, Deezer, Qobuz and Local pills, the mini player and the glass nav bar">
-      <b>Home and the glass nav bar.</b> Recently played and liked songs from four sources at once. The mini player folds into the nav bar on scroll. Home, Library and Search are fixed; the two buttons between them are your choice.
+      <b>Home.</b> Recently Played and Liked Songs, each row with a TIDAL, Deezer, Qobuz or Local pill. The mini player above the glass nav bar: Home, Discover, Radio, Library and Search.
     </td>
     <td valign="top">
       <img src="docs/screenshots/mixer-add-plugin.jpg" alt="The mixer with Front, Centre and LFE buses, the Centre bus running a Reverb, and the Add Plugin sheet listing Utility, EQ and Filter, and Dynamics processors">
-      <b>The DSP console.</b> Buses named for a surround layout (Front, Centre, LFE), the Centre bus running a reverb preset, and the Add Plugin sheet open over it. Every one of the 36 processors is native C++.
+      <b>Mixer.</b> The Add Plugin sheet open over the bus strips, listing Utility, EQ & Filter and Dynamics processors. Behind it, the Centre bus with a Reverb on its Mastering Ambience preset.
     </td>
     <td valign="top">
       <img src="docs/screenshots/autoeq.jpg" alt="Precision AutoEQ: original, target and corrected frequency-response curves, a preamp slider, Peaking and Shelf ends algorithms">
-      <b>Headphone AutoEQ.</b> Your headphone's measured response (Original) and the Target, with the generated 10-band correction applied (Corrected). Here the nav bar has Local and Playlists in its two free slots.
+      <b>AutoEQ.</b> Precision AutoEQ with the Original, Target and Corrected curves, the Preamp slider, Peaking and Shelf ends, and the AutoEq button. The nav bar holds Local and Playlists.
     </td>
   </tr>
 </table>
