@@ -76,15 +76,15 @@
 
 | | |
 | --- | --- |
-| 🎧 **Every source in one player** | Local files (FLAC, ALAC, WAV, MP3 …) plus TIDAL, Qobuz and Deezer streams through the servers you add in Settings › Connections. |
-| 📈 **A spectrum you can read** | Waterfall styles Lines, Ridgeline, Heat and Neon, or single-line Glass and Legacy. Analysis modes: Live average, Live max, Average and Max. |
-| 🎛️ **DSP mixing console** | 4–48 buses plus master, up to 16 processors each, sends between buses, a 9.1.6 Atmos upmix preset and EBU R128 loudness meters. |
-| 📐 **Headphone AutoEQ** | A 10 to 31-band parametric correction from 4,000+ measurements against 10 target curves, or your own CSV/TXT. |
-| 🔌 **Bit-perfect USB DAC** | A UAC1/UAC2 driver over libusb writes PCM straight to the DAC, past Android's mixer, and falls back to the system output if it stalls. |
-| ⏩ **Speed, pitch, tempo** | Two pitch engines (WSOLA and a phase vocoder), detected BPM, and a turntable-style tempo bend. |
-| 🌌 **MilkDrop visualizer** | projectM with 9,795 presets, every one crash-tested under AddressSanitizer before it ships. Runs as the hero view or as an ambient layer. |
-| 🌍 **Seven languages** | English, 简体中文, 日本語, Français, Español, Türkçe, Deutsch. |
-| 📱 **Everywhere else** | Home-screen widget, Android Auto, Discord presence, scrobbling, offline downloads, account sync. |
+| **Every source in one player** | Local FLAC, ALAC, WAV (16/24-bit and 32-bit float), MP3, AAC and Ogg/Opus through Media3 ExoPlayer 1.5.1, with a bundled FFmpeg renderer for codecs Android lacks. TIDAL up to 24-bit FLAC, Qobuz, and Deezer as FLAC or MP3 320, from the servers you add in Settings › Connections. Every result names its catalog; downloads are tagged FLAC with the cover embedded. |
+| **A spectrum you can read** | A 4,096, 8,192 or 16,384-point FFT reduced to 256 display bins, drawn as a C++ waterfall in one pass: Lines, Ridgeline, Heat or Neon, or single-line Glass and Legacy. Live average, Live max, Average or Max analysis with adjustable averaging time and overlap. Frame-rate cap from 15 to 120 fps or every refresh, with optional vsync. |
+| **DSP mixing console** | A C++17 engine inside ExoPlayer's audio pipeline: NEON SIMD, denormal flush-to-zero, lock-free parameter hand-off. 4–48 buses plus master, up to 16 of 36 processors each, sends between any buses (loops refused), per-plugin oversampling off/2×/4× capped at 192 kHz. A 9.1.6 upmix preset; EBU R128 momentary, short-term, integrated, loudness range and true peak. |
+| **Headphone AutoEQ** | A 3 to 31-band parametric correction (10 by default), fitted greedily to the worst deviation from 20 Hz to 16 kHz, ±12 dB (±8 dB above 8 kHz). 4,000+ measurements from 12 squig.link sources and the bundled AutoEq catalog, against 10 targets including Harman Over-Ear 2018, Harman In-Ear 2019, Diffuse Field and Moondrop VDSF. Peaking or shelf ends, smoothing, automatic preamp, separate left/right calibration, and CSV/TXT import. |
+| **Bit-perfect USB DAC** | A libusb UAC1/UAC2 driver claims the DAC's streaming interface and writes 16, 24 or 32-bit PCM to its isochronous endpoint, past Android's mixer, at any rate the DAC exposes. UAC2 asynchronous feedback paces it; a watchdog falls back to the system output if the stream stalls. Crossfades work across sample rates. |
+| **Speed, pitch, tempo** | 0.25× to 3.0×, set as a multiplier, in semitones at exact 2^(n/12) ratios, or in BPM. Two pitch engines: a phase vocoder (signalsmith-stretch) for melodic material and WSOLA for drums. Tempo is measured once per track from a 200 Hz onset envelope, autocorrelated between 60 and 200 BPM with a 120 BPM prior; a turntable-style bar bends it. |
+| **MilkDrop visualizer** | projectM 4.1.6 on OpenGL ES 3.0 with 9,795 presets in one packed archive, patched for a crash on missing textures. Every preset is run under AddressSanitizer on a headless GLES context before it ships, and one that crashes a phone's GPU driver is flagged from the exit record and skipped. Runs as the hero view or as an ambient layer. |
+| **Seven languages** | English, 简体中文, 日本語, Français, Español, Türkçe and Deutsch, generated from one translation table, with Settings search in every language and Android 13's per-app language setting. |
+| **Everywhere else** | A Glance home-screen widget, Android Auto, Discord presence, Last.fm and ListenBrainz scrobbling, offline downloads, and Supabase sync of settings, library and presets. |
 
 ## How the sound flows
 
