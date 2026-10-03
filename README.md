@@ -2,6 +2,8 @@
 
 > A native Android hi-fi music player: a C++17 DSP console, headphone AutoEQ from real measurements, bit-perfect USB-DAC output, and a player you can watch.
 
+[![Downloads](https://img.shields.io/github/downloads/tryptz/Tryptify/total?label=downloads&color=2EA44F&logo=github)](https://github.com/tryptz/Tryptify/releases)
+[![Latest release](https://img.shields.io/github/v/release/tryptz/Tryptify?label=latest%20release&color=8E5CFF)](https://github.com/tryptz/Tryptify/releases/latest)
 ![Platform](https://img.shields.io/badge/platform-Android%208.0%2B%20(API%2026)-3DDC84?logo=android&logoColor=white)
 ![Version](https://img.shields.io/badge/version-1.9.2-8E5CFF)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1.0-7F52FF?logo=kotlin&logoColor=white)
@@ -14,6 +16,14 @@
   <img src="docs/screenshots/player-ridgeline-ambient.jpg" width="31%" alt="Now playing: a purple Ridgeline spectrum rising over the album art, the ambient visualizer moving behind the player">
   <img src="docs/screenshots/player-deezer-waterfall.jpg" width="31%" alt="Now playing a Deezer track: the spectrum waterfall over the cover, a Deezer source pill under the title">
   <img src="docs/screenshots/home-nav-bar.jpg" width="31%" alt="Home: Recently Played and Liked Songs with TIDAL, Deezer, Qobuz and Local pills, the mini player and the glass nav bar">
+</p>
+
+<p align="center">
+  <a href="https://github.com/tryptz/Tryptify/releases/latest/download/tryptify.apk"><b>⬇ Download the latest APK</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/tryptz/Tryptify/releases/latest">Release notes</a>
+  <br>
+  <sub>Android 8.0 or newer</sub>
 </p>
 
 Tryptify plays your local library and streams from TIDAL, Qobuz and Deezer. Every song says where it comes from, and every stage of the sound is yours to see and shape. Under the Compose / Material 3 interface sits a native signal-processing core:
