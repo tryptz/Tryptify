@@ -145,6 +145,7 @@ fun PlayerTransportControls(
             PlayerGlassHaze(
                 modifier = Modifier.matchParentSize(),
                 shape = CircleShape,
+                lensCorner = Dp.Infinity,
             )
             Box(
                 modifier = Modifier
@@ -164,7 +165,12 @@ fun PlayerTransportControls(
                 Canvas(
                     modifier = Modifier
                         .fillMaxSize()
-                        .playerGlass(tint = tint, bulgeAmount = { bulge }, lensCorner = Dp.Infinity)
+                        .playerGlass(
+                            tint = tint,
+                            bulgeAmount = { bulge },
+                            lensCorner = Dp.Infinity,
+                            liveUnder = rememberPlayerLiveLens(),
+                        )
                         // Own offscreen layer so the punch-out (BlendMode.Clear) is
                         // contained here and can't clear the player behind it — needed
                         // when the glass effect is off or below API 33.

@@ -155,11 +155,15 @@ data class PlayerGlassSettings(
         )
 
         /**
-         * What the mini player and the glass panels start from. Not [DEFAULT]:
-         * these are the surfaces that bend the live screen, and DEFAULT is the
-         * player transport's shipped material, tuned for a stand-in backdrop.
+         * What every glass setting starts from, the player's and the mini
+         * player's alike, and what "Reset to defaults" restores.
+         *
+         * Not [DEFAULT], and DEFAULT does not move: it is also what every
+         * preset inherits for the fields it leaves out, so changing it would
+         * silently restyle all of them. DEFAULT stays the classic material
+         * under its own chip.
          */
-        val MINI_DEFAULT = LIQUID
+        val INITIAL = LIQUID
 
         /**
          * Built-in glass MATERIAL themes — one unified roster, paired 1:1 with
@@ -178,7 +182,7 @@ data class PlayerGlassSettings(
         val PRESETS: List<Pair<String, PlayerGlassSettings>> = listOf(
             // The shipped look.
             "Default" to DEFAULT,
-            // Clear live-lens glass; the mini player and panels' default.
+            // Clear live-lens glass; what every glass setting starts from.
             "Liquid" to LIQUID,
             // Chrome — liquid metal: polished mirror body, steady surface,
             // tight bright glint. (Name pinned by tests.)

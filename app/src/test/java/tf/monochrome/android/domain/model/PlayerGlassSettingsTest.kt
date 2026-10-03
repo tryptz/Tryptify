@@ -34,8 +34,8 @@ class PlayerGlassSettingsTest {
     }
 
     @Test
-    fun `the mini player and panels start from Liquid, not the transport default`() {
-        val m = PlayerGlassSettings.MINI_DEFAULT
+    fun `every glass setting starts from Liquid, and DEFAULT stays the classic material`() {
+        val m = PlayerGlassSettings.INITIAL
         assertEquals(PlayerGlassSettings.LIQUID, m)
         assertEquals(m, m.clamped())
         assertTrue(PlayerGlassSettings.PRESETS.any { (name, p) -> name == "Liquid" && p == m })

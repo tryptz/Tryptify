@@ -2117,7 +2117,7 @@ class PreferencesManager @Inject constructor(
             raw
                 ?.let { s -> runCatching { json.decodeFromString<tf.monochrome.android.domain.model.PlayerGlassSettings>(s) }.getOrNull() }
                 ?.clamped()
-                ?: tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT
+                ?: tf.monochrome.android.domain.model.PlayerGlassSettings.INITIAL
         }
 
     suspend fun setPlayerGlass(settings: tf.monochrome.android.domain.model.PlayerGlassSettings) {
@@ -2132,7 +2132,7 @@ class PreferencesManager @Inject constructor(
             raw
                 ?.let { s -> runCatching { json.decodeFromString<tf.monochrome.android.domain.model.PlayerGlassSettings>(s) }.getOrNull() }
                 ?.clamped()
-                ?: tf.monochrome.android.domain.model.PlayerGlassSettings.MINI_DEFAULT
+                ?: tf.monochrome.android.domain.model.PlayerGlassSettings.INITIAL
         }
 
     suspend fun setMiniPlayerGlass(settings: tf.monochrome.android.domain.model.PlayerGlassSettings) {

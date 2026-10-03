@@ -288,7 +288,7 @@ private fun liquidGlassModifier(
  * Player-chrome glass settings (the transport buttons), provided at the player
  * route from the persisted [tf.monochrome.android.domain.model.PlayerGlassSettings].
  */
-val LocalPlayerGlass = compositionLocalOf { tf.monochrome.android.domain.model.PlayerGlassSettings() }
+val LocalPlayerGlass = compositionLocalOf { tf.monochrome.android.domain.model.PlayerGlassSettings.INITIAL }
 
 /**
  * Whether [playerGlass] will actually do anything here.
@@ -316,6 +316,20 @@ fun rememberLiquidGlassAvailable(): Boolean {
     val flat = LocalLowPerformance.current.disableLiquidGlass
     val enabled = LocalPlayerGlass.current.enabled
     return compiles && !flat && enabled
+}
+
+/**
+ * Whether the full player's glass bends the live backdrop: there is a player
+ * haze source to draw, the device may blur, glass is on, and the live lens
+ * compiles. The disc and the dock ask this for their slab's `liveUnder`, and
+ * [PlayerGlassHaze] asks it for what to draw under them, so the two agree.
+ */
+@Composable
+fun rememberPlayerLiveLens(): Boolean {
+    val haze = LocalPlayerHaze.current
+    val profile = tf.monochrome.android.performance.LocalPerformanceProfile.current
+    return LIVE_LENS_GLASS && liveLensCompiles && haze != null && profile.allowHazeBlur &&
+        rememberLiquidGlassAvailable()
 }
 
 /**
@@ -377,11 +391,22 @@ private const val HAZE_FADE_MILLIS = 400
 fun PlayerGlassHaze(
     modifier: Modifier = Modifier,
     shape: androidx.compose.ui.graphics.Shape = androidx.compose.ui.graphics.RectangleShape,
+    /**
+     * The corner of the slab above, when that slab is a rounded rect filling
+     * this pane ([Dp.Infinity] for the disc). Given, and where the live lens
+     * runs, this draws the real backdrop bent by the lens rim instead of a
+     * blur of it — see [liveGlassLens]. The slab must then be told
+     * (`playerGlass(liveUnder = rememberPlayerLiveLens())`).
+     */
+    lensCorner: Dp = Dp.Unspecified,
 ) {
     val haze = LocalPlayerHaze.current ?: return
     val g = LocalPlayerGlass.current
     val profile = tf.monochrome.android.performance.LocalPerformanceProfile.current
-    val lit = profile.allowHazeBlur && g.enabled && g.hazeBlurDp > 0f
+    val live = lensCorner.isSpecified && rememberPlayerLiveLens()
+    // The live lens is glass even at zero blur (clear glass); the haze pane at
+    // zero blur has nothing to draw.
+    val lit = profile.allowHazeBlur && g.enabled && (live || g.hazeBlurDp > 0f)
 
     val millis = tf.monochrome.android.ui.theme.motionMillis(HAZE_FADE_MILLIS)
     val fade = remember { Animatable(0f) }
@@ -412,6 +437,14 @@ fun PlayerGlassHaze(
     // of what reads through should be the blurred art.
     val frostTint = playerFrostTint(g, isDark)
 
+    if (live && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        androidx.compose.foundation.layout.Box(
+            modifier
+                .graphicsLayer { alpha = fade.value }
+                .liveGlassLens(hazeState = haze, corner = lensCorner, frost = frostTint, glass = g),
+        )
+        return
+    }
     androidx.compose.foundation.layout.Box(
         modifier
             // Read in the layer block, not the composition: the fade would

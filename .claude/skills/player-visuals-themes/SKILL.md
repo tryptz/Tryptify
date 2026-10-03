@@ -95,10 +95,12 @@ Both lists currently run …`Halo`, `Ticker`, `Static` and end there; append aft
   (17 today — this list opens with `"Default" to DEFAULT` and `"Liquid" to
   LIQUID`, which the Lyrics one does not; the validator only parses inline
   presets, so it counts 16 and leaves those two to the unit tests).
-- `LIQUID` is also `MINI_DEFAULT`, what the mini player and every glass panel
-  start from. Changing its values restyles those surfaces for everyone who has
-  not customised them; the test `the mini player and panels start from Liquid`
-  pins that it stays still (no surface motion, no tilt).
+- `LIQUID` is also `INITIAL`, what every glass setting starts from — the
+  player's and the mini player's — and what the Studio's reset restores.
+  Changing its values restyles the app for everyone who has not customised
+  it; the test `every glass setting starts from Liquid` pins that it stays
+  still (no surface motion, no tilt). `DEFAULT` keeps the classic values under
+  the "Default" chip, because every preset inherits omitted fields from it.
 
 ## Lyrics FX parameter reference
 

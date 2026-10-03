@@ -55,7 +55,7 @@ anything that is not one rounded rect filling the layer — glyphs, icons, the
 spectrum — or the rim lands where the edge is not. With it unspecified, the
 output is bit-identical to the alpha-only glass.
 
-**Prototype: the mini player and `GlassPanel` bend the live screen**
+**Prototype: the mini player, `GlassPanel` and the full player's disc and dock bend the live screen**
 (`LiveGlassLens.kt`, behind `LIVE_LENS_GLASS`). Their haze pane is replaced by a
 layer that draws Haze's own capture of the screen behind them
 (`HazeState.areas[i].contentLayer`, offset by `positionOnScreen`), blurs it very
@@ -66,8 +66,12 @@ smear. For the same reason the slab over a live lens is told so
 (`playerGlass(liveUnder = true)`): it drops its stand-in refraction and draws its
 body as plain tint at half the body opacity, leaving the rim, reflection and
 glint to carry the glass. With `liveUnder` false the slab is bit-identical. These
-surfaces start from the `Liquid` preset (`PlayerGlassSettings.MINI_DEFAULT`), not
-from `DEFAULT`, which stays the transport's material. This is possible only because the lens rim is computed from the
+surfaces start from the `Liquid` preset (`PlayerGlassSettings.INITIAL`), as does
+every glass setting; `DEFAULT` keeps the classic values because presets inherit
+omitted fields from it. On the full player the disc and dock get it through
+`PlayerGlassHaze(lensCorner = …)` over the player background's haze source, and
+their slabs ask `rememberPlayerLiveLens()` for `liveUnder`, so the pane and the
+slab always agree on whether the real backdrop is underneath. This is possible only because the lens rim is computed from the
 corner: the slab shader spends its single RenderEffect input on the alpha
 heightfield, while this layer spends its input on the backdrop. The slab still
 draws on top for the tint, the rim light and the control holes. Same sibling

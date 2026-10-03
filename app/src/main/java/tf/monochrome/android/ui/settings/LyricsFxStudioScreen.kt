@@ -167,13 +167,13 @@ class LyricsFxStudioViewModel @Inject constructor(
     private var persistJob: Job? = null
 
     /** Player-chrome (transport button) glass settings — the "Player Glass" tab. */
-    private val _playerGlass = MutableStateFlow(tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT)
+    private val _playerGlass = MutableStateFlow(tf.monochrome.android.domain.model.PlayerGlassSettings.INITIAL)
     val playerGlass: StateFlow<tf.monochrome.android.domain.model.PlayerGlassSettings> = _playerGlass.asStateFlow()
     private var playerGlassTouched = false
     private var playerGlassPersistJob: Job? = null
 
     /** The "UI panels" tab's glass — the mini player bar and every floating panel that shares its material (its own blob, same shape as the player's). */
-    private val _miniPlayerGlass = MutableStateFlow(tf.monochrome.android.domain.model.PlayerGlassSettings.MINI_DEFAULT)
+    private val _miniPlayerGlass = MutableStateFlow(tf.monochrome.android.domain.model.PlayerGlassSettings.INITIAL)
     val miniPlayerGlass: StateFlow<tf.monochrome.android.domain.model.PlayerGlassSettings> = _miniPlayerGlass.asStateFlow()
     private var miniPlayerGlassTouched = false
     private var miniPlayerGlassPersistJob: Job? = null
@@ -671,7 +671,6 @@ fun LyricsFxStudioScreen(
                     onExportPreset = { viewModel.exportPlayerGlassPreset(it) },
                     onImportPreset = { viewModel.importPlayerGlassPresetCode(it) },
                     previewMini = true,
-                    defaults = PlayerGlassSettings.MINI_DEFAULT,
                 )
             }
             return@Column
@@ -1060,8 +1059,6 @@ private fun PlayerGlassTab(
     onExportPreset: (PlayerGlassPreset) -> String,
     onImportPreset: (String) -> String?,
     previewMini: Boolean = false,
-    /** What "Reset to defaults" restores: each tab's own starting material. */
-    defaults: PlayerGlassSettings = PlayerGlassSettings.DEFAULT,
 ) {
     val context = LocalContext.current
     val accent = MaterialTheme.colorScheme.primary
@@ -1485,7 +1482,7 @@ private fun PlayerGlassTab(
         ) { onUpdate { g -> g.copy(sampleRings = it.toInt()) } }
         Spacer(Modifier.height(20.dp))
         OutlinedButton(
-            onClick = { onApplyPreset(defaults) },
+            onClick = { onApplyPreset(PlayerGlassSettings.INITIAL) },
             modifier = Modifier.fillMaxWidth(),
         ) { Text(stringResource(R.string.fx_reset_to_defaults)) }
         // Same reservation as the other two tabs. A flat 48dp was short of the
