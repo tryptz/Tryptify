@@ -70,7 +70,11 @@ layer that draws Haze's own capture of the screen behind them
 fifth of `hazeBlurDp`, 6.4dp on Clear) and bends it with the same lens rim,
 with no frost veil at all (clear glass: a veil read as a dull frosted pane on
 device), and blurs exactly as much as "Backdrop blur" asks: 0 is crisp, unblurred
-refraction. (A 6dp floor was tried and removed on device.) Glass frosts as well as bends: at 2-3dp page
+refraction. (A 6dp floor was tried and removed on device.) The blur runs
+first and the lens bends its result, and the blur covers a margin of the page
+around the pane (twice the radius plus 2px), drawn into an inflated layer that
+the pane's clip trims back. Blurring only the pane's own rectangle clamps at its
+edges and smears the edge row into the rim, which is the band that refracts. Glass frosts as well as bends: at 2-3dp page
 text read straight through and fought the labels on top; at 10dp nothing was
 left for the rim to bend. Earlier, an 8dp blur together with full frost and the
 slab's own 20% veil on top flattened the bend into a dark
