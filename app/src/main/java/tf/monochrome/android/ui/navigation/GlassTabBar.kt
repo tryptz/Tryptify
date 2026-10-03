@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.navigation
 
+import android.os.Build
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -67,6 +68,10 @@ import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.PlayerBackdrop
 import tf.monochrome.android.ui.player.playerFrostTint
 import tf.monochrome.android.ui.player.playerGlass
+import tf.monochrome.android.ui.player.LIVE_LENS_CHROME_BLUR_SHARE
+import tf.monochrome.android.ui.player.LIVE_LENS_GLASS
+import tf.monochrome.android.ui.player.liveGlassLens
+import tf.monochrome.android.ui.player.liveLensCompiles
 import tf.monochrome.android.ui.player.rememberLiquidGlassAvailable
 import tf.monochrome.android.ui.theme.PressSpring
 import tf.monochrome.android.ui.theme.glassTint
@@ -157,10 +162,25 @@ internal fun GlassTabBar(
             .then(if (shaderGlass) Modifier else Modifier.liquidGlass(hazeState = hazeState, shape = shape)),
     ) {
         if (shaderGlass) {
-            // The frost — same style and the same gate as the mini player's, so
-            // the two read as one material side by side.
+            // The same live lens as the mini player's, with the same blur share,
+            // frost and tint, so the two read as one material side by side.
             val profile = LocalPerformanceProfile.current
-            if (hazeState != null && profile.allowHazeBlur && glass.hazeBlurDp > 0f) {
+            val liveLens = LIVE_LENS_GLASS && liveLensCompiles &&
+                hazeState != null && profile.allowHazeBlur
+            if (liveLens && hazeState != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val frostBg = MaterialTheme.colorScheme.background
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .liveGlassLens(
+                            hazeState = hazeState,
+                            corner = Dp.Infinity,
+                            frost = playerFrostTint(glass, isDark = frostBg.luminance() <= 0.5f),
+                            glass = glass,
+                            blurShare = LIVE_LENS_CHROME_BLUR_SHARE,
+                        ),
+                )
+            } else if (hazeState != null && profile.allowHazeBlur && glass.hazeBlurDp > 0f) {
                 val frostBg = MaterialTheme.colorScheme.background
                 val frostTint = playerFrostTint(glass, isDark = frostBg.luminance() <= 0.5f)
                 Box(
@@ -203,6 +223,7 @@ internal fun GlassTabBar(
                             // fraction of the width.
                             bulgeRadiusFraction = TAB_DOME_OF_SLOT / tabs.size,
                             lensCorner = Dp.Infinity,
+                            liveUnder = liveLens,
                         )
                         // One offscreen layer, so the punch clears only the
                         // glyphs and never the app behind the bar.

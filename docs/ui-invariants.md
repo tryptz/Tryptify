@@ -55,11 +55,14 @@ anything that is not one rounded rect filling the layer — glyphs, icons, the
 spectrum — or the rim lands where the edge is not. With it unspecified, the
 output is bit-identical to the alpha-only glass.
 
-**Prototype: `GlassPanel` and the full player's disc and dock bend the live screen**
-(`LiveGlassLens.kt`, behind `LIVE_LENS_GLASS`). **The mini player does not:** it
-keeps the tab bar's frost, because it is the same material as the tab bar right
-under it, and over a page of sharp text the live lens let the rows behind read
-through and fight the track title. Their haze pane is replaced by a
+**Prototype: the mini player, the tab bar, `GlassPanel` and the full player's disc and dock bend the live screen**
+(`LiveGlassLens.kt`, behind `LIVE_LENS_GLASS`). **The mini player and the tab bar are one
+material and must match exactly:** same lens, same blur share
+(`LIVE_LENS_CHROME_BLUR_SHARE`, a little more than panels so page text behind
+does not fight their labels), same frost, and the same tint — the nav host takes
+the tab bar's tint *outside* `DynamicColorScope` and hands it to the mini player
+(`glassTintColor`), because inside it `primary` is the album's colour and the
+bar came out a different hue from the tab bar under it. Their haze pane is replaced by a
 layer that draws Haze's own capture of the screen behind them
 (`HazeState.areas[i].contentLayer`, offset by `positionOnScreen`), blurs it very
 lightly (a twentieth of `hazeBlurDp`) and bends it with the same lens rim, under
@@ -68,7 +71,14 @@ full frost and the slab's own 20% veil on top flattened the bend into a dark
 smear. For the same reason the slab over a live lens is told so
 (`playerGlass(liveUnder = true)`): it drops its stand-in refraction and draws its
 body as plain tint at half the body opacity, leaving the rim, reflection and
-glint to carry the glass. With `liveUnder` false the slab is bit-identical. These
+glint to carry the glass. With `liveUnder` false the slab is bit-identical.
+
+**A lens rim is lit through a flattened normal** (`NL`, 15% of the rim's slope)
+while it bends through the full one. Lit at full slope, the glint and the key
+light peak where the rim tilts ~15° toward them — a third of the way into the
+band, 5-7dp inside the edge — so a second bright edge sat inside the bevel's
+crisp outer line and the pane read as two layers, worse at some light angles.
+Do not light with `N` on a lens pane. These
 surfaces start from the `Liquid` preset (`PlayerGlassSettings.INITIAL`), as does
 every glass setting; `DEFAULT` keeps the classic values because presets inherit
 omitted fields from it. On the full player the disc and dock get it through

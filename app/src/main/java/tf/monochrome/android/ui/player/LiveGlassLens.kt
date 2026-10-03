@@ -59,6 +59,12 @@ internal fun Modifier.liveGlassLens(
     corner: Dp,
     frost: Color,
     glass: tf.monochrome.android.domain.model.PlayerGlassSettings,
+    /**
+     * The blur as a share of `hazeBlurDp`. The chrome bars pass
+     * [LIVE_LENS_CHROME_BLUR_SHARE], a little more than panels get, so the page
+     * behind does not fight their labels; both bars pass the same, so they match.
+     */
+    blurShare: Float = LIVE_LENS_BLUR_SHARE,
 ): Modifier {
     val shader = remember { runCatching { RuntimeShader(LIVE_LENS_SRC) }.getOrNull() } ?: return this
     val view = LocalView.current
@@ -113,7 +119,7 @@ internal fun Modifier.liveGlassLens(
             // A twentieth of the haze pane's blur, 2dp at the default 40. Any
             // more smears away the very detail the rim bends — 8dp made the
             // bend unreadable on device. Zero in the Studio is clear glass.
-            val blurPx = glass.hazeBlurDp * LIVE_LENS_BLUR_SHARE * density
+            val blurPx = glass.hazeBlurDp * blurShare * density
             renderEffect = if (blurPx >= 0.5f) {
                 RenderEffect.createChainEffect(
                     lens,
@@ -129,6 +135,7 @@ internal fun Modifier.liveGlassLens(
             redraw.intValue
             val windowId = view.windowId
             val here = anchor.screen
+            var drew = 0
             hazeState.areas
                 .filter { it.windowId == null || it.windowId == windowId }
                 .sortedBy { it.zIndex }
@@ -137,7 +144,19 @@ internal fun Modifier.liveGlassLens(
                     if (layer.isReleased) return@forEach
                     val at = area.positionOnScreen - here
                     translate(at.x, at.y) { drawLayer(layer) }
+                    drew++
                 }
+            // With nothing to draw the lens is a frost over transparent: the
+            // page shows through unbent. Say so once, so a report from a
+            // device carries it in its recent log.
+            if (drew == 0 && !LensDiagnostics.warnedEmpty) {
+                LensDiagnostics.warnedEmpty = true
+                android.util.Log.w(
+                    LENS_TAG,
+                    "no haze content layer to draw (areas=${hazeState.areas.size}, " +
+                        "layers=${hazeState.areas.count { it.contentLayer != null }})",
+                )
+            }
         }
 }
 
@@ -155,6 +174,19 @@ internal fun lensClipShape(corner: Dp): Shape =
 /** Off restores the haze pane under every GlassPanel and the player's disc and dock, exactly. */
 internal const val LIVE_LENS_GLASS = true
 
+private const val LENS_TAG = "LiveGlassLens"
+
+/** One-shot flags for the lens's own diagnostics, so they log once per process. */
+private object LensDiagnostics {
+    @Volatile var warnedEmpty = false
+}
+
+/**
+ * The mini player's and the tab bar's blur share: a tenth of `hazeBlurDp` (3.2dp
+ * on Liquid). One value for both, because the two are one material.
+ */
+internal const val LIVE_LENS_CHROME_BLUR_SHARE = 0.1f
+
 /** The live lens's blur as a share of the haze pane's (`hazeBlurDp`). */
 private const val LIVE_LENS_BLUR_SHARE = 0.05f
 
@@ -168,7 +200,9 @@ private class LensAnchor {
 /** Whether [LIVE_LENS_SRC] compiles here, asked once per process. */
 internal val liveLensCompiles: Boolean by lazy {
     Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-        runCatching { RuntimeShader(LIVE_LENS_SRC) }.getOrNull() != null
+        runCatching { RuntimeShader(LIVE_LENS_SRC) }
+            .onFailure { android.util.Log.w(LENS_TAG, "live lens shader did not compile: ${it.message}") }
+            .getOrNull() != null
 }
 
 // The live backdrop, bent by the lens rim. `content` is the screen behind the

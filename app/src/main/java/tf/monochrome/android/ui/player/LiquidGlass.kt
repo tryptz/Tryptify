@@ -1121,6 +1121,25 @@ half4 main(float2 p) {
         N = normalize(N + float3((float2(h1, h2) - 0.5) * uFrost * 0.6, 0.0));
     }
 
+    // The normal the LIGHT reads. Without a lens rim it is N. With one, the
+    // rim's full slope is right for bending the backdrop but wrong for light:
+    // the glint and the room's key light peak where the surface tilts ~15deg
+    // toward them, which on the squircle is a third of the way into the band,
+    // 5-7dp inside the edge — a second bright edge inside the alpha bevel's
+    // crisp outer line, so the pane read as two layers depending on the light
+    // angle (seen on device). Lighting a flatter copy of the rim (15% of its
+    // slope) moves that peak against the outer edge, where it joins the bevel
+    // line as one edge.
+    float3 NL = N;
+    if (uLensW > 0.5) {
+        NL = normalize(float3(grad * slopeGain + lensSlope * 0.15, 1.0));
+        if (uFrost > 0.001) {
+            float g1 = fract(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453);
+            float g2 = fract(sin(dot(p, float2(39.346, 11.135))) * 24634.6345);
+            NL = normalize(NL + float3((float2(g1, g2) - 0.5) * uFrost * 0.6, 0.0));
+        }
+    }
+
     float2 uv = p / uSize;
     float3 I = float3(0.0, 0.0, -1.0);   // view ray, into the screen
 
@@ -1128,7 +1147,7 @@ half4 main(float2 p) {
     // to ~100% at grazing edges. This is what makes the rim catch the light and
     // the face stay see-through — the core of the glass look. uFresnelPower sets
     // how broad the reflective rim band is (lower = wider shoulder).
-    float cosV = clamp(N.z, 0.0, 1.0);
+    float cosV = clamp(NL.z, 0.0, 1.0);
     float fres = 0.04 + 0.96 * pow(1.0 - cosV, uFresnelPower);
 
     // Refraction (Snell, via refract) with a per-channel index of refraction so
@@ -1185,7 +1204,7 @@ half4 main(float2 p) {
     // reflection streaks across the bevel as the surface curves. The key light
     // sits along uLightAngle; uTiltAmount scales how much device tilt sways it.
     float2 keyDir = float2(cos(uLightAngle), -sin(uLightAngle)) * 0.69;
-    float3 refl = environment(reflect(I, N), uTilt * uTiltAmount, keyDir, uTime, uLiquid);
+    float3 refl = environment(reflect(I, NL), uTilt * uTiltAmount, keyDir, uTime, uLiquid);
 
     // Crisp specular glint from the same key light (uLightAngle + tilt), with a
     // uGloss-controlled exponent (higher = tighter mirror), dispersed for sparkle.
@@ -1199,13 +1218,13 @@ half4 main(float2 p) {
         lightXY.y * 0.5 + uTilt.y * 0.8 * uTiltAmount + 0.20 * cos(uTime * 0.29) * uLiquid,
         0.85));
     float3 H = normalize(L + float3(0.0, 0.0, 1.0));
-    float ndh   = max(dot(N, H), 0.0);
+    float ndh   = max(dot(NL, H), 0.0);
     float spec  = pow(ndh, uGloss);
     // The rainbow spread of the glint slowly widens and narrows, so the
     // chromatic fringe cycles instead of sitting frozen on the bevel.
     float dsp   = 0.015 * uDispersion * (1.0 + 0.35 * sin(uTime * 0.9) * uLiquid);
-    float specR = pow(max(dot(normalize(N + float3(dsp, 0.0, 0.0)), H), 0.0), uGloss);
-    float specB = pow(max(dot(normalize(N - float3(dsp, 0.0, 0.0)), H), 0.0), uGloss);
+    float specR = pow(max(dot(normalize(NL + float3(dsp, 0.0, 0.0)), H), 0.0), uGloss);
+    float specB = pow(max(dot(normalize(NL - float3(dsp, 0.0, 0.0)), H), 0.0), uGloss);
 
     // Edge twinkle: 4px cells pulse the glint with hash-staggered phases and
     // rates, so bevel highlights sparkle as points firing off one another
