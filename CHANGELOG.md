@@ -793,7 +793,7 @@
 
 | The new player | |
 |---|---|
-| ![New liquid-glass player — blue](docs/screenshots/player-glass-blue.jpg) | ![New liquid-glass player — frost](docs/screenshots/player-glass-frost.jpg) |
+| ![New liquid-glass player — blue](https://github.com/tryptz/Tryptify/raw/c3967f851d11ed5427a1fcd223507b6a6e1c3535/docs/screenshots/player-glass-blue.jpg) | ![New liquid-glass player — frost](https://github.com/tryptz/Tryptify/raw/c3967f851d11ed5427a1fcd223507b6a6e1c3535/docs/screenshots/player-glass-frost.jpg) |
 
 ### Added
 
