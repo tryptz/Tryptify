@@ -178,8 +178,8 @@ data class PlayerGlassSettings(
          * dispersion would leak into a theme that never asked for them.
          *
          * None uses `frost`, the shader's grain: frosted glass is made from
-         * backdrop blur (`hazeBlurDp`), which the live lens floors at 6dp and
-         * scales to a fifth of the value, so 80 is ~16dp of frost.
+         * backdrop blur (`hazeBlurDp`), which the live lens takes a fifth of:
+         * 0 is crisp refraction, 80 is ~16dp of frost.
          *
          * Motion and tilt are not free. On the mini player, which is on every
          * screen, `surfaceMotion` > 0 runs a frame clock and `tiltReactivity`

@@ -67,6 +67,7 @@ import tf.monochrome.android.ui.player.MANUAL_MORPH_MS
 import tf.monochrome.android.ui.player.MorphingCoverArt
 import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.player.LIVE_LENS_CHROME_BLUR_SHARE
+import tf.monochrome.android.ui.player.GlassBarShadow
 import tf.monochrome.android.ui.player.LIVE_LENS_GLASS
 import tf.monochrome.android.ui.player.liveGlassLens
 import tf.monochrome.android.ui.player.liveLensCompiles
@@ -262,8 +263,25 @@ fun MiniPlayer(
     val bulge = if (anyPressed) bulgeAmt else barPress.amount
     val bulgeSpread = if (anyPressed) 0f else GlassPressDefaults.BULGE
 
+    // Whether the bar draws an opaque backdrop pane — the live lens or the
+    // haze blur — decided out here because the shadow needs it too: it only
+    // draws over such a pane, which covers its footprint.
+    val profile = LocalPerformanceProfile.current
+    // The same live lens as the tab bar right under it, with the same blur
+    // share, frost and tint: the two are one material and must match.
+    val liveLens = LIVE_LENS_GLASS && liveLensCompiles &&
+        hazeState != null && profile.allowHazeBlur
+    val backdropPane = liveLens ||
+        (hazeState != null && profile.allowHazeBlur && glass.hazeBlurDp > 0f)
+
+    // Unclipped, so the shadow can spill past the bar's rounded edge; the bar
+    // itself is clipped inside.
+    Box(modifier = modifier.fillMaxWidth()) {
+    if (backdropPane) {
+        GlassBarShadow(glass = glass, tint = tint, shape = RoundedCornerShape(MiniCorner))
+    }
     Box(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .onSizeChanged { barSize = it }
             .clip(RoundedCornerShape(MiniCorner))
@@ -285,11 +303,6 @@ fun MiniPlayer(
         // light themes and deepens it on dark ones. Haze's default noise
         // (0.15) is disabled: over a dark backdrop it reads as visible grain
         // rather than frost.
-        val profile = LocalPerformanceProfile.current
-        // The same live lens as the tab bar right under it, with the same
-        // blur share, frost and tint: the two are one material and must match.
-        val liveLens = LIVE_LENS_GLASS && liveLensCompiles &&
-            hazeState != null && profile.allowHazeBlur
         if (liveLens && hazeState != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val isDark = MaterialTheme.colorScheme.background.luminance() <= 0.5f
             Box(
@@ -399,6 +412,7 @@ fun MiniPlayer(
                     )
             )
         }
+    }
     }
 }
 

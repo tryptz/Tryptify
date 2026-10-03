@@ -136,6 +136,12 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
+                    section = LOOK,
+                    title = "Shadows under the bars",
+                    body = "The nav bar and the mini player cast the same drop shadow as the play button, from the shadow depth, softness and tint in Player Visuals Studio.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = PLAYER,
                     title = "Glass play button and dock",
                     body = "The play button and the action dock bend the album art behind them too.",

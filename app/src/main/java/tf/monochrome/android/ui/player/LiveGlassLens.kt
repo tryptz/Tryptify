@@ -24,8 +24,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-import kotlin.math.max
 import dev.chrisbanes.haze.HazeState
 
 /**
@@ -119,11 +117,10 @@ internal fun Modifier.liveGlassLens(
             val fa = frost.alpha * LIVE_LENS_FROST_SHARE
             shader.setFloatUniform("uFrost", frost.red * fa, frost.green * fa, frost.blue * fa, fa)
             val lens = RenderEffect.createRuntimeShaderEffect(shader, "content")
-            // See LIVE_LENS_BLUR_SHARE for why a fifth. Never below
-            // LIVE_LENS_MIN_BLUR, though: glass blurs the text behind it, and
-            // with "Backdrop blur" turned down on device the page read straight
-            // through every pane, sharp. The slider can add blur, not remove it.
-            val blurPx = max(glass.hazeBlurDp * blurShare, LIVE_LENS_MIN_BLUR.value) * density
+            // See LIVE_LENS_BLUR_SHARE for why a fifth. The slider is the only
+            // say: 0 is crisp, unblurred refraction. A 6dp floor was tried and
+            // taken out on device — at 0 the listener wants clear glass.
+            val blurPx = glass.hazeBlurDp * blurShare * density
             renderEffect = if (blurPx >= 0.5f) {
                 RenderEffect.createChainEffect(
                     lens,
@@ -203,8 +200,6 @@ internal const val LIVE_LENS_CHROME_BLUR_SHARE: Float = LIVE_LENS_BLUR_SHARE
 /** The live lens's frost as a share of the haze pane's tint alpha: none, clear glass. */
 private const val LIVE_LENS_FROST_SHARE = 0f
 
-/** The least a live lens blurs what is behind it, whatever "Backdrop blur" says. */
-private val LIVE_LENS_MIN_BLUR = 6.dp
 
 private class LensAnchor {
     var screen: Offset = Offset.Zero

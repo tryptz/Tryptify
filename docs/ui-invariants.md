@@ -69,8 +69,8 @@ layer that draws Haze's own capture of the screen behind them
 (`HazeState.areas[i].contentLayer`, offset by `positionOnScreen`), blurs it (a
 fifth of `hazeBlurDp`, 6.4dp on Clear) and bends it with the same lens rim,
 with no frost veil at all (clear glass: a veil read as a dull frosted pane on
-device), and never blurs less than 6dp whatever "Backdrop blur" says — with the
-slider turned down the page read straight through every pane, sharp. Glass frosts as well as bends: at 2-3dp page
+device), and blurs exactly as much as "Backdrop blur" asks: 0 is crisp, unblurred
+refraction. (A 6dp floor was tried and removed on device.) Glass frosts as well as bends: at 2-3dp page
 text read straight through and fought the labels on top; at 10dp nothing was
 left for the rim to bend. Earlier, an 8dp blur together with full frost and the
 slab's own 20% veil on top flattened the bend into a dark
@@ -78,6 +78,14 @@ smear. For the same reason the slab over a live lens is told so
 (`playerGlass(liveUnder = true)`): it drops its stand-in refraction and draws its
 body as plain tint at half the body opacity, leaving the rim, reflection and
 glint to carry the glass. With `liveUnder` false the slab is bit-identical.
+
+**The mini player and the tab bar cast their shadow from outside their clip.**
+Both clip to their rounded shape, so a shadow drawn inside is cut away. Each
+wraps its clipped bar in an unclipped box that draws `GlassBarShadow` first,
+and only when the bar has an opaque backdrop pane (live lens or haze), which
+covers the footprint so only the spill reads; without a pane the shadow would
+show through the bar as a dark slab. The stacked mini player's
+`AnimatedVisibility` expands and shrinks with `clip = false` for the same reason.
 
 **A lens rim is lit through a flattened normal** (`NL`, 10% of the rim's slope)
 while it bends through the full one. Lit at full slope, the glint and the key

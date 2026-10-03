@@ -1077,8 +1077,12 @@ private fun TabChrome(
     ) {
         AnimatedVisibility(
             visible = miniPlayer != null && !collapsed && stackMiniPlayer,
-            enter = fadeIn(tween(foldMillis)) + expandVertically(tween(foldMillis)),
-            exit = fadeOut(tween(foldMillis)) + shrinkVertically(tween(foldMillis)),
+            // clip = false: the bar casts a glass shadow past its own bounds,
+            // and expand/shrink clip to them by default, which cut the spill
+            // off. The bar's own content is still clipped to its rounded
+            // shape; the fade covers the brief overflow while it grows.
+            enter = fadeIn(tween(foldMillis)) + expandVertically(tween(foldMillis), clip = false),
+            exit = fadeOut(tween(foldMillis)) + shrinkVertically(tween(foldMillis), clip = false),
         ) {
             miniPlayer?.invoke(Modifier.fillMaxWidth())
         }

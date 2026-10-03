@@ -464,6 +464,33 @@ internal fun BoxScope.GlassDropShadow(
     )
 }
 
+/**
+ * The drop shadow under a glass bar — the mini player, the tab bar — from the
+ * same three Studio knobs as the play disc and the dock: depth darkens and
+ * drops it, softness blurs it, tint turns it from black into an accent glow.
+ *
+ * Call it in a box that is NOT clipped to the bar, before the bar, and only
+ * when the bar draws an opaque backdrop pane (the live lens or the haze blur):
+ * that pane then covers the shadow's footprint — glass does not show the
+ * shadow it casts on itself — and only the spill around the edge reads. Over a
+ * bar with no pane the shadow would show through as a dark slab.
+ */
+@Composable
+internal fun BoxScope.GlassBarShadow(
+    glass: tf.monochrome.android.domain.model.PlayerGlassSettings,
+    tint: Color,
+    shape: Shape,
+) {
+    if (glass.shadowDepth <= 0.01f) return
+    GlassDropShadow(
+        color = androidx.compose.ui.graphics.lerp(Color.Black, tint, glass.shadowTint)
+            .copy(alpha = 0.28f + 0.55f * glass.shadowDepth),
+        softness = glass.shadowSoftness,
+        depth = glass.shadowDepth,
+        shape = shape,
+    )
+}
+
 @Composable
 internal fun TransportIcon(
     painter: Painter,

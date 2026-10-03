@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
@@ -69,6 +70,7 @@ import tf.monochrome.android.ui.player.PlayerBackdrop
 import tf.monochrome.android.ui.player.playerFrostTint
 import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.player.LIVE_LENS_CHROME_BLUR_SHARE
+import tf.monochrome.android.ui.player.GlassBarShadow
 import tf.monochrome.android.ui.player.LIVE_LENS_GLASS
 import tf.monochrome.android.ui.player.liveGlassLens
 import tf.monochrome.android.ui.player.liveLensCompiles
@@ -155,18 +157,29 @@ internal fun GlassTabBar(
     val tint = glassTint(glass.tintColor)
     val shaderGlass = rememberLiquidGlassAvailable()
 
+    // The same live lens as the mini player's, with the same blur share, frost
+    // and tint, so the two read as one material side by side. Decided out here
+    // because the shadow needs it too: it only draws over an opaque backdrop
+    // pane (the lens or the haze blur), which covers its footprint.
+    val profile = LocalPerformanceProfile.current
+    val liveLens = shaderGlass && LIVE_LENS_GLASS && liveLensCompiles &&
+        hazeState != null && profile.allowHazeBlur
+    val backdropPane = shaderGlass &&
+        (liveLens || (hazeState != null && profile.allowHazeBlur && glass.hazeBlurDp > 0f))
+
+    // Unclipped, so the shadow can spill past the pill's edge; the bar itself
+    // is clipped inside.
+    Box(modifier = modifier.height(TabBarHeight)) {
+    if (backdropPane) {
+        GlassBarShadow(glass = glass, tint = tint, shape = shape)
+    }
     Box(
-        modifier = modifier
-            .height(TabBarHeight)
+        modifier = Modifier
+            .fillMaxSize()
             .clip(shape)
             .then(if (shaderGlass) Modifier else Modifier.liquidGlass(hazeState = hazeState, shape = shape)),
     ) {
         if (shaderGlass) {
-            // The same live lens as the mini player's, with the same blur share,
-            // frost and tint, so the two read as one material side by side.
-            val profile = LocalPerformanceProfile.current
-            val liveLens = LIVE_LENS_GLASS && liveLensCompiles &&
-                hazeState != null && profile.allowHazeBlur
             if (liveLens && hazeState != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 val frostBg = MaterialTheme.colorScheme.background
                 Box(
@@ -256,6 +269,7 @@ internal fun GlassTabBar(
                 )
             }
         }
+    }
     }
 }
 
