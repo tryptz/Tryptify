@@ -158,6 +158,12 @@ object WhatsNew {
                     title = "Mini player matches the nav bar",
                     body = "The mini player's glass takes the nav bar's colour rather than the album's, so the two read as one piece of glass. Its text and cover still follow the album.",
                 ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "Titles from file names",
+                    body = "Settings › Library can name local songs after their files instead of their title tags, for files whose tags are wrong or shared. Renaming a file then renames the song.",
+                ),
             ),
         ),
         WhatsNewRelease(

@@ -1797,4 +1797,6 @@
     <string name="settings_mini_player_hide_with_tabs_desc">Gezinme çubuğu için yukarı, mini oynatıcı için aşağı kaydırın. Oynatıcıyı geri getirmek için çubukta bulunduğunuz sayfaya dokunun.</string>
     <string name="settings_nav_bar_slot_first">Birinci düğme</string>
     <string name="settings_nav_bar_slot_second">İkinci düğme</string>
+    <string name="settings_titles_from_file_names">Başlıklar dosya adlarından</string>
+    <string name="settings_titles_from_file_names_desc">Yerel şarkıları başlık etiketleri yerine dosya adlarıyla adlandırır. Değiştirmek kitaplığı yeniden tarar.</string>
 </resources>

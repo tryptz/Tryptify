@@ -1847,4 +1847,6 @@
     <string name="settings_mini_player_hide_with_tabs_desc">Faites défiler vers le haut pour la barre de navigation, vers le bas pour le mini-lecteur. Touchez la page actuelle dans la barre pour faire revenir le lecteur.</string>
     <string name="settings_nav_bar_slot_first">Premier bouton</string>
     <string name="settings_nav_bar_slot_second">Deuxième bouton</string>
+    <string name="settings_titles_from_file_names">Titres depuis les noms de fichiers</string>
+    <string name="settings_titles_from_file_names_desc">Nomme les morceaux locaux d\'après leurs fichiers plutôt que leurs balises de titre. La modification relance l\'analyse de la bibliothèque.</string>
 </resources>

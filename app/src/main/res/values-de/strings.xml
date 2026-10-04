@@ -1797,4 +1797,6 @@
     <string name="settings_mini_player_hide_with_tabs_desc">Nach oben scrollen zeigt die Navigationsleiste, nach unten den Mini-Player. Tippe in der Leiste auf die aktuelle Seite, um den Player zurückzuholen.</string>
     <string name="settings_nav_bar_slot_first">Erste Schaltfläche</string>
     <string name="settings_nav_bar_slot_second">Zweite Schaltfläche</string>
+    <string name="settings_titles_from_file_names">Titel aus Dateinamen</string>
+    <string name="settings_titles_from_file_names_desc">Lokale Songs nach ihren Dateinamen statt nach ihren Titel-Tags benennen. Eine Änderung durchsucht die Mediathek neu.</string>
 </resources>

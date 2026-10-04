@@ -1847,4 +1847,6 @@
     <string name="settings_mini_player_hide_with_tabs_desc">Desplázate hacia arriba para ver la barra de navegación y hacia abajo para el minirreproductor. Toca en la barra la página en la que estás para que vuelva el reproductor.</string>
     <string name="settings_nav_bar_slot_first">Primer botón</string>
     <string name="settings_nav_bar_slot_second">Segundo botón</string>
+    <string name="settings_titles_from_file_names">Títulos desde el nombre de archivo</string>
+    <string name="settings_titles_from_file_names_desc">Nombra las canciones locales según sus archivos en lugar de sus etiquetas de título. Cambiarlo vuelve a escanear la biblioteca.</string>
 </resources>

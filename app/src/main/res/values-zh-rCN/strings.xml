@@ -1747,4 +1747,6 @@
     <string name="settings_mini_player_hide_with_tabs_desc">向上滚动显示导航栏，向下滚动显示迷你播放器。在导航栏中点按当前所在的页面可调出迷你播放器。</string>
     <string name="settings_nav_bar_slot_first">第一个按钮</string>
     <string name="settings_nav_bar_slot_second">第二个按钮</string>
+    <string name="settings_titles_from_file_names">用文件名作为标题</string>
+    <string name="settings_titles_from_file_names_desc">本地歌曲使用文件名而不是标题标签命名。更改后会重新扫描资料库。</string>
 </resources>

@@ -1747,4 +1747,6 @@
     <string name="settings_mini_player_hide_with_tabs_desc">上にスクロールするとナビゲーションバー、下にスクロールするとミニプレーヤーを表示します。ナビゲーションバーで表示中のページをタップするとミニプレーヤーが表示されます。</string>
     <string name="settings_nav_bar_slot_first">1 つ目のボタン</string>
     <string name="settings_nav_bar_slot_second">2 つ目のボタン</string>
+    <string name="settings_titles_from_file_names">ファイル名をタイトルにする</string>
+    <string name="settings_titles_from_file_names_desc">ローカルの曲をタイトルタグではなくファイル名で表示します。変更するとライブラリを再スキャンします。</string>
 </resources>

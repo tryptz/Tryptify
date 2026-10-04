@@ -70,10 +70,20 @@ class MediaScanner @Inject constructor(
             // per file — the re-read decision then runs entirely in memory.
             val scanInfoByPath = localMediaDao.getAllTrackScanInfo().associateBy { it.filePath }
 
+            // Titles are written here, at scan time, so switching between tag
+            // and file-name titles has to re-read every file once. Nothing
+            // about the files changed, so the usual heuristics would skip them.
+            val titleFromFileName = preferences.localTitleFromFileName.first()
+            val titleModeChanged = titleFromFileName != preferences.localTitleModeScanned.first()
+
             val addedCount = processFiles(
                 files = mediaStoreFiles,
-                shouldRead = { needsReRead(scanInfoByPath[it.absolutePath], it.dateModified) },
-                progressChunkSize = 50
+                shouldRead = {
+                    titleModeChanged ||
+                        needsReRead(scanInfoByPath[it.absolutePath], it.dateModified, titleFromFileName = titleFromFileName)
+                },
+                progressChunkSize = 50,
+                titleFromFileName = titleFromFileName,
             )
 
             // Prune deleted files
@@ -90,6 +100,7 @@ class MediaScanner @Inject constructor(
 
             // Update scan state
             updateScanState(full = true)
+            preferences.setLocalTitleModeScanned(titleFromFileName)
 
             // App data now, not a cache the OS bounds for us, and a scan is
             // the one moment we know which covers are still spoken for. Best
@@ -142,7 +153,8 @@ class MediaScanner @Inject constructor(
             val addedCount = processFiles(
                 files = modifiedFiles,
                 shouldRead = { true },
-                progressChunkSize = 20
+                progressChunkSize = 20,
+                titleFromFileName = preferences.localTitleFromFileName.first(),
             )
 
             // Check for deleted files. Same roots filter as fullScan so the
@@ -183,7 +195,8 @@ class MediaScanner @Inject constructor(
     private suspend fun FlowCollector<ScanProgress>.processFiles(
         files: List<AudioFileInfo>,
         shouldRead: (AudioFileInfo) -> Boolean,
-        progressChunkSize: Int
+        progressChunkSize: Int,
+        titleFromFileName: Boolean,
     ): Int {
         val parallelism = Runtime.getRuntime().availableProcessors().coerceIn(2, 8)
         val tagDispatcher = Dispatchers.IO.limitedParallelism(parallelism)
@@ -205,7 +218,7 @@ class MediaScanner @Inject constructor(
                         try {
                             if (!shouldRead(audioFile)) return@async null
                             val tags = tagReader.readTags(audioFile.absolutePath, folderArtCache)
-                            buildTrackEntity(audioFile, tags)
+                            buildTrackEntity(audioFile, tags, titleFromFileName)
                         } catch (e: CancellationException) {
                             throw e
                         } catch (_: Exception) {
@@ -256,16 +269,21 @@ class MediaScanner @Inject constructor(
         return toDelete.size
     }
 
-    private fun buildTrackEntity(audioFile: AudioFileInfo, tags: tf.monochrome.android.data.local.tags.AudioTags): LocalTrackEntity {
+    private fun buildTrackEntity(
+        audioFile: AudioFileInfo,
+        tags: tf.monochrome.android.data.local.tags.AudioTags,
+        titleFromFileName: Boolean,
+    ): LocalTrackEntity {
+        val title = if (titleFromFileName) titleFromPath(audioFile.absolutePath) else tags.title
         return LocalTrackEntity(
             filePath = audioFile.absolutePath,
             fileSizeBytes = audioFile.sizeBytes,
             lastModified = audioFile.dateModified,
-            title = tags.title,
+            title = title,
             // Folded copy of the title that the on-device-copy lookup range
             // scans. Kept in lock-step with `title` here so it can never go
             // stale for a scanned row.
-            titleSearchKey = tags.title
+            titleSearchKey = title
                 ?.let { tf.monochrome.android.player.LocalTrackMatching.searchKey(it) },
             artist = tags.artist,
             albumArtist = tags.albumArtist,
@@ -519,7 +537,8 @@ class MediaScanner @Inject constructor(
         fun needsReRead(
             existing: TrackScanInfo?,
             mediaStoreDateModified: Long,
-            artworkFileExists: (String) -> Boolean = { File(it).exists() }
+            artworkFileExists: (String) -> Boolean = { File(it).exists() },
+            titleFromFileName: Boolean = false,
         ): Boolean {
             if (existing == null) return true
             if (existing.lastModified < mediaStoreDateModified) return true
@@ -549,11 +568,18 @@ class MediaScanner @Inject constructor(
             // or "Artist ~ Title" shaped title. Self-heals (artist gets
             // populated, so the next scan skips them) and stays cheap
             // by only targeting files that can actually benefit.
-            if (existing.artist == null &&
+            // Not with file-name titles: the title is then the file name by
+            // choice, an "Artist - Title" file name stays one, and the heal
+            // would re-read those files on every scan.
+            if (!titleFromFileName && existing.artist == null &&
                 existing.title?.let { tf.monochrome.android.data.local.tags.splitArtistTitle(it) } != null
             ) return true
             return false
         }
+
+        /** A file's name without its folder or extension: the title it is saved under. */
+        fun titleFromPath(path: String): String =
+            path.substringAfterLast('/').substringBeforeLast('.')
 
         fun normalizeText(text: String): String {
             return Normalizer.normalize(text.trim().lowercase(), Normalizer.Form.NFC)

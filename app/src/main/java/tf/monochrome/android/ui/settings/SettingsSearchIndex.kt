@@ -202,6 +202,7 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     entry("Hide mini player when the nav bar shows", R.string.settings_mini_player_hide_with_tabs, "Library", listOf("mini player", "nav bar", "tab bar", "scroll", "hide", "bottom bar")),
     entry("Library sections", R.string.settings_library_sections, "Library", listOf("reorder", "order", "hide", "pages", "local", "playlists", "favorites", "downloads")),
     entry("Local folders", R.string.settings_local_media_scanning, "Library", listOf("storage", "saf", "sd card", "path")),
+    entry("Titles from file names", R.string.settings_titles_from_file_names, "Library", listOf("filename", "file name", "title", "tags", "rename", "local")),
 
     // ── Downloads ───────────────────────────────────────────────────────
     entry("Download quality", R.string.settings_download_quality, "Downloads", listOf("bitrate", "flac", "offline")),

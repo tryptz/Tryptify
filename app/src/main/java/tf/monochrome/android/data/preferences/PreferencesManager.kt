@@ -382,6 +382,11 @@ class PreferencesManager @Inject constructor(
         private val EXCLUDED_PATHS_JSON = stringPreferencesKey("excluded_paths_json")
         private val FOLDER_TREE_REBUILD = intPreferencesKey("folder_tree_rebuild_version")
         private val USER_FOLDER_ROOTS_JSON = stringPreferencesKey("user_folder_roots_json")
+        // Device-local, not in SETTINGS_SYNC_KEYS: the titles are written into
+        // this device's library by its scanner, so the switch has to stay next
+        // to the scan that applied it.
+        private val LOCAL_TITLE_FROM_FILENAME = booleanPreferencesKey("local_title_from_filename")
+        private val LOCAL_TITLE_MODE_SCANNED = booleanPreferencesKey("local_title_mode_scanned")
 
         // DSP Mixer
         private val DSP_ENABLED = booleanPreferencesKey("dsp_enabled")
@@ -1842,6 +1847,33 @@ class PreferencesManager @Inject constructor(
     }
 
     // --- Library / Local Media ---
+
+    /**
+     * Local tracks are titled by their file name instead of their title tag.
+     *
+     * For files whose tags are wrong or shared: two renders of one song carry
+     * the same title tag, so they listed as the same song, and renaming the
+     * files changed nothing because the tag always won.
+     */
+    val localTitleFromFileName: Flow<Boolean> =
+        dataStore.data.map { it[LOCAL_TITLE_FROM_FILENAME] ?: false }
+
+    suspend fun setLocalTitleFromFileName(enabled: Boolean) {
+        dataStore.edit { it[LOCAL_TITLE_FROM_FILENAME] = enabled }
+    }
+
+    /**
+     * The [localTitleFromFileName] the last finished full scan applied. Titles
+     * are written at scan time, so when this differs from the switch the next
+     * full scan re-reads every file. Recorded only when a scan completes, so a
+     * scan cut short is simply redone.
+     */
+    val localTitleModeScanned: Flow<Boolean> =
+        dataStore.data.map { it[LOCAL_TITLE_MODE_SCANNED] ?: false }
+
+    suspend fun setLocalTitleModeScanned(fromFileName: Boolean) {
+        dataStore.edit { it[LOCAL_TITLE_MODE_SCANNED] = fromFileName }
+    }
     val excludedPathsJson: Flow<String> = dataStore.data.map { it[EXCLUDED_PATHS_JSON] ?: "[]" }
 
     /** The excluded paths, decoded. The stored JSON is the source of truth. */

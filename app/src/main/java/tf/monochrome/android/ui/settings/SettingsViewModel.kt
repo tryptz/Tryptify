@@ -818,6 +818,17 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferences.setAutoDownloadLikedSongs(enabled) }
     }
 
+    val localTitleFromFileName: StateFlow<Boolean> = preferences.localTitleFromFileName
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    /** Titles are written by the scanner, so the switch takes effect through a full scan. */
+    fun setLocalTitleFromFileName(enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.setLocalTitleFromFileName(enabled)
+            scanCoordinator.runFullScanAfterCurrent()
+        }
+    }
+
     fun rescanLibrary() {
         // Route through the shared ScanCoordinator (the same guard the Library
         // tab uses), so the button actually scans instead of no-op'ing.

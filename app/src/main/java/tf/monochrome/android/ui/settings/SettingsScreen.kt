@@ -3594,6 +3594,14 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
             Text(if (isScanning) "Scanning…" else "Rescan Library Now")
         }
 
+        val titleFromFileName by viewModel.localTitleFromFileName.collectAsStateWithLifecycle()
+        SettingSwitchItem(
+            title = stringResource(R.string.settings_titles_from_file_names),
+            subtitle = stringResource(R.string.settings_titles_from_file_names_desc),
+            checked = titleFromFileName,
+            onCheckedChange = { viewModel.setLocalTitleFromFileName(it) }
+        )
+
         Spacer(modifier = Modifier.height(16.dp))
         // This was one "Page Order" list over every page, back when pages were
         // picked from a list on Home. With the tab bar the stored order does two
