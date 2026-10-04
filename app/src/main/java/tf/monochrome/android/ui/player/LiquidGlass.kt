@@ -441,7 +441,7 @@ fun PlayerGlassHaze(
         androidx.compose.foundation.layout.Box(
             modifier
                 .graphicsLayer { alpha = fade.value }
-                .liveGlassLens(hazeState = haze, corner = lensCorner, frost = frostTint, glass = g),
+                .liveGlassLens(hazeState = haze, corner = lensCorner, frost = frostTint, glass = g, ground = frostBg),
         )
         return
     }

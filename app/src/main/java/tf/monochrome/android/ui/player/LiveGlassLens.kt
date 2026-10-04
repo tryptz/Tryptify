@@ -7,6 +7,7 @@ import android.os.Build
 import android.view.ViewTreeObserver
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableIntStateOf
@@ -70,6 +71,11 @@ internal fun Modifier.liveGlassLens(
      * behind does not fight their labels; both bars pass the same, so they match.
      */
     blurShare: Float = LIVE_LENS_BLUR_SHARE,
+    /**
+     * What lies behind the page, laid under the capture so the lens is opaque.
+     * The same colour the haze pane it replaces used as `HazeStyle.backgroundColor`.
+     */
+    ground: Color = MaterialTheme.colorScheme.background,
 ): Modifier {
     val shader = remember { runCatching { RuntimeShader(LIVE_LENS_SRC) }.getOrNull() } ?: return this
     val view = LocalView.current
@@ -112,6 +118,13 @@ internal fun Modifier.liveGlassLens(
     // backdrop goes into its own layer, inflated by the margin, and the blur and
     // then the lens run there. The pane's clip trims it back to the glass.
     val backdrop = rememberGraphicsLayer()
+    // Haze's capture holds only the page's content, not the app background
+    // behind it, so it is transparent between the text. Drawn as is, the lens
+    // was see-through exactly where it mattered: the blurred, bent copy of a
+    // line of text lay over the real, sharp line underneath, and the sharp one
+    // read straight through. The haze pane avoids this with an opaque
+    // `HazeStyle.backgroundColor`; the lens lays [ground] down first.
+    val pageColor = ground.copy(alpha = 1f)
     val effect = remember { LensEffectCache() }
     return this
         .onGloballyPositioned { anchor.screen = it.positionOnScreen() }
@@ -165,6 +178,7 @@ internal fun Modifier.liveGlassLens(
                 (size.height + 2f * margin).roundToInt(),
             )
             backdrop.record(inflated) {
+                drawRect(pageColor)
                 hazeState.areas
                     .filter { it.windowId == null || it.windowId == windowId }
                     .sortedBy { it.zIndex }

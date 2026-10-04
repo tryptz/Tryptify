@@ -74,7 +74,12 @@ refraction. (A 6dp floor was tried and removed on device.) The blur runs
 first and the lens bends its result, and the blur covers a margin of the page
 around the pane (twice the radius plus 2px), drawn into an inflated layer that
 the pane's clip trims back. Blurring only the pane's own rectangle clamps at its
-edges and smears the edge row into the rim, which is the band that refracts. Glass frosts as well as bends: at 2-3dp page
+edges and smears the edge row into the rim, which is the band that refracts.
+The lens layer is opaque: it lays the page colour (`ground`, the haze pane's
+`HazeStyle.backgroundColor`) down before the capture. Haze's capture has no app
+background, so without it the blurred text was see-through and the sharp text
+under the bar read straight through it. The mini player gets that colour from
+outside its album scope (`glassGround`), like its tint. Glass frosts as well as bends: at 2-3dp page
 text read straight through and fought the labels on top; at 10dp nothing was
 left for the rim to bend. Earlier, an 8dp blur together with full frost and the
 slab's own 20% veil on top flattened the bend into a dark

@@ -113,6 +113,11 @@ fun MiniPlayer(
      * progress and cover still follow the album.
      */
     glassTintColor: Color? = null,
+    /**
+     * The page colour under the live lens, from outside the album scope for the
+     * same reason as [glassTintColor]: inside it, `background` is the album's.
+     */
+    glassGround: Color? = null,
 ) {
     if (track == null) return
 
@@ -314,6 +319,7 @@ fun MiniPlayer(
                         frost = playerFrostTint(glass, isDark),
                         glass = glass,
                         blurShare = LIVE_LENS_CHROME_BLUR_SHARE,
+                        ground = glassGround ?: MaterialTheme.colorScheme.background,
                     ),
             )
         } else if (hazeState != null && profile.allowHazeBlur && glass.hazeBlurDp > 0f) {

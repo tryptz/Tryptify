@@ -921,6 +921,8 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                     // The glass tint is taken here, outside the album scope, so
                     // the bar's glass is the tab bar's colour exactly.
                     val chromeGlassTint = tf.monochrome.android.ui.theme.glassTint(miniPlayerGlass.tintColor)
+                    // Likewise the page colour its live lens lays under the capture.
+                    val chromeGround = MaterialTheme.colorScheme.background
                     // Mini player follows the album art (dynamic colours), while
                     // the menus around it — the tab bar included — stay on the
                     // base theme. Its glass does not: see chromeGlassTint.
@@ -946,6 +948,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                                 blendMillis = miniBlendMs,
                                 userTrackChanges = userTrackChanges,
                                 glassTintColor = chromeGlassTint,
+                                glassGround = chromeGround,
                             )
                         }
                     }
