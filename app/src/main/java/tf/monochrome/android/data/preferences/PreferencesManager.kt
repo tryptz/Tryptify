@@ -402,6 +402,7 @@ class PreferencesManager @Inject constructor(
         private val MULTICHANNEL_DOWNMIX_ENABLED =
             booleanPreferencesKey("multichannel_downmix_enabled")
         private val HIRES_HAL_OUTPUT_ENABLED = booleanPreferencesKey("hires_hal_output_enabled")
+        private val IGNORE_AUDIO_FOCUS = booleanPreferencesKey("ignore_audio_focus")
         // Powers of two mirroring the user-facing chip row in Settings.
         // Native engine's static MAX_BLOCK_SIZE caps the largest entry; bump
         // both together if you add another step.
@@ -1826,6 +1827,18 @@ class PreferencesManager @Inject constructor(
         dataStore.data.map { it[HIRES_HAL_OUTPUT_ENABLED] ?: true }
     suspend fun setHiResHalOutputEnabled(enabled: Boolean) {
         dataStore.edit { it[HIRES_HAL_OUTPUT_ENABLED] = enabled }
+    }
+
+    /**
+     * Play without asking Android for audio focus, so another app's sound —
+     * a game, a video — plays alongside instead of pausing this one. Default
+     * off: then focus is requested as usual and another app taking it pauses
+     * or ducks playback.
+     */
+    val ignoreAudioFocus: Flow<Boolean> =
+        dataStore.data.map { it[IGNORE_AUDIO_FOCUS] ?: false }
+    suspend fun setIgnoreAudioFocus(enabled: Boolean) {
+        dataStore.edit { it[IGNORE_AUDIO_FOCUS] = enabled }
     }
 
     /**

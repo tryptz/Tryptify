@@ -1039,6 +1039,9 @@
     <string name="settings_usb_on_waiting">Açık. Yönlendirmeyi başlatmak için bir USB DAC takın.</string>
     <string name="settings_hires_on">Açık. 24 bit ve kayan noktalı dosyalar DSP’den Android çıkışına kadar tam çözünürlüğünü korur; böylece LDAC/aptX HD 24 bit alır. Hızı değiştirmek 16 bite döner.</string>
     <string name="settings_hires_off">Kapalı. Bluetooth’ta ve hoparlörde yüksek çözünürlüklü dosyalar DSP’den önce 16 bite düşürülür.</string>
+    <string name="settings_play_alongside_other_apps">Diğer uygulamalarla birlikte çal</string>
+    <string name="settings_play_alongside_on">Açık. Tryptify ses odağı istemez; böylece bir oyun veya video onu duraklatmak yerine aynı anda çalar. Aramalar, alarmlar ve navigasyon da onu duraklatmaz veya sesini kısmaz.</string>
+    <string name="settings_play_alongside_off">Kapalı. Başka bir uygulama ses çalmaya başladığında Tryptify, Android’in kararına göre duraklar veya sesini kısar.</string>
     <string name="settings_exclusive_off">Kapalı. UAPP tarzı libusb çıkışı. Geliştirici seçenekleri → USB ses yönlendirmesini devre dışı bırak → AÇIK gerekir; yoksa Android’in ses HAL’i DAC’yi kapmaya devam eder.</string>
     <string name="settings_exclusive_starting">Başlatılıyor…</string>
     <string name="settings_exclusive_no_device">Açık, bir USB DAC takılması bekleniyor.</string>
