@@ -887,7 +887,11 @@ class PlaybackService : MediaSessionService() {
             override fun getCodecAdapterFactory():
                 androidx.media3.exoplayer.mediacodec.MediaCodecAdapter.Factory {
                 cachedImportanceFactory?.let { return it }
-                val wrapped = ImportanceMediaCodecAdapterFactory(super.getCodecAdapterFactory())
+                // SourceDepthMediaCodecAdapterFactory keeps 16-bit sources
+                // decoding to 16-bit, for the reason given on the class.
+                val wrapped = ImportanceMediaCodecAdapterFactory(
+                    SourceDepthMediaCodecAdapterFactory(super.getCodecAdapterFactory())
+                )
                 cachedImportanceFactory = wrapped
                 return wrapped
             }
