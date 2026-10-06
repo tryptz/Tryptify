@@ -67,10 +67,10 @@ class ListRowHeightTest {
     }
 
     /**
-     * The Songs row and the shared [tf.monochrome.android.ui.components.TrackItem]:
-     * a 48dp cover beside a bodyLarge title over a bodySmall subtitle whose
-     * artist is a link, so it carries the hit-box inset. This is the shape the
-     * budget is derived from, so it is the one with no slack to spare.
+     * The library's Songs row: a 48dp cover beside a bodyLarge title over a
+     * bodySmall subtitle whose artist is a link, so it carries the hit-box
+     * inset. This is the shape the budget is derived from, so it is the one
+     * with no slack to spare.
      */
     @Test
     fun `a track row with cover, title, linked subtitle and badge fits`() {
@@ -122,9 +122,10 @@ class ListRowHeightTest {
     }
 
     /**
-     * The search result row does NOT share the two-line budget: it stacks a
-     * source badge ("Qobuz", "Local") under the subtitle, so it has its own
-     * height. This test used to model it as two lines and so passed while the
+     * The search result row and the shared
+     * [tf.monochrome.android.ui.components.TrackItem] do NOT share the two-line
+     * budget: they stack a badge line (source, THX, Dolby Atmos) under the
+     * subtitle, so they have their own height. This test used to model it as two lines and so passed while the
      * badge was being cut in half on screen — the row was laid out at
      * [MonoDimens.listRowHeight] and clipped the third line away.
      */

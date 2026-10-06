@@ -116,17 +116,21 @@ object MonoDimens {
         }
 
     /**
-     * The search results row, which is [listRowHeight] plus a third line.
+     * The search results row and the shared track row
+     * ([tf.monochrome.android.ui.components.TrackItem]): [listRowHeight] plus a
+     * third line for badges — where the track plays from ("TIDAL", "Qobuz",
+     * "Local"), THX, Dolby Atmos, surround.
      *
-     * Search rows carry a source badge ("Qobuz", "Local") under the subtitle
-     * that no other list has, so they do not fit the shared two-line budget —
-     * they were laid out at [listRowHeight] anyway and the badge was cut in
-     * half by the row's own clip.
+     * Search rows had the badge line first; they were laid out at
+     * [listRowHeight] anyway once and the badge was cut in half by the row's
+     * own clip. TrackItem took it when every list started naming the source:
+     * squeezed in beside the title, the pills left the title about ten
+     * characters on a phone.
      *
-     * A height of their own rather than raising [listRowHeight]: the badge line
-     * is a search thing, and paying for it on every Songs and Folders row would
-     * add 30dp of empty space to every list in the app. Search rows still agree
-     * with each other, which is what the even-column rule is actually about.
+     * Still a height of its own rather than a raised [listRowHeight]: the
+     * library's Songs and Folders rows carry no badge line and stay two lines.
+     * Rows of one kind agree with each other, which is what the even-column
+     * rule is actually about.
      */
     val searchRowHeight: Dp
         @Composable get() {

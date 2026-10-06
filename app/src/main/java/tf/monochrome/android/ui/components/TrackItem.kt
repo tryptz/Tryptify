@@ -96,7 +96,9 @@ fun TrackItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(MonoDimens.listRowHeight)
+                // Three lines: title, artist and album, then the badges. See
+                // MonoDimens.searchRowHeight, which search rows share.
+                .height(MonoDimens.searchRowHeight)
                 .padding(horizontal = MonoDimens.listItemPaddingH),
             verticalAlignment = Alignment.CenterVertically
     ) {
@@ -135,7 +137,7 @@ fun TrackItem(
 
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.spacedBy(MonoDimens.spacingXs, Alignment.CenterVertically)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -158,26 +160,6 @@ fun TrackItem(
                         tint = ExplicitBadge,
                         modifier = Modifier.padding(top = 1.dp)
                     )
-                }
-                if (track.isThxSpatialAudio) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    ThxBadgePill()
-                }
-                if (track.isDolbyAtmos) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    DolbyAtmosBadgePill()
-                }
-                track.channelBadge?.let { badge ->
-                    Spacer(modifier = Modifier.width(4.dp))
-                    ChannelBadgePill(badge)
-                }
-                // Where it plays from, on every list this row is used in.
-                // Downloaded means the device, as in search.
-                val source = if (isDownloaded) tf.monochrome.android.domain.model.SourceType.LOCAL
-                    else LocalTrackSource.current(track)
-                if (source != null) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    SourcePill(source)
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -230,6 +212,21 @@ fun TrackItem(
                     )
                 }
             }
+            // The badges have a line of their own, as in search: beside the
+            // title they left it about ten characters on a phone.
+            // Where it plays from, on every list this row is used in.
+            // Downloaded means the device, as in search.
+            val source = if (isDownloaded) tf.monochrome.android.domain.model.SourceType.LOCAL
+                else LocalTrackSource.current(track)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (source != null) SourcePill(source)
+                if (track.isThxSpatialAudio) ThxBadgePill()
+                if (track.isDolbyAtmos) DolbyAtmosBadgePill()
+                track.channelBadge?.let { ChannelBadgePill(it) }
+            }
         }
 
         if (effectiveOnLikeClick != null) {
@@ -280,8 +277,8 @@ fun TrackItem(
 }
 
 /**
- * Small rounded pill for multichannel sources ("5.1", "7.1"). Rendered next
- * to the title so surround availability is visible at a glance in any list.
+ * Small rounded pill for multichannel sources ("5.1", "7.1"). Rendered on the
+ * row's badge line so surround availability is visible at a glance in any list.
  */
 @Composable
 fun ChannelBadgePill(text: String, modifier: Modifier = Modifier) {
