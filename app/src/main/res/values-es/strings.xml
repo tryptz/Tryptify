@@ -1178,6 +1178,7 @@
     <string name="fx_smooths_jagged_edges_on_the_3d_letters_and_glass">Suaviza los bordes dentados de las letras 3D y el cristal (requiere Android 13 o superior).</string>
     <string name="fx_how_hard_edges_are_smoothed_higher_softens_more">Cuánto se suavizan los bordes; más alto suaviza más.</string>
     <string name="fx_preview">VISTA PREVIA</string>
+    <string name="fx_preview_drag_hint">VISTA PREVIA · arrastra la página bajo el cristal</string>
     <string name="fx_background">Fondo</string>
     <string name="fx_button_tint">Tinte de los botones</string>
     <string name="fx_3d_refractive_glass_on_the_transport_buttons">Cristal refractivo 3D en los botones de reproducción (requiere Android 13 o superior).</string>
@@ -1250,8 +1251,6 @@
     <string name="fx_anti_aliasing">Suavizado de bordes</string>
     <string name="fx_aa_strength">Intensidad del suavizado</string>
     <string name="fx_reset_to_defaults">Restablecer valores predeterminados</string>
-    <string name="fx_audio_tools">Herramientas de audio</string>
-    <string name="fx_sheets_panels_and_search_bars_all_wear_this_pane">Hojas, paneles y barras de búsqueda llevan todos este cristal.</string>
     <string name="fx_themes">Temas</string>
     <string name="fx_glass_body">Cuerpo del cristal</string>
     <string name="fx_frosted_blur">Desenfoque esmerilado</string>

@@ -1137,6 +1137,7 @@
     <string name="fx_smooths_jagged_edges_on_the_3d_letters_and_glass">Glättet gezackte Kanten an 3D-Buchstaben und Glas (benötigt Android 13+).</string>
     <string name="fx_how_hard_edges_are_smoothed_higher_softens_more">Wie stark Kanten geglättet werden; höher macht weicher.</string>
     <string name="fx_preview">VORSCHAU</string>
+    <string name="fx_preview_drag_hint">VORSCHAU · zieh die Seite unter das Glas</string>
     <string name="fx_background">Hintergrund</string>
     <string name="fx_button_tint">Tönung der Tasten</string>
     <string name="fx_3d_refractive_glass_on_the_transport_buttons">Lichtbrechendes 3D-Glas auf den Wiedergabetasten (benötigt Android 13+).</string>
@@ -1209,8 +1210,6 @@
     <string name="fx_anti_aliasing">Kantenglättung</string>
     <string name="fx_aa_strength">Glättungsstärke</string>
     <string name="fx_reset_to_defaults">Auf Standard zurücksetzen</string>
-    <string name="fx_audio_tools">Audio-Tools</string>
-    <string name="fx_sheets_panels_and_search_bars_all_wear_this_pane">Sheets, Panels und Suchleisten tragen alle diese Scheibe.</string>
     <string name="fx_themes">Designs</string>
     <string name="fx_glass_body">Glaskörper</string>
     <string name="fx_frosted_blur">Mattierte Unschärfe</string>
