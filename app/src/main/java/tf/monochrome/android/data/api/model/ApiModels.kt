@@ -151,7 +151,9 @@ data class ApiTracksWrapper(
 data class ArtistContentResponse(
     val items: List<ArtistContentItem>? = null,
     val albums: ApiAlbumsWrapper? = null,
-    val topTracks: ApiTracksWrapper? = null
+    val topTracks: ApiTracksWrapper? = null,
+    // hifi-api's /artist/?f= sends the top tracks here, as a bare list.
+    val tracks: List<ApiTrack>? = null
 )
 
 @Serializable

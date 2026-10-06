@@ -42,7 +42,6 @@ import tf.monochrome.android.data.api.model.QobuzRelease
 import tf.monochrome.android.data.api.model.QobuzSearchEnvelope
 import tf.monochrome.android.data.api.model.QobuzSimilarArtist
 import tf.monochrome.android.data.api.model.QobuzTrackItem
-import tf.monochrome.android.data.api.model.RecommendationsResponse
 import tf.monochrome.android.data.api.model.SearchResponse
 import tf.monochrome.android.data.api.model.TrackInfoResponse
 import tf.monochrome.android.data.api.model.TrackStreamResponse
@@ -205,7 +204,7 @@ class HiFiApiClient @Inject constructor(
         }
 
         val body = fetchWithRetry(pagedQuery("s", query, offset, limit))
-        val response = parseSearchResponse(body)
+        val response = parseSearchResponse(body, HifiPayload.Kind.TRACKS)
         val tracks = response.items.map { it.toTrack() }
         cache.put(cacheKey, CacheEntry(tracks))
         return tracks
@@ -221,7 +220,7 @@ class HiFiApiClient @Inject constructor(
         }
 
         val body = fetchWithRetry(pagedQuery("al", query, offset, limit))
-        val response = parseSearchResponse(body)
+        val response = parseSearchResponse(body, HifiPayload.Kind.ALBUMS)
         val albums = response.items.map { it.toAlbum() }
         cache.put(cacheKey, CacheEntry(albums))
         return albums
@@ -237,7 +236,7 @@ class HiFiApiClient @Inject constructor(
         }
 
         val body = fetchWithRetry(pagedQuery("a", query, offset, limit))
-        val response = parseSearchResponse(body)
+        val response = parseSearchResponse(body, HifiPayload.Kind.ARTISTS)
         val artists = response.items.map { it.toArtist() }
         cache.put(cacheKey, CacheEntry(artists))
         return artists
@@ -245,7 +244,7 @@ class HiFiApiClient @Inject constructor(
 
     suspend fun searchPlaylists(query: String, offset: Int = 0, limit: Int = 50): List<Playlist> {
         val body = fetchWithRetry(pagedQuery("p", query, offset, limit))
-        val response = parseSearchResponse(body)
+        val response = parseSearchResponse(body, HifiPayload.Kind.PLAYLISTS)
         return response.items.map { it.toPlaylist() }
     }
 
@@ -921,7 +920,7 @@ class HiFiApiClient @Inject constructor(
 
         // Fetch artist info
         val infoBody = fetchWithRetry("/artist/?id=$artistId")
-        val artistResponse = json.decodeFromString<ArtistResponse>(unwrapResponse(infoBody))
+        val artistResponse = json.decodeFromString<ArtistResponse>(HifiPayload.entity(json, infoBody, "artist"))
         val artist = Artist(
             id = artistResponse.id,
             name = artistResponse.name,
@@ -951,13 +950,15 @@ class HiFiApiClient @Inject constructor(
         val eps = allAlbums.filter { it.type?.equals("EP", ignoreCase = true) == true }
         val singles = allAlbums.filter { it.type?.equals("SINGLE", ignoreCase = true) == true }
 
-        val topTracks = contentResponse.topTracks?.items?.map { it.toDomain() } ?: emptyList()
+        // hifi-api sends the top tracks as `tracks`, a bare list; older
+        // servers sent `topTracks: {items}`.
+        val topTracks = (contentResponse.topTracks?.items ?: contentResponse.tracks)
+            ?.map { it.toDomain() } ?: emptyList()
 
         // Try fetching similar artists
         val similarArtists = try {
             val similarBody = fetchWithRetry("/artist/similar/?id=$artistId", minVersion = "2.3")
-            val items = json.decodeFromString<SearchResponse>(unwrapResponse(similarBody))
-            items.items.map { it.toArtist() }
+            HifiPayload.search(json, similarBody, HifiPayload.Kind.ARTISTS).items.map { it.toArtist() }
         } catch (_: Exception) {
             emptyList()
         }
@@ -988,7 +989,7 @@ class HiFiApiClient @Inject constructor(
 
     suspend fun getPlaylist(playlistId: String): Playlist {
         val body = fetchWithRetry("/playlist/?id=$playlistId")
-        val response = json.decodeFromString<PlaylistResponse>(unwrapResponse(body))
+        val response = json.decodeFromString<PlaylistResponse>(HifiPayload.entity(json, body, "playlist"))
 
         val trackItems = response.items ?: response.tracks ?: emptyList()
         var tracks = trackItems.mapNotNull { it.toDomain() }
@@ -999,7 +1000,7 @@ class HiFiApiClient @Inject constructor(
             var offset = tracks.size
             while (offset < total) {
                 val pageBody = fetchWithRetry("/playlist/?id=$playlistId&offset=$offset")
-                val pageResponse = json.decodeFromString<PlaylistResponse>(unwrapResponse(pageBody))
+                val pageResponse = json.decodeFromString<PlaylistResponse>(HifiPayload.entity(json, pageBody, "playlist"))
                 val pageItems = pageResponse.items ?: pageResponse.tracks ?: emptyList()
                 tracks = tracks + pageItems.mapNotNull { it.toDomain() }
                 offset += pageItems.size
@@ -1168,8 +1169,8 @@ class HiFiApiClient @Inject constructor(
         // the radio from some other song entirely.
         if (qobuzIdRegistry.isDeezerTrack(trackId) && !qobuzIdRegistry.isQobuzTrack(trackId)) return emptyList()
         val body = fetchWithRetry("/recommendations/?id=$trackId", minVersion = "2.4")
-        val response = json.decodeFromString<RecommendationsResponse>(unwrapResponse(body))
-        return response.items.map { apiTrack ->
+        // TIDAL lists each recommendation as {track: {...}, sources}.
+        return HifiPayload.tracks(json, body).map { apiTrack ->
             // Recommendations may return incomplete metadata, so fetch full info
             if (apiTrack.title.isBlank() && apiTrack.id != 0L) {
                 try {
@@ -1207,7 +1208,8 @@ class HiFiApiClient @Inject constructor(
         if (qobuzIdRegistry.isQobuzTrack(trackId) || qobuzIdRegistry.isDeezerTrack(trackId)) return null
         return try {
             val body = fetchWithRetry("/lyrics/?id=$trackId")
-            val response = json.decodeFromString<LyricsResponse>(unwrapResponse(body))
+            // hifi-api sends {version, lyrics: {lyrics, subtitles, ...}}.
+            val response = json.decodeFromString<LyricsResponse>(HifiPayload.entity(json, body, "lyrics"))
             parseLyrics(response, convertToRomaji)
         } catch (_: Exception) {
             null
@@ -1270,20 +1272,10 @@ class HiFiApiClient @Inject constructor(
         }
     }
 
-    private fun parseSearchResponse(body: String): SearchResponse {
-        val unwrapped = unwrapResponse(body)
-        return try {
-            json.decodeFromString<SearchResponse>(unwrapped)
-        } catch (_: Exception) {
-            // Try parsing as array
-            try {
-                val items = json.decodeFromString<List<tf.monochrome.android.data.api.model.SearchItem>>(unwrapped)
-                SearchResponse(items = items)
-            } catch (_: Exception) {
-                SearchResponse()
-            }
-        }
-    }
+    // Track search is one flat page; artist, album and playlist search are
+    // TIDAL top-hits answers, a page per type. See HifiPayload.
+    private fun parseSearchResponse(body: String, kind: HifiPayload.Kind): SearchResponse =
+        HifiPayload.search(json, body, kind)
 
     private fun parseLyrics(response: LyricsResponse, convertToRomaji: Boolean): Lyrics? {
         val subtitles = response.subtitles ?: return response.lyrics?.let { raw ->
