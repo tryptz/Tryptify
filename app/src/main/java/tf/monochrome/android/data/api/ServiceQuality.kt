@@ -53,6 +53,19 @@ object ServiceQuality {
     private val MP3_320 = Option(AudioQuality.HIGH, "MP3 320 kbps", "Lossy MP3.")
 
     /**
+     * TIDAL's Dolby Atmos download choice, listed above its stereo tiers in
+     * the download picker but stored apart
+     * ([tf.monochrome.android.data.preferences.PreferencesManager.tidalDownloadAtmos]):
+     * it is another file, not a higher tier, so it is not in [options] and
+     * [coerce] never lands on it. Picking it sets the stereo tier to Hi-Res
+     * FLAC, which tracks without an Atmos mix download in.
+     */
+    val TIDAL_DOWNLOAD_ATMOS = Option(
+        AudioQuality.HI_RES, "Dolby Atmos",
+        "E-AC-3 JOC .m4a, untouched, for tracks with an Atmos mix. The rest download as Hi-Res FLAC.",
+    )
+
+    /**
      * What [service] offers for [setting], best first. TIDAL downloads stop at
      * AAC 320: a TrypT HiFi server's download route answers any lossy request
      * with it, so AAC 96 would be a choice that is never honoured.

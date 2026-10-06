@@ -178,6 +178,7 @@ class PreferencesManager @Inject constructor(
         private val APPLE_WRAPPER_SECRET = stringPreferencesKey("apple_wrapper_secret")
         private val APPLE_ATMOS_PREFERRED = booleanPreferencesKey("apple_atmos_preferred")
         private val TIDAL_ATMOS_PREFERRED = booleanPreferencesKey("tidal_atmos_preferred")
+        private val TIDAL_DOWNLOAD_ATMOS = booleanPreferencesKey("tidal_download_atmos")
         private val APPLE_QUALITY = stringPreferencesKey("apple_quality")
         private val DEV_MODE_ENABLED = booleanPreferencesKey("dev_mode_enabled")
         private val API_SERVERS = stringPreferencesKey("api_servers")
@@ -868,6 +869,20 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setTidalAtmosPreferred(enabled: Boolean) {
         dataStore.edit { it[TIDAL_ATMOS_PREFERRED] = enabled }
+    }
+
+    /**
+     * TIDAL's download quality is "Dolby Atmos": a track with an Atmos mix
+     * downloads that mix (the E-AC-3 JOC .m4a), the rest in TIDAL's stereo
+     * download tier. Never chosen, it follows the TIDAL Dolby Atmos switch,
+     * which decided downloads too before this setting existed.
+     */
+    val tidalDownloadAtmos: Flow<Boolean> = dataStore.data
+        .map { it[TIDAL_DOWNLOAD_ATMOS] ?: it[TIDAL_ATMOS_PREFERRED] ?: false }
+        .distinctUntilChanged()
+
+    suspend fun setTidalDownloadAtmos(enabled: Boolean) {
+        dataStore.edit { it[TIDAL_DOWNLOAD_ATMOS] = enabled }
     }
 
     /**

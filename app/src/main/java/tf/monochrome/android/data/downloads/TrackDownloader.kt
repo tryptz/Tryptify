@@ -249,6 +249,7 @@ class TrackDownloader @Inject constructor(
             // the temp file (JAudioTagger is file-based): in place for FLAC, on
             // a copy for .m4a (see tagAudioFile). Best-effort: a tagging
             // failure never fails the download (the bytes are good).
+            Log.i(TAG, "\"$trackTitle\" (id=$trackId) from ${service.label}: ${format.extension}" + if (isAtmosDownload) ", Dolby Atmos" else "")
             if (format == DownloadFormat.FLAC) repairFlacHeader(tempAudio, trackTitle)
             if (!isApple && !isAtmosDownload && format != DownloadFormat.MP3) {
                 tagAudioFile(

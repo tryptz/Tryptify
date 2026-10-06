@@ -110,6 +110,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -1702,6 +1704,7 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
     val gaplessNoResample by viewModel.gaplessNoResample.collectAsStateWithLifecycle()
     val qualities by viewModel.qualities.collectAsStateWithLifecycle()
     val tidalAtmos by viewModel.tidalAtmosPreferred.collectAsStateWithLifecycle()
+    val tidalDownloadAtmos by viewModel.tidalDownloadAtmos.collectAsStateWithLifecycle()
     val playbackSpeed by viewModel.playbackSpeed.collectAsStateWithLifecycle()
     val preservePitch by viewModel.preservePitch.collectAsStateWithLifecycle()
     val ignoreAudioFocus by viewModel.ignoreAudioFocus.collectAsStateWithLifecycle()
@@ -1781,38 +1784,65 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader(stringResource(R.string.settings_streaming_quality))
-        // Each service streams in its own setting, in its own terms: TIDAL's
-        // lossy tiers are AAC, Qobuz's and Deezer's MP3, and Deezer stops at CD.
-        val wifiTitle = stringResource(R.string.settings_wi_fi_streaming)
-        val cellularTitle = stringResource(R.string.settings_cellular_streaming)
-        ServiceQuality.services.forEach { service ->
-            listOf(
-                ServiceQuality.Setting.WIFI to wifiTitle,
-                ServiceQuality.Setting.CELLULAR to cellularTitle,
-            ).forEach { (setting, title) ->
-                ServiceQualityRow(
-                    title = "${service.label} · $title",
-                    service = service,
-                    setting = setting,
-                    quality = qualities[service to setting],
-                    onPick = { viewModel.setQuality(service, setting, it) },
+        // One section, two sets of settings: how each service streams, or how
+        // it downloads (the same settings as the Downloads tab's).
+        var downloadQualities by rememberSaveable { mutableStateOf(false) }
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.weight(1f)) {
+                SettingsGroupHeader(
+                    stringResource(
+                        if (downloadQualities) R.string.settings_download_quality else R.string.settings_streaming_quality
+                    )
                 )
             }
-            // TIDAL's Dolby Atmos mix goes ahead of the stereo tier above: a
-            // track with the Atmos badge plays its Atmos mix, the rest stereo.
-            if (service == ApiService.TIDAL) {
-                SettingSwitchItem(
-                    title = stringResource(R.string.atmos_tidal_dolby_atmos),
-                    subtitle = if (tidalAtmos) {
-                        stringResource(R.string.atmos_tidal_on)
-                    } else {
-                        stringResource(R.string.atmos_tidal_off)
-                    },
-                    checked = tidalAtmos,
-                    onCheckedChange = { viewModel.setTidalAtmosPreferred(it) },
-                    titleIcon = { tf.monochrome.android.ui.components.DolbyAtmosBadgePill() },
+            QualityModeSwitch(download = downloadQualities, onChange = { downloadQualities = it })
+        }
+        if (downloadQualities) {
+            val qualityTitle = stringResource(R.string.settings_quality)
+            ServiceQuality.services.forEach { service ->
+                ServiceQualityRow(
+                    title = "${service.label} · $qualityTitle",
+                    service = service,
+                    setting = ServiceQuality.Setting.DOWNLOAD,
+                    quality = qualities[service to ServiceQuality.Setting.DOWNLOAD],
+                    onPick = { viewModel.setQuality(service, ServiceQuality.Setting.DOWNLOAD, it) },
+                    atmos = if (service == ApiService.TIDAL) tidalDownloadAtmos else null,
+                    onPickAtmos = { viewModel.pickTidalDownloadAtmos() },
                 )
+            }
+        } else {
+            // Each service streams in its own setting, in its own terms: TIDAL's
+            // lossy tiers are AAC, Qobuz's and Deezer's MP3, and Deezer stops at CD.
+            val wifiTitle = stringResource(R.string.settings_wi_fi_streaming)
+            val cellularTitle = stringResource(R.string.settings_cellular_streaming)
+            ServiceQuality.services.forEach { service ->
+                listOf(
+                    ServiceQuality.Setting.WIFI to wifiTitle,
+                    ServiceQuality.Setting.CELLULAR to cellularTitle,
+                ).forEach { (setting, title) ->
+                    ServiceQualityRow(
+                        title = "${service.label} · $title",
+                        service = service,
+                        setting = setting,
+                        quality = qualities[service to setting],
+                        onPick = { viewModel.setQuality(service, setting, it) },
+                    )
+                }
+                // TIDAL's Dolby Atmos mix goes ahead of the stereo tier above: a
+                // track with the Atmos badge plays its Atmos mix, the rest stereo.
+                if (service == ApiService.TIDAL) {
+                    SettingSwitchItem(
+                        title = stringResource(R.string.atmos_tidal_dolby_atmos),
+                        subtitle = if (tidalAtmos) {
+                            stringResource(R.string.atmos_tidal_on)
+                        } else {
+                            stringResource(R.string.atmos_tidal_off)
+                        },
+                        checked = tidalAtmos,
+                        onCheckedChange = { viewModel.setTidalAtmosPreferred(it) },
+                        titleIcon = { tf.monochrome.android.ui.components.DolbyAtmosBadgePill() },
+                    )
+                }
             }
         }
 
@@ -2431,6 +2461,7 @@ private fun exclusiveSubtitle(
 @Composable
 private fun DownloadsTab(viewModel: SettingsViewModel) {
     val qualities by viewModel.qualities.collectAsStateWithLifecycle()
+    val tidalDownloadAtmos by viewModel.tidalDownloadAtmos.collectAsStateWithLifecycle()
     val downloadFolder by viewModel.downloadFolderUri.collectAsStateWithLifecycle()
     var showClearDialog by remember { mutableStateOf(false) }
     val downloadedCount by viewModel.downloadedCount.collectAsStateWithLifecycle()
@@ -2502,6 +2533,8 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
                 setting = ServiceQuality.Setting.DOWNLOAD,
                 quality = qualities[service to ServiceQuality.Setting.DOWNLOAD],
                 onPick = { viewModel.setQuality(service, ServiceQuality.Setting.DOWNLOAD, it) },
+                atmos = if (service == ApiService.TIDAL) tidalDownloadAtmos else null,
+                onPickAtmos = { viewModel.pickTidalDownloadAtmos() },
             )
         }
 
@@ -3401,12 +3434,19 @@ private fun ServiceQualityRow(
     setting: ServiceQuality.Setting,
     quality: AudioQuality?,
     onPick: (AudioQuality) -> Unit,
+    /** TIDAL downloads: whether Dolby Atmos is chosen; null offers no Atmos choice. */
+    atmos: Boolean? = null,
+    onPickAtmos: () -> Unit = {},
 ) {
     // The row says what the chosen tier sends; the menu lists every tier the
     // service offers the same way, so the choice is made knowing the codec,
     // bit depth and rate each one delivers.
     var expanded by remember { mutableStateOf(false) }
-    val current = quality?.let { ServiceQuality.option(service, setting, it) }
+    val current = if (atmos == true) {
+        ServiceQuality.TIDAL_DOWNLOAD_ATMOS
+    } else {
+        quality?.let { ServiceQuality.option(service, setting, it) }
+    }
     Box {
         SettingItem(
             title = title,
@@ -3414,6 +3454,32 @@ private fun ServiceQualityRow(
             onClick = { expanded = true },
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            if (atmos != null) {
+                val option = ServiceQuality.TIDAL_DOWNLOAD_ATMOS
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(option.label, style = MaterialTheme.typography.bodyLarge)
+                                Spacer(Modifier.width(6.dp))
+                                tf.monochrome.android.ui.components.DolbyAtmosBadgePill()
+                            }
+                            Text(
+                                option.detail,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    trailingIcon = if (atmos) {
+                        { Icon(Icons.Default.Check, contentDescription = null) }
+                    } else null,
+                    onClick = {
+                        onPickAtmos()
+                        expanded = false
+                    },
+                )
+            }
             ServiceQuality.options(service, setting).forEach { option ->
                 DropdownMenuItem(
                     text = {
@@ -3426,7 +3492,7 @@ private fun ServiceQualityRow(
                             )
                         }
                     },
-                    trailingIcon = if (option.quality == current?.quality) {
+                    trailingIcon = if (atmos != true && option.quality == current?.quality) {
                         { Icon(Icons.Default.Check, contentDescription = null) }
                     } else null,
                     onClick = {
@@ -3436,6 +3502,53 @@ private fun ServiceQualityRow(
                 )
             }
         }
+    }
+}
+
+/**
+ * Streaming | Download: which quality settings the section shows. Two
+ * choices, not on and off, so the switch keeps its colour in both positions
+ * and the chosen side's label is the one lit.
+ */
+@Composable
+private fun QualityModeSwitch(download: Boolean, onChange: (Boolean) -> Unit) {
+    val primary = MaterialTheme.colorScheme.primary
+    val onPrimary = MaterialTheme.colorScheme.onPrimary
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val streamLabel = stringResource(R.string.streaming)
+    val downloadLabel = stringResource(R.string.action_download)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = streamLabel,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (download) FontWeight.Normal else FontWeight.SemiBold,
+            color = if (download) muted else primary,
+            modifier = Modifier.clickable { onChange(false) }.padding(4.dp),
+        )
+        Switch(
+            checked = download,
+            onCheckedChange = onChange,
+            // A thumb always full size, as Material draws a checked one.
+            thumbContent = { Spacer(Modifier.size(androidx.compose.material3.SwitchDefaults.IconSize)) },
+            colors = androidx.compose.material3.SwitchDefaults.colors(
+                checkedThumbColor = onPrimary,
+                checkedTrackColor = primary,
+                checkedBorderColor = primary,
+                uncheckedThumbColor = onPrimary,
+                uncheckedTrackColor = primary,
+                uncheckedBorderColor = primary,
+            ),
+            modifier = Modifier
+                .padding(horizontal = 6.dp)
+                .semantics { stateDescription = if (download) downloadLabel else streamLabel },
+        )
+        Text(
+            text = downloadLabel,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (download) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (download) primary else muted,
+            modifier = Modifier.clickable { onChange(true) }.padding(4.dp),
+        )
     }
 }
 

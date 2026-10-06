@@ -124,7 +124,7 @@ fun MainPlayerRoute(
     playerViewModel: PlayerViewModel,
 ) {
     val currentTrack by playerViewModel.currentTrack.collectAsStateWithLifecycle()
-    val tidalAtmosPreferred by playerViewModel.tidalAtmosPreferred.collectAsStateWithLifecycle()
+    val decodingEac3 by playerViewModel.decodingEac3.collectAsStateWithLifecycle()
     val miniGlass by playerViewModel.miniPlayerGlass.collectAsStateWithLifecycle()
     val currentUnified by playerViewModel.currentUnifiedTrack.collectAsStateWithLifecycle()
     val queue by playerViewModel.queue.collectAsStateWithLifecycle()
@@ -810,9 +810,9 @@ fun MainPlayerRoute(
                     style = effectiveStyle,
                     isFullscreen = isFullscreenActive,
                     track = currentTrack,
-                    // The Atmos mix is what plays only when the track has one
-                    // and TIDAL Dolby Atmos is on.
-                    dolbyAtmos = tidalAtmosPreferred && currentTrack?.isDolbyAtmos == true,
+                    // Atmos only when the track has an Atmos mix and that mix
+                    // is what is decoding: a failed Atmos lookup plays stereo.
+                    dolbyAtmos = currentTrack?.isDolbyAtmos == true && decodingEac3,
                     isPlaying = isPlaying,
                     progress = {
                         val d = durationState.value

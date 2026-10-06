@@ -598,7 +598,25 @@ class SettingsViewModel @Inject constructor(
 
     // --- Audio actions ---
     fun setQuality(service: ApiService, setting: ServiceQuality.Setting, quality: AudioQuality) {
-        viewModelScope.launch { preferences.setQuality(service, setting, quality) }
+        viewModelScope.launch {
+            preferences.setQuality(service, setting, quality)
+            // A stereo tier picked for TIDAL downloads takes Dolby Atmos's place.
+            if (service == ApiService.TIDAL && setting == ServiceQuality.Setting.DOWNLOAD) {
+                preferences.setTidalDownloadAtmos(false)
+            }
+        }
+    }
+
+    /** TIDAL's download quality is Dolby Atmos (see PreferencesManager.tidalDownloadAtmos). */
+    val tidalDownloadAtmos: StateFlow<Boolean> = preferences.tidalDownloadAtmos
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    /** Dolby Atmos as TIDAL's download quality; tracks without an Atmos mix download as Hi-Res FLAC. */
+    fun pickTidalDownloadAtmos() {
+        viewModelScope.launch {
+            preferences.setQuality(ApiService.TIDAL, ServiceQuality.Setting.DOWNLOAD, AudioQuality.HI_RES)
+            preferences.setTidalDownloadAtmos(true)
+        }
     }
 
     /** TIDAL Dolby Atmos: TIDAL tracks with an Atmos mix play it instead of stereo. */

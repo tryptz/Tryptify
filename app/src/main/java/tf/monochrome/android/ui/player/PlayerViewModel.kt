@@ -80,6 +80,7 @@ class PlayerViewModel @Inject constructor(
     private val playbackState: tf.monochrome.android.player.PlaybackStateRepository,
     private val bpmTap: tf.monochrome.android.audio.tempo.BpmTapProcessor,
     private val sourceConsent: tf.monochrome.android.player.SourceConsent,
+    private val audioPipelineMonitor: tf.monochrome.android.audio.pipeline.AudioPipelineMonitor,
 ) : ViewModel() {
 
     /**
@@ -187,10 +188,13 @@ class PlayerViewModel @Inject constructor(
     val isLyricsLoading: StateFlow<Boolean> = _isLyricsLoading.asStateFlow()
 
     /**
-     * TIDAL Dolby Atmos (Settings > Audio): TIDAL tracks with an Atmos mix
-     * play it. The player marks such a track as playing in Atmos only then.
+     * The audio being decoded is E-AC-3, the codec that carries a Dolby Atmos
+     * mix. The player marks a track as playing in Atmos only then: a track
+     * TIDAL lists as Atmos still plays its stereo stream when its Atmos file
+     * cannot be had, and the mark used to claim Atmos regardless.
      */
-    val tidalAtmosPreferred: StateFlow<Boolean> = preferences.tidalAtmosPreferred
+    val decodingEac3: StateFlow<Boolean> = audioPipelineMonitor.stream
+        .map { tf.monochrome.android.domain.model.isEac3Codec(mimeType = it?.mimeType) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     // --- Parity Settings ---

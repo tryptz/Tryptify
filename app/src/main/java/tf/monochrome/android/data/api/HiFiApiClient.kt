@@ -1073,13 +1073,25 @@ class HiFiApiClient @Inject constructor(
         // TIDAL server. Never the other one — a TIDAL id on Qobuz names some
         // other recording, which would be saved under this track's tags.
         if (forDownload) {
-            // With TIDAL Dolby Atmos on, a TIDAL track with an Atmos mix
-            // downloads that mix, as it plays: the E-AC-3 JOC .m4a, untouched.
+            // With TIDAL's download quality on Dolby Atmos, a TIDAL track with
+            // an Atmos mix downloads that mix: the E-AC-3 JOC .m4a, untouched.
             // A track TIDAL lists as stereo only downloads its stereo tier.
             val listedAtmos = expectAtmos || knownAtmos[trackId] == true
+            val atmosOn = preferences.tidalDownloadAtmos.first()
+            if (!qobuzIdRegistry.isQobuzTrack(trackId)) {
+                // Said either way, so a debug log shows why a download is stereo.
+                android.util.Log.i(
+                    "HiFiApiClient",
+                    "TIDAL Atmos $trackId (download): " + when {
+                        !atmosOn -> "not asked, TIDAL's download quality is not Dolby Atmos"
+                        !listedAtmos && knownAtmos[trackId] == false -> "not asked, TIDAL lists the track as stereo only"
+                        else -> "asking the TIDAL server (listed as Atmos: $listedAtmos)"
+                    },
+                )
+            }
             if (!qobuzIdRegistry.isQobuzTrack(trackId) &&
                 (listedAtmos || knownAtmos[trackId] == null) &&
-                preferences.tidalAtmosPreferred.first()
+                atmosOn
             ) {
                 when (val atmos = tidalAtmos(trackId, TIDAL_ATMOS_DOWNLOAD_TIMEOUT_MS)) {
                     is AtmosAnswer.File -> return TrackStream(
@@ -1091,8 +1103,8 @@ class HiFiApiClient @Inject constructor(
                     )
                     // TIDAL has an Atmos mix and Atmos was asked for: saving the
                     // stereo FLAC in its place is not what was asked. The
-                    // download fails and says why; turning TIDAL Dolby Atmos
-                    // off is how to get the FLAC.
+                    // download fails and says why; a stereo download quality
+                    // is how to get the FLAC.
                     is AtmosAnswer.Unavailable -> if (listedAtmos) {
                         throw IllegalStateException("Dolby Atmos unavailable: ${atmos.reason}")
                     }
@@ -1133,6 +1145,7 @@ class HiFiApiClient @Inject constructor(
         // stereo instead of costing a round trip to ask.
         if (!forDownload && knownAtmos[trackId] != false && preferences.tidalAtmosPreferred.first()) {
             (tidalAtmos(trackId, TIDAL_ATMOS_TIMEOUT_MS) as? AtmosAnswer.File)?.let { atmos ->
+                android.util.Log.i("HiFiApiClient", "TIDAL Atmos $trackId (playback): playing the Atmos mix")
                 return TrackStream(
                     track = Track(id = trackId, title = "", duration = 0),
                     streamUrl = atmos.url,
