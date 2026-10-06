@@ -195,6 +195,7 @@ data class PlaylistResponse(
     val title: String = "",
     val description: String? = null,
     val numberOfTracks: Int? = null,
+    val numberOfVideos: Int? = null,
     val duration: Int? = null,
     val cover: String? = null,
     val squareImage: String? = null,
@@ -207,6 +208,8 @@ data class PlaylistResponse(
 @Serializable
 data class PlaylistTrackItem(
     val item: ApiTrack? = null,
+    // TIDAL marks each playlist entry "track" or "video".
+    val type: String? = null,
     // Some responses have flat track data
     val id: Long? = null,
     val title: String? = null,

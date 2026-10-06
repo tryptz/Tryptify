@@ -384,6 +384,7 @@
     <string name="all_tracks">Tüm parçalar</string>
     <string name="separator_dot">%1$s · %2$s</string>
     <string name="error_load_album">Albüm yüklenemedi</string>
+    <string name="error_load_playlist">Çalma listesi yüklenemedi</string>
     <string name="error_load_artist">Sanatçı yüklenemedi</string>
     <string name="error_album_not_found">Albüm bulunamadı</string>
     <string name="error_artist_not_found">Sanatçı bulunamadı</string>

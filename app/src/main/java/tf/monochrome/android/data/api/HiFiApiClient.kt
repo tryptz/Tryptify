@@ -13,6 +13,9 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
@@ -98,6 +101,11 @@ class HiFiApiClient @Inject constructor(
         // TrypT HiFi checks the Atmos manifest (one HiFi API round trip plus
         // the manifest fetch) before answering; give it longer than a search.
         private const val TIDAL_ATMOS_TIMEOUT_MS = 10_000L
+
+        // Playlist pages: as many tracks per request as the server allows,
+        // and how many of the remaining pages are fetched at once.
+        private const val PLAYLIST_PAGE_LIMIT = 500
+        private const val PLAYLIST_PAGE_CONCURRENCY = 4
     }
 
     private data class CacheEntry(
@@ -990,24 +998,35 @@ class HiFiApiClient @Inject constructor(
     // --- Playlist ---
 
     suspend fun getPlaylist(playlistId: String): Playlist {
-        val body = fetchWithRetry("/playlist/?id=$playlistId")
+        // The largest page a HiFi API server answers (TrypT HiFi fetches it
+        // from TIDAL as parallel pages of 100). A server that caps lower just
+        // sends fewer, and the page size below follows what it sent.
+        val body = fetchWithRetry("/playlist/?id=$playlistId&limit=$PLAYLIST_PAGE_LIMIT")
         val response = json.decodeFromString<PlaylistResponse>(HifiPayload.entity(json, body, "playlist"))
 
-        val trackItems = response.items ?: response.tracks ?: emptyList()
-        var tracks = trackItems.mapNotNull { it.toDomain() }
+        val firstPage = response.items ?: response.tracks ?: emptyList()
+        var tracks = firstPage.playlistTracks()
 
-        // Handle pagination
-        val total = response.numberOfTracks ?: tracks.size
-        if (tracks.size < total) {
-            var offset = tracks.size
-            while (offset < total) {
-                val pageBody = fetchWithRetry("/playlist/?id=$playlistId&offset=$offset")
-                val pageResponse = json.decodeFromString<PlaylistResponse>(HifiPayload.entity(json, pageBody, "playlist"))
-                val pageItems = pageResponse.items ?: pageResponse.tracks ?: emptyList()
-                tracks = tracks + pageItems.mapNotNull { it.toDomain() }
-                offset += pageItems.size
-                if (pageItems.isEmpty()) break
+        // The rest of the pages at once, a few at a time, rather than one
+        // round trip after another: a 1,000-track playlist used to be ten
+        // requests in a row through the server and TIDAL.
+        // Items are tracks and videos together, so the pages run over both.
+        val total = response.numberOfTracks?.plus(response.numberOfVideos ?: 0) ?: firstPage.size
+        val pageSize = firstPage.size
+        if (pageSize in 1 until total) {
+            val gate = kotlinx.coroutines.sync.Semaphore(PLAYLIST_PAGE_CONCURRENCY)
+            val pages = kotlinx.coroutines.coroutineScope {
+                (pageSize until total step pageSize).map { offset ->
+                    async {
+                        gate.withPermit {
+                            val pageBody = fetchWithRetry("/playlist/?id=$playlistId&offset=$offset&limit=$pageSize")
+                            val pageResponse = json.decodeFromString<PlaylistResponse>(HifiPayload.entity(json, pageBody, "playlist"))
+                            (pageResponse.items ?: pageResponse.tracks ?: emptyList()).playlistTracks()
+                        }
+                    }
+                }.awaitAll()
             }
+            tracks = tracks + pages.flatten()
         }
 
         return Playlist(
@@ -1870,6 +1889,10 @@ private fun tf.monochrome.android.data.api.model.AlbumTrackItem.toTrack(album: A
         hasDolbyAtmos(item?.audioModes ?: audioModes, item?.mediaMetadata ?: mediaMetadata),
     ),
 )
+
+/** A playlist page's tracks. TIDAL playlists can hold music videos, which the app cannot play. */
+private fun List<tf.monochrome.android.data.api.model.PlaylistTrackItem>.playlistTracks(): List<Track> =
+    filterNot { it.type.equals("video", ignoreCase = true) }.mapNotNull { it.toDomain() }
 
 private fun tf.monochrome.android.data.api.model.PlaylistTrackItem.toDomain(): Track? {
     if (item != null) return item.toDomain()

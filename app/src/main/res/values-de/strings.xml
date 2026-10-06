@@ -384,6 +384,7 @@
     <string name="all_tracks">Alle Titel</string>
     <string name="separator_dot">%1$s · %2$s</string>
     <string name="error_load_album">Album konnte nicht geladen werden</string>
+    <string name="error_load_playlist">Playlist konnte nicht geladen werden</string>
     <string name="error_load_artist">Künstler konnte nicht geladen werden</string>
     <string name="error_album_not_found">Album nicht gefunden</string>
     <string name="error_artist_not_found">Künstler nicht gefunden</string>

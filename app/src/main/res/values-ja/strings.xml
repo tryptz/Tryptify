@@ -365,6 +365,7 @@
     <string name="all_tracks">すべての曲</string>
     <string name="separator_dot">%1$s・%2$s</string>
     <string name="error_load_album">アルバムを読み込めませんでした</string>
+    <string name="error_load_playlist">プレイリストを読み込めませんでした</string>
     <string name="error_load_artist">アーティストを読み込めませんでした</string>
     <string name="error_album_not_found">アルバムが見つかりません</string>
     <string name="error_artist_not_found">アーティストが見つかりません</string>

@@ -371,6 +371,7 @@ similar_artists	Similar artists	相似艺人	似ているアーティスト	Arti
 all_tracks	All tracks	所有歌曲	すべての曲	Tous les titres	Todas las canciones	Tüm parçalar	Alle Titel
 separator_dot	%1$s · %2$s	%1$s · %2$s	%1$s・%2$s	%1$s · %2$s	%1$s · %2$s	%1$s · %2$s	%1$s · %2$s
 error_load_album	Failed to load album	无法加载专辑	アルバムを読み込めませんでした	Impossible de charger l’album	No se ha podido cargar el álbum	Albüm yüklenemedi	Album konnte nicht geladen werden
+error_load_playlist	Failed to load playlist	无法加载歌单	プレイリストを読み込めませんでした	Impossible de charger la playlist	No se ha podido cargar la playlist	Çalma listesi yüklenemedi	Playlist konnte nicht geladen werden
 error_load_artist	Failed to load artist	无法加载艺人	アーティストを読み込めませんでした	Impossible de charger l’artiste	No se ha podido cargar el artista	Sanatçı yüklenemedi	Künstler konnte nicht geladen werden
 error_album_not_found	Album not found	未找到专辑	アルバムが見つかりません	Album introuvable	No se ha encontrado el álbum	Albüm bulunamadı	Album nicht gefunden
 error_artist_not_found	Artist not found	未找到艺人	アーティストが見つかりません	Artiste introuvable	No se ha encontrado el artista	Sanatçı bulunamadı	Künstler nicht gefunden

@@ -365,6 +365,7 @@
     <string name="all_tracks">所有歌曲</string>
     <string name="separator_dot">%1$s · %2$s</string>
     <string name="error_load_album">无法加载专辑</string>
+    <string name="error_load_playlist">无法加载歌单</string>
     <string name="error_load_artist">无法加载艺人</string>
     <string name="error_album_not_found">未找到专辑</string>
     <string name="error_artist_not_found">未找到艺人</string>

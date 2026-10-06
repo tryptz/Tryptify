@@ -403,6 +403,7 @@
     <string name="all_tracks">Tous les titres</string>
     <string name="separator_dot">%1$s · %2$s</string>
     <string name="error_load_album">Impossible de charger l’album</string>
+    <string name="error_load_playlist">Impossible de charger la playlist</string>
     <string name="error_load_artist">Impossible de charger l’artiste</string>
     <string name="error_album_not_found">Album introuvable</string>
     <string name="error_artist_not_found">Artiste introuvable</string>
