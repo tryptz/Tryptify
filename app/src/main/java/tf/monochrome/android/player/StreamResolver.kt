@@ -605,8 +605,12 @@ class StreamResolver @Inject constructor(
             .setMediaId(track.id)
             .setMediaMetadata(metadata)
             .apply {
-                if (trackStream != null && trackStream.streamUrl.isNotBlank() && !trackStream.isDash) {
-                    setUri(trackStream.streamUrl.toUri())
+                // DASH carries its manifest inline, as in buildMediaItem.
+                when {
+                    trackStream == null || trackStream.streamUrl.isBlank() -> Unit
+                    trackStream.isDash ->
+                        setUri(dashManifestUri(trackStream.streamUrl)).setMimeType(MimeTypes.APPLICATION_MPD)
+                    else -> setUri(trackStream.streamUrl.toUri())
                 }
             }
             .build()
@@ -803,9 +807,15 @@ class StreamResolver @Inject constructor(
             .setMediaId(track.id.toString())
             .setMediaMetadata(metadata)
 
-        // DASH has no progressive URL — PlaybackService synthesises a
-        // data: URI at play time. For everything else, attach the URL.
-        if (!isDash && streamUrl.isNotBlank()) {
+        // DASH has no single file to point at, so its manifest goes in the
+        // item itself (see [dashManifestUri]). Every path that hands an item
+        // to the player can then play it — not only PlaybackService's own
+        // DashMediaSource branch, but playTrack, the unified queue path and
+        // the session's playback resumption, which used to NPE on a URI-less
+        // item and skip the track.
+        if (isDash && streamUrl.isNotBlank()) {
+            builder.setUri(dashManifestUri(streamUrl)).setMimeType(MimeTypes.APPLICATION_MPD)
+        } else if (streamUrl.isNotBlank()) {
             builder.setUri(streamUrl.toUri())
         }
 
@@ -830,3 +840,15 @@ internal fun pathLooksLikeAudioFile(path: String?): Boolean {
     val ext = (path ?: return false).substringAfterLast('.', "").lowercase()
     return ext in AudioFileCoverFetcher.AUDIO_EXTENSIONS
 }
+
+/**
+ * A DASH manifest (the MPD XML TIDAL sends) as a URI the player opens like any
+ * other: the manifest itself, inline, as a base64 data: URI. With
+ * MimeTypes.APPLICATION_MPD on the item, DefaultMediaSourceFactory builds a
+ * DashMediaSource for it, DefaultDataSource reads the data: URI, and the
+ * segments the manifest names come over HTTP.
+ *
+ * Top-level and String-based so it is a plain JVM unit test.
+ */
+internal fun dashManifestUri(mpd: String): String =
+    "data:application/dash+xml;base64," + java.util.Base64.getEncoder().encodeToString(mpd.toByteArray())
