@@ -41,6 +41,80 @@ The reason it was ever faint: on a device where the shader silently no-ops
 compile it), a solid fill is left on screen as an opaque rounded rectangle. Ask
 `rememberLiquidGlassAvailable()` rather than hedging with a low alpha.
 
+**A rounded-rect slab passes its corner as `lensCorner`.** The alpha
+heightfield alone gives a solid fill a bevel 2–4px wide: the fill steps from 0
+to 1 across one anti-aliased pixel, so everything inside it is flat and
+`refract()` bends nothing. The pane then reads as a tinted sheet with a
+garbled hairline, not as glass. With `lensCorner` set, the shader lays a
+rounded (circular) edge across a band as wide as the corner (capped at 24dp, scaled by
+`roundness`), and measures the bend in pixels against that band rather than as
+a fraction of the pane, so the backdrop bends hardest at the rim and not at all
+in the middle. The mini player, `GlassPanel` (so every search bar), the tab
+bar, the action dock and the play disc all pass it. Leave it unspecified for
+anything that is not one rounded rect filling the layer — glyphs, icons, the
+spectrum — or the rim lands where the edge is not. With it unspecified, the
+output is bit-identical to the alpha-only glass. The profile is circular, not a squircle: a squircle is flat for most of its
+width, only its outermost pixels bent, and on device the refraction read as too
+weak.
+
+**Prototype: the mini player, the tab bar, `GlassPanel` and the full player's disc and dock bend the live screen**
+(`LiveGlassLens.kt`, behind `LIVE_LENS_GLASS`). **The mini player and the tab bar are one
+material and must match exactly:** same lens, same blur share
+(`LIVE_LENS_CHROME_BLUR_SHARE`, a little more than panels so page text behind
+does not fight their labels), same frost, and the same tint — the nav host takes
+the tab bar's tint *outside* `DynamicColorScope` and hands it to the mini player
+(`glassTintColor`), because inside it `primary` is the album's colour and the
+bar came out a different hue from the tab bar under it. Their haze pane is replaced by a
+layer that draws Haze's own capture of the screen behind them
+(`HazeState.areas[i].contentLayer`, offset by `positionOnScreen`), blurs it (a
+fifth of `hazeBlurDp`, 6.4dp on Clear) and bends it with the same lens rim,
+with no frost veil at all (clear glass: a veil read as a dull frosted pane on
+device), and blurs exactly as much as "Backdrop blur" asks: 0 is crisp, unblurred
+refraction. (A 6dp floor was tried and removed on device.) The blur runs
+first and the lens bends its result, and the blur covers a margin of the page
+around the pane (twice the radius plus 2px), drawn into an inflated layer that
+the pane's clip trims back. Blurring only the pane's own rectangle clamps at its
+edges and smears the edge row into the rim, which is the band that refracts.
+The lens layer is opaque: it lays the page colour (`ground`, the haze pane's
+`HazeStyle.backgroundColor`) down before the capture. Haze's capture has no app
+background, so without it the blurred text was see-through and the sharp text
+under the bar read straight through it. The mini player gets that colour from
+outside its album scope (`glassGround`), like its tint. Glass frosts as well as bends: at 2-3dp page
+text read straight through and fought the labels on top; at 10dp nothing was
+left for the rim to bend. Earlier, an 8dp blur together with full frost and the
+slab's own 20% veil on top flattened the bend into a dark
+smear. For the same reason the slab over a live lens is told so
+(`playerGlass(liveUnder = true)`): it drops its stand-in refraction and draws its
+body as plain tint at half the body opacity, leaving the rim, reflection and
+glint to carry the glass. With `liveUnder` false the slab is bit-identical.
+
+**The mini player and the tab bar cast their shadow from outside their clip.**
+Both clip to their rounded shape, so a shadow drawn inside is cut away. Each
+wraps its clipped bar in an unclipped box that draws `GlassBarShadow` first,
+and only when the bar has an opaque backdrop pane (live lens or haze), which
+covers the footprint so only the spill reads; without a pane the shadow would
+show through the bar as a dark slab. The stacked mini player's
+`AnimatedVisibility` expands and shrinks with `clip = false` for the same reason.
+
+**A lens rim is lit through a flattened normal** (`NL`, 10% of the rim's slope)
+while it bends through the full one. Lit at full slope, the glint and the key
+light peak where the rim tilts ~15° toward them — several dp inside the edge —
+so a second bright edge sat inside the bevel's
+crisp outer line and the pane read as two layers, worse at some light angles.
+Do not light with `N` on a lens pane. These
+surfaces start from the `Clear` preset (`PlayerGlassSettings.INITIAL`), as does
+every glass setting; `DEFAULT` keeps the classic values because presets inherit
+omitted fields from it. On the full player the disc and dock get it through
+`PlayerGlassHaze(lensCorner = …)` over the player background's haze source, and
+their slabs ask `rememberPlayerLiveLens()` for `liveUnder`, so the pane and the
+slab always agree on whether the real backdrop is underneath. This is possible only because the lens rim is computed from the
+corner: the slab shader spends its single RenderEffect input on the alpha
+heightfield, while this layer spends its input on the backdrop. The slab still
+draws on top for the tint, the rim light and the control holes. Same sibling
+rule as haze: drawing a source's layer from inside that source recurses. The two
+surfaces are one material, so they move together; turning the flag off restores
+the haze pane on both, exactly.
+
 **Do not put a haze pane under a punched glass slab** (the transport disc, the
 action dock, the mini player). Those are drawn solid and made see-through by the
 shader's body opacity, and what shows through is whatever is composited

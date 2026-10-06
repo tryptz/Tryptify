@@ -1703,6 +1703,7 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
     val qualities by viewModel.qualities.collectAsStateWithLifecycle()
     val playbackSpeed by viewModel.playbackSpeed.collectAsStateWithLifecycle()
     val preservePitch by viewModel.preservePitch.collectAsStateWithLifecycle()
+    val ignoreAudioFocus by viewModel.ignoreAudioFocus.collectAsStateWithLifecycle()
     // Plain local state (NOT keyed on playbackSpeed) so typing isn't reset by
     // the value round-tripping back from the ViewModel; sync from external
     // changes (slider/reset) only while the field is unfocused, and commit on
@@ -1764,6 +1765,18 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             valueRange = 0f..12f,
             steps = 11,
             modifier = Modifier.fillMaxWidth()
+        )
+
+        // Issue #131: music under a game without the game pausing it.
+        SettingSwitchItem(
+            title = stringResource(R.string.settings_play_alongside_other_apps),
+            subtitle = if (ignoreAudioFocus) {
+                stringResource(R.string.settings_play_alongside_on)
+            } else {
+                stringResource(R.string.settings_play_alongside_off)
+            },
+            checked = ignoreAudioFocus,
+            onCheckedChange = { viewModel.setIgnoreAudioFocus(it) },
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -3647,6 +3660,14 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
             Spacer(modifier = Modifier.width(8.dp))
             Text(if (isScanning) "Scanning…" else "Rescan Library Now")
         }
+
+        val titleFromFileName by viewModel.localTitleFromFileName.collectAsStateWithLifecycle()
+        SettingSwitchItem(
+            title = stringResource(R.string.settings_titles_from_file_names),
+            subtitle = stringResource(R.string.settings_titles_from_file_names_desc),
+            checked = titleFromFileName,
+            onCheckedChange = { viewModel.setLocalTitleFromFileName(it) }
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
         // This was one "Page Order" list over every page, back when pages were

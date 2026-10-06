@@ -79,6 +79,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -166,13 +167,13 @@ class LyricsFxStudioViewModel @Inject constructor(
     private var persistJob: Job? = null
 
     /** Player-chrome (transport button) glass settings — the "Player Glass" tab. */
-    private val _playerGlass = MutableStateFlow(tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT)
+    private val _playerGlass = MutableStateFlow(tf.monochrome.android.domain.model.PlayerGlassSettings.INITIAL)
     val playerGlass: StateFlow<tf.monochrome.android.domain.model.PlayerGlassSettings> = _playerGlass.asStateFlow()
     private var playerGlassTouched = false
     private var playerGlassPersistJob: Job? = null
 
     /** The "UI panels" tab's glass — the mini player bar and every floating panel that shares its material (its own blob, same shape as the player's). */
-    private val _miniPlayerGlass = MutableStateFlow(tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT)
+    private val _miniPlayerGlass = MutableStateFlow(tf.monochrome.android.domain.model.PlayerGlassSettings.INITIAL)
     val miniPlayerGlass: StateFlow<tf.monochrome.android.domain.model.PlayerGlassSettings> = _miniPlayerGlass.asStateFlow()
     private var miniPlayerGlassTouched = false
     private var miniPlayerGlassPersistJob: Job? = null
@@ -1221,7 +1222,7 @@ private fun PlayerGlassTab(
                                 Canvas(
                                     Modifier
                                         .fillMaxSize()
-                                        .playerGlass(previewTint)
+                                        .playerGlass(previewTint, lensCorner = Dp.Infinity)
                                         .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
                                 ) {
                                     drawGlassPlayPauseDisc(morph = 0f, fill = previewTint)
@@ -1481,7 +1482,7 @@ private fun PlayerGlassTab(
         ) { onUpdate { g -> g.copy(sampleRings = it.toInt()) } }
         Spacer(Modifier.height(20.dp))
         OutlinedButton(
-            onClick = { onApplyPreset(PlayerGlassSettings.DEFAULT) },
+            onClick = { onApplyPreset(PlayerGlassSettings.INITIAL) },
             modifier = Modifier.fillMaxWidth(),
         ) { Text(stringResource(R.string.fx_reset_to_defaults)) }
         // Same reservation as the other two tabs. A flat 48dp was short of the

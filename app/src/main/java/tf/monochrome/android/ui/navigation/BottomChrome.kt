@@ -90,5 +90,5 @@ val LocalNowPlayingTrackId = compositionLocalOf<Long?> { null }
  * nav host provided it, it fell back to defaults that no one chose.
  */
 val LocalMiniPlayerGlass = compositionLocalOf {
-    tf.monochrome.android.domain.model.PlayerGlassSettings()
+    tf.monochrome.android.domain.model.PlayerGlassSettings.INITIAL
 }

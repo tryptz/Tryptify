@@ -1040,6 +1040,9 @@
     <string name="settings_usb_on_waiting">On. Plug in a USB DAC to start routing.</string>
     <string name="settings_hires_on">On. 24-bit and float files keep full resolution through the DSP to Android\'s output, so LDAC/aptX HD get 24-bit. Changing speed falls back to 16-bit.</string>
     <string name="settings_hires_off">Off. Hi-res files are cut to 16-bit before the DSP on Bluetooth and the speaker.</string>
+    <string name="settings_play_alongside_other_apps">Play alongside other apps</string>
+    <string name="settings_play_alongside_on">On. Tryptify doesn\'t ask for audio focus, so a game or video plays at the same time instead of pausing it. Calls, alarms and navigation won\'t pause it or turn it down either.</string>
+    <string name="settings_play_alongside_off">Off. When another app starts playing sound, Tryptify pauses or turns down, as Android decides.</string>
     <string name="settings_exclusive_off">Off. UAPP-style libusb output. Needs Developer options → Disable USB audio routing → ON, otherwise Android\'s audio HAL will keep grabbing the DAC and fight us for it.</string>
     <string name="settings_exclusive_starting">Starting up…</string>
     <string name="settings_exclusive_no_device">On, waiting for a USB DAC to be plugged in.</string>
@@ -1798,4 +1801,6 @@
     <string name="settings_mini_player_hide_with_tabs_desc">Scroll up for the nav bar, down for the mini player. Tap the page you’re on in the nav bar to bring the player back.</string>
     <string name="settings_nav_bar_slot_first">First button</string>
     <string name="settings_nav_bar_slot_second">Second button</string>
+    <string name="settings_titles_from_file_names">Titles from file names</string>
+    <string name="settings_titles_from_file_names_desc">Name local songs after their files instead of their title tags. Changing this rescans the library.</string>
 </resources>

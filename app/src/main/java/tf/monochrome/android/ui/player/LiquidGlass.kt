@@ -1,6 +1,7 @@
 package tf.monochrome.android.ui.player
 
 import kotlin.math.max
+import kotlin.math.min
 import android.content.Context
 import android.graphics.RenderEffect
 import android.graphics.RuntimeShader
@@ -26,7 +27,11 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import dev.chrisbanes.haze.hazeEffect
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -267,6 +272,11 @@ private fun liquidGlassModifier(
             shader.setFloatUniform("uBulge", 0.5f, 0.5f)
             shader.setFloatUniform("uBulgeAmt", 0f)
             shader.setFloatUniform("uBulgeR", 0f)
+            // Glyphs are not one rounded rect, so no lens rim: the alpha bevel is
+            // the right shape for a letter.
+            shader.setFloatUniform("uLensR", 0f)
+            shader.setFloatUniform("uLensW", 0f)
+            shader.setFloatUniform("uLiveUnder", 0f)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
@@ -278,7 +288,7 @@ private fun liquidGlassModifier(
  * Player-chrome glass settings (the transport buttons), provided at the player
  * route from the persisted [tf.monochrome.android.domain.model.PlayerGlassSettings].
  */
-val LocalPlayerGlass = compositionLocalOf { tf.monochrome.android.domain.model.PlayerGlassSettings() }
+val LocalPlayerGlass = compositionLocalOf { tf.monochrome.android.domain.model.PlayerGlassSettings.INITIAL }
 
 /**
  * Whether [playerGlass] will actually do anything here.
@@ -306,6 +316,20 @@ fun rememberLiquidGlassAvailable(): Boolean {
     val flat = LocalLowPerformance.current.disableLiquidGlass
     val enabled = LocalPlayerGlass.current.enabled
     return compiles && !flat && enabled
+}
+
+/**
+ * Whether the full player's glass bends the live backdrop: there is a player
+ * haze source to draw, the device may blur, glass is on, and the live lens
+ * compiles. The disc and the dock ask this for their slab's `liveUnder`, and
+ * [PlayerGlassHaze] asks it for what to draw under them, so the two agree.
+ */
+@Composable
+fun rememberPlayerLiveLens(): Boolean {
+    val haze = LocalPlayerHaze.current
+    val profile = tf.monochrome.android.performance.LocalPerformanceProfile.current
+    return LIVE_LENS_GLASS && liveLensCompiles && haze != null && profile.allowHazeBlur &&
+        rememberLiquidGlassAvailable()
 }
 
 /**
@@ -367,11 +391,22 @@ private const val HAZE_FADE_MILLIS = 400
 fun PlayerGlassHaze(
     modifier: Modifier = Modifier,
     shape: androidx.compose.ui.graphics.Shape = androidx.compose.ui.graphics.RectangleShape,
+    /**
+     * The corner of the slab above, when that slab is a rounded rect filling
+     * this pane ([Dp.Infinity] for the disc). Given, and where the live lens
+     * runs, this draws the real backdrop bent by the lens rim instead of a
+     * blur of it — see [liveGlassLens]. The slab must then be told
+     * (`playerGlass(liveUnder = rememberPlayerLiveLens())`).
+     */
+    lensCorner: Dp = Dp.Unspecified,
 ) {
     val haze = LocalPlayerHaze.current ?: return
     val g = LocalPlayerGlass.current
     val profile = tf.monochrome.android.performance.LocalPerformanceProfile.current
-    val lit = profile.allowHazeBlur && g.enabled && g.hazeBlurDp > 0f
+    val live = lensCorner.isSpecified && rememberPlayerLiveLens()
+    // The live lens is glass even at zero blur (clear glass); the haze pane at
+    // zero blur has nothing to draw.
+    val lit = profile.allowHazeBlur && g.enabled && (live || g.hazeBlurDp > 0f)
 
     val millis = tf.monochrome.android.ui.theme.motionMillis(HAZE_FADE_MILLIS)
     val fade = remember { Animatable(0f) }
@@ -402,6 +437,14 @@ fun PlayerGlassHaze(
     // of what reads through should be the blurred art.
     val frostTint = playerFrostTint(g, isDark)
 
+    if (live && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        androidx.compose.foundation.layout.Box(
+            modifier
+                .graphicsLayer { alpha = fade.value }
+                .liveGlassLens(hazeState = haze, corner = lensCorner, frost = frostTint, glass = g, ground = frostBg),
+        )
+        return
+    }
     androidx.compose.foundation.layout.Box(
         modifier
             // Read in the layer block, not the composition: the fade would
@@ -501,11 +544,30 @@ internal fun Modifier.playerGlass(
      * Recorded with [backdropFrame]; null keeps the window-wide mapping.
      */
     artFrame: BackdropAnchor? = null,
+    /**
+     * The corner radius of the slab this layer draws, when that slab is a
+     * rounded rect filling the layer — [Dp.Infinity] for a pill or a disc.
+     *
+     * Set, the shader gives the pane a lens rim as wide as its corner, which is
+     * what makes the backdrop bend toward the edge the way a real pane does.
+     * Unspecified keeps the alpha-only bevel, the right shape for a glyph or an
+     * icon; a slab that is not a rounded rect must leave it unspecified, or the
+     * rim lands where its edge is not.
+     */
+    lensCorner: Dp = Dp.Unspecified,
+    /**
+     * True when a [liveGlassLens] draws the real backdrop under this slab. The
+     * slab then drops its stand-in refraction and keeps only a thin tint and
+     * the rim light, so the bent backdrop is what shows through.
+     */
+    liveUnder: Boolean = false,
 ): Modifier {
     val g = LocalPlayerGlass.current
     if (LocalLowPerformance.current.disableLiquidGlass) return this
     if (!g.enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
-    return this.then(playerGlassModifier(tint, g, bulgeCenter, bulgeAmount, bulgeRadiusFraction, artFrame))
+    return this.then(
+        playerGlassModifier(tint, g, bulgeCenter, bulgeAmount, bulgeRadiusFraction, artFrame, lensCorner, liveUnder),
+    )
 }
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -517,6 +579,8 @@ private fun playerGlassModifier(
     bulgeAmount: () -> Float,
     bulgeRadiusFraction: Float,
     artFrame: BackdropAnchor?,
+    lensCorner: Dp,
+    liveUnder: Boolean,
 ): Modifier {
     val shader = remember { runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() } ?: return Modifier
     // Unlike the lyric glass and the panel, which pin uLiquid to 1, this
@@ -592,12 +656,19 @@ private fun playerGlassModifier(
                     0f
                 },
             )
+            val (lensR, lensW) = lensRimPx(lensCorner, size, g.roundness)
+            shader.setFloatUniform("uLensR", lensR)
+            shader.setFloatUniform("uLensW", lensW)
+            shader.setFloatUniform("uLiveUnder", if (liveUnder) 1f else 0f)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
                 .asComposeRenderEffect()
         }
     }
 }
+
+/** The widest a lens rim gets, however large the corner it sits in. */
+internal val LensRimMax = 24.dp
 
 /** A tilt that never changes, for a surface whose shader would ignore it anyway. */
 private val NoTilt: State<Offset> = mutableStateOf(Offset.Zero)
@@ -764,6 +835,49 @@ half4 main(float2 frag) {
 }
 """
 
+// The lens rim, shared by the slab glass and the live lens so the two bend
+// identically. For a rounded rect of [size] with corner [r], it takes the exact
+// distance to the edge and lays a rounded (circular) edge across a band [w]
+// wide, h = sqrt(1 - (1-x)^2): vertical at the rim, easing to flat by the
+// inner edge, so the backdrop bends hardest at the rim and not at all across
+// the middle. Circular, not a squircle: the squircle (1-(1-x)^4)^(1/4) is flat
+// for most of its width, so only the outermost few pixels bent and on device
+// the refraction read as too weak; at the band's midpoint this has ~4x the
+// slope. Returns the surface slope, pointing outward; the caller scales it
+// by depth and adds it to the normal's xy. w <= r keeps the band inside the
+// corner arcs, where the distance field has no mitre crease.
+internal const val LENS_RIM_SKSL = """
+float2 lensRimSlope(float2 p, float2 size, float r, float w) {
+    float2 hs = size * 0.5;
+    float2 c = p - hs;
+    float2 q = abs(c) - (hs - r);
+    float2 qp = max(q, float2(0.0));
+    float d = length(qp) + min(max(q.x, q.y), 0.0) - r;   // < 0 inside
+    // Outward direction of the nearest edge (the distance field's gradient).
+    float2 n = (max(q.x, q.y) > 0.0) ? qp / max(length(qp), 1e-4)
+             : ((q.x > q.y) ? float2(1.0, 0.0) : float2(0.0, 1.0));
+    n *= float2(c.x < 0.0 ? -1.0 : 1.0, c.y < 0.0 ? -1.0 : 1.0);
+    float m = 1.0 - clamp(-d / w, 0.0, 1.0);
+    float m3 = m * m * m;
+    // dh/dx of the circular edge; unbounded at the rim, so capped.
+    float slope = m / sqrt(max(1.0 - m * m, 1e-3));
+    return n * min(slope, 6.0);
+}
+"""
+
+/**
+ * The lens rim's corner and band width in px, as `uLensR`/`uLensW` take them.
+ * The corner is clamped to the short half-side, so a pill or disc can pass
+ * [Dp.Infinity]. The band is at most the corner (no crease) and at most
+ * [LensRimMax], so a tall pill keeps a flat middle; roundness widens it,
+ * 0.5..2 → 5/8..all of that. Unspecified gives (0, 0): no rim.
+ */
+internal fun Density.lensRimPx(corner: Dp, size: Size, roundness: Float): Pair<Float, Float> {
+    if (!corner.isSpecified) return 0f to 0f
+    val r = min(corner.value * density, size.minDimension / 2f)
+    return r to min(r, LensRimMax.toPx()) * (0.5f + 0.25f * roundness)
+}
+
 // True refractive glass. Output stays in premultiplied alpha (RenderEffect
 // contract): the final rgb is clamped to <= the emitted alpha, so anti-aliased
 // glyph edges remain valid and halo-free. The glyph body is emitted at reduced
@@ -790,6 +904,7 @@ half4 main(float2 frag) {
 //    stay perfectly still. No pass travels across the pane; see the shader's
 //    own note where the light sheet used to be.
 private const val LIQUID_GLASS_SRC = """
+$LENS_RIM_SKSL
 uniform shader content;
 uniform float2 uSize;
 uniform float uTime;
@@ -814,6 +929,9 @@ uniform float uFrost;         // frosted roughness: 0 = clear, higher = misted
 uniform float2 uBulge;        // press-bulge centre, normalized (0..1) in the surface
 uniform float uBulgeAmt;      // press-bulge swell, 0 = none .. 1 = full dome
 uniform float uBulgeR;        // press-bulge dome radius in px; <=0 falls back to uSize.x/6
+uniform float uLensR;         // lens rim: the slab's corner radius in px (rounded rect filling uSize)
+uniform float uLensW;         // lens rim: bevel band width in px, <= uLensR; 0 = alpha-only bevel
+uniform float uLiveUnder;     // 1 = a LiveGlassLens draws the real backdrop under this slab
 
 // The real backdrop, when there is one to lens. uArt is ALWAYS bound (SkSL
 // requires every child shader to be set); uArtMix is what decides whether it
@@ -983,11 +1101,20 @@ half4 main(float2 p) {
         grad += bdir * (dome * (1.0 - dome)) * uBulgeAmt * 10.0;
     }
 
+    // Lens rim, for a slab the caller says is a rounded rect filling the layer.
+    // The alpha heightfield alone cannot make one: a solid fill steps from 0 to
+    // 1 across its single anti-aliased pixel, so the bevel above is 2-4px wide
+    // and everything inside it is dead flat — nothing for refract() to bend.
+    // See LENS_RIM_SKSL for the profile.
+    float2 lensSlope = (uLensW > 0.5)
+        ? lensRimSlope(p, uSize, uLensR, uLensW) * uDepth
+        : float2(0.0);
+
     // Surface normal from the alpha heightfield. Depth (profondeur) scales how
     // hard the bevel tips the normal off the surface — the dominant "3D" knob,
     // now a strong multiplier on the slope instead of a small z-base nudge.
     float slopeGain = 3.5 * uDepth;
-    float3 N = normalize(float3(grad * slopeGain, 1.0));
+    float3 N = normalize(float3(grad * slopeGain + lensSlope, 1.0));
 
     // Frost: per-pixel micro-roughness scatters the reflection, refraction and
     // glint into a misted, frosted surface. Gated so uFrost = 0 is unchanged.
@@ -997,6 +1124,25 @@ half4 main(float2 p) {
         N = normalize(N + float3((float2(h1, h2) - 0.5) * uFrost * 0.6, 0.0));
     }
 
+    // The normal the LIGHT reads. Without a lens rim it is N. With one, the
+    // rim's full slope is right for bending the backdrop but wrong for light:
+    // the glint and the room's key light peak where the surface tilts ~15deg
+    // toward them, which on the full rim is several dp inside the edge — a
+    // second bright edge inside the alpha bevel's crisp outer line, so the
+    // pane read as two layers depending on the light angle (seen on device).
+    // Lighting a flatter copy of the rim (10% of its slope) moves that peak
+    // to within ~1dp of the outer edge, where it joins the bevel line as one
+    // edge.
+    float3 NL = N;
+    if (uLensW > 0.5) {
+        NL = normalize(float3(grad * slopeGain + lensSlope * 0.1, 1.0));
+        if (uFrost > 0.001) {
+            float g1 = fract(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453);
+            float g2 = fract(sin(dot(p, float2(39.346, 11.135))) * 24634.6345);
+            NL = normalize(NL + float3((float2(g1, g2) - 0.5) * uFrost * 0.6, 0.0));
+        }
+    }
+
     float2 uv = p / uSize;
     float3 I = float3(0.0, 0.0, -1.0);   // view ray, into the screen
 
@@ -1004,7 +1150,7 @@ half4 main(float2 p) {
     // to ~100% at grazing edges. This is what makes the rim catch the light and
     // the face stay see-through — the core of the glass look. uFresnelPower sets
     // how broad the reflective rim band is (lower = wider shoulder).
-    float cosV = clamp(N.z, 0.0, 1.0);
+    float cosV = clamp(NL.z, 0.0, 1.0);
     float fres = 0.04 + 0.96 * pow(1.0 - cosV, uFresnelPower);
 
     // Refraction (Snell, via refract) with a per-channel index of refraction so
@@ -1014,7 +1160,14 @@ half4 main(float2 p) {
     float3 Tr = refract(I, N, 0.66 - dispSpread);
     float3 Tg = refract(I, N, 0.66);
     float3 Tb = refract(I, N, 0.66 + dispSpread);
-    float power = uRefraction * 1.6;
+    // How far a bent ray travels, in uv. Without a lens rim it is a fixed share
+    // of the pane, as it always was. With one it is measured in pixels against
+    // the rim's own width — a fraction of the pane would push a long bar's
+    // backdrop several times further sideways than up — at 5 rim widths per
+    // unit of refraction, two at the 0.4 maximum. Keep the 5 equal to
+    // LIVE_LENS_SRC's, so the slab and the live lens under it move together.
+    float2 power = uRefraction *
+        ((uLensW > 0.5) ? float2(uLensW * 5.0) / uSize : float2(1.6));
 
     // Interior slab parallax: a real glass pane offsets what's behind it even
     // where the surface is dead flat (thickness x viewing angle), which the
@@ -1055,7 +1208,7 @@ half4 main(float2 p) {
     // reflection streaks across the bevel as the surface curves. The key light
     // sits along uLightAngle; uTiltAmount scales how much device tilt sways it.
     float2 keyDir = float2(cos(uLightAngle), -sin(uLightAngle)) * 0.69;
-    float3 refl = environment(reflect(I, N), uTilt * uTiltAmount, keyDir, uTime, uLiquid);
+    float3 refl = environment(reflect(I, NL), uTilt * uTiltAmount, keyDir, uTime, uLiquid);
 
     // Crisp specular glint from the same key light (uLightAngle + tilt), with a
     // uGloss-controlled exponent (higher = tighter mirror), dispersed for sparkle.
@@ -1069,13 +1222,13 @@ half4 main(float2 p) {
         lightXY.y * 0.5 + uTilt.y * 0.8 * uTiltAmount + 0.20 * cos(uTime * 0.29) * uLiquid,
         0.85));
     float3 H = normalize(L + float3(0.0, 0.0, 1.0));
-    float ndh   = max(dot(N, H), 0.0);
+    float ndh   = max(dot(NL, H), 0.0);
     float spec  = pow(ndh, uGloss);
     // The rainbow spread of the glint slowly widens and narrows, so the
     // chromatic fringe cycles instead of sitting frozen on the bevel.
     float dsp   = 0.015 * uDispersion * (1.0 + 0.35 * sin(uTime * 0.9) * uLiquid);
-    float specR = pow(max(dot(normalize(N + float3(dsp, 0.0, 0.0)), H), 0.0), uGloss);
-    float specB = pow(max(dot(normalize(N - float3(dsp, 0.0, 0.0)), H), 0.0), uGloss);
+    float specR = pow(max(dot(normalize(NL + float3(dsp, 0.0, 0.0)), H), 0.0), uGloss);
+    float specB = pow(max(dot(normalize(NL - float3(dsp, 0.0, 0.0)), H), 0.0), uGloss);
 
     // Edge twinkle: 4px cells pulse the glint with hash-staggered phases and
     // rates, so bevel highlights sparkle as points firing off one another
@@ -1091,6 +1244,16 @@ half4 main(float2 p) {
     float3 glyphTint = float3(src.rgb) / a;
     float bodyMix = mix(0.72, 0.42, uBackdropMix);
     float3 bodyCol = mix(refr, glyphTint, bodyMix);
+    // Over a live lens the real, bent backdrop is already underneath, so the
+    // stand-in refraction here would only veil it with a smeared copy of the
+    // cover. The body becomes a thin wash of plain tint (half the body
+    // opacity, 10% at the default) and the rim, reflection and glint carry the
+    // glass, as the demo's live-screen mode draws it.
+    float bodyA = uBodyOpacity;
+    if (uLiveUnder > 0.5) {
+        bodyCol = glyphTint;
+        bodyA = uBodyOpacity * 0.5;
+    }
 
     // Fresnel-blend the reflection over the body (edges reflect, the face
     // transmits), then add the dispersed glint. uRimGain scales both the
@@ -1129,7 +1292,7 @@ half4 main(float2 p) {
     // instead of snapping, so the rim doesn't etch a hard 1px contour.
     float rimSum = fres * 1.2 + spec;
     float rim = min(rimSum, 0.82) + 0.18 * (1.0 - exp(-max(rimSum - 0.82, 0.0) / 0.18));
-    float outA = clamp(a * (uBodyOpacity + (1.0 - uBodyOpacity) * rim), 0.0, a);
+    float outA = clamp(a * (bodyA + (1.0 - bodyA) * rim), 0.0, a);
 
     float3 col = col3 * outA;              // premultiplied
     col = min(col, float3(outA));          // keep rgb <= alpha (premult-valid)

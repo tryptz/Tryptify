@@ -918,9 +918,14 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         if (showChrome) {
             val miniPlayer: (@Composable (Modifier) -> Unit)? = if (showMiniPlayer) {
                 { mod ->
+                    // The glass tint is taken here, outside the album scope, so
+                    // the bar's glass is the tab bar's colour exactly.
+                    val chromeGlassTint = tf.monochrome.android.ui.theme.glassTint(miniPlayerGlass.tintColor)
+                    // Likewise the page colour its live lens lays under the capture.
+                    val chromeGround = MaterialTheme.colorScheme.background
                     // Mini player follows the album art (dynamic colours), while
                     // the menus around it — the tab bar included — stay on the
-                    // base theme.
+                    // base theme. Its glass does not: see chromeGlassTint.
                     DynamicColorScope {
                         CompositionLocalProvider(
                             tf.monochrome.android.ui.player.LocalPlayerGlass provides miniPlayerGlass,
@@ -942,6 +947,8 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                                 hazeState = hazeState,
                                 blendMillis = miniBlendMs,
                                 userTrackChanges = userTrackChanges,
+                                glassTintColor = chromeGlassTint,
+                                glassGround = chromeGround,
                             )
                         }
                     }
@@ -1073,8 +1080,12 @@ private fun TabChrome(
     ) {
         AnimatedVisibility(
             visible = miniPlayer != null && !collapsed && stackMiniPlayer,
-            enter = fadeIn(tween(foldMillis)) + expandVertically(tween(foldMillis)),
-            exit = fadeOut(tween(foldMillis)) + shrinkVertically(tween(foldMillis)),
+            // clip = false: the bar casts a glass shadow past its own bounds,
+            // and expand/shrink clip to them by default, which cut the spill
+            // off. The bar's own content is still clipped to its rounded
+            // shape; the fade covers the brief overflow while it grows.
+            enter = fadeIn(tween(foldMillis)) + expandVertically(tween(foldMillis), clip = false),
+            exit = fadeOut(tween(foldMillis)) + shrinkVertically(tween(foldMillis), clip = false),
         ) {
             miniPlayer?.invoke(Modifier.fillMaxWidth())
         }

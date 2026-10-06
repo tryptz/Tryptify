@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.navigation
 
+import android.os.Build
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
@@ -67,6 +69,11 @@ import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.PlayerBackdrop
 import tf.monochrome.android.ui.player.playerFrostTint
 import tf.monochrome.android.ui.player.playerGlass
+import tf.monochrome.android.ui.player.LIVE_LENS_CHROME_BLUR_SHARE
+import tf.monochrome.android.ui.player.GlassBarShadow
+import tf.monochrome.android.ui.player.LIVE_LENS_GLASS
+import tf.monochrome.android.ui.player.liveGlassLens
+import tf.monochrome.android.ui.player.liveLensCompiles
 import tf.monochrome.android.ui.player.rememberLiquidGlassAvailable
 import tf.monochrome.android.ui.theme.PressSpring
 import tf.monochrome.android.ui.theme.glassTint
@@ -150,17 +157,43 @@ internal fun GlassTabBar(
     val tint = glassTint(glass.tintColor)
     val shaderGlass = rememberLiquidGlassAvailable()
 
+    // The same live lens as the mini player's, with the same blur share, frost
+    // and tint, so the two read as one material side by side. Decided out here
+    // because the shadow needs it too: it only draws over an opaque backdrop
+    // pane (the lens or the haze blur), which covers its footprint.
+    val profile = LocalPerformanceProfile.current
+    val liveLens = shaderGlass && LIVE_LENS_GLASS && liveLensCompiles &&
+        hazeState != null && profile.allowHazeBlur
+    val backdropPane = shaderGlass &&
+        (liveLens || (hazeState != null && profile.allowHazeBlur && glass.hazeBlurDp > 0f))
+
+    // Unclipped, so the shadow can spill past the pill's edge; the bar itself
+    // is clipped inside.
+    Box(modifier = modifier.height(TabBarHeight)) {
+    if (backdropPane) {
+        GlassBarShadow(glass = glass, tint = tint, shape = shape)
+    }
     Box(
-        modifier = modifier
-            .height(TabBarHeight)
+        modifier = Modifier
+            .fillMaxSize()
             .clip(shape)
             .then(if (shaderGlass) Modifier else Modifier.liquidGlass(hazeState = hazeState, shape = shape)),
     ) {
         if (shaderGlass) {
-            // The frost — same style and the same gate as the mini player's, so
-            // the two read as one material side by side.
-            val profile = LocalPerformanceProfile.current
-            if (hazeState != null && profile.allowHazeBlur && glass.hazeBlurDp > 0f) {
+            if (liveLens && hazeState != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val frostBg = MaterialTheme.colorScheme.background
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .liveGlassLens(
+                            hazeState = hazeState,
+                            corner = Dp.Infinity,
+                            frost = playerFrostTint(glass, isDark = frostBg.luminance() <= 0.5f),
+                            glass = glass,
+                            blurShare = LIVE_LENS_CHROME_BLUR_SHARE,
+                        ),
+                )
+            } else if (hazeState != null && profile.allowHazeBlur && glass.hazeBlurDp > 0f) {
                 val frostBg = MaterialTheme.colorScheme.background
                 val frostTint = playerFrostTint(glass, isDark = frostBg.luminance() <= 0.5f)
                 Box(
@@ -202,6 +235,8 @@ internal fun GlassTabBar(
                             // is tall, so the fraction of the longest side is a
                             // fraction of the width.
                             bulgeRadiusFraction = TAB_DOME_OF_SLOT / tabs.size,
+                            lensCorner = Dp.Infinity,
+                            liveUnder = liveLens,
                         )
                         // One offscreen layer, so the punch clears only the
                         // glyphs and never the app behind the bar.
@@ -234,6 +269,7 @@ internal fun GlassTabBar(
                 )
             }
         }
+    }
     }
 }
 

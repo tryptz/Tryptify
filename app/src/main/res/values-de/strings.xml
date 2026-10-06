@@ -1039,6 +1039,9 @@
     <string name="settings_usb_on_waiting">An. Schließe einen USB-DAC an, um das Routing zu starten.</string>
     <string name="settings_hires_on">An. 24-Bit- und Float-Dateien behalten ihre volle Auflösung vom DSP bis zur Android-Ausgabe, LDAC/aptX HD bekommen also 24 Bit. Eine Geschwindigkeitsänderung fällt auf 16 Bit zurück.</string>
     <string name="settings_hires_off">Aus. Bei Bluetooth und Lautsprecher werden Hi-Res-Dateien vor dem DSP auf 16 Bit gekürzt.</string>
+    <string name="settings_play_alongside_other_apps">Gleichzeitig mit anderen Apps abspielen</string>
+    <string name="settings_play_alongside_on">An. Tryptify fordert keinen Audiofokus an, also läuft ein Spiel oder Video gleichzeitig, statt die Wiedergabe zu pausieren. Auch Anrufe, Wecker und Navigation pausieren sie nicht und machen sie nicht leiser.</string>
+    <string name="settings_play_alongside_off">Aus. Wenn eine andere App Ton abspielt, pausiert Tryptify oder wird leiser, je nachdem, was Android entscheidet.</string>
     <string name="settings_exclusive_off">Aus. libusb-Ausgabe im UAPP-Stil. Erfordert Entwickleroptionen → USB-Audiorouting deaktivieren → AN, sonst schnappt sich Androids Audio-HAL den DAC immer wieder.</string>
     <string name="settings_exclusive_starting">Wird gestartet …</string>
     <string name="settings_exclusive_no_device">An, warte auf einen angeschlossenen USB-DAC.</string>
@@ -1797,4 +1800,6 @@
     <string name="settings_mini_player_hide_with_tabs_desc">Nach oben scrollen zeigt die Navigationsleiste, nach unten den Mini-Player. Tippe in der Leiste auf die aktuelle Seite, um den Player zurückzuholen.</string>
     <string name="settings_nav_bar_slot_first">Erste Schaltfläche</string>
     <string name="settings_nav_bar_slot_second">Zweite Schaltfläche</string>
+    <string name="settings_titles_from_file_names">Titel aus Dateinamen</string>
+    <string name="settings_titles_from_file_names_desc">Lokale Songs nach ihren Dateinamen statt nach ihren Titel-Tags benennen. Eine Änderung durchsucht die Mediathek neu.</string>
 </resources>

@@ -185,9 +185,9 @@ data class LyricsFxSettings(
         val DEFAULT = LyricsFxSettings()
 
         /**
-         * Named starting points — one unified roster, paired 1:1 with the
-         * Player Glass presets of the SAME NAME (PlayerGlassSettings.PRESETS)
-         * so the lyrics and the transport chrome always compose one look. Each
+         * Named starting points. These were paired 1:1 by name with the
+         * Player Glass presets; the glass roster has since been rebuilt as an
+         * iOS Liquid Glass set and no longer mirrors these names. Each
          * theme claims a distinct region of the glass / wave / beat / glow
          * space: mirror metal, etched mist, electric strobes, arctic calm,
          * supernova bloom, brutalist flat, ghost text, a one-line ticker and a

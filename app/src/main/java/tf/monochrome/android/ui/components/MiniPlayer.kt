@@ -66,6 +66,11 @@ import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.MANUAL_MORPH_MS
 import tf.monochrome.android.ui.player.MorphingCoverArt
 import tf.monochrome.android.ui.player.playerGlass
+import tf.monochrome.android.ui.player.LIVE_LENS_CHROME_BLUR_SHARE
+import tf.monochrome.android.ui.player.GlassBarShadow
+import tf.monochrome.android.ui.player.LIVE_LENS_GLASS
+import tf.monochrome.android.ui.player.liveGlassLens
+import tf.monochrome.android.ui.player.liveLensCompiles
 import tf.monochrome.android.ui.theme.glassTint
 import tf.monochrome.android.ui.theme.PressSpring
 import tf.monochrome.android.ui.theme.MonoDimens
@@ -101,6 +106,18 @@ fun MiniPlayer(
     // the length of every transition. See MorphingCoverArt.
     blendMillis: Int = MANUAL_MORPH_MS,
     userTrackChanges: Int = 0,
+    /**
+     * The glass tint, when the caller wants it to come from outside this bar's
+     * album colours. The nav host passes the tab bar's tint, computed outside
+     * DynamicColorScope, so the two bars are the same colour; the bar's text,
+     * progress and cover still follow the album.
+     */
+    glassTintColor: Color? = null,
+    /**
+     * The page colour under the live lens, from outside the album scope for the
+     * same reason as [glassTintColor]: inside it, `background` is the album's.
+     */
+    glassGround: Color? = null,
 ) {
     if (track == null) return
 
@@ -182,7 +199,7 @@ fun MiniPlayer(
     // ── Glass path (API 33+): one tunable player-glass slab with the play/skip
     // icons punched out as see-through holes, and a smooth press-bulge under the
     // pressed control — the same shader treatment as the player action dock. ──
-    val tint = glassTint(glass.tintColor)
+    val tint = glassTintColor ?: glassTint(glass.tintColor)
     // The bar lenses the cover, the way the player's transport does. It has to
     // do it differently, though: away from the player the artwork is not behind
     // the bar — the app's own content is — and a 64dp strip of a cover stretched
@@ -251,8 +268,25 @@ fun MiniPlayer(
     val bulge = if (anyPressed) bulgeAmt else barPress.amount
     val bulgeSpread = if (anyPressed) 0f else GlassPressDefaults.BULGE
 
+    // Whether the bar draws an opaque backdrop pane — the live lens or the
+    // haze blur — decided out here because the shadow needs it too: it only
+    // draws over such a pane, which covers its footprint.
+    val profile = LocalPerformanceProfile.current
+    // The same live lens as the tab bar right under it, with the same blur
+    // share, frost and tint: the two are one material and must match.
+    val liveLens = LIVE_LENS_GLASS && liveLensCompiles &&
+        hazeState != null && profile.allowHazeBlur
+    val backdropPane = liveLens ||
+        (hazeState != null && profile.allowHazeBlur && glass.hazeBlurDp > 0f)
+
+    // Unclipped, so the shadow can spill past the bar's rounded edge; the bar
+    // itself is clipped inside.
+    Box(modifier = modifier.fillMaxWidth()) {
+    if (backdropPane) {
+        GlassBarShadow(glass = glass, tint = tint, shape = RoundedCornerShape(MiniCorner))
+    }
     Box(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .onSizeChanged { barSize = it }
             .clip(RoundedCornerShape(MiniCorner))
@@ -274,8 +308,21 @@ fun MiniPlayer(
         // light themes and deepens it on dark ones. Haze's default noise
         // (0.15) is disabled: over a dark backdrop it reads as visible grain
         // rather than frost.
-        val profile = LocalPerformanceProfile.current
-        if (hazeState != null && profile.allowHazeBlur && glass.hazeBlurDp > 0f) {
+        if (liveLens && hazeState != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val isDark = MaterialTheme.colorScheme.background.luminance() <= 0.5f
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .liveGlassLens(
+                        hazeState = hazeState,
+                        corner = MiniCorner,
+                        frost = playerFrostTint(glass, isDark),
+                        glass = glass,
+                        blurShare = LIVE_LENS_CHROME_BLUR_SHARE,
+                        ground = glassGround ?: MaterialTheme.colorScheme.background,
+                    ),
+            )
+        } else if (hazeState != null && profile.allowHazeBlur && glass.hazeBlurDp > 0f) {
             val frostBg = MaterialTheme.colorScheme.background
             val isDark = frostBg.luminance() <= 0.5f
             val frostTint = playerFrostTint(glass, isDark)
@@ -306,6 +353,8 @@ fun MiniPlayer(
                     bulgeCenter = bulgeCenter,
                     bulgeAmount = { bulge },
                     bulgeRadiusFraction = bulgeSpread,
+                    lensCorner = MiniCorner,
+                    liveUnder = liveLens,
                 )
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
         ) {
@@ -369,6 +418,7 @@ fun MiniPlayer(
                     )
             )
         }
+    }
     }
 }
 

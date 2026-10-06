@@ -119,6 +119,54 @@ object WhatsNew {
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
         WhatsNewRelease(
+            versionCode = 193,
+            versionName = "1.9.3",
+            entries = listOf(
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LOOK,
+                    title = "Liquid glass",
+                    body = "The mini player, nav bar, search bars and panels bend what is behind them at their rounded edges, the way real glass does, and stay clear across the middle.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LOOK,
+                    title = "New glass themes",
+                    body = "Clear, Tinted and Tilt, after iOS, then Pure, Droplet, Prism, Bubble, Mercury, Ice, Halo, Aurora, Dusk and Holo. Clear is the new starting look; glass you tuned yourself is kept.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LOOK,
+                    title = "Shadows under the bars",
+                    body = "The nav bar and the mini player cast the same drop shadow as the play button, from the shadow depth, softness and tint in Player Visuals Studio.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "Glass play button and dock",
+                    body = "The play button and the action dock bend the album art behind them too.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LOOK,
+                    title = "One clean glass edge",
+                    body = "Glass edges catch the light as one rim at the edge, instead of a second bright line inside it that made a pane look like two layers.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LOOK,
+                    title = "Mini player matches the nav bar",
+                    body = "The mini player's glass takes the nav bar's colour rather than the album's, so the two read as one piece of glass. Its text and cover still follow the album.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "Titles from file names",
+                    body = "Settings › Library can name local songs after their files instead of their title tags, for files whose tags are wrong or shared. Renaming a file then renames the song.",
+                ),
+            ),
+        ),
+        WhatsNewRelease(
             versionCode = 192,
             versionName = "1.9.2",
             entries = listOf(

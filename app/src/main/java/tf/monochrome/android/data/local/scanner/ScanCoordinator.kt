@@ -36,6 +36,13 @@ class ScanCoordinator @Inject constructor(
     /** Runs a full scan, or returns immediately if any scan is in flight. */
     suspend fun runFullScan() = runGuarded { mediaScanner.fullScan() }
 
+    /**
+     * A full scan that waits for one already running instead of being dropped.
+     * For a change that only a full scan can apply, such as the title source:
+     * dropped, it would not show until some later scan.
+     */
+    suspend fun runFullScanAfterCurrent() = runGuarded(wait = true) { mediaScanner.fullScan() }
+
     /** Runs an incremental scan, or returns immediately if any scan is in flight. */
     suspend fun runIncrementalScan() = runGuarded { mediaScanner.incrementalScan() }
 
@@ -76,9 +83,10 @@ class ScanCoordinator @Inject constructor(
     }
 
     private suspend inline fun runGuarded(
+        wait: Boolean = false,
         scan: () -> kotlinx.coroutines.flow.Flow<ScanProgress>
     ) {
-        if (!scanMutex.tryLock()) return
+        if (wait) scanMutex.lock() else if (!scanMutex.tryLock()) return
         try {
             _isScanning.value = true
             scan().collect { progress ->

@@ -285,6 +285,11 @@ class SettingsViewModel @Inject constructor(
     fun setHiResHalOutputEnabled(enabled: Boolean) { viewModelScope.launch {
         preferences.setHiResHalOutputEnabled(enabled)
     } }
+    val ignoreAudioFocus: StateFlow<Boolean> = preferences.ignoreAudioFocus
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    fun setIgnoreAudioFocus(enabled: Boolean) { viewModelScope.launch {
+        preferences.setIgnoreAudioFocus(enabled)
+    } }
     /** Human-readable name of the attached USB DAC, or null when nothing is plugged in. */
     val usbOutputDeviceName: StateFlow<String?> =
         usbAudioRouter.usbOutputDevice
@@ -825,6 +830,17 @@ class SettingsViewModel @Inject constructor(
 
     fun setAutoDownloadLikedSongs(enabled: Boolean) {
         viewModelScope.launch { preferences.setAutoDownloadLikedSongs(enabled) }
+    }
+
+    val localTitleFromFileName: StateFlow<Boolean> = preferences.localTitleFromFileName
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    /** Titles are written by the scanner, so the switch takes effect through a full scan. */
+    fun setLocalTitleFromFileName(enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.setLocalTitleFromFileName(enabled)
+            scanCoordinator.runFullScanAfterCurrent()
+        }
     }
 
     fun rescanLibrary() {
