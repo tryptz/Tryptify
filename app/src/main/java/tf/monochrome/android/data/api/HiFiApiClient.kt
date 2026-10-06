@@ -102,6 +102,10 @@ class HiFiApiClient @Inject constructor(
         // the manifest fetch) before answering; give it longer than a search.
         private const val TIDAL_ATMOS_TIMEOUT_MS = 10_000L
 
+        // A download can wait for the server to start the Atmos build
+        // (manifest, tags, MPD); nobody is waiting on it to start playing.
+        private const val TIDAL_ATMOS_DOWNLOAD_TIMEOUT_MS = 90_000L
+
         // Playlist pages: as many tracks per request as the server allows,
         // and how many of the remaining pages are fetched at once.
         private const val PLAYLIST_PAGE_LIMIT = 500
@@ -1043,10 +1047,16 @@ class HiFiApiClient @Inject constructor(
 
     // --- Streaming ---
 
+    /**
+     * [expectAtmos]: TIDAL listed a Dolby Atmos mix for the track when it was
+     * queued (downloads only; it outlives [knownAtmos], which a restart
+     * empties).
+     */
     suspend fun getTrackStream(
         trackId: Long,
         quality: AudioQuality,
-        forDownload: Boolean = false
+        forDownload: Boolean = false,
+        expectAtmos: Boolean = false,
     ): TrackStream {
         // A Deezer id means nothing to Qobuz or TIDAL — both would answer with
         // whatever recording happens to have that number. Deezer picks are
@@ -1065,20 +1075,27 @@ class HiFiApiClient @Inject constructor(
         if (forDownload) {
             // With TIDAL Dolby Atmos on, a TIDAL track with an Atmos mix
             // downloads that mix, as it plays: the E-AC-3 JOC .m4a, untouched.
-            // A track without one, or one the server cannot serve it for,
-            // downloads its stereo tier.
+            // A track TIDAL lists as stereo only downloads its stereo tier.
+            val listedAtmos = expectAtmos || knownAtmos[trackId] == true
             if (!qobuzIdRegistry.isQobuzTrack(trackId) &&
-                knownAtmos[trackId] != false &&
+                (listedAtmos || knownAtmos[trackId] == null) &&
                 preferences.tidalAtmosPreferred.first()
             ) {
-                tidalAtmosStreamUrl(trackId)?.let { url ->
-                    return TrackStream(
+                when (val atmos = tidalAtmos(trackId, TIDAL_ATMOS_DOWNLOAD_TIMEOUT_MS)) {
+                    is AtmosAnswer.File -> return TrackStream(
                         track = Track(id = trackId, title = "", duration = 0),
-                        streamUrl = url,
+                        streamUrl = atmos.url,
                         isDash = false,
                         replayGain = ReplayGainValues(),
                         isDolbyAtmos = true,
                     )
+                    // TIDAL has an Atmos mix and Atmos was asked for: saving the
+                    // stereo FLAC in its place is not what was asked. The
+                    // download fails and says why; turning TIDAL Dolby Atmos
+                    // off is how to get the FLAC.
+                    is AtmosAnswer.Unavailable -> if (listedAtmos) {
+                        throw IllegalStateException("Dolby Atmos unavailable: ${atmos.reason}")
+                    }
                 }
             }
             val url = if (qobuzIdRegistry.isQobuzTrack(trackId)) {
@@ -1115,10 +1132,10 @@ class HiFiApiClient @Inject constructor(
         // A track TIDAL already listed without an Atmos mix goes straight to
         // stereo instead of costing a round trip to ask.
         if (!forDownload && knownAtmos[trackId] != false && preferences.tidalAtmosPreferred.first()) {
-            tidalAtmosStreamUrl(trackId)?.let { url ->
+            (tidalAtmos(trackId, TIDAL_ATMOS_TIMEOUT_MS) as? AtmosAnswer.File)?.let { atmos ->
                 return TrackStream(
                     track = Track(id = trackId, title = "", duration = 0),
-                    streamUrl = url,
+                    streamUrl = atmos.url,
                     isDash = false,
                     replayGain = ReplayGainValues()
                 )
@@ -1176,31 +1193,64 @@ class HiFiApiClient @Inject constructor(
         )
     }
 
+    /** What the TIDAL server said when asked for a track's Dolby Atmos file. */
+    private sealed interface AtmosAnswer {
+        data class File(val url: String) : AtmosAnswer
+        data class Unavailable(val reason: String) : AtmosAnswer
+    }
+
     /**
      * The TIDAL server's link to TIDAL track [trackId]'s Dolby Atmos file
-     * (GET /api/tidal/download-music?atmos=true), or null when no TIDAL server
-     * is set, it is a plain HiFi API server without that route, the track has
-     * no Atmos mix, or the call fails. Asked of the TIDAL server, never the
+     * (GET /api/tidal/download-music?atmos=true), or why there is none: no
+     * TIDAL server is set, it is a plain HiFi API server without that route,
+     * the track has no Atmos mix, the server did not answer within
+     * [timeoutMs], or the call failed. Asked of the TIDAL server, never the
      * Qobuz one: Atmos is TIDAL's stream, served by whoever serves TIDAL. The
      * link is Range-capable once assembled and streams progressively before.
+     * Every refusal is logged, so a debug log says why a track played or
+     * downloaded in stereo.
      */
-    private suspend fun tidalAtmosStreamUrl(trackId: Long): String? {
-        val instance = instanceManager.tidalInstanceOrNull() ?: return null
+    private suspend fun tidalAtmos(trackId: Long, timeoutMs: Long): AtmosAnswer {
+        val answer = tidalAtmosAnswer(trackId, timeoutMs)
+        if (answer is AtmosAnswer.Unavailable) {
+            android.util.Log.w("HiFiApiClient", "TIDAL Atmos $trackId: ${answer.reason}")
+        }
+        return answer
+    }
+
+    private suspend fun tidalAtmosAnswer(trackId: Long, timeoutMs: Long): AtmosAnswer {
+        val instance = instanceManager.tidalInstanceOrNull()
+            ?: return AtmosAnswer.Unavailable("no TIDAL server is set")
         val base = instance.url.trimEnd('/')
-        return withTimeoutOrNull(TIDAL_ATMOS_TIMEOUT_MS) {
-            runCatching {
+        return withTimeoutOrNull(timeoutMs) {
+            try {
                 val res = httpClient.get("$base/api/tidal/download-music?track_id=$trackId&atmos=true")
-                if (!res.status.isSuccess()) return@runCatching null
-                val data = json.parseToJsonElement(res.bodyAsText()) as? JsonObject ?: return@runCatching null
-                val payload = data["data"] as? JsonObject ?: return@runCatching null
+                val data = runCatching { json.parseToJsonElement(res.bodyAsText()) as? JsonObject }.getOrNull()
+                if (!res.status.isSuccess()) {
+                    // TrypT HiFi says why in {success: false, error}.
+                    val error = (data?.get("error") as? JsonPrimitive)?.contentOrNull
+                    return@withTimeoutOrNull AtmosAnswer.Unavailable(
+                        error ?: "the TIDAL server answered HTTP ${res.status.value}"
+                    )
+                }
+                val payload = data?.get("data") as? JsonObject
+                    ?: return@withTimeoutOrNull AtmosAnswer.Unavailable("the TIDAL server sent no Atmos details")
                 // Only accept a stream the instance confirms carries JOC objects.
                 val stream = payload["stream"] as? JsonObject
                 val joc = (stream?.get("extensionType") as? JsonPrimitive)?.contentOrNull
-                if (joc != null && !joc.equals("JOC", ignoreCase = true)) return@runCatching null
+                if (joc != null && !joc.equals("JOC", ignoreCase = true)) {
+                    return@withTimeoutOrNull AtmosAnswer.Unavailable("the stream is E-AC-3 $joc, not Dolby Atmos (JOC)")
+                }
                 (payload["url"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
-                    ?.let { absoluteUrl(it, base) }
-            }.getOrNull()
-        }
+                    ?.let { AtmosAnswer.File(absoluteUrl(it, base)) }
+                    ?: AtmosAnswer.Unavailable("the TIDAL server sent no link")
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // The timeout below, or the caller cancelling: never swallowed.
+                throw e
+            } catch (e: Exception) {
+                AtmosAnswer.Unavailable(e.message ?: e.javaClass.simpleName)
+            }
+        } ?: AtmosAnswer.Unavailable("the TIDAL server did not answer within ${timeoutMs / 1000} s")
     }
 
     // --- Recommendations ---

@@ -35,6 +35,15 @@ class AlbumDetailViewModel @Inject constructor(
     private val _error = MutableStateFlow<tf.monochrome.android.ui.components.UiText?>(null)
     val error: StateFlow<tf.monochrome.android.ui.components.UiText?> = _error.asStateFlow()
 
+    private val _source = kotlinx.coroutines.flow.MutableStateFlow<tf.monochrome.android.domain.model.SourceType?>(null)
+
+    /** The catalog this album was loaded from, for its source tag. */
+    val source: kotlinx.coroutines.flow.StateFlow<tf.monochrome.android.domain.model.SourceType?> = _source
+
+    // Last: Kotlin runs initializers top to bottom, and loadAlbum's coroutine
+    // starts at once (Main.immediate). An album already cached never suspends,
+    // so it writes every flow above before the constructor returns; a flow
+    // declared below this block would still be null then.
     init {
         loadAlbum()
     }
@@ -45,11 +54,6 @@ class AlbumDetailViewModel @Inject constructor(
      * Every branch surfaces a clean error string instead of crashing on HTML
      * responses, because the repository methods return Result.
      */
-    private val _source = kotlinx.coroutines.flow.MutableStateFlow<tf.monochrome.android.domain.model.SourceType?>(null)
-
-    /** The catalog this album was loaded from, for its source tag. */
-    val source: kotlinx.coroutines.flow.StateFlow<tf.monochrome.android.domain.model.SourceType?> = _source
-
     private fun loadAlbum() {
         viewModelScope.launch {
             _isLoading.value = true

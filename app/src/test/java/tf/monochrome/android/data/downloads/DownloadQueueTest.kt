@@ -131,6 +131,17 @@ class DownloadQueueTest {
     }
 
     @Test
+    fun `a permanent failure keeps its reason until it is retried`() {
+        val q = queue()
+        q.enqueue(listOf(item(1)))
+        q.takeNext(1)
+        q.fail(1, retryable = false, reason = "Dolby Atmos unavailable: no TIDAL server is set")
+        assertEquals("Dolby Atmos unavailable: no TIDAL server is set", q.entries.value.single().error)
+        q.retry(1)
+        assertEquals(null, q.entries.value.single().error)
+    }
+
+    @Test
     fun `re-requesting a track already queued does not duplicate it`() {
         val q = queue()
         q.enqueue(listOf(item(1), item(2)))

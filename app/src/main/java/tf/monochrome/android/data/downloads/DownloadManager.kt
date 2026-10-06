@@ -38,6 +38,8 @@ data class ActiveDownload(
     val status: DownloadStatus,
     val progress: Float,
     val isThxSpatialAudio: Boolean = false,
+    /** Why a FAILED download failed, when known. */
+    val error: String? = null,
 )
 
 /**
@@ -162,6 +164,7 @@ class DownloadManager @Inject constructor(
                         status = entry.status,
                         progress = entry.progress,
                         isThxSpatialAudio = entry.item.isThxSpatialAudio,
+                        error = entry.error,
                     )
                 }
                 .sortedWith(

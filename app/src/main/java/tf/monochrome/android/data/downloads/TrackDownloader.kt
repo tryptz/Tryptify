@@ -69,12 +69,18 @@ class TrackDownloader @Inject constructor(
 
     /**
      * Runs one download to completion, reporting 0..1 through [onProgress].
+     * A PERMANENT failure the track's service explained is passed to
+     * [onFailure], for the Download Center to show.
      *
      * Cancellation propagates as it would anywhere else — the caller's scope
      * cancelling mid-transfer throws out of the read loop and the temp file is
      * cleaned up in the finally below.
      */
-    suspend fun download(item: DownloadItem, onProgress: (Float) -> Unit): Outcome {
+    suspend fun download(
+        item: DownloadItem,
+        onFailure: (String) -> Unit = {},
+        onProgress: (Float) -> Unit,
+    ): Outcome {
         val trackId = item.trackId
         val trackTitle = item.title
         val artistName = item.artistName
@@ -146,9 +152,10 @@ class TrackDownloader @Inject constructor(
                 // different master or version than the one chosen — so if its
                 // own service can't serve it, the download fails and says so.
                 val stream = runCatching {
-                    apiClient.getTrackStream(trackId, quality, forDownload = true)
+                    apiClient.getTrackStream(trackId, quality, forDownload = true, expectAtmos = item.isDolbyAtmos)
                 }.getOrElse { e ->
                     Log.w(TAG, "${service.label} could not serve \"$trackTitle\" (id=$trackId, q=$quality): ${e.message} - not falling back to another catalog")
+                    e.message?.let(onFailure)
                     return Outcome.PERMANENT
                 }
                 isAtmosDownload = stream.isDolbyAtmos
