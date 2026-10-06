@@ -1096,6 +1096,7 @@
     <string name="fx_smooths_jagged_edges_on_the_3d_letters_and_glass">3D 文字とガラスのギザギザした縁をなめらかにします（Android 13 以降が必要）。</string>
     <string name="fx_how_hard_edges_are_smoothed_higher_softens_more">縁をどれだけ強くなめらかにするか。高いほど柔らかくなります。</string>
     <string name="fx_preview">プレビュー</string>
+    <string name="fx_preview_drag_hint">プレビュー · ページをドラッグしてガラスの下で動かせます</string>
     <string name="fx_background">背景</string>
     <string name="fx_button_tint">ボタンの色合い</string>
     <string name="fx_3d_refractive_glass_on_the_transport_buttons">再生ボタンに 3D の屈折ガラスを適用します（Android 13 以降が必要）。</string>
@@ -1168,8 +1169,6 @@
     <string name="fx_anti_aliasing">アンチエイリアス</string>
     <string name="fx_aa_strength">AA の強さ</string>
     <string name="fx_reset_to_defaults">既定に戻す</string>
-    <string name="fx_audio_tools">オーディオツール</string>
-    <string name="fx_sheets_panels_and_search_bars_all_wear_this_pane">シート、パネル、検索バーはすべてこのガラスをまといます。</string>
     <string name="fx_themes">テーマ</string>
     <string name="fx_glass_body">ガラスの本体</string>
     <string name="fx_frosted_blur">すりガラスのぼかし</string>
