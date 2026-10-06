@@ -156,7 +156,9 @@ data class DownloadedTrackEntity(
     // Raw Qobuz release version string (e.g. "THX Spatial Audio version").
     val version: String? = null,
     // THX Spatial Audio release — survives offline so the badge persists.
-    val isThxSpatialAudio: Boolean = false
+    val isThxSpatialAudio: Boolean = false,
+    // TIDAL's Dolby Atmos mix (E-AC-3 JOC) is what was downloaded, not stereo.
+    val isDolbyAtmos: Boolean = false
 )
 
 @Entity(

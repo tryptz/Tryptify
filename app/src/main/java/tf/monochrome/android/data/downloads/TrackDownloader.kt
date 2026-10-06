@@ -114,6 +114,8 @@ class TrackDownloader @Inject constructor(
             // Wrapper URL is configured, else from the cloud
             // /api/apple/download-music. Deezer, Qobuz and TIDAL each use their
             // own server's download route.
+            // Set when TIDAL's Dolby Atmos mix is what downloads (TIDAL Dolby Atmos on).
+            var isAtmosDownload = false
             val streamUrl = if (deezerId != null) {
                 // A Deezer pick downloads from Deezer, the same way a Qobuz
                 // pick downloads from Qobuz: /api/deezer/download in the
@@ -143,12 +145,14 @@ class TrackDownloader @Inject constructor(
                 // title-and-artist match in another catalogue can be a
                 // different master or version than the one chosen — so if its
                 // own service can't serve it, the download fails and says so.
-                runCatching {
-                    apiClient.getTrackStream(trackId, quality, forDownload = true).streamUrl
+                val stream = runCatching {
+                    apiClient.getTrackStream(trackId, quality, forDownload = true)
                 }.getOrElse { e ->
                     Log.w(TAG, "${service.label} could not serve \"$trackTitle\" (id=$trackId, q=$quality): ${e.message} - not falling back to another catalog")
                     return Outcome.PERMANENT
                 }
+                isAtmosDownload = stream.isDolbyAtmos
+                stream.streamUrl
             }
 
             // Stream the audio into a temp FILE with progress. Never hold the
@@ -207,11 +211,13 @@ class TrackDownloader @Inject constructor(
             val customFolderUri = preferences.downloadFolderUri.first()
             // Apple delivers an MP4/M4A container (ALAC/AAC/EC-3 Atmos) and is
             // left untagged: an Atmos file must reach players byte-for-byte.
-            // Everything else is sniffed — TIDAL's lossy tiers are AAC in MP4,
-            // Qobuz's and Deezer's MP3, lossless is FLAC.
+            // TIDAL's Atmos mix is an E-AC-3 JOC .m4a that TrypT HiFi has
+            // already tagged in its header. Everything else is sniffed —
+            // TIDAL's lossy tiers are AAC in MP4, Qobuz's and Deezer's MP3,
+            // lossless is FLAC.
             val actualQuality: AudioQuality
             val format: DownloadFormat
-            if (isApple) {
+            if (isApple || isAtmosDownload) {
                 actualQuality = quality
                 format = DownloadFormat.M4A
             } else {
@@ -236,7 +242,8 @@ class TrackDownloader @Inject constructor(
             // the temp file (JAudioTagger is file-based): in place for FLAC, on
             // a copy for .m4a (see tagAudioFile). Best-effort: a tagging
             // failure never fails the download (the bytes are good).
-            if (!isApple && format != DownloadFormat.MP3) {
+            if (format == DownloadFormat.FLAC) repairFlacHeader(tempAudio, trackTitle)
+            if (!isApple && !isAtmosDownload && format != DownloadFormat.MP3) {
                 tagAudioFile(
                     file = tempAudio,
                     format = format,
@@ -375,7 +382,8 @@ class TrackDownloader @Inject constructor(
                     sizeBytes = audioSizeBytes,
                     downloadedAt = System.currentTimeMillis(),
                     version = version,
-                    isThxSpatialAudio = isThxSpatialAudio
+                    isThxSpatialAudio = isThxSpatialAudio,
+                    isDolbyAtmos = isAtmosDownload,
                 )
             )
             // A new file is on disk — let the player stop streaming this song.
@@ -532,6 +540,25 @@ class TrackDownloader @Inject constructor(
                 null,
             )
         }
+    }
+
+    /**
+     * Marks a FLAC's last metadata block as last when it is not (see
+     * [FlacMetadata]), so JAudioTagger can tag the file. One header bit, in
+     * place; best-effort like the tagging it is for.
+     */
+    private fun repairFlacHeader(file: File, title: String) {
+        runCatching {
+            java.io.RandomAccessFile(file, "rw").use { raf ->
+                val head = ByteArray(minOf(raf.length(), 65_536L).toInt())
+                raf.readFully(head)
+                FlacMetadata.unmarkedLastBlock(head)?.let { at ->
+                    raf.seek(at.toLong())
+                    raf.write(head[at].toInt() or 0x80)
+                    Log.i(TAG, "tag: marked the last FLAC metadata block of \"$title\"")
+                }
+            }
+        }.onFailure { Log.w(TAG, "tag: FLAC header check failed for \"$title\": ${it.message}") }
     }
 
     /**

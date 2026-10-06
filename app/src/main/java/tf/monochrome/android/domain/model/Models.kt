@@ -197,7 +197,9 @@ data class TrackStream(
     val track: Track,
     val streamUrl: String,
     val isDash: Boolean = false,
-    val replayGain: ReplayGainValues? = null
+    val replayGain: ReplayGainValues? = null,
+    /** The track's Dolby Atmos mix (E-AC-3 JOC), not its stereo stream. */
+    val isDolbyAtmos: Boolean = false,
 )
 
 data class ReplayGainValues(

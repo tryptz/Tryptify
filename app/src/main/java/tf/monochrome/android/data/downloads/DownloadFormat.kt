@@ -35,3 +35,40 @@ enum class DownloadFormat(val extension: String, val mimeType: String) {
             size >= magic.length && copyOfRange(0, magic.length).contentEquals(magic.toByteArray())
     }
 }
+
+/**
+ * FLAC metadata repair that tag writers need.
+ *
+ * The last metadata block of a FLAC file says so in the top bit of its
+ * header. A file whose last block leaves it off still decodes — players find
+ * the first audio frame by its sync code — but JAudioTagger reads that frame,
+ * 0xFF..., as one more block of "type 127" and refuses the file, so the
+ * download stays untagged and the library files it under "Unknown Album".
+ * TrypT HiFi's DASH-to-FLAC remux could produce exactly that.
+ *
+ * Kept free of Android types so it can be unit tested.
+ */
+object FlacMetadata {
+    /**
+     * The offset of the header byte of the metadata block that should be
+     * marked last but is not: the block straight after which [head] (a FLAC
+     * file's first bytes) reaches audio. Null when the file is fine, is not
+     * FLAC, or [head] ends before the audio can be seen.
+     */
+    fun unmarkedLastBlock(head: ByteArray): Int? {
+        if (head.size < 8 || !head.copyOfRange(0, 4).contentEquals("fLaC".toByteArray())) return null
+        var at = 4
+        while (at + 4 <= head.size) {
+            if (head[at].toInt() and 0x80 != 0) return null
+            val length = ((head[at + 1].toInt() and 0xFF) shl 16) or
+                ((head[at + 2].toInt() and 0xFF) shl 8) or
+                (head[at + 3].toInt() and 0xFF)
+            val next = at + 4 + length
+            if (next + 2 > head.size) return null
+            // A FLAC frame starts with the 14-bit sync code 11111111 111110xx.
+            if (head[next].toInt() and 0xFF == 0xFF && head[next + 1].toInt() and 0xFE == 0xF8) return at
+            at = next
+        }
+        return null
+    }
+}

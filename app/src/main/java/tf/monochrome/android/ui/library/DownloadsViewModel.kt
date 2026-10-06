@@ -274,10 +274,12 @@ class DownloadsViewModel @Inject constructor(
 // label; ExoPlayer sniffs the actual container so these are advisory.
 fun DownloadedTrackEntity.toUnifiedTrack(): UnifiedTrack {
     val quality = runCatching { AudioQuality.valueOf(quality) }.getOrDefault(AudioQuality.LOSSLESS)
-    val (codec, sampleRate, bitDepth) = when (quality) {
-        AudioQuality.HI_RES -> Triple(AudioCodec.FLAC, 96_000, 24)
-        AudioQuality.LOSSLESS -> Triple(AudioCodec.FLAC, 44_100, 16)
-        AudioQuality.HIGH, AudioQuality.LOW -> Triple(AudioCodec.MP3, 44_100, null)
+    val (codec, sampleRate, bitDepth) = when {
+        // TIDAL's Atmos mix: E-AC-3 JOC at 48 kHz, whatever tier was asked for.
+        isDolbyAtmos -> Triple(AudioCodec.EAC3, 48_000, null)
+        quality == AudioQuality.HI_RES -> Triple(AudioCodec.FLAC, 96_000, 24)
+        quality == AudioQuality.LOSSLESS -> Triple(AudioCodec.FLAC, 44_100, 16)
+        else -> Triple(AudioCodec.MP3, 44_100, null)
     }
     return UnifiedTrack(
         id = "download_$id",
@@ -296,5 +298,6 @@ fun DownloadedTrackEntity.toUnifiedTrack(): UnifiedTrack {
             bitDepth = bitDepth,
         ),
         sourceType = SourceType.LOCAL,
+        isDolbyAtmos = isDolbyAtmos,
     )
 }

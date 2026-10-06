@@ -1063,6 +1063,24 @@ class HiFiApiClient @Inject constructor(
         // TIDAL server. Never the other one — a TIDAL id on Qobuz names some
         // other recording, which would be saved under this track's tags.
         if (forDownload) {
+            // With TIDAL Dolby Atmos on, a TIDAL track with an Atmos mix
+            // downloads that mix, as it plays: the E-AC-3 JOC .m4a, untouched.
+            // A track without one, or one the server cannot serve it for,
+            // downloads its stereo tier.
+            if (!qobuzIdRegistry.isQobuzTrack(trackId) &&
+                knownAtmos[trackId] != false &&
+                preferences.tidalAtmosPreferred.first()
+            ) {
+                tidalAtmosStreamUrl(trackId)?.let { url ->
+                    return TrackStream(
+                        track = Track(id = trackId, title = "", duration = 0),
+                        streamUrl = url,
+                        isDash = false,
+                        replayGain = ReplayGainValues(),
+                        isDolbyAtmos = true,
+                    )
+                }
+            }
             val url = if (qobuzIdRegistry.isQobuzTrack(trackId)) {
                 runCatching { resolveQobuzDownloadUrl(trackId, quality) }.getOrNull()
                     ?: throw IllegalStateException("Qobuz could not serve track $trackId")

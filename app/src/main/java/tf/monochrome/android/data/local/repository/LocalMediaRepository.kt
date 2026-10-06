@@ -283,6 +283,9 @@ class LocalMediaRepository @Inject constructor(
                 bitRate = bitRate,
                 channelCount = channels,
                 isThxSpatialAudio = isThxSpatialAudio,
+                // The scanner's Atmos detection (TagReader), which never
+                // reached a row until now.
+                isDolbyAtmos = isDolbyAtmos,
                 replayGainTrack = rgTrackGain,
                 replayGainAlbum = rgAlbumGain,
                 r128TrackGain = r128TrackGain,

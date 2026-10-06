@@ -331,13 +331,21 @@ private fun DownloadedTrackRow(
         )
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = track.title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = track.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                // TIDAL's Atmos mix is what was downloaded.
+                if (track.isDolbyAtmos) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    tf.monochrome.android.ui.components.DolbyAtmosBadgePill()
+                }
+            }
             val sizeText = android.text.format.Formatter.formatShortFileSize(LocalContext.current, track.sizeBytes)
             Text(
                 text = "${track.artistName} • $sizeText",

@@ -815,6 +815,10 @@ private fun SongRow(
                     )
                     Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
                     tf.monochrome.android.ui.components.SourcePill(track.sourceType)
+                    if (track.isDolbyAtmos) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        tf.monochrome.android.ui.components.DolbyAtmosBadgePill()
+                    }
                     track.qualityBadge?.let { badge ->
                         Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
                         Text(
