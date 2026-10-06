@@ -166,7 +166,7 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
         .at(SettingsDestination.Route("crossfeed")),
     entry("Mixer", R.string.status_mixer, "Audio", listOf("dsp", "bus", "plugin", "insert", "channel"))
         .at(SettingsDestination.Route("mixer")),
-    entry("Streaming quality", R.string.settings_streaming_quality, "Audio", listOf("bitrate", "wifi", "cellular", "data")),
+    entry("Streaming quality", R.string.settings_streaming_quality, "Audio", listOf("bitrate", "wifi", "cellular", "data", "tidal", "qobuz", "deezer", "aac", "mp3", "flac", "hi-res")),
     entry("Preserve Pitch", R.string.settings_preserve_pitch, "Audio", listOf("speed", "tempo", "key", "chipmunk", "semitone")),
     entry("Never Resample Between Tracks", R.string.settings_never_resample_between_tracks, "Audio", listOf("sample rate", "gap", "dac", "bit perfect")),
     entry("USB DAC bit-perfect routing", R.string.settings_usb_dac_bit_perfect_routing, "Audio", listOf("usb", "dac", "exclusive", "bit perfect", "output")),
@@ -204,7 +204,7 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     entry("Local folders", R.string.settings_local_media_scanning, "Library", listOf("storage", "saf", "sd card", "path")),
 
     // ── Downloads ───────────────────────────────────────────────────────
-    entry("Download quality", R.string.settings_download_quality, "Downloads", listOf("bitrate", "flac", "offline")),
+    entry("Download quality", R.string.settings_download_quality, "Downloads", listOf("bitrate", "flac", "offline", "tidal", "qobuz", "deezer", "aac", "mp3", "hi-res")),
     entry("Download lyrics", R.string.settings_download_lyrics, "Downloads", listOf("offline", "synced")),
     entry("Auto-download liked", R.string.settings_auto_download_liked_songs, "Downloads", listOf("offline", "favourites", "hearted")),
     entry("Download centre", R.string.search_download_centre, "Downloads", listOf("queue", "progress", "offline"))

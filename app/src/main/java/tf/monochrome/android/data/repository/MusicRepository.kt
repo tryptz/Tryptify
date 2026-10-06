@@ -8,7 +8,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
+import tf.monochrome.android.data.api.ApiService
 import tf.monochrome.android.data.api.HiFiApiClient
+import tf.monochrome.android.data.api.ServiceQuality
 import tf.monochrome.android.data.api.KugouLyricsClient
 import tf.monochrome.android.data.api.LrcLibClient
 import tf.monochrome.android.data.api.NetEaseLyricsClient
@@ -142,9 +144,9 @@ class MusicRepository @Inject constructor(
 
     // --- Streaming ---
 
+    /** A TIDAL track's stream, in TIDAL's streaming quality for the network in use. */
     suspend fun getTrackStream(trackId: Long): Result<TrackStream> = runCatching {
-        val quality = getEffectiveQuality()
-        apiClient.getTrackStream(trackId, quality)
+        apiClient.getTrackStream(trackId, streamQuality(ApiService.TIDAL))
     }
 
     suspend fun getTrackStream(trackId: Long, quality: AudioQuality): Result<TrackStream> = runCatching {
@@ -242,12 +244,13 @@ class MusicRepository @Inject constructor(
 
     // --- Quality ---
 
-    private suspend fun getEffectiveQuality(): AudioQuality {
-        return if (isOnWifi()) {
-            preferences.wifiQuality.first()
-        } else {
-            preferences.cellularQuality.first()
-        }
+    /**
+     * [service]'s streaming quality for the network in use: its Wi-Fi setting
+     * on Wi-Fi, its cellular one otherwise. Each service has its own pair.
+     */
+    suspend fun streamQuality(service: ApiService): AudioQuality {
+        val setting = if (isOnWifi()) ServiceQuality.Setting.WIFI else ServiceQuality.Setting.CELLULAR
+        return preferences.quality(service, setting).first()
     }
 
     private fun isOnWifi(): Boolean {

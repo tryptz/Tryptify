@@ -95,11 +95,6 @@ class HiFiApiClient @Inject constructor(
         // wait-for-all-children semantics.
         private const val QOBUZ_REQUEST_TIMEOUT_MS = 6_000L
 
-        // Minimum confidence to accept an Apple cross-catalog match. Sits above
-        // a title-only agreement (60) so the artist or the duration must also
-        // line up before a track is bridged to a different catalog's id.
-        private const val APPLE_MATCH_MIN_SCORE = 70
-
         // TrypT HiFi checks the Atmos manifest (one HiFi API round trip plus
         // the manifest fetch) before answering; give it longer than a search.
         private const val TIDAL_ATMOS_TIMEOUT_MS = 10_000L
@@ -685,107 +680,6 @@ class HiFiApiClient @Inject constructor(
         return absoluteUrl(raw, base)
     }
 
-    /**
-     * Find the Apple Music adamId for a recording the app knows by metadata,
-     * so a Qobuz/TIDAL/local track can be pulled from the Apple wrapper.
-     *
-     * Matching is by title + artist, not ISRC: the instance's Apple layer
-     * indexes text only (an ISRC query returns zero results), so the query is
-     * "<title> <artist>" and candidates are then scored. Duration is the
-     * tie-breaker that separates the original from covers and edits.
-     *
-     * The result (including "no match") is cached in [QobuzIdRegistry] so this
-     * costs one round trip per track, ever. Returns null when Apple isn't
-     * configured, nothing matches confidently, or the request fails.
-     */
-    suspend fun findAppleIdFor(
-        trackId: Long,
-        title: String,
-        artist: String,
-        durationSeconds: Int = 0,
-    ): Long? {
-        qobuzIdRegistry.appleIdFor(trackId)?.let { return it }
-        if (qobuzIdRegistry.hasAppleLookup(trackId)) return null
-        if (title.isBlank()) return null
-
-        val instance = instanceManager.appleInstanceOrNull() ?: return null
-        val base = instance.url.trimEnd('/')
-        // offset is required by /api/apple/get-music — omitting it is a 400.
-        val query = listOf(title, artist).filter { it.isNotBlank() }.joinToString(" ")
-        val envelope = withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
-            runCatching {
-                val res = httpClient.get(
-                    "$base/api/apple/get-music?q=${query.encodeUrl()}&offset=0"
-                )
-                if (!res.status.isSuccess()) return@runCatching null
-                json.decodeFromString<QobuzSearchEnvelope>(res.bodyAsText())
-            }.getOrNull()
-        }
-
-        val items = envelope?.data?.tracks?.items.orEmpty()
-        val best = items
-            .mapNotNull { item ->
-                val id = item.id ?: return@mapNotNull null
-                val score = appleMatchScore(item, title, artist, durationSeconds)
-                if (score < APPLE_MATCH_MIN_SCORE) null else id to score
-            }
-            .maxByOrNull { it.second }
-            ?.first
-
-        if (best == null) {
-            qobuzIdRegistry.markNoAppleMatch(trackId)
-            return null
-        }
-        qobuzIdRegistry.registerAppleIdFor(trackId, best)
-        return best
-    }
-
-    /**
-     * Confidence that [item] is the same recording as the given metadata.
-     * Title carries the most weight, artist next, duration is a bonus — a
-     * title-only agreement is deliberately below [APPLE_MATCH_MIN_SCORE] so a
-     * generic name like "Intro" can't match the wrong song on its own.
-     */
-    private fun appleMatchScore(
-        item: QobuzTrackItem,
-        title: String,
-        artist: String,
-        durationSeconds: Int,
-    ): Int {
-        val wantTitle = normalizeForMatch(title)
-        val gotTitle = normalizeForMatch(item.title)
-        if (wantTitle.isBlank() || gotTitle.isBlank()) return 0
-
-        var score = when {
-            gotTitle == wantTitle -> 60
-            gotTitle.startsWith(wantTitle) || wantTitle.startsWith(gotTitle) -> 40
-            gotTitle.contains(wantTitle) || wantTitle.contains(gotTitle) -> 25
-            else -> return 0
-        }
-
-        val wantArtist = normalizeForMatch(artist)
-        val gotArtist = normalizeForMatch(item.performer?.name ?: item.album?.artist?.name ?: "")
-        if (wantArtist.isNotBlank() && gotArtist.isNotBlank()) {
-            score += when {
-                gotArtist == wantArtist -> 40
-                gotArtist.contains(wantArtist) || wantArtist.contains(gotArtist) -> 28
-                else -> 0
-            }
-        }
-
-        val gotDuration = item.duration ?: 0
-        if (durationSeconds > 0 && gotDuration > 0) {
-            val delta = kotlin.math.abs(gotDuration - durationSeconds)
-            score += when {
-                delta <= 2 -> 20
-                delta <= 5 -> 10
-                delta > 30 -> -30
-                else -> 0
-            }
-        }
-        return score
-    }
-
     /** Lowercase, strip bracketed suffixes and punctuation, collapse whitespace. */
     private fun normalizeForMatch(raw: String): String =
         raw.lowercase()
@@ -1132,11 +1026,6 @@ class HiFiApiClient @Inject constructor(
         quality: AudioQuality,
         forDownload: Boolean = false
     ): TrackStream {
-        // Downloads route through the project-private trypt-hifi (Qobuz) API
-        // when configured. The frontend's network trace shows the real call
-        // is GET /api/download-music?track_id=<id>&quality=<qobuz_code>, which
-        // returns a JSON envelope containing a short-lived HMAC-signed
-        // /api/file?... URL we then stream the bytes from.
         // A Deezer id means nothing to Qobuz or TIDAL — both would answer with
         // whatever recording happens to have that number. Deezer picks are
         // served by /api/deezer/download (getDeezerDownloadUrl) and never get
@@ -1147,18 +1036,23 @@ class HiFiApiClient @Inject constructor(
             )
         }
 
+        // Each catalogue downloads from its own server and nowhere else: a
+        // Qobuz id from the Qobuz server, any other id (a TIDAL one) from the
+        // TIDAL server. Never the other one — a TIDAL id on Qobuz names some
+        // other recording, which would be saved under this track's tags.
         if (forDownload) {
-            val qobuzUrl = runCatching { resolveQobuzDownloadUrl(trackId, quality) }.getOrNull()
-            if (qobuzUrl != null) {
-                return TrackStream(
-                    track = Track(id = trackId, title = "", duration = 0),
-                    streamUrl = qobuzUrl,
-                    isDash = false,
-                    replayGain = ReplayGainValues()
-                )
+            val url = if (qobuzIdRegistry.isQobuzTrack(trackId)) {
+                runCatching { resolveQobuzDownloadUrl(trackId, quality) }.getOrNull()
+                    ?: throw IllegalStateException("Qobuz could not serve track $trackId")
+            } else {
+                resolveTidalDownloadUrl(trackId, quality)
             }
-            // Qobuz unset or upstream returned nothing. Falling through to
-            // TIDAL is only valid for a TIDAL id — see the check below.
+            return TrackStream(
+                track = Track(id = trackId, title = "", duration = 0),
+                streamUrl = url,
+                isDash = false,
+                replayGain = ReplayGainValues()
+            )
         }
 
         // Qobuz ids are not TIDAL ids. Querying /track/ with one either 404s or
@@ -1241,13 +1135,15 @@ class HiFiApiClient @Inject constructor(
     }
 
     /**
-     * The TrypT HiFi instance's link to TIDAL track [trackId]'s Dolby Atmos
-     * file (GET /api/tidal/download-music?atmos=true), or null when the
-     * instance is unset, the track has no Atmos mix, or the call fails. The
+     * The TIDAL server's link to TIDAL track [trackId]'s Dolby Atmos file
+     * (GET /api/tidal/download-music?atmos=true), or null when no TIDAL server
+     * is set, it is a plain HiFi API server without that route, the track has
+     * no Atmos mix, or the call fails. Asked of the TIDAL server, never the
+     * Qobuz one: Atmos is TIDAL's stream, served by whoever serves TIDAL. The
      * link is Range-capable once assembled and streams progressively before.
      */
     private suspend fun tidalAtmosStreamUrl(trackId: Long): String? {
-        val instance = instanceManager.qobuzInstanceOrNull() ?: return null
+        val instance = instanceManager.tidalInstanceOrNull() ?: return null
         val base = instance.url.trimEnd('/')
         return withTimeoutOrNull(TIDAL_ATMOS_TIMEOUT_MS) {
             runCatching {
@@ -1488,6 +1384,51 @@ class HiFiApiClient @Inject constructor(
                 resolveQobuzDownloadUrl(trackId, AudioQuality.LOSSLESS)
             } else null
     }
+
+    /**
+     * A TIDAL track as one whole file to download, from the TIDAL server only.
+     *
+     * A TrypT HiFi server answers GET /api/tidal/download-music (the same
+     * quality codes as Qobuz's route) with a link to a single file, and
+     * assembles it server-side when TIDAL delivers the track as DASH segments
+     * — which, logged in with an account's own credentials, it does for every
+     * quality. A plain HiFi API server has no such route (404), so its /track/
+     * manifest is used instead: fine when it names one file, but a DASH
+     * manifest is not a file, and is reported rather than passed on as a URL.
+     */
+    private suspend fun resolveTidalDownloadUrl(trackId: Long, quality: AudioQuality): String {
+        val instance = instanceManager.tidalInstanceOrNull() ?: throw NoInstancesConfiguredException()
+        val base = instance.url.trimEnd('/')
+        val res = httpClient.get("$base/api/tidal/download-music?track_id=$trackId&quality=${quality.qobuzCode()}")
+        val body = res.bodyAsText()
+        if (res.status.isSuccess()) {
+            extractQobuzFileUrlFromEnvelope(body, base)?.let { return it }
+        }
+        if (res.status.value != 404) {
+            throw Exception("TIDAL could not serve track $trackId: ${envelopeError(body) ?: "HTTP ${res.status.value}"}")
+        }
+        return tidalManifestFileUrl(trackId, quality)
+    }
+
+    /** The one file a HiFi API /track/ manifest names, for [resolveTidalDownloadUrl]. */
+    private suspend fun tidalManifestFileUrl(trackId: Long, quality: AudioQuality): String {
+        val body = fetchWithRetry("/track/?id=$trackId&quality=${quality.apiValue}", instanceType = InstanceType.STREAMING)
+        val manifest = json.decodeFromString<TrackStreamResponse>(unwrapResponse(body)).manifest
+        val url = extractStreamUrlFromManifest(manifest)
+        return when {
+            url == null && quality == AudioQuality.HI_RES -> tidalManifestFileUrl(trackId, AudioQuality.LOSSLESS)
+            url == null -> throw Exception("TIDAL sent no stream for track $trackId")
+            url.contains("<MPD") -> throw Exception(
+                "TIDAL sent track $trackId as DASH segments; only a TrypT HiFi server can download those as a file"
+            )
+            else -> url
+        }
+    }
+
+    /** The `error` a TrypT HiFi {success:false, error} body carries, if it is a string. */
+    private fun envelopeError(body: String): String? = runCatching {
+        (json.parseToJsonElement(body) as? JsonObject)?.get("error")?.jsonPrimitive?.contentOrNull
+    }.getOrNull()?.takeIf { it.isNotBlank() }
 
     private fun extractQobuzFileUrlFromEnvelope(body: String, base: String): String? {
         val parsed = runCatching { json.decodeFromString<QobuzDownloadEnvelope>(body) }.getOrNull()

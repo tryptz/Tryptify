@@ -15,9 +15,11 @@ import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.readBytes
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readAvailable
+import tf.monochrome.android.data.api.ApiService
 import tf.monochrome.android.data.api.HiFiApiClient
 import tf.monochrome.android.data.db.dao.DownloadDao
 import tf.monochrome.android.data.db.entity.DownloadedTrackEntity
+import tf.monochrome.android.data.preferences.AppleQuality
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.buildCoverUrl
@@ -86,19 +88,27 @@ class TrackDownloader @Inject constructor(
             ?: trackId.takeIf { qobuzIdRegistry.isDeezerTrack(it) && !qobuzIdRegistry.isQobuzTrack(it) }
 
         return try {
-            // Get download quality preference
-            val quality = preferences.downloadQuality.first()
+            // Each service downloads in its own quality setting. Apple's ladder
+            // is its own (getAppleStreamUrl reads appleQuality), so its tier is
+            // only what gets recorded.
+            val service = when {
+                deezerId != null -> ApiService.DEEZER
+                isApple -> ApiService.APPLE
+                qobuzIdRegistry.isQobuzTrack(trackId) -> ApiService.QOBUZ
+                else -> ApiService.TIDAL
+            }
+            val quality = if (service == ApiService.APPLE) {
+                appleTier(preferences.appleQuality.first())
+            } else {
+                preferences.downloadQuality(service).first()
+            }
 
-            // Resolve the download URL. Apple tracks go through getAppleStreamUrl,
-            // which streams straight from the home wrapper/agent over Tailscale when
-            // an Apple Wrapper URL is configured, else falls back to the cloud
-            // /api/apple/download-music. Everything else uses the Qobuz instance.
-            // Apple first when the track carries an Apple identity. Otherwise
-            // try the native (Qobuz/TIDAL) path, and if that yields nothing,
-            // bridge to Apple by metadata — a track whose catalog id is a
-            // synthetic hash has no usable native id, but the same recording is
-            // almost always in the Apple catalog and the wrapper can decrypt it.
-            var usedApple = isApple
+            // Resolve the download URL from the track's own service, and only
+            // that one. Apple tracks go through getAppleStreamUrl, which streams
+            // straight from the home wrapper/agent over Tailscale when an Apple
+            // Wrapper URL is configured, else from the cloud
+            // /api/apple/download-music. Deezer, Qobuz and TIDAL each use their
+            // own server's download route.
             val streamUrl = if (deezerId != null) {
                 // A Deezer pick downloads from Deezer, the same way a Qobuz
                 // pick downloads from Qobuz: /api/deezer/download in the
@@ -122,35 +132,17 @@ class TrackDownloader @Inject constructor(
                     return Outcome.PERMANENT
                 }
             } else {
-                val native = runCatching {
+                // A Qobuz or TIDAL pick downloads from its own catalogue only:
+                // getTrackStream sends a Qobuz id to the Qobuz server and any
+                // other id to the TIDAL server. Nothing stands in for it — a
+                // title-and-artist match in another catalogue can be a
+                // different master or version than the one chosen — so if its
+                // own service can't serve it, the download fails and says so.
+                runCatching {
                     apiClient.getTrackStream(trackId, quality, forDownload = true).streamUrl
-                }.getOrNull()
-                native ?: run {
-                    // A Qobuz pick is Qobuz-only, on the same principle as the
-                    // Apple branch above: the metadata bridge matches by title
-                    // and artist, so it can hand back a different master or
-                    // version than the one chosen in search. If Qobuz can't
-                    // serve it, the download fails and says so.
-                    if (qobuzIdRegistry.isQobuzTrack(trackId)) {
-                        Log.w(TAG, "Qobuz could not serve \"$trackTitle\" (id=$trackId, q=$quality) - not falling back to another catalog")
-                        return Outcome.PERMANENT
-                    }
-                    val bridged = apiClient.findAppleIdFor(
-                        trackId = trackId,
-                        title = trackTitle,
-                        artist = artistName,
-                        durationSeconds = duration,
-                    )
-                    if (bridged == null) {
-                        Log.w(TAG, "no stream url for \"$trackTitle\" (id=$trackId, q=$quality) and no Apple match")
-                        return Outcome.PERMANENT
-                    }
-                    Log.i(TAG, "bridged \"$trackTitle\" (id=$trackId) to Apple adamId=$bridged")
-                    usedApple = true
-                    apiClient.getAppleStreamUrl(bridged, quality, atmos = isThxSpatialAudio) ?: run {
-                        Log.w(TAG, "Apple bridge found adamId=$bridged but no stream url for \"$trackTitle\"")
-                        return Outcome.PERMANENT
-                    }
+                }.getOrElse { e ->
+                    Log.w(TAG, "${service.label} could not serve \"$trackTitle\" (id=$trackId, q=$quality): ${e.message} - not falling back to another catalog")
+                    return Outcome.PERMANENT
                 }
             }
 
@@ -208,37 +200,41 @@ class TrackDownloader @Inject constructor(
             // mislabelled .flac (breaks MediaStore + other players) and makes the
             // saved quality accurate. Only the 22-byte header is read.
             val customFolderUri = preferences.downloadFolderUri.first()
-            // Apple delivers an MP4/M4A container (ALAC/AAC/EC-3 Atmos), never
-            // FLAC/MP3 — skip header sniffing + FLAC tagging for it.
+            // Apple delivers an MP4/M4A container (ALAC/AAC/EC-3 Atmos) and is
+            // left untagged: an Atmos file must reach players byte-for-byte.
+            // Everything else is sniffed — TIDAL's lossy tiers are AAC in MP4,
+            // Qobuz's and Deezer's MP3, lossless is FLAC.
             val actualQuality: AudioQuality
-            val isFlac: Boolean
-            if (usedApple) {
+            val format: DownloadFormat
+            if (isApple) {
                 actualQuality = quality
-                isFlac = false
+                format = DownloadFormat.M4A
             } else {
                 val header = ByteArray(22)
                 val headerRead = tempAudio.inputStream().use { it.read(header) }
-                actualQuality =
-                    detectActualQuality(if (headerRead > 0) header.copyOf(headerRead) else ByteArray(0), quality)
-                isFlac = actualQuality == AudioQuality.LOSSLESS || actualQuality == AudioQuality.HI_RES
+                val bytes = if (headerRead > 0) header.copyOf(headerRead) else ByteArray(0)
+                actualQuality = detectActualQuality(bytes, quality)
+                format = DownloadFormat.sniff(bytes)
             }
 
-            // Fetched once and used twice: embedded in the FLAC below and saved
+            // Fetched once and used twice: embedded in the file below and saved
             // as the folder's cover.jpg afterwards. Losing the cover never fails
             // the download.
             val artBytes = albumCover?.takeIf { it.isNotBlank() }
                 ?.let { runCatching { fetchAlbumArt(it) }.getOrNull() }
 
-            // The Qobuz CDN FLACs arrive with no embedded metadata, so without
-            // this every download lands on disk anonymous, and strict offline
-            // players (Auxio, Symfonium, MediaStore) sort and group purely on
-            // embedded tags. So every FLAC gets Vorbis comments and the cover,
-            // not only THX/versioned ones. Tagging happens in place on the temp
-            // file (JAudioTagger is file-based). Best-effort: a tagging failure
-            // never fails the download (the bytes are good).
-            if (isFlac) {
-                tagFlacFile(
+            // The Qobuz CDN FLACs and TIDAL's AAC files arrive with no embedded
+            // metadata, so without this every download lands on disk anonymous,
+            // and strict offline players (Auxio, Symfonium, MediaStore) sort and
+            // group purely on embedded tags. So every FLAC gets Vorbis comments
+            // and every AAC .m4a iTunes atoms, with the cover. Tagging works on
+            // the temp file (JAudioTagger is file-based): in place for FLAC, on
+            // a copy for .m4a (see tagAudioFile). Best-effort: a tagging
+            // failure never fails the download (the bytes are good).
+            if (!isApple && format != DownloadFormat.MP3) {
+                tagAudioFile(
                     file = tempAudio,
+                    format = format,
                     item = item,
                     title = EmbeddedTags.baseTitle(trackTitle, version),
                     artwork = artBytes,
@@ -246,8 +242,8 @@ class TrackDownloader @Inject constructor(
             }
             val audioSizeBytes = tempAudio.length()
 
-            val fileExt = if (usedApple) "m4a" else if (isFlac) "flac" else "mp3"
-            val audioMime = if (usedApple) "audio/mp4" else if (isFlac) "audio/flac" else "audio/mpeg"
+            val fileExt = format.extension
+            val audioMime = format.mimeType
             val sanitizedTitle = "${artistName} - ${trackTitle}".replace(Regex("[\\\\/:*?\"<>|]"), "_")
             val fileName = "$sanitizedTitle.$fileExt"
             val filePath: String
@@ -487,6 +483,13 @@ class TrackDownloader @Inject constructor(
      *  - anything else → lossy (MP3) → report as HIGH.
      * Falls back to [requested] if the bytes are too short to classify.
      */
+    /** The tier an Apple download is recorded as, from Apple's own ladder. */
+    private fun appleTier(quality: AppleQuality): AudioQuality = when (quality) {
+        AppleQuality.HIRES_LOSSLESS -> AudioQuality.HI_RES
+        AppleQuality.ALAC -> AudioQuality.LOSSLESS
+        AppleQuality.AAC -> AudioQuality.HIGH
+    }
+
     private fun detectActualQuality(data: ByteArray, requested: AudioQuality): AudioQuality {
         if (data.size < 4) return requested
         val isFlac = data[0] == 'f'.code.toByte() && data[1] == 'L'.code.toByte() &&
@@ -514,28 +517,38 @@ class TrackDownloader @Inject constructor(
     }
 
     /**
-     * Embed Vorbis comments and the front cover into a FLAC file in place
-     * (JAudioTagger is file-based, so no byte-array round trip). The download
-     * temp carries a ".dl" extension and JAudioTagger picks its reader by
-     * extension, so the file is renamed to a ".flac" alias for the tagging and
-     * renamed back. Best-effort: on any failure the file is left playable and
-     * the download still succeeds.
+     * Embed tags and the front cover into a FLAC (Vorbis comments) or AAC
+     * .m4a (iTunes atoms) file in place (JAudioTagger is file-based, so no
+     * byte-array round trip). The download temp carries a ".dl" extension and
+     * JAudioTagger picks its reader by extension, so the file is renamed to an
+     * alias with the format's extension for the tagging and renamed back.
+     * Best-effort: on any failure the file is left playable and the download
+     * still succeeds.
      */
-    private fun tagFlacFile(
+    private fun tagAudioFile(
         file: File,
+        format: DownloadFormat,
         item: DownloadItem,
         title: String,
         artwork: ByteArray?,
     ) {
-        val alias = File(file.parentFile, "${file.nameWithoutExtension}_tag.flac")
-        if (!file.renameTo(alias)) {
-            Log.w(TAG, "tag: rename for tagging failed for \"$title\"")
+        val alias = File(file.parentFile, "${file.nameWithoutExtension}_tag.${format.extension}")
+        // An .m4a is tagged on a copy that replaces the download only once
+        // JAudioTagger finishes. Tagging MP4 rewrites box offsets, and on a
+        // fragmented MP4 (a DASH track assembled into one file) JAudioTagger
+        // writes the tags, then finds the offsets wrong and throws — a file
+        // that must not replace the good one. A FLAC's tags sit in front of
+        // the audio, so it is tagged in place.
+        val onCopy = format == DownloadFormat.M4A
+        val staged = if (onCopy) runCatching { file.copyTo(alias, overwrite = true) }.isSuccess else file.renameTo(alias)
+        if (!staged) {
+            Log.w(TAG, "tag: staging the file for tagging failed for \"$title\"")
             return
         }
+        var committed = false
         try {
             val audioFile = org.jaudiotagger.audio.AudioFileIO.read(alias)
-            val tag = audioFile.tagOrCreateAndSetDefault as? org.jaudiotagger.tag.flac.FlacTag
-                ?: return
+            val tag = audioFile.tagOrCreateAndSetDefault ?: return
             fun write(key: org.jaudiotagger.tag.FieldKey, value: String?) {
                 value?.takeIf { it.isNotBlank() }?.let { tag.setField(key, it) }
             }
@@ -551,18 +564,49 @@ class TrackDownloader @Inject constructor(
             // FieldKey.YEAR is the Vorbis DATE comment.
             write(org.jaudiotagger.tag.FieldKey.YEAR, EmbeddedTags.releaseDate(item.releaseDate))
             write(org.jaudiotagger.tag.FieldKey.GENRE, item.genre)
-            // Raw VERSION comment — the field Qobuz itself uses for the release.
-            item.version?.takeIf { it.isNotBlank() }?.let { tag.setField("VERSION", it) }
             // COMMENT marker as belt-and-braces for players that ignore VERSION.
             if (item.isThxSpatialAudio) tag.setField(org.jaudiotagger.tag.FieldKey.COMMENT, "THX Spatial Audio")
-            // A picture the source already embedded is the label's own — keep it.
-            if (artwork != null && tag.images.isEmpty()) embedCover(tag, artwork, title)
+            when (tag) {
+                is org.jaudiotagger.tag.flac.FlacTag -> {
+                    // Raw VERSION comment — the field Qobuz itself uses for the release.
+                    item.version?.takeIf { it.isNotBlank() }?.let { tag.setField("VERSION", it) }
+                    // A picture the source already embedded is the label's own — keep it.
+                    if (artwork != null && tag.images.isEmpty()) embedCover(tag, artwork, title)
+                }
+                is org.jaudiotagger.tag.mp4.Mp4Tag -> {
+                    if (artwork != null && !tag.hasField(org.jaudiotagger.tag.mp4.Mp4FieldKey.ARTWORK)) {
+                        embedCover(tag, artwork, title)
+                    }
+                }
+            }
             audioFile.commit()
+            committed = true
         } catch (e: Exception) {
-            Log.w(TAG, "tag: FLAC tagging failed for \"$title\": ${e.message}")
+            Log.w(TAG, "tag: ${format.name} tagging failed for \"$title\": ${e.message}")
         } finally {
-            alias.renameTo(file)
+            when {
+                !onCopy -> alias.renameTo(file)
+                // rename(2) replaces the untagged file in one step.
+                committed && alias.renameTo(file) -> Unit
+                // Not tagged, or not swapped in: keep the download as it came.
+                else -> alias.delete()
+            }
         }
+    }
+
+    /**
+     * Adds [bytes] as an .m4a's `covr` atom. Built from the bytes alone
+     * ([org.jaudiotagger.tag.mp4.field.Mp4TagCoverField] reads the image type
+     * from its header), for the same reason as the FLAC overload: JAudioTagger's
+     * `Artwork` type needs `javax.imageio`, which Android lacks.
+     */
+    private fun embedCover(tag: org.jaudiotagger.tag.mp4.Mp4Tag, bytes: ByteArray, title: String) {
+        val mime = EmbeddedTags.imageMime(bytes)
+        if (mime == null || bytes.size > EmbeddedTags.MAX_EMBEDDED_ART_BYTES) {
+            Log.i(TAG, "tag: not embedding cover for \"$title\" (type=$mime, ${bytes.size} bytes)")
+            return
+        }
+        tag.setField(org.jaudiotagger.tag.mp4.field.Mp4TagCoverField(bytes))
     }
 
     /**

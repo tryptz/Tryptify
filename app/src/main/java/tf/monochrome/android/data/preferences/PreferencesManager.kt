@@ -23,6 +23,8 @@ import kotlinx.serialization.json.Json
 import tf.monochrome.android.BuildConfig
 import tf.monochrome.android.audio.stretch.PitchEngine
 import tf.monochrome.android.audio.stretch.PitchQuality
+import tf.monochrome.android.data.api.ApiService
+import tf.monochrome.android.data.api.ServiceQuality
 import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.NowPlayingViewMode
@@ -456,6 +458,15 @@ class PreferencesManager @Inject constructor(
         // the legacy lyrics keys superseded by LYRICS_FX_JSON) never leaves the
         // device — and a newly added key defaults to "not synced" until it's
         // deliberately added here.
+        // Quality, one key per service and setting: quality_tidal_wifi,
+        // quality_qobuz_download, ... (see ServiceQuality).
+        private fun serviceQualityKey(service: ApiService, setting: ServiceQuality.Setting) =
+            stringPreferencesKey("quality_${service.name.lowercase()}_${setting.name.lowercase()}")
+        private val SERVICE_QUALITY_KEYS: List<Preferences.Key<String>> =
+            ServiceQuality.services.flatMap { service ->
+                ServiceQuality.Setting.entries.map { serviceQualityKey(service, it) }
+            }
+
         val SETTINGS_SYNC_KEYS: Set<Preferences.Key<*>> = setOf(
             WIFI_QUALITY, CELLULAR_QUALITY,
             THEME, THEME_PAPER, DYNAMIC_COLORS,
@@ -496,7 +507,7 @@ class PreferencesManager @Inject constructor(
             RADIO_WEIGHT_AVOID_RECENTLY_PLAYED, RADIO_WEIGHT_DISCOVERY_DISTANCE,
             DISCOVERY_HEARTED_GENRES,
             DISCOVERY_SORT,
-        ) +
+        ) + SERVICE_QUALITY_KEYS +
             // Folded in from the registry rather than restated here, so the two
             // lists cannot disagree: a flag is on the allow-list because it
             // declares FlagSync.ACCOUNT, and a device-local one cannot arrive by
@@ -507,21 +518,25 @@ class PreferencesManager @Inject constructor(
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    // Audio Quality
-    val wifiQuality: Flow<AudioQuality> = dataStore.data.map { prefs ->
-        prefs[WIFI_QUALITY]?.let { AudioQuality.valueOf(it) } ?: AudioQuality.HI_RES
-    }
+    // Audio Quality — per service. Each catalogue streams and downloads in its
+    // own setting, in its own terms (see ServiceQuality). A setting never
+    // chosen falls back to the old single one for that slot (wifi_quality,
+    // cellular_quality, download_quality), so an upgrade starts every service
+    // where the one global choice was, snapped to the nearest tier it offers.
+    fun quality(service: ApiService, setting: ServiceQuality.Setting): Flow<AudioQuality> =
+        dataStore.data.map { prefs ->
+            val legacy = when (setting) {
+                ServiceQuality.Setting.WIFI -> WIFI_QUALITY
+                ServiceQuality.Setting.CELLULAR -> CELLULAR_QUALITY
+                ServiceQuality.Setting.DOWNLOAD -> DOWNLOAD_QUALITY
+            }
+            val stored = (prefs[serviceQualityKey(service, setting)] ?: prefs[legacy])
+                ?.let { runCatching { AudioQuality.valueOf(it) }.getOrNull() }
+            ServiceQuality.coerce(service, setting, stored ?: ServiceQuality.default(setting))
+        }.distinctUntilChanged()
 
-    val cellularQuality: Flow<AudioQuality> = dataStore.data.map { prefs ->
-        prefs[CELLULAR_QUALITY]?.let { AudioQuality.valueOf(it) } ?: AudioQuality.HIGH
-    }
-
-    suspend fun setWifiQuality(quality: AudioQuality) {
-        dataStore.edit { it[WIFI_QUALITY] = quality.name }
-    }
-
-    suspend fun setCellularQuality(quality: AudioQuality) {
-        dataStore.edit { it[CELLULAR_QUALITY] = quality.name }
+    suspend fun setQuality(service: ApiService, setting: ServiceQuality.Setting, quality: AudioQuality) {
+        dataStore.edit { it[serviceQualityKey(service, setting)] = ServiceQuality.coerce(service, setting, quality).name }
     }
 
     // Player state
@@ -1086,12 +1101,9 @@ class PreferencesManager @Inject constructor(
     }
 
     // --- Downloads ---
-    val downloadQuality: Flow<AudioQuality> = dataStore.data.map { prefs ->
-        prefs[DOWNLOAD_QUALITY]?.let { AudioQuality.valueOf(it) } ?: AudioQuality.HI_RES
-    }
-    suspend fun setDownloadQuality(quality: AudioQuality) {
-        dataStore.edit { it[DOWNLOAD_QUALITY] = quality.name }
-    }
+    /** The quality [service]'s tracks download in (see [quality]). */
+    fun downloadQuality(service: ApiService): Flow<AudioQuality> =
+        quality(service, ServiceQuality.Setting.DOWNLOAD)
 
     val downloadFolderUri: Flow<String?> = dataStore.data.map { it[DOWNLOAD_FOLDER_URI] }
     suspend fun setDownloadFolderUri(uri: String?) {

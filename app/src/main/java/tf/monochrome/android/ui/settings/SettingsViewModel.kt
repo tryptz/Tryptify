@@ -30,6 +30,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.data.auth.AuthRepository
+import tf.monochrome.android.data.api.ApiService
+import tf.monochrome.android.data.api.ServiceQuality
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.auth.SupabaseAuthManager
 import tf.monochrome.android.data.sync.BackupManager
@@ -253,10 +255,19 @@ class SettingsViewModel @Inject constructor(
     }
 
     // --- Audio ---
-    val wifiQuality: StateFlow<AudioQuality> = preferences.wifiQuality
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AudioQuality.HI_RES)
-    val cellularQuality: StateFlow<AudioQuality> = preferences.cellularQuality
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AudioQuality.HIGH)
+    /**
+     * Every service's quality, per setting (Wi-Fi, cellular, download). Each
+     * service streams and downloads in its own terms; see ServiceQuality.
+     */
+    val qualities: StateFlow<Map<Pair<ApiService, ServiceQuality.Setting>, AudioQuality>> =
+        combine(
+            ServiceQuality.services.flatMap { service ->
+                ServiceQuality.Setting.entries.map { setting ->
+                    preferences.quality(service, setting).map { (service to setting) to it }
+                }
+            }
+        ) { it.toMap() }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
     val normalizationEnabled: StateFlow<Boolean> = preferences.normalizationEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val systemWideAutoEqEnabled: StateFlow<Boolean> = preferences.systemWideAutoEqEnabled
@@ -291,8 +302,6 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     // --- Downloads ---
-    val downloadQuality: StateFlow<AudioQuality> = preferences.downloadQuality
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AudioQuality.HI_RES)
     val downloadLyrics: StateFlow<Boolean> = preferences.downloadLyrics
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val downloadFolderUri: StateFlow<String?> = preferences.downloadFolderUri
@@ -583,8 +592,9 @@ class SettingsViewModel @Inject constructor(
     fun clearListenBrainzToken() { viewModelScope.launch { preferences.clearListenBrainzToken() } }
 
     // --- Audio actions ---
-    fun setWifiQuality(quality: AudioQuality) { viewModelScope.launch { preferences.setWifiQuality(quality) } }
-    fun setCellularQuality(quality: AudioQuality) { viewModelScope.launch { preferences.setCellularQuality(quality) } }
+    fun setQuality(service: ApiService, setting: ServiceQuality.Setting, quality: AudioQuality) {
+        viewModelScope.launch { preferences.setQuality(service, setting, quality) }
+    }
     fun setNormalizationEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setNormalizationEnabled(enabled) } }
     fun setSystemWideAutoEq(enabled: Boolean) { viewModelScope.launch { preferences.setSystemWideAutoEqEnabled(enabled) } }
     fun setDspBlockSize(value: Int) { viewModelScope.launch { preferences.setDspBlockSize(value) } }
@@ -611,7 +621,6 @@ class SettingsViewModel @Inject constructor(
     fun setPreservePitch(enabled: Boolean) { viewModelScope.launch { preferences.setPreservePitch(enabled) } }
 
     // --- Downloads actions ---
-    fun setDownloadQuality(quality: AudioQuality) { viewModelScope.launch { preferences.setDownloadQuality(quality) } }
     fun setDownloadLyrics(enabled: Boolean) { viewModelScope.launch { preferences.setDownloadLyrics(enabled) } }
     fun setDownloadFolderUri(uri: String?) { viewModelScope.launch { preferences.setDownloadFolderUri(uri) } }
 

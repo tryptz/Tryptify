@@ -126,6 +126,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import tf.monochrome.android.data.api.ApiService
+import tf.monochrome.android.data.api.ServiceQuality
 import tf.monochrome.android.domain.model.AudioQuality
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.filled.CheckCircle
@@ -1698,12 +1700,9 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
     val gapless by viewModel.gaplessPlayback.collectAsStateWithLifecycle()
     val crossfade by viewModel.crossfadeDuration.collectAsStateWithLifecycle()
     val gaplessNoResample by viewModel.gaplessNoResample.collectAsStateWithLifecycle()
-    val wifiQuality by viewModel.wifiQuality.collectAsStateWithLifecycle()
-    val cellularQuality by viewModel.cellularQuality.collectAsStateWithLifecycle()
+    val qualities by viewModel.qualities.collectAsStateWithLifecycle()
     val playbackSpeed by viewModel.playbackSpeed.collectAsStateWithLifecycle()
     val preservePitch by viewModel.preservePitch.collectAsStateWithLifecycle()
-    var showWifiDropdown by remember { mutableStateOf(false) }
-    var showCellularDropdown by remember { mutableStateOf(false) }
     // Plain local state (NOT keyed on playbackSpeed) so typing isn't reset by
     // the value round-tripping back from the ViewModel; sync from external
     // changes (slider/reset) only while the field is unfocused, and commit on
@@ -1769,17 +1768,22 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader(stringResource(R.string.settings_streaming_quality))
-        SettingItem(title = stringResource(R.string.settings_wi_fi_streaming), subtitle = wifiQuality.displayName, onClick = { showWifiDropdown = true })
-        DropdownMenu(expanded = showWifiDropdown, onDismissRequest = { showWifiDropdown = false }) {
-            AudioQuality.entries.forEach { q ->
-                DropdownMenuItem(text = { Text(q.displayName) }, onClick = { viewModel.setWifiQuality(q); showWifiDropdown = false })
-            }
-        }
-
-        SettingItem(title = stringResource(R.string.settings_cellular_streaming), subtitle = cellularQuality.displayName, onClick = { showCellularDropdown = true })
-        DropdownMenu(expanded = showCellularDropdown, onDismissRequest = { showCellularDropdown = false }) {
-            AudioQuality.entries.forEach { q ->
-                DropdownMenuItem(text = { Text(q.displayName) }, onClick = { viewModel.setCellularQuality(q); showCellularDropdown = false })
+        // Each service streams in its own setting, in its own terms: TIDAL's
+        // lossy tiers are AAC, Qobuz's and Deezer's MP3, and Deezer stops at CD.
+        val wifiTitle = stringResource(R.string.settings_wi_fi_streaming)
+        val cellularTitle = stringResource(R.string.settings_cellular_streaming)
+        ServiceQuality.services.forEach { service ->
+            listOf(
+                ServiceQuality.Setting.WIFI to wifiTitle,
+                ServiceQuality.Setting.CELLULAR to cellularTitle,
+            ).forEach { (setting, title) ->
+                ServiceQualityRow(
+                    title = "${service.label} · $title",
+                    service = service,
+                    setting = setting,
+                    quality = qualities[service to setting],
+                    onPick = { viewModel.setQuality(service, setting, it) },
+                )
             }
         }
 
@@ -2397,9 +2401,8 @@ private fun exclusiveSubtitle(
 // ─── Tab 6: Downloads ──────────────────────────────────────────────────
 @Composable
 private fun DownloadsTab(viewModel: SettingsViewModel) {
-    val downloadQuality by viewModel.downloadQuality.collectAsStateWithLifecycle()
+    val qualities by viewModel.qualities.collectAsStateWithLifecycle()
     val downloadFolder by viewModel.downloadFolderUri.collectAsStateWithLifecycle()
-    var showQualityDropdown by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
     val downloadedCount by viewModel.downloadedCount.collectAsStateWithLifecycle()
     val downloadedSize by viewModel.downloadedSize.collectAsStateWithLifecycle()
@@ -2460,11 +2463,17 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader(stringResource(R.string.settings_download_quality))
-        SettingItem(title = stringResource(R.string.settings_quality), subtitle = downloadQuality.displayName, onClick = { showQualityDropdown = true })
-        DropdownMenu(expanded = showQualityDropdown, onDismissRequest = { showQualityDropdown = false }) {
-            AudioQuality.entries.forEach { q ->
-                DropdownMenuItem(text = { Text(q.displayName) }, onClick = { viewModel.setDownloadQuality(q); showQualityDropdown = false })
-            }
+        // A track downloads from its own service, in that service's setting.
+        // Apple keeps its own ladder (PreferencesManager.appleQuality).
+        val qualityTitle = stringResource(R.string.settings_quality)
+        ServiceQuality.services.forEach { service ->
+            ServiceQualityRow(
+                title = "${service.label} · $qualityTitle",
+                service = service,
+                setting = ServiceQuality.Setting.DOWNLOAD,
+                quality = qualities[service to ServiceQuality.Setting.DOWNLOAD],
+                onPick = { viewModel.setQuality(service, ServiceQuality.Setting.DOWNLOAD, it) },
+            )
         }
 
         val dlLyrics by viewModel.downloadLyrics.collectAsStateWithLifecycle()
@@ -3350,6 +3359,51 @@ private fun LitGroupHeader(title: String, badge: String? = null) {
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ServiceQualityRow(
+    title: String,
+    service: ApiService,
+    setting: ServiceQuality.Setting,
+    quality: AudioQuality?,
+    onPick: (AudioQuality) -> Unit,
+) {
+    // The row says what the chosen tier sends; the menu lists every tier the
+    // service offers the same way, so the choice is made knowing the codec,
+    // bit depth and rate each one delivers.
+    var expanded by remember { mutableStateOf(false) }
+    val current = quality?.let { ServiceQuality.option(service, setting, it) }
+    Box {
+        SettingItem(
+            title = title,
+            subtitle = current?.let { "${it.label} · ${it.detail}" } ?: "",
+            onClick = { expanded = true },
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            ServiceQuality.options(service, setting).forEach { option ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(option.label, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                option.detail,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    trailingIcon = if (option.quality == current?.quality) {
+                        { Icon(Icons.Default.Check, contentDescription = null) }
+                    } else null,
+                    onClick = {
+                        onPick(option.quality)
+                        expanded = false
+                    },
                 )
             }
         }

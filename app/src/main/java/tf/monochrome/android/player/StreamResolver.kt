@@ -7,6 +7,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
+import tf.monochrome.android.data.api.ApiService
 import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.api.QobuzTrackMatch
 import tf.monochrome.android.data.cache.QobuzStreamUri
@@ -116,7 +117,7 @@ class StreamResolver @Inject constructor(
         // before the TIDAL lookup below — and before its Qobuz fallback, which
         // would fetch the ISRC of the TIDAL track that has this number.
         if (track.deezerId != null || qobuzIdRegistry.isDeezerTrack(track.id)) {
-            val uri = deezerStreamUri(track.deezerId ?: track.id, AudioQuality.LOSSLESS)
+            val uri = deezerStreamUri(track.deezerId ?: track.id, repository.streamQuality(ApiService.DEEZER))
                 ?: return Pair(null, null)
             return Pair(buildFileMediaItem(track, uri), null)
         }
@@ -182,13 +183,13 @@ class StreamResolver @Inject constructor(
             // Kicks the download off and returns; it keeps filling the
             // cache on the manager's own scope, so by the time this track
             // is reached it is already there.
-            qobuzCache.openPartial(track.id, AudioQuality.LOSSLESS)
+            qobuzCache.openPartial(track.id, repository.streamQuality(ApiService.QOBUZ))
             return@runCatching true
         }
         // Same for Deezer — but only when the full file is really coming. The
         // preview fallback is a signed URL, which must not be pre-queued.
         if (track.deezerId != null || qobuzIdRegistry.isDeezerTrack(track.id)) {
-            val started = deezerCache.openPartial(track.deezerId ?: track.id, AudioQuality.LOSSLESS)
+            val started = deezerCache.openPartial(track.deezerId ?: track.id, repository.streamQuality(ApiService.DEEZER))
             return@runCatching started != null && started.failure == null
         }
         false
@@ -334,7 +335,7 @@ class StreamResolver @Inject constructor(
         track: UnifiedTrack,
         source: PlaybackSource.DeezerPreview,
     ): ResolvedMedia {
-        val uri = deezerStreamUri(source.deezerId, source.preferredQuality)
+        val uri = deezerStreamUri(source.deezerId, repository.streamQuality(ApiService.DEEZER))
 
         val metadata = MediaMetadata.Builder()
             .setTitle(track.title)
@@ -382,7 +383,8 @@ class StreamResolver @Inject constructor(
         // Starts the download and returns once the headers are in; the player
         // reads the cache file as it fills. Null still means "can't play this"
         // (Qobuz unconfigured, or the request failed outright).
-        val started = qobuzCache.openPartial(source.qobuzId, source.preferredQuality) != null
+        val quality = repository.streamQuality(ApiService.QOBUZ)
+        val started = qobuzCache.openPartial(source.qobuzId, quality) != null
 
         val metadata = MediaMetadata.Builder()
             .setTitle(track.title)
@@ -397,7 +399,7 @@ class StreamResolver @Inject constructor(
             .setMediaId(track.id)
             .apply {
                 if (started) {
-                    setUri(QobuzStreamUri.build(source.qobuzId, source.preferredQuality))
+                    setUri(QobuzStreamUri.build(source.qobuzId, quality))
                 }
             }
             .setMediaMetadata(metadata)
@@ -445,11 +447,12 @@ class StreamResolver @Inject constructor(
      * far better than quietly serving someone else's recording from TIDAL.
      */
     private suspend fun qobuzCachedMediaItem(track: Track): MediaItem? {
-        val started = runCatching { qobuzCache.openPartial(track.id, AudioQuality.LOSSLESS) }
+        val quality = repository.streamQuality(ApiService.QOBUZ)
+        val started = runCatching { qobuzCache.openPartial(track.id, quality) }
             .getOrNull() ?: return null
         return buildFileMediaItem(
             track,
-            QobuzStreamUri.build(track.id, AudioQuality.LOSSLESS).toUri(),
+            QobuzStreamUri.build(track.id, quality).toUri(),
         ).takeIf { started.failure == null }
     }
 
@@ -709,7 +712,8 @@ class StreamResolver @Inject constructor(
             qobuzIdRegistry.registerArtistAlias(tidalArtistId, qobuzArtistId)
         }
 
-        runCatching { qobuzCache.openPartial(match.trackId, AudioQuality.LOSSLESS) }
+        val quality = repository.streamQuality(ApiService.QOBUZ)
+        runCatching { qobuzCache.openPartial(match.trackId, quality) }
             .getOrNull() ?: return null
 
         val metadata = MediaMetadata.Builder()
@@ -724,7 +728,7 @@ class StreamResolver @Inject constructor(
 
         return MediaItem.Builder()
             .setMediaId(mediaId)
-            .setUri(QobuzStreamUri.build(match.trackId, AudioQuality.LOSSLESS).toUri())
+            .setUri(QobuzStreamUri.build(match.trackId, quality).toUri())
             .setMediaMetadata(metadata)
             .build()
     }
