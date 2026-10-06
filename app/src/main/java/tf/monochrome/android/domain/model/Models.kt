@@ -88,6 +88,21 @@ data class Track(
 
     val coverUrl: String?
         get() = album?.coverUrl
+
+    /**
+     * The quality text a track row shows, in [UnifiedTrack.qualityBadge]'s
+     * words: a catalogue tier ("HI_RES_LOSSLESS" -> "Hi-Res"), or a local
+     * file's codec ("FLAC") as it is.
+     */
+    val qualityBadge: String?
+        get() = when (val quality = audioQuality?.takeIf { it.isNotBlank() }) {
+            null -> null
+            "HI_RES_LOSSLESS", "HI_RES" -> "Hi-Res"
+            "LOSSLESS" -> "Lossless"
+            "HIGH" -> "High"
+            "LOW" -> "Low"
+            else -> quality
+        }
 }
 
 @Serializable

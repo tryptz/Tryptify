@@ -67,9 +67,10 @@ class ListRowHeightTest {
     }
 
     /**
-     * The library's Songs row: a 48dp cover beside a bodyLarge title over a
-     * bodySmall subtitle whose artist is a link, so it carries the hit-box
-     * inset. This is the shape the budget is derived from, so it is the one
+     * Every track row — the library's Songs row, the shared
+     * [tf.monochrome.android.ui.components.TrackItem] and search results: a
+     * 48dp cover beside a bodyLarge title over a bodySmall subtitle whose
+     * artist is a link, so it carries the hit-box inset. This is the shape the budget is derived from, so it is the one
      * with no slack to spare.
      */
     @Test
@@ -122,42 +123,25 @@ class ListRowHeightTest {
     }
 
     /**
-     * The search result row and the shared
-     * [tf.monochrome.android.ui.components.TrackItem] do NOT share the two-line
-     * budget: they stack a badge line (source, THX, Dolby Atmos) under the
-     * subtitle, so they have their own height. This test used to model it as two lines and so passed while the
-     * badge was being cut in half on screen — the row was laid out at
-     * [MonoDimens.listRowHeight] and clipped the third line away.
+     * Every track row — TrackItem, search results and the Library's Local list
+     * — carries its source pill ("TIDAL", "Local") on the subtitle line, as
+     * the Local list always has. The pill is labelSmall with
+     * [MonoDimens.badgePaddingV] above and below; the line it sits on is
+     * bodySmall with the artist link's [MonoDimens.linkHitBoxV]. The pill must
+     * fit inside that line, or it is what sets the row height.
      */
     @Test
-    fun `a search result row fits its own three-line budget`() {
-        forEachScale { scale, _ ->
-            val budget = searchRowHeightOf(
-                titleLineHeight = sp(bodyLargeSp, scale),
-                subtitleLineHeight = sp(bodySmallSp, scale),
-                badgeLineHeight = sp(labelSmallSp, scale),
-            )
-            val text = sp(bodyLargeSp, scale) + MonoDimens.spacingXs +
-                sp(bodySmallSp, scale) + MonoDimens.linkHitBoxV * 2 + MonoDimens.spacingXs +
-                sp(labelSmallSp, scale) + MonoDimens.badgePaddingV * 2
-            assertFits("search row", scale, budget, maxOf(MonoDimens.coverList, text))
-        }
-    }
-
-    /** The shared two-line budget is never enough for it — that was the bug. */
-    @Test
-    fun `the search row is taller than the shared list row`() {
-        forEachScale { scale, shared ->
-            val search = searchRowHeightOf(
-                titleLineHeight = sp(bodyLargeSp, scale),
-                subtitleLineHeight = sp(bodySmallSp, scale),
-                badgeLineHeight = sp(labelSmallSp, scale),
-            )
-            assertTrue(
-                "search row $search must exceed the shared $shared at ${scale}x, " +
-                    "or its badge line is being clipped again",
-                search.value > shared.value,
-            )
+    fun `a source pill fits the subtitle line it sits on`() {
+        for (app in appScales) {
+            for (system in systemScales) {
+                val scale = app * system
+                val pill = sp(labelSmallSp, scale) + MonoDimens.badgePaddingV * 2
+                val line = sp(bodySmallSp, scale) + MonoDimens.linkHitBoxV * 2
+                assertTrue(
+                    "a source pill is $pill at ${scale}x but the subtitle line is only $line",
+                    pill.value <= line.value,
+                )
+            }
         }
     }
 

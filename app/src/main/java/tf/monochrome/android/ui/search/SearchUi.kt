@@ -459,8 +459,6 @@ fun SearchResultsContent(
                     ) { track ->
                         UnifiedSearchTrackItem(
                             track = track,
-                            isLiked = favoriteTrackIds.contains(track.toLegacyTrack().id),
-                            onLikeClick = { playerViewModel.toggleFavorite(track.toLegacyTrack()) },
                             onClick = {
                                 if (selection.active) selection.toggle(track.id)
                                 else playerViewModel.playUnifiedTrack(track, tracks)
@@ -628,8 +626,6 @@ private fun SearchFilterRow(
 @Composable
 private fun UnifiedSearchTrackItem(
     track: UnifiedTrack,
-    isLiked: Boolean,
-    onLikeClick: () -> Unit,
     onClick: () -> Unit,
     onArtistClick: (UnifiedArtistRef) -> Unit,
     onAlbumClick: () -> Unit,
@@ -641,7 +637,6 @@ private fun UnifiedSearchTrackItem(
 ) {
     val legacyTrack = track.toLegacyTrack()
     // Same treatment as TrackItem: hide per-row affordances while selecting.
-    val effectiveOnLikeClick = onLikeClick.takeUnless { selectionMode }
     val effectiveOnMoreClick = onMoreClick.takeUnless { selectionMode }
     Surface(
         modifier = Modifier
@@ -655,7 +650,7 @@ private fun UnifiedSearchTrackItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(MonoDimens.searchRowHeight)
+                .height(MonoDimens.listRowHeight)
                 .padding(horizontal = MonoDimens.listItemPaddingH),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -689,10 +684,9 @@ private fun UnifiedSearchTrackItem(
                 }
             }
             Spacer(modifier = Modifier.width(MonoDimens.spacingMd))
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
+            // The Library's Local list row: the title alone, then artist and
+            // album with where it plays from and its badges beside them.
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = track.title,
                     style = MaterialTheme.typography.bodyLarge,
@@ -700,50 +694,53 @@ private fun UnifiedSearchTrackItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                TrackArtistAlbumLine(
-                    track = track,
-                    onArtistClick = if (selectionMode) ({}) else onArtistClick,
-                    onAlbumClick = if (selectionMode) ({}) else onAlbumClick,
-                )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TrackArtistAlbumLine(
+                        track = track,
+                        onArtistClick = if (selectionMode) ({}) else onArtistClick,
+                        onAlbumClick = if (selectionMode) ({}) else onAlbumClick,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
                     // Downloaded means it plays from the device, so it reads as Local.
                     SourcePill(if (isDownloaded) SourceType.LOCAL else track.sourceType)
                     if (track.isThxSpatialAudio) {
+                        Spacer(modifier = Modifier.width(4.dp))
                         tf.monochrome.android.ui.components.ThxBadgePill()
                     }
                     if (track.isDolbyAtmos) {
+                        Spacer(modifier = Modifier.width(4.dp))
                         tf.monochrome.android.ui.components.DolbyAtmosBadgePill()
                     }
-                    track.qualityBadge?.let { ResultBadge(text = it) }
-                }
-            }
-            if (effectiveOnLikeClick != null) {
-                IconButton(onClick = effectiveOnLikeClick) {
-                    Icon(
-                        imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                        contentDescription = if (isLiked) stringResource(R.string.action_unlike) else stringResource(R.string.action_like),
-                        tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    track.qualityBadge?.let { badge ->
+                        Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
+                        Text(
+                            badge,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
             if (isDownloaded) {
                 tf.monochrome.android.ui.components.DownloadedBadge(size = 18f)
                 Spacer(modifier = Modifier.width(4.dp))
             }
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = legacyTrack.formattedDuration,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             if (effectiveOnMoreClick != null) {
-                IconButton(onClick = effectiveOnMoreClick) {
+                // Compact, as in the Library's Local list.
+                IconButton(onClick = effectiveOnMoreClick, modifier = Modifier.size(32.dp)) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
                         contentDescription = stringResource(R.string.action_more_options),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
@@ -814,21 +811,6 @@ private fun PlaylistSearchItem(
             }
             SourcePill(SourceType.API)
         }
-    }
-}
-
-@Composable
-private fun ResultBadge(text: String) {
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = MonoDimens.badgePaddingV)
-        )
     }
 }
 

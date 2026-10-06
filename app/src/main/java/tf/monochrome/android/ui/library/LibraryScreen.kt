@@ -409,8 +409,6 @@ fun LibraryScreen(
                         ) { track ->
                             TrackItem(
                                 track = track,
-                                isLiked = favoriteTrackIds.contains(track.id),
-                                onLikeClick = { playerViewModel.toggleFavorite(track) },
                                 onClick = {
                                     if (selection.active) selection.toggle(track.id)
                                     else playerViewModel.playTrack(track, recentTracks)
@@ -438,8 +436,6 @@ fun LibraryScreen(
                         ) { track ->
                             TrackItem(
                                 track = track,
-                                isLiked = true,
-                                onLikeClick = { playerViewModel.toggleFavorite(track) },
                                 onClick = {
                                     if (selection.active) selection.toggle(track.id)
                                     else playerViewModel.playTrack(track, visibleFavorites)
@@ -605,8 +601,6 @@ fun LibraryScreen(
                         ) { track ->
                             TrackItem(
                                 track = track,
-                                isLiked = true,
-                                onLikeClick = { playerViewModel.toggleFavorite(track) },
                                 onClick = {
                                     if (selection.active) selection.toggle(track.id)
                                     else playerViewModel.playTrack(track, favoriteTracks)

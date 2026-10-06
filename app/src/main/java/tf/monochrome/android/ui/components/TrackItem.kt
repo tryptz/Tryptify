@@ -15,8 +15,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Explicit
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.Icon
@@ -50,8 +48,6 @@ fun TrackItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
-    isLiked: Boolean = false,
-    onLikeClick: (() -> Unit)? = null,
     showCover: Boolean = true,
     showDuration: Boolean = true,
     trackNumber: Int? = null,
@@ -63,9 +59,9 @@ fun TrackItem(
     selectionMode: Boolean = false,
     selected: Boolean = false
 ) {
-    // While multi-selecting, per-row affordances (like, 3-dot, inline
-    // artist/album links) would steal taps meant for selection — hide them.
-    val effectiveOnLikeClick = onLikeClick.takeUnless { selectionMode }
+    // While multi-selecting, per-row affordances (3-dot, inline artist/album
+    // links) would steal taps meant for selection — hide them. Liking is in
+    // the 3-dot menu, as in the Library's Local list.
     val effectiveOnMoreClick = onMoreClick.takeUnless { selectionMode }
     val effectiveOnAlbumClick = onAlbumClick.takeUnless { selectionMode }
     val effectiveOnArtistClick = onArtistClick.takeUnless { selectionMode }
@@ -96,9 +92,7 @@ fun TrackItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                // Three lines: title, artist and album, then the badges. See
-                // MonoDimens.searchRowHeight, which search rows share.
-                .height(MonoDimens.searchRowHeight)
+                .height(MonoDimens.listRowHeight)
                 .padding(horizontal = MonoDimens.listItemPaddingH),
             verticalAlignment = Alignment.CenterVertically
     ) {
@@ -137,7 +131,7 @@ fun TrackItem(
 
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(MonoDimens.spacingXs, Alignment.CenterVertically)
+            verticalArrangement = Arrangement.Center
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -162,80 +156,91 @@ fun TrackItem(
                     )
                 }
             }
+            // Artist and album, then where it plays from and its badges, on
+            // one line: the Library's Local list row, which every track list
+            // now shares. The title keeps the whole first line.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (effectiveOnArtistClick != null) {
-                    ClickableArtists(
-                        artists = track.uiArtistRefs(),
-                        fallbackName = track.displayArtist,
-                        onArtistClick = { ref -> ref.id?.let { effectiveOnArtistClick(it) } },
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                } else {
+                Row(
+                    modifier = Modifier.weight(1f, fill = false),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (effectiveOnArtistClick != null) {
+                        ClickableArtists(
+                            artists = track.uiArtistRefs(),
+                            fallbackName = track.displayArtist,
+                            onArtistClick = { ref -> ref.id?.let { effectiveOnArtistClick(it) } },
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                    } else {
+                        Text(
+                            text = track.displayArtist,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    if (track.album != null && effectiveOnAlbumClick != null) {
+                        Text(
+                            text = " • ",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = track.album.title,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            // weight(fill=false) so a long album title ellipsizes and
+                            // shares the row instead of squeezing the artist to zero.
+                            // Inset before clickable so the hit box lands inside
+                            // the glyphs: a near-miss plays the track instead of
+                            // navigating. See ClickableArtists.linkHitBox.
+                            modifier = Modifier
+                                .weight(1f, fill = false)
+                                .padding(horizontal = 3.dp, vertical = 4.dp)
+                                .clickable(onClick = effectiveOnAlbumClick)
+                        )
+                    } else if (track.album != null) {
+                        Text(
+                            text = " • ${track.album.title}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                    }
+                }
+                // Downloaded means the device, as in search.
+                val source = if (isDownloaded) tf.monochrome.android.domain.model.SourceType.LOCAL
+                    else LocalTrackSource.current(track)
+                if (source != null) {
+                    Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
+                    SourcePill(source)
+                }
+                if (track.isThxSpatialAudio) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    ThxBadgePill()
+                }
+                if (track.isDolbyAtmos) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    DolbyAtmosBadgePill()
+                }
+                track.channelBadge?.let { badge ->
+                    Spacer(modifier = Modifier.width(4.dp))
+                    ChannelBadgePill(badge)
+                }
+                track.qualityBadge?.let { badge ->
+                    Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
                     Text(
-                        text = track.displayArtist,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        badge,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
                     )
                 }
-                if (track.album != null && effectiveOnAlbumClick != null) {
-                    Text(
-                        text = " • ",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = track.album.title,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        // weight(fill=false) so a long album title ellipsizes and
-                        // shares the row instead of squeezing the artist to zero.
-                        // Inset before clickable so the hit box lands inside
-                        // the glyphs: a near-miss plays the track instead of
-                        // navigating. See ClickableArtists.linkHitBox.
-                        modifier = Modifier
-                            .weight(1f, fill = false)
-                            .padding(horizontal = 3.dp, vertical = 4.dp)
-                            .clickable(onClick = effectiveOnAlbumClick)
-                    )
-                } else if (track.album != null) {
-                    Text(
-                        text = " • ${track.album.title}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                }
-            }
-            // The badges have a line of their own, as in search: beside the
-            // title they left it about ten characters on a phone.
-            // Where it plays from, on every list this row is used in.
-            // Downloaded means the device, as in search.
-            val source = if (isDownloaded) tf.monochrome.android.domain.model.SourceType.LOCAL
-                else LocalTrackSource.current(track)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                if (source != null) SourcePill(source)
-                if (track.isThxSpatialAudio) ThxBadgePill()
-                if (track.isDolbyAtmos) DolbyAtmosBadgePill()
-                track.channelBadge?.let { ChannelBadgePill(it) }
-            }
-        }
-
-        if (effectiveOnLikeClick != null) {
-            IconButton(onClick = effectiveOnLikeClick, modifier = Modifier.padding(start = 4.dp)) {
-                Icon(
-                    imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = if (isLiked) stringResource(R.string.action_unlike) else stringResource(R.string.action_like),
-                    tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         }
 
@@ -255,7 +260,7 @@ fun TrackItem(
         }
 
         if (showDuration) {
-            Spacer(modifier = Modifier.width(if (effectiveOnLikeClick == null) 8.dp else 4.dp))
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = track.formattedDuration,
                 style = MaterialTheme.typography.bodySmall,
@@ -264,11 +269,13 @@ fun TrackItem(
         }
 
         if (effectiveOnMoreClick != null) {
-            IconButton(onClick = effectiveOnMoreClick) {
+            // Compact, as in the Library's Local list.
+            IconButton(onClick = effectiveOnMoreClick, modifier = Modifier.size(32.dp)) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
                     contentDescription = stringResource(R.string.action_more_options),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
