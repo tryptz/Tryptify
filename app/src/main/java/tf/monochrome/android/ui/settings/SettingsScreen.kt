@@ -1702,6 +1702,7 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
     val cellularQuality by viewModel.cellularQuality.collectAsStateWithLifecycle()
     val playbackSpeed by viewModel.playbackSpeed.collectAsStateWithLifecycle()
     val preservePitch by viewModel.preservePitch.collectAsStateWithLifecycle()
+    val ignoreAudioFocus by viewModel.ignoreAudioFocus.collectAsStateWithLifecycle()
     var showWifiDropdown by remember { mutableStateOf(false) }
     var showCellularDropdown by remember { mutableStateOf(false) }
     // Plain local state (NOT keyed on playbackSpeed) so typing isn't reset by
@@ -1765,6 +1766,18 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             valueRange = 0f..12f,
             steps = 11,
             modifier = Modifier.fillMaxWidth()
+        )
+
+        // Issue #131: music under a game without the game pausing it.
+        SettingSwitchItem(
+            title = stringResource(R.string.settings_play_alongside_other_apps),
+            subtitle = if (ignoreAudioFocus) {
+                stringResource(R.string.settings_play_alongside_on)
+            } else {
+                stringResource(R.string.settings_play_alongside_off)
+            },
+            checked = ignoreAudioFocus,
+            onCheckedChange = { viewModel.setIgnoreAudioFocus(it) },
         )
 
         Spacer(modifier = Modifier.height(16.dp))

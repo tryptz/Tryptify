@@ -1002,6 +1002,9 @@
     <string name="settings_usb_on_waiting">开启。插入 USB DAC 即可开始路由。</string>
     <string name="settings_hires_on">开启。24 位和浮点文件经 DSP 到 Android 输出全程保持完整分辨率，因此 LDAC/aptX HD 能获得 24 位。更改速度时会回退到 16 位。</string>
     <string name="settings_hires_off">关闭。在蓝牙和扬声器上，高解析度文件在进入 DSP 前会被截为 16 位。</string>
+    <string name="settings_play_alongside_other_apps">与其他应用同时播放</string>
+    <string name="settings_play_alongside_on">开启。Tryptify 不请求音频焦点，因此游戏或视频会与它同时播放，而不会使其暂停。来电、闹钟和导航也不会使其暂停或降低音量。</string>
+    <string name="settings_play_alongside_off">关闭。当其他应用开始播放声音时，Tryptify 会按 Android 的决定暂停或降低音量。</string>
     <string name="settings_exclusive_off">关闭。UAPP 式 libusb 输出。需要在“开发者选项”→“停用 USB 音频路由”中开启，否则 Android 音频 HAL 会一直抢占 DAC。</string>
     <string name="settings_exclusive_starting">正在启动…</string>
     <string name="settings_exclusive_no_device">已开启，正在等待插入 USB DAC。</string>

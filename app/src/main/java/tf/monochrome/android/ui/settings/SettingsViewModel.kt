@@ -274,6 +274,11 @@ class SettingsViewModel @Inject constructor(
     fun setHiResHalOutputEnabled(enabled: Boolean) { viewModelScope.launch {
         preferences.setHiResHalOutputEnabled(enabled)
     } }
+    val ignoreAudioFocus: StateFlow<Boolean> = preferences.ignoreAudioFocus
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    fun setIgnoreAudioFocus(enabled: Boolean) { viewModelScope.launch {
+        preferences.setIgnoreAudioFocus(enabled)
+    } }
     /** Human-readable name of the attached USB DAC, or null when nothing is plugged in. */
     val usbOutputDeviceName: StateFlow<String?> =
         usbAudioRouter.usbOutputDevice

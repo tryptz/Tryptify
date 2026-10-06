@@ -1076,6 +1076,9 @@
     <string name="settings_usb_on_waiting">Activado. Conecta un DAC USB para empezar el enrutamiento.</string>
     <string name="settings_hires_on">Activado. Los archivos de 24 bits y coma flotante conservan toda su resolución del DSP a la salida de Android, así que LDAC/aptX HD reciben 24 bits. Cambiar la velocidad vuelve a 16 bits.</string>
     <string name="settings_hires_off">Desactivado. En Bluetooth y altavoz, los archivos de alta resolución se recortan a 16 bits antes del DSP.</string>
+    <string name="settings_play_alongside_other_apps">Reproducir junto con otras apps</string>
+    <string name="settings_play_alongside_on">Activado. Tryptify no pide el foco de audio, así que un juego o un video suenan a la vez en lugar de pausarlo. Las llamadas, las alarmas y la navegación tampoco lo pausan ni bajan su volumen.</string>
+    <string name="settings_play_alongside_off">Desactivado. Cuando otra app empieza a reproducir sonido, Tryptify se pausa o baja el volumen, según decida Android.</string>
     <string name="settings_exclusive_off">Desactivado. Salida libusb al estilo UAPP. Requiere Opciones para desarrolladores → Inhabilitar enrutamiento audio USB → activado; si no, el HAL de audio de Android seguirá acaparando el DAC.</string>
     <string name="settings_exclusive_starting">Iniciando…</string>
     <string name="settings_exclusive_no_device">Activado, esperando a que se conecte un DAC USB.</string>

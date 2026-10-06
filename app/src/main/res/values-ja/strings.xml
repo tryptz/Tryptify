@@ -1002,6 +1002,9 @@
     <string name="settings_usb_on_waiting">オン。USB DAC を接続すると出力が始まります。</string>
     <string name="settings_hires_on">オン。24 ビットと浮動小数点のファイルは DSP から Android の出力まで解像度を保つため、LDAC/aptX HD は 24 ビットになります。速度を変えると 16 ビットに戻ります。</string>
     <string name="settings_hires_off">オフ。Bluetooth とスピーカーでは、ハイレゾファイルは DSP の前に 16 ビットに切り詰められます。</string>
+    <string name="settings_play_alongside_other_apps">他のアプリと同時に再生</string>
+    <string name="settings_play_alongside_on">オン。Tryptify はオーディオフォーカスを要求しないため、ゲームや動画が流れても一時停止せず同時に再生されます。通話、アラーム、ナビでも一時停止や音量の低下は起きません。</string>
+    <string name="settings_play_alongside_off">オフ。他のアプリが音を再生し始めると、Android の判断に従って Tryptify は一時停止するか音量を下げます。</string>
     <string name="settings_exclusive_off">オフ。UAPP 方式の libusb 出力です。「開発者向けオプション」→「USB オーディオ ルーティングを無効化」をオンにする必要があります。そうしないと Android のオーディオ HAL が DAC を奪い合い続けます。</string>
     <string name="settings_exclusive_starting">起動中…</string>
     <string name="settings_exclusive_no_device">オン。USB DAC の接続を待っています。</string>

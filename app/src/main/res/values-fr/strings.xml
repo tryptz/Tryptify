@@ -1076,6 +1076,9 @@
     <string name="settings_usb_on_waiting">Activé. Branchez un DAC USB pour lancer le routage.</string>
     <string name="settings_hires_on">Activé. Les fichiers 24 bits et flottants gardent leur pleine résolution du DSP jusqu’à la sortie d’Android : LDAC/aptX HD reçoivent du 24 bits. Changer la vitesse repasse en 16 bits.</string>
     <string name="settings_hires_off">Désactivé. En Bluetooth et sur le haut-parleur, les fichiers haute résolution sont ramenés à 16 bits avant le DSP.</string>
+    <string name="settings_play_alongside_other_apps">Lire en même temps que d’autres apps</string>
+    <string name="settings_play_alongside_on">Activé. Tryptify ne demande pas le focus audio : un jeu ou une vidéo joue en même temps au lieu de le mettre en pause. Les appels, les alarmes et la navigation ne le mettent pas en pause et ne baissent pas son volume non plus.</string>
+    <string name="settings_play_alongside_off">Désactivé. Quand une autre app joue du son, Tryptify se met en pause ou baisse le volume, selon ce que décide Android.</string>
     <string name="settings_exclusive_off">Désactivé. Sortie libusb à la UAPP. Nécessite Options pour les développeurs → Désactiver routage audio USB → activé ; sinon l’audio HAL d’Android continuera de s’accaparer le DAC.</string>
     <string name="settings_exclusive_starting">Démarrage…</string>
     <string name="settings_exclusive_no_device">Activé, en attente du branchement d’un DAC USB.</string>

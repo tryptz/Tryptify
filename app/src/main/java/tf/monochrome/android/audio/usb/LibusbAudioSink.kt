@@ -91,8 +91,11 @@ class LibusbAudioSink(
     }
 
     private val trimmer = PcmTrimmingAudioProcessor()
+    // First: everything after it counts frames, and a decoder that declares
+    // float while writing 16-bit has half as many as it claims.
+    private val floatGuard = FloatPcmGuard()
     private val halAvailable = halProcessors.isNotEmpty()
-    private val halChain = AudioProcessorChain(listOf(trimmer) + halProcessors)
+    private val halChain = AudioProcessorChain(listOf(floatGuard, trimmer) + halProcessors)
     private val narrowChain = AudioProcessorChain(
         listOf(androidx.media3.common.audio.ToInt16PcmAudioProcessor())
     )
@@ -724,7 +727,12 @@ class LibusbAudioSink(
         }
         if (!buffer.hasRemaining()) return true
 
-        if (c === halChain) noteHalInput(presentationTimeUs, buffer.remaining())
+        if (c === halChain) {
+            // Decided before the bookkeeping, which needs the buffer's real
+            // length: twice its byte count as float if it is 16-bit.
+            floatGuard.classify(buffer)
+            noteHalInput(presentationTimeUs, floatGuard.floatBytes(buffer.remaining()))
+        }
         val processed = if (c.anyActive()) c.process(buffer) else buffer
         if (processed === buffer) {
             // Nothing to do to it: the delegate consumes the renderer's buffer itself.

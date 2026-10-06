@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tf.monochrome.android.data.db.dao.DownloadDao
 import tf.monochrome.android.data.db.entity.DownloadedTrackEntity
+import tf.monochrome.android.data.downloads.DownloadLayout
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.AudioCodec
 import tf.monochrome.android.domain.model.AudioQuality
@@ -108,15 +109,34 @@ class DownloadsViewModel @Inject constructor(
         }.getOrNull() ?: return emptyList()
         if (!tree.canRead()) return emptyList()
 
-        // First pass — collect everything once. listFiles() is the expensive
-        // call; iterating the local list afterwards is free.
-        val children = tree.listFiles().filter { it.isFile && it.canRead() }
+        val knownPaths = knownRoomRows.mapTo(HashSet()) { it.filePath }
+        val out = mutableListOf<DownloadedTrackEntity>()
+        scanDirectory(tree, emptyList(), knownPaths, out)
+        return out
+    }
+
+    /**
+     * One folder of the scan, then the folders inside it. Downloads are filed
+     * as Artist / Album / Disc N (see DownloadLayout), so the scan goes that
+     * deep and no deeper. [folders] is the path from the download folder to
+     * [dir].
+     */
+    private fun scanDirectory(
+        dir: DocumentFile,
+        folders: List<String>,
+        knownPaths: Set<String>,
+        out: MutableList<DownloadedTrackEntity>,
+    ) {
+        // listFiles() is the expensive call; iterating the local list
+        // afterwards is free.
+        val children = dir.listFiles().filter { it.canRead() }
+        val files = children.filter { it.isFile }
 
         // Folder-level art (cover.jpg / folder.png / albumart.webp). The
-        // TrackDownloader drops one of these alongside the audio so the system
-        // MediaScanner picks it up. We match by stem so any of the four
+        // TrackDownloader drops one of these in each album folder so the
+        // system MediaScanner picks it up. We match by stem so any of the four
         // common names work.
-        val folderArtUri = children
+        val folderArtUri = files
             .firstOrNull { f ->
                 val n = f.name?.lowercase() ?: return@firstOrNull false
                 val stem = n.substringBeforeLast('.')
@@ -128,7 +148,7 @@ class DownloadsViewModel @Inject constructor(
 
         // Per-track sidecar art (e.g. "Artist - Title.jpg" next to
         // "Artist - Title.flac"). Index by stem so the audio loop is O(n).
-        val sidecarArtByStem: Map<String, String> = children.asSequence()
+        val sidecarArtByStem: Map<String, String> = files.asSequence()
             .mapNotNull { f ->
                 val n = f.name ?: return@mapNotNull null
                 val ext = n.substringAfterLast('.', "").lowercase()
@@ -139,18 +159,23 @@ class DownloadsViewModel @Inject constructor(
             }
             .toMap()
 
-        val knownPaths = knownRoomRows.mapTo(HashSet()) { it.filePath }
-        val out = mutableListOf<DownloadedTrackEntity>()
-        for (file in children) {
+        for (file in files) {
             val name = file.name ?: continue
             if (!isAudioFile(name, file.type)) continue
             val pathString = file.uri.toString()
             if (pathString in knownPaths) continue
             val stem = name.substringBeforeLast('.')
             val cover = sidecarArtByStem[stem] ?: folderArtUri
-            out += syntheticEntityFor(file, pathString, name, cover)
+            out += syntheticEntityFor(file, pathString, name, folders, cover)
         }
-        return out
+
+        if (folders.size < MAX_SCAN_DEPTH) {
+            for (sub in children) {
+                if (!sub.isDirectory) continue
+                val subName = sub.name ?: continue
+                scanDirectory(sub, folders + subName, knownPaths, out)
+            }
+        }
     }
 
     private fun isAudioFile(name: String, mime: String?): Boolean {
@@ -163,24 +188,23 @@ class DownloadsViewModel @Inject constructor(
         file: DocumentFile,
         path: String,
         name: String,
+        folders: List<String>,
         coverUri: String?,
     ): DownloadedTrackEntity {
-        // Filename convention written by TrackDownloader is
-        // "<artist> - <title>.<ext>" — try to recover the split, fall
-        // back to the bare name.
-        val withoutExt = name.substringBeforeLast('.', name)
-        val (artist, title) = withoutExt.split(" - ", limit = 2)
-            .let { if (it.size == 2) it[0] to it[1] else "" to withoutExt }
+        // Artist and album from the folders a download is filed in, the title
+        // from the file name without its track number. A file at the top of
+        // the folder is read the old flat way, "<artist> - <title>".
+        val described = DownloadLayout.describe(folders, name)
         // Stable id derived from the URI so successive scans don't drift the
         // LazyColumn keying. Always negative so it can't collide with a real
         // catalog track id (those are positive Longs from TIDAL/Qobuz).
         val syntheticId = -((path.hashCode().toLong() and 0x7FFFFFFFL) or 1L)
         return DownloadedTrackEntity(
             id = syntheticId,
-            title = title,
+            title = described.title,
             duration = 0,
-            artistName = artist,
-            albumTitle = null,
+            artistName = described.artist,
+            albumTitle = described.album,
             albumCover = coverUri,
             filePath = path,
             quality = AudioQuality.LOSSLESS.name,
@@ -229,6 +253,8 @@ class DownloadsViewModel @Inject constructor(
 
     companion object {
         const val SINGLES_LABEL = "Singles"
+        // Artist / Album / Disc N below the download folder.
+        private const val MAX_SCAN_DEPTH = 3
         // Lower-case extensions TrackDownloader may produce + the formats
         // users typically sideload. Mime-type sniff still wins; this list
         // catches files SAF reports without a type (common on some
@@ -237,7 +263,7 @@ class DownloadsViewModel @Inject constructor(
             "flac", "alac", "mp3", "m4a", "aac", "ogg", "opus", "wav", "wma",
         )
         // Common folder-level cover filenames (see also Android's MediaScanner
-        // and most desktop tag editors). TrackDownloader writes "cover.jpg".
+        // and most desktop tag editors). TrackDownloader writes "cover.jpg" in each album folder.
         private val COVER_STEMS = setOf("cover", "folder", "albumart", "album")
         private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
     }

@@ -156,6 +156,10 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     // ── Audio ───────────────────────────────────────────────────────────
     entry("Gapless playback", R.string.settings_gapless_playback, "Audio", listOf("gap", "continuous", "album")),
     entry("Crossfade", R.string.search_crossfade, "Audio", listOf("fade", "transition", "blend")),
+    entry(
+        "Play alongside other apps", R.string.settings_play_alongside_other_apps, "Audio",
+        listOf("audio focus", "focus", "game", "gaming", "mix", "pause", "duck", "interrupt", "video"),
+    ),
     entry("Playback speed", R.string.settings_playback_speed, "Audio", listOf("tempo", "faster", "slower", "pitch")),
     entry("Multichannel downmix", R.string.settings_downmix_multichannel_to_stereo, "Audio", listOf("surround", "5.1", "atmos", "stereo")),
     entry("Spatial renderer", R.string.settings_atmos_renderer_configuration, "Audio", listOf("atmos", "hrtf", "binaural", "spatial"))

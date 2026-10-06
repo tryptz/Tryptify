@@ -210,13 +210,9 @@ class PlaybackService : MediaSessionService() {
             // setMediaSource paths below build their own sources and are not
             // tapped yet.
             .setMediaSourceFactory(atmosTapFactory)
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(C.USAGE_MEDIA)
-                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                    .build(),
-                /* handleAudioFocus = */ true
-            )
+            // Focus handling on until the preference says otherwise; see
+            // the ignoreAudioFocus collector below.
+            .setAudioAttributes(musicAttributes, /* handleAudioFocus = */ true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .setLoadControl(loadControl)
@@ -609,6 +605,19 @@ class PlaybackService : MediaSessionService() {
         serviceScope.launch { preferences.dspEnabled.collect { dspEnabled = it } }
         serviceScope.launch { preferences.hiResHalOutputEnabled.collect { hiResHalEnabled = it } }
 
+        // "Play alongside other apps" (issue #131). With focus handling off the
+        // player never requests audio focus, so there is nothing for a game or
+        // a video to take away: both play at once, and Android 12's forced
+        // fade-out does not apply either, since it only acts on an app that
+        // was granted focus. Applied live — Media3 abandons or requests focus
+        // as the flag changes — and the focus-loss retry in
+        // onPlayWhenReadyChanged has nothing to react to while it is off.
+        serviceScope.launch {
+            preferences.ignoreAudioFocus.collect { ignore ->
+                player.setAudioAttributes(musicAttributes, /* handleAudioFocus = */ !ignore)
+            }
+        }
+
         // Blend length. Any non-zero value takes over from the gapless window,
         // so re-derive that whenever it changes.
         serviceScope.launch {
@@ -887,7 +896,11 @@ class PlaybackService : MediaSessionService() {
             override fun getCodecAdapterFactory():
                 androidx.media3.exoplayer.mediacodec.MediaCodecAdapter.Factory {
                 cachedImportanceFactory?.let { return it }
-                val wrapped = ImportanceMediaCodecAdapterFactory(super.getCodecAdapterFactory())
+                // SourceDepthMediaCodecAdapterFactory keeps 16-bit sources
+                // decoding to 16-bit, for the reason given on the class.
+                val wrapped = ImportanceMediaCodecAdapterFactory(
+                    SourceDepthMediaCodecAdapterFactory(super.getCodecAdapterFactory())
+                )
                 cachedImportanceFactory = wrapped
                 return wrapped
             }
@@ -1519,6 +1532,13 @@ class PlaybackService : MediaSessionService() {
     @Volatile private var dspEnabled = false
     // Read by LibusbAudioSink on the playback thread at configure time.
     @Volatile private var hiResHalEnabled = true
+
+    // What the player is: music. Given again whenever the audio-focus
+    // preference changes, since Media3 takes the two together.
+    private val musicAttributes = AudioAttributes.Builder()
+        .setUsage(C.USAGE_MEDIA)
+        .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+        .build()
 
     // Type left inferred, like atmosTapFactory above: spelling CrossfadeController
     // out here is itself an opt-in usage that an @OptIn on the property doesn't
