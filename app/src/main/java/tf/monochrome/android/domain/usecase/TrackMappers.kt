@@ -52,6 +52,7 @@ fun Track.toUnifiedTrack(): UnifiedTrack = UnifiedTrack(
     channelCount = channelCount,
     version = version,
     isThxSpatialAudio = isThxSpatialAudio,
+    isDolbyAtmos = isDolbyAtmos,
     source = PlaybackSource.HiFiApi(tidalId = id),
     sourceType = SourceType.API,
 )
@@ -81,6 +82,7 @@ fun Track.toQobuzUnifiedTrack(): UnifiedTrack = UnifiedTrack(
     channelCount = channelCount,
     version = version,
     isThxSpatialAudio = isThxSpatialAudio,
+    isDolbyAtmos = isDolbyAtmos,
     // DERIVED, not TAGGED: Qobuz tags the *release*, not the track, so this is
     // the album's genre inherited downward. True often enough to rank on, not
     // reliably enough to state as fact about the track itself.
@@ -120,6 +122,7 @@ fun Track.toAppleUnifiedTrack(): UnifiedTrack = UnifiedTrack(
     channelCount = channelCount,
     version = version,
     isThxSpatialAudio = isThxSpatialAudio,
+    isDolbyAtmos = isDolbyAtmos,
     source = PlaybackSource.AppleCached(appleId = appleId ?: id),
     sourceType = SourceType.APPLE,
 )

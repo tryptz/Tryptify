@@ -714,6 +714,9 @@ private fun UnifiedSearchTrackItem(
                     if (track.isThxSpatialAudio) {
                         tf.monochrome.android.ui.components.ThxBadgePill()
                     }
+                    if (track.isDolbyAtmos) {
+                        tf.monochrome.android.ui.components.DolbyAtmosBadgePill()
+                    }
                     track.qualityBadge?.let { ResultBadge(text = it) }
                 }
             }

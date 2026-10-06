@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Dolby double-D mark (path from Simple Icons, CC0-1.0). Dolby, Dolby Atmos
+  and the double-D symbol are trademarks of Dolby Laboratories; shown only to
+  label TIDAL tracks and releases that have a Dolby Atmos mix. The viewport is
+  cropped to the mark's own bounds (24 x 16.872) so it fills the badge height.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="16.872dp"
+    android:viewportWidth="24"
+    android:viewportHeight="16.872">
+    <group android:translateY="-3.564">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M0,3.564v16.872h2.488c4.648,0 8.438,-3.788 8.438,-8.436s-3.79,-8.436 -8.438,-8.436H0zM21.512,3.564c-4.648,0 -8.438,3.788 -8.438,8.436s3.79,8.436 8.438,8.436H24V3.564h-2.488z" />
+    </group>
+</vector>

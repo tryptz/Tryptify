@@ -51,6 +51,10 @@ fun AlbumItem(
                 ThxBadgePill()
                 Spacer(modifier = Modifier.width(MonoDimens.spacingXs))
             }
+            if (album.isDolbyAtmos) {
+                DolbyAtmosBadgePill()
+                Spacer(modifier = Modifier.width(MonoDimens.spacingXs))
+            }
             Text(
                 text = album.title,
                 style = MaterialTheme.typography.bodyMedium,

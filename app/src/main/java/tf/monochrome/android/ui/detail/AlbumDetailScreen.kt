@@ -229,14 +229,17 @@ fun AlbumDetailScreen(
                                 cornerRadius = 12.dp
                             )
                             Spacer(modifier = Modifier.height(16.dp))
-                            // The catalog this album came from, beside any THX mark.
-                            if (source != null || detail.album.isThxSpatialAudio) {
+                            // The catalog this album came from, beside any THX or Dolby Atmos mark.
+                            if (source != null || detail.album.isThxSpatialAudio || detail.album.isDolbyAtmos) {
                                 androidx.compose.foundation.layout.Row(
                                     horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
                                 ) {
                                     source?.let { tf.monochrome.android.ui.components.SourcePill(it) }
                                     if (detail.album.isThxSpatialAudio) {
                                         tf.monochrome.android.ui.components.ThxBadgePill()
+                                    }
+                                    if (detail.album.isDolbyAtmos) {
+                                        tf.monochrome.android.ui.components.DolbyAtmosBadgePill()
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(6.dp))

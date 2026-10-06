@@ -21,6 +21,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import tf.monochrome.android.data.api.model.AlbumResponse
+import tf.monochrome.android.data.api.model.hasDolbyAtmos
 import tf.monochrome.android.data.api.model.AlbumTrackItem
 import tf.monochrome.android.data.api.model.ArtistContentResponse
 import tf.monochrome.android.data.api.model.ArtistResponse
@@ -883,7 +884,8 @@ class HiFiApiClient @Inject constructor(
             cover = response.cover,
             explicit = response.explicit,
             type = response.type,
-            duration = response.duration
+            duration = response.duration,
+            isDolbyAtmos = hasDolbyAtmos(response.audioModes, response.mediaMetadata) == true,
         )
 
         val trackItems = response.tracks?.items ?: response.items ?: emptyList()
@@ -1073,7 +1075,9 @@ class HiFiApiClient @Inject constructor(
         // renderer then renders it to binaural or the speaker layout. Falls
         // through to the stereo stream when the track has no Atmos mix or the
         // instance isn't set / can't serve it.
-        if (!forDownload && preferences.tidalAtmosPreferred.first()) {
+        // A track TIDAL already listed without an Atmos mix goes straight to
+        // stereo instead of costing a round trip to ask.
+        if (!forDownload && knownAtmos[trackId] != false && preferences.tidalAtmosPreferred.first()) {
             tidalAtmosStreamUrl(trackId)?.let { url ->
                 return TrackStream(
                     track = Track(id = trackId, title = "", duration = 0),
@@ -1767,8 +1771,23 @@ private fun tf.monochrome.android.data.api.model.ApiAlbum.toDomain() = Album(
     cover = cover,
     explicit = explicit,
     type = type,
-    duration = duration
+    duration = duration,
+    isDolbyAtmos = hasDolbyAtmos(audioModes, mediaMetadata) == true,
 )
+
+/**
+ * TIDAL track id -> whether TIDAL lists a Dolby Atmos mix for it, for every
+ * track seen with its audio modes. Lets getTrackStream skip the Atmos request
+ * for a track TIDAL has already said has none. Track ids only: album ids live
+ * in another namespace.
+ */
+private val knownAtmos = java.util.concurrent.ConcurrentHashMap<Long, Boolean>()
+
+/** Records [atmos] for TIDAL track [id] when TIDAL said either way; true only for an Atmos mix. */
+private fun noteAtmos(id: Long, atmos: Boolean?): Boolean {
+    if (atmos != null && id != 0L) knownAtmos[id] = atmos
+    return atmos == true
+}
 
 private fun tf.monochrome.android.data.api.model.ApiTrack.toDomain() = Track(
     id = id,
@@ -1784,7 +1803,8 @@ private fun tf.monochrome.android.data.api.model.ApiTrack.toDomain() = Track(
     popularity = popularity,
     type = type ?: "track",
     isUnavailable = unavailable,
-    streamStartDate = streamStartDate
+    streamStartDate = streamStartDate,
+    isDolbyAtmos = noteAtmos(id, hasDolbyAtmos(audioModes, mediaMetadata)),
 )
 
 private fun tf.monochrome.android.data.api.model.SearchItem.toTrack() = Track(
@@ -1800,7 +1820,8 @@ private fun tf.monochrome.android.data.api.model.SearchItem.toTrack() = Track(
     volumeNumber = volumeNumber,
     popularity = popularity,
     type = type ?: "track",
-    streamStartDate = streamStartDate
+    streamStartDate = streamStartDate,
+    isDolbyAtmos = noteAtmos(id, hasDolbyAtmos(audioModes, mediaMetadata)),
 )
 
 private fun tf.monochrome.android.data.api.model.SearchItem.toAlbum() = Album(
@@ -1812,7 +1833,8 @@ private fun tf.monochrome.android.data.api.model.SearchItem.toAlbum() = Album(
     releaseDate = releaseDate,
     cover = cover ?: picture,
     explicit = explicit,
-    type = type
+    type = type,
+    isDolbyAtmos = hasDolbyAtmos(audioModes, mediaMetadata) == true,
 )
 
 private fun tf.monochrome.android.data.api.model.SearchItem.toArtist() = Artist(
@@ -1842,7 +1864,11 @@ private fun tf.monochrome.android.data.api.model.AlbumTrackItem.toTrack(album: A
     explicit = item?.explicit ?: explicit,
     trackNumber = item?.trackNumber ?: trackNumber,
     volumeNumber = item?.volumeNumber ?: volumeNumber,
-    popularity = item?.popularity ?: popularity
+    popularity = item?.popularity ?: popularity,
+    isDolbyAtmos = noteAtmos(
+        item?.id ?: id,
+        hasDolbyAtmos(item?.audioModes ?: audioModes, item?.mediaMetadata ?: mediaMetadata),
+    ),
 )
 
 private fun tf.monochrome.android.data.api.model.PlaylistTrackItem.toDomain(): Track? {
@@ -1857,6 +1883,7 @@ private fun tf.monochrome.android.data.api.model.PlaylistTrackItem.toDomain(): T
         album = album?.toDomain(),
         trackNumber = trackNumber,
         audioQuality = audioQuality,
-        explicit = explicit ?: false
+        explicit = explicit ?: false,
+        isDolbyAtmos = noteAtmos(trackId, hasDolbyAtmos(audioModes, mediaMetadata)),
     )
 }

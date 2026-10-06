@@ -1701,6 +1701,7 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
     val crossfade by viewModel.crossfadeDuration.collectAsStateWithLifecycle()
     val gaplessNoResample by viewModel.gaplessNoResample.collectAsStateWithLifecycle()
     val qualities by viewModel.qualities.collectAsStateWithLifecycle()
+    val tidalAtmos by viewModel.tidalAtmosPreferred.collectAsStateWithLifecycle()
     val playbackSpeed by viewModel.playbackSpeed.collectAsStateWithLifecycle()
     val preservePitch by viewModel.preservePitch.collectAsStateWithLifecycle()
     val ignoreAudioFocus by viewModel.ignoreAudioFocus.collectAsStateWithLifecycle()
@@ -1796,6 +1797,21 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
                     setting = setting,
                     quality = qualities[service to setting],
                     onPick = { viewModel.setQuality(service, setting, it) },
+                )
+            }
+            // TIDAL's Dolby Atmos mix goes ahead of the stereo tier above: a
+            // track with the Atmos badge plays its Atmos mix, the rest stereo.
+            if (service == ApiService.TIDAL) {
+                SettingSwitchItem(
+                    title = stringResource(R.string.atmos_tidal_dolby_atmos),
+                    subtitle = if (tidalAtmos) {
+                        stringResource(R.string.atmos_tidal_on)
+                    } else {
+                        stringResource(R.string.atmos_tidal_off)
+                    },
+                    checked = tidalAtmos,
+                    onCheckedChange = { viewModel.setTidalAtmosPreferred(it) },
+                    titleIcon = { tf.monochrome.android.ui.components.DolbyAtmosBadgePill() },
                 )
             }
         }
@@ -3449,6 +3465,8 @@ fun SettingSwitchItem(
     onCheckedChange: (Boolean) -> Unit,
     badge: String? = null,
     caution: String? = null,
+    /** Drawn after the title, like [badge]: a mark such as the Dolby Atmos pill. */
+    titleIcon: (@Composable () -> Unit)? = null,
 ) {
     // [badge] and [caution] sit beside and under the row rather than being folded
     // into [title] and [subtitle]: the title is the anchor id that settings search
@@ -3467,6 +3485,10 @@ fun SettingSwitchItem(
                         if (badge != null) {
                             Spacer(modifier = Modifier.width(6.dp))
                             SettingBadge(badge)
+                        }
+                        if (titleIcon != null) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            titleIcon()
                         }
                     }
                     Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -57,6 +57,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -96,6 +98,8 @@ fun PlayerHero(
     style: PlayerHeroStyle,
     isFullscreen: Boolean = false,
     track: Track?,
+    /** The track is playing its Dolby Atmos mix: the quality pill says so. */
+    dolbyAtmos: Boolean = false,
     isPlaying: Boolean,
     /**
      * The play head as a 0..1 fraction, as a lambda rather than a value. Only
@@ -195,6 +199,7 @@ fun PlayerHero(
             )
             else -> SquareArtHero(
                 track = track,
+                dolbyAtmos = dolbyAtmos,
                 isPlaying = isPlaying,
                 spectrumBins = spectrumBins,
                 spectrumColor = spectrumColor,
@@ -216,6 +221,7 @@ fun PlayerHero(
 @Composable
 private fun SquareArtHero(
     track: Track?,
+    dolbyAtmos: Boolean,
     isPlaying: Boolean,
     spectrumBins: (() -> FloatArray)?,
     spectrumColor: Color,
@@ -254,6 +260,7 @@ private fun SquareArtHero(
             showSpectrum = showSpectrum,
             onToggleShowSpectrum = onToggleShowSpectrum,
             quality = track?.audioQuality,
+            dolbyAtmos = dolbyAtmos,
             blendMillis = blendMillis,
             userTrackChanges = userTrackChanges,
             onEnterVisualizer = onEnterVisualizer,
@@ -732,6 +739,7 @@ private fun HeroCoverArt(
     showSpectrum: Boolean = true,
     onToggleShowSpectrum: () -> Unit = {},
     quality: String? = null,
+    dolbyAtmos: Boolean = false,
     blendMillis: Int = MANUAL_MORPH_MS,
     userTrackChanges: Int = 0,
     onEnterVisualizer: (() -> Unit)? = null,
@@ -912,8 +920,10 @@ private fun HeroCoverArt(
                 }
             }
 
-            // Quality badge (top-right) — also fades out when idle.
-            if (quality != null) {
+            // Quality badge (top-right) — also fades out when idle. While the
+            // Dolby Atmos mix plays it shows the Dolby mark instead, since the
+            // stereo tier is not what is playing.
+            if (quality != null || dolbyAtmos) {
                 Surface(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -927,11 +937,28 @@ private fun HeroCoverArt(
                     color = Color.Transparent,
                     contentColor = Color.White,
                 ) {
-                    Text(
-                        text = quality,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                    )
+                    if (dolbyAtmos) {
+                        Row(
+                            modifier = Modifier
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .semantics { contentDescription = "Dolby Atmos" },
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(
+                                painter = androidx.compose.ui.res.painterResource(R.drawable.ic_dolby_mark),
+                                contentDescription = null,
+                                modifier = Modifier.size(width = 14.dp, height = 9.8.dp),
+                            )
+                            Text(text = "ATMOS", style = MaterialTheme.typography.labelSmall)
+                        }
+                    } else {
+                        Text(
+                            text = quality.orEmpty(),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
                 }
             }
 

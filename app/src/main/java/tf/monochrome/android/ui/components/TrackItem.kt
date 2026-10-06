@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -162,6 +163,10 @@ fun TrackItem(
                     Spacer(modifier = Modifier.width(4.dp))
                     ThxBadgePill()
                 }
+                if (track.isDolbyAtmos) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    DolbyAtmosBadgePill()
+                }
                 track.channelBadge?.let { badge ->
                     Spacer(modifier = Modifier.width(4.dp))
                     ChannelBadgePill(badge)
@@ -314,5 +319,40 @@ fun ThxBadgePill(modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onPrimary,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
         )
+    }
+}
+
+/**
+ * The Dolby Atmos mark on a TIDAL track or release that has an Atmos mix,
+ * styled like [ThxBadgePill]: the double-D symbol and "ATMOS". With TIDAL
+ * Dolby Atmos on (Settings > Audio), these are the tracks that play the Atmos
+ * mix instead of stereo.
+ */
+@Composable
+fun DolbyAtmosBadgePill(modifier: Modifier = Modifier) {
+    Surface(
+        // A trademark, not translated.
+        modifier = modifier.semantics { contentDescription = "Dolby Atmos" },
+        shape = RoundedCornerShape(4.dp),
+        color = MaterialTheme.colorScheme.primary,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Icon(
+                painter = androidx.compose.ui.res.painterResource(R.drawable.ic_dolby_mark),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(width = 12.dp, height = 8.4.dp),
+            )
+            Text(
+                text = "ATMOS",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimary,
+            )
+        }
     }
 }

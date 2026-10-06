@@ -600,6 +600,13 @@ class SettingsViewModel @Inject constructor(
     fun setQuality(service: ApiService, setting: ServiceQuality.Setting, quality: AudioQuality) {
         viewModelScope.launch { preferences.setQuality(service, setting, quality) }
     }
+
+    /** TIDAL Dolby Atmos: TIDAL tracks with an Atmos mix play it instead of stereo. */
+    val tidalAtmosPreferred: StateFlow<Boolean> = preferences.tidalAtmosPreferred
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    fun setTidalAtmosPreferred(enabled: Boolean) {
+        viewModelScope.launch { preferences.setTidalAtmosPreferred(enabled) }
+    }
     fun setNormalizationEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setNormalizationEnabled(enabled) } }
     fun setSystemWideAutoEq(enabled: Boolean) { viewModelScope.launch { preferences.setSystemWideAutoEqEnabled(enabled) } }
     fun setDspBlockSize(value: Int) { viewModelScope.launch { preferences.setDspBlockSize(value) } }

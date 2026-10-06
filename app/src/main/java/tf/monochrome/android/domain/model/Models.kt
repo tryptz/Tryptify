@@ -57,6 +57,8 @@ data class Track(
     val version: String? = null,
     // THX Spatial Audio release — Qobuz marks it only via version/title text.
     val isThxSpatialAudio: Boolean = false,
+    // TIDAL lists a Dolby Atmos mix for it (audioModes / mediaMetadata tags).
+    val isDolbyAtmos: Boolean = false,
     // Apple Music identity, kept SEPARATE from [id]. Non-null means this track
     // came from the Apple catalog and this is its true adamId. Apple and Qobuz
     // ids share no namespace — inferring the source from [id] alone (the old
@@ -104,6 +106,8 @@ data class Album(
     val version: String? = null,
     // THX Spatial Audio release — marks every track on it.
     val isThxSpatialAudio: Boolean = false,
+    // TIDAL lists a Dolby Atmos mix for the release.
+    val isDolbyAtmos: Boolean = false,
     // Qobuz returns this on every album and the app used to drop it on the
     // floor. `genreSlug` is the catalogue's own taxonomy key, which is a more
     // stable join than the display name.
@@ -499,6 +503,8 @@ data class UnifiedTrack(
     val version: String? = null,
     // THX Spatial Audio release — Qobuz marks it only via version/title text.
     val isThxSpatialAudio: Boolean = false,
+    // TIDAL lists a Dolby Atmos mix for it; shown as the Dolby Atmos badge.
+    val isDolbyAtmos: Boolean = false,
 
     // Replay gain
     val replayGainTrack: Float? = null,
@@ -623,6 +629,7 @@ data class UnifiedTrack(
             channelCount = channelCount,
             version = version,
             isThxSpatialAudio = isThxSpatialAudio,
+            isDolbyAtmos = isDolbyAtmos,
             appleId = (source as? PlaybackSource.AppleCached)?.appleId,
             deezerId = (source as? PlaybackSource.DeezerPreview)?.deezerId,
         )

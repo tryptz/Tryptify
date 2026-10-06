@@ -186,6 +186,13 @@ class PlayerViewModel @Inject constructor(
     private val _isLyricsLoading = MutableStateFlow(false)
     val isLyricsLoading: StateFlow<Boolean> = _isLyricsLoading.asStateFlow()
 
+    /**
+     * TIDAL Dolby Atmos (Settings > Audio): TIDAL tracks with an Atmos mix
+     * play it. The player marks such a track as playing in Atmos only then.
+     */
+    val tidalAtmosPreferred: StateFlow<Boolean> = preferences.tidalAtmosPreferred
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     // --- Parity Settings ---
     val visualizerSensitivity: StateFlow<Int> = preferences.visualizerSensitivity
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 50)
