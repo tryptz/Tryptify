@@ -31,7 +31,10 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import kotlin.math.ceil
 import tf.monochrome.android.performance.LocalLowPerformance
 
 /**
@@ -167,7 +170,20 @@ internal fun LyricBackdropFx(backdrop: LyricBackdrop, modifier: Modifier = Modif
                 // Its own buffer, so the copy's edge fade (DstIn) cuts the copy alone.
                 fxLayer.compositingStrategy = LayerCompositingStrategy.Offscreen
                 fxLayer.renderEffect = effect.asComposeRenderEffect()
-                fxLayer.record { drawLetterCopy(capture, letters, capture.originInRoot - at) }
+                // Every length in px before recording, and recorded with a
+                // plain Density rather than through the node's own record { }:
+                // inside that block the node's draw scope reads its density
+                // from itself, so the first dp.toPx() there recursed until the
+                // stack overflowed, the moment the lyrics opened (seen on
+                // device). Here the block draws in the layer's own scope.
+                val feather = 14.dp.toPx()
+                fxLayer.record(
+                    Density(density, fontScale),
+                    layoutDirection,
+                    IntSize(ceil(size.width).toInt(), ceil(size.height).toInt()),
+                ) {
+                    drawLetterCopy(capture, letters, capture.originInRoot - at, feather)
+                }
                 drawLayer(fxLayer)
             },
     )
@@ -204,9 +220,15 @@ internal fun Modifier.lyricRaysOnLetters(backdrop: LyricBackdrop?): Modifier {
 /**
  * The lyric view's letters, as [captureLetters] recorded them, drawn with
  * their top-left at [at] in this scope, and faded at the top and bottom as
- * the real ones are when [LyricLetterCapture.edgeFade] says so.
+ * the real ones are when [LyricLetterCapture.edgeFade] says so, over at most
+ * [maxFeatherPx].
  */
-private fun DrawScope.drawLetterCopy(capture: LyricLetterCapture, letters: GraphicsLayer, at: Offset) {
+private fun DrawScope.drawLetterCopy(
+    capture: LyricLetterCapture,
+    letters: GraphicsLayer,
+    at: Offset,
+    maxFeatherPx: Float,
+) {
     translate(at.x, at.y) {
         drawLayer(letters)
         if (capture.edgeFade) {
@@ -215,7 +237,7 @@ private fun DrawScope.drawLetterCopy(capture: LyricLetterCapture, letters: Graph
             // off hard at the surface's edge.
             val h = capture.size.height
             if (h > 0f) {
-                val top = (h * 0.05f).coerceAtMost(14.dp.toPx()) / h
+                val top = (h * 0.05f).coerceAtMost(maxFeatherPx) / h
                 drawRect(
                     brush = Brush.verticalGradient(
                         0f to Color.Transparent,

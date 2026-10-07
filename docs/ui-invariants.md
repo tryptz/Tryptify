@@ -253,6 +253,17 @@ backdrop, so its lyric view draws both itself. The Studio's preview is built
 the same way as the player, down to the `lyricsEdgeFade` box around the
 playing song's lyrics.
 
+**A `GraphicsLayer` recorded in a draw modifier gets a plain `Density`.**
+`LyricBackdropFx` records its copy with `layer.record(Density(density,
+fontScale), layoutDirection, size) { … }`, never the node's `record { … }`
+shorthand. Inside the shorthand's block the node's draw scope is its own
+density (Compose 1.10's `LayoutNodeDrawScope.record` hands itself to the layer
+as the density and then reads it back), so the first `dp.toPx()` there
+recursed until the stack overflowed: the app crashed the moment the lyrics
+opened (seen on device, a `StackOverflowError` in `getDensity`). Work out
+every length before recording either way. `record { drawContent() }` is safe:
+`drawContent()` draws the children in their own scopes.
+
 **"On top" is the backdrop's shafts plus the letters' own light, added to
 their own pixels.** A layer under the letters cannot add light over them, so
 `lyricRaysOnLetters` does that part alone (`uOnLetters`): a render effect on
