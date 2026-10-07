@@ -229,6 +229,12 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
+                    section = PLAYBACK,
+                    title = "Skipping songs no longer crashes",
+                    body = "Skipping from one song to the next, most often in a Dolby Atmos or surround playlist, could close the app.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
                     section = PIPELINE,
                     title = "16-bit FLAC plays cleanly on hi-res output",
                     body = "On some phones a 16-bit FLAC on the hi-res output played as loud static at double speed, because the decoder said float and wrote 16-bit. It is caught and read as 16-bit now.",
