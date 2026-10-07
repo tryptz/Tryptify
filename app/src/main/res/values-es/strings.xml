@@ -1931,4 +1931,6 @@
     <string name="fx_god_ray_follow_word_desc">Con letras sincronizadas por palabra, solo brilla la palabra que se canta y la luz avanza palabra a palabra. Las letras sincronizadas por línea mantienen toda la línea.</string>
     <string name="fx_god_ray_all_lyrics">Toda la letra brilla</string>
     <string name="fx_god_ray_all_lyrics_desc">Cada línea emite luz, no solo la que se canta, como en el Shadertoy original. Más recargado, y la línea cantada pierde la atenuación que la mantiene legible.</string>
+    <string name="fx_god_ray_glass_catch">El cristal capta la luz</string>
+    <string name="fx_god_ray_glass_catch_desc">Las letras de cristal captan la luz de los haces: un destello en los bordes que miran hacia ella y, a contraluz, contornos que brillan. Requiere el cristal líquido.</string>
 </resources>

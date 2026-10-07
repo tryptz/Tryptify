@@ -149,6 +149,7 @@ import tf.monochrome.android.ui.player.bassBeat
 import tf.monochrome.android.ui.player.fxaa
 import tf.monochrome.android.ui.player.liquidGlass
 import tf.monochrome.android.ui.player.lyricGodRays
+import tf.monochrome.android.ui.player.rememberLyricRayLight
 import tf.monochrome.android.ui.player.rememberLyricFontFamily
 import androidx.compose.ui.layout.boundsInParent
 import androidx.compose.ui.text.TextMeasurer
@@ -2115,22 +2116,23 @@ private fun StudioPreview(
                 val wordSpans = remember(sample, sampleStyle) { sampleWordSpans(measurer, sample, sampleStyle) }
                 val followWord = fx.godRaysFollowWord
                 var rowBand by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+                val rayLight = rememberLyricRayLight(
+                    accent = accent,
+                    pulse = pulse,
+                    band = {
+                        val row = rowBand
+                        if (row == null || !followWord || wordSpans.isEmpty()) {
+                            row
+                        } else {
+                            val (from, to) = wordSpans[(clock.value * 2f).toInt().mod(wordSpans.size)]
+                            androidx.compose.ui.geometry.Rect(row.left + from, row.top, row.left + to, row.bottom)
+                        }
+                    },
+                )
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .lyricGodRays(
-                            accent = accent,
-                            pulse = pulse,
-                            band = {
-                                val row = rowBand
-                                if (row == null || !followWord || wordSpans.isEmpty()) {
-                                    row
-                                } else {
-                                    val (from, to) = wordSpans[(clock.value * 2f).toInt().mod(wordSpans.size)]
-                                    androidx.compose.ui.geometry.Rect(row.left + from, row.top, row.left + to, row.bottom)
-                                }
-                            },
-                        ),
+                        .lyricGodRays(rayLight),
                     contentAlignment = Alignment.Center,
                 ) {
                     Letters3DRow(
@@ -2141,7 +2143,7 @@ private fun StudioPreview(
                         modifier = Modifier
                             .onGloballyPositioned { rowBand = it.boundsInParent() }
                             .fxaa()
-                            .liquidGlass(tint = accent)
+                            .liquidGlass(tint = accent, rayLight = rayLight)
                             .bassBeat(pulse, fx, anchors),
                     )
                 }

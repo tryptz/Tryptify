@@ -1931,4 +1931,6 @@
     <string name="fx_god_ray_follow_word_desc">Avec des paroles synchronisées au mot, seul le mot chanté brille et la lumière avance mot par mot. Les paroles synchronisées à la ligne gardent toute la ligne.</string>
     <string name="fx_god_ray_all_lyrics">Toutes les paroles brillent</string>
     <string name="fx_god_ray_all_lyrics_desc">Chaque ligne diffuse de la lumière, pas seulement celle qui est chantée, comme dans le Shadertoy d’origine. Plus chargé, et la ligne chantée perd l’atténuation qui la garde lisible.</string>
+    <string name="fx_god_ray_glass_catch">Le verre capte la lumière</string>
+    <string name="fx_god_ray_glass_catch_desc">Les lettres de verre captent la lumière des faisceaux : un éclat sur les bords tournés vers elle et, en contre-jour, des contours qui brillent. Nécessite le verre liquide.</string>
 </resources>

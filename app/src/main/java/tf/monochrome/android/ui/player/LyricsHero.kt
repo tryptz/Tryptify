@@ -427,6 +427,8 @@ internal fun SyncedLyricsView(
     // and the full-screen glow breathe together).
     val bassPulse = LocalBeatPulse.current
         ?: if (beatIntensity > 0.01f) rememberBassPulse() else remember { mutableFloatStateOf(0f) }
+    // One light for the rays and the glass under them.
+    val rayLight = rememberLyricRayLight(accent = accent, pulse = bassPulse, band = activeBand)
     // Shared line registry — the active line reports its screen bounds here and
     // the full-screen LyricsFxLayer (in the player, no clipping ancestor) blooms
     // the album-accent glow there, so the light can never be cut.
@@ -527,13 +529,15 @@ internal fun SyncedLyricsView(
                         Modifier
                     },
                 )
-                .lyricGodRays(accent = accent, pulse = bassPulse, band = activeBand)
+                .lyricGodRays(rayLight)
                 // User edge margin + a fixed bevel-safe inset, so the outermost
                 // glyphs (and their glass bevels) never sit flush against the
                 // clip edge where they'd be corner-cut.
                 .padding(horizontal = sideInset)
                 .fxaa()
-                .liquidGlass(tint = accent),
+                // The same light, so the glass letters catch what the shafts
+                // stream from.
+                .liquidGlass(tint = accent, rayLight = rayLight),
             contentPadding = PaddingValues(top = halfViewport, bottom = tailPadding),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {

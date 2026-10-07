@@ -267,6 +267,15 @@ there the march is averaged plainly and the decay is counted out from the light.
 Letters keeps the article's weighting. Both normalise by the sample count, so
 the quality setting changes grain, not length or brightness (`GodRayGeometryTest`).
 
+**The glass letters catch the rays' light from one shared light.**
+`LyricRayLight` computes the light once, from the rays layer's own box, and
+both layers read it in their draw phase; the glass moves it into its own pixels
+through the two layers' root positions (`frameFor`). Computing it twice, once
+per layer, is how a glint ends up somewhere the shafts are not. The `uRay*`
+term in `LIQUID_GLASS_SRC` is gated on `uRayAmount`, and every pane — the
+transport, the mini player, every panel — sets it to 0 (`setNoRayLight`), which
+leaves their pixels bit-identical: multiplied by exactly 1, added exactly 0.
+
 The rays are off by default, and the 17 presets ahead of `Sunburst` set no
 glass optic and no ray field, so nobody's lyrics change on upgrade. The
 low-performance glass switch drops the rays with the glass.

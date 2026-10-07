@@ -1831,4 +1831,6 @@
     <string name="fx_god_ray_follow_word_desc">对于逐字计时的歌词，只有正在演唱的字词发光，光线逐字移动。逐行计时的歌词仍整行发光。</string>
     <string name="fx_god_ray_all_lyrics">所有歌词都发光</string>
     <string name="fx_god_ray_all_lyrics_desc">每一行都会射出光线，而不只是正在演唱的那一行，就像原版 Shadertoy 一样。画面更繁杂，正在演唱的行也不再被减光以保持清晰。</string>
+    <string name="fx_god_ray_glass_catch">玻璃捕捉光线</string>
+    <string name="fx_god_ray_glass_catch_desc">玻璃文字会捕捉光束的光：朝向光源的边缘出现闪光；若为背光，边缘会发光。需要开启液态玻璃。</string>
 </resources>

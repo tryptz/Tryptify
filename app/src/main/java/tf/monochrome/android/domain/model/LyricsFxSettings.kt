@@ -77,6 +77,13 @@ data class LyricsFxSettings(
     /** Frosted surface grain: 0 = clear letters, 1 = sea glass. */
     val glassFrost: Float = 0f,
     /**
+     * How much the glass letters catch the god rays' light: a glint and a lit
+     * bevel on the edges facing the rays' source, and with a backlight, rims
+     * glowing with the light behind them. Acts only while [godRays] is on, so
+     * it changes nothing for anyone without them.
+     */
+    val glassRayCatch: Float = 0.7f,
+    /**
      * Bevel sample rings the glass shader takes per pixel: 1/2/3 → 5/9/13 taps.
      * Higher = smoother rounded glass but heavier GPU. Device/perf setting —
      * preserved when a theme preset is applied.
@@ -230,6 +237,7 @@ data class LyricsFxSettings(
             glassLightAngleDeg = glassLightAngleDeg.c(0f, 360f, d.glassLightAngleDeg),
             glassEdgeWidth = glassEdgeWidth.c(0f, 1f, d.glassEdgeWidth),
             glassFrost = glassFrost.c(0f, 1f, d.glassFrost),
+            glassRayCatch = glassRayCatch.c(0f, 1f, d.glassRayCatch),
             glassSampleRings = glassSampleRings.coerceIn(1, 3),
             fxaa = fxaa,
             fxaaStrength = fxaaStrength.c(0f, 1f, d.fxaaStrength),

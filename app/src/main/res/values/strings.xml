@@ -1882,4 +1882,6 @@
     <string name="fx_god_ray_follow_word_desc">With word-timed lyrics, only the word being sung shines, and the light hops along word by word. Line-timed lyrics keep the whole line.</string>
     <string name="fx_god_ray_all_lyrics">All lyrics shine</string>
     <string name="fx_god_ray_all_lyrics_desc">Every line streams light, not just the one being sung, as in the original Shadertoy. Busier, and the sung line loses the dimming that keeps it readable.</string>
+    <string name="fx_god_ray_glass_catch">Glass catches the light</string>
+    <string name="fx_god_ray_glass_catch_desc">The glass letters catch the rays\' light: a glint on the edges facing it, and with a backlight, rims that glow. Needs Liquid glass.</string>
 </resources>

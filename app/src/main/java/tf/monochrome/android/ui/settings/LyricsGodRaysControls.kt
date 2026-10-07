@@ -92,6 +92,12 @@ internal fun GodRaysControls(
         ) { on -> onUpdate { it.copy(godRaysFollowWord = on) } }
     }
 
+    FxSlider(
+        stringResource(R.string.fx_god_ray_glass_catch), "${(fx.glassRayCatch * 100).roundToInt()}%",
+        fx.glassRayCatch, 0f..1f,
+        description = stringResource(R.string.fx_god_ray_glass_catch_desc),
+    ) { v -> onUpdate { it.copy(glassRayCatch = v) } }
+
     Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
         Text(
             text = stringResource(R.string.fx_god_ray_direction),

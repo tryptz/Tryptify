@@ -1831,4 +1831,6 @@
     <string name="fx_god_ray_follow_word_desc">単語ごとに同期した歌詞では、歌っている単語だけが光り、光が単語から単語へ移ります。行ごとに同期した歌詞は行全体が光ります。</string>
     <string name="fx_god_ray_all_lyrics">すべての歌詞を光らせる</string>
     <string name="fx_god_ray_all_lyrics_desc">歌っている行だけでなく、すべての行から光が差します。元の Shadertoy と同じです。にぎやかになり、歌っている行を読みやすく保つための減光もなくなります。</string>
+    <string name="fx_god_ray_glass_catch">ガラスが光をとらえる</string>
+    <string name="fx_god_ray_glass_catch_desc">ガラスの文字が光の筋の光をとらえます。光に向いた縁がきらめき、バックライトでは縁が光ります。リキッドグラスが必要です。</string>
 </resources>

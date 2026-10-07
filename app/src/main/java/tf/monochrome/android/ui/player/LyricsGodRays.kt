@@ -5,6 +5,7 @@ import android.graphics.RuntimeShader
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,7 +54,8 @@ import kotlin.math.sin
  * own layer, so a layer inset from the edge would cut every shaft off at the
  * inset in a hard vertical line.
  *
- * [band] is what is being sung, in this layer's own pixels: the line, running
+ * The light's `band` ([rememberLyricRayLight]) is what is being sung, in this
+ * layer's own pixels: the line, running
  * the full width ([GodRayGeometry.UNBOUNDED] either side), or with
  * [LyricsFxSettings.godRaysFollowWord] the one word. It decides what shines in
  * Letters mode, where the light sits when it faces you head-on, and where the
@@ -64,81 +66,154 @@ import kotlin.math.sin
  * switch on, or if the shader will not compile, this is a no-op.
  */
 @Composable
-internal fun Modifier.lyricGodRays(
+internal fun Modifier.lyricGodRays(light: LyricRayLight?): Modifier {
+    if (light == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
+    return this.then(godRaysModifier(light))
+}
+
+/**
+ * The god rays' light over one lyric surface, shared by the rays and by the
+ * glass letters under them, so the letters catch the very light the shafts
+ * come from (see the `uRay*` uniforms in LiquidGlass.kt).
+ *
+ * Built in composition and read in each layer's draw phase. Everything that
+ * moves the light — the clock, the tilt, the beat, the sung band, the rays
+ * layer's own box — is snapshot state, so both layers rerun when it moves and
+ * nothing recomposes. It is computed once, from the rays layer's box, so the
+ * two can never disagree about where the light is.
+ */
+@Stable
+internal class LyricRayLight(
+    val fx: LyricsFxSettings,
+    accent: Color,
+    val moving: Boolean,
+    private val time: State<Float>,
+    private val tilt: State<Offset>,
+    private val pulse: State<Float>?,
+    private val band: () -> Rect?,
+    /** The rays layer's own box in root px, recorded as it lays out. */
+    internal val surface: BackdropAnchor,
+) {
+    /** The light's colour: the album accent, a third of the way to white. */
+    val color: Color = lerp(accent, Color.White, 0.35f)
+
+    /** This frame's light, in the pixels of a rays layer [w] by [h]. */
+    fun frame(w: Float, h: Float): RayFrame {
+        val maxSide = max(w, h)
+        val t = if (moving) time.value else 0f
+        // "All lyrics" is the Shadertoy's whole image shining: no band at all.
+        val line = if (fx.godRaysAllLyrics) null else band()?.takeIf { it.height > 0f && it.width > 0f }
+        val center = GodRayGeometry.lightCenter(line, w, h)
+        val (az, el) = GodRayGeometry.animatedAngles(fx, t)
+        val tiltNow = tilt.value
+        val point = GodRayGeometry.lightPoint(center, az, el, focal = GodRayGeometry.FOCAL_SHARE * maxSide) +
+            Offset(-tiltNow.x, tiltNow.y) * (fx.godRayTilt * GodRayGeometry.TILT_SHARE * maxSide) +
+            GodRayGeometry.swayOffset(fx.godRaySway, t, h)
+        // The kick brightens the shafts and pushes them a little further.
+        val beat = (pulse?.value ?: 0f) * fx.bassReact * fx.godRayBeat
+        return RayFrame(
+            light = point,
+            center = center,
+            line = line,
+            exposure = fx.godRayExposure * (1f + 1.2f * beat),
+            density = (fx.godRayDensity * (1f + 0.15f * beat)).coerceAtMost(1f),
+            elevationDeg = el,
+            maxSide = maxSide,
+            time = t,
+        )
+    }
+
+    /**
+     * This frame's light for another layer — the glass letters — whose
+     * top-left sits at [originInRoot]: the rays layer's frame, moved into that
+     * layer's pixels. Null until the rays layer has been laid out.
+     */
+    fun frameFor(originInRoot: Offset): RayFrame? {
+        val box = surface.rect
+        if (box.rootW <= 0f || box.rootH <= 0f) return null
+        return frame(box.rootW, box.rootH).shiftedBy(Offset(box.left, box.top) - originInRoot)
+    }
+}
+
+/** One frame of the god rays' light, in some layer's own pixels. */
+internal data class RayFrame(
+    val light: Offset,
+    val center: Offset,
+    val line: Rect?,
+    val exposure: Float,
+    val density: Float,
+    val elevationDeg: Float,
+    val maxSide: Float,
+    val time: Float,
+) {
+    fun shiftedBy(d: Offset): RayFrame = copy(light = light + d, center = center + d, line = line?.translate(d))
+}
+
+/**
+ * The light for a lyric surface, or null when there are no rays to light it:
+ * rays off, the low-performance glass switch on, or below API 33.
+ */
+@Composable
+internal fun rememberLyricRayLight(
     accent: Color,
     pulse: State<Float>? = null,
     band: () -> Rect? = { null },
-): Modifier {
+): LyricRayLight? {
     val fx = LocalLyricsFx.current
-    if (!fx.godRays) return this
-    if (LocalLowPerformance.current.disableLiquidGlass) return this
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
-    return this.then(godRaysModifier(fx, accent, pulse, band))
+    if (!fx.godRays) return null
+    if (LocalLowPerformance.current.disableLiquidGlass) return null
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return null
+    // A clock only when something on the rays moves: the dust, the orbit or
+    // the sway. Still rays redraw only when the lyrics under them do.
+    val moving = GodRayGeometry.isMoving(fx)
+    val time = rememberFrameSeconds(animated = moving)
+    val tilt = if (fx.godRayTilt > 0f) rememberGravityTilt() else NoTilt
+    // Outlives a change of settings: the box is recorded when the rays layer
+    // is laid out, and a fresh holder would sit empty until it next moved.
+    val surface = remember { BackdropAnchor() }
+    return remember(fx, accent, moving, time, tilt, pulse, band) {
+        LyricRayLight(fx, accent, moving, time, tilt, pulse, band, surface)
+    }
 }
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
-private fun godRaysModifier(
-    fx: LyricsFxSettings,
-    accent: Color,
-    pulse: State<Float>?,
-    band: () -> Rect?,
-): Modifier {
+private fun godRaysModifier(light: LyricRayLight): Modifier {
     val shader = remember {
         runCatching { RuntimeShader(GOD_RAYS_SRC) }
             .onSuccess { LyricsDebug.log("god-rays shader compiled") }
             .onFailure { LyricsDebug.log("god-rays shader FAILED to compile: ${it.message}") }
             .getOrNull()
     } ?: return Modifier
-
-    // A clock only when something on the rays moves: the dust, the orbit or
-    // the sway. Still rays redraw only when the lyrics under them do.
-    val moving = GodRayGeometry.isMoving(fx)
-    val timeSec = rememberFrameSeconds(animated = moving)
-    val tilt = if (fx.godRayTilt > 0f) rememberGravityTilt() else NoTilt
+    val fx = light.fx
     val samples = GodRayGeometry.samplesFor(fx.godRayQuality)
-    val sunColor = remember(accent) { lerp(accent, Color.White, 0.35f) }
 
-    return Modifier.graphicsLayer {
+    return Modifier.backdropFrame(light.surface).graphicsLayer {
         if (size.minDimension <= 0f) return@graphicsLayer
         val w = size.width
         val h = size.height
-        val maxSide = max(w, h)
-        val t = timeSec.value
-
-        // "All lyrics" is the Shadertoy's whole image shining: no band at all.
-        val line = if (fx.godRaysAllLyrics) null else band()?.takeIf { it.height > 0f && it.width > 0f }
-        val center = GodRayGeometry.lightCenter(line, w, h)
-        val (az, el) = GodRayGeometry.animatedAngles(fx, if (moving) t else 0f)
-        val tiltNow = tilt.value
-        val light = GodRayGeometry.lightPoint(center, az, el, focal = GodRayGeometry.FOCAL_SHARE * maxSide) +
-            Offset(-tiltNow.x, tiltNow.y) * (fx.godRayTilt * GodRayGeometry.TILT_SHARE * maxSide) +
-            GodRayGeometry.swayOffset(fx.godRaySway, if (moving) t else 0f, h)
-
-        // The kick brightens the shafts and pushes them a little further.
-        val beat = (pulse?.value ?: 0f) * fx.bassReact * fx.godRayBeat
-        val exposure = fx.godRayExposure * (1f + 1.2f * beat)
-        val density = (fx.godRayDensity * (1f + 0.15f * beat)).coerceAtMost(1f)
+        val f = light.frame(w, h)
         val decay = GodRayGeometry.perSampleDecay(fx.godRayDecay, samples)
 
-        shader.setFloatUniform("uLight", light.x, light.y)
+        shader.setFloatUniform("uLight", f.light.x, f.light.y)
         shader.setFloatUniform("uSource", fx.godRaySource.toFloat())
         shader.setFloatUniform("uOnTop", if (fx.godRaysOnTop) 1f else 0f)
-        shader.setFloatUniform("uDensity", density)
-        shader.setFloatUniform("uReachCap", GodRayGeometry.REACH_CAP_SHARE * maxSide)
+        shader.setFloatUniform("uDensity", f.density)
+        shader.setFloatUniform("uReachCap", GodRayGeometry.REACH_CAP_SHARE * f.maxSide)
         shader.setFloatUniform("uSamples", samples.toFloat())
         shader.setFloatUniform("uDecay", decay)
         shader.setFloatUniform(
             "uSampleWeight",
-            GodRayGeometry.sampleWeight(GodRayGeometry.LETTERS_GAIN * exposure, decay, samples),
+            GodRayGeometry.sampleWeight(GodRayGeometry.LETTERS_GAIN * f.exposure, decay, samples),
         )
         shader.setFloatUniform("uCenterTap", GodRayGeometry.CENTER_TAP)
-        shader.setFloatUniform("uBacklightGain", GodRayGeometry.BACKLIGHT_GAIN * exposure)
+        shader.setFloatUniform("uBacklightGain", GodRayGeometry.BACKLIGHT_GAIN * f.exposure)
         shader.setFloatUniform("uDecayRef", fx.godRayDecay)
-        shader.setFloatUniform("uFalloffLen", density * maxSide)
+        shader.setFloatUniform("uFalloffLen", f.density * f.maxSide)
         // Inflated a little: the pump and the per-letter wave carry glyphs a
         // few dp past the item's own box.
         val pad = 2.dp.toPx()
+        val line = f.line
         if (line != null) {
             shader.setFloatUniform("uBand", line.left - pad, line.top - pad, line.right + pad, line.bottom + pad)
         } else {
@@ -147,17 +222,17 @@ private fun godRaysModifier(
         shader.setFloatUniform("uFeather", 5.dp.toPx(), 3.dp.toPx())
         shader.setFloatUniform("uGuard", GodRayGeometry.LEGIBILITY_GUARD)
         shader.setFloatUniform("uSunR", fx.godRaySunSize * min(w, h))
-        shader.setFloatUniform("uSunColor", sunColor.red, sunColor.green, sunColor.blue)
+        shader.setFloatUniform("uSunColor", light.color.red, light.color.green, light.color.blue)
         shader.setFloatUniform("uShimmer", fx.godRayShimmer)
         shader.setFloatUniform(
             "uStripeCells",
             GodRayGeometry.stripeCells(
-                radius = max((light - center).getDistance(), 0.35f * maxSide),
+                radius = max((f.light - f.center).getDistance(), 0.35f * f.maxSide),
                 stripePx = 7.dp.toPx(),
             ).toFloat(),
         )
-        shader.setFloatUniform("uTime", if (moving) t else 0f)
-        shader.setFloatUniform("uFrame", if (moving) GodRayGeometry.jitterFrame(t).toFloat() else 0f)
+        shader.setFloatUniform("uTime", f.time)
+        shader.setFloatUniform("uFrame", if (light.moving) GodRayGeometry.jitterFrame(f.time).toFloat() else 0f)
         renderEffect = RenderEffect
             .createRuntimeShaderEffect(shader, "content")
             .asComposeRenderEffect()
@@ -302,6 +377,26 @@ internal object GodRayGeometry {
 
     fun isMoving(fx: LyricsFxSettings): Boolean =
         fx.godRayShimmer > 0f || fx.godRaySpinDps != 0f || fx.godRaySway > 0f
+
+    /** The exposure the presets were tuned around, where the glass catches exactly its catch setting. */
+    const val GLASS_CATCH_REFERENCE_EXPOSURE = 0.6f
+
+    /**
+     * How much of the rays' light the glass letters catch: the catch setting,
+     * scaled by how bright the shafts are this frame, so a beat flare flashes
+     * on the letters too. Capped, so a hot exposure cannot blow the glass out.
+     */
+    fun glassRayAmount(catch: Float, exposure: Float): Float =
+        catch.coerceIn(0f, 1f) * (exposure / GLASS_CATCH_REFERENCE_EXPOSURE).coerceIn(0f, 2.5f)
+
+    /**
+     * How far the light stands off the letters, as the z of the direction the
+     * glass shades with, against the screen-space reach of 1. A light behind
+     * the line (90°) stands high, so the letters are lit nearly head-on; a
+     * raking light (0°) lies low, so the bevels facing it take nearly all of it.
+     */
+    fun glassLightLift(elevationDeg: Float): Float =
+        0.15f + 0.5f * sin(elevationDeg.coerceIn(0f, 90f) * (PI.toFloat() / 180f))
 
     /**
      * The article quotes decay per sample at 50 samples. Holding the decay

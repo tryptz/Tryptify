@@ -1881,4 +1881,6 @@
     <string name="fx_god_ray_follow_word_desc">Bei wortgenau getimten Songtexten leuchtet nur das gerade gesungene Wort, und das Licht springt Wort für Wort weiter. Zeilenweise getimte Songtexte behalten die ganze Zeile.</string>
     <string name="fx_god_ray_all_lyrics">Der ganze Songtext leuchtet</string>
     <string name="fx_god_ray_all_lyrics_desc">Jede Zeile strahlt Licht aus, nicht nur die gesungene, wie im ursprünglichen Shadertoy. Unruhiger, und die gesungene Zeile verliert die Abdunklung, die sie lesbar hält.</string>
+    <string name="fx_god_ray_glass_catch">Glas fängt das Licht ein</string>
+    <string name="fx_god_ray_glass_catch_desc">Die Glasbuchstaben fangen das Licht der Bündel ein: ein Glanz an den Kanten, die ihm zugewandt sind, und bei Gegenlicht leuchtende Ränder. Braucht Liquid Glass.</string>
 </resources>

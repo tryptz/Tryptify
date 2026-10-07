@@ -215,7 +215,7 @@ class LyricsFxSettingsTest {
     /** Every field the optics and the rays added, so "unchanged" can be checked whole. */
     private fun added(s: LyricsFxSettings) = listOf(
         s.glassRoundness, s.glassDepth, s.glassSurfaceMotion, s.glassReflection, s.glassGloss,
-        s.glassTiltReactivity, s.glassLightAngleDeg, s.glassEdgeWidth, s.glassFrost,
+        s.glassTiltReactivity, s.glassLightAngleDeg, s.glassEdgeWidth, s.glassFrost, s.glassRayCatch,
         s.godRays, s.godRaySource, s.godRaysOnTop, s.godRaysFollowWord, s.godRaysAllLyrics,
         s.godRayExposure, s.godRayDensity,
         s.godRayDecay, s.godRayAzimuthDeg, s.godRayElevationDeg, s.godRaySunSize, s.godRayShimmer,
@@ -236,6 +236,8 @@ class LyricsFxSettingsTest {
         assertEquals(135f, d.glassLightAngleDeg, 0f)
         assertEquals("uFresnelPower = 8 - 6 * edge was 5", 5f, 8f - 6f * d.glassEdgeWidth, 0f)
         assertEquals(0f, d.glassFrost, 0f)
+        // Acts only with the rays on, which are off by default.
+        assertEquals(0.7f, d.glassRayCatch, 0f)
     }
 
     @Test
@@ -291,6 +293,8 @@ class LyricsFxSettingsTest {
         assertEquals(1, c.godRayQuality)
         assertEquals("4 is the Shadertoy's 50 samples, and the most", 4, LyricsFxSettings(godRayQuality = 9).clamped().godRayQuality)
 
+        assertEquals(1f, LyricsFxSettings(glassRayCatch = 4f).clamped().glassRayCatch, 0f)
+        assertEquals(0f, LyricsFxSettings(glassRayCatch = -1f).clamped().glassRayCatch, 0f)
         val nan = LyricsFxSettings(glassGloss = Float.NaN, godRayElevationDeg = Float.NaN).clamped()
         assertEquals(LyricsFxSettings.DEFAULT.glassGloss, nan.glassGloss, 0f)
         assertEquals(LyricsFxSettings.DEFAULT.godRayElevationDeg, nan.godRayElevationDeg, 0f)

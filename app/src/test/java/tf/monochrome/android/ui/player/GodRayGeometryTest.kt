@@ -175,4 +175,50 @@ class GodRayGeometryTest {
         assertEquals(true, GodRayGeometry.isMoving(still.copy(godRayShimmer = 0.1f)))
         assertEquals(true, GodRayGeometry.isMoving(still.copy(godRaySway = 0.1f)))
     }
+
+    @Test
+    fun `the glass and the rays agree on where the light is`() {
+        // A rays layer at (0, 120) in root, 1080 x 1500; glass letters inside
+        // it, inset 42px at the side. The light the glass is handed must be
+        // the rays' own light moved into the glass's pixels — the two layers
+        // computing it separately is how a glint ends up off its shafts.
+        val fx = LyricsFxSettings(godRays = true, godRayAzimuthDeg = 30f, godRayElevationDeg = 40f, godRayShimmer = 0f)
+        val surface = BackdropAnchor().apply { rect = AnchorRect(0f, 120f, 1080f, 1500f) }
+        val band = Rect(-GodRayGeometry.UNBOUNDED, 600f, GodRayGeometry.UNBOUNDED, 680f)
+        val light = LyricRayLight(
+            fx = fx, accent = androidx.compose.ui.graphics.Color.Blue, moving = false,
+            time = androidx.compose.runtime.mutableStateOf(0f),
+            tilt = androidx.compose.runtime.mutableStateOf(Offset.Zero),
+            pulse = null, band = { band }, surface = surface,
+        )
+        val inRays = light.frame(1080f, 1500f)
+        val inGlass = light.frameFor(Offset(42f, 120f))!!
+        assertEquals(inRays.light.x - 42f, inGlass.light.x, 1e-3f)
+        assertEquals(inRays.light.y, inGlass.light.y, 1e-3f)
+        assertEquals(inRays.exposure, inGlass.exposure, 0f)
+
+        // Before the rays layer has been laid out there is no light to hand over.
+        val unplaced = LyricRayLight(
+            fx = fx, accent = androidx.compose.ui.graphics.Color.Blue, moving = false,
+            time = androidx.compose.runtime.mutableStateOf(0f),
+            tilt = androidx.compose.runtime.mutableStateOf(Offset.Zero),
+            pulse = null, band = { band }, surface = BackdropAnchor(),
+        )
+        assertEquals(null, unplaced.frameFor(Offset(42f, 120f)))
+    }
+
+    @Test
+    fun `the glass catches its setting at the tuned exposure, more on a flare, never without bound`() {
+        assertEquals(0.7f, GodRayGeometry.glassRayAmount(0.7f, GodRayGeometry.GLASS_CATCH_REFERENCE_EXPOSURE), 1e-6f)
+        assertEquals(0f, GodRayGeometry.glassRayAmount(0f, 1.5f), 0f)
+        assertTrue(GodRayGeometry.glassRayAmount(0.7f, 1.2f) > GodRayGeometry.glassRayAmount(0.7f, 0.6f))
+        assertEquals(2.5f, GodRayGeometry.glassRayAmount(1f, 99f), 1e-6f)
+    }
+
+    @Test
+    fun `a light behind the line stands high, a raking one lies low`() {
+        assertEquals(0.15f, GodRayGeometry.glassLightLift(0f), 1e-6f)
+        assertEquals(0.65f, GodRayGeometry.glassLightLift(90f), 1e-6f)
+        assertTrue(GodRayGeometry.glassLightLift(30f) < GodRayGeometry.glassLightLift(60f))
+    }
 }

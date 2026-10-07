@@ -1881,4 +1881,6 @@
     <string name="fx_god_ray_follow_word_desc">Kelime zamanlamalı sözlerde yalnızca söylenen kelime parlar ve ışık kelime kelime ilerler. Satır zamanlamalı sözlerde tüm satır parlar.</string>
     <string name="fx_god_ray_all_lyrics">Tüm sözler parlasın</string>
     <string name="fx_god_ray_all_lyrics_desc">Yalnızca söylenen satır değil, her satır ışık saçar; orijinal Shadertoy’daki gibi. Daha kalabalık olur ve söylenen satır onu okunur tutan karartmayı kaybeder.</string>
+    <string name="fx_god_ray_glass_catch">Cam ışığı yakalar</string>
+    <string name="fx_god_ray_glass_catch_desc">Cam harfler huzmelerin ışığını yakalar: ışığa bakan kenarlarda bir parıltı, arka ışıkta ise parlayan kenarlar. Sıvı cam gerekir.</string>
 </resources>
