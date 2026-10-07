@@ -92,6 +92,9 @@ object WhatsNew {
     /** What Search looks in, and how it shows where each result came from. */
     private const val SEARCH = "Search and Deezer"
 
+    /** TIDAL's own pages, playlists, lyrics and playback, from a HiFi API server. */
+    private const val TIDAL = "TIDAL"
+
     /** The DSP mixer, its buses and the presets that ship with it. */
     private const val MIXER = "Mixer"
 
@@ -166,9 +169,9 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
-                    section = PLAYBACK,
-                    title = "TIDAL Dolby Atmos",
-                    body = "Settings › Audio can play TIDAL's Dolby Atmos mix of a track that has one. Tracks with the mix carry the Dolby Atmos badge.",
+                    section = TIDAL,
+                    title = "Dolby Atmos badge",
+                    body = "TIDAL songs and albums with a Dolby Atmos mix carry the badge, and the player shows it while that mix plays. The TIDAL Dolby Atmos switch is in Settings › Audio now too.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
@@ -192,7 +195,31 @@ object WhatsNew {
                     kind = WhatsNewKind.NEW,
                     section = APP,
                     title = "Crash reports you can switch off",
-                    body = "A crash or freeze is saved to Downloads as a .log file to attach to a bug report. Settings › System › Diagnostics can turn that off.",
+                    body = "A crash or freeze, even one deep in the audio engine, is saved to Downloads as a .log file to attach to a bug report. Settings › System › Diagnostics can turn that off.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LOOK,
+                    title = "Song titles get the whole line",
+                    body = "Song rows are laid out like Library › Local: the title has its line to itself, with the artist, album, source and quality under it. Like a song from its menu or the player.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = TIDAL,
+                    title = "TIDAL playlists open",
+                    body = "A TIDAL playlist from search opened empty. It loads now, hundreds of songs at a time, ready to play, though it can't be edited here.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = TIDAL,
+                    title = "More than songs in TIDAL search",
+                    body = "Artists, albums and playlists show up in TIDAL search, artist pages have their name, picture and similar artists, and TIDAL's own lyrics and radio work.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = TIDAL,
+                    title = "TIDAL songs stop skipping",
+                    body = "On a server signed in with your own TIDAL account, every song skipped to the next instead of playing. They play now.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
@@ -205,6 +232,42 @@ object WhatsNew {
                     section = PIPELINE,
                     title = "16-bit FLAC plays cleanly on hi-res output",
                     body = "On some phones a 16-bit FLAC on the hi-res output played as loud static at double speed, because the decoder said float and wrote 16-bit. It is caught and read as 16-bit now.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = DOWNLOADS,
+                    title = "Downloads opens at once",
+                    body = "It said there were no downloads for a few seconds before showing them. Songs you put in the download folder yourself now show their own titles, artists and covers.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = DOWNLOADS,
+                    title = "Hi-Res downloads fall back to CD",
+                    body = "When TIDAL sends a Hi-Res song in pieces your server can't join into one file, it downloads as CD FLAC instead of failing.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = DOWNLOADS,
+                    title = "No broken files left behind",
+                    body = "A download that fails partway no longer leaves half a file in your folder, and names starting with a dot (.38 Special) no longer hide songs from other players.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LIBRARY,
+                    title = "Singles stay with their album",
+                    body = "A song downloaded on its own, next to the album it is from, no longer shows up as a second copy of that album. Rescan the library to regroup it.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LIBRARY,
+                    title = "Rescans run to the end",
+                    body = "Rescan Library keeps going after you leave Settings, instead of stopping halfway.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = APP,
+                    title = "Album and artist pages stop crashing",
+                    body = "Opening an album or an artist, especially one opened before, could close the app.",
                 ),
             ),
         ),
