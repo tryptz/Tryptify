@@ -220,6 +220,46 @@ nor its shadow, and the preview shows a flat pill that is not what ships,
 which is what it did until this was fixed. The backdrop must have detail:
 over a smooth gradient, blur, refraction and dispersion move nothing visible.
 
+### Lyrics: letter glass and god rays
+
+**The lyric glass reads the same optics as the player's, and its defaults are
+the old pins.** `liquidGlassModifier` used to set roundness, depth, motion,
+reflection, gloss, tilt, light angle, Fresnel and frost by hand; they are
+`LyricsFxSettings.glass*` now, mapped exactly as `playerGlassModifier` maps the
+glass fields, and each default reproduces the pinned uniform
+(`the letter glass defaults are the uniforms the lyric shader used to pin`).
+Moving a default restyles every listener's lyrics. Still letters
+(`glassSurfaceMotion` 0) run no frame clock and tilt-blind ones
+(`glassTiltReactivity` 0) hold no gravity sensor, as on the player glass. The
+letters get no lens rim, haze or drop shadow: those belong to panes.
+
+**God rays wrap the lyric list outside its side inset and outside the glass.**
+`lyricGodRays` is a RenderEffect, and a layer cannot draw past its own bounds,
+so a rays layer inside the inset cuts every shaft off in a hard vertical line
+14dp from the edge. Outside the glass, so the shafts are gathered from the
+finished glass letters. The effect is rebuilt in the layer block every draw,
+like the glass: a RuntimeShader effect takes its uniforms when it is created.
+
+**Only what is being sung shines, and it is dimmed on itself.** The band is
+the active line from `layoutInfo` (`item.offset - viewportStartOffset`, read in
+the draw phase so the shafts follow the scroll glide) or, with "Follow the sung
+word", the word the karaoke line reports. Letting every visible line emit made
+the screen a wash; dropping the 65% guard inside the band buried the sung line
+under its own light (the first prototype, at 90° elevation). The band's sides
+are `GodRayGeometry.UNBOUNDED`, not infinity: an infinity reaching
+`smoothstep` comes back NaN.
+
+**Backlight decays from the light, Letters from the pixel.** The article's
+decay weights samples by their distance from the pixel. In Backlight the light
+is always at the far end of the march, so that weighting all but erased it;
+there the march is averaged plainly and the decay is counted out from the light.
+Letters keeps the article's weighting. Both normalise by the sample count, so
+the quality setting changes grain, not length or brightness (`GodRayGeometryTest`).
+
+The rays are off by default, and the 17 presets ahead of `Sunburst` set no
+glass optic and no ray field, so nobody's lyrics change on upgrade. The
+low-performance glass switch drops the rays with the glass.
+
 ### Search bars
 
 Every search bar in the app is `SearchOverlay` + `GlassSearchBar`. There is one

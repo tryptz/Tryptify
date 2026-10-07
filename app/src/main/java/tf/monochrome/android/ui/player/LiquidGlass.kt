@@ -228,8 +228,12 @@ private fun liquidGlassModifier(
             .getOrNull()
     } ?: return Modifier
 
-    val timeSec = rememberFrameSeconds()
-    val tilt = rememberGravityTilt()
+    // The same two gates the player glass has. Every uTime term is scaled by
+    // uLiquid and every uTilt term by uTiltAmount, so still letters need no
+    // frame clock and tilt-blind ones no gravity sensor. (The per-letter wave
+    // keeps its own clock; this one is the glass's.)
+    val timeSec = rememberFrameSeconds(animated = fx.glassSurfaceMotion > 0f)
+    val tilt = if (fx.glassTiltReactivity > 0f) rememberGravityTilt() else NoTilt
     val anchor = rememberBackdropAnchor()
     val scrim = remember(backdrop.dominant) { backdropScrimTone(backdrop.dominant) }
 
@@ -259,16 +263,19 @@ private fun liquidGlassModifier(
             shader.setFloatUniform("uRimGain", fx.glassRimBrightness)
             shader.setFloatUniform("uDispersion", fx.glassDispersion)
             shader.setFloatUniform("uSampleRings", fx.glassSampleRings.toFloat())
-            shader.setFloatUniform("uRoundness", 1f)
-            shader.setFloatUniform("uDepth", 1f)
-            shader.setFloatUniform("uLiquid", 1f)
-            // Lyrics keep the neutral (non-player-tunable) relight parameters.
-            shader.setFloatUniform("uReflection", 1f)
-            shader.setFloatUniform("uGloss", 90f)
-            shader.setFloatUniform("uTiltAmount", 0.7f)
-            shader.setFloatUniform("uLightAngle", 2.3561945f)   // 135°
-            shader.setFloatUniform("uFresnelPower", 5f)
-            shader.setFloatUniform("uFrost", 0f)
+            // The Player Glass optics, mapped exactly as playerGlassModifier
+            // maps them. These were pinned (1, 1, 1, 1, 90, 0.7, 135°, 5, 0)
+            // before the lyrics had knobs for them, and each LyricsFxSettings
+            // default reproduces its pin: gloss 0.29167 → 90, edge 0.5 → 5.
+            shader.setFloatUniform("uRoundness", fx.glassRoundness)
+            shader.setFloatUniform("uDepth", fx.glassDepth)
+            shader.setFloatUniform("uLiquid", fx.glassSurfaceMotion)
+            shader.setFloatUniform("uReflection", fx.glassReflection)
+            shader.setFloatUniform("uGloss", 20f + 240f * fx.glassGloss)
+            shader.setFloatUniform("uTiltAmount", fx.glassTiltReactivity)
+            shader.setFloatUniform("uLightAngle", fx.glassLightAngleDeg * 0.017453292f)
+            shader.setFloatUniform("uFresnelPower", 8f - 6f * fx.glassEdgeWidth)
+            shader.setFloatUniform("uFrost", fx.glassFrost)
             shader.setFloatUniform("uBulge", 0.5f, 0.5f)
             shader.setFloatUniform("uBulgeAmt", 0f)
             shader.setFloatUniform("uBulgeR", 0f)
@@ -671,7 +678,7 @@ private fun playerGlassModifier(
 internal val LensRimMax = 24.dp
 
 /** A tilt that never changes, for a surface whose shader would ignore it anyway. */
-private val NoTilt: State<Offset> = mutableStateOf(Offset.Zero)
+internal val NoTilt: State<Offset> = mutableStateOf(Offset.Zero)
 
 /**
  * Low-pass-filtered gravity in [-1, 1] per axis; Offset.Zero if no sensor.
@@ -683,7 +690,7 @@ private val NoTilt: State<Offset> = mutableStateOf(Offset.Zero)
  * registration lives exactly as long as at least one glass surface is composed.
  */
 @Composable
-private fun rememberGravityTilt(): State<Offset> {
+internal fun rememberGravityTilt(): State<Offset> {
     val context = LocalContext.current
     DisposableEffect(context) {
         GravityTiltSource.acquire(context)

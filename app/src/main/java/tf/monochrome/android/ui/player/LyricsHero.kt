@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListLayoutInfo
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +41,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -381,9 +387,10 @@ internal fun SyncedLyricsView(
     // the index at line boundaries — the highlight looked stuck and the
     // constant re-scroll ate taps. The polled position is stable and accurate.)
     // Keyed on the delay too so retuning it re-selects the active line at once.
-    val currentLineIndex by remember(lines, syncDelayMs) {
+    val currentLineState = remember(lines, syncDelayMs) {
         derivedStateOf { lines.indexOfLast { it.timeMs <= position - syncDelayMs } }
     }
+    val currentLineIndex by currentLineState
 
     // Debug log: what's playing (once per song load) and each active-line change.
     LaunchedEffect(lines) {
@@ -402,6 +409,20 @@ internal fun SyncedLyricsView(
     // disabled (and the analyzer never acquired) at intensity 0.
     val fx = LocalLyricsFx.current
     val beatIntensity = fx.bassReact
+    // God rays: what is being sung, in the rays layer's own pixels — the sung
+    // word when they follow it (word-timed lyrics), else the line. Read in the
+    // rays' draw phase, so the shafts follow the scroll glide and hop from
+    // word to word without recomposing anything.
+    val followWord = fx.godRays && fx.godRaysFollowWord
+    val sungWord = remember { SungWordAnchor() }
+    val raysOrigin = remember { androidx.compose.runtime.mutableStateOf(Offset.Zero) }
+    val activeBand: () -> Rect? = remember(listState, currentLineState, followWord) {
+        {
+            val line = currentLineState.value
+            (if (followWord) sungWord.rectFor(line)?.translate(-raysOrigin.value) else null)
+                ?: activeLineBand(listState, line)
+        }
+    }
     // Prefer the player-provided shared pulse (one analyzer stake; the pump
     // and the full-screen glow breathe together).
     val bassPulse = LocalBeatPulse.current
@@ -495,6 +516,18 @@ internal fun SyncedLyricsView(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                // God rays wrap everything below, so they gather the finished
+                // glass letters, and sit OUTSIDE the side inset, so the shafts
+                // run to the screen edge instead of stopping in a hard line at
+                // the inset. A layer cannot draw past its own bounds.
+                .then(
+                    if (followWord) {
+                        Modifier.onGloballyPositioned { raysOrigin.value = it.positionInRoot() }
+                    } else {
+                        Modifier
+                    },
+                )
+                .lyricGodRays(accent = accent, pulse = bassPulse, band = activeBand)
                 // User edge margin + a fixed bevel-safe inset, so the outermost
                 // glyphs (and their glass bevels) never sit flush against the
                 // clip edge where they'd be corner-cut.
@@ -561,6 +594,11 @@ internal fun SyncedLyricsView(
                     beatModifier = beatModifier,
                     availableWidth = fitWidth,
                     measureStyle = measureStyle,
+                    onSungWordPositioned = if (isActive && followWord) {
+                        { rect -> sungWord.report(index, rect) }
+                    } else {
+                        null
+                    },
                 )
             } else {
                 // Line-level sources (LRCLib / Qobuz): illuminate the whole
@@ -650,6 +688,8 @@ internal fun KaraokeLyricLine(
     beatModifier: Modifier = Modifier,
     availableWidth: Dp,
     measureStyle: TextStyle,
+    /** Set on the active line when the god rays follow the sung word: told where that word is, in root coordinates. */
+    onSungWordPositioned: ((Rect) -> Unit)? = null,
 ) {
     // Render letters individually while active whenever the 3D wave is on.
     // One frame clock per line.
@@ -661,6 +701,9 @@ internal fun KaraokeLyricLine(
     // so a given word always sits on the same row whether the line is active
     // or not — activation can never turn 2 rows into 3.
     val wordTexts = remember(line.words) { line.words.map { it.text } }
+    // The word the rays shine from: the one lighting up, or between words the
+    // one that just did, so the light rests on it instead of blinking off.
+    val sungIndex = if (onSungWordPositioned != null) line.words.indexOfLast { it.startMs <= position } else -1
     val layout = rememberWrappedLyricLayout(
         words = wordTexts,
         availableWidth = availableWidth,
@@ -699,9 +742,14 @@ internal fun KaraokeLyricLine(
                     }
                     val color by animateColorAsState(targetValue = target, label = "wordColor")
                     val display = if (i == rowWords.last()) word.text else word.text + " "
+                    val reportSung = if (i == sungIndex && onSungWordPositioned != null) {
+                        Modifier.onGloballyPositioned { onSungWordPositioned(it.boundsInRoot()) }
+                    } else {
+                        Modifier
+                    }
                     if (time != null) {
                         val phaseBase = letterBase
-                        Row {
+                        Row(modifier = reportSung) {
                             display.forEachIndexed { j, ch ->
                                 Letter3DText(
                                     text = ch.toString(),
@@ -722,6 +770,7 @@ internal fun KaraokeLyricLine(
                             color = color,
                             maxLines = 1,
                             softWrap = false,
+                            modifier = reportSung,
                         )
                     }
                     letterBase += word.text.length + 1
@@ -729,6 +778,21 @@ internal fun KaraokeLyricLine(
             }
         }
     }
+}
+
+/**
+ * The sung line's box in the lazy list's own pixels, or null when it is off
+ * screen. Item offsets are measured from the end of the top content padding,
+ * which [LazyListLayoutInfo.viewportStartOffset] carries as a negative number,
+ * so subtracting it lands the item where the list actually draws it.
+ */
+private fun activeLineBand(state: LazyListState, index: Int): Rect? {
+    if (index < 0) return null
+    val info = state.layoutInfo
+    val item = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return null
+    val top = (item.offset - info.viewportStartOffset).toFloat()
+    // A line runs the full width, so its sides are left open.
+    return Rect(-GodRayGeometry.UNBOUNDED, top, GodRayGeometry.UNBOUNDED, top + item.size)
 }
 
 val LocalLyricsFx = compositionLocalOf { LyricsFxSettings() }

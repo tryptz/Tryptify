@@ -37,6 +37,15 @@ internal object LyricsDebug {
             append(" refr=").append(fx.glassRefraction)
             append(" rim=").append(fx.glassRimBrightness)
             append(" disp=").append(fx.glassDispersion)
+            append(" round=").append(fx.glassRoundness)
+            append(" depth=").append(fx.glassDepth)
+            append(" motion=").append(fx.glassSurfaceMotion)
+            append(" refl=").append(fx.glassReflection)
+            append(" gloss=").append(fx.glassGloss)
+            append(" tilt=").append(fx.glassTiltReactivity)
+            append(" light=").append(fx.glassLightAngleDeg.toInt()).append('°')
+            append(" edge=").append(fx.glassEdgeWidth)
+            append(" frost=").append(fx.glassFrost)
             append(" taps=").append(1 + 4 * fx.glassSampleRings).append(']')
         }
 
@@ -52,6 +61,18 @@ internal object LyricsDebug {
 
         append(" | glow=").append(
             if (fx.bassReact > 0.01f && fx.glowBrightness > 0.001f) "ON[radius=${fx.glowRadiusDp.toInt()}dp]" else "off",
+        )
+
+        append(" | rays=").append(
+            if (fx.godRays) {
+                val source = if (fx.godRaySource == LyricsFxSettings.GOD_RAYS_BACKLIGHT) "backlight" else "letters"
+                "ON[$source ${if (fx.godRaysOnTop) "top" else "under"} " +
+                    "az=${fx.godRayAzimuthDeg.toInt()}° el=${fx.godRayElevationDeg.toInt()}° " +
+                    "exp=${fx.godRayExposure} density=${fx.godRayDensity} decay=${fx.godRayDecay} " +
+                    "spin=${fx.godRaySpinDps} sway=${fx.godRaySway} tilt=${fx.godRayTilt} q=${fx.godRayQuality}]"
+            } else {
+                "off"
+            },
         )
     }
 }

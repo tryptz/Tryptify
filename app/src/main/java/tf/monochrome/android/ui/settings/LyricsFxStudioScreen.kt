@@ -148,7 +148,13 @@ import tf.monochrome.android.ui.player.SyncedLyricsView
 import tf.monochrome.android.ui.player.bassBeat
 import tf.monochrome.android.ui.player.fxaa
 import tf.monochrome.android.ui.player.liquidGlass
+import tf.monochrome.android.ui.player.lyricGodRays
 import tf.monochrome.android.ui.player.rememberLyricFontFamily
+import androidx.compose.ui.layout.boundsInParent
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.layout.onGloballyPositioned
 import tf.monochrome.android.ui.player.withLyricFont
 import java.util.Locale
 import javax.inject.Inject
@@ -362,6 +368,15 @@ class LyricsFxStudioViewModel @Inject constructor(
             val current = customPlayerGlassPresets.value.filterNot { it.name.equals(clean, ignoreCase = true) }
             preferences.setCustomPlayerGlassPresets(current + preset)
         }
+    }
+
+    /**
+     * Make the lyric letters from the player's own glass ("Match player glass").
+     * The player blob is the one the transport is drawn in, so this is the
+     * material the listener sees right under the lyrics.
+     */
+    fun matchPlayerGlass() {
+        update { it.withGlassOpticsFrom(_playerGlass.value) }
     }
 
     fun applyPreset(preset: LyricsFxSettings) {
@@ -1036,6 +1051,68 @@ fun LyricsFxStudioScreen(
                     fx.glassSampleRings.toFloat(), 1f..3f, steps = 1,
                     description = stringResource(R.string.fx_shader_taps_per_pixel_higher_smoother_glass),
                 ) { viewModel.update { s -> s.copy(glassSampleRings = it.toInt()) } }
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = { viewModel.matchPlayerGlass() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(stringResource(R.string.fx_match_player_glass)) }
+                Text(
+                    text = stringResource(R.string.fx_match_player_glass_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            // The Player Glass optics, on the letters. Same labels and ranges
+            // as that tab, so a value means the same thing on both.
+            item {
+                StudioSection(stringResource(R.string.fx_shape_bevel))
+                FxSlider(
+                    stringResource(R.string.fx_roundness), "%.2f".format(fx.glassRoundness), fx.glassRoundness, 0.5f..2f,
+                    description = stringResource(R.string.fx_rolls_the_glass_edge_from_a_sharp_bevel_to_a),
+                ) { viewModel.update { s -> s.copy(glassRoundness = it) } }
+                FxSlider(
+                    stringResource(R.string.fx_depth_profondeur), "%.2f".format(fx.glassDepth), fx.glassDepth, 0.5f..2f,
+                    description = stringResource(R.string.fx_lyric_depth_desc),
+                ) { viewModel.update { s -> s.copy(glassDepth = it) } }
+                FxSlider(
+                    stringResource(R.string.fx_frosted_blur), "${(fx.glassFrost * 100).toInt()}%", fx.glassFrost, 0f..1f,
+                    description = stringResource(R.string.fx_frosts_the_glass_from_clear_to_misted),
+                ) { viewModel.update { s -> s.copy(glassFrost = it) } }
+            }
+
+            item {
+                StudioSection(stringResource(R.string.fx_light_reflections))
+                FxSlider(
+                    stringResource(R.string.fx_light_angle), "${fx.glassLightAngleDeg.toInt()}°", fx.glassLightAngleDeg, 0f..360f,
+                    description = stringResource(R.string.fx_direction_the_key_light_comes_from_and_where_the),
+                ) { viewModel.update { s -> s.copy(glassLightAngleDeg = it) } }
+                FxSlider(
+                    stringResource(R.string.fx_tilt_reactivity), "${(fx.glassTiltReactivity * 100).toInt()}%",
+                    fx.glassTiltReactivity, 0f..1.5f,
+                    description = stringResource(R.string.fx_how_strongly_tilting_the_phone_moves_the_light),
+                ) { viewModel.update { s -> s.copy(glassTiltReactivity = it) } }
+                FxSlider(
+                    stringResource(R.string.fx_edge_width), "${(fx.glassEdgeWidth * 100).toInt()}%", fx.glassEdgeWidth, 0f..1f,
+                    description = stringResource(R.string.fx_reflective_rim_thin_crisp_edge_to_a_broad_glassy),
+                ) { viewModel.update { s -> s.copy(glassEdgeWidth = it) } }
+                FxSlider(
+                    stringResource(R.string.fx_reflection), "${(fx.glassReflection * 100).toInt()}%", fx.glassReflection, 0f..2f,
+                    description = stringResource(R.string.fx_how_much_of_the_room_environment_reflection),
+                ) { viewModel.update { s -> s.copy(glassReflection = it) } }
+                FxSlider(
+                    stringResource(R.string.fx_gloss), "${(fx.glassGloss * 100).toInt()}%", fx.glassGloss, 0f..1f,
+                    description = stringResource(R.string.fx_highlight_polish_soft_frosted_wide_glint_to_a),
+                ) { viewModel.update { s -> s.copy(glassGloss = it) } }
+                FxSlider(
+                    stringResource(R.string.fx_surface_motion), "${(fx.glassSurfaceMotion * 100).toInt()}%",
+                    fx.glassSurfaceMotion, 0f..1f,
+                    description = stringResource(R.string.fx_swell_edge_ripple_and_glint_on_the_glass_surface),
+                ) { viewModel.update { s -> s.copy(glassSurfaceMotion = it) } }
+            }
+
+            item {
+                GodRaysControls(fx = fx, onUpdate = { viewModel.update(it) })
             }
 
             item {
@@ -2021,21 +2098,53 @@ private fun StudioPreview(
                     onSeekTo = {},
                 )
             } else {
-                Letters3DRow(
-                    text = stringResource(R.string.fx_feel_the_beat_tonight),
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = fx.fontSizeSp.sp,
-                        lineHeight = (fx.fontSizeSp * 1.26f).sp,
-                        letterSpacing = fx.letterSpacingSp.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                    ).withLyricFont(rememberLyricFontFamily(fx)),
-                    color = accent,
-                    time = rememberFrameSeconds(),
+                // The rays need a layer as big as the preview to draw their
+                // shafts in, so they wrap a box around the sample row rather
+                // than the row itself, and are told where the row sits in it.
+                val sample = stringResource(R.string.fx_feel_the_beat_tonight)
+                val sampleStyle = MaterialTheme.typography.titleMedium.copy(
+                    fontSize = fx.fontSizeSp.sp,
+                    lineHeight = (fx.fontSizeSp * 1.26f).sp,
+                    letterSpacing = fx.letterSpacingSp.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                ).withLyricFont(rememberLyricFontFamily(fx))
+                val clock = rememberFrameSeconds()
+                // The sample has no word timings, so "Follow the sung word" is
+                // shown by singing it one word per beat of the synthetic kick.
+                val measurer = rememberTextMeasurer()
+                val wordSpans = remember(sample, sampleStyle) { sampleWordSpans(measurer, sample, sampleStyle) }
+                val followWord = fx.godRaysFollowWord
+                var rowBand by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+                Box(
                     modifier = Modifier
-                        .fxaa()
-                        .liquidGlass(tint = accent)
-                        .bassBeat(pulse, fx, anchors),
-                )
+                        .fillMaxSize()
+                        .lyricGodRays(
+                            accent = accent,
+                            pulse = pulse,
+                            band = {
+                                val row = rowBand
+                                if (row == null || !followWord || wordSpans.isEmpty()) {
+                                    row
+                                } else {
+                                    val (from, to) = wordSpans[(clock.value * 2f).toInt().mod(wordSpans.size)]
+                                    androidx.compose.ui.geometry.Rect(row.left + from, row.top, row.left + to, row.bottom)
+                                }
+                            },
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Letters3DRow(
+                        text = sample,
+                        style = sampleStyle,
+                        color = accent,
+                        time = clock,
+                        modifier = Modifier
+                            .onGloballyPositioned { rowBand = it.boundsInParent() }
+                            .fxaa()
+                            .liquidGlass(tint = accent)
+                            .bassBeat(pulse, fx, anchors),
+                    )
+                }
             }
         }
         Text(
@@ -2052,6 +2161,29 @@ private fun StudioPreview(
                 .padding(10.dp),
         )
     }
+}
+
+/**
+ * Where each word of [text] runs along a [Letters3DRow], in px from its start.
+ * Measured one letter at a time, because that is how the row lays them out:
+ * each glyph is its own Text at its natural advance, so a space measures the
+ * same here as it draws there, trimmed or not.
+ */
+private fun sampleWordSpans(measurer: TextMeasurer, text: String, style: TextStyle): List<Pair<Float, Float>> {
+    val spans = mutableListOf<Pair<Float, Float>>()
+    var x = 0f
+    var start = -1f
+    text.forEach { ch ->
+        if (ch == ' ') {
+            if (start >= 0f) spans += start to x
+            start = -1f
+        } else if (start < 0f) {
+            start = x
+        }
+        x += measurer.measure(ch.toString(), style = style).size.width.toFloat()
+    }
+    if (start >= 0f) spans += start to x
+    return spans
 }
 
 /**
@@ -2096,7 +2228,7 @@ private fun rememberSyntheticKickPulse(fx: LyricsFxSettings): State<Float> {
 }
 
 @Composable
-private fun StudioSection(title: String) {
+internal fun StudioSection(title: String) {
     Spacer(Modifier.height(20.dp))
     Text(
         text = title,
@@ -2108,7 +2240,7 @@ private fun StudioSection(title: String) {
 }
 
 @Composable
-private fun FxToggle(
+internal fun FxToggle(
     label: String,
     checked: Boolean,
     description: String? = null,
@@ -2200,7 +2332,7 @@ private fun FontPicker(
 }
 
 @Composable
-private fun FxSlider(
+internal fun FxSlider(
     label: String,
     valueLabel: String,
     value: Float,
