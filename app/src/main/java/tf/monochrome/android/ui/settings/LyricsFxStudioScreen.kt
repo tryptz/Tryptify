@@ -149,10 +149,14 @@ import tf.monochrome.android.ui.player.bassBeat
 import tf.monochrome.android.ui.player.fxaa
 import tf.monochrome.android.ui.player.liquidGlass
 import tf.monochrome.android.ui.player.lyricGodRays
-import tf.monochrome.android.ui.player.lyricShadow
+import tf.monochrome.android.ui.player.LocalLyricBackdrop
+import tf.monochrome.android.ui.player.LyricBackdrop
+import tf.monochrome.android.ui.player.LyricBackdropFx
+import tf.monochrome.android.ui.player.LyricLetterCapture
+import tf.monochrome.android.ui.player.captureLetters
 import tf.monochrome.android.ui.player.rememberLyricRayLight
 import tf.monochrome.android.ui.player.rememberLyricFontFamily
-import androidx.compose.ui.layout.boundsInParent
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -2092,6 +2096,19 @@ private fun StudioPreview(
         ) {
             // The glow FX layer blooms behind the active line's reported bounds.
             LyricsFxLayer(anchors = anchors, pulse = pulse, accent = accent, fx = fx)
+            // Built as the player is: the shadow and the god rays on a layer
+            // of their own under the lyrics, from a copy of the letters, with
+            // one light shared with the glass (see LyricBackdropFx).
+            val letters = remember { LyricLetterCapture() }
+            val rayLight = rememberLyricRayLight(
+                accent = accent,
+                pulse = pulse,
+                band = { letters.bandInRoot() },
+                fx = fx,
+            )
+            val backdrop = remember(letters, rayLight) { LyricBackdrop(letters, rayLight) }
+            LyricBackdropFx(backdrop)
+            CompositionLocalProvider(LocalLyricBackdrop provides backdrop) {
             if (playing != null) {
                 // Exactly the production renderer, on the real lyric lines.
                 SyncedLyricsView(
@@ -2101,9 +2118,10 @@ private fun StudioPreview(
                     onSeekTo = {},
                 )
             } else {
-                // The rays need a layer as big as the preview to draw their
-                // shafts in, so they wrap a box around the sample row rather
-                // than the row itself, and are told where the row sits in it.
+                // "On top" draws its shafts over the letters, in a box as big
+                // as the preview around the sample row; everything else is the
+                // backdrop's, which is told where the row is (and, following
+                // the word, which word).
                 val sample = stringResource(R.string.fx_feel_the_beat_tonight)
                 val sampleStyle = MaterialTheme.typography.titleMedium.copy(
                     fontSize = fx.fontSizeSp.sp,
@@ -2118,10 +2136,8 @@ private fun StudioPreview(
                 val wordSpans = remember(sample, sampleStyle) { sampleWordSpans(measurer, sample, sampleStyle) }
                 val followWord = fx.godRaysFollowWord
                 var rowBand by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
-                val rayLight = rememberLyricRayLight(
-                    accent = accent,
-                    pulse = pulse,
-                    band = {
+                androidx.compose.runtime.SideEffect {
+                    letters.bandInRoot = {
                         val row = rowBand
                         if (row == null || !followWord || wordSpans.isEmpty()) {
                             row
@@ -2129,13 +2145,12 @@ private fun StudioPreview(
                             val (from, to) = wordSpans[(clock.value * 2f).toInt().mod(wordSpans.size)]
                             androidx.compose.ui.geometry.Rect(row.left + from, row.top, row.left + to, row.bottom)
                         }
-                    },
-                )
+                    }
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .lyricGodRays(rayLight)
-                        .lyricShadow(rayLight),
+                        .lyricGodRays(if (fx.godRaysOnTop) rayLight else null),
                     contentAlignment = Alignment.Center,
                 ) {
                     Letters3DRow(
@@ -2144,12 +2159,15 @@ private fun StudioPreview(
                         color = accent,
                         time = clock,
                         modifier = Modifier
-                            .onGloballyPositioned { rowBand = it.boundsInParent() }
+                            .onGloballyPositioned { rowBand = it.boundsInRoot() }
                             .fxaa()
                             .liquidGlass(tint = accent, rayLight = rayLight)
+                            // Before the pump, so the copy pumps with the letters.
+                            .captureLetters(letters)
                             .bassBeat(pulse, fx, anchors),
                     )
                 }
+            }
             }
         }
         Text(

@@ -184,7 +184,8 @@ class GodRayGeometryTest {
         // computing it separately is how a glint ends up off its shafts.
         val fx = LyricsFxSettings(godRays = true, godRayAzimuthDeg = 30f, godRayElevationDeg = 40f, godRayShimmer = 0f)
         val surface = BackdropAnchor().apply { rect = AnchorRect(0f, 120f, 1080f, 1500f) }
-        val band = Rect(-GodRayGeometry.UNBOUNDED, 600f, GodRayGeometry.UNBOUNDED, 680f)
+        // The sung line in ROOT px: 600..680 inside the rays layer.
+        val band = Rect(-GodRayGeometry.UNBOUNDED, 720f, GodRayGeometry.UNBOUNDED, 800f)
         val light = LyricRayLight(
             fx = fx, accent = androidx.compose.ui.graphics.Color.Blue, moving = false,
             time = androidx.compose.runtime.mutableStateOf(0f),
@@ -192,6 +193,9 @@ class GodRayGeometryTest {
             pulse = null, band = { band }, surface = surface,
         )
         val inRays = light.frame(1080f, 1500f)
+        // The band is handed over in root px and lands in the rays layer's own.
+        assertEquals(600f, inRays.line!!.top, 1e-3f)
+        assertEquals(680f, inRays.line!!.bottom, 1e-3f)
         val inGlass = light.frameFor(Offset(42f, 120f))!!
         assertEquals(inRays.light.x - 42f, inGlass.light.x, 1e-3f)
         assertEquals(inRays.light.y, inGlass.light.y, 1e-3f)

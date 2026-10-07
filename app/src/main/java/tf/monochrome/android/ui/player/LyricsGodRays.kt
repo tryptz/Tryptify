@@ -16,6 +16,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
@@ -90,6 +91,7 @@ internal class LyricRayLight(
     private val time: State<Float>,
     private val tilt: State<Offset>,
     private val pulse: State<Float>?,
+    /** What is being sung, in ROOT px (any layer can turn that into its own). */
     private val band: () -> Rect?,
     /** The rays layer's own box in root px, recorded as it lays out. */
     internal val surface: BackdropAnchor,
@@ -102,7 +104,12 @@ internal class LyricRayLight(
         val maxSide = max(w, h)
         val t = if (moving) time.value else 0f
         // "All lyrics" is the Shadertoy's whole image shining: no band at all.
-        val line = if (fx.godRaysAllLyrics) null else band()?.takeIf { it.height > 0f && it.width > 0f }
+        val box = surface.rect
+        val line = if (fx.godRaysAllLyrics) {
+            null
+        } else {
+            band()?.translate(-box.left, -box.top)?.takeIf { it.height > 0f && it.width > 0f }
+        }
         val center = GodRayGeometry.lightCenter(line, w, h)
         val (az, el) = GodRayGeometry.animatedAngles(fx, t)
         val tiltNow = tilt.value
@@ -157,9 +164,10 @@ internal data class RayFrame(
 internal fun rememberLyricRayLight(
     accent: Color,
     pulse: State<Float>? = null,
+    /** What is being sung, in root px. */
     band: () -> Rect? = { null },
+    fx: LyricsFxSettings = LocalLyricsFx.current,
 ): LyricRayLight? {
-    val fx = LocalLyricsFx.current
     if (!fx.godRays) return null
     if (LocalLowPerformance.current.disableLiquidGlass) return null
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return null
@@ -176,67 +184,90 @@ internal fun rememberLyricRayLight(
     }
 }
 
+/** The god-rays shader, or null on a device that will not compile it. */
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+@Composable
+internal fun rememberGodRaysShader(): RuntimeShader? = remember {
+    runCatching { RuntimeShader(GOD_RAYS_SRC) }
+        .onSuccess { LyricsDebug.log("god-rays shader compiled") }
+        .onFailure { LyricsDebug.log("god-rays shader FAILED to compile: ${it.message}") }
+        .getOrNull()
+}
+
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
 private fun godRaysModifier(light: LyricRayLight): Modifier {
-    val shader = remember {
-        runCatching { RuntimeShader(GOD_RAYS_SRC) }
-            .onSuccess { LyricsDebug.log("god-rays shader compiled") }
-            .onFailure { LyricsDebug.log("god-rays shader FAILED to compile: ${it.message}") }
-            .getOrNull()
-    } ?: return Modifier
-    val fx = light.fx
-    val samples = GodRayGeometry.samplesFor(fx.godRayQuality)
-
+    val shader = rememberGodRaysShader() ?: return Modifier
     return Modifier.backdropFrame(light.surface).graphicsLayer {
         if (size.minDimension <= 0f) return@graphicsLayer
-        val w = size.width
-        val h = size.height
-        val f = light.frame(w, h)
-        val decay = GodRayGeometry.perSampleDecay(fx.godRayDecay, samples)
-
-        shader.setFloatUniform("uLight", f.light.x, f.light.y)
-        shader.setFloatUniform("uSource", fx.godRaySource.toFloat())
-        shader.setFloatUniform("uOnTop", if (fx.godRaysOnTop) 1f else 0f)
-        shader.setFloatUniform("uDensity", f.density)
-        shader.setFloatUniform("uReachCap", GodRayGeometry.REACH_CAP_SHARE * f.maxSide)
-        shader.setFloatUniform("uSamples", samples.toFloat())
-        shader.setFloatUniform("uDecay", decay)
-        shader.setFloatUniform(
-            "uSampleWeight",
-            GodRayGeometry.sampleWeight(GodRayGeometry.LETTERS_GAIN * f.exposure, decay, samples),
-        )
-        shader.setFloatUniform("uCenterTap", GodRayGeometry.CENTER_TAP)
-        shader.setFloatUniform("uBacklightGain", GodRayGeometry.BACKLIGHT_GAIN * f.exposure)
-        shader.setFloatUniform("uDecayRef", fx.godRayDecay)
-        shader.setFloatUniform("uFalloffLen", f.density * f.maxSide)
-        // Inflated a little: the pump and the per-letter wave carry glyphs a
-        // few dp past the item's own box.
-        val pad = 2.dp.toPx()
-        val line = f.line
-        if (line != null) {
-            shader.setFloatUniform("uBand", line.left - pad, line.top - pad, line.right + pad, line.bottom + pad)
-        } else {
-            shader.setFloatUniform("uBand", 0f, 1f, 0f, 0f)
-        }
-        shader.setFloatUniform("uFeather", 5.dp.toPx(), 3.dp.toPx())
-        shader.setFloatUniform("uGuard", GodRayGeometry.LEGIBILITY_GUARD)
-        shader.setFloatUniform("uSunR", fx.godRaySunSize * min(w, h))
-        shader.setFloatUniform("uSunColor", light.color.red, light.color.green, light.color.blue)
-        shader.setFloatUniform("uShimmer", fx.godRayShimmer)
-        shader.setFloatUniform(
-            "uStripeCells",
-            GodRayGeometry.stripeCells(
-                radius = max((f.light - f.center).getDistance(), 0.35f * f.maxSide),
-                stripePx = 7.dp.toPx(),
-            ).toFloat(),
-        )
-        shader.setFloatUniform("uTime", f.time)
-        shader.setFloatUniform("uFrame", if (light.moving) GodRayGeometry.jitterFrame(f.time).toFloat() else 0f)
+        setGodRayUniforms(shader, light, light.frame(size.width, size.height), raysOnly = false)
         renderEffect = RenderEffect
             .createRuntimeShaderEffect(shader, "content")
             .asComposeRenderEffect()
     }
+}
+
+/**
+ * Every uniform of [GOD_RAYS_SRC] for one frame [f] of [light], over a layer
+ * the size of this scope. [raysOnly] is the backdrop layer's mode: the letters
+ * it is given are only the light's source (a copy of the real ones, which draw
+ * later, on top), so it returns the shafts alone. [emission] scales how much
+ * light the letters give: that copy is taken before the glass, at full
+ * strength, where the shafts were tuned on the glass's see-through letters.
+ */
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+internal fun GraphicsLayerScope.setGodRayUniforms(
+    shader: RuntimeShader,
+    light: LyricRayLight,
+    f: RayFrame,
+    raysOnly: Boolean,
+    emission: Float = 1f,
+) {
+    val fx = light.fx
+    val w = size.width
+    val h = size.height
+    val samples = GodRayGeometry.samplesFor(fx.godRayQuality)
+    val decay = GodRayGeometry.perSampleDecay(fx.godRayDecay, samples)
+
+    shader.setFloatUniform("uLight", f.light.x, f.light.y)
+    shader.setFloatUniform("uSource", fx.godRaySource.toFloat())
+    shader.setFloatUniform("uOnTop", if (fx.godRaysOnTop) 1f else 0f)
+    shader.setFloatUniform("uRaysOnly", if (raysOnly) 1f else 0f)
+    shader.setFloatUniform("uDensity", f.density)
+    shader.setFloatUniform("uReachCap", GodRayGeometry.REACH_CAP_SHARE * f.maxSide)
+    shader.setFloatUniform("uSamples", samples.toFloat())
+    shader.setFloatUniform("uDecay", decay)
+    shader.setFloatUniform(
+        "uSampleWeight",
+        GodRayGeometry.sampleWeight(GodRayGeometry.LETTERS_GAIN * f.exposure * emission, decay, samples),
+    )
+    shader.setFloatUniform("uCenterTap", GodRayGeometry.CENTER_TAP)
+    shader.setFloatUniform("uBacklightGain", GodRayGeometry.BACKLIGHT_GAIN * f.exposure)
+    shader.setFloatUniform("uDecayRef", fx.godRayDecay)
+    shader.setFloatUniform("uFalloffLen", f.density * f.maxSide)
+    // Inflated a little: the pump and the per-letter wave carry glyphs a
+    // few dp past the item's own box.
+    val pad = 2.dp.toPx()
+    val line = f.line
+    if (line != null) {
+        shader.setFloatUniform("uBand", line.left - pad, line.top - pad, line.right + pad, line.bottom + pad)
+    } else {
+        shader.setFloatUniform("uBand", 0f, 1f, 0f, 0f)
+    }
+    shader.setFloatUniform("uFeather", 5.dp.toPx(), 3.dp.toPx())
+    shader.setFloatUniform("uGuard", GodRayGeometry.LEGIBILITY_GUARD)
+    shader.setFloatUniform("uSunR", fx.godRaySunSize * min(w, h))
+    shader.setFloatUniform("uSunColor", light.color.red, light.color.green, light.color.blue)
+    shader.setFloatUniform("uShimmer", fx.godRayShimmer)
+    shader.setFloatUniform(
+        "uStripeCells",
+        GodRayGeometry.stripeCells(
+            radius = max((f.light - f.center).getDistance(), 0.35f * f.maxSide),
+            stripePx = 7.dp.toPx(),
+        ).toFloat(),
+    )
+    shader.setFloatUniform("uTime", f.time)
+    shader.setFloatUniform("uFrame", if (light.moving) GodRayGeometry.jitterFrame(f.time).toFloat() else 0f)
 }
 
 /**
@@ -446,6 +477,7 @@ uniform shader content;
 uniform float2 uLight;          // the light's point on this surface, px (may lie off it)
 uniform float uSource;          // 0 = the sung line shines, 1 = a light behind the lyrics
 uniform float uOnTop;           // 1 = add the light over the letters, 0 = draw it under them
+uniform float uRaysOnly;        // 1 = the backdrop layer: return the shafts alone, not the letters
 uniform float uDensity;         // share of the way to the light each pixel gathers
 uniform float uReachCap;        // letters: the longest march, px
 uniform float uSamples;         // 16 / 24 / 32 / 50
@@ -583,6 +615,12 @@ half4 main(float2 p) {
 
     float a = clamp(acc.a, 0.0, 1.0);
     float3 rays = min(clamp(acc.rgb, 0.0, 1.0), float3(a));
+    float4 light = float4(rays, a);
+    // The backdrop layer's letters are a copy, there only to give the light;
+    // the real ones draw later, on top, so only the shafts are handed back.
+    if (uRaysOnly > 0.5) {
+        return half4(light);
+    }
     if (uOnTop > 0.5) {
         // The article's composite: the light is added onto the scene.
         float outA = src.a + a * (1.0 - src.a);
@@ -592,7 +630,6 @@ half4 main(float2 p) {
     // the letters, crisp in front of their own light.
     float4 letters = src * lit(src);
     float4 shade = src - letters;
-    float4 light = float4(rays, a);
     return half4(letters + (light + shade * (1.0 - a)) * (1.0 - letters.a));
 }
 """

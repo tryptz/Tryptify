@@ -586,7 +586,28 @@ fun MainPlayerRoute(
     // is actually behind them.
     val backdropArt = rememberBackdropArt(currentTrack?.coverUrl, blurredBackground)
 
+    // The lyrics' light and shadow belong to the background, under the glass
+    // UI (LyricBackdropFx, in fxUnderlay below). The lyric view sends a copy
+    // of its letters here; the light is made here so the backdrop, the lyric
+    // glass and the shadow share one. The legacy layout has no fxUnderlay to
+    // draw it in, so it gets no backdrop and its lyric view draws both itself.
+    val lyricLetters = remember { LyricLetterCapture() }
+    val lyricsRayLight = if (!legacyPlayer && lyricsSlotWide) {
+        rememberLyricRayLight(
+            accent = blendedColors.vibrant,
+            pulse = beatPulse,
+            band = { lyricLetters.bandInRoot() },
+            fx = lyricsFx,
+        )
+    } else {
+        null
+    }
+    val lyricBackdrop = if (legacyPlayer) null else remember(lyricLetters, lyricsRayLight) {
+        LyricBackdrop(lyricLetters, lyricsRayLight)
+    }
+
     CompositionLocalProvider(
+        LocalLyricBackdrop provides lyricBackdrop,
         LocalLyricsFx provides lyricsFx,
         LocalLyricsSpectrum provides playerViewModel.spectrumAnalyzer,
         LocalLyricGlyphAnchors provides glyphAnchors.takeIf { lyricsBeatOn },
@@ -1103,6 +1124,16 @@ fun MainPlayerRoute(
                             accent = albumColors.vibrant,
                             fx = lyricsFx,
                             edgeHug = albumGlowOn,
+                        )
+                    }
+                    // The lyrics' shadow and god rays, over the glow: full
+                    // screen, so the shafts run on under the title, the
+                    // progress tube and the glass, which frost and bend them.
+                    // Faded with the lyrics.
+                    if (lyricBackdrop != null && lyricsSlotWide) {
+                        LyricBackdropFx(
+                            backdrop = lyricBackdrop,
+                            modifier = Modifier.graphicsLayer { alpha = lyricsProgress },
                         )
                     }
                 },

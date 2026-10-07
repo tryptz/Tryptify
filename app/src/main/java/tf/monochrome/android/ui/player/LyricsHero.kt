@@ -407,26 +407,38 @@ internal fun SyncedLyricsView(
     // disabled (and the analyzer never acquired) at intensity 0.
     val fx = LocalLyricsFx.current
     val beatIntensity = fx.bassReact
-    // God rays: what is being sung, in the rays layer's own pixels — the sung
-    // word when they follow it (word-timed lyrics), else the line. Read in the
-    // rays' draw phase, so the shafts follow the scroll glide and hop from
-    // word to word without recomposing anything.
+    // God rays: what is being sung, in root px — the sung word when they
+    // follow it (word-timed lyrics), else the line. Read in the draw phase of
+    // whichever layer draws the light, so the shafts follow the scroll glide
+    // and hop from word to word without recomposing anything.
     val followWord = fx.godRays && fx.godRaysFollowWord
     val sungWord = remember { SungWordAnchor() }
-    val raysOrigin = remember { androidx.compose.runtime.mutableStateOf(Offset.Zero) }
-    val activeBand: () -> Rect? = remember(listState, currentLineState, followWord) {
+    val listOrigin = remember { androidx.compose.runtime.mutableStateOf(Offset.Zero) }
+    val bandInRoot: () -> Rect? = remember(listState, currentLineState, followWord) {
         {
             val line = currentLineState.value
-            (if (followWord) sungWord.rectFor(line)?.translate(-raysOrigin.value) else null)
-                ?: activeLineBand(listState, line)
+            (if (followWord) sungWord.rectFor(line) else null)
+                ?: activeLineBand(listState, line)?.translate(listOrigin.value)
         }
     }
     // Prefer the player-provided shared pulse (one analyzer stake; the pump
     // and the full-screen glow breathe together).
     val bassPulse = LocalBeatPulse.current
         ?: if (beatIntensity > 0.01f) rememberBassPulse() else remember { mutableFloatStateOf(0f) }
-    // One light for the rays and the glass under them.
-    val rayLight = rememberLyricRayLight(accent = accent, pulse = bassPulse, band = activeBand)
+    // The player's backdrop, when it draws one under the lyrics (see
+    // LyricBackdropFx): the shadow and the shafts are drawn there, full screen
+    // and under the glass UI, from a copy of these letters, and the light is
+    // the player's, shared with the glass here. Without one this view draws
+    // them itself, inside its own surface.
+    val backdrop = LocalLyricBackdrop.current
+    val rayLight = if (backdrop != null) {
+        backdrop.light
+    } else {
+        rememberLyricRayLight(accent = accent, pulse = bassPulse, band = bandInRoot)
+    }
+    if (backdrop != null) {
+        androidx.compose.runtime.SideEffect { backdrop.capture.bandInRoot = bandInRoot }
+    }
     // Shared line registry — the active line reports its screen bounds here and
     // the full-screen LyricsFxLayer (in the player, no clipping ancestor) blooms
     // the album-accent glow there, so the light can never be cut.
@@ -520,19 +532,16 @@ internal fun SyncedLyricsView(
                 // glass letters, and sit OUTSIDE the side inset, so the shafts
                 // run to the screen edge instead of stopping in a hard line at
                 // the inset. A layer cannot draw past its own bounds.
-                .then(
-                    if (followWord) {
-                        Modifier.onGloballyPositioned { raysOrigin.value = it.positionInRoot() }
-                    } else {
-                        Modifier
-                    },
-                )
-                .lyricGodRays(rayLight)
+                .onGloballyPositioned { listOrigin.value = it.positionInRoot() }
+                // Here only when nothing under the lyrics draws them: "On top"
+                // adds the light over the letters, which a layer under them
+                // cannot.
+                .lyricGodRays(if (backdrop == null || fx.godRaysOnTop) rayLight else null)
                 // The shadow under the letters, on the background: outside the
                 // glass so it is never bevelled into a block, inside the rays so
                 // the shafts pass over it, and outside the inset so its blur is
-                // not cut off at the edge.
-                .lyricShadow(rayLight)
+                // not cut off at the edge. The backdrop draws it when there is one.
+                .then(if (backdrop == null) Modifier.lyricShadow(rayLight) else Modifier)
                 // User edge margin + a fixed bevel-safe inset, so the outermost
                 // glyphs (and their glass bevels) never sit flush against the
                 // clip edge where they'd be corner-cut.
@@ -540,7 +549,10 @@ internal fun SyncedLyricsView(
                 .fxaa()
                 // The same light, so the glass letters catch what the shafts
                 // stream from.
-                .liquidGlass(tint = accent, rayLight = rayLight),
+                .liquidGlass(tint = accent, rayLight = rayLight)
+                // Innermost, so the copy the backdrop lights from is the plain
+                // letters and the glass is not run twice.
+                .captureLetters(backdrop?.capture, edgeFade = true),
             contentPadding = PaddingValues(top = halfViewport, bottom = tailPadding),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {

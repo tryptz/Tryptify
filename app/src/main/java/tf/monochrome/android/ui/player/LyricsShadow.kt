@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.performance.LocalLowPerformance
@@ -52,25 +53,37 @@ private fun lyricShadowModifier(fx: LyricsFxSettings, rayLight: LyricRayLight?):
     Modifier.graphicsLayer {
         if (size.minDimension <= 0f) return@graphicsLayer
         // Same box as the rays layer it sits in, so the rays' frame is ours.
-        val cast = LyricShadowGeometry.cast(fx, rayLight?.frame(size.width, size.height))
-        val reach = cast.lengthDp.dp.toPx()
-        val blur = LyricShadowGeometry.blurDp(fx.shadowDepth).dp.toPx()
-        val shadow = RenderEffect.createColorFilterEffect(
-            BlendModeColorFilter(
-                android.graphics.Color.argb(LyricShadowGeometry.alpha(fx.shadowDepth), 0f, 0f, 0f),
-                BlendMode.SRC_IN,
-            ),
-            RenderEffect.createOffsetEffect(
-                cast.direction.x * reach,
-                cast.direction.y * reach,
-                RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.DECAL),
-            ),
-        )
+        val shadow = lyricShadowEffect(fx, rayLight?.frame(size.width, size.height))
         // The letters, untouched, over their shadow.
         renderEffect = RenderEffect
             .createBlendModeEffect(shadow, RenderEffect.createOffsetEffect(0f, 0f), BlendMode.SRC_OVER)
             .asComposeRenderEffect()
     }
+
+/**
+ * The shadow alone, from whatever letters this layer holds: their silhouette
+ * blurred, moved away from the light ([ray], in this layer's pixels, or the
+ * glass key light without one) and darkened. The letters themselves are not
+ * in it — the caller lays them over it, or (the backdrop layer) leaves them to
+ * the real ones drawn later.
+ */
+@RequiresApi(Build.VERSION_CODES.S)
+internal fun Density.lyricShadowEffect(fx: LyricsFxSettings, ray: RayFrame?): RenderEffect {
+    val cast = LyricShadowGeometry.cast(fx, ray)
+    val reach = cast.lengthDp.dp.toPx()
+    val blur = LyricShadowGeometry.blurDp(fx.shadowDepth).dp.toPx()
+    return RenderEffect.createColorFilterEffect(
+        BlendModeColorFilter(
+            android.graphics.Color.argb(LyricShadowGeometry.alpha(fx.shadowDepth), 0f, 0f, 0f),
+            BlendMode.SRC_IN,
+        ),
+        RenderEffect.createOffsetEffect(
+            cast.direction.x * reach,
+            cast.direction.y * reach,
+            RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.DECAL),
+        ),
+    )
+}
 
 /** Which way the lyrics' shadow falls, how far and how dark — off the GPU, so it can be tested. */
 internal object LyricShadowGeometry {
