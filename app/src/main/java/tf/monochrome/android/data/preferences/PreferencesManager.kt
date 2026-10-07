@@ -874,11 +874,14 @@ class PreferencesManager @Inject constructor(
     /**
      * TIDAL's download quality is "Dolby Atmos": a track with an Atmos mix
      * downloads that mix (the E-AC-3 JOC .m4a), the rest in TIDAL's stereo
-     * download tier. Never chosen, it follows the TIDAL Dolby Atmos switch,
-     * which decided downloads too before this setting existed.
+     * download tier. Off until chosen. It does not follow the TIDAL Dolby
+     * Atmos playback switch: downloads never asked for Atmos before this
+     * setting existed, and inheriting the switch turned Atmos downloads on
+     * by themselves on upgrade, where a server without the Atmos route then
+     * failed every track TIDAL lists as Atmos.
      */
     val tidalDownloadAtmos: Flow<Boolean> = dataStore.data
-        .map { it[TIDAL_DOWNLOAD_ATMOS] ?: it[TIDAL_ATMOS_PREFERRED] ?: false }
+        .map { it[TIDAL_DOWNLOAD_ATMOS] ?: false }
         .distinctUntilChanged()
 
     suspend fun setTidalDownloadAtmos(enabled: Boolean) {

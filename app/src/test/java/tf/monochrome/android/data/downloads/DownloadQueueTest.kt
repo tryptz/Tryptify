@@ -227,6 +227,28 @@ class DownloadQueueTest {
     }
 
     @Test
+    fun `a Qobuz track is still Qobuz's after the queue is restored`() {
+        // The id alone is a bare number TIDAL also uses, and the registry that
+        // tells them apart may not be loaded yet when the queue comes back.
+        val q = queue()
+        var saved: String? = null
+        q.onChanged = { saved = it }
+        q.enqueue(listOf(item(1).copy(isQobuz = true), item(2)))
+
+        val restored = queue()
+        restored.restore(saved)
+        assertEquals(listOf(true, false), restored.entries.value.map { it.item.isQobuz })
+    }
+
+    @Test
+    fun `a queue saved before the Qobuz flag existed still restores`() {
+        val q = queue()
+        q.restore("""[{"trackId":7,"title":"Old","artistName":"Artist"}]""")
+        assertEquals(listOf(7L), q.entries.value.map { it.item.trackId })
+        assertFalse(q.entries.value.single().item.isQobuz)
+    }
+
+    @Test
     fun `restoring junk leaves the queue alone`() {
         val q = queue()
         q.enqueue(items(2))

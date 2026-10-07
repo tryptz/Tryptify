@@ -24,8 +24,12 @@ import tf.monochrome.android.data.preferences.AppleQuality
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.buildCoverUrl
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -80,8 +84,26 @@ class TrackDownloader @Inject constructor(
         item: DownloadItem,
         onFailure: (String) -> Unit = {},
         onProgress: (Float) -> Unit,
+    ): Outcome = withContext(Dispatchers.IO) {
+        // Disk copies, tag writes and storage-provider queries all block, and
+        // a CoroutineWorker runs on Dispatchers.Default, whose few threads are
+        // meant for CPU work. IO is the pool sized for waiting.
+        downloadOnIo(item, onFailure, onProgress)
+    }
+
+    private suspend fun downloadOnIo(
+        item: DownloadItem,
+        onFailure: (String) -> Unit,
+        onProgress: (Float) -> Unit,
     ): Outcome {
         val trackId = item.trackId
+        // A queue restored at startup can run before the registry has read
+        // its ids back from disk, and an id it does not know yet is taken for
+        // TIDAL's. Wait for it, then teach it this track if the queue knew it
+        // was Qobuz's: the registry saves 750 ms after a change, which a
+        // process death can beat.
+        qobuzIdRegistry.awaitLoaded()
+        if (item.isQobuz) qobuzIdRegistry.registerTrack(trackId)
         val trackTitle = item.title
         val artistName = item.artistName
         val albumTitle = item.albumTitle
@@ -151,9 +173,18 @@ class TrackDownloader @Inject constructor(
                 // title-and-artist match in another catalogue can be a
                 // different master or version than the one chosen — so if its
                 // own service can't serve it, the download fails and says so.
-                val stream = runCatching {
+                val stream = try {
                     apiClient.getTrackStream(trackId, quality, forDownload = true, expectAtmos = item.isDolbyAtmos)
-                }.getOrElse { e ->
+                } catch (e: CancellationException) {
+                    // The user cancelled, or WorkManager stopped the job: not
+                    // a verdict on the track.
+                    throw e
+                } catch (e: IOException) {
+                    // No answer at all (no signal, a timeout): the queue tries
+                    // again, up to its attempt limit, rather than failing for good.
+                    Log.w(TAG, "${service.label} did not answer for \"$trackTitle\" (id=$trackId): ${e.message} - will retry")
+                    return Outcome.RETRYABLE
+                } catch (e: Exception) {
                     Log.w(TAG, "${service.label} could not serve \"$trackTitle\" (id=$trackId, q=$quality): ${e.message} - not falling back to another catalog")
                     e.message?.let(onFailure)
                     return Outcome.PERMANENT
@@ -288,8 +319,16 @@ class TrackDownloader @Inject constructor(
                 dir.findChild("$stem.$fileExt")?.delete()
                 val newFile = dir.createFile(audioMime, stem)
                 if (newFile != null) {
-                    context.contentResolver.openOutputStream(newFile.uri)?.use { out ->
-                        tempAudio.inputStream().use { input -> input.copyTo(out) }
+                    try {
+                        val out = context.contentResolver.openOutputStream(newFile.uri)
+                            ?: throw IOException("could not open ${newFile.uri} for writing")
+                        out.use { tempAudio.inputStream().use { input -> input.copyTo(it) } }
+                    } catch (e: Exception) {
+                        // A half-written file (storage full, card pulled) or an
+                        // empty one would be indexed as a broken track. Remove
+                        // it; the catch below decides whether to try again.
+                        runCatching { newFile.delete() }
+                        throw e
                     }
                     filePath = newFile.uri.toString()
                     targetDir = dir
@@ -402,6 +441,11 @@ class TrackDownloader @Inject constructor(
             } finally {
                 tempAudio.delete()
             }
+        } catch (e: CancellationException) {
+            // As the KDoc above promises: cancellation propagates. Caught as an
+            // Exception below, it was turned into a retry or a failure, and
+            // DownloadQueueWorker's own cancellation branch never ran.
+            throw e
         } catch (e: Exception) {
             // Never swallow this silently. A throw here puts the request back to
             // ENQUEUED for the backoff window, which the download list renders as
@@ -490,9 +534,35 @@ class TrackDownloader @Inject constructor(
      * [DocumentFile.findFile], ignoring case. Shared storage does not tell
      * "Abba" from "ABBA", so a case-sensitive miss followed by a create gets
      * "ABBA (1)" from the provider rather than the folder already there.
+     *
+     * Two provider queries whatever the folder holds. Reading each child's
+     * [DocumentFile.getName] is a query of its own, so a download folder with
+     * 1,500 artists cost 1,500 of them per lookup, five lookups a track, with
+     * every other download waiting on [folderLock]. One query reads every
+     * name; [listFiles] then gives the child itself. (It has to come from
+     * there: documentfile is 1.0.0 here, whose fromTreeUri always opens the
+     * root of the tree, whatever document the uri names.)
      */
-    private fun DocumentFile.findChild(name: String): DocumentFile? =
-        listFiles().firstOrNull { it.name.equals(name, ignoreCase = true) }
+    private fun DocumentFile.findChild(name: String): DocumentFile? {
+        val names = runCatching {
+            context.contentResolver.query(
+                DocumentsContract.buildChildDocumentsUriUsingTree(uri, DocumentsContract.getDocumentId(uri)),
+                arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+                null, null, null,
+            )
+        }.getOrNull()
+            // A provider that will not list this way: look one name at a time.
+            ?: return listFiles().firstOrNull { it.name.equals(name, ignoreCase = true) }
+        val childId = names.use { cursor ->
+            var found: String? = null
+            while (found == null && cursor.moveToNext()) {
+                if (cursor.getString(1).equals(name, ignoreCase = true)) found = cursor.getString(0)
+            }
+            found
+        } ?: return null
+        val childUri = DocumentsContract.buildDocumentUriUsingTree(uri, childId)
+        return listFiles().firstOrNull { it.uri == childUri }
+    }
 
     /**
      * Whether two stored locations are the same file. Two content URIs can

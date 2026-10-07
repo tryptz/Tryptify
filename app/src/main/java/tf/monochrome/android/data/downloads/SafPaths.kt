@@ -16,13 +16,19 @@ import java.net.URLDecoder
  */
 object SafPaths {
     private const val PREFIX = "content://com.android.externalstorage.documents/"
-    private const val PRIMARY_ROOT = "/storage/emulated/0"
+
+    /**
+     * Where `primary` is for the device owner. A work profile or a second
+     * user has its own (`/storage/emulated/10`), so the app passes the real
+     * one, Environment.getExternalStorageDirectory(), as `primaryRoot`.
+     */
+    const val PRIMARY_ROOT = "/storage/emulated/0"
 
     /**
      * The file path of [uri], a tree (a folder picked in the system picker)
      * or a document under one; null when it is not an external-storage link.
      */
-    fun absolutePath(uri: String): String? {
+    fun absolutePath(uri: String, primaryRoot: String = PRIMARY_ROOT): String? {
         if (!uri.startsWith(PREFIX)) return null
         // tree/<id>, tree/<id>/document/<id> or document/<id>; ids are
         // percent-encoded, so their own slashes are %2F and never split here.
@@ -34,24 +40,24 @@ object SafPaths {
         }
         val documentId = runCatching { URLDecoder.decode(encoded.replace("+", "%2B"), "UTF-8") }.getOrNull()
             ?: return null
-        return pathOfDocumentId(documentId)
+        return pathOfDocumentId(documentId, primaryRoot)
     }
 
     /** The file path of external-storage document [documentId] (`primary:Music/a.flac`). */
-    fun pathOfDocumentId(documentId: String): String? {
+    fun pathOfDocumentId(documentId: String, primaryRoot: String = PRIMARY_ROOT): String? {
         val colon = documentId.indexOf(':')
         if (colon <= 0) return null
         val volume = documentId.substring(0, colon)
         val inVolume = documentId.substring(colon + 1).trim('/')
-        val root = if (volume.equals("primary", ignoreCase = true)) PRIMARY_ROOT else "/storage/$volume"
+        val root = if (volume.equals("primary", ignoreCase = true)) primaryRoot else "/storage/$volume"
         return if (inVolume.isEmpty()) root else "$root/$inVolume"
     }
 
     /** The external-storage document id of file [path], the reverse of [pathOfDocumentId]. */
-    fun documentIdOfPath(path: String): String? {
+    fun documentIdOfPath(path: String, primaryRoot: String = PRIMARY_ROOT): String? {
         val clean = path.trimEnd('/')
-        if (clean == PRIMARY_ROOT) return "primary:"
-        if (clean.startsWith("$PRIMARY_ROOT/")) return "primary:" + clean.removePrefix("$PRIMARY_ROOT/")
+        if (clean == primaryRoot) return "primary:"
+        if (clean.startsWith("$primaryRoot/")) return "primary:" + clean.removePrefix("$primaryRoot/")
         if (!clean.startsWith("/storage/")) return null
         val rest = clean.removePrefix("/storage/")
         val volume = rest.substringBefore('/')

@@ -28,6 +28,14 @@ class DashManifestUriTest {
     }
 
     @Test
+    fun `a link to a manifest is handed over as the link`() {
+        val link = "https://example.invalid/track/1234/manifest.mpd?token=a"
+        assertEquals(link, dashManifestUri(link))
+        // Signed like the segments, so it is not queued for gapless either.
+        assertFalse(GaplessEligibility.isStableUri(dashManifestUri(link)))
+    }
+
+    @Test
     fun `an inline DASH manifest is never queued for gapless`() {
         // Its segment links are time-limited, so it must be resolved when reached.
         assertFalse(GaplessEligibility.isStableUri(dashManifestUri(mpd)))

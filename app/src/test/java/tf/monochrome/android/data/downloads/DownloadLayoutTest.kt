@@ -80,6 +80,14 @@ class DownloadLayoutTest {
     }
 
     @Test
+    fun `names never start with a dot, which would hide them from the media scanner`() {
+        assertEquals("38 Special", DownloadLayout.sanitize(".38 Special", "x"))
+        assertEquals("And Justice for All", DownloadLayout.sanitize("...And Justice for All", "x"))
+        assertEquals("5_ The Gray Chapter", DownloadLayout.sanitize(".5: The Gray Chapter", "x"))
+        assertEquals("fallback", DownloadLayout.sanitize("...", "fallback"))
+    }
+
+    @Test
     fun `a name with nothing left falls back`() {
         assertEquals(DownloadLayout.UNKNOWN_ARTIST, target(artist = "...", albumArtist = null).artistFolder)
         assertEquals("fallback", DownloadLayout.sanitize("   ", "fallback"))

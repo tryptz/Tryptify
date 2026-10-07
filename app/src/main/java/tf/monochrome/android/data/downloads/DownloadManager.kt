@@ -61,6 +61,7 @@ class DownloadManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val queue: DownloadQueue,
     private val preferences: PreferencesManager,
+    private val qobuzIdRegistry: tf.monochrome.android.data.api.QobuzIdRegistry,
 ) {
     private val workManager = WorkManager.getInstance(context)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -81,7 +82,7 @@ class DownloadManager @Inject constructor(
 
     fun downloadTracks(tracks: List<Track>) {
         if (tracks.isEmpty()) return
-        queue.enqueue(tracks.map { DownloadItem.from(it) })
+        queue.enqueue(tracks.map { DownloadItem.from(it, isQobuz = qobuzIdRegistry.isQobuzTrack(it.id)) })
         startWorker()
     }
 

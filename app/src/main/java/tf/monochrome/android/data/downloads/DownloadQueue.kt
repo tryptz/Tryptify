@@ -25,6 +25,11 @@ data class DownloadItem(
     // Deezer identity, captured at enqueue for the same reason as [appleId].
     // Defaulted so a queue persisted before it existed still decodes.
     val deezerId: Long = -1L,
+    // Qobuz identity, captured at enqueue for the same reason. Qobuz ids are
+    // bare numbers too, and the registry that knows them loads from disk
+    // after startup: a queue restored before it has would send them to TIDAL,
+    // where the same number is some other recording.
+    val isQobuz: Boolean = false,
     val title: String,
     val artistName: String,
     val albumTitle: String? = null,
@@ -45,10 +50,11 @@ data class DownloadItem(
     val genre: String? = null,
 ) {
     companion object {
-        fun from(track: Track): DownloadItem = DownloadItem(
+        fun from(track: Track, isQobuz: Boolean = false): DownloadItem = DownloadItem(
             trackId = track.id,
             appleId = track.appleId ?: -1L,
             deezerId = track.deezerId ?: -1L,
+            isQobuz = isQobuz,
             title = track.title,
             artistName = track.artist?.name
                 ?: track.displayArtist.ifBlank { "Unknown Artist" },

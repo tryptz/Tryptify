@@ -848,7 +848,17 @@ internal fun pathLooksLikeAudioFile(path: String?): Boolean {
  * DashMediaSource for it, DefaultDataSource reads the data: URI, and the
  * segments the manifest names come over HTTP.
  *
+ * A server can also answer with a link to the manifest (an `.mpd` URL),
+ * which the client marks as DASH too. That is already a URI the player can
+ * open, so it is handed over as it is: encoded, the player would read the
+ * link's text as the manifest and fail.
+ *
  * Top-level and String-based so it is a plain JVM unit test.
  */
-internal fun dashManifestUri(mpd: String): String =
-    "data:application/dash+xml;base64," + java.util.Base64.getEncoder().encodeToString(mpd.toByteArray())
+internal fun dashManifestUri(mpd: String): String {
+    val text = mpd.trim()
+    if (text.startsWith("https://", ignoreCase = true) || text.startsWith("http://", ignoreCase = true)) {
+        return text
+    }
+    return "data:application/dash+xml;base64," + java.util.Base64.getEncoder().encodeToString(mpd.toByteArray())
+}

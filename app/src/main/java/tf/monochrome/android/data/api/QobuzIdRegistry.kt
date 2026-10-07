@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -90,8 +91,19 @@ class QobuzIdRegistry @Inject constructor(
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
 
+    // Completed once [load] has run, however it went. The in-memory sets are
+    // empty until then, and a caller deciding which service a bare id belongs
+    // to (the download queue, restored at startup) would read "not Qobuz".
+    private val loaded = CompletableDeferred<Unit>()
+
     init {
-        scope.launch { load() }
+        scope.launch {
+            try {
+                load()
+            } finally {
+                loaded.complete(Unit)
+            }
+        }
         scope.launch {
             @OptIn(FlowPreview::class)
             saveSignal.debounce(SAVE_DEBOUNCE_MS).collect { persist() }
@@ -116,6 +128,9 @@ class QobuzIdRegistry @Inject constructor(
     }
 
     fun isQobuzTrack(id: Long): Boolean = id in qobuzTrackIds
+
+    /** Suspends until the persisted ids are back in memory. */
+    suspend fun awaitLoaded() = loaded.await()
 
     fun registerAppleTrack(id: Long) {
         if (appleTrackIds.add(id)) markDirty()

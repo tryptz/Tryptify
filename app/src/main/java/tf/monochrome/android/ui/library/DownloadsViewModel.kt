@@ -60,6 +60,10 @@ class DownloadsViewModel @Inject constructor(
     private val localMediaDao: LocalMediaDao,
 ) : ViewModel() {
 
+    /** This user's own storage, for [SafPaths]: not /storage/emulated/0 in a work profile. */
+    @Suppress("DEPRECATION")
+    private val primaryRoot: String = android.os.Environment.getExternalStorageDirectory().path
+
     /**
      * Combined view of downloads: every track tracked by Room (downloaded by
      * this app) plus every other audio file in the download folder
@@ -78,7 +82,7 @@ class DownloadsViewModel @Inject constructor(
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     private val folderTracks: Flow<List<DownloadedTrackEntity>> =
         preferences.downloadFolderUri
-            .map { folder -> folder?.let(SafPaths::absolutePath)?.trimEnd('/')?.plus('/') }
+            .map { folder -> folder?.let { SafPaths.absolutePath(it, primaryRoot) }?.trimEnd('/')?.plus('/') }
             .distinctUntilChanged()
             .flatMapLatest { prefix ->
                 // No folder picked: downloads are in app storage, which the
@@ -90,7 +94,7 @@ class DownloadsViewModel @Inject constructor(
     val downloadedTracks: StateFlow<List<DownloadedTrackEntity>?> =
         combine(roomTracks, folderTracks) { roomRows, folderRows ->
             // A file this app downloaded is Room's row, not a second one.
-            val known = roomRows.mapTo(HashSet()) { SafPaths.absolutePath(it.filePath) ?: it.filePath }
+            val known = roomRows.mapTo(HashSet()) { SafPaths.absolutePath(it.filePath, primaryRoot) ?: it.filePath }
             // Newest first overall; folder rows bias to file timestamp.
             (roomRows + folderRows.filter { it.filePath !in known }).sortedByDescending { it.downloadedAt }
         }
@@ -187,7 +191,7 @@ class DownloadsViewModel @Inject constructor(
      */
     private suspend fun deleteThroughFolder(path: String): Boolean = runCatching {
         val tree = preferences.downloadFolderUri.first()?.toUri() ?: return false
-        val documentId = SafPaths.documentIdOfPath(path) ?: return false
+        val documentId = SafPaths.documentIdOfPath(path, primaryRoot) ?: return false
         DocumentsContract.deleteDocument(
             appCtx.contentResolver,
             DocumentsContract.buildDocumentUriUsingTree(tree, documentId),

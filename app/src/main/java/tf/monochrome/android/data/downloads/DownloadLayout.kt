@@ -69,8 +69,10 @@ internal object DownloadLayout {
 
     /**
      * A name every Android storage backend accepts: none of the characters FAT
-     * and the storage providers refuse, no control characters, no trailing dot
-     * or space (FAT drops them, so the name read back would not match), and at
+     * and the storage providers refuse, no control characters, no leading dot
+     * (a dot name is hidden, and Android's media scanner skips hidden folders,
+     * so ".38 Special" never reached the library), no trailing dot or space
+     * (FAT drops them, so the name read back would not match), and at
      * most [MAX_NAME_BYTES] of UTF-8. The limit leaves room for an extension
      * and the provider's " (1)" under the 255-byte limit of the filesystems
      * underneath. A name with nothing left becomes [fallback].
@@ -80,6 +82,7 @@ internal object DownloadLayout {
             .replace(WHITESPACE, " ")
             .replace(ILLEGAL, "_")
             .trim()
+            .trimStart('.', ' ')
             .trimEnd('.', ' ')
         return truncateUtf8(cleaned, MAX_NAME_BYTES).trimEnd('.', ' ').ifEmpty { fallback }
     }

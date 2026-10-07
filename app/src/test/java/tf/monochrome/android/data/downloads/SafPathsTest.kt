@@ -40,4 +40,14 @@ class SafPathsTest {
         assertEquals("1A2B-3C4D:Music/a.flac", SafPaths.documentIdOfPath("/storage/1A2B-3C4D/Music/a.flac"))
         assertNull(SafPaths.documentIdOfPath("/data/user/0/tf.monotrypt.android/files/a.flac"))
     }
+
+    @Test
+    fun `a work profile's own storage is primary for it`() {
+        val root = "/storage/emulated/10"
+        val uri = "content://com.android.externalstorage.documents/tree/primary%3AMusic/document/primary%3AMusic%2Fa.flac"
+        assertEquals("/storage/emulated/10/Music/a.flac", SafPaths.absolutePath(uri, root))
+        assertEquals("primary:Music/a.flac", SafPaths.documentIdOfPath("/storage/emulated/10/Music/a.flac", root))
+        // The owner's storage is not this user's primary.
+        assertNull(SafPaths.documentIdOfPath("/storage/emulated/0/Music/a.flac", root))
+    }
 }

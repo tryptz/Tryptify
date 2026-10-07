@@ -4,6 +4,7 @@ import android.util.Base64
 import android.util.LruCache
 import io.ktor.client.HttpClient
 import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -1001,7 +1002,15 @@ class HiFiApiClient @Inject constructor(
 
     // --- Playlist ---
 
-    suspend fun getPlaylist(playlistId: String): Playlist {
+    /**
+     * Off the caller's thread: playlist pages of up to 500 tracks are decoded
+     * and merged here, and the playlist screen calls this from its view
+     * model, which runs on the main thread.
+     */
+    suspend fun getPlaylist(playlistId: String): Playlist =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { fetchPlaylist(playlistId) }
+
+    private suspend fun fetchPlaylist(playlistId: String): Playlist {
         // The largest page a HiFi API server answers (TrypT HiFi fetches it
         // from TIDAL as parallel pages of 100). A server that caps lower just
         // sends fewer, and the page size below follows what it sent.
@@ -1237,7 +1246,15 @@ class HiFiApiClient @Inject constructor(
         val base = instance.url.trimEnd('/')
         return withTimeoutOrNull(timeoutMs) {
             try {
-                val res = httpClient.get("$base/api/tidal/download-music?track_id=$trackId&atmos=true")
+                val res = httpClient.get("$base/api/tidal/download-music?track_id=$trackId&atmos=true") {
+                    // The engine's 30 s read timeout would otherwise end the
+                    // wait long before [timeoutMs]: a download allows 90 s for
+                    // the server to start the Atmos build and answer.
+                    timeout {
+                        socketTimeoutMillis = timeoutMs
+                        requestTimeoutMillis = timeoutMs
+                    }
+                }
                 val data = runCatching { json.parseToJsonElement(res.bodyAsText()) as? JsonObject }.getOrNull()
                 if (!res.status.isSuccess()) {
                     // TrypT HiFi says why in {success: false, error}.
@@ -1514,6 +1531,11 @@ class HiFiApiClient @Inject constructor(
         return when {
             url == null && quality == AudioQuality.HI_RES -> tidalManifestFileUrl(trackId, AudioQuality.LOSSLESS)
             url == null -> throw Exception("TIDAL sent no stream for track $trackId")
+            // TIDAL sends its hi-res tier as DASH segments, which only a TrypT
+            // HiFi server can join into a file. Its CD tier is one FLAC, so a
+            // hi-res download falls back to that, as it does with no stream.
+            url.contains("<MPD") && quality == AudioQuality.HI_RES ->
+                tidalManifestFileUrl(trackId, AudioQuality.LOSSLESS)
             url.contains("<MPD") -> throw Exception(
                 "TIDAL sent track $trackId as DASH segments; only a TrypT HiFi server can download those as a file"
             )
