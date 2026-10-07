@@ -290,7 +290,9 @@ fun DownloadedTrackEntity.toUnifiedTrack(): UnifiedTrack {
         albumArtistName = artistName.takeIf { it.isNotBlank() },
         albumTitle = albumTitle,
         albumId = albumTitle?.let { "download_album_${it.hashCode()}" },
-        artworkUri = albumCover,
+        // The record keeps TIDAL's cover id, not a URL: handed over as it was,
+        // the notification and lock screen tried to open "/<id>" as a file.
+        artworkUri = albumCover?.let { tf.monochrome.android.domain.model.buildCoverUrl(it, 640) },
         source = PlaybackSource.LocalFile(
             filePath = filePath,
             codec = codec,
