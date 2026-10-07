@@ -299,7 +299,7 @@ internal object GodRayGeometry {
      */
     const val BACKLIGHT_GAIN = 3f
 
-    /** How much of the light is taken back off the sung line itself, so its letters stay readable. */
+    /** How much of the light is taken back off under the sung letters, in their shape, so they stay readable. */
     const val LEGIBILITY_GUARD = 0.65f
 
     /** The sample count the article's decay is quoted against (the Shadertoy uses 50). */
@@ -457,7 +457,7 @@ uniform float uDecayRef;        // backlight: decay per 1/50 of uFalloffLen
 uniform float uFalloffLen;      // backlight: how far the shafts reach, px
 uniform float4 uBand;           // what is sung, px (left, top, right, bottom); bottom < top = nothing
 uniform float2 uFeather;        // band edge: outside, inside, px
-uniform float uGuard;           // how much light is taken off the sung line itself
+uniform float uGuard;           // how much light is taken off under the sung letters
 uniform float uSunR;            // backlight disc radius, px
 uniform float3 uSunColor;
 uniform float uShimmer;         // dust in the shafts
@@ -572,8 +572,13 @@ half4 main(float2 p) {
     }
 
     acc *= 1.0 + uShimmer * (dust(p) * 1.3 - 0.65);
+    // Legibility: the light is taken down under the sung letters themselves,
+    // in their own shape, so they stay readable while the shafts run on
+    // through the gaps between them. It used to be dimmed across the whole
+    // band, and on device that showed as a darker rectangle cut out of the
+    // shafts wherever the sung line was.
     if (hasBand()) {
-        acc *= 1.0 - uGuard * bandMask(p);
+        acc *= 1.0 - uGuard * src.a * lit(src) * bandMask(p);
     }
 
     float a = clamp(acc.a, 0.0, 1.0);

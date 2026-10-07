@@ -244,8 +244,11 @@ like the glass: a RuntimeShader effect takes its uniforms when it is created.
 the active line from `layoutInfo` (`item.offset - viewportStartOffset`, read in
 the draw phase so the shafts follow the scroll glide) or, with "Follow the sung
 word", the word the karaoke line reports. Letting every visible line emit made
-the screen a wash; dropping the 65% guard inside the band buried the sung line
-under its own light (the first prototype, at 90° elevation). The band's sides
+the screen a wash; with no guard at all the sung line was buried under its own
+light (the first prototype, at 90° elevation). The guard takes 65% of the light
+off *under the sung letters, in their shape* (their coverage, `src.a * lit`),
+never across the band: dimmed across the whole band, the shafts showed on device
+a darker rectangle wherever the sung line was. The band's sides
 are `GodRayGeometry.UNBOUNDED`, not infinity: an infinity reaching
 `smoothstep` comes back NaN. The one exception is "All lyrics shine", which is
 the Shadertoy's whole image as the light and asks for exactly that trade.
