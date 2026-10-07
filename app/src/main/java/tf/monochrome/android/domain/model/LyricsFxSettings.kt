@@ -184,7 +184,7 @@ data class LyricsFxSettings(
     val godRayAzimuthDeg: Float = 90f,
     /** How far the light is raised out of the screen toward you: 0 = raking from the side, 90 = straight behind the line. */
     val godRayElevationDeg: Float = 60f,
-    /** Backlight disc radius, as a fraction of the lyric surface's short side. */
+    /** Backlight disc radius, as a fraction of the window's short side. */
     val godRaySunSize: Float = 0.08f,
     /** Dust in the shafts: slow flicker across neighbouring rays. 0 = clean beams. */
     val godRayShimmer: Float = 0.35f,
@@ -194,7 +194,7 @@ data class LyricsFxSettings(
     val godRaySpinDps: Float = 0f,
     /**
      * The light wanders over the lyrics on the Shadertoy's own path,
-     * `(sin(t), sin(0.913·t))`, out to half the surface's height at 1.
+     * `(sin(t), sin(0.913·t))`, out to half the window's short side at 1.
      */
     val godRaySway: Float = 0f,
     /** How strongly tilting the phone swings the light. */

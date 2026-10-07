@@ -175,12 +175,12 @@ Personal fields are omitted here — never set them in a preset.
 | `godRayDensity` | 0.2..1 | 0.85 | How far toward the light each pixel gathers: the shaft length (the article's density). |
 | `godRayDecay` | 0.85..1 | 0.95 | Light kept per 1/50 of a shaft (the article's decay at 50 samples). 1 = no falloff. |
 | `godRayAzimuthDeg` | 0..360 | 90 | Where the light comes from around the screen: 0 = right, 90 = above, 270 = below. |
-| `godRayElevationDeg` | 0..90 | 60 | The 3D angle: 90 = straight behind the line (a burst), 0 = flat and raking (near-parallel shafts). Projected as `focal · cot(el)`. |
-| `godRaySunSize` | 0.03..0.3 | 0.08 | Backlight disc radius, share of the surface's short side. Backlight only. |
+| `godRayElevationDeg` | 0..90 | 60 | The 3D angle: 90 = straight behind the line (a burst), 0 = flat and raking (near-parallel shafts). Projected as `focal · cot(el)`, focal = half the window's short side, so it lands the same in the Studio's preview as in the player. |
+| `godRaySunSize` | 0.03..0.3 | 0.08 | Backlight disc radius, share of the window's short side. Backlight only. |
 | `godRayShimmer` | 0..1 | 0.35 | Dust: slow flicker across neighbouring shafts. Any value > 0 runs a frame clock. |
 | `godRayBeat` | 0..1 | 0.5 | How much a kick brightens and lengthens the shafts. Needs `bassReact` > 0.01. |
 | `godRaySpinDps` | -45..45 | 0 | The light orbits the line, degrees per second; sign = direction. |
-| `godRaySway` | 0..1 | 0 | The light wanders on the Shadertoy's own path, `(sin(t), sin(0.913·t))`, out to half the surface height at 1. Runs a frame clock. |
+| `godRaySway` | 0..1 | 0 | The light wanders on the Shadertoy's own path, `(sin(t), sin(0.913·t))`, out to half the window's short side at 1. Runs a frame clock. |
 | `godRayTilt` | 0..1.5 | 0 | How far tilting the phone swings the light. Device only; > 0 holds the gravity sensor. |
 
 ## Player Glass parameter reference

@@ -10,7 +10,7 @@ class LyricShadowGeometryTest {
 
     private fun frame(light: Offset, center: Offset, el: Float) = RayFrame(
         light = light, center = center, line = null, exposure = 0.6f, density = 0.85f,
-        elevationDeg = el, maxSide = 2000f, time = 0f,
+        elevationDeg = el, scale = 1080f, time = 0f,
     )
 
     @Test

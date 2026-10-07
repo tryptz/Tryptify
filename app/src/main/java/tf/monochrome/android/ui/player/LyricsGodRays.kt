@@ -5,6 +5,7 @@ import android.graphics.RuntimeShader
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -16,9 +17,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeRenderEffect
-import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.performance.LocalLowPerformance
@@ -49,14 +53,16 @@ import kotlin.math.sin
  *    blocks it by its alpha, and the letters' shadows stream through the
  *    shafts.
  *
- * Apply it OUTSIDE the lyric surface's side padding and outside the glass, so
- * the shafts are computed from the finished glass letters and can run to the
- * screen edge (see `SyncedLyricsView`). The render effect cannot draw past its
- * own layer, so a layer inset from the edge would cut every shaft off at the
- * inset in a hard vertical line.
+ * This modifier is the lyric view's own rays, for a screen with no
+ * [LyricBackdropFx] under it (the legacy player). Apply it OUTSIDE the lyric
+ * surface's side padding and outside the glass, so the shafts are computed
+ * from the finished glass letters and can run to the screen edge (see
+ * `SyncedLyricsView`). The render effect cannot draw past its own layer, so a
+ * layer inset from the edge would cut every shaft off at the inset in a hard
+ * vertical line.
  *
- * The light's `band` ([rememberLyricRayLight]) is what is being sung, in this
- * layer's own pixels: the line, running
+ * The light's `band` ([rememberLyricRayLight]) is what is being sung, in root
+ * px: the line, running
  * the full width ([GodRayGeometry.UNBOUNDED] either side), or with
  * [LyricsFxSettings.godRaysFollowWord] the one word. It decides what shines in
  * Letters mode, where the light sits when it faces you head-on, and where the
@@ -78,10 +84,20 @@ internal fun Modifier.lyricGodRays(light: LyricRayLight?): Modifier {
  * come from (see the `uRay*` uniforms in LiquidGlass.kt).
  *
  * Built in composition and read in each layer's draw phase. Everything that
- * moves the light — the clock, the tilt, the beat, the sung band, the rays
- * layer's own box — is snapshot state, so both layers rerun when it moves and
- * nothing recomposes. It is computed once, from the rays layer's box, so the
- * two can never disagree about where the light is.
+ * moves the light — the clock, the tilt, the beat, the sung band, the lyric
+ * surface's box — is snapshot state, so every layer reruns when it moves and
+ * nothing recomposes.
+ *
+ * It is computed once, in root px, and each layer that draws it — the
+ * backdrop's shafts, the light on the letters, the glass, the shadow — only
+ * moves it into its own pixels ([frameFor]). Nothing in it depends on how big
+ * the layer drawing it is. It used to be worked out as shares of the rays
+ * layer's long side, which is the preview's width in the Studio and the
+ * screen's height in the player, so the same settings put the light more than
+ * twice as far from the sung line in the player and the two looked nothing
+ * alike (seen on device). Every distance is a share of [scale], the window's
+ * short side, instead: the same on every screen the lyrics are shown on, and
+ * about the long side of the lyric surface the rays were tuned on.
  */
 @Stable
 internal class LyricRayLight(
@@ -91,31 +107,32 @@ internal class LyricRayLight(
     private val time: State<Float>,
     private val tilt: State<Offset>,
     private val pulse: State<Float>?,
-    /** What is being sung, in ROOT px (any layer can turn that into its own). */
+    /** What is being sung, in root px. */
     private val band: () -> Rect?,
-    /** The rays layer's own box in root px, recorded as it lays out. */
-    internal val surface: BackdropAnchor,
+    /**
+     * The lyric surface the light is set over, in root px: the light centres
+     * on it when nothing is sung, or all of it is. Null until it is laid out.
+     */
+    private val lettersBox: () -> Rect?,
+    /** The length every distance in the light is a share of, px: the window's short side. */
+    private val scale: Float,
 ) {
     /** The light's colour: the album accent, a third of the way to white. */
     val color: Color = lerp(accent, Color.White, 0.35f)
 
-    /** This frame's light, in the pixels of a rays layer [w] by [h]. */
-    fun frame(w: Float, h: Float): RayFrame {
-        val maxSide = max(w, h)
+    /** This frame's light in root px. Null until the lyrics have been laid out. */
+    private fun frameInRoot(): RayFrame? {
+        val box = lettersBox()?.takeIf { it.width > 0f && it.height > 0f } ?: return null
+        if (scale <= 0f) return null
         val t = if (moving) time.value else 0f
         // "All lyrics" is the Shadertoy's whole image shining: no band at all.
-        val box = surface.rect
-        val line = if (fx.godRaysAllLyrics) {
-            null
-        } else {
-            band()?.translate(-box.left, -box.top)?.takeIf { it.height > 0f && it.width > 0f }
-        }
-        val center = GodRayGeometry.lightCenter(line, w, h)
+        val line = if (fx.godRaysAllLyrics) null else band()?.takeIf { it.height > 0f && it.width > 0f }
+        val center = GodRayGeometry.lightCenter(line, box)
         val (az, el) = GodRayGeometry.animatedAngles(fx, t)
         val tiltNow = tilt.value
-        val point = GodRayGeometry.lightPoint(center, az, el, focal = GodRayGeometry.FOCAL_SHARE * maxSide) +
-            Offset(-tiltNow.x, tiltNow.y) * (fx.godRayTilt * GodRayGeometry.TILT_SHARE * maxSide) +
-            GodRayGeometry.swayOffset(fx.godRaySway, t, h)
+        val point = GodRayGeometry.lightPoint(center, az, el, focal = GodRayGeometry.FOCAL_SHARE * scale) +
+            Offset(-tiltNow.x, tiltNow.y) * (fx.godRayTilt * GodRayGeometry.TILT_SHARE * scale) +
+            GodRayGeometry.swayOffset(fx.godRaySway, t, scale)
         // The kick brightens the shafts and pushes them a little further.
         val beat = (pulse?.value ?: 0f) * fx.bassReact * fx.godRayBeat
         return RayFrame(
@@ -125,21 +142,16 @@ internal class LyricRayLight(
             exposure = fx.godRayExposure * (1f + 1.2f * beat),
             density = (fx.godRayDensity * (1f + 0.15f * beat)).coerceAtMost(1f),
             elevationDeg = el,
-            maxSide = maxSide,
+            scale = scale,
             time = t,
         )
     }
 
     /**
-     * This frame's light for another layer — the glass letters — whose
-     * top-left sits at [originInRoot]: the rays layer's frame, moved into that
-     * layer's pixels. Null until the rays layer has been laid out.
+     * This frame's light for a layer whose top-left sits at [originInRoot],
+     * in that layer's own pixels. Null until the lyrics have been laid out.
      */
-    fun frameFor(originInRoot: Offset): RayFrame? {
-        val box = surface.rect
-        if (box.rootW <= 0f || box.rootH <= 0f) return null
-        return frame(box.rootW, box.rootH).shiftedBy(Offset(box.left, box.top) - originInRoot)
-    }
+    fun frameFor(originInRoot: Offset): RayFrame? = frameInRoot()?.shiftedBy(-originInRoot)
 }
 
 /** One frame of the god rays' light, in some layer's own pixels. */
@@ -150,7 +162,8 @@ internal data class RayFrame(
     val exposure: Float,
     val density: Float,
     val elevationDeg: Float,
-    val maxSide: Float,
+    /** The length the light's distances are shares of, px ([LyricRayLight]'s scale). */
+    val scale: Float,
     val time: Float,
 ) {
     fun shiftedBy(d: Offset): RayFrame = copy(light = light + d, center = center + d, line = line?.translate(d))
@@ -166,6 +179,8 @@ internal fun rememberLyricRayLight(
     pulse: State<Float>? = null,
     /** What is being sung, in root px. */
     band: () -> Rect? = { null },
+    /** The lyric surface, in root px; read in the draw phase. */
+    lettersBox: () -> Rect?,
     fx: LyricsFxSettings = LocalLyricsFx.current,
 ): LyricRayLight? {
     if (!fx.godRays) return null
@@ -176,13 +191,19 @@ internal fun rememberLyricRayLight(
     val moving = GodRayGeometry.isMoving(fx)
     val time = rememberFrameSeconds(animated = moving)
     val tilt = if (fx.godRayTilt > 0f) rememberGravityTilt() else NoTilt
-    // Outlives a change of settings: the box is recorded when the rays layer
-    // is laid out, and a fresh holder would sit empty until it next moved.
-    val surface = remember { BackdropAnchor() }
-    return remember(fx, accent, moving, time, tilt, pulse, band) {
-        LyricRayLight(fx, accent, moving, time, tilt, pulse, band, surface)
+    val window = LocalWindowInfo.current.containerSize
+    val scale = min(window.width, window.height).toFloat()
+    return remember(fx, accent, moving, time, tilt, pulse, band, lettersBox, scale) {
+        LyricRayLight(fx, accent, moving, time, tilt, pulse, band, lettersBox, scale)
     }
 }
+
+/**
+ * Where a layer drawing the light sits in the root, recorded as it lays out:
+ * the light is handed out in root px and each layer moves it into its own.
+ */
+internal fun Modifier.rayLayerOrigin(origin: MutableState<Offset?>): Modifier =
+    onGloballyPositioned { origin.value = it.positionInRoot() }
 
 /** The god-rays shader, or null on a device that will not compile it. */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -198,43 +219,65 @@ internal fun rememberGodRaysShader(): RuntimeShader? = remember {
 @Composable
 private fun godRaysModifier(light: LyricRayLight): Modifier {
     val shader = rememberGodRaysShader() ?: return Modifier
-    return Modifier.backdropFrame(light.surface).graphicsLayer {
-        if (size.minDimension <= 0f) return@graphicsLayer
-        setGodRayUniforms(shader, light, light.frame(size.width, size.height), raysOnly = false)
-        renderEffect = RenderEffect
-            .createRuntimeShaderEffect(shader, "content")
-            .asComposeRenderEffect()
+    val origin = remember { mutableStateOf<Offset?>(null) }
+    return Modifier.rayLayerOrigin(origin).graphicsLayer {
+        val f = origin.value?.let(light::frameFor)
+        renderEffect = if (f == null || size.minDimension <= 0f) {
+            null
+        } else {
+            setGodRayUniforms(shader, light, f, RayOutput.LETTERS_AND_LIGHT)
+            RenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect()
+        }
     }
 }
 
+/** What a rays layer hands back: [GOD_RAYS_SRC]'s `uRaysOnly` and `uOnLetters`. */
+internal enum class RayOutput {
+    /**
+     * The letters with their light, under them or over them as
+     * [LyricsFxSettings.godRaysOnTop] says: a lyric view with no backdrop.
+     */
+    LETTERS_AND_LIGHT,
+
+    /**
+     * The shafts alone: the backdrop, whose letters are a copy there only to
+     * give the light. The real ones draw later, on top.
+     */
+    SHAFTS,
+
+    /**
+     * Only the light falling on the letters, in their shape: "On top", added
+     * over the real letters, which already stand on the backdrop's shafts.
+     */
+    ON_LETTERS,
+}
+
 /**
- * Every uniform of [GOD_RAYS_SRC] for one frame [f] of [light], over a layer
- * the size of this scope. [raysOnly] is the backdrop layer's mode: the letters
- * it is given are only the light's source (a copy of the real ones, which draw
- * later, on top), so it returns the shafts alone. [emission] scales how much
- * light the letters give: that copy is taken before the glass, at full
- * strength, where the shafts were tuned on the glass's see-through letters.
+ * Every uniform of [GOD_RAYS_SRC] for one frame [f] of [light], in the pixels
+ * of the layer [f] was moved into. [output] says what the layer hands back.
+ * [emission] scales how much light the letters give: the backdrop's copy is
+ * taken before the glass, at full strength, where the shafts were tuned on the
+ * glass's see-through letters.
  */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-internal fun GraphicsLayerScope.setGodRayUniforms(
+internal fun Density.setGodRayUniforms(
     shader: RuntimeShader,
     light: LyricRayLight,
     f: RayFrame,
-    raysOnly: Boolean,
+    output: RayOutput,
     emission: Float = 1f,
 ) {
     val fx = light.fx
-    val w = size.width
-    val h = size.height
     val samples = GodRayGeometry.samplesFor(fx.godRayQuality)
     val decay = GodRayGeometry.perSampleDecay(fx.godRayDecay, samples)
 
     shader.setFloatUniform("uLight", f.light.x, f.light.y)
     shader.setFloatUniform("uSource", fx.godRaySource.toFloat())
     shader.setFloatUniform("uOnTop", if (fx.godRaysOnTop) 1f else 0f)
-    shader.setFloatUniform("uRaysOnly", if (raysOnly) 1f else 0f)
+    shader.setFloatUniform("uRaysOnly", if (output == RayOutput.SHAFTS) 1f else 0f)
+    shader.setFloatUniform("uOnLetters", if (output == RayOutput.ON_LETTERS) 1f else 0f)
     shader.setFloatUniform("uDensity", f.density)
-    shader.setFloatUniform("uReachCap", GodRayGeometry.REACH_CAP_SHARE * f.maxSide)
+    shader.setFloatUniform("uReachCap", GodRayGeometry.REACH_CAP_SHARE * f.scale)
     shader.setFloatUniform("uSamples", samples.toFloat())
     shader.setFloatUniform("uDecay", decay)
     shader.setFloatUniform(
@@ -244,7 +287,7 @@ internal fun GraphicsLayerScope.setGodRayUniforms(
     shader.setFloatUniform("uCenterTap", GodRayGeometry.CENTER_TAP)
     shader.setFloatUniform("uBacklightGain", GodRayGeometry.BACKLIGHT_GAIN * f.exposure)
     shader.setFloatUniform("uDecayRef", fx.godRayDecay)
-    shader.setFloatUniform("uFalloffLen", f.density * f.maxSide)
+    shader.setFloatUniform("uFalloffLen", f.density * f.scale)
     // Inflated a little: the pump and the per-letter wave carry glyphs a
     // few dp past the item's own box.
     val pad = 2.dp.toPx()
@@ -256,13 +299,13 @@ internal fun GraphicsLayerScope.setGodRayUniforms(
     }
     shader.setFloatUniform("uFeather", 5.dp.toPx(), 3.dp.toPx())
     shader.setFloatUniform("uGuard", GodRayGeometry.LEGIBILITY_GUARD)
-    shader.setFloatUniform("uSunR", fx.godRaySunSize * min(w, h))
+    shader.setFloatUniform("uSunR", fx.godRaySunSize * f.scale)
     shader.setFloatUniform("uSunColor", light.color.red, light.color.green, light.color.blue)
     shader.setFloatUniform("uShimmer", fx.godRayShimmer)
     shader.setFloatUniform(
         "uStripeCells",
         GodRayGeometry.stripeCells(
-            radius = max((f.light - f.center).getDistance(), 0.35f * f.maxSide),
+            radius = max((f.light - f.center).getDistance(), 0.35f * f.scale),
             stripePx = 7.dp.toPx(),
         ).toFloat(),
     )
@@ -354,12 +397,15 @@ internal object GodRayGeometry {
 
     /**
      * Where the light sits when it faces you head-on (90°): the middle of what
-     * is being sung — the sung word, or the line's centre across the surface
-     * when the band runs the full width. The surface's centre with no band.
+     * is being sung — the sung word, or the line's centre across the lyric
+     * [surface] when the band runs the full width. The surface's centre with
+     * no band. The surface, not the layer the rays are drawn in: the
+     * backdrop's layer is the whole screen, and its centre is somewhere
+     * around the song title.
      */
-    fun lightCenter(band: Rect?, width: Float, height: Float): Offset {
-        if (band == null) return Offset(width / 2f, height / 2f)
-        val x = if (band.left <= -UNBOUNDED / 2f || band.right >= UNBOUNDED / 2f) width / 2f else band.center.x
+    fun lightCenter(band: Rect?, surface: Rect): Offset {
+        if (band == null) return surface.center
+        val x = if (band.left <= -UNBOUNDED / 2f || band.right >= UNBOUNDED / 2f) surface.center.x else band.center.x
         return Offset(x, band.center.y)
     }
 
@@ -478,6 +524,7 @@ uniform float2 uLight;          // the light's point on this surface, px (may li
 uniform float uSource;          // 0 = the sung line shines, 1 = a light behind the lyrics
 uniform float uOnTop;           // 1 = add the light over the letters, 0 = draw it under them
 uniform float uRaysOnly;        // 1 = the backdrop layer: return the shafts alone, not the letters
+uniform float uOnLetters;       // 1 = return only the light on the letters, in their shape ("On top" over a backdrop)
 uniform float uDensity;         // share of the way to the light each pixel gathers
 uniform float uReachCap;        // letters: the longest march, px
 uniform float uSamples;         // 16 / 24 / 32 / 50
@@ -544,6 +591,14 @@ float dust(float2 p) {
 half4 main(float2 p) {
     float4 src = float4(content.eval(p));
     bool back = uSource > 0.5;
+    // Only the letters' own light is wanted here, and where there is no
+    // letter there is none: most of the layer skips the march.
+    if (uOnLetters > 0.5 && src.a < 0.004) {
+        return half4(0.0);
+    }
+    // What a pixel with no light hands back: the backdrop's and the
+    // on-letters layer's letters are only the light's source, never drawn.
+    float4 unlit = (uRaysOnly > 0.5 || uOnLetters > 0.5) ? float4(0.0) : src;
 
     float2 toL = uLight - p;
     float dist = length(toL);
@@ -559,7 +614,10 @@ half4 main(float2 p) {
         float2 hi = max(p, end);
         if (hi.y < uBand.y - uFeather.x || lo.y > uBand.w + uFeather.x ||
             hi.x < uBand.x - uFeather.x || lo.x > uBand.z + uFeather.x) {
-            return half4(src);
+            // Not the copy: handed back from the backdrop, it drew the plain
+            // letters of every line whose march missed the sung one under
+            // the glass ones.
+            return half4(unlit);
         }
     }
 
@@ -620,6 +678,20 @@ half4 main(float2 p) {
     // the real ones draw later, on top, so only the shafts are handed back.
     if (uRaysOnly > 0.5) {
         return half4(light);
+    }
+    // "On top" over a backdrop: the shafts are already under the letters, so
+    // what is left of the article's composite (src + rays, below) is the
+    // light that falls on the letters themselves, in their shape — capped
+    // where that composite caps it, at what the letters cover, or a soft
+    // glyph edge would glow brighter than it is solid. Added over the letters
+    // on the shafts, it is that composite. Its alpha is the least a valid
+    // premultiplied colour can have: in the lyric surface's offscreen edge
+    // fade, alpha added here would hide that much of the shafts behind it.
+    if (uOnLetters > 0.5) {
+        float topA = src.a + a * (1.0 - src.a);
+        float3 room = max(float3(topA) - src.rgb - rays * (1.0 - src.a), float3(0.0));
+        float3 add = min(rays * src.a, room);
+        return half4(half3(add), half(max(add.r, max(add.g, add.b))));
     }
     if (uOnTop > 0.5) {
         // The article's composite: the light is added onto the scene.

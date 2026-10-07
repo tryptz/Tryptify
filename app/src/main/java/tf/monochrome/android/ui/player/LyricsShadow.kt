@@ -7,6 +7,9 @@ import android.graphics.Shader
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asComposeRenderEffect
@@ -45,15 +48,15 @@ internal fun Modifier.lyricShadow(rayLight: LyricRayLight? = null): Modifier {
     if (fx.shadowDepth <= LyricShadowGeometry.OFF) return this
     if (LocalLowPerformance.current.disableLiquidGlass) return this
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return this
-    return this.then(lyricShadowModifier(fx, rayLight))
+    val origin = remember { mutableStateOf<Offset?>(null) }
+    return this.then(lyricShadowModifier(fx, rayLight, origin))
 }
 
 @RequiresApi(Build.VERSION_CODES.S)
-private fun lyricShadowModifier(fx: LyricsFxSettings, rayLight: LyricRayLight?): Modifier =
-    Modifier.graphicsLayer {
+private fun lyricShadowModifier(fx: LyricsFxSettings, rayLight: LyricRayLight?, origin: MutableState<Offset?>): Modifier =
+    Modifier.rayLayerOrigin(origin).graphicsLayer {
         if (size.minDimension <= 0f) return@graphicsLayer
-        // Same box as the rays layer it sits in, so the rays' frame is ours.
-        val shadow = lyricShadowEffect(fx, rayLight?.frame(size.width, size.height))
+        val shadow = lyricShadowEffect(fx, origin.value?.let { rayLight?.frameFor(it) })
         // The letters, untouched, over their shadow.
         renderEffect = RenderEffect
             .createBlendModeEffect(shadow, RenderEffect.createOffsetEffect(0f, 0f), BlendMode.SRC_OVER)

@@ -123,11 +123,14 @@ class GodRayGeometryTest {
 
     @Test
     fun `the light centres on the sung word, or across the line`() {
-        assertEquals(Offset(540f, 1000f), GodRayGeometry.lightCenter(null, 1080f, 2000f))
+        // The lyric surface, not the screen: in the player that is the slot
+        // under the top bar, and the screen's centre is near the song title.
+        val surface = Rect(40f, 200f, 1040f, 1400f)
+        assertEquals(Offset(540f, 800f), GodRayGeometry.lightCenter(null, surface))
         val line = Rect(-GodRayGeometry.UNBOUNDED, 400f, GodRayGeometry.UNBOUNDED, 480f)
-        assertEquals(Offset(540f, 440f), GodRayGeometry.lightCenter(line, 1080f, 2000f))
+        assertEquals(Offset(540f, 440f), GodRayGeometry.lightCenter(line, surface))
         val word = Rect(100f, 400f, 300f, 480f)
-        assertEquals(Offset(200f, 440f), GodRayGeometry.lightCenter(word, 1080f, 2000f))
+        assertEquals(Offset(200f, 440f), GodRayGeometry.lightCenter(word, surface))
     }
 
     @Test
@@ -176,39 +179,60 @@ class GodRayGeometryTest {
         assertEquals(true, GodRayGeometry.isMoving(still.copy(godRaySway = 0.1f)))
     }
 
-    @Test
-    fun `the glass and the rays agree on where the light is`() {
-        // A rays layer at (0, 120) in root, 1080 x 1500; glass letters inside
-        // it, inset 42px at the side. The light the glass is handed must be
-        // the rays' own light moved into the glass's pixels — the two layers
-        // computing it separately is how a glint ends up off its shafts.
-        val fx = LyricsFxSettings(godRays = true, godRayAzimuthDeg = 30f, godRayElevationDeg = 40f, godRayShimmer = 0f)
-        val surface = BackdropAnchor().apply { rect = AnchorRect(0f, 120f, 1080f, 1500f) }
-        // The sung line in ROOT px: 600..680 inside the rays layer.
-        val band = Rect(-GodRayGeometry.UNBOUNDED, 720f, GodRayGeometry.UNBOUNDED, 800f)
-        val light = LyricRayLight(
-            fx = fx, accent = androidx.compose.ui.graphics.Color.Blue, moving = false,
-            time = androidx.compose.runtime.mutableStateOf(0f),
-            tilt = androidx.compose.runtime.mutableStateOf(Offset.Zero),
-            pulse = null, band = { band }, surface = surface,
-        )
-        val inRays = light.frame(1080f, 1500f)
-        // The band is handed over in root px and lands in the rays layer's own.
-        assertEquals(600f, inRays.line!!.top, 1e-3f)
-        assertEquals(680f, inRays.line!!.bottom, 1e-3f)
-        val inGlass = light.frameFor(Offset(42f, 120f))!!
-        assertEquals(inRays.light.x - 42f, inGlass.light.x, 1e-3f)
-        assertEquals(inRays.light.y, inGlass.light.y, 1e-3f)
-        assertEquals(inRays.exposure, inGlass.exposure, 0f)
+    private fun light(fx: LyricsFxSettings, band: Rect?, letters: Rect?, scale: Float = 1080f) = LyricRayLight(
+        fx = fx, accent = androidx.compose.ui.graphics.Color.Blue, moving = false,
+        time = androidx.compose.runtime.mutableStateOf(0f),
+        tilt = androidx.compose.runtime.mutableStateOf(Offset.Zero),
+        pulse = null, band = { band }, lettersBox = { letters }, scale = scale,
+    )
 
-        // Before the rays layer has been laid out there is no light to hand over.
-        val unplaced = LyricRayLight(
-            fx = fx, accent = androidx.compose.ui.graphics.Color.Blue, moving = false,
-            time = androidx.compose.runtime.mutableStateOf(0f),
-            tilt = androidx.compose.runtime.mutableStateOf(Offset.Zero),
-            pulse = null, band = { band }, surface = BackdropAnchor(),
-        )
-        assertEquals(null, unplaced.frameFor(Offset(42f, 120f)))
+    @Test
+    fun `every layer drawing the light agrees on where it is`() {
+        // The backdrop's shafts are a full-screen layer at the root's corner;
+        // the glass letters sit at (42, 120). Each is handed the one light,
+        // moved into its own pixels — two layers computing it separately is
+        // how a glint ends up off its shafts.
+        val fx = LyricsFxSettings(godRays = true, godRayAzimuthDeg = 30f, godRayElevationDeg = 40f, godRayShimmer = 0f)
+        // The sung line in ROOT px.
+        val band = Rect(-GodRayGeometry.UNBOUNDED, 720f, GodRayGeometry.UNBOUNDED, 800f)
+        val light = light(fx, band, letters = Rect(0f, 120f, 1080f, 1620f))
+        val inBackdrop = light.frameFor(Offset.Zero)!!
+        val inGlass = light.frameFor(Offset(42f, 120f))!!
+        // The band lands in each layer's own pixels.
+        assertEquals(720f, inBackdrop.line!!.top, 1e-3f)
+        assertEquals(600f, inGlass.line!!.top, 1e-3f)
+        assertEquals(680f, inGlass.line!!.bottom, 1e-3f)
+        assertEquals(inBackdrop.light.x - 42f, inGlass.light.x, 1e-3f)
+        assertEquals(inBackdrop.light.y - 120f, inGlass.light.y, 1e-3f)
+        assertEquals(inBackdrop.exposure, inGlass.exposure, 0f)
+        assertEquals(inBackdrop.scale, inGlass.scale, 0f)
+
+        // Before the lyrics have been laid out there is no light to hand over.
+        assertEquals(null, light(fx, band, letters = null).frameFor(Offset(42f, 120f)))
+        assertEquals(null, light(fx, band, letters = Rect.Zero).frameFor(Offset(42f, 120f)))
+    }
+
+    @Test
+    fun `the light sits as far from the sung line in the preview as in the player`() {
+        // The Studio's preview is a 190dp box; the player's backdrop is the
+        // whole screen. The light used to be worked out as a share of the
+        // layer drawing it, so the same settings put it 0.29 of 1048px above
+        // the line in one and 0.29 of 2340px in the other.
+        val fx = LyricsFxSettings(godRays = true, godRayAzimuthDeg = 90f, godRayElevationDeg = 60f, godRayShimmer = 0f)
+        val previewLine = Rect(-GodRayGeometry.UNBOUNDED, 560f, GodRayGeometry.UNBOUNDED, 640f)
+        val preview = light(fx, previewLine, letters = Rect(16f, 400f, 1064f, 899f))
+            .frameFor(Offset(16f, 400f))!!
+        val playerLine = Rect(-GodRayGeometry.UNBOUNDED, 900f, GodRayGeometry.UNBOUNDED, 980f)
+        val player = light(fx, playerLine, letters = Rect(0f, 150f, 1080f, 1250f))
+            .frameFor(Offset.Zero)!!
+        assertEquals(player.light - player.center, preview.light - preview.center)
+        // Straight up, at FOCAL_SHARE x cot(60) of the window's short side.
+        val rise = GodRayGeometry.FOCAL_SHARE * 1080f / kotlin.math.tan(60f * kotlin.math.PI.toFloat() / 180f)
+        assertEquals(-rise, player.light.y - player.center.y, 1e-2f)
+        assertEquals(0f, player.light.x - player.center.x, 1e-2f)
+        // Everything else a share of it is the same in both too.
+        assertEquals(player.scale, preview.scale, 0f)
+        assertEquals(player.density, preview.density, 0f)
     }
 
     @Test

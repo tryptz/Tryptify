@@ -148,7 +148,9 @@ import tf.monochrome.android.ui.player.SyncedLyricsView
 import tf.monochrome.android.ui.player.bassBeat
 import tf.monochrome.android.ui.player.fxaa
 import tf.monochrome.android.ui.player.liquidGlass
-import tf.monochrome.android.ui.player.lyricGodRays
+import tf.monochrome.android.ui.player.lyricRaysOnLetters
+import tf.monochrome.android.ui.player.lyricsEdgeFade
+import tf.monochrome.android.ui.player.rememberBassPulse
 import tf.monochrome.android.ui.player.LocalLyricBackdrop
 import tf.monochrome.android.ui.player.LyricBackdrop
 import tf.monochrome.android.ui.player.LyricBackdropFx
@@ -176,6 +178,8 @@ class LyricsFxStudioViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     nowPlayingLyrics: tf.monochrome.android.player.NowPlayingLyricsHolder,
     queueManager: tf.monochrome.android.player.QueueManager,
+    /** The player's own beat analyzer, so the preview of the playing song pulses with it. */
+    val spectrumAnalyzer: tf.monochrome.android.audio.eq.SpectrumAnalyzerTap,
 ) : ViewModel() {
     /** The currently-playing lyrics + position, so the preview can show them live. */
     val currentLyrics: StateFlow<tf.monochrome.android.domain.model.Lyrics?> = nowPlayingLyrics.lyrics
@@ -721,7 +725,7 @@ fun LyricsFxStudioScreen(
         // Preview + presets are pinned above the scrolling sliders, so the
         // live example stays locked in view while you tune every parameter.
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-            StudioPreview(fx, currentLyrics, viewModel.currentPositionMs)
+            StudioPreview(fx, currentLyrics, viewModel.currentPositionMs, viewModel.spectrumAnalyzer)
             Spacer(Modifier.height(12.dp))
 
             // Preset bar header: a Save button (store the current look) and an
@@ -2071,13 +2075,24 @@ private fun StudioPreview(
     fx: LyricsFxSettings,
     lyrics: Lyrics?,
     positionMs: kotlinx.coroutines.flow.StateFlow<Long>,
+    analyzer: tf.monochrome.android.audio.eq.SpectrumAnalyzerTap,
 ) {
-    val pulse = rememberSyntheticKickPulse(fx)
     val anchors = remember { LyricGlyphAnchors() }
     val accent = MaterialTheme.colorScheme.primary
     // Show the real currently-playing lyrics when there are synced lines; else a
     // synthetic sample so the preview is never empty.
     val playing = lyrics?.takeIf { it.isSynced && it.lines.isNotEmpty() }
+    // The playing song's lyrics beat with the song, from the player's own
+    // analyzer, exactly as they do in the player: still while it is paused.
+    // The synthetic kick kept pumping under them, and every kick pushed the
+    // rays brighter and longer, so the preview of a paused song showed longer
+    // shafts than the player beside it. The sample has no song, so it keeps
+    // the kick, which is how the beat settings can be seen at all.
+    val pulse = when {
+        playing == null -> rememberSyntheticKickPulse(fx)
+        fx.bassReact > 0.01f -> rememberBassPulse(analyzer, fx)
+        else -> remember { mutableFloatStateOf(0f) }
+    }
 
     Box(
         modifier = Modifier
@@ -2090,8 +2105,8 @@ private fun StudioPreview(
         CompositionLocalProvider(
             LocalLyricsFx provides fx,
             LocalLyricGlyphAnchors provides anchors,
-            // Drive the beat FX from the synthetic kick even for real lyrics
-            // (there's no live audio analyzer on this screen).
+            // The song's own beat for its lyrics, the synthetic kick for the
+            // sample (see `pulse`).
             LocalBeatPulse provides pulse,
         ) {
             // The glow FX layer blooms behind the active line's reported bounds.
@@ -2104,24 +2119,27 @@ private fun StudioPreview(
                 accent = accent,
                 pulse = pulse,
                 band = { letters.bandInRoot() },
+                lettersBox = { letters.boxInRoot },
                 fx = fx,
             )
             val backdrop = remember(letters, rayLight) { LyricBackdrop(letters, rayLight) }
             LyricBackdropFx(backdrop)
             CompositionLocalProvider(LocalLyricBackdrop provides backdrop) {
             if (playing != null) {
-                // Exactly the production renderer, on the real lyric lines.
-                SyncedLyricsView(
-                    lines = playing.lines,
-                    positionMs = positionMs,
-                    accent = accent,
-                    onSeekTo = {},
-                )
+                // Exactly the production renderer, on the real lyric lines,
+                // in the box the player gives it (LyricsHeroBox).
+                Box(Modifier.fillMaxSize().lyricRaysOnLetters(backdrop).lyricsEdgeFade()) {
+                    SyncedLyricsView(
+                        lines = playing.lines,
+                        positionMs = positionMs,
+                        accent = accent,
+                        onSeekTo = {},
+                    )
+                }
             } else {
-                // "On top" draws its shafts over the letters, in a box as big
-                // as the preview around the sample row; everything else is the
-                // backdrop's, which is told where the row is (and, following
-                // the word, which word).
+                // The shafts are the backdrop's, which is told where the row
+                // is (and, following the word, which word); "On top" adds the
+                // light on the letters over them, as the player does.
                 val sample = stringResource(R.string.fx_feel_the_beat_tonight)
                 val sampleStyle = MaterialTheme.typography.titleMedium.copy(
                     fontSize = fx.fontSizeSp.sp,
@@ -2148,9 +2166,7 @@ private fun StudioPreview(
                     }
                 }
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .lyricGodRays(if (fx.godRaysOnTop) rayLight else null),
+                    modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
                     Letters3DRow(
@@ -2160,6 +2176,7 @@ private fun StudioPreview(
                         time = clock,
                         modifier = Modifier
                             .onGloballyPositioned { rowBand = it.boundsInRoot() }
+                            .lyricRaysOnLetters(backdrop)
                             .fxaa()
                             .liquidGlass(tint = accent, rayLight = rayLight)
                             // Before the pump, so the copy pumps with the letters.

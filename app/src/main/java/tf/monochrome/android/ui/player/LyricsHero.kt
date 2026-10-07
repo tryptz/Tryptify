@@ -61,6 +61,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
@@ -323,7 +324,16 @@ internal fun LyricsHeroBox(
     onSeekTo: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier.lyricsEdgeFade()) {
+    Box(
+        modifier = modifier
+            // "On top" over the backdrop: the light that falls on the letters,
+            // added over them. Outside the edge fade, whose offscreen buffer
+            // would let the light's own alpha hide the shafts behind a soft
+            // letter, so it lands on the screen next to the shafts, as it does
+            // in the Studio's preview.
+            .lyricRaysOnLetters(LocalLyricBackdrop.current)
+            .lyricsEdgeFade(),
+    ) {
         when {
             isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
@@ -413,12 +423,12 @@ internal fun SyncedLyricsView(
     // and hop from word to word without recomposing anything.
     val followWord = fx.godRays && fx.godRaysFollowWord
     val sungWord = remember { SungWordAnchor() }
-    val listOrigin = remember { androidx.compose.runtime.mutableStateOf(Offset.Zero) }
+    val listBox = remember { androidx.compose.runtime.mutableStateOf(Rect.Zero) }
     val bandInRoot: () -> Rect? = remember(listState, currentLineState, followWord) {
         {
             val line = currentLineState.value
             (if (followWord) sungWord.rectFor(line) else null)
-                ?: activeLineBand(listState, line)?.translate(listOrigin.value)
+                ?: activeLineBand(listState, line)?.translate(listBox.value.topLeft)
         }
     }
     // Prefer the player-provided shared pulse (one analyzer stake; the pump
@@ -434,7 +444,12 @@ internal fun SyncedLyricsView(
     val rayLight = if (backdrop != null) {
         backdrop.light
     } else {
-        rememberLyricRayLight(accent = accent, pulse = bassPulse, band = bandInRoot)
+        rememberLyricRayLight(
+            accent = accent,
+            pulse = bassPulse,
+            band = bandInRoot,
+            lettersBox = remember { { listBox.value.takeUnless { it.isEmpty } } },
+        )
     }
     if (backdrop != null) {
         androidx.compose.runtime.SideEffect { backdrop.capture.bandInRoot = bandInRoot }
@@ -532,11 +547,11 @@ internal fun SyncedLyricsView(
                 // glass letters, and sit OUTSIDE the side inset, so the shafts
                 // run to the screen edge instead of stopping in a hard line at
                 // the inset. A layer cannot draw past its own bounds.
-                .onGloballyPositioned { listOrigin.value = it.positionInRoot() }
-                // Here only when nothing under the lyrics draws them: "On top"
-                // adds the light over the letters, which a layer under them
-                // cannot.
-                .lyricGodRays(if (backdrop == null || fx.godRaysOnTop) rayLight else null)
+                .onGloballyPositioned {
+                    listBox.value = Rect(it.positionInRoot(), it.size.toSize())
+                }
+                // Here only when nothing under the lyrics draws them.
+                .lyricGodRays(if (backdrop == null) rayLight else null)
                 // The shadow under the letters, on the background: outside the
                 // glass so it is never bevelled into a block, inside the rays so
                 // the shafts pass over it, and outside the inset so its blur is

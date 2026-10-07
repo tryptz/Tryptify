@@ -233,26 +233,59 @@ Moving a default restyles every listener's lyrics. Still letters
 (`glassTiltReactivity` 0) hold no gravity sensor, as on the player glass. The
 letters get no lens rim, haze or drop shadow: those belong to panes.
 
-**The shadow and the god rays live on the background, under the glass UI.**
-They are drawn by `LyricBackdropFx` in the player's `fxUnderlay`: full screen,
-after the album background, inside the haze sources, before the hero and the
-chrome. Drawn inside the lyric surface, a shaft stopped dead at its bottom edge,
-just above the song title, and the title, the progress tube, the disc and the
-dock had none of the light under them (seen on device). A render effect reads
-only its own layer, so the lyric view records its letters into a `GraphicsLayer`
-(`captureLetters`, innermost, before the glass, so the glass shader does not run
-twice) and the backdrop draws that copy as its input and hands back only the
-shadow and the shafts (`uRaysOnly`); the real letters draw over them. It fades
-the copy's top and bottom as `lyricsEdgeFade` fades the real ones, and fades as a
-whole with `lyricsProgress`. "On top" cannot be drawn from under the letters, so
-in that mode the shafts stay in the lyric surface (below) and only the shadow is
-on the backdrop. The legacy player has no `fxUnderlay` and is given no backdrop,
-so its lyric view draws both itself. The Studio's preview is built the same way
-as the player. The sung band is handed around in root px; each layer turns it
-into its own.
+**The shadow and the god rays live on the background, under the glass UI — in
+both modes.** They are drawn by `LyricBackdropFx` in the player's `fxUnderlay`:
+full screen, after the album background, inside the haze sources, before the
+hero and the chrome. Drawn inside the lyric surface, a shaft stopped dead at its
+bottom edge, just above the song title, and the title, the progress tube, the
+disc and the dock had none of the light under them (seen on device, in "Under"
+and then again in "On top", which was left behind in the surface). A render
+effect reads only its own layer, so the lyric view records its letters into a
+`GraphicsLayer` (`captureLetters`, innermost, before the glass, so the glass
+shader does not run twice) and the backdrop draws that copy as its input and
+hands back only the shadow and the shafts (`uRaysOnly`); the real letters draw
+over them. Where a pixel's march misses the sung line it hands back nothing,
+never the copy: returning the copy there drew plain letters under the glass
+ones on every line the march missed. It fades the copy's top and bottom as
+`lyricsEdgeFade` fades the real ones, and fades as a whole with
+`lyricsProgress`. The legacy player has no `fxUnderlay` and is given no
+backdrop, so its lyric view draws both itself. The Studio's preview is built
+the same way as the player, down to the `lyricsEdgeFade` box around the
+playing song's lyrics.
 
-**God rays drawn in the lyric surface ("On top", or no backdrop) wrap the lyric
-list outside its side inset and outside the glass.**
+**"On top" is the backdrop's shafts plus the light on the letters, added
+outside the edge fade.** A layer under the letters cannot add light over them,
+so `lyricRaysOnLetters` does that part alone (`uOnLetters`): the light that
+falls on the letters, in their shape, gathered from the same copy with the same
+light and emission as the shafts, capped where the old composite capped it, at
+what the letters cover. Shafts under the letters plus that over them is the old
+in-surface composite to float precision (checked by running the shader through
+Skia: 1.2e-7). Uncapped, a soft glyph edge glowed brighter than it is solid. It
+sits on `LyricsHeroBox` outside `lyricsEdgeFade`, because inside that offscreen
+buffer the light's own alpha hides that much of the shafts behind every soft or
+see-through letter (up to a tenth, measured the same way), and the Studio's
+preview, with no such buffer, did not.
+
+**The light is one light, in root px, sized by the window.** `LyricRayLight`
+works it out once, in root px, and every layer that draws it — the backdrop,
+the light on the letters, the glass, the shadow — only moves it into its own
+pixels (`frameFor`). Every distance in it (how far the light stands off the
+line, the reach cap, the tilt and the sway, the backlight disc) is a share of
+the window's short side, and it centres on the lyric surface's box, not on the
+layer drawing it. It was worked out as shares of the rays layer's long side,
+which is the preview's width in the Studio and the screen's height in the
+player, so the same settings put the light more than twice as far from the
+sung line in the player and the preview showed a different picture (seen on
+device). `GodRayGeometryTest` pins it.
+
+**The Studio previews the playing song with the song's beat.** Its lyrics pulse
+from the player's own analyzer, still when the song is paused. The synthetic
+kick under them pushed every shaft brighter and longer twice a second, so a
+paused song's preview showed shafts its player did not. The sample row, with no
+song behind it, keeps the kick: it is the only way to see the beat settings.
+
+**God rays drawn in the lyric surface (no backdrop) wrap the lyric list outside
+its side inset and outside the glass.**
 `lyricGodRays` is a RenderEffect, and a layer cannot draw past its own bounds,
 so a rays layer inside the inset cuts every shaft off in a hard vertical line
 14dp from the edge. Outside the glass, so the shafts are gathered from the

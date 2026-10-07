@@ -287,8 +287,8 @@ private fun liquidGlassModifier(
             shader.setFloatUniform("uLensR", 0f)
             shader.setFloatUniform("uLensW", 0f)
             shader.setFloatUniform("uLiveUnder", 0f)
-            // The god rays' light, moved from the rays layer into these
-            // letters' own pixels through their two root positions.
+            // The god rays' light, in root px, moved into these
+            // letters' own pixels through their root position.
             val light = rayLight
             val ray = if (light != null && fx.glassRayCatch > 0f) {
                 light.frameFor(Offset(anchor.rect.left, anchor.rect.top))
@@ -299,7 +299,7 @@ private fun liquidGlassModifier(
                 shader.setFloatUniform("uRayLight", ray.light.x, ray.light.y, GodRayGeometry.glassLightLift(ray.elevationDeg))
                 shader.setFloatUniform("uRayAmount", GodRayGeometry.glassRayAmount(fx.glassRayCatch, ray.exposure))
                 shader.setFloatUniform("uRayColor", light.color.red, light.color.green, light.color.blue)
-                shader.setFloatUniform("uRayReach", ray.density * ray.maxSide)
+                shader.setFloatUniform("uRayReach", ray.density * ray.scale)
                 shader.setFloatUniform("uRayDecay", fx.godRayDecay)
                 shader.setFloatUniform(
                     "uRayBack",

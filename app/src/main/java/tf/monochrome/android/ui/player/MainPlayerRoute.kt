@@ -597,6 +597,7 @@ fun MainPlayerRoute(
             accent = blendedColors.vibrant,
             pulse = beatPulse,
             band = { lyricLetters.bandInRoot() },
+            lettersBox = { lyricLetters.boxInRoot },
             fx = lyricsFx,
         )
     } else {
