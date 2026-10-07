@@ -62,6 +62,31 @@ class FolderSortTest {
     }
 
     @Test
+    fun `album sort turns the albums round but plays each from its first track`() {
+        val folder = listOf(
+            track("/d/b2.flac", title = "B2", album = "Beta", number = 2),
+            track("/d/a1.flac", title = "A1", album = "Alpha", number = 1),
+            track("/d/b1.flac", title = "B1", album = "Beta", number = 1),
+            track("/d/a2.flac", title = "A2", album = "Alpha", number = 2),
+            track("/d/loose.flac", title = "Loose"),
+        )
+        assertEquals(
+            listOf("A1", "A2", "B1", "B2", "Loose"),
+            sortFolderTracks(folder, FolderTrackOrder.ALBUM, ascending = true).names(),
+        )
+        // Down: Beta before Alpha, each still 1 then 2; no album stays last.
+        assertEquals(
+            listOf("B1", "B2", "A1", "A2", "Loose"),
+            sortFolderTracks(folder, FolderTrackOrder.ALBUM, ascending = false).names(),
+        )
+        // Which is not what reversing the original order does.
+        assertEquals(
+            listOf("Loose", "B2", "B1", "A2", "A1"),
+            sortFolderTracks(folder, FolderTrackOrder.ORIGINAL, ascending = false).names(),
+        )
+    }
+
+    @Test
     fun `an untagged live recording plays in file order, not by title`() {
         // No track numbers, and titles whose alphabetical order is not the set's.
         val set = listOf(

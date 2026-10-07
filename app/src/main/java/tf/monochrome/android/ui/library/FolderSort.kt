@@ -16,7 +16,10 @@ import tf.monochrome.android.domain.model.UnifiedTrack
  * recording ("01 - Intro.flac", "02 - …") keeps its running order: sorted by
  * title it played alphabetically, the complaint that started this.
  *
- * Album is not a key of its own here because [ORIGINAL] already groups by it.
+ * [ALBUM] looks like [ORIGINAL] going up, but not coming down: [ORIGINAL]
+ * reversed plays every album backwards, while [ALBUM] reversed takes the
+ * albums Z to A and still plays each from its first track. The folder
+ * screen's old toolbar had it, so leaving it out took a sort away.
  */
 enum class FolderTrackOrder(
     @StringRes val label: Int,
@@ -27,6 +30,7 @@ enum class FolderTrackOrder(
     FILE_NAME(R.string.sort_file_name),
     TITLE(R.string.sort_title),
     ARTIST(R.string.sort_artist),
+    ALBUM(R.string.sort_album),
     YEAR(R.string.sort_year),
     DURATION(R.string.sort_duration),
     DATE_MODIFIED(R.string.sort_date_modified, firstAscending = false),
@@ -169,11 +173,16 @@ private fun <K> keyOrder(
 
 private val byFileName: Comparator<Keyed> = Comparator { a, b -> NaturalOrder.compare(a.fileName, b.fileName) }
 
-private val originalOrder: Comparator<Keyed> =
-    keyOrder(true, NaturalOrder) { it.track.albumTitle?.takeIf(String::isNotBlank) }
-        .then(keyOrder(true, naturalOrder<Int>()) { it.track.discNumber ?: 1 })
+private fun byAlbum(ascending: Boolean): Comparator<Keyed> =
+    keyOrder(ascending, NaturalOrder) { it.track.albumTitle?.takeIf(String::isNotBlank) }
+
+/** Within one album: disc, then track, then file name. */
+private val runningOrder: Comparator<Keyed> =
+    keyOrder(true, naturalOrder<Int>()) { it.track.discNumber ?: 1 }
         .then(keyOrder(true, naturalOrder<Int>()) { it.track.trackNumber?.takeIf { n -> n > 0 } })
         .then(byFileName)
+
+private val originalOrder: Comparator<Keyed> = byAlbum(true).then(runningOrder)
 
 /** Quality, best last: bit depth (lossy counts as none), then sample rate, then bitrate. */
 private val byQuality: Comparator<UnifiedTrack> =
@@ -193,6 +202,7 @@ fun sortFolderTracks(tracks: List<UnifiedTrack>, order: FolderTrackOrder, ascend
         FolderTrackOrder.TITLE -> keyOrder(ascending, NaturalOrder) { it.track.title }.then(byFileName)
         FolderTrackOrder.ARTIST ->
             keyOrder(ascending, NaturalOrder) { it.track.artistName.takeIf(String::isNotBlank) }.then(originalOrder)
+        FolderTrackOrder.ALBUM -> byAlbum(ascending).then(runningOrder)
         FolderTrackOrder.YEAR -> keyOrder(ascending, naturalOrder<Int>()) { it.track.releaseYear }.then(originalOrder)
         FolderTrackOrder.DURATION -> keyOrder(ascending, naturalOrder<Int>()) { it.track.durationSeconds }.then(byFileName)
         FolderTrackOrder.DATE_MODIFIED -> keyOrder(ascending, naturalOrder<Long>()) { it.track.dateModified }.then(byFileName)
