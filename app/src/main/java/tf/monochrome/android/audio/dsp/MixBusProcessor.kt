@@ -24,7 +24,10 @@ class MixBusProcessor @Inject constructor(
     private val crossfeed: CrossfeedEffect,
 ) : AudioProcessor {
 
-    private var enginePtr: Long = 0L
+    // Created on the playback thread the first time a format arrives, and read
+    // from any thread through getEnginePtr(): the mixer UI, DspEngineManager's
+    // collectors. Once set, the app's own processor keeps it for good; see reset().
+    @Volatile private var enginePtr: Long = 0L
     private var pendingFormat = AudioFormat.NOT_SET
     private var inputFormat = AudioFormat.NOT_SET
     private var outputBuffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
@@ -560,14 +563,36 @@ class MixBusProcessor @Inject constructor(
         pendingFormat = AudioFormat.NOT_SET
     }
 
+    /**
+     * Whether [reset] also destroys the native engine. Off for the app's own
+     * processor: its pointer is shared with other threads through
+     * [getEnginePtr], and it lives as long as the process. On for a
+     * crossfade's own [DspChain] copy, which nobody else can reach: its engine
+     * goes when the tail player resets it, on the thread that was using it.
+     */
+    @Volatile internal var destroyEngineOnReset = false
+
+    /**
+     * Back to unconfigured. The app's own processor keeps its native engine.
+     *
+     * Media3 calls this whenever it rebuilds the audio pipeline, which a track
+     * change can do (from an Atmos track to a stereo one, say). The engine used
+     * to be destroyed here while other threads still held its pointer:
+     * publishChannelGroups() below wakes DspEngineManager's collector, which
+     * called into the engine just as it was freed, and the app died in
+     * DspEngine::getStateJson locking a mutex that was gone. Kept, the pointer
+     * can never dangle; the next format goes through the same nativeReconfigure
+     * as any format change, with the bus graph and plugins kept.
+     */
     override fun reset() {
         _engineReady.value = false
         laneChannels = 2
         publishChannelGroups()
         flush()
-        if (enginePtr != 0L) {
-            nativeDestroy(enginePtr)
+        if (destroyEngineOnReset) {
+            val ptr = enginePtr
             enginePtr = 0L
+            if (ptr != 0L) nativeDestroy(ptr)
         }
         pendingFormat = AudioFormat.NOT_SET
         inputFormat = AudioFormat.NOT_SET

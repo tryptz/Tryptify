@@ -731,8 +731,8 @@ class PlaybackService : MediaSessionService() {
                     dspManager.restoreState()
                     hasRestored = true
                 } else if (ready && hasRestored) {
-                    // Re-apply on engine recreation (a track at a different
-                    // format rebuilds it). The manager reapplies from its own
+                    // Re-apply when the engine comes back after a format
+                    // change or a pipeline reset. The manager reapplies from its own
                     // live copy — reading the persisted state here rolled any
                     // edit made in the half second before the track change back
                     // to its previous value, and then saved it that way.
