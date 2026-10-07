@@ -1772,4 +1772,8 @@
     <string name="action_shuffle">随机播放</string>
     <string name="folder_subfolders_included">包括子文件夹</string>
     <string name="folder_go_to">前往 %1$s</string>
+    <string name="dac_volume">音量</string>
+    <string name="volume_muted">已静音</string>
+    <string name="action_mute">静音</string>
+    <string name="action_unmute">取消静音</string>
 </resources>

@@ -1822,4 +1822,8 @@
     <string name="action_shuffle">Karıştır</string>
     <string name="folder_subfolders_included">Alt klasörler dahil</string>
     <string name="folder_go_to">%1$s klasörüne git</string>
+    <string name="dac_volume">Ses düzeyi</string>
+    <string name="volume_muted">Sessiz</string>
+    <string name="action_mute">Sessize al</string>
+    <string name="action_unmute">Sesi aç</string>
 </resources>

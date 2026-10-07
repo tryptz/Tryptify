@@ -1822,4 +1822,8 @@
     <string name="action_shuffle">Zufallswiedergabe</string>
     <string name="folder_subfolders_included">Mit Unterordnern</string>
     <string name="folder_go_to">Zu %1$s wechseln</string>
+    <string name="dac_volume">Lautstärke</string>
+    <string name="volume_muted">Stumm</string>
+    <string name="action_mute">Stummschalten</string>
+    <string name="action_unmute">Stummschaltung aufheben</string>
 </resources>

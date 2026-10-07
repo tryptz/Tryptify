@@ -247,6 +247,7 @@ fun MainPlayerRoute(
 
     val lyricsFx by playerViewModel.lyricsFx.collectAsStateWithLifecycle()
     val playerGlass by playerViewModel.playerGlass.collectAsStateWithLifecycle()
+    val dacExclusive by playerViewModel.dacExclusive.collectAsStateWithLifecycle()
     val playerDynamicColor by playerViewModel.playerDynamicColor.collectAsStateWithLifecycle()
     val dynamicColors by playerViewModel.dynamicColors.collectAsStateWithLifecycle()
 
@@ -605,6 +606,26 @@ fun MainPlayerRoute(
     // visualizer are the same whichever layout is drawing around them. Hoisted
     // into slots so both the current and the legacy screen are handed one copy
     // instead of the hero being forked along with the chrome.
+    // The DAC's volume, only while one is claimed for exclusive output: Android's
+    // own volume never reaches it then. The level is collected inside the slot,
+    // so a drag recomposes the bar and not the player around it.
+    val dacVolumeSlot: (@Composable () -> Unit)? = if (dacExclusive) {
+        {
+            val level by playerViewModel.dacLevelDb.collectAsStateWithLifecycle()
+            val glass = LocalPlayerGlass.current
+            DacVolumeBar(
+                levelDb = level,
+                onLevelDb = playerViewModel::setDacLevelDb,
+                onMute = playerViewModel::setDacMuted,
+                // The seek bar's tint, so the two tubes are one material.
+                tint = if (glass.tintColor != 0) Color(glass.tintColor) else state.albumColors.vibrant,
+                contentColor = Color.White,
+                glassTube = !legacyPlayer,
+            )
+        }
+    } else {
+        null
+    }
     val topBarSlot: @Composable () -> Unit = {
         PlayerTopBar(
             speedLabel = state.speedLabel,
@@ -1022,6 +1043,7 @@ fun MainPlayerRoute(
                 },
                 topBar = topBarSlot,
                 hero = heroSlot,
+                dacVolume = dacVolumeSlot,
             )
         } else {
             MainPlayerScreen(
@@ -1103,6 +1125,7 @@ fun MainPlayerRoute(
                     null
                 },
                 overlay = playerPanels,
+                dacVolume = dacVolumeSlot,
             )
         }
     }

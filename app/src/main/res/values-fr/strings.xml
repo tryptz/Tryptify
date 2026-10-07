@@ -1872,4 +1872,8 @@
     <string name="action_shuffle">Aléatoire</string>
     <string name="folder_subfolders_included">Sous-dossiers compris</string>
     <string name="folder_go_to">Aller à %1$s</string>
+    <string name="dac_volume">Volume</string>
+    <string name="volume_muted">Coupé</string>
+    <string name="action_mute">Couper le son</string>
+    <string name="action_unmute">Rétablir le son</string>
 </resources>

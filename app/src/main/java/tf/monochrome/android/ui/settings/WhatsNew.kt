@@ -187,6 +187,12 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
+                    section = USB_DAC,
+                    title = "A volume for USB DACs",
+                    body = "With a USB DAC in exclusive mode the player has a glass volume bar, and the volume keys bring one up anywhere in the app, or Android's own panel with the screen off. Unmuting goes back to where you were.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = DOWNLOADS,
                     title = "Dolby Atmos downloads",
                     body = "TIDAL's download quality can be Dolby Atmos: a track with an Atmos mix downloads it as an untouched .m4a, and the rest as Hi-Res FLAC.",
@@ -238,6 +244,18 @@ object WhatsNew {
                     section = PLAYBACK,
                     title = "Skipping songs no longer crashes",
                     body = "Skipping from one song to the next, most often in a Dolby Atmos or surround playlist, could close the app.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = USB_DAC,
+                    title = "USB DACs start quiet",
+                    body = "A DAC in exclusive mode starts at −24 dB every time and fades in, instead of at full volume. Volume works at 24 and 32 bits now too, and moves smoothly without clicks.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = USB_DAC,
+                    title = "DAC volume stays with the DAC",
+                    body = "The volume keys on a DAC no longer turn down the app's own volume, which left everything quiet afterwards with no way back up. That volume is set back to full once.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,

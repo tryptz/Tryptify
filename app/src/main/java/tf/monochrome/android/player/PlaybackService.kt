@@ -492,11 +492,24 @@ class PlaybackService : MediaSessionService() {
             queueManager = queueManager,
             onNext = ::skipToNext,
             onPrev = ::skipToPrevious,
+            // While a DAC is claimed the session's volume is the DAC level, so
+            // the hardware keys reach it with the app in the background too.
+            dacVolume = bypassVolumeController,
+            isExclusive = { libusbDriver.isOpen.value },
         )
         mediaSession = MediaSession.Builder(this, forwardingPlayer)
             .setSessionActivity(createSessionActivity())
             .setCallback(PlaybackResumptionCallback())
             .build()
+        // The session hears when the DAC is claimed or let go, and when its
+        // level moves, so the system volume panel follows it. On the main
+        // thread, where the session listens.
+        serviceScope.launch {
+            libusbDriver.isOpen.collect { forwardingPlayer.onExclusiveChanged() }
+        }
+        serviceScope.launch {
+            bypassVolumeController.levelDb.collect { forwardingPlayer.onDeviceVolumeChanged() }
+        }
 
         // Seamlessly apply playback speed when settings change
         serviceScope.launch {
@@ -1501,8 +1514,17 @@ class PlaybackService : MediaSessionService() {
         bypassVolumeController.setVolume(effective)
     }
 
+    // Whether the stale-volume repair has run in this service (see
+    // PreferencesManager.resetLegacyBypassVolumeOnce): before the first read,
+    // so the first track does not play at the stale level.
+    @Volatile private var legacyVolumeChecked = false
+
     private fun applyVolume() {
         serviceScope.launch {
+            if (!legacyVolumeChecked) {
+                preferences.resetLegacyBypassVolumeOnce()
+                legacyVolumeChecked = true
+            }
             baseVolume = preferences.volume.first().toFloat()
             pushVolume()
         }

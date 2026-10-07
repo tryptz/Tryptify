@@ -73,6 +73,7 @@ class PlayerViewModel @Inject constructor(
     private val radioQueueManager: RadioQueueManager,
     val spectrumAnalyzer: SpectrumAnalyzerTap,
     private val bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController,
+    private val libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver,
     private val inflatorEffect: tf.monochrome.android.audio.dsp.oxford.InflatorEffect,
     private val compressorEffect: tf.monochrome.android.audio.dsp.oxford.CompressorEffect,
     private val crossfeedEffect: tf.monochrome.android.audio.dsp.crossfeed.CrossfeedEffect,
@@ -451,6 +452,24 @@ class PlayerViewModel @Inject constructor(
     val volume: StateFlow<Float> = preferences.volume
         .map { it.toFloat() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1.0f)
+
+    // --- The USB DAC's own volume (exclusive output) ---
+    /** Whether a DAC is claimed for exclusive output, which is when its volume bar shows. */
+    val dacExclusive: StateFlow<Boolean> = libusbDriver.isOpen
+
+    /** The DAC level in dB, MIN_DB (muted) to 0; see BypassVolumeController. */
+    val dacLevelDb: StateFlow<Float> = bypassVolumeController.levelDb
+
+    /** A volume key moved the DAC level: the cue for the glass volume pop-up. */
+    val dacVolumeKeyPresses: kotlinx.coroutines.flow.SharedFlow<Unit> = bypassVolumeController.keyPresses
+
+    fun setDacLevelDb(db: Float) {
+        bypassVolumeController.setLevelDb(db)
+    }
+
+    fun setDacMuted(muted: Boolean) {
+        bypassVolumeController.setMuted(muted)
+    }
 
     // --- Global Favorites State ---
     val favoriteTrackIds: StateFlow<Set<Long>> = libraryRepository.getFavoriteTracks()

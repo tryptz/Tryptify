@@ -126,6 +126,8 @@ fun LegacyMainPlayerScreen(
     onLyrics: () -> Unit,
     topBar: @Composable () -> Unit,
     hero: @Composable (Modifier) -> Unit,
+    /** The USB DAC's volume bar in exclusive mode, else null; see MainPlayerScreen. */
+    dacVolume: (@Composable () -> Unit)? = null,
 ) {
     val accent = state.albumColors.vibrant
     var statusExpanded by remember { mutableStateOf(false) }
@@ -202,6 +204,11 @@ fun LegacyMainPlayerScreen(
                     onForward10 = onForward10,
                     onNext = onNext,
                 )
+            }
+
+            if (dacVolume != null) {
+                Spacer(Modifier.height(12.dp))
+                DevEditable("legacy_dacVolume", Modifier.fillMaxWidth()) { dacVolume() }
             }
 
             Spacer(Modifier.height(20.dp))

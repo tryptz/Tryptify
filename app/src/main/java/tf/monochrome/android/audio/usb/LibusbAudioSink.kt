@@ -202,6 +202,14 @@ class LibusbAudioSink(
     private var partialWriteLogged = false
 
     private var gainScratch: ByteBuffer = AudioProcessor.EMPTY_BUFFER
+
+    // The gain the DAC is getting now, moved a frame at a time toward the
+    // volume's target (see GainRamp). Zero whenever the DAC starts from
+    // silence, so every fresh stream fades in instead of arriving at level.
+    // Audio thread only, under writeLock.
+    private var appliedGain = 0f
+    // The rate the DAC runs at, for the ramp's per-frame steps.
+    private var outSampleRate = 0
     private var copyScratch: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var packScratch: ByteBuffer = AudioProcessor.EMPTY_BUFFER
 
@@ -265,7 +273,9 @@ class LibusbAudioSink(
             }
             silence.clear()
             silence.limit(bytes)
-            val packed = packFloatForUsb(silence, frames, 0f)
+            // The main stream is silence here (gain 0, nothing to ramp); the
+            // tail is mixed in at its own gain under the DAC level.
+            val packed = packFloatForUsb(silence, frames, 0f, 0f, 0f, 0f)
             val written = driver.write(packed.slice().order(ByteOrder.nativeOrder()), frames)
             if (tailPeeked > 0) {
                 if (written > 0) mix.consume(minOf(written, tailPeeked), rate)
@@ -402,6 +412,10 @@ class LibusbAudioSink(
             val reused = driver.isStreamingFormat(rate, bits, channels)
             if (reused) Log.i(TAG, "reused active stream ($rate/${bits}b/${channels}ch)")
             if (reused || driver.start(rate, bits, channels)) {
+                // A stream the DAC starts from silence fades in from silence;
+                // one it carries on with (gapless, same format) keeps its level.
+                if (!reused) appliedGain = 0f
+                outSampleRate = rate
                 adoptNegotiatedFormat(bits, channels, encoding)
                 // Integer PCM reaches the DAC untouched, so its stride has to
                 // match the subslot the device negotiated. Normally it does —
@@ -532,19 +546,29 @@ class LibusbAudioSink(
         val framesAvailable = direct.remaining() / sourceBytesPerFrame
         if (framesAvailable <= 0) return 0
 
+        // The volume, reached a frame at a time (GainRamp): a slider move or a
+        // key press is a slope, not a step, and a fresh stream fades in.
         val gain = volumeController.getVolume()
+        val startGain = appliedGain
+        val rise = GainRamp.risePerFrame(gain, outSampleRate)
+        val fall = GainRamp.fallPerFrame(outSampleRate)
         val toWrite = when {
             // Float chain: gain and the pack down to the DAC's subslot happen
-            // in one pass. This is also what gives 24-bit output a working
-            // volume control — the integer path only ever had a 16-bit fast
-            // path and silently skipped attenuation at any other depth.
-            sourceIsFloat -> packFloatForUsb(direct, framesAvailable, gain)
-            gain >= 0.9999f || outBitsPerSample != 16 -> direct
-            else -> applyGainPcm16(direct, gain)
+            // in one pass.
+            sourceIsFloat -> packFloatForUsb(direct, framesAvailable, startGain, gain, rise, fall)
+            // Unity and settled: the samples go out untouched, bit-perfect.
+            gain >= 1f && startGain >= 1f -> direct
+            // Every integer depth. Only 16-bit used to be attenuated, so
+            // 24- and 32-bit integer output ignored the volume entirely and
+            // played at the DAC's full level.
+            else -> applyGainPcmInt(direct, framesAvailable, startGain, gain, rise, fall)
         }
 
         val positionedView = toWrite.slice().order(ByteOrder.nativeOrder())
         val written = driver.write(positionedView, framesAvailable)
+        // Where the ramp got to in the frames the DAC actually took; a partial
+        // write resumes from there.
+        if (written > 0) appliedGain = GainRamp.after(startGain, gain, written, rise, fall)
 
         // Only what the DAC took: the rest of the tail is mixed again with
         // the rest of this buffer on the next try.
@@ -1241,20 +1265,55 @@ class LibusbAudioSink(
         partialWriteLogged = false
     }
 
-    private fun applyGainPcm16(src: ByteBuffer, gain: Float): ByteBuffer {
+    /**
+     * Integer PCM at the DAC's own depth (2-, 3- or 4-byte little-endian
+     * samples, the source stride matching the subslot) with the gain ramped
+     * from [startGain] toward [targetGain] a frame at a time. Rounded, not
+     * truncated, which would bias every sample toward zero; computed in
+     * double, which holds a 32-bit sample exactly where a float does not.
+     */
+    private fun applyGainPcmInt(
+        src: ByteBuffer,
+        frames: Int,
+        startGain: Float,
+        targetGain: Float,
+        rise: Float,
+        fall: Float,
+    ): ByteBuffer {
+        val bytesPerSample = usbBytesPerSample
+        val samples = frames * outChannels
+        val scratch = ensureGainScratch(samples * bytesPerSample)
         val srcPos = src.position()
-        val totalBytes = src.remaining()
-        val scratch = ensureGainScratch(totalBytes)
-        val numSamples = totalBytes / 2
+        val bits = bytesPerSample * 8
+        val max = (1L shl (bits - 1)) - 1
+        val min = -(1L shl (bits - 1))
 
-        for (i in 0 until numSamples) {
-            val sample = src.getShort(srcPos + i * 2).toInt()
-            val scaled = (sample * gain).toInt().coerceIn(-32768, 32767)
-            scratch.putShort(i * 2, scaled.toShort())
+        var gain = startGain.toDouble()
+        var channel = 0
+        var frame = 0
+        var o = 0
+        for (i in 0 until samples) {
+            val at = srcPos + o
+            var raw = 0L
+            for (b in 0 until bytesPerSample) {
+                raw = raw or ((src.get(at + b).toLong() and 0xFF) shl (8 * b))
+            }
+            // Sign-extend from the sample's width.
+            val sample = (raw shl (64 - bits)) shr (64 - bits)
+            val scaled = Math.round(sample * gain).coerceIn(min, max)
+            for (b in 0 until bytesPerSample) {
+                scratch.put(o + b, (scaled shr (8 * b)).toByte())
+            }
+            o += bytesPerSample
+            if (++channel == outChannels) {
+                channel = 0
+                frame++
+                gain = GainRamp.after(startGain, targetGain, frame, rise, fall).toDouble()
+            }
         }
 
         scratch.position(0)
-        scratch.limit(numSamples * 2)
+        scratch.limit(samples * bytesPerSample)
         return scratch
     }
 
@@ -1271,7 +1330,14 @@ class LibusbAudioSink(
      * emit. USB PCM is always little-endian, hence the explicit byte order
      * rather than the buffer's.
      */
-    private fun packFloatForUsb(src: ByteBuffer, frames: Int, gain: Float): ByteBuffer {
+    private fun packFloatForUsb(
+        src: ByteBuffer,
+        frames: Int,
+        startGain: Float,
+        targetGain: Float,
+        rise: Float,
+        fall: Float,
+    ): ByteBuffer {
         val bytesPerSample = usbBytesPerSample
         val samples = frames * outChannels
         val out = ensurePackScratch(samples * bytesPerSample)
@@ -1285,11 +1351,16 @@ class LibusbAudioSink(
         if (mix != null && mix.isOpen) {
             if (tailScratch.size < samples) tailScratch = FloatArray(samples)
             tailPeeked = mix.peek(tailScratch, frames, outChannels)
-            tailGain = mix.gain
+            // The tail's own gain is its fade times the player's volume; the
+            // DAC level goes on top, as it does for the song coming in.
+            tailGain = mix.gain * volumeController.getDacGain()
         }
         val mixing = tailPeeked > 0
 
         var o = 0
+        var gain = startGain
+        var channel = 0
+        var frame = 0
         for (i in 0 until samples) {
             var v = src.getFloat(srcPos + (i shl 2)) * gain
             if (mixing) v += tailScratch[i] * tailGain
@@ -1299,6 +1370,12 @@ class LibusbAudioSink(
             if (bytesPerSample > 2) out.put(o + 2, (sample shr 16).toByte())
             if (bytesPerSample > 3) out.put(o + 3, (sample shr 24).toByte())
             o += bytesPerSample
+            // One gain per frame, so every channel of a frame moves together.
+            if (++channel == outChannels) {
+                channel = 0
+                frame++
+                gain = GainRamp.after(startGain, targetGain, frame, rise, fall)
+            }
         }
 
         out.position(0)

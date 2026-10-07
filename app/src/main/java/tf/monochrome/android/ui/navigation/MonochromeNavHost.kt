@@ -1038,6 +1038,23 @@ fun MonochromeNavHost(initialRoute: String? = null) {
             hazeState = hazeState,
             glass = miniPlayerGlass,
         )
+
+        // The USB DAC's volume, shown by the volume keys while one plays in
+        // exclusive mode: Android's own panel has nothing to show then. Chrome,
+        // so the mini player's material, and a sibling of the haze source for
+        // the reason above. Above the modal layer, as the system's panel is.
+        tf.monochrome.android.ui.player.DacVolumePopup(
+            exclusive = playerViewModel.dacExclusive,
+            levelDb = playerViewModel.dacLevelDb,
+            keyPresses = playerViewModel.dacVolumeKeyPresses,
+            onLevelDb = playerViewModel::setDacLevelDb,
+            onMute = playerViewModel::setDacMuted,
+            hazeState = hazeState,
+            glass = miniPlayerGlass,
+            // The full player carries the bar itself.
+            suppressed = currentDestination?.route == Screen.NowPlaying.route,
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
     }
 }
 

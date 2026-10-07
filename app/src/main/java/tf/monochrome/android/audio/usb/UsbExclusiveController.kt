@@ -49,6 +49,7 @@ class UsbExclusiveController @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val driver: LibusbUacDriver,
     private val preferences: PreferencesManager,
+    private val volume: BypassVolumeController,
 ) {
     enum class Status {
         Disabled,
@@ -175,7 +176,12 @@ class UsbExclusiveController @Inject constructor(
                 return
             }
         }
+        val wasOpen = driver.isOpen.value
         val opened = driver.open(device)
+        // A DAC just claimed starts quiet, whatever the last session ended at.
+        // Only on the claim itself: this runs again while the DAC is already
+        // open, and dropping the level then would cut it mid-song.
+        if (opened && !wasOpen) volume.startSession()
         if (!opened) {
             _status.value = Status.Error
             Log.w(TAG,

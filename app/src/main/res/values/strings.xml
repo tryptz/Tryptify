@@ -1823,4 +1823,8 @@
     <string name="action_shuffle">Shuffle</string>
     <string name="folder_subfolders_included">Subfolders included</string>
     <string name="folder_go_to">Go to %1$s</string>
+    <string name="dac_volume">Volume</string>
+    <string name="volume_muted">Muted</string>
+    <string name="action_mute">Mute</string>
+    <string name="action_unmute">Unmute</string>
 </resources>

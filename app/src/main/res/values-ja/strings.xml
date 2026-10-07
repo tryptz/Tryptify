@@ -1772,4 +1772,8 @@
     <string name="action_shuffle">シャッフル</string>
     <string name="folder_subfolders_included">サブフォルダを含む</string>
     <string name="folder_go_to">%1$s へ移動</string>
+    <string name="dac_volume">音量</string>
+    <string name="volume_muted">ミュート中</string>
+    <string name="action_mute">ミュート</string>
+    <string name="action_unmute">ミュート解除</string>
 </resources>

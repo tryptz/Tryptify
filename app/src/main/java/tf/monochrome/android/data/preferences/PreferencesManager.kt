@@ -438,6 +438,7 @@ class PreferencesManager @Inject constructor(
         private val ALBUM_SORT = stringPreferencesKey("library_album_sort")
         private val ARTIST_SORT = stringPreferencesKey("library_artist_sort")
         private val FOLDER_SORT = stringPreferencesKey("library_folder_sort")
+        private val LEGACY_BYPASS_VOLUME_RESET = booleanPreferencesKey("legacy_bypass_volume_reset")
 
         // Car mode
         private val CAR_MODE_BAND_COUNT = intPreferencesKey("car_mode_band_count")
@@ -570,6 +571,21 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setVolume(volume: Double) {
         dataStore.edit { it[VOLUME] = volume }
+    }
+
+    /**
+     * Once per install: the player volume back to full. Until the exclusive
+     * USB path got a volume of its own, its volume keys wrote into this
+     * preference, which the normal output also plays at, and nothing in the
+     * app can raise it again — so a session on a DAC left everything quiet.
+     */
+    suspend fun resetLegacyBypassVolumeOnce() {
+        dataStore.edit {
+            if (it[LEGACY_BYPASS_VOLUME_RESET] != true) {
+                it[VOLUME] = 1.0
+                it[LEGACY_BYPASS_VOLUME_RESET] = true
+            }
+        }
     }
 
     // Theme

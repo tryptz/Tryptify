@@ -1792,3 +1792,7 @@ sort_song_count	Number of songs	歌曲数量	曲数	Nombre de titres	Número de 
 action_shuffle	Shuffle	随机播放	シャッフル	Aléatoire	Aleatorio	Karıştır	Zufallswiedergabe
 folder_subfolders_included	Subfolders included	包括子文件夹	サブフォルダを含む	Sous-dossiers compris	Incluye subcarpetas	Alt klasörler dahil	Mit Unterordnern
 folder_go_to	Go to %1$s	前往 %1$s	%1$s へ移動	Aller à %1$s	Ir a %1$s	%1$s klasörüne git	Zu %1$s wechseln
+dac_volume	Volume	音量	音量	Volume	Volumen	Ses düzeyi	Lautstärke
+volume_muted	Muted	已静音	ミュート中	Coupé	Silenciado	Sessiz	Stumm
+action_mute	Mute	静音	ミュート	Couper le son	Silenciar	Sessize al	Stummschalten
+action_unmute	Unmute	取消静音	ミュート解除	Rétablir le son	Activar sonido	Sesi aç	Stummschaltung aufheben
