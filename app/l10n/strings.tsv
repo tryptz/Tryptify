@@ -1103,6 +1103,7 @@ fx_shader_taps_per_pixel_higher_smoother_glass	Shader taps per pixel: higher = s
 fx_smooths_jagged_edges_on_the_3d_letters_and_glass	Smooths jagged edges on the 3D letters and glass (needs Android 13+).	平滑 3D 字母和玻璃上的锯齿边缘（需要 Android 13 及以上）。	3D 文字とガラスのギザギザした縁をなめらかにします（Android 13 以降が必要）。	Lisse les bords crénelés des lettres 3D et du verre (Android 13 ou version ultérieure requis).	Suaviza los bordes dentados de las letras 3D y el cristal (requiere Android 13 o superior).	3B harflerdeki ve camdaki tırtıklı kenarları yumuşatır (Android 13+ gerekir).	Glättet gezackte Kanten an 3D-Buchstaben und Glas (benötigt Android 13+).
 fx_how_hard_edges_are_smoothed_higher_softens_more	How hard edges are smoothed; higher softens more.	边缘平滑的力度；越高越柔和。	縁をどれだけ強くなめらかにするか。高いほど柔らかくなります。	L’intensité du lissage des bords ; plus haut adoucit davantage.	Cuánto se suavizan los bordes; más alto suaviza más.	Kenarların ne kadar yumuşatıldığı; yüksek değer daha çok yumuşatır.	Wie stark Kanten geglättet werden; höher macht weicher.
 fx_preview	PREVIEW	预览	プレビュー	APERÇU	VISTA PREVIA	ÖNİZLEME	VORSCHAU
+fx_preview_drag_hint	PREVIEW · drag the page under the glass	预览 · 拖动页面，让它从玻璃下滑过	プレビュー · ページをドラッグしてガラスの下で動かせます	APERÇU · faites glisser la page sous le verre	VISTA PREVIA · arrastra la página bajo el cristal	ÖNİZLEME · sayfayı camın altında sürükleyin	VORSCHAU · zieh die Seite unter das Glas
 fx_background	Background	背景	背景	Arrière-plan	Fondo	Arka plan	Hintergrund
 fx_button_tint	Button tint	按钮色调	ボタンの色合い	Teinte des boutons	Tinte de los botones	Düğme tonu	Tönung der Tasten
 fx_3d_refractive_glass_on_the_transport_buttons	3D refractive glass on the transport buttons (needs Android 13+).	播放控制按钮上的 3D 折射玻璃（需要 Android 13 及以上）。	再生ボタンに 3D の屈折ガラスを適用します（Android 13 以降が必要）。	Verre réfractif 3D sur les boutons de lecture (Android 13 ou version ultérieure requis).	Cristal refractivo 3D en los botones de reproducción (requiere Android 13 o superior).	Çalma düğmelerinde 3B kırılan cam (Android 13+ gerekir).	Lichtbrechendes 3D-Glas auf den Wiedergabetasten (benötigt Android 13+).
@@ -1175,8 +1176,6 @@ fx_bevel_samples	Bevel samples	斜面采样数	面取りのサンプル数	Écha
 fx_anti_aliasing	Anti-aliasing	抗锯齿	アンチエイリアス	Anticrénelage	Suavizado de bordes	Kenar yumuşatma	Kantenglättung
 fx_aa_strength	AA strength	抗锯齿强度	AA の強さ	Intensité de l’anticrénelage	Intensidad del suavizado	Yumuşatma gücü	Glättungsstärke
 fx_reset_to_defaults	Reset to defaults	恢复默认设置	既定に戻す	Rétablir les valeurs par défaut	Restablecer valores predeterminados	Varsayılanlara sıfırla	Auf Standard zurücksetzen
-fx_audio_tools	Audio tools	音频工具	オーディオツール	Outils audio	Herramientas de audio	Ses araçları	Audio-Tools
-fx_sheets_panels_and_search_bars_all_wear_this_pane	Sheets, panels and search bars all wear this pane.	面板、底部表单和搜索栏都使用这层玻璃。	シート、パネル、検索バーはすべてこのガラスをまといます。	Feuilles, panneaux et barres de recherche portent tous ce verre.	Hojas, paneles y barras de búsqueda llevan todos este cristal.	Sayfalar, paneller ve arama çubuklarının hepsi bu camı kullanır.	Sheets, Panels und Suchleisten tragen alle diese Scheibe.
 fx_themes	Themes	主题	テーマ	Thèmes	Temas	Temalar	Designs
 fx_glass_body	Glass body	玻璃主体	ガラスの本体	Corps du verre	Cuerpo del cristal	Cam gövdesi	Glaskörper
 fx_frosted_blur	Frosted blur	磨砂模糊	すりガラスのぼかし	Flou givré	Desenfoque esmerilado	Buzlu bulanıklık	Mattierte Unschärfe

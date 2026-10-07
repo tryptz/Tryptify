@@ -1097,6 +1097,7 @@
     <string name="fx_smooths_jagged_edges_on_the_3d_letters_and_glass">平滑 3D 字母和玻璃上的锯齿边缘（需要 Android 13 及以上）。</string>
     <string name="fx_how_hard_edges_are_smoothed_higher_softens_more">边缘平滑的力度；越高越柔和。</string>
     <string name="fx_preview">预览</string>
+    <string name="fx_preview_drag_hint">预览 · 拖动页面，让它从玻璃下滑过</string>
     <string name="fx_background">背景</string>
     <string name="fx_button_tint">按钮色调</string>
     <string name="fx_3d_refractive_glass_on_the_transport_buttons">播放控制按钮上的 3D 折射玻璃（需要 Android 13 及以上）。</string>
@@ -1169,8 +1170,6 @@
     <string name="fx_anti_aliasing">抗锯齿</string>
     <string name="fx_aa_strength">抗锯齿强度</string>
     <string name="fx_reset_to_defaults">恢复默认设置</string>
-    <string name="fx_audio_tools">音频工具</string>
-    <string name="fx_sheets_panels_and_search_bars_all_wear_this_pane">面板、底部表单和搜索栏都使用这层玻璃。</string>
     <string name="fx_themes">主题</string>
     <string name="fx_glass_body">玻璃主体</string>
     <string name="fx_frosted_blur">磨砂模糊</string>

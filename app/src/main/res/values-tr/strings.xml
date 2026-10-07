@@ -1138,6 +1138,7 @@
     <string name="fx_smooths_jagged_edges_on_the_3d_letters_and_glass">3B harflerdeki ve camdaki tırtıklı kenarları yumuşatır (Android 13+ gerekir).</string>
     <string name="fx_how_hard_edges_are_smoothed_higher_softens_more">Kenarların ne kadar yumuşatıldığı; yüksek değer daha çok yumuşatır.</string>
     <string name="fx_preview">ÖNİZLEME</string>
+    <string name="fx_preview_drag_hint">ÖNİZLEME · sayfayı camın altında sürükleyin</string>
     <string name="fx_background">Arka plan</string>
     <string name="fx_button_tint">Düğme tonu</string>
     <string name="fx_3d_refractive_glass_on_the_transport_buttons">Çalma düğmelerinde 3B kırılan cam (Android 13+ gerekir).</string>
@@ -1210,8 +1211,6 @@
     <string name="fx_anti_aliasing">Kenar yumuşatma</string>
     <string name="fx_aa_strength">Yumuşatma gücü</string>
     <string name="fx_reset_to_defaults">Varsayılanlara sıfırla</string>
-    <string name="fx_audio_tools">Ses araçları</string>
-    <string name="fx_sheets_panels_and_search_bars_all_wear_this_pane">Sayfalar, paneller ve arama çubuklarının hepsi bu camı kullanır.</string>
     <string name="fx_themes">Temalar</string>
     <string name="fx_glass_body">Cam gövdesi</string>
     <string name="fx_frosted_blur">Buzlu bulanıklık</string>

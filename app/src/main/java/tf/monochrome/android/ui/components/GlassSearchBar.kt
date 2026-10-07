@@ -75,6 +75,12 @@ fun GlassSearchBar(
     glass: PlayerGlassSettings = LocalMiniPlayerGlass.current,
     /** Focus and open the keyboard on first composition. For bars that appear on demand. */
     autoFocus: Boolean = false,
+    /**
+     * Whether the field takes input. Off for a bar that is only there to show
+     * the material — the Studio's UI panels preview — where a tap would open
+     * the keyboard over the very preview it was meant to be looked at in.
+     */
+    enabled: Boolean = true,
     onSubmit: () -> Unit = {},
     /**
      * What the trailing button does when the field is already empty. A bar that
@@ -111,6 +117,7 @@ fun GlassSearchBar(
                 BasicTextField(
                     value = query,
                     onValueChange = onQueryChange,
+                    enabled = enabled,
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
                         color = MaterialTheme.colorScheme.onSurface,

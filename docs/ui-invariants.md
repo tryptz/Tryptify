@@ -209,6 +209,16 @@ how the real screen is built, and a `GlassPanel` there would be drawing the *UI
 panels* blob, which those sliders do not control. The pane belongs to the UI
 panels tab, alongside the mini player bar, because that tab is what tunes it.
 
+**The UI panels preview is a small screen built the way the real one is**
+(`UiPanelsPreview`): a page of drawn covers and song rows as the haze source,
+and as its siblings the real `GlassSearchBar` on top and the mini player
+stacked over the tab pill and Search button below, with the nav host's tint
+and ground handed to the mini player. **Every one of them is given the
+preview's haze state.** A mini player without it draws neither its live lens
+nor its shadow, and the preview shows a flat pill that is not what ships,
+which is what it did until this was fixed. The backdrop must have detail:
+over a smooth gradient, blur, refraction and dispersion move nothing visible.
+
 ### Search bars
 
 Every search bar in the app is `SearchOverlay` + `GlassSearchBar`. There is one

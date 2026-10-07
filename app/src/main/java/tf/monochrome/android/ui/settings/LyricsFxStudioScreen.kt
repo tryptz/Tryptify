@@ -71,6 +71,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import tf.monochrome.android.ui.components.GlassPanel
+import tf.monochrome.android.ui.components.GlassSearchBar
+import tf.monochrome.android.ui.navigation.AppTab
+import tf.monochrome.android.ui.navigation.GlassTabBar
+import tf.monochrome.android.ui.navigation.TabBarHeight
+import tf.monochrome.android.ui.theme.DynamicColorScope
+import tf.monochrome.android.ui.theme.glassTint
+import dev.chrisbanes.haze.HazeState
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.style.TextOverflow
 import dev.chrisbanes.haze.hazeSource
 import tf.monochrome.android.ui.player.VisualizerPresetPanel
 import dev.chrisbanes.haze.rememberHazeState
@@ -151,10 +162,17 @@ class LyricsFxStudioViewModel @Inject constructor(
     private val preferences: PreferencesManager,
     @ApplicationContext private val context: Context,
     nowPlayingLyrics: tf.monochrome.android.player.NowPlayingLyricsHolder,
+    queueManager: tf.monochrome.android.player.QueueManager,
 ) : ViewModel() {
     /** The currently-playing lyrics + position, so the preview can show them live. */
     val currentLyrics: StateFlow<tf.monochrome.android.domain.model.Lyrics?> = nowPlayingLyrics.lyrics
     val currentPositionMs: StateFlow<Long> = nowPlayingLyrics.positionMs
+    /**
+     * The track playing now, for the UI panels preview's mini player. Its cover
+     * is what the real bar fits into its glass, so the preview shows the bar
+     * the listener actually has rather than a placeholder note.
+     */
+    val currentTrack: StateFlow<Track?> = queueManager.currentTrack
     // An in-memory working copy is the source of truth for the Studio UI and the
     // live preview, so every slider frame updates instantly with no I/O. A slider
     // drag fires dozens of times a second; persisting each frame — JSON-encode +
@@ -661,6 +679,7 @@ fun LyricsFxStudioScreen(
                     onImportPreset = { viewModel.importPlayerGlassPresetCode(it) },
                 )
             } else {
+                val previewTrack by viewModel.currentTrack.collectAsStateWithLifecycle()
                 PlayerGlassTab(
                     glass = miniPlayerGlass,
                     customPresets = customGlassPresets,
@@ -671,6 +690,7 @@ fun LyricsFxStudioScreen(
                     onExportPreset = { viewModel.exportPlayerGlassPreset(it) },
                     onImportPreset = { viewModel.importPlayerGlassPresetCode(it) },
                     previewMini = true,
+                    previewTrack = previewTrack,
                 )
             }
             return@Column
@@ -1059,6 +1079,8 @@ private fun PlayerGlassTab(
     onExportPreset: (PlayerGlassPreset) -> String,
     onImportPreset: (String) -> String?,
     previewMini: Boolean = false,
+    /** The playing track, for the UI panels preview's mini player; null shows a sample. */
+    previewTrack: Track? = null,
 ) {
     val context = LocalContext.current
     val accent = MaterialTheme.colorScheme.primary
@@ -1072,6 +1094,11 @@ private fun PlayerGlassTab(
     // midpoint stands for it.
     val previewGround = if (glass.previewBg != 0) Color(glass.previewBg)
         else lerp(Color.Black, accent, 0.22f)
+    // The page under the UI panels preview. Those panes float over the app's
+    // own pages, not the player, so unless the listener picked a colour it is
+    // the theme's page colour rather than the player's accent wash.
+    val panelsPage = if (glass.previewBg != 0) Color(glass.previewBg)
+        else MaterialTheme.colorScheme.background
     var showBgPicker by remember { mutableStateOf(false) }
     var showTintPicker by remember { mutableStateOf(false) }
     // Theme save / import / share dialog state (mirrors the Lyrics preset system).
@@ -1083,20 +1110,34 @@ private fun PlayerGlassTab(
         // just like the Lyrics editor.
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
         Spacer(Modifier.height(12.dp))
-        // Live preview: the real transport buttons AND the action dock under the
-        // current button glass — the dock is the same hollowed-slab glass, so it
-        // tunes with these sliders exactly like the play button.
-        // The backdrop is a sibling of the pane above it, not its parent, so the
-        // pane can actually blur it — a haze effect cannot sample a layer it is
-        // drawn inside, and one that tries paints the source's flat colour.
         val previewHaze = rememberHazeState()
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(288.dp)
+                .height(if (previewMini) UiPanelsPreviewHeight else 288.dp)
                 .clip(RoundedCornerShape(16.dp)),
             contentAlignment = Alignment.Center,
         ) {
+            if (previewMini) {
+                // This tab's material has two faces and the preview shows both:
+                // the floating pane (search bars, sheets, the map panels) and the
+                // bottom chrome (the mini player and the tab bar). The pane used
+                // to be previewed on the Player tab, wrapped around the transport,
+                // which put the one thing those sliders do NOT control behind
+                // everything they do. UiPanelsPreview says how it is built now.
+                UiPanelsPreview(
+                    glass = glass,
+                    hazeState = previewHaze,
+                    page = panelsPage,
+                    track = previewTrack,
+                )
+            } else {
+            // Live preview: the real transport buttons AND the action dock under the
+            // current button glass — the dock is the same hollowed-slab glass, so it
+            // tunes with these sliders exactly like the play button.
+            // The backdrop is a sibling of the pane above it, not its parent, so the
+            // pane can actually blur it — a haze effect cannot sample a layer it is
+            // drawn inside, and one that tries paints the source's flat colour.
             Box(
                 Modifier
                     .matchParentSize()
@@ -1119,62 +1160,6 @@ private fun PlayerGlassTab(
                 // gets it too.
                 LocalPlayerGlassGround provides previewGround,
             ) {
-                if (previewMini) {
-                    // Both faces of this material, because this tab owns both:
-                    // the floating PANE (the audio-tools sheet, the speed panel,
-                    // the search bars, the map panels) and the mini player bar.
-                    //
-                    // The pane used to be previewed on the Player tab instead,
-                    // wrapped around the transport — which put the one thing on
-                    // that preview those sliders do NOT control behind
-                    // everything they do, and left the tab that does control it
-                    // showing only the bar.
-                    val sampleTrack = remember {
-                        Track(
-                            id = 0L,
-                            title = "The Business",
-                            artist = Artist(id = 0L, name = "Tiësto"),
-                        )
-                    }
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        GlassPanel(
-                            hazeState = previewHaze,
-                            glass = glass,
-                            modifier = Modifier.padding(horizontal = 12.dp),
-                            avoidNavigationBar = false,
-                        ) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                Text(
-                                    stringResource(R.string.fx_audio_tools),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color.White,
-                                )
-                                Text(
-                                    stringResource(R.string.fx_sheets_panels_and_search_bars_all_wear_this_pane),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color.White.copy(alpha = 0.62f),
-                                )
-                            }
-                        }
-                        MiniPlayer(
-                            track = sampleTrack,
-                            isPlaying = false,
-                            progressProvider = { 0.4f },
-                            onPlayPauseClick = {},
-                            onSkipNextClick = {},
-                            onSkipPreviousClick = {},
-                            onClick = {},
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        )
-                    }
-                } else {
                 // The transport as it actually sits on the player screen: straight
                 // over the backdrop, with nothing between. There was a GlassPanel
                 // here, on the argument that glass should be previewed over
@@ -1253,7 +1238,6 @@ private fun PlayerGlassTab(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                }
             }
             Text(
                 text = stringResource(R.string.fx_preview),
@@ -1261,6 +1245,7 @@ private fun PlayerGlassTab(
                 color = Color.White.copy(alpha = 0.35f),
                 modifier = Modifier.align(Alignment.TopStart).padding(10.dp),
             )
+            }
         }
         }
 
@@ -1344,7 +1329,11 @@ private fun PlayerGlassTab(
         Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
             ColorSwatch(
                 label = stringResource(R.string.fx_background),
-                color = if (glass.previewBg != 0) Color(glass.previewBg) else lerp(Color.Black, accent, 0.34f),
+                color = when {
+                    previewMini -> panelsPage
+                    glass.previewBg != 0 -> Color(glass.previewBg)
+                    else -> lerp(Color.Black, accent, 0.34f)
+                },
                 isCustom = glass.previewBg != 0,
                 onClick = { showBgPicker = true },
             )
@@ -1717,6 +1706,273 @@ private fun previewBackground(accent: Color): Brush =
             lerp(Color.Black, accent, 0.10f),
         ),
     )
+
+/** Room for the search bar, a strip of open page, and the bottom chrome. */
+private val UiPanelsPreviewHeight = 312.dp
+
+/** The nav bar as it ships: Home, the two default middle pages, Library. */
+private val PreviewTabs = listOf(AppTab.HOME, AppTab.DISCOVER, AppTab.RADIO, AppTab.LIBRARY)
+
+/**
+ * The UI panels preview: a small screen of the app, put together the way the
+ * real one is.
+ *
+ * A page at the back, marked as the haze source, and the chrome floating over
+ * it as siblings of that source: the search bar at the top — a [GlassPanel],
+ * so it stands for every sheet and panel as well — and at the bottom the mini
+ * player stacked over the tab pill and the round Search button, as the nav
+ * host stacks them. Every pane is handed the source, so each one frosts and
+ * lenses the page under it exactly as it does on a real screen.
+ *
+ * Each part of this used to be missing something. The backdrop was a smooth
+ * gradient, which gives a lens nothing to bend and a blur nothing to soften,
+ * so Backdrop blur, Refraction and Chromatic aberration moved nothing anyone
+ * could see. The mini player was handed no backdrop, so it drew neither its
+ * live lens nor its shadow and came out a flat pill beside the real bar at the
+ * bottom of the same screen. And the pane was a caption card with no vertical
+ * padding, whose text ran into its own rim.
+ *
+ * The page scrolls both ways, so it can be dragged under the glass to watch
+ * the rim bend it.
+ */
+@Composable
+private fun UiPanelsPreview(
+    glass: PlayerGlassSettings,
+    hazeState: HazeState,
+    /** The page colour: the theme's, or the Background swatch's. */
+    page: Color,
+    /** The playing track; null shows a sample one. */
+    track: Track?,
+) {
+    // The page's own ink, picked against the page: the swatch can make it any
+    // colour, and theme text on a page it was not chosen for can vanish.
+    val ink = if (page.luminance() > 0.5f) Color.Black else Color.White
+    val accent = MaterialTheme.colorScheme.primary
+    val sampleTrack = remember {
+        Track(
+            id = 0L,
+            title = "The Business",
+            artist = Artist(id = 0L, name = "Tiësto"),
+        )
+    }
+    var selectedTab by remember { mutableStateOf(AppTab.HOME) }
+
+    Box(Modifier.fillMaxSize()) {
+        PreviewPage(
+            ink = ink,
+            modifier = Modifier
+                .matchParentSize()
+                .hazeSource(hazeState)
+                .background(page),
+        )
+
+        // Everything below is a sibling of the page, never inside it: a pane
+        // drawn inside its own haze source samples a picture it is part of and
+        // paints a flat slab.
+        //
+        // The mini player and the tab bar read their glass from LocalPlayerGlass;
+        // the nav host provides the mini player's settings there the same way.
+        CompositionLocalProvider(LocalPlayerGlass provides glass) {
+            Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()) {
+                Text(
+                    text = stringResource(R.string.fx_preview_drag_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = ink.copy(alpha = 0.45f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 14.dp, top = 10.dp, end = 14.dp),
+                )
+                GlassSearchBar(
+                    query = "",
+                    onQueryChange = {},
+                    placeholder = stringResource(R.string.search_hint),
+                    hazeState = hazeState,
+                    glass = glass,
+                    enabled = false,
+                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // Taken out here, outside the album's colours, as the nav host
+                // takes them: inside DynamicColorScope `primary` is the cover's,
+                // and the bar would come out a different hue from the tab bar
+                // under it.
+                val chromeTint = glassTint(glass.tintColor)
+                val chromeGround = MaterialTheme.colorScheme.background
+                DynamicColorScope {
+                    MiniPlayer(
+                        track = track ?: sampleTrack,
+                        isPlaying = false,
+                        progressProvider = { 0.4f },
+                        onPlayPauseClick = {},
+                        onSkipNextClick = {},
+                        onSkipPreviousClick = {},
+                        onClick = {},
+                        hazeState = hazeState,
+                        glassTintColor = chromeTint,
+                        glassGround = chromeGround,
+                    )
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // Live, so a tap lights the tab and swells the glass under
+                    // the finger as the real bar does.
+                    GlassTabBar(
+                        tabs = PreviewTabs,
+                        selected = selectedTab,
+                        onSelect = { selectedTab = it },
+                        accent = accent,
+                        hazeState = hazeState,
+                        modifier = Modifier.weight(1f),
+                    )
+                    GlassTabBar(
+                        tabs = listOf(AppTab.SEARCH),
+                        selected = selectedTab,
+                        onSelect = { selectedTab = it },
+                        accent = accent,
+                        hazeState = hazeState,
+                        modifier = Modifier.width(TabBarHeight),
+                    )
+                }
+            }
+        }
+    }
+}
+
+// The sample page's songs. Made up, so nobody mistakes them for their library.
+private val PreviewMixes = listOf("Low Orbit", "Glass Harbour", "Paper Satellites", "Velvet Signal", "Night Ferry")
+private val PreviewSongs = listOf(
+    "Midnight Static" to "Aurora Lane",
+    "Neon Driftwood" to "The Halyards",
+    "Slow Lightning" to "Kasimir",
+    "Coastal Frequencies" to "Mira Sol",
+    "After the Rain" to "Northbound",
+    "Echo Valley" to "Juno & the Tides",
+    "Silver Hours" to "Odessa Park",
+    "Hollow Moon" to "Static Bloom",
+)
+
+/**
+ * What the UI panels preview's glass sits over: a page shaped like Home, a rail
+ * of covers over a list of songs.
+ *
+ * The covers are loud on purpose. Hard colour edges are what refraction bends
+ * and chromatic aberration splits, and text is what a blur visibly softens. They
+ * are drawn rather than loaded, so the preview looks the same with an empty
+ * library and costs no I/O.
+ */
+@Composable
+private fun PreviewPage(ink: Color, modifier: Modifier = Modifier) {
+    Column(modifier.verticalScroll(rememberScrollState())) {
+        // Starts under the search bar, so its glass has covers behind it at rest.
+        Spacer(Modifier.height(30.dp))
+        PreviewHeading(stringResource(R.string.for_you), ink)
+        Row(
+            modifier = Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            PreviewMixes.forEachIndexed { i, title ->
+                Column(Modifier.width(104.dp)) {
+                    PreviewCover(i, Modifier.size(104.dp), corner = 12.dp)
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(18.dp))
+        PreviewHeading(stringResource(R.string.recently_played), ink)
+        PreviewSongs.forEachIndexed { i, (title, artist) ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PreviewCover(PreviewMixes.size + i, Modifier.size(40.dp), corner = 6.dp)
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        artist,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ink.copy(alpha = 0.6f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+        // Room to drag the last songs up clear of the bottom chrome.
+        Spacer(Modifier.height(160.dp))
+    }
+}
+
+@Composable
+private fun PreviewHeading(text: String, ink: Color) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = ink,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+    )
+}
+
+/** A drawn stand-in for a cover: a two-tone gradient with a disc on it. */
+@Composable
+private fun PreviewCover(index: Int, modifier: Modifier, corner: Dp) {
+    Spacer(
+        modifier
+            .clip(RoundedCornerShape(corner))
+            .drawWithCache {
+                // Golden-angle steps, so no two neighbours land on similar hues.
+                val hue = (index * 137.5f + 12f) % 360f
+                val wash = Brush.linearGradient(
+                    listOf(
+                        Color.hsv(hue, 0.72f, 0.92f),
+                        Color.hsv((hue + 48f) % 360f, 0.85f, 0.42f),
+                    ),
+                    start = Offset.Zero,
+                    end = Offset(size.width, size.height),
+                )
+                val disc = Color.hsv((hue + 180f) % 360f, 0.5f, 0.98f)
+                onDrawBehind {
+                    drawRect(wash)
+                    drawCircle(
+                        color = disc,
+                        radius = size.minDimension * 0.28f,
+                        center = Offset(size.width * 0.66f, size.height * 0.36f),
+                    )
+                }
+            },
+    )
+}
 
 @Composable
 private fun StudioPreview(
