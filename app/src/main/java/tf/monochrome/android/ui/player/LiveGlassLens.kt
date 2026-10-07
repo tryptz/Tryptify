@@ -53,10 +53,10 @@ import kotlin.math.roundToInt
  * Same rule as any haze pane: it must be a sibling of the haze source, never
  * inside it. Drawing the source's layer from inside itself would recurse.
  *
- * Prototype: wired into [GlassPanel] and the full player's disc and dock,
- * behind [LIVE_LENS_GLASS]. Not the mini player, which keeps the tab bar's
- * frost: it is the tab bar's material, and over sharp page text a clear lens
- * let the rows behind fight its title.
+ * Prototype: wired into [GlassPanel], the full player's disc and dock, and
+ * the mini player and tab bar, behind [LIVE_LENS_GLASS]. The mini player and
+ * the tab bar are one material: same lens, same [LIVE_LENS_CHROME_BLUR_SHARE],
+ * same tint (docs/ui-invariants.md).
  */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable

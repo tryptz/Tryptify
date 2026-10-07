@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -123,6 +123,9 @@ fun PlaylistScreen(
     val visibleTracks = remember(tracks, listQuery, listSort) {
         tracks.applySearchAndSort(listQuery, listSort)
     }
+    // A TIDAL playlist can hold one track twice, and two rows with one key
+    // crash the list, so the key is the id and which occurrence it is.
+    val rowKeys = remember(visibleTracks) { LibraryKeys.occurrences(visibleTracks.map { it.id }) }
     val selection = rememberTrackSelectionState<Long>()
     BackHandler(enabled = selection.active) { selection.clear() }
 
@@ -439,7 +442,7 @@ fun PlaylistScreen(
                     )
                 }
             } else {
-                items(visibleTracks, key = { it.id }) { track ->
+                itemsIndexed(visibleTracks, key = { index, _ -> rowKeys[index] }) { _, track ->
                     TrackItem(
                         track = track,
                         onClick = {

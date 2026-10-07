@@ -136,6 +136,7 @@ import tf.monochrome.android.ui.player.PlayerDesignTokens
 import tf.monochrome.android.ui.player.TransportIcon
 import tf.monochrome.android.ui.player.drawGlassPlayPauseDisc
 import tf.monochrome.android.ui.player.playerGlass
+import tf.monochrome.android.ui.player.rememberPlayerLiveLens
 import tf.monochrome.android.ui.player.Letters3DRow
 import tf.monochrome.android.ui.player.LocalBeatPulse
 import tf.monochrome.android.ui.player.rememberFrameSeconds
@@ -1194,11 +1195,14 @@ private fun PlayerGlassTab(
                                 softness = glass.shadowSoftness,
                                 depth = glass.shadowDepth,
                             )
-                            // The same frost the real disc gets, so Backdrop
-                            // blur and tint move something here too.
+                            // The same frost and live lens the real disc gets
+                            // (PlayerTransportControls), so Backdrop blur, tint
+                            // and the lens move something here too, and the
+                            // disc reads the same as the dock beside it.
                             PlayerGlassHaze(
                                 modifier = Modifier.matchParentSize(),
                                 shape = CircleShape,
+                                lensCorner = Dp.Infinity,
                             )
                             Box(
                                 Modifier.fillMaxSize().clip(CircleShape),
@@ -1207,7 +1211,11 @@ private fun PlayerGlassTab(
                                 Canvas(
                                     Modifier
                                         .fillMaxSize()
-                                        .playerGlass(previewTint, lensCorner = Dp.Infinity)
+                                        .playerGlass(
+                                            previewTint,
+                                            lensCorner = Dp.Infinity,
+                                            liveUnder = rememberPlayerLiveLens(),
+                                        )
                                         .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
                                 ) {
                                     drawGlassPlayPauseDisc(morph = 0f, fill = previewTint)

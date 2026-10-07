@@ -60,9 +60,10 @@ weak.
 **Prototype: the mini player, the tab bar, `GlassPanel` and the full player's disc and dock bend the live screen**
 (`LiveGlassLens.kt`, behind `LIVE_LENS_GLASS`). **The mini player and the tab bar are one
 material and must match exactly:** same lens, same blur share
-(`LIVE_LENS_CHROME_BLUR_SHARE`, a little more than panels so page text behind
-does not fight their labels), same frost, and the same tint — the nav host takes
-the tab bar's tint *outside* `DynamicColorScope` and hands it to the mini player
+(`LIVE_LENS_CHROME_BLUR_SHARE`, now the same share as every other pane's, kept
+as its own name so the two bars always pass one value), same frost, and the
+same tint — the nav host takes the tab bar's tint *outside* `DynamicColorScope`
+and hands it to the mini player
 (`glassTintColor`), because inside it `primary` is the album's colour and the
 bar came out a different hue from the tab bar under it. Their haze pane is replaced by a
 layer that draws Haze's own capture of the screen behind them

@@ -130,10 +130,11 @@ class DownloadsViewModel @Inject constructor(
 
     /** A local-library track in the download folder, as a Downloads row. */
     private fun LocalTrackEntity.toDownloadedTrack(): DownloadedTrackEntity = DownloadedTrackEntity(
-        // Stable id derived from the path so the list keeps its keys. Always
+        // Stable id derived from the path so the list keeps its keys, and a
+        // queued "download_<id>" still finds the file after a rescan. Always
         // negative so it can't collide with a real catalog track id (those
         // are positive Longs from TIDAL/Qobuz).
-        id = -((filePath.hashCode().toLong() and 0x7FFFFFFFL) or 1L),
+        id = pathId(filePath),
         title = title ?: MediaScanner.titleFromPath(filePath),
         duration = durationSeconds,
         artistName = artist ?: albumArtist ?: "Unknown Artist",
@@ -185,8 +186,15 @@ class DownloadsViewModel @Inject constructor(
                 !file.exists() || file.delete() || deleteThroughFolder(track.filePath)
             }
             // App-written downloads live in Room; sideloaded rows don't, so this
-            // is a harmless no-op for them (they leave once the file is gone).
+            // is a harmless no-op for them.
             downloadDao.deleteDownloadedTrack(track.id)
+            // The library's row for the file goes too. Nothing else prunes it
+            // until the next full scan, and the list is built from it: the
+            // deleted download came straight back, as a row with no file.
+            if (fileRemoved) {
+                val path = SafPaths.absolutePath(track.filePath, primaryRoot) ?: track.filePath
+                localMediaDao.deleteTracksByPaths(listOf(path))
+            }
             fileRemoved
         }
 
@@ -206,6 +214,22 @@ class DownloadsViewModel @Inject constructor(
 
     companion object {
         const val SINGLES_LABEL = "Singles"
+
+        /**
+         * A negative id for a file the app did not record, from its path: 64
+         * bits of FNV-1a. The 31-bit String.hashCode it replaces left 2^30
+         * values, and a download folder of 20,000 tracks then had about a one
+         * in six chance of two rows with one key, which crashes the list.
+         */
+        internal fun pathId(path: String): Long {
+            var hash = -0x340d631b7bdddcdbL // FNV-1a 64-bit offset basis
+            for (byte in path.encodeToByteArray()) {
+                hash = hash xor (byte.toLong() and 0xFF)
+                hash *= 0x100000001b3L // FNV-1a 64-bit prime
+            }
+            // Clear the sign bit, then negate: never 0, never positive.
+            return -((hash and Long.MAX_VALUE) or 1L)
+        }
     }
 }
 

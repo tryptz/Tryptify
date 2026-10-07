@@ -127,6 +127,21 @@ internal object LibraryKeys {
     fun header(id: String) = "header:$id"
     fun spacer(id: String) = "spacer:$id"
     const val EMPTY = "empty"
+
+    /**
+     * One key per row of a track list that can hold a track more than once,
+     * as a TIDAL playlist can: the first occurrence is [track] of its id, a
+     * repeat is that plus "#2", "#3". By occurrence rather than position, so
+     * a row keeps its key when rows above it come and go.
+     */
+    fun occurrences(ids: List<Long>): List<String> {
+        val seen = HashMap<Long, Int>()
+        return ids.map { id ->
+            val n = (seen[id] ?: 0) + 1
+            seen[id] = n
+            if (n == 1) track(id) else "${track(id)}#$n"
+        }
+    }
 }
 
 /**
