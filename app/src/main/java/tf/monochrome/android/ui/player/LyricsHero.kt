@@ -324,16 +324,7 @@ internal fun LyricsHeroBox(
     onSeekTo: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(
-        modifier = modifier
-            // "On top" over the backdrop: the light that falls on the letters,
-            // added over them. Outside the edge fade, whose offscreen buffer
-            // would let the light's own alpha hide the shafts behind a soft
-            // letter, so it lands on the screen next to the shafts, as it does
-            // in the Studio's preview.
-            .lyricRaysOnLetters(LocalLyricBackdrop.current)
-            .lyricsEdgeFade(),
-    ) {
+    Box(modifier = modifier.lyricsEdgeFade()) {
         when {
             isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
@@ -552,6 +543,10 @@ internal fun SyncedLyricsView(
                 }
                 // Here only when nothing under the lyrics draws them.
                 .lyricGodRays(if (backdrop == null) rayLight else null)
+                // Over a backdrop, "On top" adds the light that falls on the
+                // letters to them here; the shafts around them are the
+                // backdrop's.
+                .lyricRaysOnLetters(backdrop)
                 // The shadow under the letters, on the background: outside the
                 // glass so it is never bevelled into a block, inside the rays so
                 // the shafts pass over it, and outside the inset so its blur is

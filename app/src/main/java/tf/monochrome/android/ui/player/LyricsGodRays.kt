@@ -73,9 +73,12 @@ import kotlin.math.sin
  * switch on, or if the shader will not compile, this is a no-op.
  */
 @Composable
-internal fun Modifier.lyricGodRays(light: LyricRayLight?): Modifier {
+internal fun Modifier.lyricGodRays(
+    light: LyricRayLight?,
+    output: RayOutput = RayOutput.LETTERS_AND_LIGHT,
+): Modifier {
     if (light == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
-    return this.then(godRaysModifier(light))
+    return this.then(godRaysModifier(light, output))
 }
 
 /**
@@ -217,7 +220,7 @@ internal fun rememberGodRaysShader(): RuntimeShader? = remember {
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
-private fun godRaysModifier(light: LyricRayLight): Modifier {
+private fun godRaysModifier(light: LyricRayLight, output: RayOutput): Modifier {
     val shader = rememberGodRaysShader() ?: return Modifier
     val origin = remember { mutableStateOf<Offset?>(null) }
     return Modifier.rayLayerOrigin(origin).graphicsLayer {
@@ -225,7 +228,7 @@ private fun godRaysModifier(light: LyricRayLight): Modifier {
         renderEffect = if (f == null || size.minDimension <= 0f) {
             null
         } else {
-            setGodRayUniforms(shader, light, f, RayOutput.LETTERS_AND_LIGHT)
+            setGodRayUniforms(shader, light, f, output)
             RenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect()
         }
     }
@@ -246,8 +249,8 @@ internal enum class RayOutput {
     SHAFTS,
 
     /**
-     * Only the light falling on the letters, in their shape: "On top", added
-     * over the real letters, which already stand on the backdrop's shafts.
+     * The real letters with the light that falls on them added, and nothing
+     * around them: "On top", over the backdrop's shafts.
      */
     ON_LETTERS,
 }
@@ -594,11 +597,11 @@ half4 main(float2 p) {
     // Only the letters' own light is wanted here, and where there is no
     // letter there is none: most of the layer skips the march.
     if (uOnLetters > 0.5 && src.a < 0.004) {
-        return half4(0.0);
+        return half4(src);
     }
-    // What a pixel with no light hands back: the backdrop's and the
-    // on-letters layer's letters are only the light's source, never drawn.
-    float4 unlit = (uRaysOnly > 0.5 || uOnLetters > 0.5) ? float4(0.0) : src;
+    // What a pixel with no light hands back: the backdrop's letters are a
+    // copy, only the light's source, never drawn.
+    float4 unlit = uRaysOnly > 0.5 ? float4(0.0) : src;
 
     float2 toL = uLight - p;
     float dist = length(toL);
@@ -681,17 +684,19 @@ half4 main(float2 p) {
     }
     // "On top" over a backdrop: the shafts are already under the letters, so
     // what is left of the article's composite (src + rays, below) is the
-    // light that falls on the letters themselves, in their shape — capped
-    // where that composite caps it, at what the letters cover, or a soft
-    // glyph edge would glow brighter than it is solid. Added over the letters
-    // on the shafts, it is that composite. Its alpha is the least a valid
-    // premultiplied colour can have: in the lyric surface's offscreen edge
-    // fade, alpha added here would hide that much of the shafts behind it.
+    // light that falls on the letters themselves, added to their own pixels
+    // — capped where that composite caps it, at what the letters cover, or a
+    // soft glyph edge would glow brighter than it is solid. Over the shafts,
+    // that is the composite. The cap has to be measured on these, the real
+    // letters: measured on the backdrop's copy, which is drawn before the
+    // glass at full strength, it found no room at all and the sung line
+    // stood grey under its own light. Their alpha is left as it is, so the
+    // edge fade's offscreen buffer takes them like any letters.
     if (uOnLetters > 0.5) {
         float topA = src.a + a * (1.0 - src.a);
         float3 room = max(float3(topA) - src.rgb - rays * (1.0 - src.a), float3(0.0));
         float3 add = min(rays * src.a, room);
-        return half4(half3(add), half(max(add.r, max(add.g, add.b))));
+        return half4(half3(min(src.rgb + add, float3(src.a))), half(src.a));
     }
     if (uOnTop > 0.5) {
         // The article's composite: the light is added onto the scene.

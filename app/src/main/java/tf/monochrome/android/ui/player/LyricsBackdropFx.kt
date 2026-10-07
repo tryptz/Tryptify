@@ -54,15 +54,11 @@ import tf.monochrome.android.performance.LocalLowPerformance
  * over them later. Back to front: shadow, shafts, letters.
  *
  * "On top" is drawn here too, so its shafts run under the glass UI as well.
- * The one thing a layer under the letters cannot do is add the light over
- * them, so the lyric view does that part alone ([lyricRaysOnLetters]): the
- * light that falls on the letters, in their shape, from the same copy and the
- * same light. Shafts under the letters plus that over them is the "On top"
- * composite to the pixel. While its shafts stayed in the lyric surface they
- * stopped dead above the song title (seen on device), and they were gathered
- * from the finished glass letters, whose brightness turns on what the glass
- * is lensing — the album art in the player, a flat gradient in the Studio —
- * so the same settings shone differently in the two.
+ * While they stayed in the lyric surface they stopped dead above the song
+ * title (seen on device). The one thing a layer under the letters cannot do is
+ * add the light over them, so the lyric view does that part alone, on its own
+ * letters ([lyricRaysOnLetters]). Shafts under the letters plus their own light
+ * added to them is the "On top" composite.
  */
 @Stable
 internal class LyricLetterCapture {
@@ -178,47 +174,31 @@ internal fun LyricBackdropFx(backdrop: LyricBackdrop, modifier: Modifier = Modif
 }
 
 /**
- * "On top" over a [LyricBackdropFx]: the light that falls on the letters,
- * added over them. The backdrop has already drawn the shafts under the
- * letters, everywhere else; this is the rest of the "On top" composite, and
- * the letters are the only place it lands, so the march runs on their pixels
- * alone. It is gathered from the same copy, through the same light and the
- * same emission as the backdrop's shafts, so the light on a letter and the
- * shaft beside it are one light.
+ * "On top" over a [LyricBackdropFx]: the real letters, with the light that
+ * falls on them added to their own pixels. The backdrop has already drawn the
+ * shafts under them, everywhere else; this is the rest of the "On top"
+ * composite, and the letters are the only place it lands, so the march runs
+ * on their pixels alone.
  *
- * Put it outside the glass, so it lands on the finished letters, on a box
- * that holds them all (nothing outside it is lit), and outside any offscreen
- * layer they are drawn in — the lyric surface's edge fade — so it is added
- * onto the screen beside the shafts. Added inside one, the light's alpha
- * hides that much of the shafts behind every soft or see-through letter. A
- * no-op without a backdrop (the lyric view's own rays add it then), out of
- * "On top", or below API 33.
+ * It is a render effect on the letters' own layer, not a layer of light laid
+ * over them, for two reasons. The composite caps the light at what a letter
+ * covers, and only the real letters know that: capped on the backdrop's copy,
+ * which is drawn before the glass at full strength, there was never any room
+ * and the sung line stood grey under its own light (seen in a render through
+ * Skia). And it leaves the letters' alpha as it is, so the edge fade's
+ * offscreen buffer takes them like any others; a separate layer adds alpha
+ * there that hides the shafts behind every soft letter.
+ *
+ * Put it where [lyricGodRays] would go: outside the glass, so the light is
+ * gathered from and added to the finished letters. A no-op without a
+ * backdrop (the lyric view's own rays add it then), out of "On top", or below
+ * API 33.
  */
 @Composable
 internal fun Modifier.lyricRaysOnLetters(backdrop: LyricBackdrop?): Modifier {
     val light = backdrop?.light ?: return this
     if (!light.fx.godRaysOnTop) return this
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
-    val shader = rememberGodRaysShader() ?: return this
-    val capture = backdrop.capture
-    val origin = remember { mutableStateOf<Offset?>(null) }
-    val onLetters = rememberGraphicsLayer()
-    return this
-        .rayLayerOrigin(origin)
-        .drawWithContent {
-            drawContent()
-            val at = origin.value ?: return@drawWithContent
-            val letters = capture.layer ?: return@drawWithContent
-            if (letters.isReleased || size.minDimension <= 0f) return@drawWithContent
-            val f = light.frameFor(at) ?: return@drawWithContent
-            setGodRayUniforms(shader, light, f, RayOutput.ON_LETTERS, emission = LYRIC_COPY_EMISSION)
-            onLetters.compositingStrategy = LayerCompositingStrategy.Offscreen
-            onLetters.renderEffect = RenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect()
-            // Added, as the article composites its light onto the scene.
-            onLetters.blendMode = ComposeBlendMode.Plus
-            onLetters.record { drawLetterCopy(capture, letters, capture.originInRoot - at) }
-            drawLayer(onLetters)
-        }
+    return lyricGodRays(light, RayOutput.ON_LETTERS)
 }
 
 /**

@@ -253,18 +253,22 @@ backdrop, so its lyric view draws both itself. The Studio's preview is built
 the same way as the player, down to the `lyricsEdgeFade` box around the
 playing song's lyrics.
 
-**"On top" is the backdrop's shafts plus the light on the letters, added
-outside the edge fade.** A layer under the letters cannot add light over them,
-so `lyricRaysOnLetters` does that part alone (`uOnLetters`): the light that
-falls on the letters, in their shape, gathered from the same copy with the same
-light and emission as the shafts, capped where the old composite capped it, at
-what the letters cover. Shafts under the letters plus that over them is the old
-in-surface composite to float precision (checked by running the shader through
-Skia: 1.2e-7). Uncapped, a soft glyph edge glowed brighter than it is solid. It
-sits on `LyricsHeroBox` outside `lyricsEdgeFade`, because inside that offscreen
-buffer the light's own alpha hides that much of the shafts behind every soft or
-see-through letter (up to a tenth, measured the same way), and the Studio's
-preview, with no such buffer, did not.
+**"On top" is the backdrop's shafts plus the letters' own light, added to
+their own pixels.** A layer under the letters cannot add light over them, so
+`lyricRaysOnLetters` does that part alone (`uOnLetters`): a render effect on
+the real letters' layer, outside the glass, that adds the light falling on
+each letter to it, capped where the old composite capped it, at what the
+letter covers. Over the shafts that is the old in-surface composite, to float
+precision under white light (checked by running the shader through Skia:
+1.2e-7); under a coloured backlight a see-through letter can come out a few
+percent dimmer, because its colour cannot pass its own coverage. Two ways of
+doing it are wrong, and both were tried. Measuring the cap on the backdrop's
+copy: the copy is drawn before the glass at full strength, so there was never
+any room and the sung line stood grey under its own light (seen in that
+render). Adding the light as a separate layer: the layer brings alpha of its
+own, which in the edge fade's offscreen buffer hides that much of the shafts
+behind every soft letter. The effect leaves the letters' alpha alone, so the
+edge fade takes them like any letters.
 
 **The light is one light, in root px, sized by the window.** `LyricRayLight`
 works it out once, in root px, and every layer that draws it — the backdrop,

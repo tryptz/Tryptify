@@ -2128,7 +2128,7 @@ private fun StudioPreview(
             if (playing != null) {
                 // Exactly the production renderer, on the real lyric lines,
                 // in the box the player gives it (LyricsHeroBox).
-                Box(Modifier.fillMaxSize().lyricRaysOnLetters(backdrop).lyricsEdgeFade()) {
+                Box(Modifier.fillMaxSize().lyricsEdgeFade()) {
                     SyncedLyricsView(
                         lines = playing.lines,
                         positionMs = positionMs,
