@@ -3129,6 +3129,19 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
             subtitle = stringResource(R.string.settings_live_logcat_stream_for_this_process_copy_or),
             onClick = { navController.navigateTool(Screen.DebugLog) },
         )
+        // A native crash report carries the tombstone's readable strings and
+        // the app's own log tail, which not everyone wants left in Downloads.
+        val saveCrashReports by viewModel.saveCrashReports.collectAsStateWithLifecycle()
+        SettingSwitchItem(
+            title = stringResource(R.string.settings_save_crash_reports),
+            subtitle = if (saveCrashReports) {
+                stringResource(R.string.settings_save_crash_reports_on)
+            } else {
+                stringResource(R.string.settings_save_crash_reports_off)
+            },
+            checked = saveCrashReports,
+            onCheckedChange = { viewModel.setSaveCrashReports(it) },
+        )
 
         // Moved from Audio, where it had ended up under the "Spatial Audio"
         // header. A screen recorder is a diagnostic, not an audio setting.
@@ -3450,7 +3463,7 @@ private fun ServiceQualityRow(
     Box {
         SettingItem(
             title = title,
-            subtitle = current?.let { "${it.label} · ${it.detail}" } ?: "",
+            subtitle = current?.let { "${it.label} · ${stringResource(it.detail)}" } ?: "",
             onClick = { expanded = true },
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -3465,7 +3478,7 @@ private fun ServiceQualityRow(
                                 tf.monochrome.android.ui.components.DolbyAtmosBadgePill()
                             }
                             Text(
-                                option.detail,
+                                stringResource(option.detail),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -3486,7 +3499,7 @@ private fun ServiceQualityRow(
                         Column {
                             Text(option.label, style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                option.detail,
+                                stringResource(option.detail),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

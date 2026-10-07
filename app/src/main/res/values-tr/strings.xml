@@ -1802,4 +1802,15 @@
     <string name="settings_nav_bar_slot_second">İkinci düğme</string>
     <string name="settings_titles_from_file_names">Başlıklar dosya adlarından</string>
     <string name="settings_titles_from_file_names_desc">Yerel şarkıları başlık etiketleri yerine dosya adlarıyla adlandırır. Değiştirmek kitaplığı yeniden tarar.</string>
+    <string name="quality_detail_tidal_hi_res">24 bit / 192 kHz’e kadar. Albümün yüksek çözünürlüklü masterı yoksa CD kalitesi.</string>
+    <string name="quality_detail_qobuz_hi_res">24 bit, 192 kHz’e kadar. Yayının yüksek çözünürlüklü masterı yoksa CD kalitesi.</string>
+    <string name="quality_detail_cd_flac">16 bit / 44,1 kHz, kayıpsız.</string>
+    <string name="quality_detail_deezer_cd_flac">16 bit / 44,1 kHz, kayıpsız. Deezer’ın en iyisi: yüksek çözünürlük sunmuyor.</string>
+    <string name="quality_detail_aac_320">Kayıplı AAC, .m4a (MP4) dosyasında.</string>
+    <string name="quality_detail_aac_96">Kayıplı AAC, en küçük boyut. Yavaş veya kotalı bağlantılar için.</string>
+    <string name="quality_detail_mp3_320">Kayıplı MP3.</string>
+    <string name="quality_detail_tidal_atmos_download">Atmos miksi olan parçalar için E-AC-3 JOC .m4a, değiştirilmeden. Diğerleri Hi-Res FLAC olarak indirilir.</string>
+    <string name="settings_save_crash_reports">Çökme raporlarını kaydet</string>
+    <string name="settings_save_crash_reports_on">Bir çökme veya donma, hata raporuna eklemek için İndirilenler klasörüne .log dosyası olarak kaydedilir.</string>
+    <string name="settings_save_crash_reports_off">Kapalı: çökme İndirilenler klasöründe dosya bırakmaz.</string>
 </resources>

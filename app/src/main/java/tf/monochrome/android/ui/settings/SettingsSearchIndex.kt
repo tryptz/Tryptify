@@ -171,6 +171,9 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     entry("Mixer", R.string.status_mixer, "Audio", listOf("dsp", "bus", "plugin", "insert", "channel"))
         .at(SettingsDestination.Route("mixer")),
     entry("Streaming quality", R.string.settings_streaming_quality, "Audio", listOf("bitrate", "wifi", "cellular", "data", "tidal", "qobuz", "deezer", "aac", "mp3", "flac", "hi-res", "dolby", "atmos")),
+    // The switch itself, so "atmos" lands on it rather than on the header,
+    // whose text reads "Download quality" while the tab shows downloads.
+    entry("TIDAL Dolby Atmos", R.string.atmos_tidal_dolby_atmos, "Audio", listOf("atmos", "dolby", "spatial", "e-ac-3", "joc", "surround")),
     entry("Preserve Pitch", R.string.settings_preserve_pitch, "Audio", listOf("speed", "tempo", "key", "chipmunk", "semitone")),
     entry("Never Resample Between Tracks", R.string.settings_never_resample_between_tracks, "Audio", listOf("sample rate", "gap", "dac", "bit perfect")),
     entry("USB DAC bit-perfect routing", R.string.settings_usb_dac_bit_perfect_routing, "Audio", listOf("usb", "dac", "exclusive", "bit perfect", "output")),
@@ -240,6 +243,7 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     ),
     entry("Debug log", R.string.settings_view_debug_log, "System", listOf("logs", "diagnostics", "report", "crash"))
         .at(SettingsDestination.Route("debug_log")),
+    entry("Save crash reports", R.string.settings_save_crash_reports, "System", listOf("crash", "anr", "freeze", "diagnostics", "report", "privacy", "downloads", "log")),
     entry("Backup and restore", R.string.settings_backup_restore, "System", listOf("export", "import", "settings", "transfer")),
     entry("Clear cache", R.string.settings_clear_cache, "System", listOf("storage", "space", "images")),
     entry("Check for updates", R.string.settings_check_for_updates, "System", listOf("update", "version", "github", "release", "newer")),

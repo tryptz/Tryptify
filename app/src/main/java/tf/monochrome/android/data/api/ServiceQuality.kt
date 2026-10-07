@@ -1,5 +1,7 @@
 package tf.monochrome.android.data.api
 
+import androidx.annotation.StringRes
+import tf.monochrome.android.R
 import tf.monochrome.android.domain.model.AudioQuality
 import kotlin.math.abs
 
@@ -13,7 +15,9 @@ import kotlin.math.abs
  * only offers the tiers it can actually send. Apple has its own ladder
  * ([tf.monochrome.android.data.preferences.AppleQuality]) and is not here.
  *
- * Kept free of Android types so it can be unit tested.
+ * Kept free of Android types so it can be unit tested; the descriptions are
+ * string resource ids, translated like the rest of Settings. The labels are
+ * codec names and stay as they are in every language.
  */
 object ServiceQuality {
 
@@ -29,28 +33,16 @@ object ServiceQuality {
         /** The codec and tier, e.g. "AAC 320 kbps". */
         val label: String,
         /** What arrives: bit depth and sample rate, or what the codec means. */
-        val detail: String,
+        @StringRes val detail: Int,
     )
 
-    private val TIDAL_HI_RES = Option(
-        AudioQuality.HI_RES, "Hi-Res FLAC",
-        "Up to 24-bit / 192 kHz. CD quality when the album has no hi-res master.",
-    )
-    private val QOBUZ_HI_RES = Option(
-        AudioQuality.HI_RES, "Hi-Res FLAC",
-        "24-bit, up to 192 kHz. CD quality when the release has no hi-res master.",
-    )
-    private val CD_FLAC = Option(AudioQuality.LOSSLESS, "CD FLAC", "16-bit / 44.1 kHz, lossless.")
-    private val DEEZER_CD_FLAC = Option(
-        AudioQuality.LOSSLESS, "CD FLAC",
-        "16-bit / 44.1 kHz, lossless. Deezer's best: it has no hi-res.",
-    )
-    private val AAC_320 = Option(AudioQuality.HIGH, "AAC 320 kbps", "Lossy AAC in an .m4a (MP4) file.")
-    private val AAC_96 = Option(
-        AudioQuality.LOW, "AAC 96 kbps",
-        "Lossy AAC, smallest. For slow or metered connections.",
-    )
-    private val MP3_320 = Option(AudioQuality.HIGH, "MP3 320 kbps", "Lossy MP3.")
+    private val TIDAL_HI_RES = Option(AudioQuality.HI_RES, "Hi-Res FLAC", R.string.quality_detail_tidal_hi_res)
+    private val QOBUZ_HI_RES = Option(AudioQuality.HI_RES, "Hi-Res FLAC", R.string.quality_detail_qobuz_hi_res)
+    private val CD_FLAC = Option(AudioQuality.LOSSLESS, "CD FLAC", R.string.quality_detail_cd_flac)
+    private val DEEZER_CD_FLAC = Option(AudioQuality.LOSSLESS, "CD FLAC", R.string.quality_detail_deezer_cd_flac)
+    private val AAC_320 = Option(AudioQuality.HIGH, "AAC 320 kbps", R.string.quality_detail_aac_320)
+    private val AAC_96 = Option(AudioQuality.LOW, "AAC 96 kbps", R.string.quality_detail_aac_96)
+    private val MP3_320 = Option(AudioQuality.HIGH, "MP3 320 kbps", R.string.quality_detail_mp3_320)
 
     /**
      * TIDAL's Dolby Atmos download choice, listed above its stereo tiers in
@@ -60,10 +52,7 @@ object ServiceQuality {
      * [coerce] never lands on it. Picking it sets the stereo tier to Hi-Res
      * FLAC, which tracks without an Atmos mix download in.
      */
-    val TIDAL_DOWNLOAD_ATMOS = Option(
-        AudioQuality.HI_RES, "Dolby Atmos",
-        "E-AC-3 JOC .m4a, untouched, for tracks with an Atmos mix. The rest download as Hi-Res FLAC.",
-    )
+    val TIDAL_DOWNLOAD_ATMOS = Option(AudioQuality.HI_RES, "Dolby Atmos", R.string.quality_detail_tidal_atmos_download)
 
     /**
      * What [service] offers for [setting], best first. TIDAL downloads stop at

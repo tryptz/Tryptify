@@ -66,7 +66,7 @@ class ServiceQualityTest {
             Setting.entries.forEach { setting ->
                 ServiceQuality.options(service, setting).forEach { option ->
                     assertTrue("$service ${option.quality} label", option.label.isNotBlank())
-                    assertTrue("$service ${option.quality} detail", option.detail.isNotBlank())
+                    assertTrue("$service ${option.quality} detail", option.detail != 0)
                 }
             }
         }

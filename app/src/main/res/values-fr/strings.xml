@@ -1852,4 +1852,15 @@
     <string name="settings_nav_bar_slot_second">Deuxième bouton</string>
     <string name="settings_titles_from_file_names">Titres depuis les noms de fichiers</string>
     <string name="settings_titles_from_file_names_desc">Nomme les morceaux locaux d\'après leurs fichiers plutôt que leurs balises de titre. La modification relance l\'analyse de la bibliothèque.</string>
+    <string name="quality_detail_tidal_hi_res">Jusqu’à 24 bits / 192 kHz. Qualité CD si l’album n’a pas de master haute résolution.</string>
+    <string name="quality_detail_qobuz_hi_res">24 bits, jusqu’à 192 kHz. Qualité CD si la sortie n’a pas de master haute résolution.</string>
+    <string name="quality_detail_cd_flac">16 bits / 44,1 kHz, sans perte.</string>
+    <string name="quality_detail_deezer_cd_flac">16 bits / 44,1 kHz, sans perte. Le mieux que propose Deezer : il n’a pas de haute résolution.</string>
+    <string name="quality_detail_aac_320">AAC avec perte, dans un fichier .m4a (MP4).</string>
+    <string name="quality_detail_aac_96">AAC avec perte, le plus léger. Pour les connexions lentes ou limitées.</string>
+    <string name="quality_detail_mp3_320">MP3 avec perte.</string>
+    <string name="quality_detail_tidal_atmos_download">E-AC-3 JOC en .m4a, intact, pour les titres qui ont un mixage Atmos. Les autres se téléchargent en FLAC Hi-Res.</string>
+    <string name="settings_save_crash_reports">Enregistrer les rapports de plantage</string>
+    <string name="settings_save_crash_reports_on">Un plantage ou un blocage est enregistré dans Téléchargements sous forme de fichier .log, à joindre à un rapport de bug.</string>
+    <string name="settings_save_crash_reports_off">Désactivé : un plantage ne laisse aucun fichier dans Téléchargements.</string>
 </resources>

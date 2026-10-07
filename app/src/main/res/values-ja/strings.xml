@@ -1752,4 +1752,15 @@
     <string name="settings_nav_bar_slot_second">2 つ目のボタン</string>
     <string name="settings_titles_from_file_names">ファイル名をタイトルにする</string>
     <string name="settings_titles_from_file_names_desc">ローカルの曲をタイトルタグではなくファイル名で表示します。変更するとライブラリを再スキャンします。</string>
+    <string name="quality_detail_tidal_hi_res">最大 24 ビット / 192 kHz。アルバムにハイレゾマスターがない場合は CD 音質です。</string>
+    <string name="quality_detail_qobuz_hi_res">24 ビット、最大 192 kHz。リリースにハイレゾマスターがない場合は CD 音質です。</string>
+    <string name="quality_detail_cd_flac">16 ビット / 44.1 kHz、ロスレス。</string>
+    <string name="quality_detail_deezer_cd_flac">16 ビット / 44.1 kHz、ロスレス。Deezer の最高音質です（ハイレゾはありません）。</string>
+    <string name="quality_detail_aac_320">非可逆の AAC（.m4a / MP4 ファイル）。</string>
+    <string name="quality_detail_aac_96">非可逆の AAC、最小サイズ。低速または従量制の回線向けです。</string>
+    <string name="quality_detail_mp3_320">非可逆の MP3。</string>
+    <string name="quality_detail_tidal_atmos_download">Atmos ミックスがある曲は E-AC-3 JOC の .m4a を無加工で保存します。その他の曲は Hi-Res FLAC でダウンロードします。</string>
+    <string name="settings_save_crash_reports">クラッシュレポートを保存</string>
+    <string name="settings_save_crash_reports_on">クラッシュやフリーズが起きると「ダウンロード」フォルダに .log ファイルを保存します。不具合の報告に添付できます。</string>
+    <string name="settings_save_crash_reports_off">オフ：クラッシュしても「ダウンロード」フォルダにファイルは残りません。</string>
 </resources>

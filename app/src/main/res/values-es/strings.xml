@@ -1852,4 +1852,15 @@
     <string name="settings_nav_bar_slot_second">Segundo botón</string>
     <string name="settings_titles_from_file_names">Títulos desde el nombre de archivo</string>
     <string name="settings_titles_from_file_names_desc">Nombra las canciones locales según sus archivos en lugar de sus etiquetas de título. Cambiarlo vuelve a escanear la biblioteca.</string>
+    <string name="quality_detail_tidal_hi_res">Hasta 24 bits / 192 kHz. Calidad CD si el álbum no tiene máster de alta resolución.</string>
+    <string name="quality_detail_qobuz_hi_res">24 bits, hasta 192 kHz. Calidad CD si el lanzamiento no tiene máster de alta resolución.</string>
+    <string name="quality_detail_cd_flac">16 bits / 44,1 kHz, sin pérdida.</string>
+    <string name="quality_detail_deezer_cd_flac">16 bits / 44,1 kHz, sin pérdida. Lo máximo de Deezer: no tiene alta resolución.</string>
+    <string name="quality_detail_aac_320">AAC con pérdida, en un archivo .m4a (MP4).</string>
+    <string name="quality_detail_aac_96">AAC con pérdida, el más ligero. Para conexiones lentas o con datos limitados.</string>
+    <string name="quality_detail_mp3_320">MP3 con pérdida.</string>
+    <string name="quality_detail_tidal_atmos_download">E-AC-3 JOC en .m4a, sin modificar, para las canciones con mezcla Atmos. Las demás se descargan en FLAC Hi-Res.</string>
+    <string name="settings_save_crash_reports">Guardar informes de fallos</string>
+    <string name="settings_save_crash_reports_on">Un fallo o bloqueo se guarda en Descargas como archivo .log, para adjuntarlo a un informe de error.</string>
+    <string name="settings_save_crash_reports_off">Desactivado: un fallo no deja ningún archivo en Descargas.</string>
 </resources>

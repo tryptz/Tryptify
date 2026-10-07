@@ -64,8 +64,16 @@ class SettingsViewModel @Inject constructor(
     private val scanCoordinator: tf.monochrome.android.data.local.scanner.ScanCoordinator,
     private val downloadDao: tf.monochrome.android.data.db.dao.DownloadDao,
     private val updateChecker: tf.monochrome.android.data.update.UpdateChecker,
+    private val crashLogger: tf.monochrome.android.debug.CrashLogger,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
+
+    /** Whether crashes are written to Downloads; see [tf.monochrome.android.debug.CrashLogger]. */
+    val saveCrashReports: StateFlow<Boolean> = crashLogger.saveReports
+
+    fun setSaveCrashReports(enabled: Boolean) {
+        crashLogger.setSaveReports(enabled)
+    }
 
     /** True while any library scan is running — lets Settings disable the
      *  "Rescan Library Now" button and show progress. */

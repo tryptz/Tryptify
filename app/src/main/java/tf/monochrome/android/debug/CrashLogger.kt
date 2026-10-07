@@ -10,6 +10,9 @@ import android.provider.MediaStore
 import android.util.Log
 import androidx.annotation.RequiresApi
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import tf.monochrome.android.BuildConfig
 import java.io.File
 import java.io.PrintWriter
@@ -41,6 +44,13 @@ import javax.inject.Singleton
  * forward the original throwable to the prior handler — losing the crash
  * dialog because of a logging side effect would be worse than losing the
  * log.
+ *
+ * Both reports can be switched off in Settings › System › Diagnostics
+ * ([saveReports]). A native report carries the tombstone's readable strings
+ * and the process's own log, which a user may not want lying in Downloads.
+ * The switch lives in this class's SharedPreferences rather than DataStore:
+ * the handler reads it while the process is dying, synchronously, and
+ * DataStore can only be read by suspending.
  */
 @Singleton
 class CrashLogger @Inject constructor(
@@ -49,13 +59,27 @@ class CrashLogger @Inject constructor(
 ) {
     private var installed = false
 
+    // Opened on first use, off the startup path: the report thread or the
+    // Settings screen, whichever comes first.
+    private val prefs by lazy { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
+
+    private val _saveReports by lazy { MutableStateFlow(prefs.getBoolean(KEY_SAVE_REPORTS, true)) }
+
+    /** Whether crash and native-crash reports are written to Downloads. On unless switched off. */
+    val saveReports: StateFlow<Boolean> get() = _saveReports.asStateFlow()
+
+    fun setSaveReports(enabled: Boolean) {
+        _saveReports.value = enabled
+        prefs.edit().putBoolean(KEY_SAVE_REPORTS, enabled).apply()
+    }
+
     fun install() {
         if (installed) return
         installed = true
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
-                writeCrashDump(thread, throwable)
+                if (_saveReports.value) writeCrashDump(thread, throwable)
             } catch (t: Throwable) {
                 Log.w(TAG, "Crash dump failed", t)
             }
@@ -79,13 +103,13 @@ class CrashLogger @Inject constructor(
      */
     private fun reportPreviousNativeExit() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        if (!_saveReports.value) return
         val activityManager = context.getSystemService(ActivityManager::class.java) ?: return
         val exit = activityManager.getHistoricalProcessExitReasons(context.packageName, 0, 1)
             .firstOrNull() ?: return
         if (exit.reason != ApplicationExitInfo.REASON_CRASH_NATIVE && exit.reason != ApplicationExitInfo.REASON_ANR) return
-        val seen = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (seen.getLong(KEY_LAST_EXIT, 0L) >= exit.timestamp) return
-        seen.edit().putLong(KEY_LAST_EXIT, exit.timestamp).apply()
+        if (prefs.getLong(KEY_LAST_EXIT, 0L) >= exit.timestamp) return
+        prefs.edit().putLong(KEY_LAST_EXIT, exit.timestamp).apply()
 
         val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(exit.timestamp))
         val trace = runCatching { exit.traceInputStream?.use { it.readBytes() } }.getOrNull()
@@ -203,5 +227,6 @@ class CrashLogger @Inject constructor(
         private const val TAG = "CrashLogger"
         private const val PREFS = "crash_logger"
         private const val KEY_LAST_EXIT = "last_reported_exit"
+        private const val KEY_SAVE_REPORTS = "save_reports"
     }
 }

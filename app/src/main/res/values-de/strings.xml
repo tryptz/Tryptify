@@ -1802,4 +1802,15 @@
     <string name="settings_nav_bar_slot_second">Zweite Schaltfläche</string>
     <string name="settings_titles_from_file_names">Titel aus Dateinamen</string>
     <string name="settings_titles_from_file_names_desc">Lokale Songs nach ihren Dateinamen statt nach ihren Titel-Tags benennen. Eine Änderung durchsucht die Mediathek neu.</string>
+    <string name="quality_detail_tidal_hi_res">Bis zu 24 Bit / 192 kHz. CD-Qualität, wenn das Album kein Hi-Res-Master hat.</string>
+    <string name="quality_detail_qobuz_hi_res">24 Bit, bis zu 192 kHz. CD-Qualität, wenn die Veröffentlichung kein Hi-Res-Master hat.</string>
+    <string name="quality_detail_cd_flac">16 Bit / 44,1 kHz, verlustfrei.</string>
+    <string name="quality_detail_deezer_cd_flac">16 Bit / 44,1 kHz, verlustfrei. Das Beste, was Deezer hat: Hi-Res gibt es dort nicht.</string>
+    <string name="quality_detail_aac_320">Verlustbehaftetes AAC in einer .m4a-Datei (MP4).</string>
+    <string name="quality_detail_aac_96">Verlustbehaftetes AAC, am kleinsten. Für langsame oder getaktete Verbindungen.</string>
+    <string name="quality_detail_mp3_320">Verlustbehaftetes MP3.</string>
+    <string name="quality_detail_tidal_atmos_download">E-AC-3 JOC als .m4a, unverändert, für Titel mit Atmos-Mix. Alle anderen werden als Hi-Res-FLAC geladen.</string>
+    <string name="settings_save_crash_reports">Absturzberichte speichern</string>
+    <string name="settings_save_crash_reports_on">Ein Absturz oder Hänger wird als .log-Datei unter Downloads gespeichert, zum Anhängen an einen Fehlerbericht.</string>
+    <string name="settings_save_crash_reports_off">Aus: Ein Absturz hinterlässt keine Datei unter Downloads.</string>
 </resources>

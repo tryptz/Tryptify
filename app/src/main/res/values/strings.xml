@@ -1803,4 +1803,15 @@
     <string name="settings_nav_bar_slot_second">Second button</string>
     <string name="settings_titles_from_file_names">Titles from file names</string>
     <string name="settings_titles_from_file_names_desc">Name local songs after their files instead of their title tags. Changing this rescans the library.</string>
+    <string name="quality_detail_tidal_hi_res">Up to 24-bit / 192 kHz. CD quality when the album has no hi-res master.</string>
+    <string name="quality_detail_qobuz_hi_res">24-bit, up to 192 kHz. CD quality when the release has no hi-res master.</string>
+    <string name="quality_detail_cd_flac">16-bit / 44.1 kHz, lossless.</string>
+    <string name="quality_detail_deezer_cd_flac">16-bit / 44.1 kHz, lossless. Deezer\'s best: it has no hi-res.</string>
+    <string name="quality_detail_aac_320">Lossy AAC in an .m4a (MP4) file.</string>
+    <string name="quality_detail_aac_96">Lossy AAC, smallest. For slow or metered connections.</string>
+    <string name="quality_detail_mp3_320">Lossy MP3.</string>
+    <string name="quality_detail_tidal_atmos_download">E-AC-3 JOC .m4a, untouched, for tracks with an Atmos mix. The rest download as Hi-Res FLAC.</string>
+    <string name="settings_save_crash_reports">Save crash reports</string>
+    <string name="settings_save_crash_reports_on">A crash or freeze is saved to Downloads as a .log file, to attach to a bug report.</string>
+    <string name="settings_save_crash_reports_off">Off: a crash leaves no file in Downloads.</string>
 </resources>

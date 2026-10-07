@@ -164,6 +164,48 @@ object WhatsNew {
                     title = "Titles from file names",
                     body = "Settings › Library can name local songs after their files instead of their title tags, for files whose tags are wrong or shared. Renaming a file then renames the song.",
                 ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYBACK,
+                    title = "TIDAL Dolby Atmos",
+                    body = "Settings › Audio can play TIDAL's Dolby Atmos mix of a track that has one. Tracks with the mix carry the Dolby Atmos badge.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYBACK,
+                    title = "Play alongside other apps",
+                    body = "Settings › Audio can keep music playing under a game or a video, instead of pausing whenever another app makes a sound.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = DOWNLOADS,
+                    title = "Dolby Atmos downloads",
+                    body = "TIDAL's download quality can be Dolby Atmos: a track with an Atmos mix downloads it as an untouched .m4a, and the rest as Hi-Res FLAC.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = DOWNLOADS,
+                    title = "Artist and album folders",
+                    body = "Downloads to a folder you picked are filed as Artist / Album / 01. Title, with one cover.jpg per album and tags other players can group by.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = APP,
+                    title = "Crash reports you can switch off",
+                    body = "A crash or freeze is saved to Downloads as a .log file to attach to a bug report. Settings › System › Diagnostics can turn that off.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYBACK,
+                    title = "Quality per service",
+                    body = "TIDAL, Qobuz and Deezer each stream and download in a quality of their own, named in their own terms: AAC or MP3, CD or Hi-Res FLAC. A Streaming | Download switch picks which you are setting.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PIPELINE,
+                    title = "16-bit FLAC plays cleanly on hi-res output",
+                    body = "On some phones a 16-bit FLAC on the hi-res output played as loud static at double speed, because the decoder said float and wrote 16-bit. It is caught and read as 16-bit now.",
+                ),
             ),
         ),
         WhatsNewRelease(

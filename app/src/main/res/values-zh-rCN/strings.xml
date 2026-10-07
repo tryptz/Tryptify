@@ -1752,4 +1752,15 @@
     <string name="settings_nav_bar_slot_second">第二个按钮</string>
     <string name="settings_titles_from_file_names">用文件名作为标题</string>
     <string name="settings_titles_from_file_names_desc">本地歌曲使用文件名而不是标题标签命名。更改后会重新扫描资料库。</string>
+    <string name="quality_detail_tidal_hi_res">最高 24 位 / 192 kHz。专辑没有高解析度母带时为 CD 音质。</string>
+    <string name="quality_detail_qobuz_hi_res">24 位，最高 192 kHz。发行版没有高解析度母带时为 CD 音质。</string>
+    <string name="quality_detail_cd_flac">16 位 / 44.1 kHz，无损。</string>
+    <string name="quality_detail_deezer_cd_flac">16 位 / 44.1 kHz，无损。这是 Deezer 的最高音质：它没有高解析度。</string>
+    <string name="quality_detail_aac_320">有损 AAC，.m4a（MP4）文件。</string>
+    <string name="quality_detail_aac_96">有损 AAC，体积最小。适合慢速或按流量计费的网络。</string>
+    <string name="quality_detail_mp3_320">有损 MP3。</string>
+    <string name="quality_detail_tidal_atmos_download">有 Atmos 混音的歌曲保存为原样的 E-AC-3 JOC .m4a。其余歌曲下载为 Hi-Res FLAC。</string>
+    <string name="settings_save_crash_reports">保存崩溃报告</string>
+    <string name="settings_save_crash_reports_on">崩溃或无响应时，会在“下载”文件夹中保存一个 .log 文件，可附在错误报告中。</string>
+    <string name="settings_save_crash_reports_off">已关闭：崩溃时不会在“下载”文件夹中留下文件。</string>
 </resources>
