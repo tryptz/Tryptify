@@ -19,6 +19,14 @@ interface LocalMediaDao {
     fun getAllTracks(): Flow<List<LocalTrackEntity>>
 
     /**
+     * Every track whose file is under folder [prefix] (a path ending in "/").
+     * substr rather than LIKE, so a "%" or "_" in a folder name is just a
+     * character.
+     */
+    @Query("SELECT * FROM local_tracks WHERE substr(filePath, 1, length(:prefix)) = :prefix")
+    fun observeTracksUnder(prefix: String): Flow<List<LocalTrackEntity>>
+
+    /**
      * The songs list, one page at a time.
      *
      * Eight queries rather than one @RawQuery with the ORDER BY pasted in.

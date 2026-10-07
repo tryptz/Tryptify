@@ -1,12 +1,18 @@
 package tf.monochrome.android.ui.library
 
+import android.provider.DocumentsContract
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +25,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tf.monochrome.android.data.db.dao.DownloadDao
 import tf.monochrome.android.data.db.entity.DownloadedTrackEntity
-import tf.monochrome.android.data.downloads.DownloadLayout
+import tf.monochrome.android.data.downloads.SafPaths
+import tf.monochrome.android.data.local.db.LocalMediaDao
+import tf.monochrome.android.data.local.db.LocalTrackEntity
+import tf.monochrome.android.data.local.scanner.MediaScanner
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.AudioCodec
 import tf.monochrome.android.domain.model.AudioQuality
@@ -48,34 +57,50 @@ class DownloadsViewModel @Inject constructor(
     private val appCtx: android.app.Application,
     private val downloadDao: DownloadDao,
     private val preferences: PreferencesManager,
+    private val localMediaDao: LocalMediaDao,
 ) : ViewModel() {
 
     /**
-     * Combined view of downloads: every track tracked by Room
-     * (downloaded by this app) plus every audio file present in the
-     * user-selected SAF folder that the app didn't write itself
-     * (sideloaded files, prior installs, manual copies). Sideloaded
-     * files are surfaced as synthetic DownloadedTrackEntity rows so
-     * the rest of the screen — album grouping, tap-to-play, delete —
-     * works uniformly. The synthetic id is a stable hash of the URI
-     * so re-scans don't shuffle the list.
+     * Combined view of downloads: every track tracked by Room (downloaded by
+     * this app) plus every other audio file in the download folder
+     * (sideloaded files, prior installs, manual copies), as synthetic
+     * DownloadedTrackEntity rows so the rest of the screen — album grouping,
+     * tap-to-play, delete — works uniformly.
+     *
+     * The other files come from the local library, which has already scanned
+     * them with their tags, rather than from a walk of the SAF folder of its
+     * own: that walk took seconds, and the list waited for it. Both halves
+     * are Room queries, so the list arrives at once. Null until it does, so
+     * the screen does not claim there are no downloads while still looking.
      */
-    val downloadedTracks: StateFlow<List<DownloadedTrackEntity>> =
-        combine(
-            downloadDao.getDownloadedTracks(),
-            preferences.downloadFolderUri,
-        ) { roomRows, folderUri ->
-            val sideloaded = scanFolderForSideloadedTracks(folderUri, roomRows)
-            // Newest first overall; synthetic rows bias to file timestamp.
-            (roomRows + sideloaded).sortedByDescending { it.downloadedAt }
+    private val roomTracks = downloadDao.getDownloadedTracks()
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private val folderTracks: Flow<List<DownloadedTrackEntity>> =
+        preferences.downloadFolderUri
+            .map { folder -> folder?.let(SafPaths::absolutePath)?.trimEnd('/')?.plus('/') }
+            .distinctUntilChanged()
+            .flatMapLatest { prefix ->
+                // No folder picked: downloads are in app storage, which the
+                // local library does not scan, and nothing else is there.
+                if (prefix == null) flowOf(emptyList())
+                else localMediaDao.observeTracksUnder(prefix).map { rows -> rows.map { it.toDownloadedTrack() } }
+            }
+
+    val downloadedTracks: StateFlow<List<DownloadedTrackEntity>?> =
+        combine(roomTracks, folderTracks) { roomRows, folderRows ->
+            // A file this app downloaded is Room's row, not a second one.
+            val known = roomRows.mapTo(HashSet()) { SafPaths.absolutePath(it.filePath) ?: it.filePath }
+            // Newest first overall; folder rows bias to file timestamp.
+            (roomRows + folderRows.filter { it.filePath !in known }).sortedByDescending { it.downloadedAt }
         }
-            .flowOn(Dispatchers.IO)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val albumGroups: StateFlow<List<DownloadedAlbumGroup>> =
         downloadedTracks
             .map { entities ->
-                entities
+                entities.orEmpty()
                     .groupBy { (it.albumTitle ?: SINGLES_LABEL) to it.artistName }
                     .map { (key, list) ->
                         val cover = list.firstNotNullOfOrNull { it.albumCover }
@@ -93,125 +118,29 @@ class DownloadsViewModel @Inject constructor(
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /**
-     * Walk the SAF tree the user picked as the download folder and surface
-     * any audio file not already represented in Room. Slow on large folders
-     * (DocumentFile.listFiles round-trips through ContentResolver), so we
-     * only run it from the combine() flow which is dispatched on IO.
-     */
-    private fun scanFolderForSideloadedTracks(
-        folderUriString: String?,
-        knownRoomRows: List<DownloadedTrackEntity>,
-    ): List<DownloadedTrackEntity> {
-        if (folderUriString.isNullOrBlank()) return emptyList()
-        val tree = runCatching {
-            DocumentFile.fromTreeUri(appCtx, folderUriString.toUri())
-        }.getOrNull() ?: return emptyList()
-        if (!tree.canRead()) return emptyList()
-
-        val knownPaths = knownRoomRows.mapTo(HashSet()) { it.filePath }
-        val out = mutableListOf<DownloadedTrackEntity>()
-        scanDirectory(tree, emptyList(), knownPaths, out)
-        return out
-    }
-
-    /**
-     * One folder of the scan, then the folders inside it. Downloads are filed
-     * as Artist / Album / Disc N (see DownloadLayout), so the scan goes that
-     * deep and no deeper. [folders] is the path from the download folder to
-     * [dir].
-     */
-    private fun scanDirectory(
-        dir: DocumentFile,
-        folders: List<String>,
-        knownPaths: Set<String>,
-        out: MutableList<DownloadedTrackEntity>,
-    ) {
-        // listFiles() is the expensive call; iterating the local list
-        // afterwards is free.
-        val children = dir.listFiles().filter { it.canRead() }
-        val files = children.filter { it.isFile }
-
-        // Folder-level art (cover.jpg / folder.png / albumart.webp). The
-        // TrackDownloader drops one of these in each album folder so the
-        // system MediaScanner picks it up. We match by stem so any of the four
-        // common names work.
-        val folderArtUri = files
-            .firstOrNull { f ->
-                val n = f.name?.lowercase() ?: return@firstOrNull false
-                val stem = n.substringBeforeLast('.')
-                val ext = n.substringAfterLast('.', "")
-                stem in COVER_STEMS && ext in IMAGE_EXTENSIONS
-            }
-            ?.uri
-            ?.toString()
-
-        // Per-track sidecar art (e.g. "Artist - Title.jpg" next to
-        // "Artist - Title.flac"). Index by stem so the audio loop is O(n).
-        val sidecarArtByStem: Map<String, String> = files.asSequence()
-            .mapNotNull { f ->
-                val n = f.name ?: return@mapNotNull null
-                val ext = n.substringAfterLast('.', "").lowercase()
-                if (ext !in IMAGE_EXTENSIONS) return@mapNotNull null
-                val stem = n.substringBeforeLast('.')
-                if (stem.lowercase() in COVER_STEMS) return@mapNotNull null
-                stem to f.uri.toString()
-            }
-            .toMap()
-
-        for (file in files) {
-            val name = file.name ?: continue
-            if (!isAudioFile(name, file.type)) continue
-            val pathString = file.uri.toString()
-            if (pathString in knownPaths) continue
-            val stem = name.substringBeforeLast('.')
-            val cover = sidecarArtByStem[stem] ?: folderArtUri
-            out += syntheticEntityFor(file, pathString, name, folders, cover)
-        }
-
-        if (folders.size < MAX_SCAN_DEPTH) {
-            for (sub in children) {
-                if (!sub.isDirectory) continue
-                val subName = sub.name ?: continue
-                scanDirectory(sub, folders + subName, knownPaths, out)
-            }
-        }
-    }
-
-    private fun isAudioFile(name: String, mime: String?): Boolean {
-        if (mime?.startsWith("audio/") == true) return true
-        val lower = name.lowercase()
-        return AUDIO_EXTENSIONS.any { lower.endsWith(".$it") }
-    }
-
-    private fun syntheticEntityFor(
-        file: DocumentFile,
-        path: String,
-        name: String,
-        folders: List<String>,
-        coverUri: String?,
-    ): DownloadedTrackEntity {
-        // Artist and album from the folders a download is filed in, the title
-        // from the file name without its track number. A file at the top of
-        // the folder is read the old flat way, "<artist> - <title>".
-        val described = DownloadLayout.describe(folders, name)
-        // Stable id derived from the URI so successive scans don't drift the
-        // LazyColumn keying. Always negative so it can't collide with a real
-        // catalog track id (those are positive Longs from TIDAL/Qobuz).
-        val syntheticId = -((path.hashCode().toLong() and 0x7FFFFFFFL) or 1L)
-        return DownloadedTrackEntity(
-            id = syntheticId,
-            title = described.title,
-            duration = 0,
-            artistName = described.artist,
-            albumTitle = described.album,
-            albumCover = coverUri,
-            filePath = path,
-            quality = AudioQuality.LOSSLESS.name,
-            sizeBytes = file.length(),
-            downloadedAt = file.lastModified().takeIf { it > 0 } ?: 0L,
-        )
-    }
+    /** A local-library track in the download folder, as a Downloads row. */
+    private fun LocalTrackEntity.toDownloadedTrack(): DownloadedTrackEntity = DownloadedTrackEntity(
+        // Stable id derived from the path so the list keeps its keys. Always
+        // negative so it can't collide with a real catalog track id (those
+        // are positive Longs from TIDAL/Qobuz).
+        id = -((filePath.hashCode().toLong() and 0x7FFFFFFFL) or 1L),
+        title = title ?: MediaScanner.titleFromPath(filePath),
+        duration = durationSeconds,
+        artistName = artist ?: albumArtist ?: "Unknown Artist",
+        albumTitle = album,
+        albumCover = artworkCacheKey,
+        filePath = filePath,
+        quality = when {
+            !codec.equals("FLAC", ignoreCase = true) && !codec.equals("ALAC", ignoreCase = true) -> AudioQuality.HIGH
+            (bitDepth ?: 16) > 16 -> AudioQuality.HI_RES
+            else -> AudioQuality.LOSSLESS
+        }.name,
+        sizeBytes = fileSizeBytes,
+        // MediaStore dates files in seconds; download rows in milliseconds.
+        downloadedAt = if (lastModified in 1 until 100_000_000_000L) lastModified * 1000 else lastModified,
+        isThxSpatialAudio = isThxSpatialAudio,
+        isDolbyAtmos = isDolbyAtmos,
+    )
 
     // One-shot user messages (e.g. a delete that couldn't remove the file).
     private val _messages = MutableSharedFlow<tf.monochrome.android.ui.components.UiText>(extraBufferCapacity = 4)
@@ -243,7 +172,7 @@ class DownloadsViewModel @Inject constructor(
                 }
             } else {
                 val file = File(track.filePath)
-                !file.exists() || file.delete()
+                !file.exists() || file.delete() || deleteThroughFolder(track.filePath)
             }
             // App-written downloads live in Room; sideloaded rows don't, so this
             // is a harmless no-op for them (they leave once the file is gone).
@@ -251,21 +180,22 @@ class DownloadsViewModel @Inject constructor(
             fileRemoved
         }
 
+    /**
+     * Deletes file [path] through the download folder's SAF grant. A file the
+     * app did not write is out of reach of File.delete on Android 11+, but the
+     * folder picked for downloads was granted with write access.
+     */
+    private suspend fun deleteThroughFolder(path: String): Boolean = runCatching {
+        val tree = preferences.downloadFolderUri.first()?.toUri() ?: return false
+        val documentId = SafPaths.documentIdOfPath(path) ?: return false
+        DocumentsContract.deleteDocument(
+            appCtx.contentResolver,
+            DocumentsContract.buildDocumentUriUsingTree(tree, documentId),
+        )
+    }.getOrDefault(false)
+
     companion object {
         const val SINGLES_LABEL = "Singles"
-        // Artist / Album / Disc N below the download folder.
-        private const val MAX_SCAN_DEPTH = 3
-        // Lower-case extensions TrackDownloader may produce + the formats
-        // users typically sideload. Mime-type sniff still wins; this list
-        // catches files SAF reports without a type (common on some
-        // providers).
-        private val AUDIO_EXTENSIONS = setOf(
-            "flac", "alac", "mp3", "m4a", "aac", "ogg", "opus", "wav", "wma",
-        )
-        // Common folder-level cover filenames (see also Android's MediaScanner
-        // and most desktop tag editors). TrackDownloader writes "cover.jpg" in each album folder.
-        private val COVER_STEMS = setOf("cover", "folder", "albumart", "album")
-        private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
     }
 }
 
