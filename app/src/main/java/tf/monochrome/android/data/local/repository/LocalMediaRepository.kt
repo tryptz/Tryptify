@@ -19,6 +19,7 @@ import tf.monochrome.android.data.local.db.LocalGenreEntity
 import tf.monochrome.android.data.local.db.LocalMediaDao
 import tf.monochrome.android.data.local.db.LocalTrackEntity
 import tf.monochrome.android.data.local.db.ScanStateEntity
+import tf.monochrome.android.data.local.db.folderRangeEnd
 import tf.monochrome.android.data.local.scanner.MediaScanner
 import tf.monochrome.android.data.local.scanner.ScanProgress
 import tf.monochrome.android.domain.model.AudioCodec
@@ -229,6 +230,25 @@ class LocalMediaRepository @Inject constructor(
     fun getSubfolders(parentPath: String): Flow<List<LocalFolderEntity>> =
         localMediaDao.getSubfolders(parentPath)
 
+    /** Every song anywhere under [folderPath], for playing the whole folder. */
+    suspend fun getTracksUnder(folderPath: String): List<UnifiedTrack> = withContext(Dispatchers.Default) {
+        val prefix = folderPath.trimEnd('/') + "/"
+        localMediaDao.getTracksUnder(prefix, folderRangeEnd(prefix)).map { it.toUnifiedTrack() }
+    }
+
+    /** Folder path → newest file under it, for each folder directly inside [folderPath]. */
+    fun observeNewestInSubfolders(folderPath: String): Flow<Map<String, Long>> {
+        val prefix = folderPath.trimEnd('/') + "/"
+        return localMediaDao.observeNewestInSubfolders(prefix, folderRangeEnd(prefix))
+            .map { rows -> rows.associate { it.path to it.newest } }
+    }
+
+    /** The newest file anywhere under [folderPath], or null when there is none. */
+    suspend fun newestUnder(folderPath: String): Long? {
+        val prefix = folderPath.trimEnd('/') + "/"
+        return localMediaDao.newestUnder(prefix, folderRangeEnd(prefix))
+    }
+
     // ── Scan State ──────────────────────────────────────────────────
 
     suspend fun getScanState(): ScanStateEntity? = localMediaDao.getScanState()
@@ -300,7 +320,8 @@ class LocalMediaRepository @Inject constructor(
                     bitDepth = bitDepth
                 ),
                 sourceType = SourceType.LOCAL,
-                dateModified = lastModified
+                dateModified = lastModified,
+                fileSizeBytes = fileSizeBytes,
             )
         }
 

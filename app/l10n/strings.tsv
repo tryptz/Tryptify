@@ -1783,3 +1783,12 @@ quality_detail_tidal_atmos_download	E-AC-3 JOC .m4a, untouched, for tracks with 
 settings_save_crash_reports	Save crash reports	保存崩溃报告	クラッシュレポートを保存	Enregistrer les rapports de plantage	Guardar informes de fallos	Çökme raporlarını kaydet	Absturzberichte speichern
 settings_save_crash_reports_on	A crash or freeze is saved to Downloads as a .log file, to attach to a bug report.	崩溃或无响应时，会在“下载”文件夹中保存一个 .log 文件，可附在错误报告中。	クラッシュやフリーズが起きると「ダウンロード」フォルダに .log ファイルを保存します。不具合の報告に添付できます。	Un plantage ou un blocage est enregistré dans Téléchargements sous forme de fichier .log, à joindre à un rapport de bug.	Un fallo o bloqueo se guarda en Descargas como archivo .log, para adjuntarlo a un informe de error.	Bir çökme veya donma, hata raporuna eklemek için İndirilenler klasörüne .log dosyası olarak kaydedilir.	Ein Absturz oder Hänger wird als .log-Datei unter Downloads gespeichert, zum Anhängen an einen Fehlerbericht.
 settings_save_crash_reports_off	Off: a crash leaves no file in Downloads.	已关闭：崩溃时不会在“下载”文件夹中留下文件。	オフ：クラッシュしても「ダウンロード」フォルダにファイルは残りません。	Désactivé : un plantage ne laisse aucun fichier dans Téléchargements.	Desactivado: un fallo no deja ningún archivo en Descargas.	Kapalı: çökme İndirilenler klasöründe dosya bırakmaz.	Aus: Ein Absturz hinterlässt keine Datei unter Downloads.
+sort_file_name	File name	文件名	ファイル名	Nom du fichier	Nombre de archivo	Dosya adı	Dateiname
+sort_year	Year	年份	年	Année	Año	Yıl	Jahr
+sort_date_modified	Date modified	修改日期	更新日時	Date de modification	Fecha de modificación	Değiştirilme tarihi	Änderungsdatum
+sort_quality	Quality	音质	音質	Qualité	Calidad	Kalite	Qualität
+sort_file_size	File size	文件大小	ファイルサイズ	Taille du fichier	Tamaño del archivo	Dosya boyutu	Dateigröße
+sort_song_count	Number of songs	歌曲数量	曲数	Nombre de titres	Número de canciones	Şarkı sayısı	Anzahl der Songs
+action_shuffle	Shuffle	随机播放	シャッフル	Aléatoire	Aleatorio	Karıştır	Zufallswiedergabe
+folder_subfolders_included	Subfolders included	包括子文件夹	サブフォルダを含む	Sous-dossiers compris	Incluye subcarpetas	Alt klasörler dahil	Mit Unterordnern
+folder_go_to	Go to %1$s	前往 %1$s	%1$s へ移動	Aller à %1$s	Ir a %1$s	%1$s klasörüne git	Zu %1$s wechseln

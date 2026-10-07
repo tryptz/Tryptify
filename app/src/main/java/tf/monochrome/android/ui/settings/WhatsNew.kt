@@ -169,6 +169,12 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "Better folder browsing",
+                    body = "Sort folders by name, songs or newest file, and songs by file name, year, date, format, quality or size; the choice sticks. Tap the path to jump up, and Play or Shuffle a folder with everything inside it.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = TIDAL,
                     title = "Dolby Atmos badge",
                     body = "TIDAL songs and albums with a Dolby Atmos mix carry the badge, and the player shows it while that mix plays. The TIDAL Dolby Atmos switch is in Settings › Audio now too.",
@@ -268,6 +274,12 @@ object WhatsNew {
                     section = LIBRARY,
                     title = "Rescans run to the end",
                     body = "Rescan Library keeps going after you leave Settings, instead of stopping halfway.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LIBRARY,
+                    title = "Folders play in their real order",
+                    body = "Songs in a folder go in album, disc and track order, and files without track numbers in file-name order, instead of alphabetically by title.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,

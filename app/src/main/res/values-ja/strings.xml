@@ -1763,4 +1763,13 @@
     <string name="settings_save_crash_reports">クラッシュレポートを保存</string>
     <string name="settings_save_crash_reports_on">クラッシュやフリーズが起きると「ダウンロード」フォルダに .log ファイルを保存します。不具合の報告に添付できます。</string>
     <string name="settings_save_crash_reports_off">オフ：クラッシュしても「ダウンロード」フォルダにファイルは残りません。</string>
+    <string name="sort_file_name">ファイル名</string>
+    <string name="sort_year">年</string>
+    <string name="sort_date_modified">更新日時</string>
+    <string name="sort_quality">音質</string>
+    <string name="sort_file_size">ファイルサイズ</string>
+    <string name="sort_song_count">曲数</string>
+    <string name="action_shuffle">シャッフル</string>
+    <string name="folder_subfolders_included">サブフォルダを含む</string>
+    <string name="folder_go_to">%1$s へ移動</string>
 </resources>

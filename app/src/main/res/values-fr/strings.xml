@@ -1863,4 +1863,13 @@
     <string name="settings_save_crash_reports">Enregistrer les rapports de plantage</string>
     <string name="settings_save_crash_reports_on">Un plantage ou un blocage est enregistré dans Téléchargements sous forme de fichier .log, à joindre à un rapport de bug.</string>
     <string name="settings_save_crash_reports_off">Désactivé : un plantage ne laisse aucun fichier dans Téléchargements.</string>
+    <string name="sort_file_name">Nom du fichier</string>
+    <string name="sort_year">Année</string>
+    <string name="sort_date_modified">Date de modification</string>
+    <string name="sort_quality">Qualité</string>
+    <string name="sort_file_size">Taille du fichier</string>
+    <string name="sort_song_count">Nombre de titres</string>
+    <string name="action_shuffle">Aléatoire</string>
+    <string name="folder_subfolders_included">Sous-dossiers compris</string>
+    <string name="folder_go_to">Aller à %1$s</string>
 </resources>

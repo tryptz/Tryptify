@@ -15,12 +15,15 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import tf.monochrome.android.data.collections.db.CollectionEntity
 import tf.monochrome.android.data.collections.repository.CollectionRepository
 import tf.monochrome.android.data.local.db.LocalFacetTally
@@ -84,6 +87,21 @@ class LocalLibraryViewModel @Inject constructor(
     private val _artistSort = MutableStateFlow(LibrarySort(LibrarySortKey.NAME))
     val artistSort: StateFlow<LibrarySort> = _artistSort.asStateFlow()
 
+    // Above every flow that reads it: Kotlin initialises properties in source
+    // order, and a combine built before this existed would capture a null.
+    private val _folderSort = MutableStateFlow(FolderSort())
+    /** The one song-and-folder sort the Folders list and every folder screen use. */
+    val folderSort: StateFlow<FolderSort> = _folderSort.asStateFlow()
+
+    fun setFolderSort(sort: FolderSort) {
+        _folderSort.value = sort
+        viewModelScope.launch { preferencesManager.setFolderSort(sort.encode()) }
+    }
+
+    /** The phone's own storage, where folder crumbs start for a folder outside every root. */
+    @Suppress("DEPRECATION")
+    val deviceStorageRoot: String = android.os.Environment.getExternalStorageDirectory().path
+
     init {
         // Restore persisted sort selections so they survive process death and
         // app restarts instead of snapping back to Name / A→Z.
@@ -95,6 +113,9 @@ class LocalLibraryViewModel @Inject constructor(
         }
         viewModelScope.launch {
             preferencesManager.artistSort.collect { _artistSort.value = parseSort(it) }
+        }
+        viewModelScope.launch {
+            preferencesManager.folderSort.collect { _folderSort.value = FolderSort.decode(it) }
         }
         // One-off repair for libraries indexed before the folder tree included
         // its intermediate folders. No-ops on every launch after the first.
@@ -241,6 +262,47 @@ class LocalLibraryViewModel @Inject constructor(
     }.flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /**
+     * [displayRootFolders] in the folder sort, for the Folders list. A root's
+     * date is the newest file under it, asked only while that sort is chosen.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val sortedRootFolders: StateFlow<List<FolderRoot>> = combine(displayRootFolders, folderSort) { roots, sort -> roots to sort }
+        .mapLatest { (roots, sort) ->
+            val newest = if (sort.folders == SubfolderOrder.DATE_MODIFIED) {
+                roots.associate { it.path to localMediaRepository.newestUnder(it.path) }
+            } else {
+                emptyMap()
+            }
+            sortFolders(
+                roots, sort.folders, sort.foldersAscending,
+                name = { it.displayName },
+                songCount = { it.trackCount },
+                newest = { newest[it.path] },
+            )
+        }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Where a folder screen's path crumbs may start: the Folders list's roots. */
+    val crumbRoots: StateFlow<List<FolderCrumb>> = displayRootFolders
+        .map { roots -> roots.map { FolderCrumb(it.displayName, it.path) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /**
+     * Every song in [folderPath] and the folders inside it, in the folder
+     * sort (see [folderPlayOrder]), handed to [onReady] to play or shuffle.
+     * A folder with nothing under it hands over nothing.
+     */
+    fun loadFolderForPlay(folderPath: String, onReady: (List<UnifiedTrack>) -> Unit) {
+        viewModelScope.launch {
+            val tracks = localMediaRepository.getTracksUnder(folderPath)
+            val sort = folderSort.value
+            val ordered = withContext(Dispatchers.Default) { folderPlayOrder(folderPath, tracks, sort) }
+            if (ordered.isNotEmpty()) onReady(ordered)
+        }
+    }
+
     fun addUserFolderRoot(path: String) {
         if (path.isBlank()) return
         viewModelScope.launch {
@@ -311,15 +373,38 @@ class LocalLibraryViewModel @Inject constructor(
     private val subfolderFlows = mutableMapOf<String, StateFlow<List<LocalFolderEntity>>>()
     private val folderTrackFlows = mutableMapOf<String, StateFlow<List<UnifiedTrack>>>()
 
+    /**
+     * The folders inside [parentPath], in the folder sort. Their dates (the
+     * newest file under each) are only queried while that is the sort.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
     fun getSubfolders(parentPath: String): StateFlow<List<LocalFolderEntity>> =
         subfolderFlows.getOrPut(parentPath) {
-            localMediaRepository.getSubfolders(parentPath)
+            val dates = folderSort
+                .map { it.folders == SubfolderOrder.DATE_MODIFIED }
+                .distinctUntilChanged()
+                .flatMapLatest { needed ->
+                    if (needed) localMediaRepository.observeNewestInSubfolders(parentPath) else flowOf(emptyMap())
+                }
+            combine(localMediaRepository.getSubfolders(parentPath), folderSort, dates) { folders, sort, newest ->
+                sortFolders(
+                    folders, sort.folders, sort.foldersAscending,
+                    name = { it.displayName },
+                    songCount = { it.trackCount },
+                    newest = { newest[it.path] },
+                )
+            }
+                .flowOn(Dispatchers.Default)
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
         }
 
+    /** The songs directly in [folderPath], in the folder sort. */
     fun getTracksInFolder(folderPath: String): StateFlow<List<UnifiedTrack>> =
         folderTrackFlows.getOrPut(folderPath) {
-            localMediaRepository.getTracksInFolder(folderPath)
+            combine(localMediaRepository.getTracksInFolder(folderPath), folderSort) { tracks, sort ->
+                sortFolderTracks(tracks, sort.tracks, sort.tracksAscending)
+            }
+                .flowOn(Dispatchers.Default)
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
         }
 

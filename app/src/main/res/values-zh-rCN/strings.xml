@@ -1763,4 +1763,13 @@
     <string name="settings_save_crash_reports">保存崩溃报告</string>
     <string name="settings_save_crash_reports_on">崩溃或无响应时，会在“下载”文件夹中保存一个 .log 文件，可附在错误报告中。</string>
     <string name="settings_save_crash_reports_off">已关闭：崩溃时不会在“下载”文件夹中留下文件。</string>
+    <string name="sort_file_name">文件名</string>
+    <string name="sort_year">年份</string>
+    <string name="sort_date_modified">修改日期</string>
+    <string name="sort_quality">音质</string>
+    <string name="sort_file_size">文件大小</string>
+    <string name="sort_song_count">歌曲数量</string>
+    <string name="action_shuffle">随机播放</string>
+    <string name="folder_subfolders_included">包括子文件夹</string>
+    <string name="folder_go_to">前往 %1$s</string>
 </resources>

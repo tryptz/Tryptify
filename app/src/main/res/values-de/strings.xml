@@ -1813,4 +1813,13 @@
     <string name="settings_save_crash_reports">Absturzberichte speichern</string>
     <string name="settings_save_crash_reports_on">Ein Absturz oder Hänger wird als .log-Datei unter Downloads gespeichert, zum Anhängen an einen Fehlerbericht.</string>
     <string name="settings_save_crash_reports_off">Aus: Ein Absturz hinterlässt keine Datei unter Downloads.</string>
+    <string name="sort_file_name">Dateiname</string>
+    <string name="sort_year">Jahr</string>
+    <string name="sort_date_modified">Änderungsdatum</string>
+    <string name="sort_quality">Qualität</string>
+    <string name="sort_file_size">Dateigröße</string>
+    <string name="sort_song_count">Anzahl der Songs</string>
+    <string name="action_shuffle">Zufallswiedergabe</string>
+    <string name="folder_subfolders_included">Mit Unterordnern</string>
+    <string name="folder_go_to">Zu %1$s wechseln</string>
 </resources>

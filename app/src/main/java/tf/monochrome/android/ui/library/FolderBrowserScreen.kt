@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -22,10 +24,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,6 +44,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,16 +67,14 @@ import tf.monochrome.android.ui.components.bounceCombinedClick
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.components.TrackArtistAlbumLine
 import tf.monochrome.android.ui.theme.MonoDimens
-import tf.monochrome.android.ui.components.TrackListToolbar
-import tf.monochrome.android.ui.components.TrackSort
-import tf.monochrome.android.ui.components.TrackSortSaver
 import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
-import tf.monochrome.android.ui.components.applyUnifiedSearchAndSort
+import tf.monochrome.android.ui.components.applyUnifiedQuery
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openAlbum
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.navigation.navigateSafe
+import tf.monochrome.android.ui.navigation.openAncestorFolder
 import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import tf.monochrome.android.ui.navigation.LocalNowPlayingTrackId
 import tf.monochrome.android.ui.components.SearchOverlay
@@ -86,18 +94,33 @@ fun FolderBrowserScreen(
     onAddToQueue: (UnifiedTrack) -> Unit,
     playerViewModel: PlayerViewModel
 ) {
+    // Both arrive in the folder sort, which the view model applies and keeps.
     val subfolders by viewModel.getSubfolders(folderPath).collectAsStateWithLifecycle()
     val tracks by viewModel.getTracksInFolder(folderPath).collectAsStateWithLifecycle()
+    val folderSort by viewModel.folderSort.collectAsStateWithLifecycle()
+    val crumbRoots by viewModel.crumbRoots.collectAsStateWithLifecycle()
 
     val displayName = folderPath.substringAfterLast('/')
+    val crumbs = remember(folderPath, crumbRoots) {
+        folderCrumbs(folderPath, crumbRoots, viewModel.deviceStorageRoot)
+    }
 
     var listQuery by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
     var searchOpen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
-    var listSort by androidx.compose.runtime.saveable.rememberSaveable(stateSaver = TrackSortSaver) {
-        mutableStateOf(TrackSort())
-    }
-    val visibleTracks = remember(tracks, listQuery, listSort) {
-        tracks.applyUnifiedSearchAndSort(listQuery, listSort)
+    val visibleTracks = remember(tracks, listQuery) { tracks.applyUnifiedQuery(listQuery) }
+
+    // Play and Shuffle take the folder and every folder inside it, in the
+    // folder sort. While a search is open they take what it shows instead:
+    // the buttons play what is on screen.
+    fun play(path: String, shuffle: Boolean) {
+        val start: (List<UnifiedTrack>) -> Unit = { list ->
+            if (shuffle) playerViewModel.shufflePlayUnified(list) else onPlayAll(list)
+        }
+        if (path == folderPath && listQuery.isNotBlank()) {
+            if (visibleTracks.isNotEmpty()) start(visibleTracks)
+        } else {
+            viewModel.loadFolderForPlay(path, start)
+        }
     }
 
     var folderToExclude by remember { mutableStateOf<FolderToExclude?>(null) }
@@ -114,6 +137,9 @@ fun FolderBrowserScreen(
         )
     }
 
+    // The subfolder whose long-press menu is open, by path.
+    var menuFolder by remember { mutableStateOf<String?>(null) }
+
     var menuTrack by remember { mutableStateOf<UnifiedTrack?>(null) }
     UnifiedTrackContextMenuHost(
         track = menuTrack,
@@ -126,21 +152,13 @@ fun FolderBrowserScreen(
         TopAppBar(
             title = {
                 tf.monochrome.android.devedit.DevEditable("folder_path_bar") {
-                Column {
+                    // The path is the crumbs under the bar now, one tap per level.
                     Text(
                         displayName,
                         style = MaterialTheme.typography.titleMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Text(
-                        folderPath,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
                 }
             },
             navigationIcon = {
@@ -155,17 +173,13 @@ fun FolderBrowserScreen(
                     // a list ends up looking like it has lost rows.
                     if (!searchOpen) listQuery = ""
                 })
-
-                if (visibleTracks.isNotEmpty()) {
-                    IconButton(onClick = { onPlayAll(visibleTracks) }) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = stringResource(R.string.action_play_all))
-                    }
-                }
+                FolderSortButton(sort = folderSort, onChange = viewModel::setFolderSort)
             },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = Color.Transparent
             )
         )
+        FolderCrumbBar(crumbs = crumbs, onOpen = { navController.openAncestorFolder(it) })
 
         SearchOverlay(
             open = searchOpen,
@@ -184,10 +198,21 @@ fun FolderBrowserScreen(
                         bottom = 80.dp + LocalBottomChromeInset.current,
                     )
         ) {
+            if (subfolders.isNotEmpty() || tracks.isNotEmpty()) {
+                item(key = "play", contentType = "play") {
+                    FolderPlayRow(
+                        includesSubfolders = subfolders.isNotEmpty() && listQuery.isBlank(),
+                        onPlay = { play(folderPath, shuffle = false) },
+                        onShuffle = { play(folderPath, shuffle = true) },
+                    )
+                }
+            }
+
             // Subfolders first, then the folder's own audio files. Both kinds of
             // row live in one list, so each declares its contentType — without it
             // Compose would try to reuse a folder row's slots for a track row.
             items(subfolders, key = { it.path }, contentType = { "folder" }) { folder ->
+                Box {
                 Row(
                     // The same pane as the Folders tab and Home's page list.
                     // The gap is in this row's own padding rather than the
@@ -201,13 +226,7 @@ fun FolderBrowserScreen(
                         .padding(horizontal = 16.dp, vertical = 6.dp)
                         .liquidGlass(shape = MonoDimens.shapeMd)
                         .bounceCombinedClick(
-                            onLongClick = {
-                                folderToExclude = FolderToExclude(
-                                    path = folder.path,
-                                    displayName = folder.displayName,
-                                    trackCount = folder.trackCount,
-                                )
-                            },
+                            onLongClick = { menuFolder = folder.path },
                             onClick = {
                                 navController.navigateSafe(
                                     Screen.FolderBrowser.createRoute(folder.path)
@@ -238,15 +257,19 @@ fun FolderBrowserScreen(
                         )
                     }
                 }
-            }
-
-            // Tracks in this folder
-            if (tracks.isNotEmpty()) {
-                stickyHeader {
-                    TrackListToolbar(
-                        sort = listSort,
-                        onSortChange = { listSort = it },
-                    )
+                FolderActionsMenu(
+                    expanded = menuFolder == folder.path,
+                    onDismiss = { menuFolder = null },
+                    onPlay = { play(folder.path, shuffle = false) },
+                    onShuffle = { play(folder.path, shuffle = true) },
+                    onRemove = {
+                        folderToExclude = FolderToExclude(
+                            path = folder.path,
+                            displayName = folder.displayName,
+                            trackCount = folder.trackCount,
+                        )
+                    },
+                )
                 }
             }
             items(visibleTracks, key = { it.id }, contentType = { "track" }) { track ->
@@ -367,5 +390,127 @@ fun FolderBrowserScreen(
         FastScroller(state = listState)
         }
         }
+    }
+}
+
+/**
+ * The folder's path from where browsing starts, one tap per level: "Music ›
+ * Swans › 2024 Live". Jumps up any number of levels at once, which Back
+ * does one at a time. Scrolled to its end, the folder on screen, which is
+ * the one crumb that is not a link.
+ */
+@Composable
+private fun FolderCrumbBar(crumbs: List<FolderCrumb>, onOpen: (String) -> Unit) {
+    // A lone crumb is the folder's own name, which the title already shows.
+    if (crumbs.size < 2) return
+    val scroll = rememberScrollState()
+    LaunchedEffect(crumbs) { scroll.scrollTo(scroll.maxValue) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(scroll)
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        crumbs.forEachIndexed { index, crumb ->
+            val current = index == crumbs.lastIndex
+            Text(
+                crumb.name,
+                style = MaterialTheme.typography.labelLarge,
+                color = if (current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .then(
+                        if (current) Modifier
+                        else Modifier.clickable(
+                            onClickLabel = stringResource(R.string.folder_go_to, crumb.name),
+                        ) { onOpen(crumb.path) }
+                    )
+                    .padding(horizontal = 6.dp, vertical = 10.dp),
+            )
+            if (!current) {
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/** Play and Shuffle for the folder on screen, styled like the album and artist pages'. */
+@Composable
+private fun FolderPlayRow(includesSubfolders: Boolean, onPlay: () -> Unit, onShuffle: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        FilledIconButton(
+            onClick = onPlay,
+            modifier = Modifier.size(48.dp),
+            colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary),
+        ) {
+            Icon(
+                Icons.Default.PlayArrow,
+                contentDescription = stringResource(R.string.action_play),
+                tint = MaterialTheme.colorScheme.onPrimary,
+            )
+        }
+        FilledIconButton(
+            onClick = onShuffle,
+            modifier = Modifier.size(48.dp),
+            colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Icon(
+                Icons.Default.Shuffle,
+                contentDescription = stringResource(R.string.action_shuffle),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (includesSubfolders) {
+            Text(
+                stringResource(R.string.folder_subfolders_included),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/**
+ * A folder's long-press menu: play or shuffle it with everything inside it,
+ * or take it out of the library. Shared by the folder screen and the Folders
+ * list, so a folder offers the same three things wherever it is.
+ */
+@Composable
+internal fun FolderActionsMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onPlay: () -> Unit,
+    onShuffle: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.action_play)) },
+            leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null) },
+            onClick = { onDismiss(); onPlay() },
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.action_shuffle)) },
+            leadingIcon = { Icon(Icons.Default.Shuffle, contentDescription = null) },
+            onClick = { onDismiss(); onShuffle() },
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.remove_folder)) },
+            leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) },
+            onClick = { onDismiss(); onRemove() },
+        )
     }
 }

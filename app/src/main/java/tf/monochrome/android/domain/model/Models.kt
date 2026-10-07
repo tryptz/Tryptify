@@ -544,6 +544,10 @@ data class UnifiedTrack(
     // Null for streaming sources.
     val dateModified: Long? = null,
 
+    // File size on disk for local tracks — used for the folder screen's File
+    // size sort. Null for streaming sources, and in a queue saved before it.
+    val fileSizeBytes: Long? = null,
+
     // Genre, and how much we trust it. Before this existed every streaming
     // result in the app was genre-less, so search could not score on genre and
     // shelves could not explain themselves in genre terms.

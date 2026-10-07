@@ -1863,4 +1863,13 @@
     <string name="settings_save_crash_reports">Guardar informes de fallos</string>
     <string name="settings_save_crash_reports_on">Un fallo o bloqueo se guarda en Descargas como archivo .log, para adjuntarlo a un informe de error.</string>
     <string name="settings_save_crash_reports_off">Desactivado: un fallo no deja ningún archivo en Descargas.</string>
+    <string name="sort_file_name">Nombre de archivo</string>
+    <string name="sort_year">Año</string>
+    <string name="sort_date_modified">Fecha de modificación</string>
+    <string name="sort_quality">Calidad</string>
+    <string name="sort_file_size">Tamaño del archivo</string>
+    <string name="sort_song_count">Número de canciones</string>
+    <string name="action_shuffle">Aleatorio</string>
+    <string name="folder_subfolders_included">Incluye subcarpetas</string>
+    <string name="folder_go_to">Ir a %1$s</string>
 </resources>

@@ -437,6 +437,7 @@ class PreferencesManager @Inject constructor(
         private val SONG_SORT = stringPreferencesKey("library_song_sort")
         private val ALBUM_SORT = stringPreferencesKey("library_album_sort")
         private val ARTIST_SORT = stringPreferencesKey("library_artist_sort")
+        private val FOLDER_SORT = stringPreferencesKey("library_folder_sort")
 
         // Car mode
         private val CAR_MODE_BAND_COUNT = intPreferencesKey("car_mode_band_count")
@@ -2040,6 +2041,10 @@ class PreferencesManager @Inject constructor(
     suspend fun setSongSort(value: String) { dataStore.edit { it[SONG_SORT] = value } }
     suspend fun setAlbumSort(value: String) { dataStore.edit { it[ALBUM_SORT] = value } }
     suspend fun setArtistSort(value: String) { dataStore.edit { it[ARTIST_SORT] = value } }
+
+    /** The one song-and-folder sort every folder screen uses (FolderSort.encode). */
+    val folderSort: Flow<String?> = dataStore.data.map { it[FOLDER_SORT] }.distinctUntilChanged()
+    suspend fun setFolderSort(value: String) { dataStore.edit { it[FOLDER_SORT] = value } }
 
     // --- Car mode ---
     val carModeBandCount: Flow<Int> = dataStore.data.map { it[CAR_MODE_BAND_COUNT] ?: 10 }

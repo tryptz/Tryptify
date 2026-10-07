@@ -1813,4 +1813,13 @@
     <string name="settings_save_crash_reports">Çökme raporlarını kaydet</string>
     <string name="settings_save_crash_reports_on">Bir çökme veya donma, hata raporuna eklemek için İndirilenler klasörüne .log dosyası olarak kaydedilir.</string>
     <string name="settings_save_crash_reports_off">Kapalı: çökme İndirilenler klasöründe dosya bırakmaz.</string>
+    <string name="sort_file_name">Dosya adı</string>
+    <string name="sort_year">Yıl</string>
+    <string name="sort_date_modified">Değiştirilme tarihi</string>
+    <string name="sort_quality">Kalite</string>
+    <string name="sort_file_size">Dosya boyutu</string>
+    <string name="sort_song_count">Şarkı sayısı</string>
+    <string name="action_shuffle">Karıştır</string>
+    <string name="folder_subfolders_included">Alt klasörler dahil</string>
+    <string name="folder_go_to">%1$s klasörüne git</string>
 </resources>
