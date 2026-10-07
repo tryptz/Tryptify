@@ -1876,4 +1876,18 @@
     <string name="volume_muted">Coupé</string>
     <string name="action_mute">Couper le son</string>
     <string name="action_unmute">Rétablir le son</string>
+    <string name="eq_output_speaker">Haut-parleur du téléphone</string>
+    <string name="eq_output_wired">Casque filaire</string>
+    <string name="eq_output_bluetooth">Bluetooth</string>
+    <string name="eq_output_usb">DAC USB</string>
+    <string name="eq_output_switched">AutoEQ : %1$s pour %2$s</string>
+    <string name="eq_assign_preset">Attribuer aux sorties</string>
+    <string name="eq_assign_body">Appliquer %1$s automatiquement sur ces sorties :</string>
+    <string name="eq_assign_named_first">Le préréglage d’un appareil nommé passe avant celui de son type.</string>
+    <string name="eq_output_connected">Connecté</string>
+    <string name="eq_output_now_other">Actuellement : %1$s</string>
+    <string name="action_unassign">Retirer</string>
+    <string name="eq_off_preset">AutoEQ désactivé</string>
+    <string name="eq_off_preset_detail">À attribuer aux sorties qui doivent jouer sans correction, comme le haut-parleur du téléphone.</string>
+    <string name="eq_output_switched_off">AutoEQ désactivé pour %1$s</string>
 </resources>

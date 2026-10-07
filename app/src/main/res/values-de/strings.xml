@@ -1826,4 +1826,18 @@
     <string name="volume_muted">Stumm</string>
     <string name="action_mute">Stummschalten</string>
     <string name="action_unmute">Stummschaltung aufheben</string>
+    <string name="eq_output_speaker">Handylautsprecher</string>
+    <string name="eq_output_wired">Kabelgebundene Kopfhörer</string>
+    <string name="eq_output_bluetooth">Bluetooth</string>
+    <string name="eq_output_usb">USB-DAC</string>
+    <string name="eq_output_switched">AutoEQ: %1$s für %2$s</string>
+    <string name="eq_assign_preset">Ausgabegeräten zuweisen</string>
+    <string name="eq_assign_body">%1$s automatisch auf diesen Ausgabegeräten anwenden:</string>
+    <string name="eq_assign_named_first">Das Preset eines benannten Geräts geht dem seines Typs vor.</string>
+    <string name="eq_output_connected">Verbunden</string>
+    <string name="eq_output_now_other">Aktuell: %1$s</string>
+    <string name="action_unassign">Zuweisung aufheben</string>
+    <string name="eq_off_preset">AutoEQ aus</string>
+    <string name="eq_off_preset_detail">Ausgabegeräten zuweisen, die ohne Korrektur spielen sollen, etwa dem Handylautsprecher.</string>
+    <string name="eq_output_switched_off">AutoEQ aus für %1$s</string>
 </resources>

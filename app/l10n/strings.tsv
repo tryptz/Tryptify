@@ -1796,3 +1796,17 @@ dac_volume	Volume	音量	音量	Volume	Volumen	Ses düzeyi	Lautstärke
 volume_muted	Muted	已静音	ミュート中	Coupé	Silenciado	Sessiz	Stumm
 action_mute	Mute	静音	ミュート	Couper le son	Silenciar	Sessize al	Stummschalten
 action_unmute	Unmute	取消静音	ミュート解除	Rétablir le son	Activar sonido	Sesi aç	Stummschaltung aufheben
+eq_output_speaker	Phone speaker	手机扬声器	スマホのスピーカー	Haut-parleur du téléphone	Altavoz del teléfono	Telefon hoparlörü	Handylautsprecher
+eq_output_wired	Wired headphones	有线耳机	有線ヘッドホン	Casque filaire	Auriculares con cable	Kablolu kulaklık	Kabelgebundene Kopfhörer
+eq_output_bluetooth	Bluetooth	蓝牙	Bluetooth	Bluetooth	Bluetooth	Bluetooth	Bluetooth
+eq_output_usb	USB DAC	USB DAC	USB DAC	DAC USB	DAC USB	USB DAC	USB-DAC
+eq_output_switched	AutoEQ: %1$s for %2$s	AutoEQ：%2$s 使用 %1$s	AutoEQ：%2$s に %1$s	AutoEQ : %1$s pour %2$s	AutoEQ: %1$s para %2$s	AutoEQ: %2$s için %1$s	AutoEQ: %1$s für %2$s
+eq_assign_preset	Assign to outputs	分配给输出设备	出力先に割り当て	Attribuer aux sorties	Asignar a salidas	Çıkışlara ata	Ausgabegeräten zuweisen
+eq_assign_body	Apply %1$s automatically on these outputs:	在以下输出设备上自动应用 %1$s：	次の出力先で %1$s を自動的に適用します：	Appliquer %1$s automatiquement sur ces sorties :	Aplicar %1$s automáticamente en estas salidas:	%1$s şu çıkışlarda otomatik olarak uygulansın:	%1$s automatisch auf diesen Ausgabegeräten anwenden:
+eq_assign_named_first	A named device's preset comes before its type's.	指定设备的预设优先于其类型的预设。	名前のあるデバイスのプリセットは、その種類のプリセットより優先されます。	Le préréglage d’un appareil nommé passe avant celui de son type.	El preset de un dispositivo con nombre va antes que el de su tipo.	Adı olan bir cihazın ön ayarı, türünün ön ayarından önce gelir.	Das Preset eines benannten Geräts geht dem seines Typs vor.
+eq_output_connected	Connected	已连接	接続中	Connecté	Conectado	Bağlı	Verbunden
+eq_output_now_other	Now: %1$s	当前：%1$s	現在：%1$s	Actuellement : %1$s	Ahora: %1$s	Şu an: %1$s	Aktuell: %1$s
+action_unassign	Unassign	取消分配	割り当て解除	Retirer	Quitar asignación	Atamayı kaldır	Zuweisung aufheben
+eq_off_preset	AutoEQ off	关闭 AutoEQ	AutoEQ オフ	AutoEQ désactivé	AutoEQ desactivado	AutoEQ kapalı	AutoEQ aus
+eq_off_preset_detail	Assign it to outputs that should play without correction, like the phone speaker.	分配给不需要校正的输出设备，例如手机扬声器。	スマホのスピーカーなど、補正なしで再生する出力先に割り当てます。	À attribuer aux sorties qui doivent jouer sans correction, comme le haut-parleur du téléphone.	Asígnalo a las salidas que deben sonar sin corrección, como el altavoz del teléfono.	Telefon hoparlörü gibi düzeltme olmadan çalması gereken çıkışlara atayın.	Ausgabegeräten zuweisen, die ohne Korrektur spielen sollen, etwa dem Handylautsprecher.
+eq_output_switched_off	AutoEQ off for %1$s	%1$s：已关闭 AutoEQ	%1$s では AutoEQ をオフにしました	AutoEQ désactivé pour %1$s	AutoEQ desactivado para %1$s	%1$s için AutoEQ kapalı	AutoEQ aus für %1$s

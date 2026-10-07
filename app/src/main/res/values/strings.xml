@@ -1827,4 +1827,18 @@
     <string name="volume_muted">Muted</string>
     <string name="action_mute">Mute</string>
     <string name="action_unmute">Unmute</string>
+    <string name="eq_output_speaker">Phone speaker</string>
+    <string name="eq_output_wired">Wired headphones</string>
+    <string name="eq_output_bluetooth">Bluetooth</string>
+    <string name="eq_output_usb">USB DAC</string>
+    <string name="eq_output_switched">AutoEQ: %1$s for %2$s</string>
+    <string name="eq_assign_preset">Assign to outputs</string>
+    <string name="eq_assign_body">Apply %1$s automatically on these outputs:</string>
+    <string name="eq_assign_named_first">A named device\'s preset comes before its type\'s.</string>
+    <string name="eq_output_connected">Connected</string>
+    <string name="eq_output_now_other">Now: %1$s</string>
+    <string name="action_unassign">Unassign</string>
+    <string name="eq_off_preset">AutoEQ off</string>
+    <string name="eq_off_preset_detail">Assign it to outputs that should play without correction, like the phone speaker.</string>
+    <string name="eq_output_switched_off">AutoEQ off for %1$s</string>
 </resources>

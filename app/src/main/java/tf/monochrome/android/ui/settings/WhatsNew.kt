@@ -193,6 +193,12 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
+                    section = EQUALIZER,
+                    title = "AutoEQ per device",
+                    body = "An AutoEQ preset can follow your headphones: give it to the speaker, wired, Bluetooth or USB, or to one device by name, with the devices button on the preset. It switches when they connect. AutoEQ off can be given too.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = DOWNLOADS,
                     title = "Dolby Atmos downloads",
                     body = "TIDAL's download quality can be Dolby Atmos: a track with an Atmos mix downloads it as an untouched .m4a, and the rest as Hi-Res FLAC.",

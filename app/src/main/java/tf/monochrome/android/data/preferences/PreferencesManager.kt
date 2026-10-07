@@ -358,6 +358,9 @@ class PreferencesManager @Inject constructor(
         // list persists even while the switch is off, so toggling stereo off
         // and back on is non-destructive.
         private val EQ_BANDS_R_JSON = stringPreferencesKey("eq_bands_r_json")
+        // Per-device AutoEQ: output key -> preset id, and the named devices seen.
+        private val EQ_OUTPUT_ASSIGNMENTS_JSON = stringPreferencesKey("eq_output_assignments_json")
+        private val EQ_KNOWN_OUTPUTS_JSON = stringPreferencesKey("eq_known_outputs_json")
         private val EQ_STEREO_MODE = booleanPreferencesKey("eq_stereo_mode")
         private val EQ_MEASUREMENT_R_JSON = stringPreferencesKey("eq_measurement_r_json")
         private val EQ_CUSTOM_TARGETS_JSON = stringPreferencesKey("eq_custom_targets_json")
@@ -1711,6 +1714,79 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setEqStereoMode(enabled: Boolean) {
         dataStore.edit { it[EQ_STEREO_MODE] = enabled }
+    }
+
+    // --- Per-device AutoEQ (see OutputEq) ---
+
+    /** Which preset each output plays through, by OutputId.key. */
+    val eqOutputAssignments: Flow<Map<String, String>> = dataStore.data
+        .map { it[EQ_OUTPUT_ASSIGNMENTS_JSON] }
+        .distinctUntilChanged()
+        .map(::decodeAssignments)
+
+    /** Changes the assignments in one edit, so two quick changes cannot drop one. */
+    suspend fun updateEqOutputAssignments(transform: (Map<String, String>) -> Map<String, String>) {
+        dataStore.edit {
+            val now = decodeAssignments(it[EQ_OUTPUT_ASSIGNMENTS_JSON])
+            val next = transform(now)
+            if (next != now) it[EQ_OUTPUT_ASSIGNMENTS_JSON] = json.encodeToString(next)
+        }
+    }
+
+    /** The named devices seen, most recent first, for the assign sheet. */
+    val eqKnownOutputs: Flow<List<tf.monochrome.android.audio.eq.OutputId>> = dataStore.data
+        .map { it[EQ_KNOWN_OUTPUTS_JSON] }
+        .distinctUntilChanged()
+        .map(::decodeKnownOutputs)
+
+    suspend fun rememberEqOutput(seen: tf.monochrome.android.audio.eq.OutputId) {
+        dataStore.edit {
+            val known = decodeKnownOutputs(it[EQ_KNOWN_OUTPUTS_JSON])
+            val next = tf.monochrome.android.audio.eq.OutputEq.remember(known, seen)
+            if (next != known) it[EQ_KNOWN_OUTPUTS_JSON] = json.encodeToString(next)
+        }
+    }
+
+    private fun decodeAssignments(raw: String?): Map<String, String> =
+        raw?.let { runCatching { json.decodeFromString<Map<String, String>>(it) }.getOrNull() } ?: emptyMap()
+
+    private fun decodeKnownOutputs(raw: String?): List<tf.monochrome.android.audio.eq.OutputId> =
+        raw?.let {
+            runCatching { json.decodeFromString<List<tf.monochrome.android.audio.eq.OutputId>>(it) }.getOrNull()
+        } ?: emptyList()
+
+    /**
+     * Makes [preset] the AutoEQ and switches the EQ on, in one write: the keys
+     * EqViewModel.loadPreset writes, for the per-device switch, which runs with
+     * no EQ screen open. One edit, so the service never rebuilds its filters
+     * from half a preset.
+     *
+     * The right ear as loadPreset does it: a stereo preset brings its own and
+     * turns 2-channel mode on; a mono one drives both ears only while 2-channel
+     * mode is on and has a right ear to replace. With it off, the stored right
+     * ear is a calibration kept for later, not to be overwritten.
+     */
+    suspend fun applyEqPreset(preset: tf.monochrome.android.domain.model.EqPreset) {
+        val bandsSerializer = kotlinx.serialization.builtins.ListSerializer(
+            tf.monochrome.android.domain.model.EqBand.serializer(),
+        )
+        val bands = json.encodeToString(bandsSerializer, preset.bands)
+        val presetR = preset.bandsR
+        dataStore.edit {
+            if (presetR != null) {
+                it[EQ_BANDS_R_JSON] = json.encodeToString(bandsSerializer, presetR)
+                it[EQ_STEREO_MODE] = true
+            } else if (it[EQ_STEREO_MODE] == true) {
+                val storedR = it[EQ_BANDS_R_JSON]
+                    ?.let { raw -> runCatching { json.decodeFromString(bandsSerializer, raw) }.getOrNull() }
+                if (!storedR.isNullOrEmpty()) it[EQ_BANDS_R_JSON] = bands
+            }
+            it[EQ_ACTIVE_PRESET_ID] = preset.id
+            it[EQ_PREAMP] = preset.preamp.toDouble()
+            it[EQ_TARGET_ID] = preset.targetId
+            it[EQ_BANDS_JSON] = bands
+            it[EQ_ENABLED] = true
+        }
     }
 
     val eqCustomTargetsJson: Flow<String> = dataStore.data.map { it[EQ_CUSTOM_TARGETS_JSON] ?: "[]" }

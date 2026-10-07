@@ -18,7 +18,17 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /** Where the sound is going, as far as the framework will say. */
-data class RoutedOutput(val name: String, val typeLabel: String, val kind: OutputKind)
+data class RoutedOutput(
+    val name: String,
+    val typeLabel: String,
+    val kind: OutputKind,
+    /**
+     * The device's own name, or null when it has none. [name] falls back to
+     * [typeLabel] for display; this does not, so a headphone is never mistaken
+     * for one called "Bluetooth" (see OutputEq).
+     */
+    val productName: String? = null,
+)
 
 /**
  * Which output device is most likely carrying playback, and what rate the
@@ -166,6 +176,7 @@ class OutputDeviceProbe @Inject constructor(
             name = describe(device),
             typeLabel = typeLabel(device.type),
             kind = kindOf(device.type),
+            productName = device.productName?.toString()?.takeIf { it.isNotBlank() },
         )
     }
 

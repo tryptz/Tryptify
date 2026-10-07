@@ -1826,4 +1826,18 @@
     <string name="volume_muted">Sessiz</string>
     <string name="action_mute">Sessize al</string>
     <string name="action_unmute">Sesi aç</string>
+    <string name="eq_output_speaker">Telefon hoparlörü</string>
+    <string name="eq_output_wired">Kablolu kulaklık</string>
+    <string name="eq_output_bluetooth">Bluetooth</string>
+    <string name="eq_output_usb">USB DAC</string>
+    <string name="eq_output_switched">AutoEQ: %2$s için %1$s</string>
+    <string name="eq_assign_preset">Çıkışlara ata</string>
+    <string name="eq_assign_body">%1$s şu çıkışlarda otomatik olarak uygulansın:</string>
+    <string name="eq_assign_named_first">Adı olan bir cihazın ön ayarı, türünün ön ayarından önce gelir.</string>
+    <string name="eq_output_connected">Bağlı</string>
+    <string name="eq_output_now_other">Şu an: %1$s</string>
+    <string name="action_unassign">Atamayı kaldır</string>
+    <string name="eq_off_preset">AutoEQ kapalı</string>
+    <string name="eq_off_preset_detail">Telefon hoparlörü gibi düzeltme olmadan çalması gereken çıkışlara atayın.</string>
+    <string name="eq_output_switched_off">%1$s için AutoEQ kapalı</string>
 </resources>

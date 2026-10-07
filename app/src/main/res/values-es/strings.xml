@@ -1876,4 +1876,18 @@
     <string name="volume_muted">Silenciado</string>
     <string name="action_mute">Silenciar</string>
     <string name="action_unmute">Activar sonido</string>
+    <string name="eq_output_speaker">Altavoz del teléfono</string>
+    <string name="eq_output_wired">Auriculares con cable</string>
+    <string name="eq_output_bluetooth">Bluetooth</string>
+    <string name="eq_output_usb">DAC USB</string>
+    <string name="eq_output_switched">AutoEQ: %1$s para %2$s</string>
+    <string name="eq_assign_preset">Asignar a salidas</string>
+    <string name="eq_assign_body">Aplicar %1$s automáticamente en estas salidas:</string>
+    <string name="eq_assign_named_first">El preset de un dispositivo con nombre va antes que el de su tipo.</string>
+    <string name="eq_output_connected">Conectado</string>
+    <string name="eq_output_now_other">Ahora: %1$s</string>
+    <string name="action_unassign">Quitar asignación</string>
+    <string name="eq_off_preset">AutoEQ desactivado</string>
+    <string name="eq_off_preset_detail">Asígnalo a las salidas que deben sonar sin corrección, como el altavoz del teléfono.</string>
+    <string name="eq_output_switched_off">AutoEQ desactivado para %1$s</string>
 </resources>

@@ -1776,4 +1776,18 @@
     <string name="volume_muted">ミュート中</string>
     <string name="action_mute">ミュート</string>
     <string name="action_unmute">ミュート解除</string>
+    <string name="eq_output_speaker">スマホのスピーカー</string>
+    <string name="eq_output_wired">有線ヘッドホン</string>
+    <string name="eq_output_bluetooth">Bluetooth</string>
+    <string name="eq_output_usb">USB DAC</string>
+    <string name="eq_output_switched">AutoEQ：%2$s に %1$s</string>
+    <string name="eq_assign_preset">出力先に割り当て</string>
+    <string name="eq_assign_body">次の出力先で %1$s を自動的に適用します：</string>
+    <string name="eq_assign_named_first">名前のあるデバイスのプリセットは、その種類のプリセットより優先されます。</string>
+    <string name="eq_output_connected">接続中</string>
+    <string name="eq_output_now_other">現在：%1$s</string>
+    <string name="action_unassign">割り当て解除</string>
+    <string name="eq_off_preset">AutoEQ オフ</string>
+    <string name="eq_off_preset_detail">スマホのスピーカーなど、補正なしで再生する出力先に割り当てます。</string>
+    <string name="eq_output_switched_off">%1$s では AutoEQ をオフにしました</string>
 </resources>

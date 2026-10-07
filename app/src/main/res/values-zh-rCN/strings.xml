@@ -1776,4 +1776,18 @@
     <string name="volume_muted">已静音</string>
     <string name="action_mute">静音</string>
     <string name="action_unmute">取消静音</string>
+    <string name="eq_output_speaker">手机扬声器</string>
+    <string name="eq_output_wired">有线耳机</string>
+    <string name="eq_output_bluetooth">蓝牙</string>
+    <string name="eq_output_usb">USB DAC</string>
+    <string name="eq_output_switched">AutoEQ：%2$s 使用 %1$s</string>
+    <string name="eq_assign_preset">分配给输出设备</string>
+    <string name="eq_assign_body">在以下输出设备上自动应用 %1$s：</string>
+    <string name="eq_assign_named_first">指定设备的预设优先于其类型的预设。</string>
+    <string name="eq_output_connected">已连接</string>
+    <string name="eq_output_now_other">当前：%1$s</string>
+    <string name="action_unassign">取消分配</string>
+    <string name="eq_off_preset">关闭 AutoEQ</string>
+    <string name="eq_off_preset_detail">分配给不需要校正的输出设备，例如手机扬声器。</string>
+    <string name="eq_output_switched_off">%1$s：已关闭 AutoEQ</string>
 </resources>
