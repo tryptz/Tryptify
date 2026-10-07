@@ -216,7 +216,8 @@ class LyricsFxSettingsTest {
     private fun added(s: LyricsFxSettings) = listOf(
         s.glassRoundness, s.glassDepth, s.glassSurfaceMotion, s.glassReflection, s.glassGloss,
         s.glassTiltReactivity, s.glassLightAngleDeg, s.glassEdgeWidth, s.glassFrost,
-        s.godRays, s.godRaySource, s.godRaysOnTop, s.godRaysFollowWord, s.godRayExposure, s.godRayDensity,
+        s.godRays, s.godRaySource, s.godRaysOnTop, s.godRaysFollowWord, s.godRaysAllLyrics,
+        s.godRayExposure, s.godRayDensity,
         s.godRayDecay, s.godRayAzimuthDeg, s.godRayElevationDeg, s.godRaySunSize, s.godRayShimmer,
         s.godRayBeat, s.godRaySpinDps, s.godRaySway, s.godRayTilt,
     )
@@ -288,6 +289,7 @@ class LyricsFxSettingsTest {
         assertEquals(1f, c.godRaySway, 0f)
         assertEquals(1.5f, c.godRayTilt, 0f)
         assertEquals(1, c.godRayQuality)
+        assertEquals("4 is the Shadertoy's 50 samples, and the most", 4, LyricsFxSettings(godRayQuality = 9).clamped().godRayQuality)
 
         val nan = LyricsFxSettings(glassGloss = Float.NaN, godRayElevationDeg = Float.NaN).clamped()
         assertEquals(LyricsFxSettings.DEFAULT.glassGloss, nan.glassGloss, 0f)
@@ -307,12 +309,19 @@ class LyricsFxSettingsTest {
     @Test
     fun `the light presets light, and Spotlight follows the sung word`() {
         val byName = LyricsFxSettings.PRESETS.toMap()
-        listOf("Sunburst", "Cathedral", "Eclipse", "Daybreak", "Searchlight", "Spotlight").forEach {
+        listOf("Sunburst", "Cathedral", "Eclipse", "Daybreak", "Searchlight", "Spotlight", "Crepuscular").forEach {
             assertTrue("$it should switch the god rays on", byName.getValue(it).godRays)
         }
         assertEquals(90f, byName.getValue("Sunburst").godRayElevationDeg, 0f)
         assertEquals(LyricsFxSettings.GOD_RAYS_BACKLIGHT, byName.getValue("Eclipse").godRaySource)
         assertTrue(byName.getValue("Spotlight").godRaysFollowWord)
+        // Crepuscular is the Shadertoy as written: the whole image shining and
+        // its wandering light, round the middle of the screen.
+        val crepuscular = byName.getValue("Crepuscular")
+        assertTrue(crepuscular.godRaysAllLyrics)
+        assertEquals(LyricsFxSettings.GOD_RAYS_LETTERS, crepuscular.godRaySource)
+        assertEquals(1f, crepuscular.godRaySway, 0f)
+        assertEquals(90f, crepuscular.godRayElevationDeg, 0f)
         assertFalse(byName.getValue("Mercury").godRays)
     }
 

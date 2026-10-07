@@ -75,9 +75,11 @@ test enforces `tintColor == 0 && previewBg == 0` for every preset, and
      Within the rays, `godRaySunSize` only matters with `godRaySource = 1`
      (backlight), and `godRaysFollowWord` only with word-timed (karaoke)
      lyrics; line-timed lyrics shine from the whole line either way.
+     `godRaysAllLyrics` overrides `godRaysFollowWord`.
 5. **Don't rename or remove these preset names — tests look them up by name:**
    Lyrics FX `Voltage`, `Sunburst`, `Cathedral`, `Eclipse`, `Daybreak`,
-   `Searchlight`, `Spotlight` and `Mercury`; Player Glass `Clear` (must stay
+   `Searchlight`, `Spotlight`, `Crepuscular` (pinned to the Shadertoy's
+   numbers) and `Mercury`; Player Glass `Clear` (must stay
    first and be `INITIAL`) and `Tinted` and `Tilt`. **Appending new names is
    safe** — no test pins the total. But never insert a Lyrics FX preset
    *before* `Sunburst`: the test `god rays are off by default and every
@@ -109,7 +111,7 @@ test enforces `tintColor == 0 && previewBg == 0` for every preset, and
 ## Where to add a preset
 
 - Lyrics FX: append after `"Static"` inside `PRESETS = listOf(…)` in
-  `LyricsFxSettings.kt`, i.e. after `"Sea Glass"` (25 presets today).
+  `LyricsFxSettings.kt`, i.e. after `"Sea Glass"` (26 presets today).
 - Player Glass: append after `"Holo"` inside `PRESETS = listOf(…)` in
   `PlayerGlassSettings.kt` (13 today: Clear, Tinted, Tilt, Pure, Droplet,
   Prism, Bubble, Mercury, Ice, Halo, Aurora, Dusk, Holo). It opens with
@@ -166,6 +168,7 @@ Personal fields are omitted here — never set them in a preset.
 | `godRaySource` | 0..1 | 0 | 0 = the sung line shines and streams light; 1 = a backlight disc behind the lyrics that the letters block, so their shadows streak through the shafts. |
 | `godRaysOnTop` | bool | false | false = shafts under the letters (crisp); true = light added over them (the article's additive composite, hazier). |
 | `godRaysFollowWord` | bool | false | Word-timed lyrics: only the sung word shines, hopping word to word. Line-timed lyrics keep the line. |
+| `godRaysAllLyrics` | bool | false | Every lyric shines (the Shadertoy's whole image as the light). Overrides `godRaysFollowWord` and drops the sung line's legibility dimming. |
 | `godRayExposure` | 0..1.5 | 0.6 | Shaft brightness (the article's exposure). |
 | `godRayDensity` | 0.2..1 | 0.85 | How far toward the light each pixel gathers: the shaft length (the article's density). |
 | `godRayDecay` | 0.85..1 | 0.95 | Light kept per 1/50 of a shaft (the article's decay at 50 samples). 1 = no falloff. |
@@ -175,7 +178,7 @@ Personal fields are omitted here — never set them in a preset.
 | `godRayShimmer` | 0..1 | 0.35 | Dust: slow flicker across neighbouring shafts. Any value > 0 runs a frame clock. |
 | `godRayBeat` | 0..1 | 0.5 | How much a kick brightens and lengthens the shafts. Needs `bassReact` > 0.01. |
 | `godRaySpinDps` | -45..45 | 0 | The light orbits the line, degrees per second; sign = direction. |
-| `godRaySway` | 0..1 | 0 | A slow Lissajous wander of the light, after the Shadertoy's `sin(t), sin(0.913·t)`. |
+| `godRaySway` | 0..1 | 0 | The light wanders on the Shadertoy's own path, `(sin(t), sin(0.913·t))`, out to half the surface height at 1. Runs a frame clock. |
 | `godRayTilt` | 0..1.5 | 0 | How far tilting the phone swings the light. Device only; > 0 holds the gravity sensor. |
 
 ## Player Glass parameter reference

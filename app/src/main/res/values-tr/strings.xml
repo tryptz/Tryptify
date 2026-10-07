@@ -1873,10 +1873,12 @@
     <string name="fx_god_ray_orbit">Yörünge</string>
     <string name="fx_god_ray_orbit_desc">Işık satırın etrafında döner; işaret yönü belirler.</string>
     <string name="fx_god_ray_sway">Salınım</string>
-    <string name="fx_god_ray_sway_desc">Işığın yönü etrafında yavaşça gezinmesi.</string>
+    <string name="fx_god_ray_sway_desc">Işık, orijinal Shadertoy’un yolunu izleyerek sözlerin üzerinde gezinir.</string>
     <string name="fx_god_ray_tilt_desc">Telefonu eğmenin ışığı ne kadar savurduğu.</string>
     <string name="fx_god_ray_samples_value">%1$d örnek</string>
     <string name="fx_god_ray_quality_desc">Piksel başına örnek: daha temiz huzmeler ile GPU maliyeti arasında denge.</string>
     <string name="fx_god_ray_follow_word">Söylenen kelimeyi izle</string>
     <string name="fx_god_ray_follow_word_desc">Kelime zamanlamalı sözlerde yalnızca söylenen kelime parlar ve ışık kelime kelime ilerler. Satır zamanlamalı sözlerde tüm satır parlar.</string>
+    <string name="fx_god_ray_all_lyrics">Tüm sözler parlasın</string>
+    <string name="fx_god_ray_all_lyrics_desc">Yalnızca söylenen satır değil, her satır ışık saçar; orijinal Shadertoy’daki gibi. Daha kalabalık olur ve söylenen satır onu okunur tutan karartmayı kaybeder.</string>
 </resources>

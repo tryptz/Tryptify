@@ -1923,10 +1923,12 @@
     <string name="fx_god_ray_orbit">Orbite</string>
     <string name="fx_god_ray_orbit_desc">La lumière tourne autour de la ligne ; le signe fixe le sens.</string>
     <string name="fx_god_ray_sway">Balancement</string>
-    <string name="fx_god_ray_sway_desc">Une lente dérive de la lumière autour de sa direction.</string>
+    <string name="fx_god_ray_sway_desc">La lumière se promène sur les paroles en suivant le trajet du Shadertoy d’origine.</string>
     <string name="fx_god_ray_tilt_desc">À quel point incliner le téléphone fait pivoter la lumière.</string>
     <string name="fx_god_ray_samples_value">%1$d échantillons</string>
     <string name="fx_god_ray_quality_desc">Échantillons par pixel : des faisceaux plus nets contre le coût GPU.</string>
     <string name="fx_god_ray_follow_word">Suivre le mot chanté</string>
     <string name="fx_god_ray_follow_word_desc">Avec des paroles synchronisées au mot, seul le mot chanté brille et la lumière avance mot par mot. Les paroles synchronisées à la ligne gardent toute la ligne.</string>
+    <string name="fx_god_ray_all_lyrics">Toutes les paroles brillent</string>
+    <string name="fx_god_ray_all_lyrics_desc">Chaque ligne diffuse de la lumière, pas seulement celle qui est chantée, comme dans le Shadertoy d’origine. Plus chargé, et la ligne chantée perd l’atténuation qui la garde lisible.</string>
 </resources>

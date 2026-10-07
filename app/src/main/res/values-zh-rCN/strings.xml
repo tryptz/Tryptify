@@ -1823,10 +1823,12 @@
     <string name="fx_god_ray_orbit">环绕</string>
     <string name="fx_god_ray_orbit_desc">光源绕歌词行旋转；正负号决定方向。</string>
     <string name="fx_god_ray_sway">摇摆</string>
-    <string name="fx_god_ray_sway_desc">光源围绕其方向缓慢游移。</string>
+    <string name="fx_god_ray_sway_desc">光源沿着 Shadertoy 原版的路径在歌词上游移。</string>
     <string name="fx_god_ray_tilt_desc">倾斜手机时光源摆动的幅度。</string>
     <string name="fx_god_ray_samples_value">%1$d 个采样</string>
     <string name="fx_god_ray_quality_desc">每像素采样数：光束更干净，但 GPU 开销更大。</string>
     <string name="fx_god_ray_follow_word">跟随正在演唱的字词</string>
     <string name="fx_god_ray_follow_word_desc">对于逐字计时的歌词，只有正在演唱的字词发光，光线逐字移动。逐行计时的歌词仍整行发光。</string>
+    <string name="fx_god_ray_all_lyrics">所有歌词都发光</string>
+    <string name="fx_god_ray_all_lyrics_desc">每一行都会射出光线，而不只是正在演唱的那一行，就像原版 Shadertoy 一样。画面更繁杂，正在演唱的行也不再被减光以保持清晰。</string>
 </resources>

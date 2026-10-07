@@ -155,6 +155,12 @@ data class LyricsFxSettings(
      * word to follow and keep the whole line.
      */
     val godRaysFollowWord: Boolean = false,
+    /**
+     * Every lyric shines, not only what is being sung — the Shadertoy's whole
+     * image as the light (its `iChannel0`). Overrides [godRaysFollowWord], and
+     * drops the dimming that keeps the sung line readable under its own light.
+     */
+    val godRaysAllLyrics: Boolean = false,
     /** Brightness of the shafts (the article's exposure). */
     val godRayExposure: Float = 0.6f,
     /** How far toward the light each pixel gathers — the shaft length (the article's density). */
@@ -173,12 +179,16 @@ data class LyricsFxSettings(
     val godRayBeat: Float = 0.5f,
     /** The light orbiting the line, degrees per second; the sign picks the direction. */
     val godRaySpinDps: Float = 0f,
-    /** A slow Lissajous wander of the light around its set direction. */
+    /**
+     * The light wanders over the lyrics on the Shadertoy's own path,
+     * `(sin(t), sin(0.913·t))`, out to half the surface's height at 1.
+     */
     val godRaySway: Float = 0f,
     /** How strongly tilting the phone swings the light. */
     val godRayTilt: Float = 0f,
     /**
-     * Samples per pixel: 1/2/3 → 16/24/32. Higher = cleaner shafts, heavier
+     * Samples per pixel: 1/2/3/4 → 16/24/32/50, 50 being the Shadertoy's
+     * own count. Higher = cleaner shafts, heavier
      * GPU. Device/perf setting, like [glassSampleRings] — preserved when a
      * theme preset is applied.
      */
@@ -243,6 +253,7 @@ data class LyricsFxSettings(
             godRaySource = godRaySource.coerceIn(0, 1),
             godRaysOnTop = godRaysOnTop,
             godRaysFollowWord = godRaysFollowWord,
+            godRaysAllLyrics = godRaysAllLyrics,
             godRayExposure = godRayExposure.c(0f, 1.5f, d.godRayExposure),
             godRayDensity = godRayDensity.c(0.2f, 1f, d.godRayDensity),
             godRayDecay = godRayDecay.c(0.85f, 1f, d.godRayDecay),
@@ -254,7 +265,7 @@ data class LyricsFxSettings(
             godRaySpinDps = godRaySpinDps.c(-45f, 45f, d.godRaySpinDps),
             godRaySway = godRaySway.c(0f, 1f, d.godRaySway),
             godRayTilt = godRayTilt.c(0f, 1.5f, d.godRayTilt),
-            godRayQuality = godRayQuality.coerceIn(1, 3),
+            godRayQuality = godRayQuality.coerceIn(1, 4),
         )
     }
 
@@ -329,9 +340,10 @@ data class LyricsFxSettings(
          * knobs it gates are personal and are intentionally left at their
          * defaults in every preset.
          *
-         * The last eight came with the letter-glass optics and the god rays:
-         * six light the lyrics (from behind the line, from above, a hidden
-         * backlight, a low sun, a raking searchlight, the sung word alone) and
+         * The last nine came with the letter-glass optics and the god rays:
+         * seven light the lyrics (from behind the line, from above, a hidden
+         * backlight, a low sun, a raking searchlight, the sung word alone, and
+         * the Shadertoy they come from, as written) and
          * two are made of the Player Glass material (liquid metal, frosted sea
          * glass). Every preset
          * before them leaves both at their defaults, which is exactly what the
@@ -542,7 +554,7 @@ data class LyricsFxSettings(
                 godRays = true, godRaySource = GOD_RAYS_BACKLIGHT,
                 godRayExposure = 1f, godRayDensity = 1f, godRayDecay = 0.97f,
                 godRayAzimuthDeg = 30f, godRayElevationDeg = 35f, godRaySunSize = 0.12f,
-                godRayShimmer = 0.45f, godRayBeat = 0.3f, godRaySway = 0.4f, godRayTilt = 0.8f,
+                godRayShimmer = 0.45f, godRayBeat = 0.3f, godRaySway = 0.15f, godRayTilt = 0.8f,
             ),
             // Searchlight — a light raking in almost level from the left (12°),
             // so the shafts are long and nearly parallel, sweeping round the
@@ -571,6 +583,22 @@ data class LyricsFxSettings(
                 godRayExposure = 0.8f, godRayDensity = 0.9f, godRayDecay = 0.95f,
                 godRayAzimuthDeg = 90f, godRayElevationDeg = 75f,
                 godRayShimmer = 0.3f, godRayBeat = 0.6f,
+            ),
+            // Crepuscular — toninoni's Shadertoy "Crepuscular light" (ls2Xzd),
+            // the article's own numbers: decay 0.92, density 1, every lyric
+            // shining, the light wandering on its sin(t), sin(0.913t) path.
+            // Exposure 0.57 is its 0.4 + 0.4 × 0.58767 weights; at the 50-sample
+            // quality the march matches it to 0.1% (GodRayGeometryTest).
+            "Crepuscular" to LyricsFxSettings(
+                fontSizeSp = 24f, letterSpacingSp = 0.05f,
+                glassBodyOpacity = 0.6f, glassRefraction = 0.16f, glassRimBrightness = 1.2f, glassDispersion = 0.9f,
+                rotationDegrees = 8f, waveSpeed = 0.8f, wavePhaseStep = 0.2f, waveTravelDp = 3f, shadowDepth = 0.6f,
+                bassReact = 0.6f, pumpAmount = 0.07f, attackMs = 14f, releaseMs = 180f, bounce = 0.6f,
+                glowRadiusDp = 0f, glowBrightness = 0f,
+                godRays = true, godRaySource = GOD_RAYS_LETTERS, godRaysAllLyrics = true,
+                godRayExposure = 0.57f, godRayDensity = 1f, godRayDecay = 0.92f,
+                godRayAzimuthDeg = 90f, godRayElevationDeg = 90f,
+                godRayShimmer = 0f, godRayBeat = 0f, godRaySway = 1f,
             ),
             // Mercury — liquid-metal letters: the Player Glass material's
             // mirror end — full room reflection, a tight glint, deep relief and

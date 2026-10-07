@@ -81,9 +81,16 @@ internal fun GodRaysControls(
         selected = if (fx.godRaysOnTop) 1 else 0,
     ) { i -> onUpdate { it.copy(godRaysOnTop = i == 1) } }
     FxToggle(
-        stringResource(R.string.fx_god_ray_follow_word), fx.godRaysFollowWord,
-        description = stringResource(R.string.fx_god_ray_follow_word_desc),
-    ) { on -> onUpdate { it.copy(godRaysFollowWord = on) } }
+        stringResource(R.string.fx_god_ray_all_lyrics), fx.godRaysAllLyrics,
+        description = stringResource(R.string.fx_god_ray_all_lyrics_desc),
+    ) { on -> onUpdate { it.copy(godRaysAllLyrics = on) } }
+    // Every lyric shining leaves no single word to follow.
+    if (!fx.godRaysAllLyrics) {
+        FxToggle(
+            stringResource(R.string.fx_god_ray_follow_word), fx.godRaysFollowWord,
+            description = stringResource(R.string.fx_god_ray_follow_word_desc),
+        ) { on -> onUpdate { it.copy(godRaysFollowWord = on) } }
+    }
 
     Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
         Text(
@@ -175,7 +182,7 @@ internal fun GodRaysControls(
     FxSlider(
         stringResource(R.string.fx_quality),
         stringResource(R.string.fx_god_ray_samples_value, GodRayGeometry.samplesFor(fx.godRayQuality)),
-        fx.godRayQuality.toFloat(), 1f..3f, steps = 1,
+        fx.godRayQuality.toFloat(), 1f..4f, steps = 2,
         description = stringResource(R.string.fx_god_ray_quality_desc),
     ) { v -> onUpdate { it.copy(godRayQuality = v.roundToInt()) } }
 }

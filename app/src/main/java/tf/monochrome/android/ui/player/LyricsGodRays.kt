@@ -106,12 +106,14 @@ private fun godRaysModifier(
         val maxSide = max(w, h)
         val t = timeSec.value
 
-        val line = band()?.takeIf { it.height > 0f && it.width > 0f }
+        // "All lyrics" is the Shadertoy's whole image shining: no band at all.
+        val line = if (fx.godRaysAllLyrics) null else band()?.takeIf { it.height > 0f && it.width > 0f }
         val center = GodRayGeometry.lightCenter(line, w, h)
         val (az, el) = GodRayGeometry.animatedAngles(fx, if (moving) t else 0f)
         val tiltNow = tilt.value
         val light = GodRayGeometry.lightPoint(center, az, el, focal = GodRayGeometry.FOCAL_SHARE * maxSide) +
-            Offset(-tiltNow.x, tiltNow.y) * (fx.godRayTilt * GodRayGeometry.TILT_SHARE * maxSide)
+            Offset(-tiltNow.x, tiltNow.y) * (fx.godRayTilt * GodRayGeometry.TILT_SHARE * maxSide) +
+            GodRayGeometry.swayOffset(fx.godRaySway, if (moving) t else 0f, h)
 
         // The kick brightens the shafts and pushes them a little further.
         val beat = (pulse?.value ?: 0f) * fx.bassReact * fx.godRayBeat
@@ -130,6 +132,7 @@ private fun godRaysModifier(
             "uSampleWeight",
             GodRayGeometry.sampleWeight(GodRayGeometry.LETTERS_GAIN * exposure, decay, samples),
         )
+        shader.setFloatUniform("uCenterTap", GodRayGeometry.CENTER_TAP)
         shader.setFloatUniform("uBacklightGain", GodRayGeometry.BACKLIGHT_GAIN * exposure)
         shader.setFloatUniform("uDecayRef", fx.godRayDecay)
         shader.setFloatUniform("uFalloffLen", density * maxSide)
@@ -208,8 +211,12 @@ internal object GodRayGeometry {
     /** How far a full tilt of the phone swings the light, as a share of the long side. */
     const val TILT_SHARE = 0.3f
 
-    /** Exposure 1 → this gain on Letters mode's weighted average. */
-    const val LETTERS_GAIN = 5f
+    /**
+     * Exposure 1 → this gain on Letters mode's weighted average. The
+     * Shadertoy's taps add up to 3.293 (0.4 × (1 + 0.58767 × Σ 0.92^i over
+     * 50)), so exposure 0.57 is the original's brightness.
+     */
+    const val LETTERS_GAIN = 5.8f
 
     /**
      * Exposure 1 → this gain in Backlight mode. Lower than Letters', because
@@ -222,6 +229,15 @@ internal object GodRayGeometry {
 
     /** The sample count the article's decay is quoted against (the Shadertoy uses 50). */
     const val DECAY_REFERENCE_SAMPLES = 50
+
+    /** The article's per-sample weight against its 0.4 first tap. */
+    const val ARTICLE_WEIGHT = 0.58767f
+
+    /**
+     * The first tap, on the pixel itself, relative to a march sample: the
+     * Shadertoy weighs it 0.4 and each sample 0.4 × 0.58767.
+     */
+    const val CENTER_TAP = 1f / ARTICLE_WEIGHT
 
     /**
      * A band edge that is not there: a whole line runs the full width. Large
@@ -241,10 +257,12 @@ internal object GodRayGeometry {
         return Offset(x, band.center.y)
     }
 
-    fun samplesFor(quality: Int): Int = when (quality.coerceIn(1, 3)) {
+    /** 4 is the Shadertoy's own 50, and the shader's loop length. */
+    fun samplesFor(quality: Int): Int = when (quality.coerceIn(1, 4)) {
         1 -> 16
         2 -> 24
-        else -> 32
+        3 -> 32
+        else -> 50
     }
 
     /**
@@ -265,21 +283,21 @@ internal object GodRayGeometry {
         return Offset(center.x + focal * cot * cos(az), center.y - focal * cot * sin(az))
     }
 
-    /**
-     * The direction the light is pointing at time [t]: the set angles, plus
-     * the orbit (degrees per second around the line) and the sway — a slow
-     * Lissajous wander like the Shadertoy's `sin(t), sin(t * 0.913)` light,
-     * a third as fast.
-     */
+    /** The direction the light is pointing at time [t]: the set angles, plus the orbit round the line. */
     fun animatedAngles(fx: LyricsFxSettings, t: Float): Pair<Float, Float> {
-        var az = fx.godRayAzimuthDeg + fx.godRaySpinDps * t
-        var el = fx.godRayElevationDeg
-        if (fx.godRaySway > 0f) {
-            az += 40f * fx.godRaySway * sin(t * 0.35f)
-            el += 20f * fx.godRaySway * sin(t * 0.35f * 0.913f)
-        }
-        az = ((az % 360f) + 360f) % 360f
-        return az to el.coerceIn(0f, 90f)
+        val az = fx.godRayAzimuthDeg + fx.godRaySpinDps * t
+        return (((az % 360f) + 360f) % 360f) to fx.godRayElevationDeg.coerceIn(0f, 90f)
+    }
+
+    /**
+     * The sway: the Shadertoy's own wandering light, `pos = (sin(t), sin(t *
+     * 0.913)) * 0.5` in units of the screen's height, scaled by [sway]. Its uv
+     * y points up and the screen's down, hence the minus.
+     */
+    fun swayOffset(sway: Float, t: Float, height: Float): Offset {
+        if (sway <= 0f) return Offset.Zero
+        val r = 0.5f * height * sway
+        return Offset(sin(t) * r, -sin(t * 0.913f) * r)
     }
 
     fun isMoving(fx: LyricsFxSettings): Boolean =
@@ -294,11 +312,12 @@ internal object GodRayGeometry {
         decay.coerceIn(0f, 1f).pow(DECAY_REFERENCE_SAMPLES.toFloat() / samples.coerceAtLeast(1))
 
     /**
-     * Turns the shader's decayed sum into a weighted average times [gain], so
-     * the brightness does not depend on the sample count either.
+     * Turns the shader's decayed sum — the [CENTER_TAP] plus every march
+     * sample — into a weighted average times [gain], so the brightness does
+     * not depend on the sample count either.
      */
     fun sampleWeight(gain: Float, perSampleDecay: Float, samples: Int): Float {
-        var sum = 0f
+        var sum = CENTER_TAP
         var w = 1f
         repeat(samples.coerceAtLeast(1)) {
             sum += w
@@ -334,9 +353,10 @@ uniform float uSource;          // 0 = the sung line shines, 1 = a light behind 
 uniform float uOnTop;           // 1 = add the light over the letters, 0 = draw it under them
 uniform float uDensity;         // share of the way to the light each pixel gathers
 uniform float uReachCap;        // letters: the longest march, px
-uniform float uSamples;         // 16 / 24 / 32
+uniform float uSamples;         // 16 / 24 / 32 / 50
 uniform float uDecay;           // letters: per-sample decay, already converted for uSamples
 uniform float uSampleWeight;    // letters: turns the decayed sum into an average times exposure
+uniform float uCenterTap;       // letters: the article's first tap, on the pixel itself (1 / weight)
 uniform float uBacklightGain;   // backlight: exposure on the plain average
 uniform float uDecayRef;        // backlight: decay per 1/50 of uFalloffLen
 uniform float uFalloffLen;      // backlight: how far the shafts reach, px
@@ -413,11 +433,17 @@ half4 main(float2 p) {
     float2 jp = p + float2(5.588238 * uFrame, 0.0);
     float jitter = fract(52.9829189 * fract(dot(jp, float2(0.06711056, 0.00583715))));
 
-    float4 acc = float4(0.0);
+    // The Shadertoy's first tap, `color = texture(tc) * 0.4`, on the pixel
+    // itself at 1 / weight of a march sample. Without it the port was 5% off
+    // the original; with it, and the taps at 1..N steps below, it matches
+    // to 0.1% at 50 samples.
+    float4 acc = back ? float4(0.0) : src * (bandMask(p) * uCenterTap);
     float w = 1.0;
-    for (int i = 0; i < 32; i++) {
+    for (int i = 0; i < 50; i++) {
         if (float(i) < uSamples) {
-            float2 s = p + dir * ((float(i) + jitter) * stepLen);
+            // 1 - jitter .. N - jitter steps toward the light: the Shadertoy
+            // pushes tc back by the jitter, then steps before every sample.
+            float2 s = p + dir * ((float(i) + 1.0 - jitter) * stepLen);
             float4 c = float4(content.eval(s));
             if (back) {
                 float r = distance(s, uLight);

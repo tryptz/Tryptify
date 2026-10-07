@@ -247,7 +247,18 @@ word", the word the karaoke line reports. Letting every visible line emit made
 the screen a wash; dropping the 65% guard inside the band buried the sung line
 under its own light (the first prototype, at 90° elevation). The band's sides
 are `GodRayGeometry.UNBOUNDED`, not infinity: an infinity reaching
-`smoothstep` comes back NaN.
+`smoothstep` comes back NaN. The one exception is "All lyrics shine", which is
+the Shadertoy's whole image as the light and asks for exactly that trade.
+
+**The Letters march is the Shadertoy, tap for tap.** "Crepuscular light"
+(ls2Xzd) starts from a centre tap, `texture(tc) * 0.4`, and steps *before* it
+samples, so its taps sit 1..N steps toward the light. Both are kept: without
+the centre tap the port was 5% off the original, and with it, at the 50-sample
+quality, 0.1% (correlation 0.99998, checked against the GLSL run verbatim).
+`GodRayGeometryTest` pins the weights, so a change to the gain, the tap or the
+decay conversion that drifts from the original fails there. The jitter is the
+one deliberate difference: interleaved gradient noise instead of its sine hash,
+for the same banding fix with less visible grain.
 
 **Backlight decays from the light, Letters from the pixel.** The article's
 decay weights samples by their distance from the pixel. In Backlight the light

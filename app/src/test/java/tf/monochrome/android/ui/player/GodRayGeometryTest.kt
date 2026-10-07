@@ -66,11 +66,12 @@ class GodRayGeometryTest {
 
     @Test
     fun `the sample weight turns the decayed sum into an average times the gain`() {
-        listOf(16, 24, 32).forEach { n ->
+        listOf(16, 24, 32, 50).forEach { n ->
             val d = GodRayGeometry.perSampleDecay(0.95f, n)
             val w = GodRayGeometry.sampleWeight(2.5f, d, n)
-            // A march through solid light (every sample 1) gives exactly the gain.
-            var sum = 0f
+            // Solid light under every tap, the centre one included, gives
+            // exactly the gain.
+            var sum = GodRayGeometry.CENTER_TAP
             var k = 1f
             repeat(n) { sum += k; k *= d }
             assertEquals("$n samples", 2.5f, sum * w, 1e-4f)
@@ -78,12 +79,38 @@ class GodRayGeometryTest {
     }
 
     @Test
+    fun `at the Shadertoy's settings every tap weighs what it does there`() {
+        // crepuscular_rays(): color = tex * 0.4, then 50 samples of
+        // tex * 0.4 * 0.58767 * 0.92^i. The app scales a weighted average, so
+        // it matches when the gain is the original's whole tap weight.
+        val n = 50
+        var decaySum = 0.0
+        var k = 1.0
+        repeat(n) { decaySum += k; k *= 0.92 }
+        val total = (0.4 * (1 + 0.58767 * decaySum)).toFloat()
+
+        val d = GodRayGeometry.perSampleDecay(0.92f, n)
+        assertEquals(0.92f, d, 1e-6f)
+        val w = GodRayGeometry.sampleWeight(total, d, n)
+        assertEquals("a march sample", 0.4f * 0.58767f, w, 1e-5f)
+        assertEquals("the centre tap", 0.4f, w * GodRayGeometry.CENTER_TAP, 1e-5f)
+
+        // The Crepuscular preset is those numbers, to within 1% of brightness.
+        val crepuscular = LyricsFxSettings.PRESETS.toMap().getValue("Crepuscular")
+        assertEquals(0.92f, crepuscular.godRayDecay, 0f)
+        assertEquals(1f, crepuscular.godRayDensity, 0f)
+        assertEquals(total, GodRayGeometry.LETTERS_GAIN * crepuscular.godRayExposure, total * 0.01f)
+        assertEquals(50, GodRayGeometry.samplesFor(4))
+    }
+
+    @Test
     fun `quality maps to the shader's sample counts`() {
         assertEquals(16, GodRayGeometry.samplesFor(1))
         assertEquals(24, GodRayGeometry.samplesFor(2))
         assertEquals(32, GodRayGeometry.samplesFor(3))
-        // The shader's loop is 32 long; nothing may ask for more.
-        assertEquals(32, GodRayGeometry.samplesFor(9))
+        assertEquals(50, GodRayGeometry.samplesFor(4))
+        // The shader's loop is 50 long; nothing may ask for more.
+        assertEquals(50, GodRayGeometry.samplesFor(9))
         assertEquals(16, GodRayGeometry.samplesFor(-1))
     }
 
@@ -104,20 +131,31 @@ class GodRayGeometryTest {
     }
 
     @Test
-    fun `orbit and sway move the light without leaving the dome`() {
+    fun `the orbit turns the azimuth and wraps it`() {
         val still = LyricsFxSettings(godRayAzimuthDeg = 90f, godRayElevationDeg = 60f)
         assertEquals(90f to 60f, GodRayGeometry.animatedAngles(still, 123f))
 
         val orbit = still.copy(godRaySpinDps = -45f)
-        val (az, _) = GodRayGeometry.animatedAngles(orbit, 10f)
-        assertEquals(((90f - 450f) % 360f + 360f) % 360f, az, 1e-3f)
-
-        val sway = still.copy(godRayElevationDeg = 85f, godRaySway = 1f)
         for (i in 0..400) {
-            val (a, e) = GodRayGeometry.animatedAngles(sway, i * 0.37f)
-            assertTrue(a in 0f..360f)
-            assertTrue("elevation $e left the dome", e in 0f..90f)
+            val (a, e) = GodRayGeometry.animatedAngles(orbit, i * 0.37f)
+            assertTrue("azimuth $a", a in 0f..360f)
+            assertEquals(60f, e, 0f)
         }
+        assertEquals(0f, GodRayGeometry.animatedAngles(orbit, 10f).first, 1e-3f)
+    }
+
+    @Test
+    fun `the sway is the Shadertoy's wandering light`() {
+        // pos = (sin(t), sin(t * 0.913)) * 0.5, in units of the screen's height,
+        // with the Shadertoy's y pointing up.
+        val h = 2000f
+        listOf(0f, 0.7f, 2.1f, 5.3f).forEach { t ->
+            val o = GodRayGeometry.swayOffset(1f, t, h)
+            assertEquals(kotlin.math.sin(t) * 0.5f * h, o.x, 1e-2f)
+            assertEquals(-kotlin.math.sin(t * 0.913f) * 0.5f * h, o.y, 1e-2f)
+        }
+        assertEquals(Offset.Zero, GodRayGeometry.swayOffset(0f, 3f, h))
+        assertEquals(GodRayGeometry.swayOffset(1f, 1.3f, h) * 0.25f, GodRayGeometry.swayOffset(0.25f, 1.3f, h))
     }
 
     @Test

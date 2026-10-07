@@ -1873,10 +1873,12 @@
     <string name="fx_god_ray_orbit">Umlauf</string>
     <string name="fx_god_ray_orbit_desc">Das Licht kreist um die Zeile; das Vorzeichen bestimmt die Richtung.</string>
     <string name="fx_god_ray_sway">Schwanken</string>
-    <string name="fx_god_ray_sway_desc">Ein langsames Wandern des Lichts um seine Richtung.</string>
+    <string name="fx_god_ray_sway_desc">Das Licht wandert auf dem Pfad des ursprünglichen Shadertoys über den Songtext.</string>
     <string name="fx_god_ray_tilt_desc">Wie weit das Neigen des Handys das Licht schwenkt.</string>
     <string name="fx_god_ray_samples_value">%1$d Samples</string>
     <string name="fx_god_ray_quality_desc">Samples pro Pixel: sauberere Bündel gegen GPU-Last.</string>
     <string name="fx_god_ray_follow_word">Dem gesungenen Wort folgen</string>
     <string name="fx_god_ray_follow_word_desc">Bei wortgenau getimten Songtexten leuchtet nur das gerade gesungene Wort, und das Licht springt Wort für Wort weiter. Zeilenweise getimte Songtexte behalten die ganze Zeile.</string>
+    <string name="fx_god_ray_all_lyrics">Der ganze Songtext leuchtet</string>
+    <string name="fx_god_ray_all_lyrics_desc">Jede Zeile strahlt Licht aus, nicht nur die gesungene, wie im ursprünglichen Shadertoy. Unruhiger, und die gesungene Zeile verliert die Abdunklung, die sie lesbar hält.</string>
 </resources>

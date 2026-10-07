@@ -1874,10 +1874,12 @@
     <string name="fx_god_ray_orbit">Orbit</string>
     <string name="fx_god_ray_orbit_desc">The light circles the line; the sign sets the direction.</string>
     <string name="fx_god_ray_sway">Sway</string>
-    <string name="fx_god_ray_sway_desc">A slow wander of the light around its direction.</string>
+    <string name="fx_god_ray_sway_desc">The light wanders over the lyrics on the Shadertoy\'s own path.</string>
     <string name="fx_god_ray_tilt_desc">How far tilting the phone swings the light.</string>
     <string name="fx_god_ray_samples_value">%1$d samples</string>
     <string name="fx_god_ray_quality_desc">Samples per pixel: cleaner shafts against GPU cost.</string>
     <string name="fx_god_ray_follow_word">Follow the sung word</string>
     <string name="fx_god_ray_follow_word_desc">With word-timed lyrics, only the word being sung shines, and the light hops along word by word. Line-timed lyrics keep the whole line.</string>
+    <string name="fx_god_ray_all_lyrics">All lyrics shine</string>
+    <string name="fx_god_ray_all_lyrics_desc">Every line streams light, not just the one being sung, as in the original Shadertoy. Busier, and the sung line loses the dimming that keeps it readable.</string>
 </resources>
