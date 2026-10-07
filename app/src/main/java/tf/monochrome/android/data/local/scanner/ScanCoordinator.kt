@@ -1,9 +1,13 @@
 package tf.monochrome.android.data.local.scanner
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -24,6 +28,11 @@ class ScanCoordinator @Inject constructor(
 ) {
     private val scanMutex = Mutex()
 
+    // Scans a screen asks for run here, not in the screen's view model: there,
+    // leaving the screen cancelled the scan halfway, with the batches already
+    // written cut off from their albums and artists until the next full scan.
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     private val _scanProgress = MutableStateFlow<ScanProgress?>(null)
     val scanProgress: StateFlow<ScanProgress?> = _scanProgress.asStateFlow()
 
@@ -42,6 +51,16 @@ class ScanCoordinator @Inject constructor(
      * dropped, it would not show until some later scan.
      */
     suspend fun runFullScanAfterCurrent() = runGuarded(wait = true) { mediaScanner.fullScan() }
+
+    /** [runFullScan], started here and left running whatever the caller does next. */
+    fun requestFullScan() {
+        scope.launch { runFullScan() }
+    }
+
+    /** [runFullScanAfterCurrent], started here and left running whatever the caller does next. */
+    fun requestFullScanAfterCurrent() {
+        scope.launch { runFullScanAfterCurrent() }
+    }
 
     /** Runs an incremental scan, or returns immediately if any scan is in flight. */
     suspend fun runIncrementalScan() = runGuarded { mediaScanner.incrementalScan() }

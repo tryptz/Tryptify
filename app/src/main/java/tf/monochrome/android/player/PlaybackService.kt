@@ -210,9 +210,13 @@ class PlaybackService : MediaSessionService() {
             // setMediaSource paths below build their own sources and are not
             // tapped yet.
             .setMediaSourceFactory(atmosTapFactory)
-            // Focus handling on until the preference says otherwise; see
-            // the ignoreAudioFocus collector below.
-            .setAudioAttributes(musicAttributes, /* handleAudioFocus = */ true)
+            // Focus handling off until the preference has been read; the
+            // ignoreAudioFocus collector below turns it on a moment later for
+            // everyone who has not chosen to play alongside other apps. Built
+            // with it on, a cold start from a headset button took focus before
+            // the setting arrived, and the app that had it (a game) lost it
+            // for good: exactly what that setting exists to prevent.
+            .setAudioAttributes(musicAttributes, /* handleAudioFocus = */ false)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .setLoadControl(loadControl)

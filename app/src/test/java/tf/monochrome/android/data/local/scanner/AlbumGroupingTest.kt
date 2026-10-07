@@ -63,6 +63,31 @@ class AlbumGroupingTest {
     }
 
     @Test
+    fun `in a flat folder, another artist's same-titled album is not borrowed`() {
+        // Download/ holds Queen's "Greatest Hits" and an ABBA track tagged
+        // with the same album title but no album artist or year.
+        val keys = AlbumGrouping.keys(
+            listOf(
+                track(album = "Greatest Hits", albumArtist = "Queen", artist = "Queen", year = 1981, folder = "Download"),
+                track(album = "Greatest Hits", albumArtist = null, artist = "ABBA", year = null, folder = "Download"),
+            )
+        )
+        assertNotEquals(keys[0], keys[1])
+        assertEquals(MediaScanner.buildAlbumGroupingKey("Greatest Hits", "ABBA", null), keys[1])
+    }
+
+    @Test
+    fun `a compilation's single joins it through the track artists`() {
+        val keys = AlbumGrouping.keys(
+            listOf(
+                track(album = "Now 50", albumArtist = "Various Artists", artist = "Robyn", year = 2001, folder = "Download"),
+                track(album = "Now 50", albumArtist = null, artist = "Robyn", year = null, folder = "Download"),
+            )
+        )
+        assertEquals(keys[0], keys[1])
+    }
+
+    @Test
     fun `an album artist is only borrowed within the same folder`() {
         val keys = AlbumGrouping.keys(
             listOf(

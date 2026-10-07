@@ -60,6 +60,10 @@ internal class FloatPcmGuard(
         if (inputAudioFormat.encoding != C.ENCODING_PCM_FLOAT || inputAudioFormat.channelCount <= 0) {
             pendingFormat = AudioFormat.NOT_SET
             inputFormat = AudioFormat.NOT_SET
+            // The stream it judged is over, so is its verdict: kept, a 16-bit
+            // verdict went on doubling floatBytes for the integer stream after.
+            verdict = Verdict.UNVERIFIED
+            audibleFramesPassed = 0
             return AudioFormat.NOT_SET
         }
         pendingFormat = inputAudioFormat
@@ -72,9 +76,11 @@ internal class FloatPcmGuard(
     /**
      * Looks at [input] without consuming it, while the stream is still
      * unverified. Called from [queueInput]; also callable ahead of it by a sink
-     * that needs [floatBytes] for a buffer before the chain runs.
+     * that needs [floatBytes] for a buffer before the chain runs. That look
+     * ahead passes [countTrust] false: [queueInput] sees the same buffer next,
+     * and counting it twice trusted a stream after half the second promised.
      */
-    fun classify(input: ByteBuffer) {
+    fun classify(input: ByteBuffer, countTrust: Boolean = true) {
         if (verdict != Verdict.UNVERIFIED || inputFormat == AudioFormat.NOT_SET) return
         val start = input.position()
         val samples = input.remaining() / FLOAT_BYTES
@@ -97,7 +103,7 @@ internal class FloatPcmGuard(
             )
             return
         }
-        if (implausible == 0 && peak >= AUDIBLE_PEAK) {
+        if (countTrust && implausible == 0 && peak >= AUDIBLE_PEAK) {
             audibleFramesPassed += samples / inputFormat.channelCount
             if (audibleFramesPassed >= inputFormat.sampleRate.toLong() * TRUST_SECONDS) {
                 verdict = Verdict.FLOAT
@@ -128,7 +134,8 @@ internal class FloatPcmGuard(
                 out.putFloat(i * FLOAT_BYTES, inputBuffer.getShort(start + i * INT16_BYTES) / 32768f)
             }
             out.limit(samples * FLOAT_BYTES)
-            inputBuffer.position(start + samples * INT16_BYTES)
+            // Whole frames are converted; a stray part-frame is dropped (see below).
+            inputBuffer.position(inputBuffer.limit())
             outputBuffer = out
             return
         }
@@ -140,6 +147,12 @@ internal class FloatPcmGuard(
         inputBuffer.limit(start + bytes)
         out.put(inputBuffer)
         inputBuffer.limit(savedLimit)
+        // Real float output is whole frames. A part-frame left over means the
+        // data is not what it was declared as (16-bit with an odd frame count
+        // that has not been caught yet, e.g. digital silence). Left in the
+        // buffer it was never consumed, the sink waited on it forever and the
+        // track stalled at its end; under one frame, dropping it is inaudible.
+        inputBuffer.position(savedLimit)
         out.flip()
         outputBuffer = out
     }

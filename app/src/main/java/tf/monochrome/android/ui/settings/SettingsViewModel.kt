@@ -860,18 +860,23 @@ class SettingsViewModel @Inject constructor(
     val localTitleFromFileName: StateFlow<Boolean> = preferences.localTitleFromFileName
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    /** Titles are written by the scanner, so the switch takes effect through a full scan. */
+    /**
+     * Titles are written by the scanner, so the switch takes effect through a
+     * full scan. The scan is the coordinator's, not this screen's: it re-reads
+     * every file, and leaving Settings must not cut it off halfway.
+     */
     fun setLocalTitleFromFileName(enabled: Boolean) {
         viewModelScope.launch {
             preferences.setLocalTitleFromFileName(enabled)
-            scanCoordinator.runFullScanAfterCurrent()
+            scanCoordinator.requestFullScanAfterCurrent()
         }
     }
 
     fun rescanLibrary() {
         // Route through the shared ScanCoordinator (the same guard the Library
-        // tab uses), so the button actually scans instead of no-op'ing.
-        viewModelScope.launch { scanCoordinator.runFullScan() }
+        // tab uses), so the button actually scans instead of no-op'ing, and
+        // keeps scanning after the user leaves Settings.
+        scanCoordinator.requestFullScan()
     }
 
     // The library_tab_order surface that used to live here is gone: the flat page

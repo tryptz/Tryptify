@@ -730,7 +730,7 @@ class LibusbAudioSink(
         if (c === halChain) {
             // Decided before the bookkeeping, which needs the buffer's real
             // length: twice its byte count as float if it is 16-bit.
-            floatGuard.classify(buffer)
+            floatGuard.classify(buffer, countTrust = false)
             noteHalInput(presentationTimeUs, floatGuard.floatBytes(buffer.remaining()))
         }
         val processed = if (c.anyActive()) c.process(buffer) else buffer

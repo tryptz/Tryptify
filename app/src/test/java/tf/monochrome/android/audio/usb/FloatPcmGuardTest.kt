@@ -173,6 +173,48 @@ class FloatPcmGuardTest {
     }
 
     @Test
+    fun `the sink's look-ahead does not count toward trust`() {
+        // What the sink does with each buffer: classify ahead for its timing,
+        // then the chain's queueInput. Counted twice, 0.6 s of float trusted
+        // the stream, and 16-bit after it went through as static.
+        val g = guard()
+        var at = 0
+        while (at < rate * 6 / 10) {
+            val b = floatSine(4410, from = at)
+            g.classify(b, countTrust = false)
+            run(g, b)
+            at += 4410
+        }
+        run(g, int16Sine(1024))
+        assertTrue(g.readingAsInt16)
+    }
+
+    @Test
+    fun `a non-float stream after a 16-bit one is not counted double`() {
+        val g = guard()
+        run(g, int16Sine(1024))
+        assertEquals(8192, g.floatBytes(4096))
+        g.configure(AudioProcessor.AudioFormat(rate, 2, C.ENCODING_PCM_24BIT))
+        g.flush()
+        assertEquals(4096, g.floatBytes(4096))
+    }
+
+    @Test
+    fun `a part-frame left over is consumed, not left to stall the sink`() {
+        // Digital silence keeps the stream unverified, and an odd number of
+        // 16-bit stereo frames is half a float frame short.
+        val g = guard()
+        val silence = ByteBuffer.allocateDirect(4097 * 4).order(ByteOrder.LITTLE_ENDIAN)
+        silence.position(silence.limit())
+        silence.flip()
+        val out = run(g, silence)
+        assertFalse(silence.hasRemaining())
+        // 16,388 bytes: 2,048 whole float frames (4,096 samples) and 4 left over.
+        assertEquals(4096, out.size)
+        assertFalse(g.readingAsInt16)
+    }
+
+    @Test
     fun `only float input is taken`() {
         val g = FloatPcmGuard {}
         val out = g.configure(AudioProcessor.AudioFormat(rate, 2, C.ENCODING_PCM_16BIT))

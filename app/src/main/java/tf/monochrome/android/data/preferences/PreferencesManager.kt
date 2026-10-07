@@ -1870,8 +1870,12 @@ class PreferencesManager @Inject constructor(
      * off: then focus is requested as usual and another app taking it pauses
      * or ducks playback.
      */
+    // distinctUntilChanged: DataStore emits on every write to any key (the
+    // download queue rewrites itself per track), and the service applies each
+    // emission to the player. Re-applied during a call, focus was asked for
+    // again, refused, and playback stayed paused once the call ended.
     val ignoreAudioFocus: Flow<Boolean> =
-        dataStore.data.map { it[IGNORE_AUDIO_FOCUS] ?: false }
+        dataStore.data.map { it[IGNORE_AUDIO_FOCUS] ?: false }.distinctUntilChanged()
     suspend fun setIgnoreAudioFocus(enabled: Boolean) {
         dataStore.edit { it[IGNORE_AUDIO_FOCUS] = enabled }
     }

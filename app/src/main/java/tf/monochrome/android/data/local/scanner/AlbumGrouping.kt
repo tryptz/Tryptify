@@ -13,7 +13,10 @@ import tf.monochrome.android.data.local.scanner.MediaScanner.Companion.normalize
  * carries no album artist and no year, so "1" by The Beatles came out twice.
  * Now such a track is not split off for that alone:
  *  - without an album artist, it takes the one named by the same-titled
- *    album's tracks in its folder;
+ *    album's tracks in its folder, if its own artist credits that album
+ *    artist or one of those tracks' artists ("The Beatles, Billy Preston"
+ *    credits The Beatles). A flat folder holds many artists, and ABBA's
+ *    "Greatest Hits" track is not Queen's because the titles match;
  *  - without a year, it takes the year of the album with its title and
  *    artist (the most common one, if the album's tracks give several).
  * Different releases still stay apart: the same title in two years, under
@@ -37,14 +40,27 @@ object AlbumGrouping {
     fun keys(tracks: List<Facts>): List<String> {
         val titled = tracks.map { it.album?.takeIf(String::isNotBlank)?.let(::normalizeText) }
 
-        val albumArtistInFolder: Map<Pair<String, String>, String> = tracks.indices
+        val albumInFolder: Map<Pair<String, String>, FolderAlbum> = tracks.indices
             .filter { titled[it] != null && !tracks[it].albumArtist.isNullOrBlank() }
             .groupBy { tracks[it].folder to titled[it]!! }
-            .mapValues { (_, members) -> mostCommon(members.map { tracks[it].albumArtist!! }) }
+            .mapValues { (_, members) ->
+                FolderAlbum(
+                    albumArtist = mostCommon(members.map { tracks[it].albumArtist!! }),
+                    names = members
+                        .flatMap { listOfNotNull(tracks[it].albumArtist, tracks[it].artist) }
+                        .map(::normalizeText)
+                        .filter(String::isNotEmpty)
+                        .toSet(),
+                )
+            }
         val artists = tracks.indices.map { i ->
+            val own = tracks[i].artist
+            val ownKey = own?.takeIf(String::isNotBlank)?.let(::normalizeText)
             tracks[i].albumArtist?.takeIf(String::isNotBlank)
-                ?: titled[i]?.let { albumArtistInFolder[tracks[i].folder to it] }
-                ?: tracks[i].artist
+                ?: titled[i]?.let { albumInFolder[tracks[i].folder to it] }
+                    ?.takeIf { album -> ownKey == null || album.names.any { credits(ownKey, it) } }
+                    ?.albumArtist
+                ?: own
         }
         val artistKeys = artists.map { normalizeText(it ?: "unknown") }
 
@@ -56,6 +72,27 @@ object AlbumGrouping {
         return tracks.indices.map { i ->
             val year = tracks[i].year ?: titled[i]?.let { yearOfAlbum[it to artistKeys[i]] }
             buildAlbumGroupingKey(tracks[i].album, artists[i], year)
+        }
+    }
+
+    /** An album in a folder: its album artist, and every artist its tracks name. */
+    private class FolderAlbum(val albumArtist: String, val names: Set<String>)
+
+    /**
+     * Whether artist tag [credit] names [name] as a whole word or words,
+     * alone or among others: "the beatles, billy preston" credits "the
+     * beatles", and "ravel" does not credit "ra". Both already normalized.
+     */
+    private fun credits(credit: String, name: String): Boolean {
+        var from = 0
+        while (true) {
+            val at = credit.indexOf(name, from)
+            if (at < 0) return false
+            val end = at + name.length
+            val startsWord = at == 0 || !credit[at - 1].isLetterOrDigit()
+            val endsWord = end == credit.length || !credit[end].isLetterOrDigit()
+            if (startsWord && endsWord) return true
+            from = at + 1
         }
     }
 

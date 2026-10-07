@@ -19,12 +19,14 @@ interface LocalMediaDao {
     fun getAllTracks(): Flow<List<LocalTrackEntity>>
 
     /**
-     * Every track whose file is under folder [prefix] (a path ending in "/").
-     * substr rather than LIKE, so a "%" or "_" in a folder name is just a
-     * character.
+     * Every track whose file is under folder [prefix] (a path ending in "/"),
+     * as a range of the unique filePath index: [prefix] up to [folderRangeEnd]
+     * of it. A comparison rather than LIKE, so a "%" or "_" in a folder name is
+     * just a character; a range rather than substr(), which no index can
+     * serve, so this re-ran as a scan of the whole library on every write.
      */
-    @Query("SELECT * FROM local_tracks WHERE substr(filePath, 1, length(:prefix)) = :prefix")
-    fun observeTracksUnder(prefix: String): Flow<List<LocalTrackEntity>>
+    @Query("SELECT * FROM local_tracks WHERE filePath >= :prefix AND filePath < :prefixEnd")
+    fun observeTracksUnder(prefix: String, prefixEnd: String): Flow<List<LocalTrackEntity>>
 
     /**
      * The songs list, one page at a time.
@@ -423,3 +425,13 @@ data class TrackScanInfo(
     val artist: String?,
     val title: String?
 )
+
+/**
+ * The first path past every path under folder [prefix] (which ends in "/"):
+ * the same text with that "/" turned into "0", the next character. Nothing
+ * sorts between the two, so `>= prefix AND < this` is exactly the folder.
+ */
+fun folderRangeEnd(prefix: String): String {
+    require(prefix.endsWith('/')) { "a folder prefix ends in /: $prefix" }
+    return prefix.dropLast(1) + '0'
+}

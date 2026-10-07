@@ -28,6 +28,7 @@ import tf.monochrome.android.data.db.entity.DownloadedTrackEntity
 import tf.monochrome.android.data.downloads.SafPaths
 import tf.monochrome.android.data.local.db.LocalMediaDao
 import tf.monochrome.android.data.local.db.LocalTrackEntity
+import tf.monochrome.android.data.local.db.folderRangeEnd
 import tf.monochrome.android.data.local.scanner.MediaScanner
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.AudioCodec
@@ -88,7 +89,12 @@ class DownloadsViewModel @Inject constructor(
                 // No folder picked: downloads are in app storage, which the
                 // local library does not scan, and nothing else is there.
                 if (prefix == null) flowOf(emptyList())
-                else localMediaDao.observeTracksUnder(prefix).map { rows -> rows.map { it.toDownloadedTrack() } }
+                else localMediaDao.observeTracksUnder(prefix, folderRangeEnd(prefix))
+                    .map { rows -> rows.map { it.toDownloadedTrack() } }
+                    // Room re-runs the query on any write to the library, a
+                    // scan batch elsewhere included; the same rows again need
+                    // no re-sort or regroup below.
+                    .distinctUntilChanged()
             }
 
     val downloadedTracks: StateFlow<List<DownloadedTrackEntity>?> =
