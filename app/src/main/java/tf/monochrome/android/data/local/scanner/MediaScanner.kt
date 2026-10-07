@@ -321,12 +321,15 @@ class MediaScanner @Inject constructor(
         val tracksByAlbumKey = HashMap<String, MutableList<LocalTrackEntity>>()
         val artistSet = HashMap<String, MutableList<LocalTrackEntity>>()
         val genreSet = HashMap<String, Int>()
-        for (track in tracks) {
-            val albumKey = buildAlbumGroupingKey(
-                track.album,
-                track.albumArtist ?: track.artist,
-                track.year
-            )
+        // A track missing a tag its album's other tracks have (a single
+        // downloaded next to its album) joins that album; see AlbumGrouping.
+        val albumKeys = AlbumGrouping.keys(
+            tracks.map {
+                AlbumGrouping.Facts(it.album, it.albumArtist, it.artist, it.year, it.filePath.substringBeforeLast('/', ""))
+            }
+        )
+        for ((index, track) in tracks.withIndex()) {
+            val albumKey = albumKeys[index]
             tracksByAlbumKey.getOrPut(albumKey) { mutableListOf() }.add(track)
 
             val artistName = track.albumArtist ?: track.artist ?: "Unknown Artist"
@@ -358,7 +361,11 @@ class MediaScanner @Inject constructor(
             // cover in the song list instead of a music-note placeholder.
             val albumArtByTrackPath = HashMap<String, String?>(tracks.size)
             for ((key, albumTracks) in tracksByAlbumKey) {
-                val representative = albumTracks.first()
+                // The album's title, artist and year from its most fully
+                // tagged track, not a single that joined it without them.
+                val representative = albumTracks.maxBy {
+                    (if (!it.albumArtist.isNullOrBlank()) 2 else 0) + (if (it.year != null) 1 else 0)
+                }
                 // A "synthetic" album is the bucket every track with a null/
                 // blank `album` tag falls into — those tracks aren't actually
                 // an album together, just unidentified files that share the
