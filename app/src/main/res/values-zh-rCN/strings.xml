@@ -1833,4 +1833,5 @@
     <string name="fx_god_ray_all_lyrics_desc">每一行都会射出光线，而不只是正在演唱的那一行，就像原版 Shadertoy 一样。画面更繁杂，正在演唱的行也不再被减光以保持清晰。</string>
     <string name="fx_god_ray_glass_catch">玻璃捕捉光线</string>
     <string name="fx_god_ray_glass_catch_desc">玻璃文字会捕捉光束的光：朝向光源的边缘出现闪光；若为背光，边缘会发光。需要开启液态玻璃。</string>
+    <string name="fx_lyric_shadow_desc">歌词下方投在背景上的柔和阴影，方向背离光源。0 = 无阴影。</string>
 </resources>

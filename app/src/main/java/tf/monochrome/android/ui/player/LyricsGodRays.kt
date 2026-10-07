@@ -477,6 +477,16 @@ float bandMask(float2 s) {
     return x * y;
 }
 
+// How much of a sample is lit letter rather than the soft shadow under it
+// (lyricShadow lays it inside this layer): its brightness for its coverage.
+// A glyph — accent, white, glass — passes whole; the shadow is black, so it
+// neither shines nor blocks the light. Without this the shadow streaked the
+// shafts dark and stood in front of them.
+float lit(float4 c) {
+    if (c.a < 0.004) { return 0.0; }
+    return clamp(max(c.r, max(c.g, c.b)) * 4.0 / c.a, 0.0, 1.0);
+}
+
 float hash11(float n) { return fract(sin(n * 127.1 + 311.7) * 43758.5453); }
 
 // Dust: value noise round the light, in a whole number of cells so it closes
@@ -532,7 +542,7 @@ half4 main(float2 p) {
     // itself at 1 / weight of a march sample. Without it the port was 5% off
     // the original; with it, and the taps at 1..N steps below, it matches
     // to 0.1% at 50 samples.
-    float4 acc = back ? float4(0.0) : src * (bandMask(p) * uCenterTap);
+    float4 acc = back ? float4(0.0) : src * (lit(src) * bandMask(p) * uCenterTap);
     float w = 1.0;
     for (int i = 0; i < 50; i++) {
         if (float(i) < uSamples) {
@@ -544,10 +554,10 @@ half4 main(float2 p) {
                 float r = distance(s, uLight);
                 float sun = 0.75 * smoothstep(uSunR, uSunR * 0.2, r)
                           + 0.12 * smoothstep(uSunR * 2.2, 0.0, r);
-                float k = sun * (1.0 - c.a);
+                float k = sun * (1.0 - c.a * lit(c));
                 acc += float4(uSunColor * k, k);
             } else {
-                acc += c * (bandMask(s) * w);
+                acc += c * (lit(c) * bandMask(s) * w);
                 w *= uDecay;
             }
         }
@@ -573,7 +583,11 @@ half4 main(float2 p) {
         float outA = src.a + a * (1.0 - src.a);
         return half4(half3(min(src.rgb + rays, float3(outA))), half(outA));
     }
-    // Under: the letters stay crisp in front of their own light.
-    return half4(src + float4(rays, a) * (1.0 - src.a));
+    // Under: back to front, the shadow on the background, the shafts, then
+    // the letters, crisp in front of their own light.
+    float4 letters = src * lit(src);
+    float4 shade = src - letters;
+    float4 light = float4(rays, a);
+    return half4(letters + (light + shade * (1.0 - a)) * (1.0 - letters.a));
 }
 """

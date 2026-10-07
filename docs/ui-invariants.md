@@ -267,6 +267,16 @@ there the march is averaged plainly and the decay is counted out from the light.
 Letters keeps the article's weighting. Both normalise by the sample count, so
 the quality setting changes grain, not length or brightness (`GodRayGeometryTest`).
 
+**The lyrics' shadow is on the background, never on the letters.** Nothing
+dark may be drawn inside the lyric glass layer: the glass bevels and relights
+everything in it, so an extruded backing glyph and a contact `Shadow` there came
+out as solid blocks with dark slabs stuck to every letter (seen on device). The
+shadow is `lyricShadow`, its own layer outside the glass and the side inset — a
+blurred, offset, darkened silhouette of the finished letters laid under them,
+falling away from the light — and inside the rays, whose shader weighs every
+sample by `lit` so the shadow neither shines nor blocks the light, and composites
+it under the shafts.
+
 **The glass letters catch the rays' light from one shared light.**
 `LyricRayLight` computes the light once, from the rays layer's own box, and
 both layers read it in their draw phase; the glass moves it into its own pixels
@@ -274,7 +284,9 @@ through the two layers' root positions (`frameFor`). Computing it twice, once
 per layer, is how a glint ends up somewhere the shafts are not. The `uRay*`
 term in `LIQUID_GLASS_SRC` is gated on `uRayAmount`, and every pane — the
 transport, the mini player, every panel — sets it to 0 (`setNoRayLight`), which
-leaves their pixels bit-identical: multiplied by exactly 1, added exactly 0.
+leaves their pixels bit-identical: added exactly 0. The term only ever adds
+light. It used to dim the bevels turned away from the light and darken backlit
+letters into silhouettes, and on device that read as shadows on the letters.
 
 The rays are off by default, and the 17 presets ahead of `Sunburst` set no
 glass optic and no ray field, so nobody's lyrics change on upgrade. The

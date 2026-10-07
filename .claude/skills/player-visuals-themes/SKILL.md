@@ -67,7 +67,8 @@ test enforces `tintColor == 0 && previewBg == 0` for every preset, and
    data-class default (listed below), which may not be the look you intend.
 4. **Mind the three gates** (they cut whole subsystems off):
    - Lyrics `rotationDegrees ≤ 0.05` → the entire per-letter 3D path is off, so
-     `waveSpeed` / `wavePhaseStep` / `waveTravelDp` / `shadowDepth` do nothing.
+     `waveSpeed` / `wavePhaseStep` / `waveTravelDp` do nothing. (`shadowDepth`
+     no longer depends on it: the shadow is its own layer under every line.)
    - Lyrics `bassReact ≤ 0.01` → the analyzer is off, so `pumpAmount` / `attackMs`
      / `releaseMs` / `bounce` / `glowRadiusDp` / `glowBrightness` do nothing —
      and neither does `godRayBeat`, which rides the same pulse.
@@ -157,7 +158,7 @@ Personal fields are omitted here — never set them in a preset.
 | `waveSpeed` | 0.25..3 | 1 | Wave temporal rate. |
 | `wavePhaseStep` | 0.05..0.9 | 0.22 | Phase advance per letter. Low = smooth ribbon; high = choppy/glitchy. |
 | `waveTravelDp` | 0..8 | 3 | Vertical bob amplitude of each letter. |
-| `shadowDepth` | 0..1 | 0.7 | 3D block extrusion / contact-shadow depth. 0 = flat, 1 = chunky. |
+| `shadowDepth` | 0..1 | 0.7 | Soft shadow cast on the background under every lyric line, falling away from the light (the rays' light when they are on, else the glass key light). 0 = none, 1 = darkest and softest. Not on the letters: it is its own layer outside the glass. |
 | `bassReact` | 0..1 | 0.8 | Master reactive intensity **and gate** (≤0.01 = no pump/pop/glow). |
 | `pumpAmount` | 0..0.25 | 0.08 | Active-line swell on a kick. |
 | `attackMs` | 4..60 | 12 | Pulse attack — how fast it snaps onto a kick. Low = snappy, high = soft swell. |

@@ -1883,4 +1883,5 @@
     <string name="fx_god_ray_all_lyrics_desc">Jede Zeile strahlt Licht aus, nicht nur die gesungene, wie im ursprünglichen Shadertoy. Unruhiger, und die gesungene Zeile verliert die Abdunklung, die sie lesbar hält.</string>
     <string name="fx_god_ray_glass_catch">Glas fängt das Licht ein</string>
     <string name="fx_god_ray_glass_catch_desc">Die Glasbuchstaben fangen das Licht der Bündel ein: ein Glanz an den Kanten, die ihm zugewandt sind, und bei Gegenlicht leuchtende Ränder. Braucht Liquid Glass.</string>
+    <string name="fx_lyric_shadow_desc">Ein weicher Schatten unter dem Songtext, auf dem Hintergrund, vom Licht abgewandt. 0 = keiner.</string>
 </resources>

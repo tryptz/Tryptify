@@ -104,6 +104,12 @@ data class LyricsFxSettings(
     val wavePhaseStep: Float = 0.22f,
     /** Vertical travel of each letter riding the wave, in dp. */
     val waveTravelDp: Float = 3f,
+    /**
+     * The soft shadow the lyrics cast on the background under them, falling
+     * away from the light: 0 = none, 1 = darkest and softest. On every line
+     * and whether or not the wave is on; it used to be a blocky extrusion on
+     * the sung line's letters (see lyricShadow).
+     */
     val shadowDepth: Float = 0.7f,
 
     // ── Beat engine (bass → pulse) ─────────────────────────────────────

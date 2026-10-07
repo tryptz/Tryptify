@@ -149,6 +149,7 @@ import tf.monochrome.android.ui.player.bassBeat
 import tf.monochrome.android.ui.player.fxaa
 import tf.monochrome.android.ui.player.liquidGlass
 import tf.monochrome.android.ui.player.lyricGodRays
+import tf.monochrome.android.ui.player.lyricShadow
 import tf.monochrome.android.ui.player.rememberLyricRayLight
 import tf.monochrome.android.ui.player.rememberLyricFontFamily
 import androidx.compose.ui.layout.boundsInParent
@@ -980,9 +981,10 @@ fun LyricsFxStudioScreen(
                 FxSlider(stringResource(R.string.fx_wave_travel), "%.1f dp".format(fx.waveTravelDp), fx.waveTravelDp, 0f..8f) {
                     viewModel.update { s -> s.copy(waveTravelDp = it) }
                 }
-                FxSlider(stringResource(R.string.fx_shadow_depth), "${(fx.shadowDepth * 100).toInt()}%", fx.shadowDepth, 0f..1f) {
-                    viewModel.update { s -> s.copy(shadowDepth = it) }
-                }
+                FxSlider(
+                    stringResource(R.string.fx_shadow_depth), "${(fx.shadowDepth * 100).toInt()}%", fx.shadowDepth, 0f..1f,
+                    description = stringResource(R.string.fx_lyric_shadow_desc),
+                ) { viewModel.update { s -> s.copy(shadowDepth = it) } }
             }
 
             item {
@@ -2132,7 +2134,8 @@ private fun StudioPreview(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .lyricGodRays(rayLight),
+                        .lyricGodRays(rayLight)
+                        .lyricShadow(rayLight),
                     contentAlignment = Alignment.Center,
                 ) {
                     Letters3DRow(

@@ -1295,11 +1295,13 @@ half4 main(float2 p) {
 
     // The god rays' light on the glass. In front of the letters it lights the
     // bevels that face it — brighter than the flat face by however much more
-    // they turn toward it — throws a glint off them and dims the bevels turned
-    // away. Behind them (the backlight) it shines through instead: the rims
-    // facing it glow, the way the edge of a glass catches a light behind it.
+    // they turn toward it — and throws a glint off them. Behind them (the
+    // backlight) it shines through instead: the rims facing it glow, the way
+    // the edge of a glass catches a light behind it. It only ever ADDS light:
+    // darkening the bevels turned away, and the whole letter under a
+    // backlight, read on device as shadows on the letters, and the lyrics'
+    // shadow belongs on the background (lyricShadow).
     float3 rayAdd = float3(0.0);
-    float rayShade = 1.0;
     if (uRayAmount > 0.001) {
         float2 toRay = uRayLight.xy - p;
         float rd = length(toRay);
@@ -1313,7 +1315,6 @@ half4 main(float2 p) {
             float2 out2 = (edgeness > 1e-4) ? N.xy / edgeness : float2(0.0);
             float toward = (rd > 0.5) ? max(dot(out2, toRay / rd), 0.0) : 1.0;
             rayAdd = uRayColor * k * (edgeness * (0.2 + toward) * 0.9 + rayGlint * 0.5);
-            rayShade = 1.0 - 0.35 * min(k, 1.0);
         } else {
             // The bevels are 2-4px wide, so on its own their light reads as a
             // faint emboss; the face takes a share of it too (more the more
@@ -1321,7 +1322,6 @@ half4 main(float2 p) {
             // to be lit by the shafts' source.
             float facing = dot(N, Lr) - Lr.z;
             rayAdd = uRayColor * k * (max(facing, 0.0) * 2.4 + rayGlint * fres * 2.5 + Lr.z * 0.3);
-            rayShade = 1.0 - min(max(-facing, 0.0) * 1.2 * k, 0.55);
         }
     }
 
@@ -1349,7 +1349,7 @@ half4 main(float2 p) {
     // otherwise fire the specular uniformly).
     float3 col3 = mix(bodyCol, refl * uReflection, clamp(fres * 1.1, 0.0, 1.0));
     col3 += float3(specR, spec, specB) * uRimGain * fres * glintGain;
-    col3 = col3 * rayShade + rayAdd;
+    col3 += rayAdd;
 
     // There is deliberately no traveling light sheet here. A soft diagonal band
     // used to glide across every pane every ~7s — the classic "shine" pass — and

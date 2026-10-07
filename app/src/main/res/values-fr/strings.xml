@@ -1933,4 +1933,5 @@
     <string name="fx_god_ray_all_lyrics_desc">Chaque ligne diffuse de la lumière, pas seulement celle qui est chantée, comme dans le Shadertoy d’origine. Plus chargé, et la ligne chantée perd l’atténuation qui la garde lisible.</string>
     <string name="fx_god_ray_glass_catch">Le verre capte la lumière</string>
     <string name="fx_god_ray_glass_catch_desc">Les lettres de verre captent la lumière des faisceaux : un éclat sur les bords tournés vers elle et, en contre-jour, des contours qui brillent. Nécessite le verre liquide.</string>
+    <string name="fx_lyric_shadow_desc">Une ombre douce sous les paroles, sur l’arrière-plan, qui tombe à l’opposé de la lumière. 0 = aucune.</string>
 </resources>

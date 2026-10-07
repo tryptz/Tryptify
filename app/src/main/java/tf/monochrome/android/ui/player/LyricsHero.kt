@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -49,7 +48,6 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
@@ -530,6 +528,11 @@ internal fun SyncedLyricsView(
                     },
                 )
                 .lyricGodRays(rayLight)
+                // The shadow under the letters, on the background: outside the
+                // glass so it is never bevelled into a block, inside the rays so
+                // the shafts pass over it, and outside the inset so its blur is
+                // not cut off at the edge.
+                .lyricShadow(rayLight)
                 // User edge margin + a fixed bevel-safe inset, so the outermost
                 // glyphs (and their glass bevels) never sit flush against the
                 // clip edge where they'd be corner-cut.
@@ -723,7 +726,6 @@ internal fun KaraokeLyricLine(
         letterSpacing = fx.letterSpacingSp.sp,
         fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
     ).withLyricFont(lyricFont)
-    val shadowed = wordStyle.copy(shadow = letter3DShadow(fx.shadowDepth))
     Column(
         modifier = beatModifier
             .fillMaxWidth()
@@ -761,7 +763,7 @@ internal fun KaraokeLyricLine(
                                     // nearly in phase, so the line reads as one long
                                     // smooth ribbon; the step is a Studio setting.
                                     phase = (phaseBase + j) * fx.wavePhaseStep,
-                                    style = shadowed,
+                                    style = wordStyle,
                                     color = color,
                                     time = time,
                                 )
@@ -950,19 +952,11 @@ internal fun rememberWrappedLyricLayout(
     }
 }
 
-// Crisp contact shadow: a tight, dark edge right under the glyph so the
-// letterform reads as solid and sharp. (The previous wide blur — up to ~17px —
-// hazed the glyph edges and made the whole line look soft; block depth now
-// comes from the extruded backing glyph in Letter3DText instead.)
-private fun letter3DShadow(depth: Float) = Shadow(
-    color = Color.Black.copy(alpha = (0.5f + 0.4f * depth).coerceIn(0f, 1f)),
-    offset = Offset(0f, 2f + 5f * depth),
-    blurRadius = 1f + 4f * depth,
-)
-
 /**
  * One precomputed lyric row rendered as per-letter 3D glyphs — a ripple of
- * rotation travelling along the row, with a baked-in drop shadow for depth.
+ * rotation travelling along the row. The letters carry no shadow of their own:
+ * it is cast on the background under them by [lyricShadow], outside the glass,
+ * because anything drawn here is turned into glass with them.
  * Every letter sits at its NATURAL text advance (no inter-letter gaps), so
  * the row occupies the same width as the identical row drawn as one Text and
  * activating a line never shifts or re-wraps it; the swell/tilt/extrusion are
@@ -981,7 +975,6 @@ internal fun Letters3DRow(
     phaseBase: Int = 0,
 ) {
     val fx = LocalLyricsFx.current
-    val shadowed = style.copy(shadow = letter3DShadow(fx.shadowDepth))
     Row(modifier = modifier) {
         text.forEachIndexed { j, ch ->
             Letter3DText(
@@ -989,7 +982,7 @@ internal fun Letters3DRow(
                 // Low spatial frequency: neighbouring letters stay nearly in
                 // phase, so the row reads as one long smooth ribbon.
                 phase = (phaseBase + j) * fx.wavePhaseStep,
-                style = shadowed,
+                style = style,
                 color = color,
                 time = time,
             )
@@ -1029,18 +1022,10 @@ private fun Letter3DText(
             cameraDistance = 4f * density
         },
     ) {
-        // Extruded backing: the same glyph stamped in near-black a couple of
-        // pixels down-right, inside the same transform layer so it tilts with
-        // the letter. The pair reads as one solid letterform with block
-        // depth — not a glyph plus a detached shadow. Layout offset, NOT a
-        // second graphicsLayer: an extra render node per letter doubled the
-        // per-frame layer updates on long lines and cost visible frames.
-        Text(
-            text = text,
-            style = style.copy(shadow = null),
-            color = Color.Black.copy(alpha = (0.45f + 0.4f * fx.shadowDepth).coerceIn(0f, 0.9f)),
-            modifier = Modifier.offset(x = 1.2.dp, y = 2.2.dp),
-        )
+        // No extruded backing glyph any more. It sat inside the glass layer,
+        // so the glass bevelled and relit it as more glass, and every letter
+        // came out as a block with a dark slab stuck to it. Depth is the soft
+        // shadow [lyricShadow] casts on the background instead.
         Text(text = text, style = style, color = color)
     }
 }
