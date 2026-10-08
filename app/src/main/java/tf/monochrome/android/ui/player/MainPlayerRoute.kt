@@ -599,6 +599,7 @@ fun MainPlayerRoute(
             band = { lyricLetters.bandInRoot() },
             lettersBox = { lyricLetters.boxInRoot },
             fx = lyricsFx,
+            debugName = "player",
         )
     } else {
         null

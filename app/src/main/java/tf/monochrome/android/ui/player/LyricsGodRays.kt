@@ -5,13 +5,16 @@ import android.graphics.RuntimeShader
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -155,6 +158,22 @@ internal class LyricRayLight(
      * in that layer's own pixels. Null until the lyrics have been laid out.
      */
     fun frameFor(originInRoot: Offset): RayFrame? = frameInRoot()?.shiftedBy(-originInRoot)
+
+    /** This frame's light in words, for [RaysProbe]'s report: what is missing when there is none. */
+    fun describe(): String {
+        val box = lettersBox()
+        val line = band()
+        val f = frameInRoot()
+        return "scale=${scale.toInt()} " +
+            "box=${box?.let { "${it.left.toInt()},${it.top.toInt()} ${it.width.toInt()}x${it.height.toInt()}" } ?: "none"} " +
+            "band=${line?.let { "${it.top.toInt()}..${it.bottom.toInt()}" } ?: "none"} " +
+            if (f == null) {
+                "light=NONE"
+            } else {
+                "light=${f.light.x.toInt()},${f.light.y.toInt()} " +
+                    "exp=${"%.2f".format(f.exposure)} density=${"%.2f".format(f.density)}"
+            }
+    }
 }
 
 /** One frame of the god rays' light, in some layer's own pixels. */
@@ -185,6 +204,8 @@ internal fun rememberLyricRayLight(
     /** The lyric surface, in root px; read in the draw phase. */
     lettersBox: () -> Rect?,
     fx: LyricsFxSettings = LocalLyricsFx.current,
+    /** Who this light is for, in the Debug Log's rays report. */
+    debugName: String = "lyrics",
 ): LyricRayLight? {
     if (!fx.godRays) return null
     if (LocalLowPerformance.current.disableLiquidGlass) return null
@@ -196,9 +217,32 @@ internal fun rememberLyricRayLight(
     val tilt = if (fx.godRayTilt > 0f) rememberGravityTilt() else NoTilt
     val window = LocalWindowInfo.current.containerSize
     val scale = min(window.width, window.height).toFloat()
-    return remember(fx, accent, moving, time, tilt, pulse, band, lettersBox, scale) {
+    val light = remember(fx, accent, moving, time, tilt, pulse, band, lettersBox, scale) {
+        RaysProbe.lightsBuilt++
         LyricRayLight(fx, accent, moving, time, tilt, pulse, band, lettersBox, scale)
     }
+    // Keyed on nothing, so a light rebuilt every recomposition still gets
+    // reported, as a high "lights built", instead of restarting the timer.
+    val current = rememberUpdatedState(light)
+    LaunchedEffect(Unit) {
+        var lastKey = ""
+        var lastAt = 0L
+        while (true) {
+            delay(2_000)
+            val state = current.value.describe()
+            val key = state + RaysProbe.kinds()
+            val now = System.currentTimeMillis()
+            // A line when anything changes, and otherwise every 10 s.
+            if (key != lastKey || now - lastAt >= 10_000) {
+                LyricsDebug.log("rays[$debugName]: $state | ${RaysProbe.kinds()} | ${RaysProbe.drain()}")
+                lastKey = key
+                lastAt = now
+            } else {
+                RaysProbe.drain()
+            }
+        }
+    }
+    return light
 }
 
 /**
@@ -224,10 +268,13 @@ private fun godRaysModifier(light: LyricRayLight, output: RayOutput): Modifier {
     val shader = rememberGodRaysShader() ?: return Modifier
     val origin = remember { mutableStateOf<Offset?>(null) }
     return Modifier.rayLayerOrigin(origin).graphicsLayer {
-        val f = origin.value?.let(light::frameFor)
+        val at = origin.value
+        val f = at?.let(light::frameFor)
         renderEffect = if (f == null || size.minDimension <= 0f) {
+            RaysProbe.hit(if (at == null) RaysProbe.Surface.NO_ORIGIN else RaysProbe.Surface.NO_LIGHT_FRAME)
             null
         } else {
+            RaysProbe.hit(RaysProbe.Surface.LIT)
             setGodRayUniforms(shader, light, f, output)
             RenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect()
         }

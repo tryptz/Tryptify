@@ -440,6 +440,7 @@ internal fun SyncedLyricsView(
             pulse = bassPulse,
             band = bandInRoot,
             lettersBox = remember { { listBox.value.takeUnless { it.isEmpty } } },
+            debugName = "lyric view",
         )
     }
     if (backdrop != null) {

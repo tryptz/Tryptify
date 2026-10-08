@@ -118,6 +118,7 @@ internal fun Modifier.captureLetters(capture: LyricLetterCapture?, edgeFade: Boo
             capture.size = Size(it.size.width.toFloat(), it.size.height.toFloat())
         }
         .drawWithContent {
+            RaysProbe.copiesRecorded++
             layer.record { this@drawWithContent.drawContent() }
             drawLayer(layer)
         }
@@ -131,15 +132,29 @@ internal fun Modifier.captureLetters(capture: LyricLetterCapture?, edgeFade: Boo
 @Composable
 internal fun LyricBackdropFx(backdrop: LyricBackdrop, modifier: Modifier = Modifier) {
     val fx = LocalLyricsFx.current
-    if (LocalLowPerformance.current.disableLiquidGlass) return
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+    // The reasons it composes nothing go to the Debug Log's rays report.
+    if (LocalLowPerformance.current.disableLiquidGlass) {
+        RaysProbe.backdropState = "off: low-performance glass"
+        return
+    }
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+        RaysProbe.backdropState = "off: below API 31"
+        return
+    }
     val capture = backdrop.capture
-    val letters = capture.layer ?: return
+    val letters = capture.layer ?: run {
+        RaysProbe.backdropState = "no letters recorded"
+        return
+    }
     val light = backdrop.light
     val shader = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) rememberGodRaysShader() else null
     val raysLight = if (shader != null) light else null
     val shadow = fx.shadowDepth > LyricShadowGeometry.OFF
-    if (raysLight == null && !shadow) return
+    if (raysLight == null && !shadow) {
+        RaysProbe.backdropState = if (light == null) "no light" else "no shader"
+        return
+    }
+    RaysProbe.backdropState = "composed"
     val origin = remember { mutableStateOf<Offset?>(null) }
     val fxLayer = rememberGraphicsLayer()
 
@@ -148,9 +163,16 @@ internal fun LyricBackdropFx(backdrop: LyricBackdrop, modifier: Modifier = Modif
             .fillMaxSize()
             .rayLayerOrigin(origin)
             .drawBehind {
-                val at = origin.value ?: return@drawBehind
-                if (letters.isReleased || size.minDimension <= 0f) return@drawBehind
+                val at = origin.value ?: run {
+                    RaysProbe.hit(RaysProbe.Backdrop.NO_ORIGIN)
+                    return@drawBehind
+                }
+                if (letters.isReleased || size.minDimension <= 0f) {
+                    RaysProbe.hit(RaysProbe.Backdrop.LETTERS_RELEASED)
+                    return@drawBehind
+                }
                 val f = light?.frameFor(at)
+                if (raysLight != null && f == null) RaysProbe.hit(RaysProbe.Backdrop.NO_LIGHT_FRAME)
                 val rays = if (raysLight != null && f != null && shader != null &&
                     Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                 ) {
@@ -166,7 +188,11 @@ internal fun LyricBackdropFx(backdrop: LyricBackdrop, modifier: Modifier = Modif
                     rays != null && shade != null -> RenderEffect.createBlendModeEffect(shade, rays, BlendMode.SRC_OVER)
                     rays != null -> rays
                     else -> shade
-                } ?: return@drawBehind
+                } ?: run {
+                    RaysProbe.hit(RaysProbe.Backdrop.NO_EFFECT)
+                    return@drawBehind
+                }
+                RaysProbe.hit(if (rays != null) RaysProbe.Backdrop.RAYS else RaysProbe.Backdrop.SHADOW_ONLY)
                 // Its own buffer, so the copy's edge fade (DstIn) cuts the copy alone.
                 fxLayer.compositingStrategy = LayerCompositingStrategy.Offscreen
                 fxLayer.renderEffect = effect.asComposeRenderEffect()

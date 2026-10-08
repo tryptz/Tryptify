@@ -2121,6 +2121,7 @@ private fun StudioPreview(
                 band = { letters.bandInRoot() },
                 lettersBox = { letters.boxInRoot },
                 fx = fx,
+                debugName = "studio",
             )
             val backdrop = remember(letters, rayLight) { LyricBackdrop(letters, rayLight) }
             LyricBackdropFx(backdrop)
