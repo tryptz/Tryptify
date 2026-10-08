@@ -359,6 +359,18 @@ object WhatsNew {
                     title = "Album and artist pages stop crashing",
                     body = "Opening an album or an artist, especially one opened before, could close the app.",
                 ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = ACCOUNT_SYNC,
+                    title = "Your plays reach your account",
+                    body = "Songs played with the screen off were not saved to your account, so your listening stats missed most of them. They are now, and plays that never made it go up the next time you open the app.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = ACCOUNT_SYNC,
+                    title = "Less background data",
+                    body = "Changing the visualizer's preset no longer saves your settings to your account each time. The preset on screen stays on this phone; your favourite presets and rotation still sync.",
+                ),
             ),
         ),
         WhatsNewRelease(
