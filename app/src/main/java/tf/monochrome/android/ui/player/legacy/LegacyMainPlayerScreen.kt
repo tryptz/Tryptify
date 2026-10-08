@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -128,6 +129,8 @@ fun LegacyMainPlayerScreen(
     hero: @Composable (Modifier) -> Unit,
     /** The USB DAC's volume bar in exclusive mode, else null; see MainPlayerScreen. */
     dacVolume: (@Composable () -> Unit)? = null,
+    /** The hero is the lyric surface (or dissolving to or from it): give it the whole region. */
+    lyricsMode: Boolean = false,
 ) {
     val accent = state.albumColors.vibrant
     var statusExpanded by remember { mutableStateOf(false) }
@@ -155,16 +158,26 @@ fun LegacyMainPlayerScreen(
             DevEditable("legacy_topBar", Modifier.fillMaxWidth()) { topBar() }
 
             Spacer(Modifier.height(12.dp))
-            // Bound the hero to the smaller of the available width/height so a
-            // full-width square can never overflow its slot and collide with the
-            // track info below it.
-            DevEditable("legacy_hero", Modifier.fillMaxWidth().weight(1f)) {
-                BoxWithConstraints(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    val side = minOf(maxWidth, maxHeight)
-                    hero(Modifier.size(side))
+            // The hero takes every dp the controls do not, as on the current
+            // player: the artwork is the largest square that fits, and the
+            // lyrics get the whole region, edge to edge. Bound to the smaller
+            // side so a full-width square can never overflow its slot into
+            // the track info below it.
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                val side = minOf(maxWidth, maxHeight)
+                if (lyricsMode) {
+                    // requiredWidth overrides the padded slot, so lines reach
+                    // the screen edges, as on the current player.
+                    hero(
+                        Modifier
+                            .requiredWidth(maxWidth + PlayerDesignTokens.ScreenPadding * 2)
+                            .height(maxHeight),
+                    )
+                } else {
+                    DevEditable("legacy_hero", Modifier) { hero(Modifier.size(side)) }
                 }
             }
 
@@ -221,11 +234,12 @@ fun LegacyMainPlayerScreen(
                 )
             }
 
-            // Free, fully-interactive space below the dock. The audio-tools
-            // pull gesture lives in a thin strip at the very bottom edge (added
-            // as an overlay below), so anything placed in this area still works
-            // when the panel isn't pulled up.
-            Spacer(Modifier.weight(1f))
+            // Clearance for the audio-tools pull strip (an overlay, so it
+            // reserves no height of its own) and nothing more, as on the
+            // current player. This used to be a weighted spacer, which split
+            // the free height with the hero: the controls floated up the
+            // screen over a band of dead space, and the artwork shrank.
+            Spacer(Modifier.height(56.dp))
         }
 
         // Thin bottom-edge pull strip — the only element that captures the

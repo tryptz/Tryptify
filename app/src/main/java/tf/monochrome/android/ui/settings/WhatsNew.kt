@@ -253,6 +253,12 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
+                    section = PLAYER,
+                    title = "The legacy player fills the screen",
+                    body = "With Legacy player on in Settings › System › Performance, the controls sit at the bottom of the screen and the album art is as big as it fits, instead of a small cover over a band of empty space. Lyrics get the full width.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
                     section = TIDAL,
                     title = "TIDAL playlists open",
                     body = "A TIDAL playlist from search opened empty. It loads now, hundreds of songs at a time, ready to play, though it can't be edited here.",

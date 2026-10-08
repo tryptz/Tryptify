@@ -1067,6 +1067,7 @@ fun MainPlayerRoute(
                 topBar = topBarSlot,
                 hero = heroSlot,
                 dacVolume = dacVolumeSlot,
+                lyricsMode = lyricsSlotWide,
             )
         } else {
             MainPlayerScreen(
