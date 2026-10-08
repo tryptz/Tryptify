@@ -177,6 +177,22 @@
 - **Safe to repeat on every launch.** Each batch of 200 first asks which of its plays the cloud already holds, by track and millisecond (`matchPlays`, pinned by `PlayEventBackfillTest`), and adopts those rows: a play whose upload landed and whose reply was lost is not inserted twice. The rest go up in one bulk insert instead of one request per play. Plays from the last ten minutes are left to the push that follows the play, which they could otherwise race. A local row that duplicates a cloud row the device already holds — the cloud copy came down in a pull — is dropped, so stats count that play once.
 - **The bulk insert row has no defaults** (`SbPlayEventUpload`). A bulk insert names the union of every row's keys, and a row that leaves one out sends NULL for it; with `duration = 0` or `artist_name = ""` left out as defaults, the NOT NULL columns would refuse the whole batch.
 
+#### The track catalog fills for the first time
+- **`ensure_catalog_track` had answered 404 to every call it was ever sent.** PostgREST matches a body's top-level keys to the function's parameter names, and the function's one parameter is `p jsonb`; sent bare, the payload named a function with parameters `source`, `source_ref`, `title` and so on that does not exist. No play had a `track_uuid` and the catalog tables were empty. The payload now goes as `{"p": …}`.
+- **The function was rebuilt before it started taking writes**, as migration `catalog_unique_names_and_race_safe_ensure`. Its artist and album lookups compared `lower(name)` and `is not distinct from`, which no index could serve, so every miss would have scanned the whole shared catalog. Unique indexes on `lower(name)` and on `(primary_artist_id, lower(title))` make each lookup one probe and stop two calls creating the same artist or album twice; creating a new track is serialised per source key with a transaction-scoped advisory lock. All cost nothing to add while the tables were empty.
+- **A track played again skips the call**: resolved ids are kept per process, keyed by source and source ref.
+
+#### play_history is no longer written
+- **Nothing ever read it.** Every play inserted a row, and every Sync now inserted up to 500 more with no conflict key, so they piled up as duplicates. Its prune trigger, which ran on every insert, was a third of all the database time the app used, before it was rewritten to use its index. Every play still goes to `play_events`; the table and its rows stay, unwritten.
+
+#### One device row per install
+- **`DeviceRegistry` inserted a new `user_devices` row on every sign-in**, because the cached row id was cleared on sign-out and nothing else identified the install: 774 rows for 327 accounts, one with 87. A cached id whose row had gone was worse, because the update matched nothing and the dead id went onto every play.
+- **It now upserts on `(user_id, local_id)`**, where `local_id` is `DeviceIdProvider`'s per-install id, which already survived sign-out and already claimed to be this key. The column and its unique constraint went in first, as migration `user_devices_keyed_by_local_id`; older app versions send no `local_id`, and nulls never collide.
+
+#### Playlists restore in one paged request
+- **The launch restore fetched each playlist's tracks separately**, one round trip per playlist. It now asks for all of them together, 50 playlists to a request.
+- **Paged, because the server truncates silently.** PostgREST caps a response at 1,000 rows by default, and one account already holds 1,577 playlist tracks. Pages follow the primary key's order and continue until one comes back empty, so a lower cap cannot cut the list short either.
+
 #### The visualizer's preset was half of all API traffic
 - **`visualizer_preset_id` is no longer a synced setting.** It is the preset on screen, rewritten on every Next on the visualizer and every per-track rotation, and every rewrite was a full settings sync: a read of the account's settings row and a write of the whole thing. In one day that was 1,616 of about 3,650 requests to Supabase. Two accounts, both with the visualizer on, made 694 of the 737 writes, most of them 2–15 seconds apart.
 - **It stays on the device**, so the visualizer still opens on the last preset shown. Favourite presets and the rotation mode and interval still sync; those are the choices. A value already in the cloud is ignored on pull, because import only applies allow-listed keys.

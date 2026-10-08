@@ -1,3 +1,9 @@
+-- No longer written. The app stopped sending play_history rows: nothing ever
+-- read them back, so the cross-device Recently Played this column was for was
+-- never built, and each row cost a second request per play and a run of the
+-- prune trigger (play_history_prune.sql). Existing rows are left as they are.
+-- Every play still reaches play_events.
+--
 -- Add unified_json to play_history so cross-device Recently Played routes
 -- through the original backend (Qobuz cache fetch / local file / collection
 -- direct link) instead of falling back to TIDAL with the wrong id.
