@@ -324,6 +324,15 @@ class PlayerViewModel @Inject constructor(
     val playbackSpeed: StateFlow<Float> = preferences.playbackSpeed
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1.0f)
 
+    private val _liveSpeed = MutableStateFlow(1.0f)
+
+    /**
+     * The speed the player is running at, from the player itself rather than
+     * the saved setting — a BPM nudge bends it without touching the setting.
+     * Lyrics timing converts wall time to song time by it (see LyricClock).
+     */
+    val liveSpeed: StateFlow<Float> = _liveSpeed.asStateFlow()
+
     // When true, changing speed preserves the original pitch (tempo-only);
     // when false, pitch shifts with speed (vinyl-style). Applied by
     // PlaybackService via PlaybackParameters.
@@ -656,6 +665,10 @@ class PlayerViewModel @Inject constructor(
                 _isPlaying.value = isPlaying
             }
 
+            override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
+                _liveSpeed.value = playbackParameters.speed
+            }
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 _isBuffering.value = playbackState == Player.STATE_BUFFERING
                 syncState()
@@ -704,6 +717,7 @@ class PlayerViewModel @Inject constructor(
             if (mc.currentMediaItem == null && playbackState.pendingStart.value != null) return@let
             _durationMs.value = mc.duration.coerceAtLeast(0)
             _positionMs.value = mc.currentPosition.coerceAtLeast(0)
+            _liveSpeed.value = mc.playbackParameters.speed
         }
     }
 
@@ -721,9 +735,20 @@ class PlayerViewModel @Inject constructor(
                     _isPlaying.first { it }
                     continue
                 }
-                _positionMs.value = mc.currentPosition.coerceAtLeast(0)
+                val position = mc.currentPosition.coerceAtLeast(0)
+                _positionMs.value = position
                 _durationMs.value = mc.duration.coerceAtLeast(0)
-                delay(250) // 4 updates/sec for smooth progress
+                // 4 updates/sec for smooth progress, and sooner when a lyric
+                // word or line is due: a fixed 250 ms let the karaoke
+                // highlight move only in 250 ms × speed steps of the song.
+                delay(
+                    LyricClock.nextPollDelayMs(
+                        positionMs = position,
+                        speed = _liveSpeed.value,
+                        delayMs = lyricsFx.value.bluetoothDelayMs,
+                        lyrics = _currentLyrics.value,
+                    ),
+                )
             }
         }
     }

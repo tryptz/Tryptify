@@ -117,8 +117,9 @@ private fun SyncedLyrics(
     val position by positionMs.collectAsStateWithLifecycle()
     // Bluetooth sync delay (tunable in the Player Visuals Studio): audio lands later
     // than the reported position over Bluetooth, so rewind the clock we match
-    // lyrics against to keep them in step with what's heard.
-    val syncDelayMs = LocalLyricsFx.current.bluetoothDelayMs.toLong()
+    // lyrics against to keep them in step with what's heard. Wall-time latency,
+    // so scaled into song time by the playback speed.
+    val syncDelayMs = LyricClock.delayInSongMs(LocalLyricsFx.current.bluetoothDelayMs, LocalPlaybackSpeed.current)
     val lyricFont = rememberLyricFontFamily(LocalLyricsFx.current)
     val listState = rememberLazyListState()
     var currentLineIndex by remember { mutableIntStateOf(-1) }

@@ -368,7 +368,9 @@ internal fun SyncedLyricsView(
     // playback position, so lyrics run ahead. Rewinding the position we match
     // against by the delay pushes the whole lyric timeline back into step with
     // what's actually being heard. (Tunable in the Player Visuals Studio.)
-    val syncDelayMs = LocalLyricsFx.current.bluetoothDelayMs.toLong()
+    // The delay is wall time and the position song time, so it is scaled by
+    // the playback speed: 200 ms of latency is 300 ms of song at 1.5×.
+    val syncDelayMs = LyricClock.delayInSongMs(LocalLyricsFx.current.bluetoothDelayMs, LocalPlaybackSpeed.current)
     // Start composed at the current line so a freshly created instance (the
     // expand morph spawns one) never flashes the top of the song before the
     // centring effect runs.
@@ -825,6 +827,13 @@ private fun activeLineBand(state: LazyListState, index: Int): Rect? {
 }
 
 val LocalLyricsFx = compositionLocalOf { LyricsFxSettings() }
+
+/**
+ * The speed the player is running at. The lyric views convert the Bluetooth
+ * delay, which is wall time, into song time by it (LyricClock). 1× where no
+ * player provides it — the Studio preview.
+ */
+val LocalPlaybackSpeed = compositionLocalOf { 1f }
 
 /**
  * The imported font chosen for the lyrics, or null when the custom-font toggle

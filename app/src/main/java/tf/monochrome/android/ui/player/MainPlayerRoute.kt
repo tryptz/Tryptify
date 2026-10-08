@@ -608,9 +608,11 @@ fun MainPlayerRoute(
         LyricBackdrop(lyricLetters, lyricsRayLight)
     }
 
+    val liveSpeed by playerViewModel.liveSpeed.collectAsStateWithLifecycle()
     CompositionLocalProvider(
         LocalLyricBackdrop provides lyricBackdrop,
         LocalLyricsFx provides lyricsFx,
+        LocalPlaybackSpeed provides liveSpeed,
         LocalLyricsSpectrum provides playerViewModel.spectrumAnalyzer,
         LocalLyricGlyphAnchors provides glyphAnchors.takeIf { lyricsBeatOn },
         LocalBeatPulse provides beatPulse,
