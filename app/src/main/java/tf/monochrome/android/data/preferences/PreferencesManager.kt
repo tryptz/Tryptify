@@ -70,10 +70,17 @@ private data class LyricsFxRaw(
     val bassReact: Float?,
 )
 
+/**
+ * Which free catalogues may supply karaoke timing when the playing catalogue
+ * has none. [BOTH] keeps its stored name from when there were two; it now
+ * means every source (lrc.red, LyricsPlus, AMLL, NetEase, Kugou), raced
+ * together, best timing wins. LRCLib's line timing is the fallback in every
+ * mode.
+ */
 enum class LyricsWordProvider(val displayName: String) {
     NETEASE_ONLY("NetEase"),
     KUGOU_ONLY("Kugou"),
-    BOTH("Both"),
+    BOTH("All"),
 }
 
 @Singleton

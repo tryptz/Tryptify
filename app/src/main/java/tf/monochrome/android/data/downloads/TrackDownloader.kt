@@ -348,10 +348,12 @@ class TrackDownloader @Inject constructor(
                 try {
                     val lyrics = apiClient.getLyrics(trackId)
                         ?: lrcLibClient.lookup(
-                            title = trackTitle,
-                            artist = artistName,
-                            album = albumTitle,
-                            durationSeconds = duration.takeIf { it > 0 },
+                            tf.monochrome.android.data.api.LyricsQuery(
+                                title = trackTitle,
+                                artist = artistName,
+                                album = albumTitle,
+                                durationMs = duration.takeIf { it > 0 }?.let { it * 1000L },
+                            ),
                         )
                     if (lyrics != null && lyrics.isSynced) {
                         val lrcContent = StringBuilder()

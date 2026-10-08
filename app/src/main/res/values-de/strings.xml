@@ -785,7 +785,7 @@
     <string name="settings_romaji_lyrics">Romaji-Songtexte</string>
     <string name="settings_transliterate_japanese_lyrics_to_latin">Japanische Songtexte in lateinische Schrift umschreiben</string>
     <string name="settings_word_level_lyrics_provider">Anbieter für wortgenaue Songtexte</string>
-    <string name="settings_karaoke_timing_source_when_your_instance_has_no">Quelle für Karaoke-Timing, wenn deine Instanz keine synchronisierten Songtexte hat. Beide = jeder springt für den anderen ein.</string>
+    <string name="settings_karaoke_timing_source_when_your_instance_has_no">Quellen für Karaoke-Timing, wenn deine Instanz keine wortgenauen Songtexte hat. Alle = alle Quellen gleichzeitig; das beste Timing gewinnt.</string>
     <string name="settings_view_mode">Ansicht</string>
     <string name="settings_dynamic_player_color">Dynamische Player-Farbe</string>
     <string name="settings_tint_the_player_from_album_art_needs_dynamic">Färbt den Player nach dem Albumcover (Dynamische Farben müssen an sein); aus: Player bleibt in der Farbe des Schemas</string>

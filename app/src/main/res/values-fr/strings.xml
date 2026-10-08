@@ -822,7 +822,7 @@
     <string name="settings_romaji_lyrics">Paroles en rōmaji</string>
     <string name="settings_transliterate_japanese_lyrics_to_latin">Translittérer les paroles japonaises en caractères latins</string>
     <string name="settings_word_level_lyrics_provider">Source des paroles mot à mot</string>
-    <string name="settings_karaoke_timing_source_when_your_instance_has_no">Source du minutage karaoké quand votre instance n’a pas de paroles synchronisées. Les deux = chacune sert de repli à l’autre.</string>
+    <string name="settings_karaoke_timing_source_when_your_instance_has_no">Sources du minutage karaoké quand votre instance n’a pas de paroles synchronisées mot à mot. Toutes = toutes les sources à la fois ; le meilleur minutage l’emporte.</string>
     <string name="settings_view_mode">Mode d’affichage</string>
     <string name="settings_dynamic_player_color">Couleur dynamique du lecteur</string>
     <string name="settings_tint_the_player_from_album_art_needs_dynamic">Teinte le lecteur d’après la pochette (nécessite Couleurs dynamiques) ; désactivé, le lecteur garde la couleur du thème</string>

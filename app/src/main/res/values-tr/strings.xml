@@ -785,7 +785,7 @@
     <string name="settings_romaji_lyrics">Romaji şarkı sözleri</string>
     <string name="settings_transliterate_japanese_lyrics_to_latin">Japonca şarkı sözlerini Latin harflerine çevir</string>
     <string name="settings_word_level_lyrics_provider">Kelime düzeyinde şarkı sözü sağlayıcısı</string>
-    <string name="settings_karaoke_timing_source_when_your_instance_has_no">Örneğinizde senkronize şarkı sözü yoksa karaoke zamanlamasının kaynağı. İkisi = her biri diğerinin yedeği olur.</string>
+    <string name="settings_karaoke_timing_source_when_your_instance_has_no">Örneğinizde kelime bazlı senkronize şarkı sözü yoksa karaoke zamanlamasının kaynakları. Tümü = tüm kaynaklar aynı anda; en iyi zamanlama kazanır.</string>
     <string name="settings_view_mode">Görünüm modu</string>
     <string name="settings_dynamic_player_color">Dinamik oynatıcı rengi</string>
     <string name="settings_tint_the_player_from_album_art_needs_dynamic">Oynatıcıyı albüm kapağına göre renklendirir (Dinamik renkler açık olmalı); kapalıyken oynatıcı tema renginde kalır</string>

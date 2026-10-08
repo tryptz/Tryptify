@@ -786,7 +786,7 @@
     <string name="settings_romaji_lyrics">Romaji Lyrics</string>
     <string name="settings_transliterate_japanese_lyrics_to_latin">Transliterate Japanese lyrics to Latin characters</string>
     <string name="settings_word_level_lyrics_provider">Word-level lyrics provider</string>
-    <string name="settings_karaoke_timing_source_when_your_instance_has_no">Karaoke-timing source when your instance has no synced lyrics. Both = each falls back to the other.</string>
+    <string name="settings_karaoke_timing_source_when_your_instance_has_no">Karaoke-timing sources for songs your instance has no word-timed lyrics for. All = every source at once; the best timing wins.</string>
     <string name="settings_view_mode">View Mode</string>
     <string name="settings_dynamic_player_color">Dynamic Player Color</string>
     <string name="settings_tint_the_player_from_album_art_needs_dynamic">Tint the player from album art (needs Dynamic Colors on); off keeps the player on the theme color</string>

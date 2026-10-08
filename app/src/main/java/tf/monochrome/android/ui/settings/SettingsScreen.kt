@@ -1109,7 +1109,7 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
     )
 
     // Word-level lyrics provider — which karaoke-timing source(s) run when
-    // TIDAL has no synced lyrics. "Both" tries NetEase first, then Kugou.
+    // TIDAL has no word-timed lyrics. "All" races every source (LyricsResolver).
     val lyricsProvider by viewModel.lyricsWordProvider.collectAsStateWithLifecycle()
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Text(

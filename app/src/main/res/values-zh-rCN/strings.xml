@@ -748,7 +748,7 @@
     <string name="settings_romaji_lyrics">罗马字歌词</string>
     <string name="settings_transliterate_japanese_lyrics_to_latin">将日语歌词转写为拉丁字母</string>
     <string name="settings_word_level_lyrics_provider">逐字歌词来源</string>
-    <string name="settings_karaoke_timing_source_when_your_instance_has_no">当你的实例没有同步歌词时使用的卡拉 OK 时间来源。“两者”= 互为后备。</string>
+    <string name="settings_karaoke_timing_source_when_your_instance_has_no">当你的实例没有逐字同步歌词时使用的卡拉 OK 时间来源。“全部”= 同时查询所有来源，采用最精确的时间。</string>
     <string name="settings_view_mode">视图模式</string>
     <string name="settings_dynamic_player_color">播放器动态颜色</string>
     <string name="settings_tint_the_player_from_album_art_needs_dynamic">根据专辑封面为播放器着色（需开启动态颜色）；关闭后播放器使用主题颜色</string>

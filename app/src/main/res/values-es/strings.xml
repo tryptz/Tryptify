@@ -822,7 +822,7 @@
     <string name="settings_romaji_lyrics">Letras en romaji</string>
     <string name="settings_transliterate_japanese_lyrics_to_latin">Transliterar las letras japonesas al alfabeto latino</string>
     <string name="settings_word_level_lyrics_provider">Proveedor de letras palabra a palabra</string>
-    <string name="settings_karaoke_timing_source_when_your_instance_has_no">Fuente de sincronización karaoke cuando tu instancia no tiene letras sincronizadas. Ambos = cada uno sirve de respaldo al otro.</string>
+    <string name="settings_karaoke_timing_source_when_your_instance_has_no">Fuentes de sincronización karaoke cuando tu instancia no tiene letras sincronizadas por palabra. Todas = todas las fuentes a la vez; gana la mejor sincronización.</string>
     <string name="settings_view_mode">Modo de vista</string>
     <string name="settings_dynamic_player_color">Color dinámico del reproductor</string>
     <string name="settings_tint_the_player_from_album_art_needs_dynamic">Tiñe el reproductor con la portada (requiere Colores dinámicos); desactivado, el reproductor mantiene el color del tema</string>

@@ -748,7 +748,7 @@
     <string name="settings_romaji_lyrics">ローマ字の歌詞</string>
     <string name="settings_transliterate_japanese_lyrics_to_latin">日本語の歌詞をローマ字に変換</string>
     <string name="settings_word_level_lyrics_provider">単語単位の歌詞の提供元</string>
-    <string name="settings_karaoke_timing_source_when_your_instance_has_no">インスタンスに同期歌詞がないときのカラオケタイミングの取得元。「両方」= 互いに代替します。</string>
+    <string name="settings_karaoke_timing_source_when_your_instance_has_no">インスタンスに単語単位の同期歌詞がないときのカラオケタイミングの取得元。「すべて」= すべての取得元を同時に検索し、最も精密なタイミングを採用します。</string>
     <string name="settings_view_mode">表示モード</string>
     <string name="settings_dynamic_player_color">プレーヤーのダイナミックカラー</string>
     <string name="settings_tint_the_player_from_album_art_needs_dynamic">アルバムアートでプレーヤーを染めます（ダイナミックカラーがオンの場合）。オフにするとテーマの色のままです</string>

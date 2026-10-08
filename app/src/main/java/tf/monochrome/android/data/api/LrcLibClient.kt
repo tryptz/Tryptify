@@ -35,38 +35,50 @@ class LrcLibClient @Inject constructor(
     private val httpClient: HttpClient,
     private val json: Json,
 ) {
-    suspend fun lookup(
-        title: String,
-        artist: String,
-        album: String? = null,
-        durationSeconds: Int? = null,
-        convertToRomaji: Boolean = false,
-    ): Lyrics? {
-        if (title.isBlank() || artist.isBlank()) return null
+    suspend fun lookup(query: LyricsQuery, convertToRomaji: Boolean = false): Lyrics? {
+        if (query.title.isBlank() || query.artist.isBlank()) return null
 
         // Qobuz appends the edition/version to the track and album titles with
         // an em dash ("Song — Radio Edit"), and catalogues often carry trailing
         // parenthetical tags ("Song (Remastered)"). LRCLib only has the base
         // title, so we try the title as given first (matches TIDAL / clean
-        // metadata) then progressively cleaned variants. The album is cleaned
-        // the same way for the exact-match lookup.
+        // metadata) then the fully cleaned one. The album is cleaned the same
+        // way for the exact-match lookup.
+        val album = query.album
         val cleanAlbum = album?.let { stripDecorations(it) }?.takeIf { it.isNotBlank() } ?: album
-        val titleCandidates = linkedSetOf(
-            title.trim(),
-            stripVersion(title),
-            stripDecorations(title),
-        ).filter { it.isNotBlank() }
+        val durationSeconds = query.durationSeconds
+        // LRCLib files each song under one artist; a credit list never matches.
+        val searchArtist = LyricsMatch.primaryArtist(query.artist)
+        val titleCandidates = LyricsMatch.titleVariants(query.title).let { listOf(it.first(), it.last()) }.distinct()
 
+        var untimedFallback: LrcLibRecord? = null
         for (candidate in titleCandidates) {
-            // Prefer /api/get when all the exact-match params are available;
-            // fall back to /api/search for fuzzy matches.
-            val exact = if (!cleanAlbum.isNullOrBlank() && durationSeconds != null && durationSeconds > 0) {
-                tryGet(candidate, artist, cleanAlbum, durationSeconds)
-            } else null
-            val item = exact ?: trySearch(candidate, artist)
-            if (item != null) return parseLyricsRecord(item, convertToRomaji)
+            // /api/get enforces its own ±2 s runtime match, so a hit is this cut.
+            if (!cleanAlbum.isNullOrBlank() && durationSeconds != null) {
+                tryGet(candidate, query.artist, cleanAlbum, durationSeconds)
+                    ?.let { record -> parseLyricsRecord(record, convertToRomaji)?.let { return it } }
+            }
+            val results = trySearch(candidate, searchArtist).filterNot { it.instrumental }
+            val timed = LyricsMatch.pick(
+                query,
+                results.filter { !it.syncedLyrics.isNullOrBlank() },
+                title = { it.trackName },
+                artist = { it.artistName },
+                durationMs = { it.durationMs() },
+            )
+            if (timed != null) parseLyricsRecord(timed, convertToRomaji)?.let { return it }
+            // Same song, other cut: its words are right, its timings are not.
+            if (untimedFallback == null) {
+                untimedFallback = LyricsMatch.pick(
+                    query.copy(durationMs = null),
+                    results.filter { !it.plainLyrics.isNullOrBlank() || !it.syncedLyrics.isNullOrBlank() },
+                    title = { it.trackName },
+                    artist = { it.artistName },
+                    durationMs = { null },
+                )
+            }
         }
-        return null
+        return untimedFallback?.let { parseUntimed(it, convertToRomaji) }
     }
 
     /** "Song — Radio Edit" → "Song" (Qobuz's em-dash version join). */
@@ -87,14 +99,23 @@ class LrcLibClient @Inject constructor(
         return fetchJson<LrcLibRecord>(url)
     }
 
-    private suspend fun trySearch(title: String, artist: String): LrcLibRecord? {
+    private suspend fun trySearch(title: String, artist: String): List<LrcLibRecord> {
         val url = buildString {
             append("$BASE_URL/api/search?")
             append("track_name=").append(title.urlEncode())
             append("&artist_name=").append(artist.urlEncode())
         }
-        return fetchJson<List<LrcLibRecord>>(url)
-            ?.firstOrNull { !it.syncedLyrics.isNullOrBlank() || !it.plainLyrics.isNullOrBlank() }
+        return fetchJson<List<LrcLibRecord>>(url).orEmpty()
+    }
+
+    /** The record's words without its timings, from whichever field it has. */
+    private fun parseUntimed(record: LrcLibRecord, convertToRomaji: Boolean): Lyrics? {
+        val text = record.plainLyrics?.takeIf { it.isNotBlank() }
+            ?: record.syncedLyrics?.lines()?.joinToString("\n") { it.replace(LRC_TAG, "").trim() }
+            ?: return null
+        val converted = if (convertToRomaji) RomajiConverter.convert(text) else text
+        val lines = converted.split('\n').map { LyricLine(0L, it) }
+        return if (lines.any { it.text.isNotBlank() }) Lyrics(lines = lines, isSynced = false) else null
     }
 
     private suspend inline fun <reified T> fetchJson(url: String): T? {
@@ -138,6 +159,7 @@ class LrcLibClient @Inject constructor(
 
     companion object {
         private const val BASE_URL = "https://lrclib.net"
+        private val LRC_TAG = Regex("""\[\d+:\d+(?:\.\d+)?]""")
         // lrclib.net regularly takes 7-9s to answer a search/get, so a tight
         // budget here silently dropped every result (→ "No lyrics available",
         // most visibly for Qobuz tracks, which depend on LRCLib). Give it real
@@ -156,4 +178,6 @@ private data class LrcLibRecord(
     val instrumental: Boolean = false,
     @SerialName("plainLyrics") val plainLyrics: String? = null,
     @SerialName("syncedLyrics") val syncedLyrics: String? = null,
-)
+) {
+    fun durationMs(): Long? = duration?.let { (it * 1000).toLong() }
+}

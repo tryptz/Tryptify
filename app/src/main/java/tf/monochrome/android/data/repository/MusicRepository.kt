@@ -11,9 +11,7 @@ import kotlinx.coroutines.flow.first
 import tf.monochrome.android.data.api.ApiService
 import tf.monochrome.android.data.api.HiFiApiClient
 import tf.monochrome.android.data.api.ServiceQuality
-import tf.monochrome.android.data.api.KugouLyricsClient
-import tf.monochrome.android.data.api.LrcLibClient
-import tf.monochrome.android.data.api.NetEaseLyricsClient
+import tf.monochrome.android.data.api.LyricsQuery
 import tf.monochrome.android.data.preferences.LyricsWordProvider
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.Album
@@ -32,9 +30,7 @@ import javax.inject.Singleton
 @Singleton
 class MusicRepository @Inject constructor(
     private val apiClient: HiFiApiClient,
-    private val lrcLibClient: LrcLibClient,
-    private val netEaseLyricsClient: NetEaseLyricsClient,
-    private val kugouLyricsClient: KugouLyricsClient,
+    private val lyricsResolver: LyricsResolver,
     private val preferences: PreferencesManager,
     @ApplicationContext private val context: Context
 ) {
@@ -169,47 +165,71 @@ class MusicRepository @Inject constructor(
         skipTidal: Boolean = false,
     ): Result<Lyrics?> = runCatching {
         val romajiEnabled = preferences.romajiLyrics.first()
-        if (!skipTidal) {
-            // TIDAL by id — highest-quality path (LRC + word-level timing).
-            apiClient.getLyrics(trackId, romajiEnabled)?.let { return@runCatching it }
-        } else {
-            // Qobuz: the id can't be used on TIDAL (different namespace → wrong
-            // song), but TIDAL usually still HAS the song. Match it by metadata
-            // and use TIDAL's lyrics — the same working instance the player
-            // already streams from — before falling back to LRCLib, which may
-            // be unreachable on some networks and lacks word-level timing.
-            tidalLyricsByMetadata(track, romajiEnabled)?.let { return@runCatching it }
-        }
-        // No word-level lyrics from TIDAL — try free, no-auth catalogs that
-        // carry per-word (karaoke-style) timing before falling back to
-        // LRCLib's line-level-only synced lyrics. Which provider(s) run is
-        // user-selected: NetEase only, Kugou only, or both as each other's
-        // fallback (NetEase first). Skip entirely when we don't have enough
-        // info to make any reasonable query.
-        val title = track?.title?.takeIf { it.isNotBlank() } ?: return@runCatching null
-        val artistName = (track.artist?.name ?: track.artists.firstOrNull()?.name)
-            ?.takeIf { it.isNotBlank() } ?: return@runCatching null
-        val durationSeconds = track.duration.takeIf { it > 0 }
         val wordProvider = preferences.lyricsWordProvider.first()
+        val cacheKey = LyricsCacheKey(trackId, skipTidal, romajiEnabled, wordProvider)
+        synchronized(lyricsCache) { lyricsCache[cacheKey] }?.let { return@runCatching it }
 
-        if (wordProvider != LyricsWordProvider.KUGOU_ONLY) {
-            runCatching {
-                netEaseLyricsClient.lookup(title, artistName, durationSeconds, romajiEnabled)
-            }.getOrNull()?.let { return@runCatching it }
+        // TIDAL by id is the highest-quality path (LRC + word-level timing).
+        // Qobuz: the id can't be used on TIDAL (different namespace → wrong
+        // song), but TIDAL usually still HAS the song. Match it by metadata
+        // and use TIDAL's lyrics — the same working instance the player
+        // already streams from.
+        val primary: suspend () -> Lyrics? = if (!skipTidal) {
+            { apiClient.getLyrics(trackId, romajiEnabled) }
+        } else {
+            { tidalLyricsByMetadata(track, romajiEnabled) }
         }
-
-        if (wordProvider != LyricsWordProvider.NETEASE_ONLY) {
-            runCatching {
-                kugouLyricsClient.lookup(title, artistName, durationSeconds, romajiEnabled)
-            }.getOrNull()?.let { return@runCatching it }
+        // Every other source searches by metadata, so it needs at least a
+        // title and an artist; without them only TIDAL can answer.
+        val query = track?.let(::lyricsQueryFor)
+        val lyrics = if (query == null) {
+            primary()
+        } else {
+            // TIDAL races the free catalogues rather than going first, and
+            // its line-timed lyrics no longer stop a word-timed match from
+            // replacing them. Which word-level catalogues join is the user's
+            // choice (Settings › Word-level lyrics provider).
+            lyricsResolver.resolve(query, romajiEnabled, wordProvider, primary)
         }
+        if (lyrics != null) synchronized(lyricsCache) { lyricsCache[cacheKey] = lyrics }
+        lyrics
+    }
 
-        lrcLibClient.lookup(
-            title = title,
-            artist = artistName,
-            album = track.album?.title,
-            durationSeconds = durationSeconds,
-            convertToRomaji = romajiEnabled,
+    private data class LyricsCacheKey(
+        val trackId: Long,
+        val skipTidal: Boolean,
+        val romaji: Boolean,
+        val provider: LyricsWordProvider,
+    )
+
+    /**
+     * The last few songs' lyrics. Going back a track, repeating one, or
+     * reopening the player would otherwise send the whole search out again
+     * for an answer that cannot have changed. Misses are not kept: a source
+     * that was down may be back.
+     */
+    private val lyricsCache = object : LinkedHashMap<LyricsCacheKey, Lyrics>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<LyricsCacheKey, Lyrics>?): Boolean =
+            size > LYRICS_CACHE_SIZE
+    }
+
+    /**
+     * The search terms for [track]. The full credit is kept ("Queen, David
+     * Bowie"); the matchers split it. TIDAL keeps the version apart from the
+     * title, and it is what tells a live take from the studio one, so it goes
+     * back on for matching; the sources strip it again to search.
+     */
+    private fun lyricsQueryFor(track: Track): LyricsQuery? {
+        val title = track.title.takeIf { it.isNotBlank() } ?: return null
+        val credit = track.artists.map { it.name }.filter { it.isNotBlank() }.joinToString(", ")
+            .ifBlank { track.artist?.name.orEmpty() }
+            .takeIf { it.isNotBlank() } ?: return null
+        val version = track.version?.trim()?.takeIf { it.isNotEmpty() && !title.contains(it, ignoreCase = true) }
+        return LyricsQuery(
+            title = if (version != null) "$title ($version)" else title,
+            artist = credit,
+            album = track.album?.title?.takeIf { it.isNotBlank() },
+            durationMs = track.duration.takeIf { it > 0 }?.let { it * 1000L },
         )
     }
 
@@ -258,5 +278,9 @@ class MusicRepository @Inject constructor(
         val network = connectivityManager.activeNetwork ?: return false
         val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
         return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+    }
+
+    private companion object {
+        const val LYRICS_CACHE_SIZE = 32
     }
 }
