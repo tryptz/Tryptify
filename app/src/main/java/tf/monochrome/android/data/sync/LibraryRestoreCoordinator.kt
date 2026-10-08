@@ -31,6 +31,11 @@ import javax.inject.Singleton
  * confirmed yet (see [SyncOutbox]). It is bounded too: the automatic pass leaves the thousand
  * scrobbles of play history to the manual sync.
  *
+ * After the pull it sends up the plays this device recorded that the cloud
+ * never accepted ([SupabaseSyncRepository.uploadUnsyncedPlayEvents]). That is
+ * repeatable for the same reason the pull is: a play the cloud already holds is
+ * matched to its row, not inserted again.
+ *
  * Failures are logged and dropped. A restore is a repair, so a device that is
  * offline at launch is not broken, it is simply not repaired yet; it will try
  * again next launch.
@@ -59,6 +64,14 @@ class LibraryRestoreCoordinator @Inject constructor(
                     } else {
                         Log.w(TAG, "library restore finished with issues: ${failed.joinToString()}")
                     }
+                    // The other direction: plays recorded here that the cloud
+                    // never accepted. Most were recorded with the screen off
+                    // while the session was parked in the background (see
+                    // SupabaseAuthManager), and until now only Sync now sent
+                    // them, so the account's stats never saw them.
+                    runCatching { syncRepository.uploadUnsyncedPlayEvents() }
+                        .onSuccess { if (it > 0) Log.d(TAG, "uploaded $it unsynced plays") }
+                        .onFailure { Log.w(TAG, "unsynced plays not uploaded: ${it.message}") }
                 }
         }
     }

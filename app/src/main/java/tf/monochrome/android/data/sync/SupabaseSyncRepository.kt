@@ -2,6 +2,7 @@ package tf.monochrome.android.data.sync
 
 import android.util.Log
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -247,6 +248,8 @@ class SupabaseSyncRepository @Inject constructor(
     private val flushScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     /** One flush at a time — two racing would send the same edit twice. */
     private val flushLock = Mutex()
+    /** One play upload at a time, for the same reason: launch and Sync now can overlap. */
+    private val playUploadLock = Mutex()
 
     private fun userId(): String? = authManager.userProfile.value?.id
 
@@ -544,6 +547,64 @@ class SupabaseSyncRepository @Inject constructor(
             Log.e(TAG, "pushPlayEvent failed: ${it.message}")
             null
         }
+    }
+
+    /**
+     * Uploads every play this device recorded that the cloud never accepted,
+     * and ties each one to its cloud row.
+     *
+     * Runs on every launch, from [LibraryRestoreCoordinator], and from Sync
+     * now. Safe to repeat: before inserting, each batch asks which of its plays
+     * the cloud already holds and adopts those rows instead (see [matchPlays]).
+     * Plays from the last ten minutes are left to the push that follows the
+     * play itself.
+     *
+     * The plays go up under whichever account is signed in, as Sync now always
+     * sent them: this device keeps one play history, not one per account.
+     *
+     * @return how many plays were settled — tied to a cloud row, or dropped as
+     *   a local duplicate of one. Throws when the cloud can't be read or
+     *   written; whatever is left goes next time.
+     */
+    suspend fun uploadUnsyncedPlayEvents(): Int {
+        val uid = userId() ?: return 0
+        return playUploadLock.withLock {
+            val before = System.currentTimeMillis() - PLAY_UPLOAD_MIN_AGE_MS
+            var afterRowId = 0L
+            var settled = 0
+            // Stops if the account changes mid-run, like flushOutbox.
+            while (userId() == uid) {
+                val batch = playEventDao.getUnsyncedBatch(before, afterRowId, PLAY_UPLOAD_BATCH)
+                if (batch.isEmpty()) break
+                afterRowId = batch.last().rowId
+                settled += uploadPlayBatch(uid, batch)
+                if (batch.size < PLAY_UPLOAD_BATCH) break
+            }
+            settled
+        }
+    }
+
+    /** One batch: adopt the plays the cloud already has, insert the rest in one request. */
+    private suspend fun uploadPlayBatch(uid: String, batch: List<PlayEventEntity>): Int {
+        val keyColumns = Columns.list("id", "track_id", "played_at_ms")
+        val inCloud = supabase.postgrest["play_events"]
+            .select(keyColumns) {
+                filter {
+                    eq("user_id", uid)
+                    isIn("played_at_ms", batch.map { it.playedAt }.distinct())
+                }
+            }
+            .decodeList<SbPlayEventKey>()
+        val existing = matchPlays(batch, inCloud)
+        existing.matched.forEach { (play, cloudId) -> playEventDao.adoptCloudId(play.rowId, cloudId) }
+        if (existing.unmatched.isEmpty()) return existing.matched.size
+
+        val inserted = supabase.postgrest["play_events"]
+            .insert(existing.unmatched.map { it.toUpload(uid) }) { select(keyColumns) }
+            .decodeList<SbPlayEventKey>()
+        val fresh = matchPlays(existing.unmatched, inserted)
+        fresh.matched.forEach { (play, cloudId) -> playEventDao.adoptCloudId(play.rowId, cloudId) }
+        return existing.matched.size + fresh.matched.size
     }
 
     // ─── Pull play_events from cloud into local Room (phase 2.1) ─────────────
@@ -1090,15 +1151,11 @@ class SupabaseSyncRepository @Inject constructor(
         section("favorite_albums") { favoritesDao.getFavoriteAlbumsSnapshot().sendAll { pushFavoriteAlbum(it) } }
         section("favorite_artists") { favoritesDao.getFavoriteArtistsSnapshot().sendAll { pushFavoriteArtist(it) } }
         section("play_history") { historyDao.getHistorySnapshot(500).forEach { pushHistoryTrack(it) } }
-        // Play events: only push rows not already in the cloud (cloudRowId IS
-        // NULL), and record the assigned cloud id, so repeated syncs don't
-        // re-insert the same scrobble and inflate stats (the old code re-pushed
-        // the last 1000 every time).
-        section("play_events") {
-            playEventDao.getUnsynced(1000).forEach { e ->
-                pushPlayEvent(e)?.let { cloudId -> playEventDao.setCloudId(e.rowId, cloudId) }
-            }
-        }
+        // Play events: only rows the cloud never accepted, each checked against
+        // what it already holds before anything is inserted, so repeated syncs
+        // don't inflate stats. It throws rather than skipping a play it could
+        // not send, so a failure here is reported.
+        section("play_events") { uploadUnsyncedPlayEvents() }
         section("playlists") {
             playlistDao.getAllPlaylistsSnapshot().forEach { playlist ->
                 check(pushPlaylist(playlist)) { "playlist ${playlist.id} refused" }

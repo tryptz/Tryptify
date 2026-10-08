@@ -199,6 +199,8 @@ Use for anything that writes a favourite, playlist, playlist entry, EQ or mixer 
 - **Nothing is pushed until a settings pull has reached the cloud** (`SettingsSyncCoordinator`). A pull that fails retries with backoff; it doesn't fall through to the watcher.
 - **Edits are scoped to the account that made them.** Nothing is recorded while signed out, and a flush stops if the account changes under it.
 - **No request goes out under the anon key.** `SupabaseAuthManager` sets `enableLifecycleCallbacks = false`, so the session stays signed in while the app works in the background, and `requireValidSession = true`, so a call with no session throws on the device. Turn either back on and background writes go out as anon: inserts fail with 401, and updates and deletes match no rows yet report success, which settles outbox deletes that never happened.
+- **Plays upload idempotently.** A play whose push failed keeps a null `cloudRowId`, and `uploadUnsyncedPlayEvents` sends it on the next launch or Sync now. Each batch matches its plays to rows the cloud already holds (`matchPlays`, by track and millisecond) before inserting, and skips plays from the last ten minutes, which their own push may still be sending. Don't upload `play_events` any other way, or a lost reply becomes a duplicate play.
+- **A synced setting is a choice, not state.** Anything the app rewrites by itself as it runs (the preset on screen, a position, a counter) stays off `SETTINGS_SYNC_KEYS`: every change to a synced key is a read and a write of the settings row.
 - **Push helpers report, they don't pretend.** They return `false` when Supabase refused; `pushAll` counts refusals so the Sync button never reports a backup that isn't there.
 
 ### Workflow
