@@ -301,7 +301,7 @@ internal fun Modifier.lyricsEdgeFade(): Modifier = this
         // they now reach the side borders) instead of being padded away by a deep
         // fade. Just enough of a feather to soften the scroll clip and the glass
         // shader edge — not a visible top/bottom inset.
-        val edge = (size.height * 0.05f).coerceAtMost(14.dp.toPx())
+        val edge = (size.height * 0.05f).coerceAtMost(EDGE_FEATHER_MAX.toPx())
         val top = edge / size.height
         val mask = Brush.verticalGradient(
             0f to Color.Transparent,
@@ -461,29 +461,14 @@ internal fun SyncedLyricsView(
         // there are plenty of upcoming lines, the anchor scroll is unaffected.
         val halfViewport = maxHeight / 2
         val tailPadding = (maxHeight * 0.12f).coerceAtLeast(24.dp)
-        // The line width is the same for every item, so read it once here.
         // A fixed bevel-safe inset (on top of the user's edge margin) keeps the
         // outermost glyphs — and their puffy 3D glass bevels — off the layer's
         // clip edge, so edge letters never get corner-cut against the border.
         val sideInset = fx.edgeMarginDp.dp + LYRIC_BEVEL_SAFE_DP
-        val lineWidth = (maxWidth - sideInset * 2).coerceAtLeast(0.dp)
-        // Headroom for the active line's bass bounce. The line pumps via a
-        // graphicsLayer scale (bassBeat), but it lives inside the lyric surface's
-        // glass render-layer, which only captures `lineWidth` — so a long line
-        // swelling past that would be clipped. Fit width-constrained lines to a
-        // slightly narrower box that reserves the PEAK pump scale plus a small
-        // edge-safety margin, so at full pump the glyphs stay INSIDE the glass
-        // clip edge — leaving room for the glass bevel/refraction, which lenses a
-        // few px beyond the glyph geometry and would otherwise get corner-cut on a
-        // hard kick. (The bass pulse caps at ~1.6 in rememberBassPulse.) Short
-        // lines aren't width-constrained, so the fitter leaves them as-is.
-        val bounceHeadroom = if (fx.bassReact > 0.01f) {
-            val pumpPeak = 1f + fx.pumpAmount * fx.bassReact * 1.6f
-            (pumpPeak * BOUNCE_EDGE_SAFETY).coerceIn(1f, 2.2f)
-        } else {
-            1f
-        }
-        val fitWidth = lineWidth / bounceHeadroom
+        // The line width is the same for every item, so read it once here:
+        // inside that inset, less room for the bass bounce (lyricFitWidth).
+        val fitWidth = lyricFitWidth(maxWidth, fx)
+        val edgeFeatherPx = with(LocalDensity.current) { EDGE_FEATHER_MAX.toPx() }
 
         // Keyed on maxHeight as well so the active line is re-centred while
         // the surface is being resized (the expand/collapse morph animates
@@ -512,11 +497,25 @@ internal fun SyncedLyricsView(
             val viewportHeight = info.viewportEndOffset - info.viewportStartOffset
             val viewportAnchor = viewportStart + viewportHeight * ACTIVE_LINE_ANCHOR
             val itemCentre = target.offset + target.size / 2f
+            // A line taller than twice the anchor's distance from the top —
+            // three rows of very large type on a short surface — would start
+            // above the top edge if centred there, losing its first row to the
+            // clip. Pin its top just inside lyricsEdgeFade's feather instead;
+            // only a line taller than the whole surface still clips (at the
+            // bottom, which cannot be helped). Every smaller line centres as it
+            // always has.
+            val topInset = minOf(viewportHeight * 0.05f, edgeFeatherPx)
+            val minTop = viewportStart + topInset
+            val delta = if (viewportAnchor - target.size / 2f < minTop) {
+                target.offset - minTop
+            } else {
+                itemCentre - viewportAnchor
+            }
             // Snap when re-centring the same line (first composition, or the
             // morph resizing the viewport every frame); animate only when the
             // song has actually advanced to a new line.
             if (lastCentredLine.intValue == index) {
-                listState.scrollBy(itemCentre - viewportAnchor)
+                listState.scrollBy(delta)
             } else {
                 // Glide, don't yank: animateScrollBy's default spring is stiff
                 // (settles in ~200ms), which reads as the list snapping to each
@@ -524,7 +523,7 @@ internal fun SyncedLyricsView(
                 // calm glide; fast lyrics simply interrupt it mid-flight and
                 // the next glide starts from wherever the list currently is.
                 listState.animateScrollBy(
-                    itemCentre - viewportAnchor,
+                    delta,
                     animationSpec = tween(
                         durationMillis = LINE_SWITCH_SCROLL_MS,
                         easing = FastOutSlowInEasing,
@@ -905,6 +904,89 @@ private val LYRIC_BEVEL_SAFE_DP = 14.dp
  */
 private const val BOUNCE_EDGE_SAFETY = 1.06f
 
+/** The deepest lyricsEdgeFade feather: the scroll clip is softened over at most this much. */
+private val EDGE_FEATHER_MAX = 14.dp
+
+/**
+ * The width a width-constrained lyric line is fitted to inside a surface
+ * [maxWidth] wide: less the user's edge margin and the bevel-safe inset on
+ * each side, then less headroom for the bass bounce. The line pumps via a
+ * graphicsLayer scale (bassBeat), but it lives inside the lyric surface's
+ * glass render-layer, which only captures the line width — so a long line
+ * swelling past that would be clipped. The box reserves the PEAK pump scale
+ * plus a small edge-safety margin, so at full pump the glyphs stay INSIDE the
+ * glass clip edge — leaving room for the glass bevel/refraction, which lenses
+ * a few px beyond the glyph geometry and would otherwise get corner-cut on a
+ * hard kick. (The bass pulse caps at ~1.6 in rememberBassPulse.) Short lines
+ * aren't width-constrained, so the fitter leaves them as-is.
+ */
+internal fun lyricFitWidth(maxWidth: Dp, fx: LyricsFxSettings): Dp {
+    val sideInset = fx.edgeMarginDp.dp + LYRIC_BEVEL_SAFE_DP
+    val lineWidth = (maxWidth - sideInset * 2).coerceAtLeast(0.dp)
+    val bounceHeadroom = if (fx.bassReact > 0.01f) {
+        val pumpPeak = 1f + fx.pumpAmount * fx.bassReact * 1.6f
+        (pumpPeak * BOUNCE_EDGE_SAFETY).coerceIn(1f, 2.2f)
+    } else {
+        1f
+    }
+    return lineWidth / bounceHeadroom
+}
+
+/**
+ * The pieces of [text] a line may not be broken inside: its space-separated
+ * words, except that Han, kana and the Thai-family scripts break between any
+ * two characters, so each of those characters is a piece of its own.
+ */
+internal fun unbreakableRuns(text: String): List<String> {
+    val runs = mutableListOf<String>()
+    val run = StringBuilder()
+    fun flush() {
+        if (run.isNotEmpty()) runs.add(run.toString())
+        run.setLength(0)
+    }
+    var i = 0
+    while (i < text.length) {
+        val cp = text.codePointAt(i)
+        val n = Character.charCount(cp)
+        when {
+            Character.isWhitespace(cp) -> flush()
+            breaksAnywhere(cp) -> {
+                flush()
+                runs.add(text.substring(i, i + n))
+            }
+            else -> run.append(text, i, i + n)
+        }
+        i += n
+    }
+    flush()
+    return runs
+}
+
+private fun breaksAnywhere(codePoint: Int): Boolean = when (Character.UnicodeScript.of(codePoint)) {
+    Character.UnicodeScript.HAN,
+    Character.UnicodeScript.HIRAGANA,
+    Character.UnicodeScript.KATAKANA,
+    Character.UnicodeScript.THAI,
+    Character.UnicodeScript.LAO,
+    Character.UnicodeScript.KHMER,
+    Character.UnicodeScript.MYANMAR -> true
+    else -> false
+}
+
+/**
+ * The size a freely wrapping lyric line is drawn at: [baseSp], unless one of
+ * its words alone is wider than [width] — Android would then break that word
+ * between two letters, with no hyphen ("every/thing"), which large type made
+ * common. Then the size steps down until the widest word fits. Rows are
+ * unlimited, so ordinary wrapping never shrinks anything. For the views that
+ * let Text wrap rather than laying out their own rows.
+ */
+@Composable
+internal fun rememberWordFitSp(text: String, width: Dp, baseSp: Float, style: TextStyle): Float {
+    val runs = remember(text) { unbreakableRuns(text) }
+    return rememberWrappedLyricLayout(runs, width, baseSp, style, maxRows = Int.MAX_VALUE).fontSizeSp
+}
+
 /**
  * A lyric line's FROZEN wrap: which words sit on which row, and the font size
  * (≤ base, ≥ [MIN_LYRIC_SP]) at which those rows fit the available width.
@@ -1065,27 +1147,30 @@ private fun Letter3DText(
 @Composable
 internal fun UnsyncedLyricsView(lines: List<LyricLine>) {
     LaunchedEffect(lines) { LyricsDebug.log("unsynced lyrics loaded: ${lines.size} lines (no timing)") }
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 28.dp)
-            .fxaa()
-            .liquidGlass(),
-        contentPadding = PaddingValues(vertical = 60.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        itemsIndexed(lines) { _, line ->
-            val fx = LocalLyricsFx.current
-            Text(
-                text = line.text.ifBlank { "" },
-                style = MaterialTheme.typography.bodyLarge.copy(
-                    fontSize = fx.fontSizeSp.sp,
-                    lineHeight = (fx.fontSizeSp * 1.26f).sp,
-                ).withLyricFont(rememberLyricFontFamily(fx)),
-                color = Color.White.copy(alpha = 0.85f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
+    val fx = LocalLyricsFx.current
+    val style = MaterialTheme.typography.bodyLarge.withLyricFont(rememberLyricFontFamily(fx))
+    val sidePadding = 28.dp
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val lineWidth = (maxWidth - sidePadding * 2).coerceAtLeast(0.dp)
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = sidePadding)
+                .fxaa()
+                .liquidGlass(),
+            contentPadding = PaddingValues(vertical = 60.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            itemsIndexed(lines) { _, line ->
+                val sp = rememberWordFitSp(line.text, lineWidth, fx.fontSizeSp, style)
+                Text(
+                    text = line.text.ifBlank { "" },
+                    style = style.copy(fontSize = sp.sp, lineHeight = (sp * 1.26f).sp),
+                    color = Color.White.copy(alpha = 0.85f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
     }
 }
