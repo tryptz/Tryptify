@@ -930,7 +930,7 @@ fun LyricsFxStudioScreen(
         ) {
             item {
                 StudioSection(stringResource(R.string.fx_typography))
-                FxSlider(stringResource(R.string.fx_font_size), "%.0f sp".format(fx.fontSizeSp), fx.fontSizeSp, 14f..34f) {
+                FxSlider(stringResource(R.string.fx_font_size), "%.0f sp".format(fx.fontSizeSp), fx.fontSizeSp, 14f..64f) {
                     viewModel.update { s -> s.copy(fontSizeSp = it) }
                 }
                 FxSlider(stringResource(R.string.fx_letter_spacing), "%.2f sp".format(fx.letterSpacingSp), fx.letterSpacingSp, -1f..1f) {

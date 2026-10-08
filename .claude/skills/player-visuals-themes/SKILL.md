@@ -139,7 +139,7 @@ Personal fields are omitted here — never set them in a preset.
 
 | Field | Range | Default | Visual effect |
 |---|---|---|---|
-| `fontSizeSp` | 14..34 | 23 | Base type size; the **ceiling** the width-fitter shrinks from. Bigger ⇒ larger but more per-line shrink on long lines. |
+| `fontSizeSp` | 14..64 | 23 | Base type size; the **ceiling** the width-fitter shrinks from. Bigger ⇒ larger but more per-line shrink on long lines. |
 | `letterSpacingSp` | -1..1 | -0.2 | Tracking. Negative = condensed/dense; positive = airy/editorial. |
 | `edgeMarginDp` | 0..48 | 0 | Side inset (added to a fixed bevel-safe pad). Larger narrows the column ⇒ earlier shrink / more centred. |
 | `maxWrapLines` | 1..3 | 3 | Rows a line may wrap before shrinking. **1 = strict single-line ticker.** |

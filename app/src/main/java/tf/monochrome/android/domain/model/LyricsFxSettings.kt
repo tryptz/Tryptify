@@ -222,7 +222,7 @@ data class LyricsFxSettings(
         val d = DEFAULT
         fun Float.c(min: Float, max: Float, def: Float) = if (isFinite()) coerceIn(min, max) else def
         return LyricsFxSettings(
-            fontSizeSp = fontSizeSp.c(14f, 34f, d.fontSizeSp),
+            fontSizeSp = fontSizeSp.c(14f, 64f, d.fontSizeSp),
             letterSpacingSp = letterSpacingSp.c(-1f, 1f, d.letterSpacingSp),
             edgeMarginDp = edgeMarginDp.c(0f, 48f, d.edgeMarginDp),
             maxWrapLines = maxWrapLines.coerceIn(1, 3),

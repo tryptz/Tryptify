@@ -40,7 +40,7 @@ class LyricsFxSettingsTest {
             bassReact = -2f,
             glowBrightness = 5f,
         ).clamped()
-        assertEquals(34f, c.fontSizeSp, 0f)
+        assertEquals(64f, c.fontSizeSp, 0f)
         assertEquals(160f, c.glowRadiusDp, 0f)
         assertEquals(0f, c.bassReact, 0f)
         assertEquals(0.6f, c.glowBrightness, 0f)
@@ -171,7 +171,7 @@ class LyricsFxSettingsTest {
         val evil = LyricsFxPreset.CODE_PREFIX +
             """{"name":"Evil","settings":{"fontSizeSp":9999.0,"glowRadiusDp":9999.0}}"""
         val decoded = LyricsFxPreset.decode(evil)!!
-        assertEquals(34f, decoded.settings.fontSizeSp, 0f)
+        assertEquals(64f, decoded.settings.fontSizeSp, 0f)
         assertEquals(160f, decoded.settings.glowRadiusDp, 0f)
     }
 
