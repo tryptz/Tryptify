@@ -135,7 +135,7 @@ object WhatsNew {
                     kind = WhatsNewKind.NEW,
                     section = LOOK,
                     title = "New glass themes",
-                    body = "Clear, Tinted and Tilt, after iOS, then Pure, Droplet, Prism, Bubble, Mercury, Ice, Halo, Aurora, Dusk and Holo. Clear is the new starting look; glass you tuned yourself is kept.",
+                    body = "Float, Opal, Ripple, Glint, Blurred and Frosted Ripple, tuned on device, then Clear, Tinted and Tilt, after iOS, and Pure, Droplet, Prism, Bubble, Mercury, Ice, Halo, Aurora, Dusk and Holo. Float is the new starting look; glass you tuned yourself is kept.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,

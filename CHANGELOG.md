@@ -152,6 +152,13 @@
 
 ### Changed
 
+#### Six glass themes tuned on device lead the roster, and Float is the starting look
+- **Float, Opal, Ripple, Glint, Blurred and Frosted Ripple** come first in `PlayerGlassSettings.PRESETS`, ahead of Clear, Tinted and Tilt. They are `TRYPTGLASS1` codes tuned on a phone, with the personal fields (`sampleRings`, `miniProgressBar`, `tintColor`, `previewBg`) left out, so applying one keeps the listener's own.
+- **`INITIAL` is `FLOAT`**: half a body of glass, a broad mirror shoulder and the deepest, softest shadow on the roster. Only a setting never saved, or reset, takes it. Like Clear before it, it is still, with no surface motion and no tilt, so the app-wide mini player runs no frame clock and holds no gravity sensor until the listener picks a theme that moves.
+- **Opal's surface motion is 0.** Its code carried 0.0069, too little to see, and anything above 0 runs a frame clock under the mini player on every screen.
+- **Ripple and Frosted Ripple move, and Glint and Blurred follow tilt**, because that is what those looks are; each costs the battery only while it is chosen.
+- **A light frost grain is allowed.** `no preset uses the frost grain` became `no preset uses more than a light frost grain`, capped at 0.15. Blurred carries 0.03 and Frosted Ripple 0.11, as tuned on device; the heavy grain that read as noise on the rim stays out.
+
 #### Search keeps its filter pills
 - **Home never handed the floating search bar's height to the results**, so the bar sat on the type and source pills. It is the list's top `contentPadding` now, as the Search bars invariant asks.
 - **The source row shows for every type** and filters albums and artists too, by catalog tags the view model records as results arrive, rather than disappearing on anything but Tracks.

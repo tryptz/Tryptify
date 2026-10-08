@@ -34,11 +34,11 @@ class PlayerGlassSettingsTest {
     }
 
     @Test
-    fun `every glass setting starts from Clear, the first chip, and DEFAULT is not offered`() {
+    fun `every glass setting starts from Float, the first chip, and DEFAULT is not offered`() {
         val m = PlayerGlassSettings.INITIAL
-        assertEquals(PlayerGlassSettings.CLEAR, m)
+        assertEquals(PlayerGlassSettings.FLOAT, m)
         assertEquals(m, m.clamped())
-        assertEquals("Clear" to m, PlayerGlassSettings.PRESETS.first())
+        assertEquals("Float" to m, PlayerGlassSettings.PRESETS.first())
         assertTrue(PlayerGlassSettings.PRESETS.none { it.second == PlayerGlassSettings.DEFAULT })
         // Still until touched: on the app-wide bar a moving surface runs a
         // frame clock and tilt holds the gravity sensor, on every screen.
@@ -175,11 +175,13 @@ class PlayerGlassSettingsTest {
     }
 
     @Test
-    fun `no preset uses the frost grain`() {
+    fun `no preset uses more than a light frost grain`() {
         // Frosted glass is made from backdrop blur. The shader's frost is
-        // per-pixel grain, and on device it read as noise on the rim.
+        // per-pixel grain, and heavy grain read as noise on the rim on
+        // device. A light grain was tuned in on device for Blurred (0.03)
+        // and Frosted Ripple (0.11, the heaviest); nothing goes past that.
         PlayerGlassSettings.PRESETS.forEach { (name, preset) ->
-            assertEquals("$name must not use frost", 0f, preset.frost, 0f)
+            assertTrue("$name uses heavy frost grain (${preset.frost})", preset.frost <= 0.15f)
         }
     }
 

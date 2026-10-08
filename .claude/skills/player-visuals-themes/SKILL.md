@@ -24,8 +24,9 @@ never colour or font** (colours are derived from album art at runtime).
 | **Lyrics FX** | `LyricsFxSettings` | `app/src/main/java/tf/monochrome/android/domain/model/LyricsFxSettings.kt` | Lyric typography, the liquid-glass letters, the 3D per-letter wave, the bass beat engine, the reactive glow, the god rays |
 | **Player Glass** | `PlayerGlassSettings` | `app/src/main/java/tf/monochrome/android/domain/model/PlayerGlassSettings.kt` | The refractive glass on the transport buttons + the progress "thermometer" |
 
-The two rosters are **independent**. Player Glass was rebuilt as an iOS
-Liquid Glass roster (Clear, Tinted, Tilt, then creative extensions); its names
+The two rosters are **independent**. Player Glass opens with six themes
+tuned on device (Float, the starting look, first), then an iOS Liquid Glass
+roster (Clear, Tinted, Tilt) and creative extensions; its names
 no longer mirror the Lyrics FX list, and a glass theme does not need a lyric
 twin. If you do want a coordinated look, give the two the same name — the lists
 are separate, so the same name may appear in both.
@@ -80,14 +81,16 @@ test enforces `tintColor == 0 && previewBg == 0` for every preset, and
 5. **Don't rename or remove these preset names — tests look them up by name:**
    Lyrics FX `Voltage`, `Sunburst`, `Cathedral`, `Eclipse`, `Daybreak`,
    `Searchlight`, `Spotlight`, `Crepuscular` (pinned to the Shadertoy's
-   numbers) and `Mercury`; Player Glass `Clear` (must stay
+   numbers) and `Mercury`; Player Glass `Float` (must stay
    first and be `INITIAL`) and `Tinted` and `Tilt`. **Appending new names is
    safe** — no test pins the total. But never insert a Lyrics FX preset
    *before* `Sunburst`: the test `god rays are off by default and every
    earlier preset is untouched` takes the 17 presets ahead of it and asserts
    none of them sets a letter-glass optic or a god-ray field.
-   Player Glass presets must also leave `frost` at 0 (`no preset uses the frost
-   grain`): frosted glass is made from `hazeBlurDp`, not shader grain.
+   Player Glass presets must also keep `frost` light, at most 0.15 (`no preset
+   uses more than a light frost grain`): frosted glass is made from
+   `hazeBlurDp`, and heavy shader grain read as noise on the rim. Blurred
+   (0.03) and Frosted Ripple (0.11) are the only themes that use it.
 6. **Keep names unique (case-insensitive) and give each a distinct value set** —
    two presets with identical values light two chips at once.
 7. **Lyrics glass has the full Player Glass optics, under `glass*` names.**
@@ -114,14 +117,15 @@ test enforces `tintColor == 0 && previewBg == 0` for every preset, and
 - Lyrics FX: append after `"Static"` inside `PRESETS = listOf(…)` in
   `LyricsFxSettings.kt`, i.e. after `"Sea Glass"` (26 presets today).
 - Player Glass: append after `"Holo"` inside `PRESETS = listOf(…)` in
-  `PlayerGlassSettings.kt` (13 today: Clear, Tinted, Tilt, Pure, Droplet,
-  Prism, Bubble, Mercury, Ice, Halo, Aurora, Dusk, Holo). It opens with
-  `"Clear" to CLEAR`, a reference the validator cannot parse, so it counts 12
-  and leaves Clear to the unit tests.
-- `CLEAR` is also `INITIAL`, what every glass setting starts from — the
+  `PlayerGlassSettings.kt` (19 today: Float, Opal, Ripple, Glint, Blurred,
+  Frosted Ripple, Clear, Tinted, Tilt, Pure, Droplet, Prism, Bubble, Mercury,
+  Ice, Halo, Aurora, Dusk, Holo). It opens with `"Float" to FLOAT` and holds
+  `"Clear" to CLEAR`, references the validator cannot parse, so it counts 17
+  and leaves Float and Clear to the unit tests.
+- `FLOAT` is also `INITIAL`, what every glass setting starts from — the
   player's and the mini player's — and what the Studio's reset restores.
   Changing its values restyles the app for everyone who has not customised
-  it; the test `every glass setting starts from Clear` pins that it stays
+  it; the test `every glass setting starts from Float` pins that it stays
   still (no surface motion, no tilt). `DEFAULT` keeps the classic values but is
   no longer a chip; it stays because every preset inherits omitted fields from
   it — so set **every** material field in a new glass preset.

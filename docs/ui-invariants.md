@@ -77,7 +77,7 @@ and hands it to the mini player
 bar came out a different hue from the tab bar under it. Their haze pane is replaced by a
 layer that draws Haze's own capture of the screen behind them
 (`HazeState.areas[i].contentLayer`, offset by `positionOnScreen`), blurs it (a
-fifth of `hazeBlurDp`, 6.4dp on Clear) and bends it with the same lens rim,
+fifth of `hazeBlurDp`, 6.3dp on Float) and bends it with the same lens rim,
 with no frost veil at all (clear glass: a veil read as a dull frosted pane on
 device), and blurs exactly as much as "Backdrop blur" asks: 0 is crisp, unblurred
 refraction. (A 6dp floor was tried and removed on device.) The blur runs
@@ -112,7 +112,7 @@ light peak where the rim tilts ~15° toward them — several dp inside the edge 
 so a second bright edge sat inside the bevel's
 crisp outer line and the pane read as two layers, worse at some light angles.
 Do not light with `N` on a lens pane. These
-surfaces start from the `Clear` preset (`PlayerGlassSettings.INITIAL`), as does
+surfaces start from the `Float` preset (`PlayerGlassSettings.INITIAL`), as does
 every glass setting; `DEFAULT` keeps the classic values because presets inherit
 omitted fields from it. On the full player the disc and dock get it through
 `PlayerGlassHaze(lensCorner = …)` over the player background's haze source, and

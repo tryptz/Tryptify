@@ -136,8 +136,23 @@ data class PlayerGlassSettings(
         val DEFAULT = PlayerGlassSettings()
 
         /**
-         * Clear — iOS's clear Liquid Glass, and what every glass setting starts
-         * from ([INITIAL]). On the panes that bend the live screen (see
+         * Float — what every glass setting starts from ([INITIAL]), tuned on
+         * device. Half a body of glass with a broad mirror shoulder, lifted off
+         * the page by the deepest, softest shadow the roster has. Still until
+         * touched, like Clear before it: no surface motion and no tilt, so on
+         * the app-wide mini player no frame clock and no gravity sensor.
+         */
+        val FLOAT = PlayerGlassSettings(
+            bodyOpacity = 0.48956832f, refraction = 0.25042957f, rimBrightness = 1.2720146f, dispersion = 1.0006076f,
+            roundness = 1.9778082f, depth = 0.99957055f, reflection = 1.0004491f, gloss = 1f,
+            surfaceMotion = 0f, tiltReactivity = 0f, lightAngleDeg = 112.78995f, edgeWidth = 0.9997863f,
+            frost = 0f, shadowDepth = 1f, shadowSoftness = 0.7590206f, shadowTint = 0f,
+            hazeBlurDp = 31.726803f, hazeTint = 0f,
+        )
+
+        /**
+         * Clear — iOS's clear Liquid Glass, and until [FLOAT] what every glass
+         * setting started from. On the panes that bend the live screen (see
          * LiveGlassLens) it is almost nothing but optics: an 8% tint, the full
          * rim bend, a crisp rim lit from the upper left, a whisper of
          * dispersion and a calm room reflection. Still until touched — no
@@ -154,32 +169,36 @@ data class PlayerGlassSettings(
 
         /**
          * What every glass setting starts from — the player's and the mini
-         * player's alike — and what "Reset to defaults" restores: [CLEAR], the
-         * first chip.
+         * player's alike — and what "Reset to defaults" restores: [FLOAT], the
+         * first chip. A setting the listener has saved stays theirs; only one
+         * never saved, or reset, takes this.
          *
          * Not [DEFAULT], and DEFAULT does not move: it is also what a preset
          * inherits for any field it leaves out, and the fallback for a
          * non-finite value, so changing it would silently restyle everything
          * built on it. It is no longer offered as a chip.
          */
-        val INITIAL = CLEAR
+        val INITIAL = FLOAT
 
         /**
-         * The glass MATERIAL themes, in two families. The first three are
-         * iOS's own Liquid Glass: Clear, Tinted (the legibility variant) and
-         * Tilt (its highlights riding the phone's motion). The rest extend the
-         * same material where iOS does not go — a water drop, a prism, a soap
-         * film, liquid metal, ice, a glowing halo, an aurora, dusk light and a
-         * hologram — still nothing but optics, never colour: the tint is the
-         * album's or the listener's own, and a theme never touches it.
+         * The glass MATERIAL themes, in three families. The first six were
+         * tuned on device for this app, and Float, the first, is [INITIAL].
+         * Then iOS's own Liquid Glass: Clear, Tinted (the legibility variant)
+         * and Tilt (its highlights riding the phone's motion). The rest extend
+         * the same material where iOS does not go — a water drop, a prism, a
+         * soap film, liquid metal, ice, a glowing halo, an aurora, dusk light
+         * and a hologram — still nothing but optics, never colour: the tint is
+         * the album's or the listener's own, and a theme never touches it.
          *
          * Every theme sets every material field. A field left out would be
          * inherited from [DEFAULT], whose 0.53 surface motion and heavy
          * dispersion would leak into a theme that never asked for them.
          *
-         * None uses `frost`, the shader's grain: frosted glass is made from
-         * backdrop blur (`hazeBlurDp`), which the live lens takes a fifth of:
-         * 0 is crisp refraction, 80 is ~16dp of frost.
+         * Frosted glass is made from backdrop blur (`hazeBlurDp`), which the
+         * live lens takes a fifth of: 0 is crisp refraction, 80 is ~16dp of
+         * frost. `frost`, the shader's per-pixel grain, read as noise on the
+         * rim when heavy, so only Blurred and Frosted Ripple use it, lightly,
+         * at the values they were tuned to on device.
          *
          * Motion and tilt are not free. On the mini player, which is on every
          * screen, `surfaceMotion` > 0 runs a frame clock and `tiltReactivity`
@@ -187,6 +206,53 @@ data class PlayerGlassSettings(
          * both at zero; the ones that move are the ones about moving.
          */
         val PRESETS: List<Pair<String, PlayerGlassSettings>> = listOf(
+            "Float" to FLOAT,
+            // Opal — milky: a 60dp frosted backdrop behind a shallow face, with
+            // the strongest rainbow fringe on the edge and no shadow at all.
+            "Opal" to PlayerGlassSettings(
+                bodyOpacity = 0.31964132f, refraction = 0.16484107f, rimBrightness = 1.566366f, dispersion = 1.9898437f,
+                roundness = 1.9778082f, depth = 0.5081831f, reflection = 0.5974012f, gloss = 0.9886218f,
+                surfaceMotion = 0f, tiltReactivity = 0f, lightAngleDeg = 112.78995f, edgeWidth = 0.9968483f,
+                frost = 0f, shadowDepth = 0f, shadowSoftness = 0.7590206f, shadowTint = 0f,
+                hazeBlurDp = 60.25773f, hazeTint = 0f,
+            ),
+            // Ripple — a living surface: the face swells and shimmers, the
+            // glint is soft and wide, the rim bright, the light low from the
+            // left, the backdrop nearly crisp.
+            "Ripple" to PlayerGlassSettings(
+                bodyOpacity = 0.33888888f, refraction = 0.21891026f, rimBrightness = 1.8115268f, dispersion = 1.7587607f,
+                roundness = 1.9778082f, depth = 1.1776217f, reflection = 0.5974012f, gloss = 0.14583333f,
+                surfaceMotion = 0.31733248f, tiltReactivity = 0f, lightAngleDeg = 219.0021f, edgeWidth = 1f,
+                frost = 0f, shadowDepth = 0.1594109f, shadowSoftness = 0.2922036f, shadowTint = 0f,
+                hazeBlurDp = 9.846154f, hazeTint = 0f,
+            ),
+            // Glint — thin and polished: tight mirror highlights, lit from
+            // below, that slide as the phone tilts.
+            "Glint" to PlayerGlassSettings(
+                bodyOpacity = 0.16431624f, refraction = 0.17920963f, rimBrightness = 1.6380342f, dispersion = 1.4217198f,
+                roundness = 1.6424029f, depth = 0.75547683f, reflection = 1.1176282f, gloss = 1f,
+                surfaceMotion = 0f, tiltReactivity = 0.29526418f, lightAngleDeg = 246.07993f, edgeWidth = 0.77147436f,
+                frost = 0f, shadowDepth = 0.18637243f, shadowSoftness = 0.3135739f, shadowTint = 0f,
+                hazeBlurDp = 25.176117f, hazeTint = 0f,
+            ),
+            // Blurred — the page behind it gone to a 67dp wash under a ghost of
+            // a body: the full bend, a mirror room, a faint rim, a light grain
+            // and a soft accent-tinted shadow, with highlights that follow tilt.
+            "Blurred" to PlayerGlassSettings(
+                bodyOpacity = 0.15603523f, refraction = 0.4f, rimBrightness = 0.16935137f, dispersion = 0.22046821f,
+                roundness = 1.9778082f, depth = 0.5f, reflection = 2f, gloss = 1f,
+                surfaceMotion = 0f, tiltReactivity = 0.21713917f, lightAngleDeg = 104.90335f, edgeWidth = 1f,
+                frost = 0.02969287f, shadowDepth = 0f, shadowSoftness = 0.94882476f, shadowTint = 0.14850427f,
+                hazeBlurDp = 67.40121f, hazeTint = 0f,
+            ),
+            // Frosted Ripple — Ripple with a light grain on its living surface.
+            "Frosted Ripple" to PlayerGlassSettings(
+                bodyOpacity = 0.33888888f, refraction = 0.21891026f, rimBrightness = 1.8115268f, dispersion = 1.7587607f,
+                roundness = 1.9778082f, depth = 1.1776217f, reflection = 0.5974012f, gloss = 0.14583333f,
+                surfaceMotion = 0.31733248f, tiltReactivity = 0f, lightAngleDeg = 219.0021f, edgeWidth = 1f,
+                frost = 0.11025641f, shadowDepth = 0.1594109f, shadowSoftness = 0.2922036f, shadowTint = 0f,
+                hazeBlurDp = 9.846154f, hazeTint = 0f,
+            ),
             "Clear" to CLEAR,
             // Tinted — iOS's Tinted option: more body for legibility over busy
             // pages (a 30% tint), a heavier 12dp blur, a gentler bend.
