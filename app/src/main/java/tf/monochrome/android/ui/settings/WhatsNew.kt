@@ -150,6 +150,24 @@ object WhatsNew {
                     body = "The play button and the action dock bend the album art behind them too.",
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "God rays on the lyrics",
+                    body = "Light streams out of the line being sung, or from a light behind the lyrics that the letters block, and runs on down the screen under the player's glass. Aim it in Player Visuals Studio › Lyrics, under or over the letters. Off until you turn it on.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "Lyrics in any glass",
+                    body = "The letters can be made of any of the player's glass: roundness, depth, motion, reflection, gloss, tilt, light angle, edge and frost, or Match player glass to copy it. With god rays on, the letters catch their light.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "Nine new lyric looks",
+                    body = "Sunburst, Cathedral, Eclipse, Daybreak, Searchlight, Spotlight, Crepuscular, Mercury and Sea Glass, in Player Visuals Studio. Your own look and the presets you had stay as they were.",
+                ),
+                WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = LOOK,
                     title = "One clean glass edge",
@@ -220,6 +238,18 @@ object WhatsNew {
                     section = LOOK,
                     title = "Song titles get the whole line",
                     body = "Song rows are laid out like Library › Local: the title has its line to itself, with the artist, album, source and quality under it. Like a song from its menu or the player.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYER,
+                    title = "A soft shadow under the lyrics",
+                    body = "The lyrics' shadow falls on the background under each line, soft and away from the light, instead of a dark copy stuck to every letter. Shadow depth sets how dark and how soft.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYER,
+                    title = "The Studio preview beats with the song",
+                    body = "Player Visuals Studio's preview of the song playing pulses with the song itself, as the player does, and is still while it is paused. The sample line, with no song behind it, keeps its steady beat.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
