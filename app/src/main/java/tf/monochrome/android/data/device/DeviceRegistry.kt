@@ -5,10 +5,10 @@ import android.os.Build
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.serialization.Serializable
 import tf.monochrome.android.BuildConfig
 import tf.monochrome.android.data.auth.SupabaseAuthManager
@@ -30,22 +30,29 @@ private data class SbUserDevice(
     // `platform` column and the NOT NULL constraint on user_devices.platform
     // failed. Callers already pass it explicitly.
     val platform: String,
+    /** [DeviceIdProvider]'s per-install id: with user_id, the upsert key. No default, for the same reason. */
+    val local_id: String,
     val model: String? = null,
     val app_version: String? = null,
     val last_seen_at: String? = null,
 )
 
+@Serializable
+private data class SbUserDeviceId(val id: String)
+
 /**
- * Upserts the current (user, device) pair in Supabase `user_devices` and
- * caches the remote UUID locally so [currentRemoteId] can be awaited
- * synchronously by the play-event push path.
+ * Upserts the current (user, device) pair in Supabase `user_devices` and holds
+ * the row's id so [currentRemoteId] can be read synchronously by the
+ * play-event push path.
  *
- * Upsert key: server-side we match on (user_id, local_id_fingerprint) by
- * looking up the existing row before inserting. We don't have a (user_id,
- * local_id) unique constraint on the cloud table (local_id isn't stored
- * there — it's an Android-only concept), so we resolve the row by
- * checking our locally cached [PreferencesManager.deviceRemoteId] first;
- * on first run we insert a new row and persist its id.
+ * Keyed by (user_id, local_id), where local_id is [DeviceIdProvider]'s
+ * per-install id, unique together on the cloud table. It used to be keyed by
+ * nothing: the row id was cached in preferences, the cache was cleared on
+ * sign-out, and every sign-in inserted a new row — 774 rows for 327 accounts,
+ * one account with 87. A cached id whose row was gone was worse: the update
+ * matched nothing and the dead id went onto every play, which its foreign key
+ * then refused. One upsert per launch now finds or creates the row and
+ * answers its id.
  */
 @Singleton
 class DeviceRegistry @Inject constructor(
@@ -66,50 +73,30 @@ class DeviceRegistry @Inject constructor(
             _currentRemoteId.value = null
             return
         }
-        // Ensure local id exists (tracked across sign-outs for stats continuity).
-        deviceIdProvider.getOrCreate()
-
-        val cached = prefs.deviceRemoteId.firstOrNull()
-        val supabase = authManager.supabase
+        // Survives sign-out and account switches, which is what makes it a key.
+        val localId = deviceIdProvider.getOrCreate()
         val model = "${Build.MANUFACTURER} ${Build.MODEL}".trim()
-        val appVersion = BuildConfig.VERSION_NAME
 
         runCatching {
-            if (cached != null) {
-                // Existing device row — just touch last_seen_at + version.
-                val nowIso = Instant.now().toString()
-                supabase.postgrest["user_devices"].update({
-                    set("last_seen_at", nowIso)
-                    set("app_version", appVersion)
-                    set("model", model)
-                }) {
-                    filter {
-                        eq("id", cached)
-                        eq("user_id", uid)
-                    }
-                }
-                _currentRemoteId.value = cached
-                return@runCatching
-            }
-
-            // No cached remote id — insert and persist the returned UUID.
-            val inserted = supabase.postgrest["user_devices"]
-                .insert(
+            val row = authManager.supabase.postgrest["user_devices"]
+                .upsert(
                     SbUserDevice(
                         user_id = uid,
                         platform = "android",
+                        local_id = localId,
                         model = model,
-                        app_version = appVersion,
+                        app_version = BuildConfig.VERSION_NAME,
+                        last_seen_at = Instant.now().toString(),
                     )
                 ) {
-                    select()
+                    onConflict = "user_id,local_id"
+                    select(Columns.list("id"))
                 }
-                .decodeSingleOrNull<SbUserDevice>()
-
-            val remoteId = inserted?.id
-            if (remoteId != null) {
-                prefs.setDeviceRemoteId(remoteId)
-                _currentRemoteId.value = remoteId
+                .decodeSingleOrNull<SbUserDeviceId>()
+            // An account switch while the request was out: the id belongs to
+            // the account that sent it, not to whoever is signed in now.
+            if (row != null && authManager.userProfile.value?.id == uid) {
+                _currentRemoteId.value = row.id
             }
         }.onFailure {
             Log.e(TAG, "registerCurrentDevice failed: ${it.message}")

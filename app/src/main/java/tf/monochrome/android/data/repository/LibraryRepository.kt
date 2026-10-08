@@ -173,8 +173,10 @@ class LibraryRepository @Inject constructor(
         // was played", and the service reaches it from four different places.
         preferences.recordPlayTowardsDonatePrompt()
         // Fire-and-forget cloud sync — no-op if the user isn't signed in.
+        // Only play_events goes up. The row used to go to play_history as
+        // well, a table nothing ever read back: a second request per play,
+        // and a prune trigger on every insert.
         syncScope.launch {
-            supabaseSync.pushHistoryTrack(historyRow)
             val sessionId = playSessionManager.sessionFor(event.playedAt)
             val deviceId = deviceRegistry.snapshotRemoteId()
             val sourceType = track.cloudSourceType()

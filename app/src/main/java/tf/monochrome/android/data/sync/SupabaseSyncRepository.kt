@@ -2,6 +2,7 @@ package tf.monochrome.android.data.sync
 
 import android.util.Log
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -16,14 +17,12 @@ import kotlinx.serialization.json.buildJsonObject
 import tf.monochrome.android.data.auth.SupabaseAuthManager
 import tf.monochrome.android.data.db.dao.EqPresetDao
 import tf.monochrome.android.data.db.dao.FavoriteDao
-import tf.monochrome.android.data.db.dao.HistoryDao
 import tf.monochrome.android.data.db.dao.MixPresetDao
 import tf.monochrome.android.data.db.dao.PlaylistDao
 import tf.monochrome.android.data.db.entity.EqPresetEntity
 import tf.monochrome.android.data.db.entity.FavoriteAlbumEntity
 import tf.monochrome.android.data.db.entity.FavoriteArtistEntity
 import tf.monochrome.android.data.db.entity.FavoriteTrackEntity
-import tf.monochrome.android.data.db.entity.HistoryTrackEntity
 import tf.monochrome.android.data.db.entity.MixPresetEntity
 import tf.monochrome.android.data.db.entity.PlayEventEntity
 import tf.monochrome.android.data.db.entity.PlaylistTrackEntity
@@ -35,6 +34,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "SupabaseSync"
+
+/** Rows asked for per page of playlist tracks; the server may answer fewer. */
+private const val PLAYLIST_TRACKS_PAGE = 1000L
 
 // ─── Supabase row DTOs (flat, snake_case) ────────────────────────────────────
 
@@ -122,26 +124,6 @@ data class SbFavoriteArtist(
     val name: String,
     val picture: String? = null,
     val added_at: String? = null
-)
-
-@Serializable
-data class SbPlayHistory(
-    val id: Long? = null,
-    val user_id: String? = null,
-    val track_id: Long,
-    val title: String,
-    val duration: Int = 0,
-    val artist_id: Long? = null,
-    val artist_name: String = "",
-    val album_id: Long? = null,
-    val album_title: String? = null,
-    val album_cover: String? = null,
-    val audio_quality: String? = null,
-    val played_at: String? = null,
-    // Mirrors history_tracks.unifiedJson on the local DB. Carries the
-    // serialized UnifiedTrack so cross-device re-routing of Recently Played
-    // doesn't fall back to TIDAL with a Qobuz id / file-path hash.
-    val unified_json: String? = null,
 )
 
 /**
@@ -232,7 +214,6 @@ data class SbUserSettings(
 class SupabaseSyncRepository @Inject constructor(
     private val authManager: SupabaseAuthManager,
     private val favoritesDao: FavoriteDao,
-    private val historyDao: HistoryDao,
     private val eqPresetDao: EqPresetDao,
     private val mixPresetDao: MixPresetDao,
     private val playlistDao: PlaylistDao,
@@ -247,6 +228,15 @@ class SupabaseSyncRepository @Inject constructor(
     private val flushScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     /** One flush at a time — two racing would send the same edit twice. */
     private val flushLock = Mutex()
+    /** One play upload at a time, for the same reason: launch and Sync now can overlap. */
+    private val playUploadLock = Mutex()
+
+    /**
+     * Catalog ids already resolved in this process, by "source:sourceRef".
+     * A track played again needs no second round trip: ensure_catalog_track
+     * answers the same id for the same key every time.
+     */
+    private val catalogTrackIds = android.util.LruCache<String, String>(512)
 
     private fun userId(): String? = authManager.userProfile.value?.id
 
@@ -463,29 +453,6 @@ class SupabaseSyncRepository @Inject constructor(
         }.onFailure { Log.e(TAG, "deleteFavoriteArtist failed: ${it.message}") }.isSuccess
     }
 
-    // ─── Play History ────────────────────────────────────────────────────────
-
-    suspend fun pushHistoryTrack(track: HistoryTrackEntity) {
-        val uid = userId() ?: return
-        runCatching {
-            supabase.postgrest["play_history"].insert(
-                SbPlayHistory(
-                    user_id = uid,
-                    track_id = track.id,
-                    title = track.title,
-                    duration = track.duration,
-                    artist_id = track.artistId,
-                    artist_name = track.artistName,
-                    album_id = track.albumId,
-                    album_title = track.albumTitle,
-                    album_cover = track.albumCover,
-                    audio_quality = track.audioQuality,
-                    unified_json = track.unifiedJson,
-                )
-            )
-        }.onFailure { Log.e(TAG, "pushHistoryTrack failed: ${it.message}") }
-    }
-
     // ─── Play Events (per-play scrobble log) ─────────────────────────────────
 
     /**
@@ -544,6 +511,64 @@ class SupabaseSyncRepository @Inject constructor(
             Log.e(TAG, "pushPlayEvent failed: ${it.message}")
             null
         }
+    }
+
+    /**
+     * Uploads every play this device recorded that the cloud never accepted,
+     * and ties each one to its cloud row.
+     *
+     * Runs on every launch, from [LibraryRestoreCoordinator], and from Sync
+     * now. Safe to repeat: before inserting, each batch asks which of its plays
+     * the cloud already holds and adopts those rows instead (see [matchPlays]).
+     * Plays from the last ten minutes are left to the push that follows the
+     * play itself.
+     *
+     * The plays go up under whichever account is signed in, as Sync now always
+     * sent them: this device keeps one play history, not one per account.
+     *
+     * @return how many plays were settled — tied to a cloud row, or dropped as
+     *   a local duplicate of one. Throws when the cloud can't be read or
+     *   written; whatever is left goes next time.
+     */
+    suspend fun uploadUnsyncedPlayEvents(): Int {
+        val uid = userId() ?: return 0
+        return playUploadLock.withLock {
+            val before = System.currentTimeMillis() - PLAY_UPLOAD_MIN_AGE_MS
+            var afterRowId = 0L
+            var settled = 0
+            // Stops if the account changes mid-run, like flushOutbox.
+            while (userId() == uid) {
+                val batch = playEventDao.getUnsyncedBatch(before, afterRowId, PLAY_UPLOAD_BATCH)
+                if (batch.isEmpty()) break
+                afterRowId = batch.last().rowId
+                settled += uploadPlayBatch(uid, batch)
+                if (batch.size < PLAY_UPLOAD_BATCH) break
+            }
+            settled
+        }
+    }
+
+    /** One batch: adopt the plays the cloud already has, insert the rest in one request. */
+    private suspend fun uploadPlayBatch(uid: String, batch: List<PlayEventEntity>): Int {
+        val keyColumns = Columns.list("id", "track_id", "played_at_ms")
+        val inCloud = supabase.postgrest["play_events"]
+            .select(keyColumns) {
+                filter {
+                    eq("user_id", uid)
+                    isIn("played_at_ms", batch.map { it.playedAt }.distinct())
+                }
+            }
+            .decodeList<SbPlayEventKey>()
+        val existing = matchPlays(batch, inCloud)
+        existing.matched.forEach { (play, cloudId) -> playEventDao.adoptCloudId(play.rowId, cloudId) }
+        if (existing.unmatched.isEmpty()) return existing.matched.size
+
+        val inserted = supabase.postgrest["play_events"]
+            .insert(existing.unmatched.map { it.toUpload(uid) }) { select(keyColumns) }
+            .decodeList<SbPlayEventKey>()
+        val fresh = matchPlays(existing.unmatched, inserted)
+        fresh.matched.forEach { (play, cloudId) -> playEventDao.adoptCloudId(play.rowId, cloudId) }
+        return existing.matched.size + fresh.matched.size
     }
 
     // ─── Pull play_events from cloud into local Room (phase 2.1) ─────────────
@@ -614,6 +639,8 @@ class SupabaseSyncRepository @Inject constructor(
         sourceRef: String,
     ): String? {
         userId() ?: return null
+        val cacheKey = "$source:$sourceRef"
+        catalogTrackIds.get(cacheKey)?.let { return it }
         val payload: JsonObject = buildJsonObject {
             put("source", JsonPrimitive(source))
             put("source_ref", JsonPrimitive(sourceRef))
@@ -625,9 +652,16 @@ class SupabaseSyncRepository @Inject constructor(
             event.audioQuality?.let { put("audio_quality", JsonPrimitive(it)) }
         }
         return runCatching {
-            supabase.postgrest.rpc("ensure_catalog_track", payload)
+            // Wrapped in "p" because PostgREST matches the body's top-level
+            // keys to the function's parameter names, and the function's one
+            // parameter is `p jsonb`. Sent bare, the keys named a function
+            // with parameters source, source_ref, title, … that does not
+            // exist: every call so far answered 404, and no play has a
+            // track_uuid.
+            supabase.postgrest.rpc("ensure_catalog_track", buildJsonObject { put("p", payload) })
                 .decodeAs<String>()
                 .takeIf { it.isNotBlank() }
+                ?.also { catalogTrackIds.put(cacheKey, it) }
         }.getOrElse {
             Log.w(TAG, "ensure_catalog_track($source/$sourceRef) failed: ${it.message}")
             null
@@ -977,7 +1011,8 @@ class SupabaseSyncRepository @Inject constructor(
                 .select { filter { eq("user_id", uid) } }
                 .decodeList<SbPlaylist>()
             val gonePlaylists = deleted(SyncKind.PLAYLIST)
-            playlists.filterNot { it.id in gonePlaylists }.forEach { p ->
+            val kept = playlists.filterNot { it.id in gonePlaylists }
+            kept.forEach { p ->
                 playlistDao.insertPlaylistIfNotExists(
                     UserPlaylistEntity(
                         id = p.id,
@@ -986,25 +1021,25 @@ class SupabaseSyncRepository @Inject constructor(
                         isPublic = p.is_public
                     )
                 )
-                val tracks = supabase.postgrest["playlist_tracks"]
-                    .select { filter { eq("playlist_id", p.id) } }
-                    .decodeList<SbPlaylistTrack>()
-                val goneTracks = deleted(SyncKind.PLAYLIST_TRACK)
-                tracks.filterNot { playlistTrackKey(it.playlist_id, it.track_id) in goneTracks }.forEach { t ->
-                    playlistDao.insertTrackIfNotExists(
-                        PlaylistTrackEntity(
-                            playlistId = t.playlist_id,
-                            trackId = t.track_id,
-                            title = t.title,
-                            duration = t.duration,
-                            artistName = t.artist_name,
-                            albumId = t.album_id,
-                            albumTitle = t.album_title,
-                            albumCover = t.album_cover,
-                            position = t.position
-                        )
+            }
+            // Every playlist's tracks together, not one request per playlist:
+            // this runs on every launch, and ten playlists were ten round trips.
+            val tracks = fetchPlaylistTracks(kept.map { it.id })
+            val goneTracks = deleted(SyncKind.PLAYLIST_TRACK)
+            tracks.filterNot { playlistTrackKey(it.playlist_id, it.track_id) in goneTracks }.forEach { t ->
+                playlistDao.insertTrackIfNotExists(
+                    PlaylistTrackEntity(
+                        playlistId = t.playlist_id,
+                        trackId = t.track_id,
+                        title = t.title,
+                        duration = t.duration,
+                        artistName = t.artist_name,
+                        albumId = t.album_id,
+                        albumTitle = t.album_title,
+                        albumCover = t.album_cover,
+                        position = t.position
                     )
-                }
+                )
             }
         }.onFailure { failed += "playlists"; Log.e(TAG, "pull playlists: ${it.message}") }
 
@@ -1044,6 +1079,38 @@ class SupabaseSyncRepository @Inject constructor(
 
         Log.d(TAG, "Cloud pull complete (${failed.size} failed sections)")
         return failed
+    }
+
+    /**
+     * The tracks of [playlistIds], paged until the server has nothing left.
+     *
+     * Paged because PostgREST caps a response (1,000 rows on Supabase by
+     * default) and says nothing when it does: one account already holds 1,577
+     * playlist tracks, and a single request would have restored the first
+     * 1,000 of them. Each page starts where the last one ended rather than
+     * assuming the cap, so a lower one cannot cut the list short either. Ids
+     * go in groups of 50 to keep the `in` list well inside a URL.
+     */
+    private suspend fun fetchPlaylistTracks(playlistIds: List<String>): List<SbPlaylistTrack> {
+        val all = ArrayList<SbPlaylistTrack>()
+        for (group in playlistIds.chunked(50)) {
+            var from = 0L
+            while (true) {
+                val page = supabase.postgrest["playlist_tracks"]
+                    .select {
+                        filter { isIn("playlist_id", group) }
+                        // The primary key's order, so pages neither skip nor repeat a row.
+                        order("playlist_id", io.github.jan.supabase.postgrest.query.Order.ASCENDING)
+                        order("track_id", io.github.jan.supabase.postgrest.query.Order.ASCENDING)
+                        range(from, from + PLAYLIST_TRACKS_PAGE - 1)
+                    }
+                    .decodeList<SbPlaylistTrack>()
+                if (page.isEmpty()) break
+                all += page
+                from += page.size
+            }
+        }
+        return all
     }
 
     /**
@@ -1089,16 +1156,11 @@ class SupabaseSyncRepository @Inject constructor(
         section("favorite_tracks") { favoritesDao.getFavoriteTracksSnapshot().sendAll { pushFavoriteTrack(it) } }
         section("favorite_albums") { favoritesDao.getFavoriteAlbumsSnapshot().sendAll { pushFavoriteAlbum(it) } }
         section("favorite_artists") { favoritesDao.getFavoriteArtistsSnapshot().sendAll { pushFavoriteArtist(it) } }
-        section("play_history") { historyDao.getHistorySnapshot(500).forEach { pushHistoryTrack(it) } }
-        // Play events: only push rows not already in the cloud (cloudRowId IS
-        // NULL), and record the assigned cloud id, so repeated syncs don't
-        // re-insert the same scrobble and inflate stats (the old code re-pushed
-        // the last 1000 every time).
-        section("play_events") {
-            playEventDao.getUnsynced(1000).forEach { e ->
-                pushPlayEvent(e)?.let { cloudId -> playEventDao.setCloudId(e.rowId, cloudId) }
-            }
-        }
+        // Play events: only rows the cloud never accepted, each checked against
+        // what it already holds before anything is inserted, so repeated syncs
+        // don't inflate stats. It throws rather than skipping a play it could
+        // not send, so a failure here is reported.
+        section("play_events") { uploadUnsyncedPlayEvents() }
         section("playlists") {
             playlistDao.getAllPlaylistsSnapshot().forEach { playlist ->
                 check(pushPlaylist(playlist)) { "playlist ${playlist.id} refused" }

@@ -499,7 +499,12 @@ class PreferencesManager @Inject constructor(
             PLAYER_GLASS_CUSTOM_PRESETS_JSON, MINI_PLAYER_GLASS_JSON, WAVE_CANDY_JSON,
             SPECTRUM_WATERFALL_JSON,
             VISUALIZER_SENSITIVITY, VISUALIZER_BRIGHTNESS, VISUALIZER_AUDIO_DELAY_MS,
-            VISUALIZER_ENGINE_ENABLED, VISUALIZER_PRESET_ID,
+            // Not VISUALIZER_PRESET_ID: it is the preset on screen, rewritten on
+            // every Next on the visualizer and every per-track rotation, and each
+            // rewrite was a full settings read and write against Supabase — the
+            // largest single source of API traffic. The favourites and the
+            // rotation settings below are the choices worth carrying across.
+            VISUALIZER_ENGINE_ENABLED,
             VISUALIZER_ROTATION_SECONDS, VISUALIZER_PRESET_ROTATION_MODE,
             VISUALIZER_PRESET_ROTATION_LAST,
             VISUALIZER_SHOW_FPS, VISUALIZER_FULLSCREEN,
