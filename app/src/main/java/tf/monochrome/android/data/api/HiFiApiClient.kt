@@ -1113,14 +1113,20 @@ class HiFiApiClient @Inject constructor(
                     // TIDAL has an Atmos mix and Atmos was asked for: saving the
                     // stereo FLAC in its place is not what was asked. The
                     // download fails and says why; a stereo download quality
-                    // is how to get the FLAC.
+                    // is how to get the FLAC. No answer at all is not that
+                    // verdict: an IOException, which the queue tries again.
                     is AtmosAnswer.Unavailable -> if (listedAtmos) {
+                        if (atmos.noAnswer) throw java.io.IOException("Dolby Atmos: ${atmos.reason}")
                         throw IllegalStateException("Dolby Atmos unavailable: ${atmos.reason}")
                     }
                 }
             }
             val url = if (qobuzIdRegistry.isQobuzTrack(trackId)) {
-                runCatching { resolveQobuzDownloadUrl(trackId, quality) }.getOrNull()
+                // Not wrapped in runCatching: an IOException (no answer at
+                // all) has to reach TrackDownloader as itself, which retries
+                // it, and a cancellation has to stay a cancellation. Only a
+                // server that answered without a link is a verdict.
+                resolveQobuzDownloadUrl(trackId, quality)
                     ?: throw IllegalStateException("Qobuz could not serve track $trackId")
             } else {
                 resolveTidalDownloadUrl(trackId, quality)
@@ -1171,7 +1177,7 @@ class HiFiApiClient @Inject constructor(
         val streamResponse = json.decodeFromString<TrackStreamResponse>(unwrapResponse(body))
 
         val streamUrl = extractStreamUrlFromManifest(streamResponse.manifest)
-        val isDash = streamUrl?.contains("<MPD") == true || streamUrl?.endsWith(".mpd") == true
+        val isDash = streamUrl?.let(::isDashManifest) == true
 
         if (streamUrl == null) {
             // Fallback to lower quality
@@ -1218,7 +1224,12 @@ class HiFiApiClient @Inject constructor(
     /** What the TIDAL server said when asked for a track's Dolby Atmos file. */
     private sealed interface AtmosAnswer {
         data class File(val url: String) : AtmosAnswer
-        data class Unavailable(val reason: String) : AtmosAnswer
+        /**
+         * [noAnswer]: the server never answered (the call failed or timed
+         * out), which says nothing about the track. A download tries again
+         * rather than failing for good.
+         */
+        data class Unavailable(val reason: String, val noAnswer: Boolean = false) : AtmosAnswer
     }
 
     /**
@@ -1260,7 +1271,15 @@ class HiFiApiClient @Inject constructor(
                     // TrypT HiFi says why in {success: false, error}.
                     val error = (data?.get("error") as? JsonPrimitive)?.contentOrNull
                     return@withTimeoutOrNull AtmosAnswer.Unavailable(
-                        error ?: "the TIDAL server answered HTTP ${res.status.value}"
+                        error ?: if (res.status.value == 404) {
+                            // A plain HiFi API server has no such route, so no
+                            // track on it downloads in Atmos: say that, rather
+                            // than a bare status every Atmos track repeats.
+                            "this TIDAL server has no Atmos downloads (HTTP 404); " +
+                                "a stereo download quality gets the FLAC"
+                        } else {
+                            "the TIDAL server answered HTTP ${res.status.value}"
+                        }
                     )
                 }
                 val payload = data?.get("data") as? JsonObject
@@ -1277,10 +1296,12 @@ class HiFiApiClient @Inject constructor(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 // The timeout below, or the caller cancelling: never swallowed.
                 throw e
+            } catch (e: java.io.IOException) {
+                AtmosAnswer.Unavailable(e.message ?: e.javaClass.simpleName, noAnswer = true)
             } catch (e: Exception) {
                 AtmosAnswer.Unavailable(e.message ?: e.javaClass.simpleName)
             }
-        } ?: AtmosAnswer.Unavailable("the TIDAL server did not answer within ${timeoutMs / 1000} s")
+        } ?: AtmosAnswer.Unavailable("the TIDAL server did not answer within ${timeoutMs / 1000} s", noAnswer = true)
     }
 
     // --- Recommendations ---
@@ -1534,9 +1555,11 @@ class HiFiApiClient @Inject constructor(
             // TIDAL sends its hi-res tier as DASH segments, which only a TrypT
             // HiFi server can join into a file. Its CD tier is one FLAC, so a
             // hi-res download falls back to that, as it does with no stream.
-            url.contains("<MPD") && quality == AudioQuality.HI_RES ->
+            // A link to an .mpd is the same thing at one remove: saved, it is
+            // the manifest's XML under an audio name.
+            isDashManifest(url) && quality == AudioQuality.HI_RES ->
                 tidalManifestFileUrl(trackId, AudioQuality.LOSSLESS)
-            url.contains("<MPD") -> throw Exception(
+            isDashManifest(url) -> throw Exception(
                 "TIDAL sent track $trackId as DASH segments; only a TrypT HiFi server can download those as a file"
             )
             else -> url
@@ -2013,3 +2036,13 @@ private fun tf.monochrome.android.data.api.model.PlaylistTrackItem.toDomain(): T
         isDolbyAtmos = noteAtmos(trackId, hasDolbyAtmos(audioModes, mediaMetadata)),
     )
 }
+
+/**
+ * Whether a manifest's stream is DASH rather than one file: the MPD XML itself,
+ * or a link to it. A link is judged by its path, so a signed one
+ * (`…/manifest.mpd?token=…`) counts too. Playback hands DASH to the DASH
+ * source; a download cannot save it as a file.
+ */
+internal fun isDashManifest(stream: String): Boolean =
+    stream.contains("<MPD") ||
+        stream.substringBefore('#').substringBefore('?').endsWith(".mpd", ignoreCase = true)
