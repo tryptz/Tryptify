@@ -1335,11 +1335,11 @@ class PlaybackService : MediaSessionService() {
                     val dataSourceFactory = DefaultDataSource.Factory(this@PlaybackService)
 
                     val source = if (trackStream.isDash) {
-                        // Create DASH source from MPD XML string
-                        val mpdUri = ("data:application/dash+xml;base64," +
-                            android.util.Base64.encodeToString(streamUrl.toByteArray(), android.util.Base64.NO_WRAP)).toUri()
+                        // The MPD XML inline as a data: URI, or an .mpd link
+                        // as it is: encoded, the link's own text would be read
+                        // as the manifest (see dashManifestUri).
                         DashMediaSource.Factory(dataSourceFactory)
-                            .createMediaSource(MediaItem.fromUri(mpdUri))
+                            .createMediaSource(MediaItem.fromUri(dashManifestUri(streamUrl).toUri()))
                     } else {
                         ProgressiveMediaSource.Factory(dataSourceFactory, tf.monochrome.android.audio.wav.TryptifyExtractors.factory)
                             .createMediaSource(mediaItem)
