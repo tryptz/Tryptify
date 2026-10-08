@@ -228,6 +228,8 @@ fun LegacyMainPlayerScreen(
             DevEditable("legacy_actionDock", Modifier.fillMaxWidth()) {
                 LegacyPlayerActionDock(
                     accent = accent,
+                    lyricsActive = state.viewMode == NowPlayingViewMode.LYRICS,
+                    onLyrics = onLyrics,
                     onTimer = onTimer,
                     onMixer = onMixer,
                     onPlaylist = onPlaylist,

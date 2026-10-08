@@ -168,6 +168,12 @@ object WhatsNew {
                     body = "Sunburst, Cathedral, Eclipse, Daybreak, Searchlight, Spotlight, Crepuscular, Mercury and Sea Glass, in Player Visuals Studio. Your own look and the presets you had stay as they were.",
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "A Lyrics button on the legacy player",
+                    body = "The legacy player has a Lyrics button beside Timer, Mixer/FX and Playlist, lit while the lyrics show. It used to be in the Audio tools panel only.",
+                ),
+                WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = LOOK,
                     title = "One clean glass edge",
@@ -238,6 +244,12 @@ object WhatsNew {
                     section = LOOK,
                     title = "Song titles get the whole line",
                     body = "Song rows are laid out like Library › Local: the title has its line to itself, with the artist, album, source and quality under it. Like a song from its menu or the player.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LOOK,
+                    title = "Low performance mode draws flat",
+                    body = "With Remove liquid glass on, the nav bar is Android's own Material 3 bar, with Search in it, and the mini player and every pane are flat surfaces. They used to turn see-through, and the page showed through the nav bar.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,

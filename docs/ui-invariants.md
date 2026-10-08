@@ -57,6 +57,15 @@ output is bit-identical to the alpha-only glass. The profile is circular, not a 
 width, only its outermost pixels bent, and on device the refraction read as too
 weak.
 
+**With "Remove liquid glass" on, glass is flat Material 3, never nothing.**
+`Modifier.liquidGlass` draws a flat fill in the caller's shape, between
+`surfaceContainerLow` and `surfaceContainerHighest` by the caller's `tintAlpha`
+(a quieter pane a tone lower), and `GlassPanel` its own `surfaceContainerHigh`. The switch turns off the haze
+blur too, and the shared modifier used to fall through to the LOW-tier return
+and draw nothing: the nav bar, the mini player and every pane went
+see-through, and the page read straight through them (seen on device). The
+switch is for the blur, the rim and the refraction, not the surface.
+
 **Prototype: the mini player, the tab bar, `GlassPanel` and the full player's disc and dock bend the live screen**
 (`LiveGlassLens.kt`, behind `LIVE_LENS_GLASS`). **The mini player and the tab bar are one
 material and must match exactly:** same lens, same blur share
@@ -426,6 +435,13 @@ frosted pane with ordinary icons, because a solid slab without the shader is an
 opaque block with holes in it. Its titles are plain text, not punched: the
 glyphs are chunky because the bevel needs about 3dp of stroke to read as an
 edge, and an 11sp title's strokes are thinner than the bevel.
+
+**With liquid glass removed, the bar is Material 3's.** `FlatTabChrome`: a
+`NavigationBar` across the bottom with every tab in it, Search included, and
+the mini player docked flat above it. It stands on the system bar's inset
+itself, so `chromeHeight` has its own value for it (`FLAT_NAV_BAR_HEIGHT`),
+and it does not fold. The floating pill without its glass was a shape with
+nothing under it.
 
 **Scrolling down folds the mini player into the bar; scrolling up unfolds it.**
 It is driven by nested scroll at the nav host, so every list drives it without
