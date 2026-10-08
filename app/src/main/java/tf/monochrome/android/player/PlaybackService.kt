@@ -495,17 +495,20 @@ class PlaybackService : MediaSessionService() {
             // While a DAC is claimed the session's volume is the DAC level, so
             // the hardware keys reach it with the app in the background too.
             dacVolume = bypassVolumeController,
-            isExclusive = { libusbDriver.isOpen.value },
+            isExclusive = { bypassVolumeController.steersOutput(libusbDriver.isOpen.value) },
         )
         mediaSession = MediaSession.Builder(this, forwardingPlayer)
             .setSessionActivity(createSessionActivity())
             .setCallback(PlaybackResumptionCallback())
             .build()
-        // The session hears when the DAC is claimed or let go, and when its
-        // level moves, so the system volume panel follows it. On the main
-        // thread, where the session listens.
+        // The session hears when the DAC is claimed or let go, or a stream
+        // goes to Android's output despite it, and when its level moves, so
+        // the system volume panel follows it. On the main thread, where the
+        // session listens.
         serviceScope.launch {
-            libusbDriver.isOpen.collect { forwardingPlayer.onExclusiveChanged() }
+            combine(libusbDriver.isOpen, bypassVolumeController.dacCarriesStream) { open, carries -> open && carries }
+                .distinctUntilChanged()
+                .collect { forwardingPlayer.onExclusiveChanged() }
         }
         serviceScope.launch {
             bypassVolumeController.levelDb.collect { forwardingPlayer.onDeviceVolumeChanged() }

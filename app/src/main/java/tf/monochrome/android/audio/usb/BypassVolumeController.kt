@@ -54,6 +54,24 @@ class BypassVolumeController @Inject constructor() {
     // control so every way in agrees: the bar, the pop-up, the system panel.
     private var beforeMuteDb: Float = SAFE_START_DB
 
+    private val _dacCarriesStream = MutableStateFlow(true)
+    /**
+     * False while a DAC is claimed but the stream playing went to Android's
+     * own output instead: a format the DAC has no alt for, or a DAC that
+     * stopped streaming. The DAC level steers nothing heard then, so the
+     * volume keys and the system panel go back to Android's volume. True
+     * otherwise, with no stream at all included, so a key press before play
+     * still sets the DAC. Set by [LibusbAudioSink], which makes that call.
+     */
+    val dacCarriesStream: StateFlow<Boolean> = _dacCarriesStream.asStateFlow()
+
+    fun setDacCarriesStream(carries: Boolean) {
+        _dacCarriesStream.value = carries
+    }
+
+    /** Whether the DAC level is the volume heard: a DAC is claimed ([dacClaimed]) and the stream is on it. */
+    fun steersOutput(dacClaimed: Boolean): Boolean = dacClaimed && _dacCarriesStream.value
+
     private val _keyPresses = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     /** A volume key changed the level: the cue for the glass pop-up to show. */
     val keyPresses: SharedFlow<Unit> = _keyPresses.asSharedFlow()

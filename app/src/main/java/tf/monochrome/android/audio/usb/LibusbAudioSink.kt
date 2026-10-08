@@ -307,6 +307,30 @@ class LibusbAudioSink(
         specifiedBufferSize: Int,
         outputChannels: IntArray?,
     ) {
+        // Every way out of configureStream is a decision about who plays the
+        // stream, the throws included; the volume controls hear each one.
+        try {
+            configureStream(inputFormat, specifiedBufferSize, outputChannels)
+        } finally {
+            publishDacCarriesStream()
+        }
+    }
+
+    /**
+     * Tells the volume controls whether the claimed DAC is what this stream
+     * plays on (see [BypassVolumeController.dacCarriesStream]). With no DAC
+     * claimed the question does not arise, and the answer is left at yes for
+     * the next claim.
+     */
+    private fun publishDacCarriesStream() {
+        volumeController.setDacCarriesStream(bypassActive || !driver.isOpen.value)
+    }
+
+    private fun configureStream(
+        inputFormat: Format,
+        specifiedBufferSize: Int,
+        outputChannels: IntArray?,
+    ) {
         configuredFormat = inputFormat
         configuredBufferSize = specifiedBufferSize
         configuredOutputChannels = outputChannels
@@ -892,6 +916,7 @@ class LibusbAudioSink(
 
         Log.i(TAG, "driver released the DAC — disengaging bypass, delegate takes over")
         bypassActive = false
+        publishDacCarriesStream()
         pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
         // The processors are still configured for the chain's format.
         handProcessorsToDelegate()
@@ -929,6 +954,7 @@ class LibusbAudioSink(
         }
 
         bypassActive = engageDriver(rate, channels, encoding)
+        publishDacCarriesStream()
 
         if (bypassActive) {
             lastEngageFailHash = 0
@@ -1222,6 +1248,9 @@ class LibusbAudioSink(
         if (driver.isStreaming.value) driver.stop()
 
         bypassActive = false
+        // No stream, so nothing has gone elsewhere: a key press before the
+        // next one starts still sets the DAC.
+        volumeController.setDacCarriesStream(true)
         paused = false
         pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
         framesWritten = 0L

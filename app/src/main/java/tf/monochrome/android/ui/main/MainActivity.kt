@@ -319,6 +319,9 @@ class MainActivity : ComponentActivity() {
      * consume the key event and step the DAC level instead (BypassVolumeController,
      * 2 dB a press); the step also brings up the glass volume pop-up,
      * since Android's own panel would show a volume that does nothing.
+     * Not while the playing stream went to Android's output although a DAC
+     * is claimed (a format the DAC has no alt for): then STREAM_MUSIC is
+     * the volume heard, and the keys go to it.
      *
      * The level is the DAC's alone: it is not written into the player's
      * volume preference, which the non-exclusive path also plays at —
@@ -339,7 +342,7 @@ class MainActivity : ComponentActivity() {
         if (event.action == KeyEvent.ACTION_DOWN) {
             val isVolumeKey = event.keyCode == KeyEvent.KEYCODE_VOLUME_UP ||
                               event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN
-            if (isVolumeKey && libusbDriver.isOpen.value) {
+            if (isVolumeKey && bypassVolumeController.steersOutput(libusbDriver.isOpen.value)) {
                 bypassVolumeController.stepLevel(
                     if (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP) 1 else -1
                 )
@@ -352,7 +355,7 @@ class MainActivity : ComponentActivity() {
             // — when bypass is off, the system handles both.
             val isVolumeKey = event.keyCode == KeyEvent.KEYCODE_VOLUME_UP ||
                               event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN
-            if (isVolumeKey && libusbDriver.isOpen.value) return true
+            if (isVolumeKey && bypassVolumeController.steersOutput(libusbDriver.isOpen.value)) return true
         }
         return super.dispatchKeyEvent(event)
     }

@@ -29,7 +29,8 @@ import kotlin.math.roundToInt
  *  - Re-routes `seekToNext*` / `seekToPrevious*` calls to [onNext] / [onPrev]
  *    (the service's skipToNext / skipToPrevious), which handle queue
  *    advancement plus stream-URL resolution.
- *  - While a USB DAC is claimed for exclusive output ([isExclusive]), reports
+ *  - While a USB DAC is claimed for exclusive output and the stream plays on
+ *    it ([isExclusive]; BypassVolumeController.steersOutput), reports
  *    itself as a remote device with the DAC level as its volume. Android then
  *    sends the hardware volume keys to this session, with the app in the
  *    background or the screen locked too, and its volume panel shows the
