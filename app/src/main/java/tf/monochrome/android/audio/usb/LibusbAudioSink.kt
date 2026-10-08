@@ -149,6 +149,18 @@ class LibusbAudioSink(
     private var sourceIsFloat = false
 
     /**
+     * A 16-bit chain on a wider DAC alt: each sample is widened to 24 bits as
+     * it is packed (see [int16ToSubslotSample]) rather than sent as it is.
+     * The level is then applied with 8 bits to spare, where at 16 bits a
+     * -24 dB setting rounded away the bottom 4 of the song's own with no
+     * dither. At 0 dB the widened sample is the 16-bit one, zero-padded.
+     */
+    private var sourceIs16Widened = false
+
+    /** Whether the chain's PCM is packed for the DAC (gain, crossfade, width) rather than sent as it is. */
+    private val packsForUsb: Boolean get() = sourceIsFloat || sourceIs16Widened
+
+    /**
      * Subslot size the driver negotiated, from the device's own descriptor —
      * NOT bitsPerSample / 8. A 24-bit alt may carry each sample in 4 bytes
      * (bSubslotSize = 4, sample left-justified), and the driver strides its
@@ -262,7 +274,7 @@ class LibusbAudioSink(
         if (!bypassActive || paused || !mix.isOpen || !mix.playing) return
         if (System.nanoTime() - lastMainActivityNs < MAIN_ACTIVE_NS) return
         synchronized(writeLock) {
-            if (!bypassActive || !sourceIsFloat || outChannels <= 0 || usbBytesPerSample <= 0) return
+            if (!bypassActive || !packsForUsb || outChannels <= 0 || usbBytesPerSample <= 0) return
             val rate = chain.outputFormat().sampleRate
             if (rate <= 0 || driver.pendingFrames() > rate / 10) return
             val frames = minOf(mix.pending(), TAIL_PUMP_FRAMES)
@@ -275,7 +287,7 @@ class LibusbAudioSink(
             silence.limit(bytes)
             // The main stream is silence here (gain 0, nothing to ramp); the
             // tail is mixed in at its own gain under the DAC level.
-            val packed = packFloatForUsb(silence, frames, 0f, 0f, 0f, 0f)
+            val packed = packForUsb(silence, frames, 0f, 0f, 0f, 0f)
             val written = driver.write(packed.slice().order(ByteOrder.nativeOrder()), frames)
             if (tailPeeked > 0) {
                 if (written > 0) mix.consume(minOf(written, tailPeeked), rate)
@@ -405,7 +417,8 @@ class LibusbAudioSink(
      * 24-bit mantissa, so rounding it to 16 on the way out throws away
      * precision the DSP actually produced — but a DAC with no 24-bit alt at
      * this rate must still get audio rather than being dropped to the HAL,
-     * which is what a single failed start() would have done.
+     * which is what a single failed start() would have done. A 16-bit chain
+     * asks the same, for the headroom the level needs (see [sourceIs16Widened]).
      */
     private fun engageDriver(rate: Int, channels: Int, encoding: Int): Boolean {
         for (bits in usbBitDepthLadder(encoding)) {
@@ -425,7 +438,7 @@ class LibusbAudioSink(
                 // into a dropped write and an error line per buffer, i.e.
                 // silence, so take the next rung (or the delegate) instead.
                 val sourceStride = sourceBytesPerSample(encoding)
-                if (!sourceIsFloat && usbBytesPerSample != sourceStride) {
+                if (!packsForUsb && usbBytesPerSample != sourceStride) {
                     Log.w(
                         TAG,
                         "DAC negotiated ${usbBytesPerSample}-byte subslots at ${bits}b but " +
@@ -443,6 +456,7 @@ class LibusbAudioSink(
         outBitsPerSample = bits
         outChannels = channels
         sourceIsFloat = encoding == C.ENCODING_PCM_FLOAT
+        sourceIs16Widened = encoding == C.ENCODING_PCM_16BIT && bits > 16
         sourceBytesPerFrame = sourceBytesPerSample(encoding) * channels
         // Ask the driver what it actually negotiated rather than assuming
         // bits / 8 — see the note on [usbBytesPerSample]. The guard keeps a
@@ -553,9 +567,9 @@ class LibusbAudioSink(
         val rise = GainRamp.risePerFrame(gain, outSampleRate)
         val fall = GainRamp.fallPerFrame(outSampleRate)
         val toWrite = when {
-            // Float chain: gain and the pack down to the DAC's subslot happen
-            // in one pass.
-            sourceIsFloat -> packFloatForUsb(direct, framesAvailable, startGain, gain, rise, fall)
+            // Float chain, or 16-bit on a wider alt: gain and the pack into
+            // the DAC's subslot happen in one pass.
+            packsForUsb -> packForUsb(direct, framesAvailable, startGain, gain, rise, fall)
             // Unity and settled: the samples go out untouched, bit-perfect.
             gain >= 1f && startGain >= 1f -> direct
             // Every integer depth. Only 16-bit used to be attenuated, so
@@ -1223,8 +1237,8 @@ class LibusbAudioSink(
      * with hi-res output on. The decoders ask this before choosing their output
      * format: said yes, MediaCodec decodes to float, which is what carries a
      * 24-bit FLAC past 16 bits. While the USB DAC is open the answer stays what
-     * it always was, so a 16-bit file still reaches the DAC as 16-bit integers,
-     * bit-perfect.
+     * it always was, so a 16-bit file still reaches the sink as 16-bit
+     * integers, bit-perfect (widened only by zero-padding on a 24-bit alt).
      */
     override fun getFormatSupport(format: Format): Int {
         val support = super.getFormatSupport(format)
@@ -1318,8 +1332,9 @@ class LibusbAudioSink(
     }
 
     /**
-     * Converts [frames] frames of native-order float PCM into the DAC's
-     * subslot width, applying [gain] on the way.
+     * Converts [frames] frames of native-order float PCM — or 16-bit, when
+     * [sourceIs16Widened] — into the DAC's subslot width, applying [gain] on
+     * the way.
      *
      * Scales to a 24-bit sample and then keeps the top [usbBytesPerSample]
      * bytes, which is what left-justification means: USB Audio Type I places
@@ -1330,7 +1345,7 @@ class LibusbAudioSink(
      * emit. USB PCM is always little-endian, hence the explicit byte order
      * rather than the buffer's.
      */
-    private fun packFloatForUsb(
+    private fun packForUsb(
         src: ByteBuffer,
         frames: Int,
         startGain: Float,
@@ -1357,14 +1372,23 @@ class LibusbAudioSink(
         }
         val mixing = tailPeeked > 0
 
+        val widen16 = sourceIs16Widened
         var o = 0
         var gain = startGain
         var channel = 0
         var frame = 0
         for (i in 0 until samples) {
-            var v = src.getFloat(srcPos + (i shl 2)) * gain
-            if (mixing) v += tailScratch[i] * tailGain
-            val sample = floatToSubslotSample(v, bytesPerSample)
+            val tail = if (mixing) tailScratch[i] * tailGain else 0f
+            val sample = if (widen16) {
+                // Little-endian by hand, like applyGainPcmInt: with no DSP
+                // running, src is the renderer's own buffer, whose ByteBuffer
+                // order is not promised to be native.
+                val at = srcPos + (i shl 1)
+                val s16 = (src.get(at).toInt() and 0xFF) or (src.get(at + 1).toInt() shl 8)
+                int16ToSubslotSample(s16, gain, tail, bytesPerSample)
+            } else {
+                floatToSubslotSample(src.getFloat(srcPos + (i shl 2)) * gain + tail, bytesPerSample)
+            }
             out.put(o, sample.toByte())
             if (bytesPerSample > 1) out.put(o + 1, (sample shr 8).toByte())
             if (bytesPerSample > 2) out.put(o + 2, (sample shr 16).toByte())
@@ -1436,14 +1460,17 @@ class LibusbAudioSink(
     /**
      * Widths to offer the DAC for [encoding], best first.
      *
-     * Only float gets a ladder. An integer chain has exactly as many bits as
-     * it has, so there is nothing to gain by asking for more and no converter
-     * here to narrow it if the DAC wants less — offering one width keeps that
-     * case behaving exactly as it did.
+     * Float gets a ladder, and so does 16-bit, which a 24-bit alt gives the
+     * headroom to take the DAC level without rounding the song away (see
+     * [sourceIs16Widened]); a DAC with no such alt plays it at 16 as before.
+     * A wider integer chain has exactly as many bits as it has, and no
+     * converter here to narrow it if the DAC wants less, so it is offered its
+     * own width only.
      */
-    private fun usbBitDepthLadder(encoding: Int): IntArray =
-        if (encoding == C.ENCODING_PCM_FLOAT) intArrayOf(24, 16)
-        else intArrayOf(pcmBitsFromEncoding(encoding))
+    private fun usbBitDepthLadder(encoding: Int): IntArray = when (encoding) {
+        C.ENCODING_PCM_FLOAT, C.ENCODING_PCM_16BIT -> intArrayOf(24, 16)
+        else -> intArrayOf(pcmBitsFromEncoding(encoding))
+    }
 
     private fun encodingLabel(encoding: Int): String =
         if (encoding == C.ENCODING_PCM_FLOAT) "float" else "${pcmBitsFromEncoding(encoding)}b"
@@ -1499,4 +1526,26 @@ internal fun floatToSubslotSample(value: Float, bytesPerSample: Int): Int {
         bytesPerSample == 2 -> sample24 shr 8
         else -> sample24
     }
+}
+
+/**
+ * A 16-bit [sample] as the subslot integer of a 24-bit alt ([bytesPerSample]
+ * 3, or 4 left-justified), with [gain] applied and a crossfade tail [mixed] in
+ * (float, full scale ±1) — what LibusbAudioSink sends a 16-bit song on a DAC
+ * that has a 24-bit alt.
+ *
+ * Exact where it must be: at unity gain with nothing mixed in, the result is
+ * the sample shifted up 8 bits, so the DAC receives the song bit for bit,
+ * zero-padded. Done in floats it would not be: [floatToSubslotSample] scales
+ * by 2^23 - 1 and truncates, which lands one 24-bit step under the padded
+ * value. Below unity the level is applied at 24 bits, 8 more than the song
+ * has, so -24 dB costs it nothing.
+ */
+internal fun int16ToSubslotSample(sample: Int, gain: Float, mixed: Float, bytesPerSample: Int): Int {
+    // sample * 256 is the 16-bit value in 24 bits, exactly (|x| <= 2^23, so a
+    // float holds it); times a gain of 1f it stays exact. Rounded, not
+    // truncated, so a level below 0 dB is not biased towards zero.
+    val v = Math.round(sample * 256f * gain + mixed * 8_388_607f)
+        .coerceIn(-8_388_608, 8_388_607)
+    return if (bytesPerSample >= 4) v shl 8 else v
 }
