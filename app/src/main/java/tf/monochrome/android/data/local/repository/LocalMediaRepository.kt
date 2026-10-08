@@ -279,7 +279,13 @@ class LocalMediaRepository @Inject constructor(
                 durationSeconds = durationSeconds,
                 trackNumber = trackNumber,
                 discNumber = discNumber,
-                artistName = albumArtist ?: artist ?: "Unknown Artist",
+                // The track's own artist, and the album artist only when it has
+                // none. This name is what Last.fm and ListenBrainz scrobble and
+                // what the session and the row show; album artist first made a
+                // compilation's every track "Various Artists", and a borrowed
+                // folder album artist ("Daft Punk") replaced the credit
+                // ("Daft Punk feat. Pharrell").
+                artistName = artist ?: albumArtist ?: "Unknown Artist",
                 artistNames = listOfNotNull(artist, albumArtist).distinct(),
                 albumArtistName = albumArtist,
                 // Local artist id (local_artists table) so song rows can link to

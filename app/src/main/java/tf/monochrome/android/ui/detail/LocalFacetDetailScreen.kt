@@ -84,7 +84,8 @@ fun LocalFacetDetailScreen(
 
     val sortedTracks = remember(tracks) {
         tracks.sortedWith(
-            compareBy({ it.artistName }, { it.albumTitle ?: "" }, { it.discNumber ?: 1 }, { it.trackNumber ?: 0 })
+            // By album artist, so a compilation's tracks stay together.
+            compareBy({ it.albumArtistName ?: it.artistName }, { it.albumTitle ?: "" }, { it.discNumber ?: 1 }, { it.trackNumber ?: 0 })
         )
     }
 
