@@ -10,6 +10,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -47,6 +48,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -138,6 +146,8 @@ import tf.monochrome.android.ui.player.drawGlassPlayPauseDisc
 import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.player.rememberPlayerLiveLens
 import tf.monochrome.android.ui.player.Letters3DRow
+import tf.monochrome.android.ui.player.lyricFitWidth
+import tf.monochrome.android.ui.player.rememberWrappedLyricLayout
 import tf.monochrome.android.ui.player.LocalBeatPulse
 import tf.monochrome.android.ui.player.rememberFrameSeconds
 import tf.monochrome.android.ui.player.LocalLyricGlyphAnchors
@@ -2094,7 +2104,7 @@ private fun StudioPreview(
         else -> remember { mutableFloatStateOf(0f) }
     }
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .height(190.dp)
@@ -2102,6 +2112,7 @@ private fun StudioPreview(
             .background(previewBackground(accent)),
         contentAlignment = Alignment.Center,
     ) {
+        val previewWidth = maxWidth
         CompositionLocalProvider(
             LocalLyricsFx provides fx,
             LocalLyricGlyphAnchors provides anchors,
@@ -2142,12 +2153,25 @@ private fun StudioPreview(
                 // is (and, following the word, which word); "On top" adds the
                 // light on the letters over them, as the player does.
                 val sample = stringResource(R.string.fx_feel_the_beat_tonight)
-                val sampleStyle = MaterialTheme.typography.titleMedium.copy(
-                    fontSize = fx.fontSizeSp.sp,
-                    lineHeight = (fx.fontSizeSp * 1.26f).sp,
+                val baseStyle = MaterialTheme.typography.titleMedium.copy(
                     letterSpacing = fx.letterSpacingSp.sp,
                     fontWeight = FontWeight.ExtraBold,
                 ).withLyricFont(rememberLyricFontFamily(fx))
+                // Fitted to one row the way the player fits a line: drawn at
+                // the slider's size, a large one ran the row off the box edge
+                // and Letters3DRow, which never wraps, cut the rest away.
+                val sampleWords = remember(sample) { sample.split(' ').filter { it.isNotEmpty() } }
+                val sampleFit = rememberWrappedLyricLayout(
+                    words = sampleWords,
+                    availableWidth = lyricFitWidth(previewWidth, fx),
+                    baseSp = fx.fontSizeSp,
+                    style = baseStyle,
+                    maxRows = 1,
+                )
+                val sampleStyle = baseStyle.copy(
+                    fontSize = sampleFit.fontSizeSp.sp,
+                    lineHeight = (sampleFit.fontSizeSp * 1.26f).sp,
+                )
                 val clock = rememberFrameSeconds()
                 // The sample has no word timings, so "Follow the sung word" is
                 // shown by singing it one word per beat of the synthetic kick.
@@ -2270,7 +2294,7 @@ private fun rememberSyntheticKickPulse(fx: LyricsFxSettings): State<Float> {
 
 @Composable
 internal fun StudioSection(title: String) {
-    Spacer(Modifier.height(20.dp))
+    Spacer(Modifier.height(14.dp))
     Text(
         text = title,
         style = MaterialTheme.typography.titleMedium,
@@ -2372,6 +2396,8 @@ private fun FontPicker(
     }
 }
 
+// The slot-taking Slider (custom thumb and track) is still experimental in Material3 1.4.
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun FxSlider(
     label: String,
@@ -2388,37 +2414,88 @@ internal fun FxSlider(
     onChangeFinished: (() -> Unit)? = null,
     onChange: (Float) -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-            )
+    // Compact, since some fifty of these fill the Studio and at full size the
+    // Lyrics tab alone scrolled about 3000 dp: the label and value share one
+    // smaller row, the description folds away behind a tap on that row (ⓘ),
+    // and the slider is slimmer but still full width, so fine moves stay as
+    // fine as before.
+    var showDescription by rememberSaveable(label) { mutableStateOf(false) }
+    val interaction = remember { MutableInteractionSource() }
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 2.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (description != null) {
+                        Modifier
+                            .clickable { showDescription = !showDescription }
+                            // TalkBack reads the description whether or not it
+                            // is unfolded, so folding it hides nothing there.
+                            .semantics { contentDescription = "$label, $valueLabel. $description" }
+                    } else {
+                        Modifier
+                    },
+                )
+                .padding(vertical = 2.dp),
+        ) {
+            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (description != null) {
+                    Icon(
+                        imageVector = Icons.Outlined.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (showDescription) 1f else 0.6f),
+                        modifier = Modifier.padding(start = 4.dp).size(14.dp),
+                    )
+                }
+            }
             Text(
                 text = valueLabel,
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 8.dp),
             )
         }
-        description?.let {
+        AnimatedVisibility(visible = description != null && showDescription) {
             Text(
-                text = it,
+                text = description.orEmpty(),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 2.dp),
             )
         }
-        Slider(
-            value = value,
-            onValueChange = onChange,
-            onValueChangeFinished = onChangeFinished ?: {},
-            valueRange = range,
-            steps = steps,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides FX_SLIDER_HEIGHT) {
+            Slider(
+                value = value,
+                onValueChange = onChange,
+                onValueChangeFinished = onChangeFinished ?: {},
+                valueRange = range,
+                steps = steps,
+                interactionSource = interaction,
+                thumb = {
+                    SliderDefaults.Thumb(interactionSource = interaction, thumbSize = DpSize(4.dp, 22.dp))
+                },
+                track = { state ->
+                    SliderDefaults.Track(
+                        sliderState = state,
+                        modifier = Modifier.height(8.dp),
+                        thumbTrackGapSize = 4.dp,
+                    )
+                },
+                modifier = Modifier.fillMaxWidth().height(FX_SLIDER_HEIGHT),
+            )
+        }
     }
 }
+
+/** The slider's touch height: shorter than Material's 48 dp, for a drag that runs sideways. */
+private val FX_SLIDER_HEIGHT = 36.dp
 
 private fun String.format(vararg args: Any?): String = String.format(Locale.US, this, *args)
 
