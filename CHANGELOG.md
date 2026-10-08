@@ -168,6 +168,13 @@
 
 ### Fixed
 
+#### Plays recorded in the background reach the account again
+- **Two in three play uploads were refused**, and every refused one carried the anon key rather than the listener's token. Supabase's edge log for one day: 123 `play_events` inserts and 126 `play_history` inserts answered 401 with `role = anon`, against 68 and 67 that went through signed in. None of the refused requests had an expired user token; they had no user token at all.
+- **The Supabase Kotlin client parks the session when the app leaves the foreground.** On Android its lifecycle observer stops the refresh job and sets the session status to `Initializing`, and `currentSessionOrNull()` answers null for any status but `Authenticated`. The request then falls back to the anon key, and the client's own expired-token check never runs, because there is no user token to check. Tryptify records plays from the playback service with the screen off, so that was most of them.
+- **`enableLifecycleCallbacks = false`** keeps the session and its refresh job alive for as long as the process is. A token that expires anyway, because the device slept through the scheduled refresh, is refreshed by the client before the next request that carries it.
+- **`requireValidSession = true` on Postgrest** makes a call with no session throw `SessionRequiredException` on the device instead of going out as anon. An anon insert at least failed loudly. An anon update or delete matches no rows under RLS and returns success, so a delete queued in `SyncOutbox` could be settled without having happened, and the next pull would bring the row back.
+- Plays refused before this release are still on the device, with no cloud row id, and go up with the next Sync now.
+
 #### Recording a baseline profile no longer means cooking a phone
 - **`useConnectedDevices = true` was the only option**, so generating a profile meant running the app flat out on a handset for several minutes — five launches, three pages, a scroll and a search each — with the screen on the whole time. That is enough sustained load to heat a phone, which is a poor reason not to have a profile at all.
 - **A Gradle Managed Device is the default now**: a Pixel 6 API 34 emulator the build starts for itself, on whatever machine is running Gradle. `aosp` rather than `google`, because the generator wants root and the Play images are not rootable — Macrobenchmark 1.4 can do without root on API 33 and above, but an AOSP image costs nothing and keeps the option open. API 34 rather than the app's target 36 because profiles are portable across API levels: they name classes and methods, not platform behaviour.
