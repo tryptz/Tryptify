@@ -246,6 +246,7 @@ fun MainPlayerRoute(
     }
 
     val lyricsFx by playerViewModel.lyricsFx.collectAsStateWithLifecycle()
+    val liveSpeed by playerViewModel.liveSpeed.collectAsStateWithLifecycle()
     val playerGlass by playerViewModel.playerGlass.collectAsStateWithLifecycle()
     val dacExclusive by playerViewModel.dacExclusive.collectAsStateWithLifecycle()
     val playerDynamicColor by playerViewModel.playerDynamicColor.collectAsStateWithLifecycle()
@@ -304,13 +305,21 @@ fun MainPlayerRoute(
 
     // --- Sheets ---
     if (showLyricsSheet) {
-        LyricsSheet(
-            lyrics = lyrics,
-            isLoading = isLyricsLoading,
-            positionMs = playerViewModel.positionMs,
-            onSeekTo = playerViewModel::seekTo,
-            onDismiss = { showLyricsSheet = false },
-        )
+        // The sheet is composed here, outside the player's provider below, so
+        // it used to read the defaults: no Bluetooth delay, the stock font and
+        // size, 1x speed. It gets the listener's own settings handed in.
+        CompositionLocalProvider(
+            LocalLyricsFx provides lyricsFx,
+            LocalPlaybackSpeed provides liveSpeed,
+        ) {
+            LyricsSheet(
+                lyrics = lyrics,
+                isLoading = isLyricsLoading,
+                positionMs = playerViewModel.positionMs,
+                onSeekTo = playerViewModel::seekTo,
+                onDismiss = { showLyricsSheet = false },
+            )
+        }
     }
     if (showQueueSheet) {
         QueueSheet(playerViewModel = playerViewModel, onDismiss = { showQueueSheet = false })
@@ -608,7 +617,6 @@ fun MainPlayerRoute(
         LyricBackdrop(lyricLetters, lyricsRayLight)
     }
 
-    val liveSpeed by playerViewModel.liveSpeed.collectAsStateWithLifecycle()
     CompositionLocalProvider(
         LocalLyricBackdrop provides lyricBackdrop,
         LocalLyricsFx provides lyricsFx,

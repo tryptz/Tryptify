@@ -121,6 +121,7 @@ private fun SyncedLyrics(
     // so scaled into song time by the playback speed.
     val syncDelayMs = LyricClock.delayInSongMs(LocalLyricsFx.current.bluetoothDelayMs, LocalPlaybackSpeed.current)
     val lyricFont = rememberLyricFontFamily(LocalLyricsFx.current)
+    val fontSizeSp = LocalLyricsFx.current.fontSizeSp
     val listState = rememberLazyListState()
     var currentLineIndex by remember { mutableIntStateOf(-1) }
 
@@ -188,11 +189,12 @@ private fun SyncedLyrics(
 
                 Text(
                     text = line.text.ifBlank { "♪" },
-                    // Fixed size: the active line is marked by colour/weight only,
-                    // so the list never reflows mid-song (see LyricsHero.kt).
+                    // One size for every line, the Studio's: the active line is
+                    // marked by colour/weight only, so the list never reflows
+                    // mid-song (see LyricsHero.kt).
                     style = MaterialTheme.typography.bodyLarge.copy(
-                        fontSize = 23.sp,
-                        lineHeight = 29.sp,
+                        fontSize = fontSizeSp.sp,
+                        lineHeight = (fontSizeSp * LINE_HEIGHT_RATIO).sp,
                         fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
                     ).withLyricFont(lyricFont),
                     color = textColor,
@@ -216,6 +218,7 @@ private fun KaraokeLine(
     onClick: () -> Unit
 ) {
     val lyricFont = rememberLyricFontFamily(LocalLyricsFx.current)
+    val fontSizeSp = LocalLyricsFx.current.fontSizeSp
     FlowRow(
         modifier = Modifier
             .fillMaxWidth()
@@ -241,8 +244,8 @@ private fun KaraokeLine(
             Text(
                 text = word.text + " ",
                 style = MaterialTheme.typography.bodyLarge.copy(
-                    fontSize = 23.sp,
-                    lineHeight = 29.sp,
+                    fontSize = fontSizeSp.sp,
+                    lineHeight = (fontSizeSp * LINE_HEIGHT_RATIO).sp,
                     fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
                 ).withLyricFont(lyricFont),
                 color = color
@@ -254,6 +257,7 @@ private fun KaraokeLine(
 @Composable
 private fun UnsyncedLyrics(lines: List<LyricLine>) {
     val lyricFont = rememberLyricFontFamily(LocalLyricsFx.current)
+    val fontSizeSp = LocalLyricsFx.current.fontSizeSp
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -264,7 +268,8 @@ private fun UnsyncedLyrics(lines: List<LyricLine>) {
         itemsIndexed(lines) { _, line ->
             Text(
                 text = line.text.ifBlank { "" },
-                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 23.sp, lineHeight = 29.sp)
+                style = MaterialTheme.typography.bodyLarge
+                    .copy(fontSize = fontSizeSp.sp, lineHeight = (fontSizeSp * LINE_HEIGHT_RATIO).sp)
                     .withLyricFont(lyricFont),
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center,
@@ -275,3 +280,6 @@ private fun UnsyncedLyrics(lines: List<LyricLine>) {
         }
     }
 }
+
+/** Line height over font size, the player lyrics' ratio: 23 sp gives the sheet's old fixed 29 sp. */
+private const val LINE_HEIGHT_RATIO = 1.26f
