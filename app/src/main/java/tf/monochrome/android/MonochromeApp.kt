@@ -119,6 +119,11 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
     @Inject
     lateinit var preferencesProvider: javax.inject.Provider<tf.monochrome.android.data.preferences.PreferencesManager>
 
+    // A Provider for the same reason as the three above: it is started on a
+    // background coroutine, so constructing it belongs there too.
+    @Inject
+    lateinit var libraryWatcher: javax.inject.Provider<tf.monochrome.android.data.local.watcher.LibraryWatcher>
+
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override val workManagerConfiguration: Configuration
@@ -226,6 +231,12 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
         // start. This carries an existing install's art into filesDir, once.
         appScope.launch {
             runCatching { artworkStoreMigration.migrateIfNeeded() }
+        }
+        // The local library follows the files: songs added, deleted or moved
+        // show up without a rescan, including those that changed while the app
+        // was closed. Quiet, and nothing at all until there is a library.
+        appScope.launch {
+            libraryWatcher.get().start(appScope)
         }
         // Settings whose features are gone — Google and PocketBase sign-in, AI
         // radio, the API instance cache — are dropped from the store, once.

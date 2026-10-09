@@ -1,5 +1,6 @@
 package tf.monochrome.android.data.local.scanner
 
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -9,12 +10,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Process-wide scan state. Scans can be started from several places —
- * the Library tab, the FileObserver watcher, and the onboarding-enqueued
+ * the Library tab, LibraryWatcher, and the onboarding-enqueued
  * ScanWorker — but progress used to live in per-ViewModel StateFlows, so a
  * scan started anywhere else was invisible to the Library UI and nothing
  * stopped two entry points from scanning concurrently. All entry points go
@@ -42,28 +45,71 @@ class ScanCoordinator @Inject constructor(
     /** Clears the last terminal progress so the UI can dismiss the bar. */
     fun clearProgress() { _scanProgress.value = null }
 
-    /** Runs a full scan, or returns immediately if any scan is in flight. */
+    /**
+     * Runs a full scan, after any scan already in flight. For onboarding's
+     * ScanWorker: dropped, as it was when busy, the first library was not
+     * built if a LibraryWatcher refresh happened to be running.
+     */
     suspend fun runFullScan() = runGuarded { mediaScanner.fullScan() }
 
+    private val fullScanQueued = AtomicBoolean(false)
+
     /**
-     * A full scan that waits for one already running instead of being dropped.
-     * For a change that only a full scan can apply, such as the title source:
-     * dropped, it would not show until some later scan.
+     * A full scan that waits for one already running instead of being dropped,
+     * started here and left running whatever the caller does next. For a
+     * change only a full scan can apply, such as the title source, and for
+     * every scan a person asks for: dropped while another ran, a tap on
+     * Rescan during LibraryWatcher's quiet refresh would do nothing at all.
+     * One waiting is enough, since it reads the folders and settings when it
+     * starts, so a second request meanwhile is folded into it.
      */
-    suspend fun runFullScanAfterCurrent() = runGuarded(wait = true) { mediaScanner.fullScan() }
-
-    /** [runFullScan], started here and left running whatever the caller does next. */
-    fun requestFullScan() {
-        scope.launch { runFullScan() }
-    }
-
-    /** [runFullScanAfterCurrent], started here and left running whatever the caller does next. */
     fun requestFullScanAfterCurrent() {
-        scope.launch { runFullScanAfterCurrent() }
+        if (!fullScanQueued.compareAndSet(false, true)) return
+        scope.launch {
+            try {
+                runGuarded {
+                    fullScanQueued.set(false)
+                    mediaScanner.fullScan()
+                }
+            } finally {
+                fullScanQueued.set(false)
+            }
+        }
     }
 
-    /** Runs an incremental scan, or returns immediately if any scan is in flight. */
-    suspend fun runIncrementalScan() = runGuarded { mediaScanner.incrementalScan() }
+    /**
+     * Adds [path] as a library folder, then scans it in: in that order, in one
+     * job. The Library tab used to save the folder and start the scan as two
+     * jobs, and the scan could read the folder list before the save landed and
+     * leave the new folder out (#136).
+     */
+    fun addFolderAndScan(path: String) {
+        scope.launch {
+            preferences.addUserFolderRoot(path)
+            requestFullScanAfterCurrent()
+        }
+    }
+
+    /**
+     * The incremental scan LibraryWatcher runs when Android's audio index
+     * changes. Quiet: it publishes no progress, because nobody asked for it
+     * and a bar at every launch would say nothing, and the library's own
+     * tables are what show the result. It waits for a scan already running
+     * rather than being dropped, so a change that lands mid-scan is still
+     * picked up after it.
+     */
+    suspend fun runBackgroundRefresh() {
+        scanMutex.withLock {
+            mediaScanner.incrementalScan().collect { progress ->
+                when {
+                    progress is ScanProgress.Error ->
+                        Log.w(TAG, "library refresh failed: ${progress.message}")
+                    progress is ScanProgress.Complete && (progress.added > 0 || progress.removed > 0) ->
+                        Log.i(TAG, "library refresh: ${progress.added} read, ${progress.removed} removed")
+                }
+            }
+        }
+    }
 
     /**
      * Drops a folder from the library. Files on disk are untouched.
@@ -71,14 +117,14 @@ class ScanCoordinator @Inject constructor(
      * Takes the same lock as a scan: it deletes rows and rebuilds the album,
      * artist and folder tables, which is exactly what a scan is doing in its
      * grouping phase, and the two interleaving would leave either one's output
-     * half-overwritten.
+     * half-overwritten. It waits for that lock, here rather than in the
+     * screen's scope: it used to give up when a scan held it, and with
+     * LibraryWatcher refreshing on its own, removing a folder could then
+     * silently do nothing.
      */
-    suspend fun excludeFolder(path: String) {
-        if (!scanMutex.tryLock()) return
-        try {
-            mediaScanner.excludeFolder(path)
-        } finally {
-            scanMutex.unlock()
+    fun excludeFolder(path: String) {
+        scope.launch {
+            scanMutex.withLock { mediaScanner.excludeFolder(path) }
         }
     }
 
@@ -101,11 +147,11 @@ class ScanCoordinator @Inject constructor(
         }
     }
 
+    /** Runs [scan] with its progress published, after any scan already holding the lock. */
     private suspend inline fun runGuarded(
-        wait: Boolean = false,
         scan: () -> kotlinx.coroutines.flow.Flow<ScanProgress>
     ) {
-        if (wait) scanMutex.lock() else if (!scanMutex.tryLock()) return
+        scanMutex.lock()
         try {
             _isScanning.value = true
             scan().collect { progress ->
@@ -121,6 +167,8 @@ class ScanCoordinator @Inject constructor(
     }
 
     private companion object {
+        const val TAG = "ScanCoordinator"
+
         /** Bump to make every install rebuild its folder tree once. */
         const val FOLDER_TREE_REBUILD_VERSION = 1
     }
