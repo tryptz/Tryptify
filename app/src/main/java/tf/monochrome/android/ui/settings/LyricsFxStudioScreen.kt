@@ -2162,22 +2162,34 @@ private fun StudioPreview(
                 ).withLyricFont(rememberLyricFontFamily(fx))
                 // Drawn the way the player draws a line: wrapped to "Lines per
                 // block" at the slider's size, shrinking only when the rows still
-                // overflow — so the preview shows the size the player will. Drawn
-                // as one unwrapped row instead, a large size ran off the box edge
-                // and Letters3DRow, which never wraps, cut the rest away. The box
-                // holds fewer rows of very large type than the player can, so the
-                // row budget is also capped by what fits between the label above
-                // and the same margin below.
+                // overflow. Drawn as one unwrapped row instead, a large size ran
+                // off the box edge and Letters3DRow, which never wraps, cut the
+                // rest away. The box holds fewer rows of very large type than the
+                // player can, so it takes the most rows, up to that setting, whose
+                // measured height fits between the label above and the same
+                // margin below — at most sizes exactly the player's rows and size;
+                // past what the box can show, the largest that fits.
                 val sampleWords = remember(sample) { sample.split(' ').filter { it.isNotEmpty() } }
-                val rowPitch = with(LocalDensity.current) { (fx.fontSizeSp * 1.26f).sp.toDp() }
-                val rowsThatFit = ((previewHeight - SAMPLE_VERTICAL_ROOM * 2) / rowPitch).toInt().coerceAtLeast(1)
-                val sampleFit = rememberWrappedLyricLayout(
-                    words = sampleWords,
-                    availableWidth = lyricFitWidth(previewWidth, fx),
-                    baseSp = fx.fontSizeSp,
-                    style = baseStyle,
-                    maxRows = fx.maxWrapLines.coerceIn(1, rowsThatFit),
-                )
+                val fitWidth = lyricFitWidth(previewWidth, fx)
+                val candidates = (1..fx.maxWrapLines.coerceAtLeast(1)).map { rows ->
+                    rememberWrappedLyricLayout(
+                        words = sampleWords,
+                        availableWidth = fitWidth,
+                        baseSp = fx.fontSizeSp,
+                        style = baseStyle,
+                        maxRows = rows,
+                    )
+                }
+                val measurer = rememberTextMeasurer()
+                val density = LocalDensity.current
+                val room = previewHeight - SAMPLE_VERTICAL_ROOM * 2
+                val sampleFit = remember(candidates, room, baseStyle, density) {
+                    candidates.lastOrNull { fit ->
+                        // One row is one line of type at the fitted size.
+                        val rowPx = measurer.measure("Ag", style = baseStyle.copy(fontSize = fit.fontSizeSp.sp)).size.height
+                        with(density) { (rowPx * fit.rowIndices.size).toDp() } <= room
+                    } ?: candidates.first()
+                }
                 val sampleStyle = baseStyle.copy(
                     fontSize = sampleFit.fontSizeSp.sp,
                     // Pinned to the base size, as the player pins it.
@@ -2189,12 +2201,12 @@ private fun StudioPreview(
                 val clock = rememberFrameSeconds()
                 // The sample has no word timings, so "Follow the sung word" is
                 // shown by singing it one word per beat of the synthetic kick.
+                val rowSpans = remember(rowTexts, sampleStyle) {
+                    rowTexts.map { sampleWordSpans(measurer, it, sampleStyle) }
+                }
                 // Each word's place: its row, then px along that row.
-                val measurer = rememberTextMeasurer()
-                val wordSpans = remember(rowTexts, sampleStyle) {
-                    rowTexts.flatMapIndexed { row, text ->
-                        sampleWordSpans(measurer, text, sampleStyle).map { (from, to) -> Triple(row, from, to) }
-                    }
+                val wordSpans = remember(rowSpans) {
+                    rowSpans.flatMapIndexed { row, spans -> spans.words.map { (from, to) -> Triple(row, from, to) } }
                 }
                 val followWord = fx.godRaysFollowWord
                 var blockBand by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
@@ -2206,8 +2218,16 @@ private fun StudioPreview(
                             block
                         } else {
                             val (row, from, to) = wordSpans[(clock.value * 2f).toInt().mod(wordSpans.size)]
-                            val band = rowBands[row] ?: block
-                            androidx.compose.ui.geometry.Rect(band.left + from, band.top, band.left + to, band.bottom)
+                            val band = rowBands[row]
+                            if (band == null) {
+                                block
+                            } else {
+                                // The row is measured inside the pump's scale, the
+                                // spans outside it: scale them to the row as drawn.
+                                val advance = rowSpans.getOrNull(row)?.advance ?: 0f
+                                val k = if (advance > 0f) band.width / advance else 1f
+                                androidx.compose.ui.geometry.Rect(band.left + from * k, band.top, band.left + to * k, band.bottom)
+                            }
                         }
                     }
                 }
@@ -2266,7 +2286,7 @@ private fun StudioPreview(
  * each glyph is its own Text at its natural advance, so a space measures the
  * same here as it draws there, trimmed or not.
  */
-private fun sampleWordSpans(measurer: TextMeasurer, text: String, style: TextStyle): List<Pair<Float, Float>> {
+private fun sampleWordSpans(measurer: TextMeasurer, text: String, style: TextStyle): SampleRowSpans {
     val spans = mutableListOf<Pair<Float, Float>>()
     var x = 0f
     var start = -1f
@@ -2280,8 +2300,11 @@ private fun sampleWordSpans(measurer: TextMeasurer, text: String, style: TextSty
         x += measurer.measure(ch.toString(), style = style).size.width.toFloat()
     }
     if (start >= 0f) spans += start to x
-    return spans
+    return SampleRowSpans(spans, advance = x)
 }
+
+/** A sample row's words, in px from its start, and the row's whole advance. */
+private class SampleRowSpans(val words: List<Pair<Float, Float>>, val advance: Float)
 
 /**
  * Synthetic beat: an instant-on, exponential-decay envelope pushed through the

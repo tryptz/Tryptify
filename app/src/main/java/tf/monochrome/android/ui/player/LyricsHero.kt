@@ -934,10 +934,13 @@ internal fun lyricFitWidth(maxWidth: Dp, fx: LyricsFxSettings): Dp {
 
 /**
  * The pieces of [text] a line may not be broken inside: its space-separated
- * words, also split right after a hyphen or dash (the dash stays on the left,
- * as the line breaker leaves it), except that Han, kana and the Thai-family
- * scripts break between any two characters, so each of those characters is a
- * piece of its own.
+ * words, except that Han, kana and the Thai-family scripts break between any
+ * two characters, so each of those characters is a piece of its own, and an
+ * em dash, which may break on either side, is one too (a run of them stays
+ * together). Hard hyphens do NOT end a piece: with hyphenation off, Compose's
+ * default, Android's line breaker (minikin) never wraps after a hyphen-minus,
+ * hyphen or en dash, so "rock-and-roll" or "867-5309" is drawn as one unit and
+ * must be measured as one.
  */
 internal fun unbreakableRuns(text: String): List<String> {
     val runs = mutableListOf<String>()
@@ -956,10 +959,12 @@ internal fun unbreakableRuns(text: String): List<String> {
                 flush()
                 runs.add(text.substring(i, i + n))
             }
-            else -> {
+            cp == EM_DASH -> {
+                if (run.isNotEmpty() && run.codePointBefore(run.length) != EM_DASH) flush()
                 run.append(text, i, i + n)
-                if (breaksAfter(cp)) flush()
+                if (i + n >= text.length || text.codePointAt(i + n) != EM_DASH) flush()
             }
+            else -> run.append(text, i, i + n)
         }
         i += n
     }
@@ -967,18 +972,7 @@ internal fun unbreakableRuns(text: String): List<String> {
     return runs
 }
 
-/**
- * Hyphen and dashes: Android's line breaker may wrap right after them, so
- * "Na-na-na-na" wraps at 23 sp rather than counting as one word to shrink for.
- */
-private fun breaksAfter(codePoint: Int): Boolean = when (codePoint) {
-    0x002D, // hyphen-minus
-    0x2010, // hyphen
-    0x2013, // en dash
-    0x2014, // em dash
-    -> true
-    else -> false
-}
+private const val EM_DASH = 0x2014
 
 private fun breaksAnywhere(codePoint: Int): Boolean = when (Character.UnicodeScript.of(codePoint)) {
     Character.UnicodeScript.HAN,
@@ -1002,7 +996,7 @@ private fun breaksAnywhere(codePoint: Int): Boolean = when (Character.UnicodeScr
 @Composable
 internal fun rememberWordFitSp(text: String, width: Dp, baseSp: Float, style: TextStyle): Float {
     val runs = remember(text) { unbreakableRuns(text) }
-    return rememberWrappedLyricLayout(runs, width, baseSp, style, maxRows = Int.MAX_VALUE).fontSizeSp
+    return rememberWrappedLyricLayout(runs, width, baseSp, style, maxRows = Int.MAX_VALUE, capacityFactor = 1f).fontSizeSp
 }
 
 /**
@@ -1035,15 +1029,20 @@ internal fun rememberWrappedLyricLayout(
     baseSp: Float,
     style: TextStyle,
     maxRows: Int,
+    /**
+     * Share of [availableWidth] a row may fill. The default leaves a small
+     * safety margin for the per-letter 3D path, which loses kerning (each
+     * glyph is its own composable at its natural advance) and can run a hair
+     * wider than the same row measured as one string. A Text that wraps
+     * itself measures exactly, so it passes 1.
+     */
+    capacityFactor: Float = 0.97f,
 ): WrappedLyricLayout {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    return remember(words, availableWidth, baseSp, maxRows, style.fontWeight, style.letterSpacing, style.fontFamily) {
+    return remember(words, availableWidth, baseSp, maxRows, capacityFactor, style.fontWeight, style.letterSpacing, style.fontFamily) {
         val rowsBudget = maxRows.coerceAtLeast(1)
-        // Small safety factor: the per-letter 3D path loses kerning (each glyph
-        // is its own composable at its natural advance), which can run a hair
-        // wider than the same row measured as one string.
-        val capacity = with(density) { availableWidth.toPx() } * 0.97f
+        val capacity = with(density) { availableWidth.toPx() } * capacityFactor
         if (words.isEmpty() || capacity.isNaN() || capacity <= 0f) {
             return@remember WrappedLyricLayout(listOf(words.indices.toList()), baseSp)
         }

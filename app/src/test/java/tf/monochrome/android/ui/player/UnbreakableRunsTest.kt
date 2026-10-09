@@ -29,12 +29,21 @@ class UnbreakableRunsTest {
     }
 
     @Test
-    fun `a line may break after a hyphen or dash`() {
-        // Text wraps a "na-na-na" chain at its hyphens; as one run it would
-        // shrink the whole line even at the default size.
-        assertEquals(listOf("Na-", "na-", "na,", "hey"), unbreakableRuns("Na-na-na, hey"))
-        assertEquals(listOf("rock-", "and-", "roll"), unbreakableRuns("rock-and-roll"))
-        assertEquals(listOf("now—", "then"), unbreakableRuns("now—then"))
+    fun `hyphenated words stay whole`() {
+        // With hyphenation off (Compose's default) the line breaker never wraps
+        // after a hyphen or en dash: measured in pieces, a long one would be
+        // drawn at full size and split between two letters.
+        assertEquals(listOf("Na-na-na,", "hey"), unbreakableRuns("Na-na-na, hey"))
+        assertEquals(listOf("rock-and-roll"), unbreakableRuns("rock-and-roll"))
+        assertEquals(listOf("867-5309,"), unbreakableRuns("867-5309,"))
+        assertEquals(listOf("1990–2000"), unbreakableRuns("1990–2000"))
+    }
+
+    @Test
+    fun `an em dash is a piece of its own`() {
+        assertEquals(listOf("now", "—", "then"), unbreakableRuns("now—then"))
+        assertEquals(listOf("well", "—"), unbreakableRuns("well—"))
+        assertEquals(listOf("word", "——", "word"), unbreakableRuns("word——word"))
     }
 
     @Test
