@@ -48,6 +48,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
@@ -2113,6 +2115,7 @@ private fun StudioPreview(
         contentAlignment = Alignment.Center,
     ) {
         val previewWidth = maxWidth
+        val previewHeight = maxHeight
         CompositionLocalProvider(
             LocalLyricsFx provides fx,
             LocalLyricGlyphAnchors provides anchors,
@@ -2157,36 +2160,54 @@ private fun StudioPreview(
                     letterSpacing = fx.letterSpacingSp.sp,
                     fontWeight = FontWeight.ExtraBold,
                 ).withLyricFont(rememberLyricFontFamily(fx))
-                // Fitted to one row the way the player fits a line: drawn at
-                // the slider's size, a large one ran the row off the box edge
-                // and Letters3DRow, which never wraps, cut the rest away.
+                // Drawn the way the player draws a line: wrapped to "Lines per
+                // block" at the slider's size, shrinking only when the rows still
+                // overflow — so the preview shows the size the player will. Drawn
+                // as one unwrapped row instead, a large size ran off the box edge
+                // and Letters3DRow, which never wraps, cut the rest away. The box
+                // holds fewer rows of very large type than the player can, so the
+                // row budget is also capped by what fits between the label above
+                // and the same margin below.
                 val sampleWords = remember(sample) { sample.split(' ').filter { it.isNotEmpty() } }
+                val rowPitch = with(LocalDensity.current) { (fx.fontSizeSp * 1.26f).sp.toDp() }
+                val rowsThatFit = ((previewHeight - SAMPLE_VERTICAL_ROOM * 2) / rowPitch).toInt().coerceAtLeast(1)
                 val sampleFit = rememberWrappedLyricLayout(
                     words = sampleWords,
                     availableWidth = lyricFitWidth(previewWidth, fx),
                     baseSp = fx.fontSizeSp,
                     style = baseStyle,
-                    maxRows = 1,
+                    maxRows = fx.maxWrapLines.coerceIn(1, rowsThatFit),
                 )
                 val sampleStyle = baseStyle.copy(
                     fontSize = sampleFit.fontSizeSp.sp,
-                    lineHeight = (sampleFit.fontSizeSp * 1.26f).sp,
+                    // Pinned to the base size, as the player pins it.
+                    lineHeight = (fx.fontSizeSp * 1.26f).sp,
                 )
+                val rowTexts = remember(sampleFit, sampleWords) {
+                    sampleFit.rowIndices.map { row -> row.joinToString(" ") { sampleWords[it] } }
+                }
                 val clock = rememberFrameSeconds()
                 // The sample has no word timings, so "Follow the sung word" is
                 // shown by singing it one word per beat of the synthetic kick.
+                // Each word's place: its row, then px along that row.
                 val measurer = rememberTextMeasurer()
-                val wordSpans = remember(sample, sampleStyle) { sampleWordSpans(measurer, sample, sampleStyle) }
+                val wordSpans = remember(rowTexts, sampleStyle) {
+                    rowTexts.flatMapIndexed { row, text ->
+                        sampleWordSpans(measurer, text, sampleStyle).map { (from, to) -> Triple(row, from, to) }
+                    }
+                }
                 val followWord = fx.godRaysFollowWord
-                var rowBand by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+                var blockBand by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+                val rowBands = remember { mutableStateMapOf<Int, androidx.compose.ui.geometry.Rect>() }
                 androidx.compose.runtime.SideEffect {
                     letters.bandInRoot = {
-                        val row = rowBand
-                        if (row == null || !followWord || wordSpans.isEmpty()) {
-                            row
+                        val block = blockBand
+                        if (block == null || !followWord || wordSpans.isEmpty()) {
+                            block
                         } else {
-                            val (from, to) = wordSpans[(clock.value * 2f).toInt().mod(wordSpans.size)]
-                            androidx.compose.ui.geometry.Rect(row.left + from, row.top, row.left + to, row.bottom)
+                            val (row, from, to) = wordSpans[(clock.value * 2f).toInt().mod(wordSpans.size)]
+                            val band = rowBands[row] ?: block
+                            androidx.compose.ui.geometry.Rect(band.left + from, band.top, band.left + to, band.bottom)
                         }
                     }
                 }
@@ -2194,20 +2215,31 @@ private fun StudioPreview(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Letters3DRow(
-                        text = sample,
-                        style = sampleStyle,
-                        color = accent,
-                        time = clock,
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .onGloballyPositioned { rowBand = it.boundsInRoot() }
+                            .onGloballyPositioned { blockBand = it.boundsInRoot() }
                             .lyricRaysOnLetters(backdrop)
                             .fxaa()
                             .liquidGlass(tint = accent, rayLight = rayLight)
                             // Before the pump, so the copy pumps with the letters.
                             .captureLetters(letters)
                             .bassBeat(pulse, fx, anchors),
-                    )
+                    ) {
+                        // The ripple runs on across rows, as in the player.
+                        var phaseBase = 0
+                        rowTexts.forEachIndexed { row, rowText ->
+                            Letters3DRow(
+                                text = rowText,
+                                style = sampleStyle,
+                                color = accent,
+                                time = clock,
+                                phaseBase = phaseBase,
+                                modifier = Modifier.onGloballyPositioned { rowBands[row] = it.boundsInRoot() },
+                            )
+                            phaseBase += rowText.length + 1
+                        }
+                    }
                 }
             }
             }
@@ -2493,6 +2525,9 @@ internal fun FxSlider(
         }
     }
 }
+
+/** Room kept clear above the Studio sample for the reactivity label, and the same below. */
+private val SAMPLE_VERTICAL_ROOM = 28.dp
 
 /** The slider's touch height: shorter than Material's 48 dp, for a drag that runs sideways. */
 private val FX_SLIDER_HEIGHT = 36.dp

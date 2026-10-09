@@ -934,8 +934,10 @@ internal fun lyricFitWidth(maxWidth: Dp, fx: LyricsFxSettings): Dp {
 
 /**
  * The pieces of [text] a line may not be broken inside: its space-separated
- * words, except that Han, kana and the Thai-family scripts break between any
- * two characters, so each of those characters is a piece of its own.
+ * words, also split right after a hyphen or dash (the dash stays on the left,
+ * as the line breaker leaves it), except that Han, kana and the Thai-family
+ * scripts break between any two characters, so each of those characters is a
+ * piece of its own.
  */
 internal fun unbreakableRuns(text: String): List<String> {
     val runs = mutableListOf<String>()
@@ -954,12 +956,28 @@ internal fun unbreakableRuns(text: String): List<String> {
                 flush()
                 runs.add(text.substring(i, i + n))
             }
-            else -> run.append(text, i, i + n)
+            else -> {
+                run.append(text, i, i + n)
+                if (breaksAfter(cp)) flush()
+            }
         }
         i += n
     }
     flush()
     return runs
+}
+
+/**
+ * Hyphen and dashes: Android's line breaker may wrap right after them, so
+ * "Na-na-na-na" wraps at 23 sp rather than counting as one word to shrink for.
+ */
+private fun breaksAfter(codePoint: Int): Boolean = when (codePoint) {
+    0x002D, // hyphen-minus
+    0x2010, // hyphen
+    0x2013, // en dash
+    0x2014, // em dash
+    -> true
+    else -> false
 }
 
 private fun breaksAnywhere(codePoint: Int): Boolean = when (Character.UnicodeScript.of(codePoint)) {

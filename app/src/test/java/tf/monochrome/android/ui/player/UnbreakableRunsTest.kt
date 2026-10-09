@@ -29,6 +29,15 @@ class UnbreakableRunsTest {
     }
 
     @Test
+    fun `a line may break after a hyphen or dash`() {
+        // Text wraps a "na-na-na" chain at its hyphens; as one run it would
+        // shrink the whole line even at the default size.
+        assertEquals(listOf("Na-", "na-", "na,", "hey"), unbreakableRuns("Na-na-na, hey"))
+        assertEquals(listOf("rock-", "and-", "roll"), unbreakableRuns("rock-and-roll"))
+        assertEquals(listOf("now—", "then"), unbreakableRuns("now—then"))
+    }
+
+    @Test
     fun `blank text has no runs`() {
         assertEquals(emptyList<String>(), unbreakableRuns("   "))
     }
