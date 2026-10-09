@@ -536,17 +536,9 @@ chip_classical	Classical	古典	クラシック	Classique	Clásica	Klasik	Klassi
 chip_pop_hits	Pop hits	流行金曲	ポップヒット	Tubes pop	Éxitos pop	Pop hitleri	Pop-Hits
 not_in_catalogue	“%1$s” isn’t in the catalogue	“%1$s”不在曲库中	「%1$s」はカタログにありません	« %1$s » n’est pas au catalogue	“%1$s” no está en el catálogo	“%1$s” katalogda yok	„%1$s“ ist nicht im Katalog
 genres	Genres	流派	ジャンル	Genres	Géneros	Türler	Genres
-collapse_everything	Collapse everything	全部收起	すべて折りたたむ	Tout réduire	Contraer todo	Tümünü daralt	Alles einklappen
-expand_everything	Expand everything	全部展开	すべて展開	Tout développer	Expandir todo	Tümünü genişlet	Alles ausklappen
 back_to_constellation	Back to the constellation map	返回星图	星座マップに戻る	Retour à la carte des constellations	Volver al mapa de constelaciones	Takımyıldız haritasına dön	Zurück zur Sternbildkarte
 arrange_by_year	Arrange by year	按年份排列	年代順に並べる	Classer par année	Ordenar por año	Yıla göre diz	Nach Jahr anordnen
-change_size_meaning	Change what size means	更改大小代表的含义	大きさの意味を変更	Changer ce que représente la taille	Cambiar qué indica el tamaño	Boyutun anlamını değiştir	Ändern, wofür die Größe steht
-hide_constellations	Hide constellations	隐藏星座	星座を非表示	Masquer les constellations	Ocultar constelaciones	Takımyıldızları gizle	Sternbilder ausblenden
-show_constellations	Show constellations	显示星座	星座を表示	Afficher les constellations	Mostrar constelaciones	Takımyıldızları göster	Sternbilder einblenden
-timeline_caption	Oldest left, newest right — each subgenre branches under its parent	左旧右新——每个子流派都从其上级流派下分出	左が古く右が新しい — サブジャンルは親ジャンルの下に枝分かれします	Les plus anciens à gauche, les plus récents à droite — chaque sous-genre part de son parent	Los más antiguos a la izquierda, los más nuevos a la derecha: cada subgénero sale de su género padre	En eskisi solda, en yenisi sağda — her alt tür kendi üst türünün altından dallanır	Älteste links, neueste rechts – jedes Subgenre zweigt unter seinem Elterngenre ab
 map_weight_popularity	Sized by listeners on Last.fm	大小表示 Last.fm 上的听众数	大きさは Last.fm のリスナー数	Taille selon les auditeurs sur Last.fm	Tamaño según los oyentes en Last.fm	Boyut, Last.fm dinleyici sayısına göre	Größe nach Hörern auf Last.fm
-map_weight_era	Sized by how recent the genre is	大小表示流派的新旧程度	大きさはジャンルの新しさ	Taille selon l’ancienneté du genre	Tamaño según lo reciente que es el género	Boyut, türün ne kadar yeni olduğuna göre	Größe danach, wie jung das Genre ist
-map_weight_depth	Sized by depth in the genre tree	大小表示在流派树中的层级	大きさはジャンルツリーでの深さ	Taille selon la profondeur dans l’arbre des genres	Tamaño según la profundidad en el árbol de géneros	Boyut, tür ağacındaki derinliğe göre	Größe nach Tiefe im Genre-Baum
 genre_map_failed	The genre map didn’t load.	流派地图没有加载出来。	ジャンルマップを読み込めませんでした。	La carte des genres ne s’est pas chargée.	El mapa de géneros no se ha cargado.	Tür haritası yüklenmedi.	Die Genre-Karte wurde nicht geladen.
 hide_history	Hide the history	隐藏历史	歴史を閉じる	Masquer l’histoire	Ocultar la historia	Tarihçeyi gizle	Geschichte ausblenden
 read_history_of	Read the history of %1$s	阅读 %1$s 的历史	%1$s の歴史を読む	Lire l’histoire de %1$s	Leer la historia de %1$s	%1$s türünün tarihçesini oku	Geschichte von %1$s lesen
@@ -1961,8 +1953,9 @@ radar_days_ago#other	%1$d days ago	%1$d 天前	%1$d 日前	Il y a %1$d jours	Hac
 genre_galaxy	Genre galaxy	流派星系	ジャンル銀河	Galaxie des genres	Galaxia de géneros	Tür galaksisi	Genre-Galaxie
 galaxy_layout_galaxy	Galaxy	星系	銀河	Galaxie	Galaxia	Galaksi	Galaxie
 galaxy_layout_timeline	Timeline	时间线	年表	Chronologie	Cronología	Zaman çizelgesi	Zeitleiste
+galaxy_time_caption	Oldest at the core, newest at the rim	最古老的在核心，最新的在边缘	古いものほど中心に、新しいものほど外側に	Les plus anciens au centre, les plus récents au bord	Los más antiguos en el centro, los más nuevos en el borde	En eskiler merkezde, en yeniler kenarda	Die ältesten im Kern, die neuesten am Rand
+galaxy_planets_caption	Planets: its most played artists · Moons: their tracks · Tap a moon to play	行星：最常播放的艺人 · 卫星：他们的曲目 · 点按卫星即可播放	惑星：よく聴かれるアーティスト · 衛星：その曲 · 衛星をタップして再生	Planètes : les artistes les plus écoutés · Lunes : leurs titres · Touchez une lune pour l’écouter	Planetas: los artistas más escuchados · Lunas: sus canciones · Toca una luna para reproducir	Gezegenler: en çok dinlenen sanatçılar · Uydular: şarkıları · Çalmak için bir uyduya dokunun	Planeten: die meistgehörten Künstler · Monde: ihre Titel · Tippe auf einen Mond zum Abspielen
 galaxy_surprise	Surprise me	给我惊喜	おまかせ	Surprenez-moi	Sorpréndeme	Beni şaşırt	Überrasch mich
-galaxy_more	More options	更多选项	その他のオプション	Plus d’options	Más opciones	Diğer seçenekler	Weitere Optionen
 galaxy_you_are_here	You are here	你在这里	現在地	Vous êtes ici	Estás aquí	Buradasınız	Du bist hier
 galaxy_legend_lit	Lit: you’ve listened	亮起：听过	点灯：聴いた	Allumé : écouté	Encendido: escuchado	Yanan: dinlediniz	Leuchtet: gehört
 galaxy_legend_hearted	Hearted	已收藏	お気に入り	Favori	Favorito	Favori	Favorit

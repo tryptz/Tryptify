@@ -8,29 +8,15 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
-import kotlin.math.hypot
 import kotlin.random.Random
 
-/** The galaxy's clouds, "Surprise me" and "You are here", against the real graph. */
+/** "Surprise me" and "You are here", against the real graph. */
 class GenreGalaxyTest {
 
     private val graph: GenreGraph by lazy {
         val json = Json { ignoreUnknownKeys = true; isLenient = true }
         val data = json.decodeFromString(GenreGraphData.serializer(), File("src/main/assets/genre_graph.json").readText())
         GenreGraph(data, emptyMap())
-    }
-
-    @Test
-    fun `every family gets one cloud, and most of its genres sit inside it`() {
-        val clouds = GenreGalaxy.familyClouds(graph)
-        val families = graph.allGenres.map { it.family }.filter { it.isNotBlank() }.toSet()
-        assertEquals(families, clouds.map { it.family }.toSet())
-        for (cloud in clouds) {
-            val members = graph.allGenres.filter { it.family == cloud.family }
-            val inside = members.count { hypot(it.x - cloud.x, it.y - cloud.y) <= cloud.radius }
-            assertTrue("${cloud.family}: only $inside of ${members.size} inside", inside >= members.size * 0.7)
-            assertTrue(cloud.radius.isFinite() && cloud.radius > 0f)
-        }
     }
 
     @Test

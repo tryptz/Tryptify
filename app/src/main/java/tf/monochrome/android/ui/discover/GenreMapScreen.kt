@@ -8,9 +8,7 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -20,8 +18,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,7 +46,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CenterFocusStrong
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -60,13 +55,7 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.material.icons.filled.Timeline
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.UnfoldLess
-import androidx.compose.material.icons.filled.UnfoldMore
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.SegmentedButton
@@ -82,35 +71,21 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.ui.res.pluralStringResource
 import tf.monochrome.android.ui.components.GlassPanel
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.PointMode
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -124,11 +99,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlin.math.PI
-import androidx.compose.ui.graphics.Path
-import kotlin.math.atan2
 import kotlin.math.hypot
 import kotlin.math.ln
 import kotlin.math.sin
@@ -140,40 +112,60 @@ import tf.monochrome.android.domain.model.PlayerGlassSettings
 import coil3.compose.AsyncImage
 import tf.monochrome.android.data.charts.ChartEntry
 import tf.monochrome.android.ui.components.bounceClick
-import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.theme.reduceMotion
 import androidx.compose.ui.res.stringResource
 import tf.monochrome.android.R
+import android.os.Build
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import tf.monochrome.android.performance.LocalLowPerformance
+import tf.monochrome.android.ui.discover.galaxy.GALAXY_ARRIVE_DISTANCE
+import tf.monochrome.android.ui.discover.galaxy.GALAXY_INK
+import tf.monochrome.android.ui.discover.galaxy.PlanetSystem
+import tf.monochrome.android.ui.discover.galaxy.GALAXY_SPACE
+import tf.monochrome.android.ui.discover.galaxy.GalaxyCamera
+import tf.monochrome.android.ui.discover.galaxy.GalaxyScene
+import tf.monochrome.android.ui.discover.galaxy.GenreGalaxyView
+import tf.monochrome.android.ui.player.sceneGodRays
+import kotlin.math.exp
 
 /**
- * The genre map — all 771 genres as one picture you can move around in.
+ * The genre map — all 771 genres as a galaxy you can fly through.
  *
- * Twelve radial clusters, one per family, arranged so that the families sharing
- * the most genres end up next to each other — electronic beside hip-hop and pop,
- * metal beside rock, folk beside country. Inside each cluster a genre fans out
- * from its family root, and the fusion genres lean out of their cluster toward
- * whatever else they belong to, so jazz house comes to rest between electronic
- * and jazz rather than pretending to sit wholly inside one of them. Where a
- * genre lies is an argument about what it is.
+ * Every genre is a star, in 3D (see [GalaxyScene]). Two layouts, and the
+ * stars glide between them:
  *
- * Coordinates are baked into the asset at build time
- * (`tools/build_genre_graph.py`), not simulated here — a force layout would
- * spend battery arriving at the same picture on every launch, and a map whose
- * landmarks move between visits is one you can never learn.
+ * - **Galaxy**: the map's own baked layout as a disc. Twelve clusters, one per
+ *   family, arranged so the families sharing the most genres end up next to
+ *   each other — electronic beside hip-hop and pop, metal beside rock, folk
+ *   beside country — and fusion genres leaning out of their cluster toward
+ *   whatever else they belong to. Where a genre lies is an argument about what
+ *   it is. Coordinates are baked into the asset at build time
+ *   (`tools/build_genre_graph.py`), not simulated here — a map whose landmarks
+ *   move between visits is one you can never learn.
+ * - **Timeline**: a spiral. Distance from the core is when a genre began, the
+ *   oldest music at the centre and the newest at the rim, and each family is
+ *   an arm starting from where its cluster sits in the galaxy, so the morph
+ *   turns the map rather than shuffling it.
  *
- * Cluster size grows with the square root of its population, which is why
- * electronic is the biggest without being the whole picture: it holds half the
- * dataset but takes a third of the canvas.
+ * One finger orbits, two pinch and pan. Tapping a star selects it: the camera
+ * travels there — a glide that pulls back over long distances, with a light
+ * blur while it moves — and the panel opens. The panel names the subgenres
+ * rather than counting them, and each of those is a tap to the next star.
  *
- * Tapping a genre does two things at once: it opens the panel for it and flies
- * the camera over to centre it, and it folds or unfolds whatever grows below it
- * — the subtree scaling out of its parent, or shrinking back into it. So you can
- * fold electronic away and actually see folk, and you can walk down into a
- * family one tap at a time. The panel names the subgenres rather than counting
- * them, and each of those is a tap to the next one.
+ * Drawn on Compose canvases, never OpenGL: the panels are glass, and a haze
+ * pane cannot frost a SurfaceView. The core and the bright stars shine through
+ * the lyric god rays ([sceneGodRays]) on API 33 and up.
  *
  * The panel expands. Collapsed it says what the curated dataset knows — family,
  * tempo, era, subgenres — which is a description of a genre's *shape* and never
@@ -187,13 +179,10 @@ import tf.monochrome.android.R
  * one that admits a gap.
  *
  * The panel's four actions: *Play top* queues the genre's chart in rank order,
- * so it opens on the record that genre is actually known for. It used to search
- * the catalogue for the genre's name and shuffle the results, which ranked by
- * how well a title or album matched the words — the one query machine-generated
- * filler reliably wins. *Radio* opens a few of those tracks and then hands over
- * to the station planner, which keeps going. *Top 100* leaves the catalogue
- * behind and asks the outside world what this genre actually plays, over a
- * window. *Explore in Discover* hands the genre to the feed, which rebuilds
+ * so it opens on the record that genre is actually known for. *Radio* opens a
+ * few of those tracks and then hands over to the station planner, which keeps
+ * going. *Top 100* asks the outside world what this genre actually plays, over
+ * a window. *Explore in Discover* hands the genre to the feed, which rebuilds
  * around it and its graph neighbours.
  *
  * The panel is drawn from the mini player's own glass settings — the Studio's
@@ -226,84 +215,53 @@ fun GenreMapScreen(
         }
     }
 
-    // Collapsed branches, by node id. Starts empty: the first thing you should
-    // see is the whole thing, and folding is the exception.
-    var collapsed by remember { mutableStateOf(setOf<String>()) }
-
-    // The fold currently playing out, if any. A collapse holds off on updating
-    // `collapsed` until the animation finishes — otherwise the subtree would be
-    // gone from the first frame and there'd be nothing left to shrink.
-    var fold by remember { mutableStateOf<Fold?>(null) }
-    var foldEpoch by remember { mutableIntStateOf(0) }
-
-    var camera by remember { mutableStateOf(Camera()) }
-
-    // What's actually drawn: everything except the descendants of a collapsed
-    // branch. Derived rather than stored so collapsing can't desync the two.
-    val visible by remember(graph, collapsed) {
-        derivedStateOf { visibleNodes(graph, collapsed) }
-    }
-
     val density = LocalDensity.current
-    val labelPx = with(density) { 11.dp.toPx() }
-    var layout by remember { mutableStateOf(MapLayout.RADIAL) }
-    val timeline = remember(graph) { timelineFor(graph) }
-    // 0 is the radial map, 1 the timeline. Everything that differs between the
-    // two reads this, so the transition is one number rather than a mode flag
-    // and a pile of branches.
-    val morph = remember { Animatable(0f) }
-    LaunchedEffect(layout) {
-        morph.animateTo(
-            targetValue = if (layout == MapLayout.TIMELINE) 1f else 0f,
-            animationSpec = tween(durationMillis = 1100, easing = FastOutSlowInEasing),
-        )
+    val instant = reduceMotion()
+    val lowPower = LocalLowPerformance.current.disableLiquidGlass
+    // Twinkle and the idle turn redraw every frame, so they go with the rest
+    // of the motion when the device or the listener asks for less.
+    val alive = !instant && !lowPower
+
+    val scene = remember(graph, lowPower) {
+        if (graph.size == 0) {
+            null
+        } else {
+            GalaxyScene(graph, dustCount = if (lowPower) LOW_POWER_DUST else GalaxyScene.DEFAULT_DUST)
+        }
     }
-
-    val radialBounds = remember(graph) { boundsOf(graph.allGenres) }
-    // Lerped rather than swapped: snapping the frame at the start of the
-    // animation would jolt every node before any of them had moved.
-    val bounds = lerpBounds(radialBounds, timeline.bounds, morph.value)
-
+    val camera = remember { GalaxyCamera() }
     val familyColors = remember(graph) { familyPalette(graph.allGenres.map { it.family }.distinct()) }
 
-    // Read at gesture time rather than captured, so the pointer handlers can be
-    // keyed on Unit. Keying them on the camera would rebuild both gesture
-    // detectors on every frame of a pan, a pinch or a camera flight — which
-    // drops the pointer stream mid-gesture.
-    val liveCamera = rememberUpdatedState(camera)
-    val liveVisible = rememberUpdatedState(visible)
-    val liveFold = rememberUpdatedState(fold)
-    // These two have to be read live for the same reason, and did not before the
-    // timeline existed: `bounds` used to be a constant computed once from the
-    // graph, so capturing it was harmless. It is now interpolated between the
-    // two layouts and changes every frame, and `morph` decides where a node
-    // actually is. Captured, the hit test goes on computing radial positions
-    // while the screen shows something else, and taps land on nothing.
-    val liveBounds = rememberUpdatedState(bounds)
-    val liveMorph = rememberUpdatedState(morph.value)
+    var timeline by rememberSaveable { mutableStateOf(false) }
+    // 0 the galaxy, 1 the timeline. Read through the state, never in
+    // composition, so the morph redraws the map without recomposing the screen.
+    val morph = animateFloatAsState(
+        targetValue = if (timeline) 1f else 0f,
+        animationSpec = if (instant) snap() else tween(MORPH_MILLIS, easing = FastOutSlowInEasing),
+        label = "galaxyMorph",
+    )
 
-    // How much of the bottom the detail panel is covering, so a genre can be
-    // centred in the part of the map you can actually see.
-    //
-    // Seeded with an estimate rather than zero and deliberately not a key of the
-    // flight below: the panel only exists once something is selected, so a
-    // measured-only value would make the very first selection fly to the canvas
-    // centre and then fly again to correct itself.
-    var panelHeightPx by remember { mutableIntStateOf(with(density) { 230.dp.roundToPx() }) }
-    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+    val glassSettings by playerViewModel.miniPlayerGlass.collectAsStateWithLifecycle()
+    val hearted by viewModel.heartedGenres.collectAsStateWithLifecycle()
+    val explored by viewModel.exploredGenres.collectAsStateWithLifecycle()
+    val here by viewModel.mapHere.collectAsStateWithLifecycle()
+    val system by viewModel.mapSystem.collectAsStateWithLifecycle()
 
-    val scope = rememberCoroutineScope()
-    // The in-flight camera move, so a touch can take the controls back off it.
-    var flight by remember { mutableStateOf<Job?>(null) }
-    var folding by remember { mutableStateOf<Job?>(null) }
-    val instant = reduceMotion()
+    // Planets grow out of their star when the chart arrives, rather than
+    // popping into orbit.
+    val systemAppear = remember { Animatable(0f) }
+    LaunchedEffect(system) {
+        if (system == null || instant) {
+            systemAppear.snapTo(if (system == null) 0f else 1f)
+        } else {
+            systemAppear.snapTo(0f)
+            systemAppear.animateTo(1f, tween(SYSTEM_APPEAR_MILLIS, easing = FastOutSlowInEasing))
+        }
+    }
 
-    // The map blurs itself behind the panel. A local haze source rather than the
-    // shared app one: the panel sits inside the same subtree, and pointing it at
-    // the app-wide state would have it sampling its own output. (The map also
-    // feeds the *app* haze — it runs full-bleed under the mini player, whose
-    // glass needs real content behind it — but that source is declared once by
-    // the nav host around everything, not here.)
+    // The map blurs itself behind the panels. A local haze source rather than
+    // the shared app one: the panels sit inside the same subtree, and pointing
+    // them at the app-wide state would have them sampling their own output.
     val mapHaze = rememberHazeState()
 
     // The map runs under the tab bar and mini player so they have something to
@@ -312,379 +270,321 @@ fun GenreMapScreen(
     // own navigationBarsPadding is consumed below so it is not counted twice.
     val panelBottomInset = tf.monochrome.android.ui.navigation.LocalBottomChromeInset.current
 
-    // A selected genre swells and springs back — bouncy enough to read as a
-    // response to the tap, and it settles larger than it started so the node
-    // you're looking at stays the obvious one on a map of 355 dots.
-    val selectPop = remember { Animatable(SELECTED_SCALE) }
-    LaunchedEffect(selected?.id) {
-        if (selected == null) return@LaunchedEffect
-        if (instant) { selectPop.snapTo(SELECTED_SCALE); return@LaunchedEffect }
-        selectPop.snapTo(SELECTED_SCALE * 1.7f)
-        selectPop.animateTo(
-            targetValue = SELECTED_SCALE,
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessLow,
-            ),
-        )
-    }
-
-    // The same settings the mini player is drawn from, straight off the
-    // Studio's "Player Glass" tab. Read from the player rather than through
-    // LocalPlayerGlass because the nav host only provides that local around the
-    // mini player and the page indicator, not around detail routes.
-    val glassSettings by playerViewModel.miniPlayerGlass.collectAsStateWithLifecycle()
-    val hearted by viewModel.heartedGenres.collectAsStateWithLifecycle()
-    val explored by viewModel.exploredGenres.collectAsStateWithLifecycle()
-    val here by viewModel.mapHere.collectAsStateWithLifecycle()
-
-    // The galaxy's sky: one cloud per family and a field of distant stars,
-    // worked out once. The sky is dark on dark themes and a paper star chart
-    // on light ones — glowing nebulae on white read as stains.
-    val clouds = remember(graph) { tf.monochrome.android.domain.model.GenreGalaxy.familyClouds(graph) }
-    val farStars = remember { FarStars() }
-    val dark = MaterialTheme.colorScheme.background.luminance() <= 0.5f
-    val space = rememberSpaceColors(dark)
-    val youAreHere = stringResource(R.string.galaxy_you_are_here)
-
-    // "You are here" breathes. Still with reduced motion, like everything else.
-    val herePulse = if (instant) 0f else {
-        val pulse = rememberInfiniteTransition(label = "youAreHere")
-        pulse.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(2200, easing = LinearEasing)),
-            label = "pulse",
-        ).value
-    }
-    var menuOpen by remember { mutableStateOf(false) }
+    // Measured rather than assumed: the bar moves with font scale and the
+    // display cutout, the panel with whatever it is showing.
+    var viewport by remember { mutableStateOf(IntSize.Zero) }
+    var topChromePx by remember { mutableIntStateOf(0) }
     var hudHeightPx by remember { mutableIntStateOf(0) }
+    var panelHeightPx by remember { mutableIntStateOf(with(density) { 230.dp.roundToPx() }) }
 
-    fun focusOn(node: GenreNode) {
-        flight?.cancel()
-        if (canvasSize == IntSize.Zero) return
-        flight = scope.launch {
-            flyTo(node, canvasSize, panelHeightPx, bounds, camera, instant) { camera = it }
-        }
-    }
+    // The middle of the view is the middle of what the panels leave visible,
+    // or every genre you look at would sit under its own panel. Eased, so the
+    // star you are reading about slides up as the panel grows instead of
+    // jumping.
+    val reserveBottom by animateFloatAsState(
+        targetValue = with(density) { panelBottomInset.toPx() } +
+            (if (selected != null) panelHeightPx else hudHeightPx),
+        animationSpec = if (instant) snap() else tween(RESERVE_MILLIS, easing = FastOutSlowInEasing),
+        label = "galaxyReserve",
+    )
 
-    /** Unfold a genre's subtree, or fold it back, growing it out of the genre itself. */
-    fun toggleBranch(id: String) {
-        val subtree = descendantsOf(graph, id)
-        if (subtree.isEmpty()) return
+    val scope = rememberCoroutineScope()
+    // The camera move in progress, so a touch can take the controls back off it.
+    var travel by remember { mutableStateOf<Job?>(null) }
+    var travelBlur by remember { mutableFloatStateOf(0f) }
+    val maxBlurPx = with(density) { TRAVEL_BLUR.toPx() }
+    val scratch = remember { FloatArray(3) }
 
-        // Cancelling a fold kills the coroutine before it can commit, so the
-        // interrupted one is settled here rather than left half-applied. Doing
-        // it before reading `collapsed` below is also what makes tapping twice
-        // mid-animation reverse the fold instead of restarting it.
-        folding?.cancel()
-        fold?.let { if (it.collapsing) collapsed = collapsed + it.rootId }
-        fold = null
+    // Seconds of the clock, for twinkle and the god rays' shimmer.
+    var clock by remember { mutableFloatStateOf(0f) }
+    // Seconds since the last touch; a plain array, because nothing draws it.
+    val idle = remember { FloatArray(1) }
 
-        val collapsing = id !in collapsed
-        if (!collapsing) collapsed = collapsed - id
-        if (instant) {
-            if (collapsing) collapsed = collapsed + id
-            return
-        }
-        // Seeded synchronously: `collapsed` has already changed, and a frame
-        // drawn before the coroutine's first dispatch would show the subtree
-        // at full size — the pop this exists to avoid.
-        foldEpoch += 1
-        val epoch = foldEpoch
-        fold = Fold(epoch, id, subtree, collapsing, if (collapsing) 1f else 0f)
-        folding = scope.launch {
-            animate(
-                initialValue = if (collapsing) 1f else 0f,
-                targetValue = if (collapsing) 0f else 1f,
-                animationSpec = tween(
-                    if (collapsing) FOLD_IN_MILLIS else FOLD_OUT_MILLIS,
-                    // Growing overshoots a little and settles back — the
-                    // difference between a subtree appearing and one unfurling.
-                    easing = if (collapsing) FoldInEasing else FoldOutEasing,
-                ),
-            ) { value, _ ->
-                fold?.takeIf { it.epoch == epoch }?.let { fold = it.copy(progress = value) }
-            }
-            if (fold?.epoch == epoch) {
-                if (collapsing) collapsed = collapsed + id
-                fold = null
-            }
-        }
-    }
-
-    // Selecting a genre — by tapping it, or by tapping a subgenre chip in the
-    // panel — flies the camera to it. Keyed on the id so re-selecting the same
-    // genre doesn't re-fly, and on the canvas size so a selection made before
-    // the first measurement still lands.
-    //
-    // Also keyed on the panel's measured height, which is what keeps the genre
-    // visible when the history opens: the expanded panel covers better than
-    // half the screen, and a camera that centred for the collapsed one leaves
-    // the dot you are reading about underneath the text about it. Measured
-    // rather than derived from `expanded` because the height is only known
-    // after layout — and because it re-runs as the height settles, the last
-    // flight is the one with the right number.
-    // Quantised so that only a real change of shape re-aims the camera. Keyed
-    // on the raw height, a few pixels of difference between "Looking it up…"
-    // and the loaded article would be a second flight nobody asked for.
-    LaunchedEffect(selected?.id, canvasSize, panelHeightPx / FLIGHT_HEIGHT_QUANTUM) {
-        selected?.let { focusOn(it) }
-    }
-
-    // Constellations are off by default. They explain the map's structure,
-    // which is worth seeing once and then not every time.
-    var showRings by remember { mutableStateOf(false) }
-    val constellations = remember(graph) { constellationsFor(graph) }
-    // Popularity leads: with 771 nodes, which genres are big is the first thing
-    // that makes the picture navigable.
-    var weighting by remember { mutableStateOf(MapWeight.POPULARITY) }
-    val weightScale = remember(graph) { WeightScale(graph) }
-
-
-    // Measured rather than assumed: the bar's height moves with font scale and
-    // with the display cutout, and a hard-coded inset would be wrong on exactly
-    // the devices where the labels have least room.
-    var topBarHeightPx by remember { mutableIntStateOf(0) }
-
-    Column(modifier = Modifier.fillMaxSize().background(space.base)) {
-        TopAppBar(
-            // "Genre map" wrapped to two lines once the bar carried five
-            // actions, and a wrapped title crowds the first row of labels.
-            title = { Text(stringResource(R.string.genre_galaxy)) },
-            navigationIcon = {
-                IconButton(onClick = { navController.popBackStackSafe() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
-                }
-            },
-            actions = {
-                // Two in the bar, the rest one tap away. Six icons in a row
-                // were six things to decode before the map said anything.
-                IconButton(onClick = { viewModel.surpriseMe() }) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = stringResource(R.string.galaxy_surprise))
-                }
-                IconButton(onClick = { flight?.cancel(); camera = Camera() }) {
-                    Icon(Icons.Default.CenterFocusStrong, contentDescription = stringResource(R.string.recentre))
-                }
-                Box {
-                    IconButton(onClick = { menuOpen = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.galaxy_more))
-                    }
-                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        // These set every branch at once, so they cancel any
-                        // single fold in flight — letting it commit afterwards
-                        // would re-fold one branch a moment after you asked
-                        // for all of them.
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.collapse_everything)) },
-                            leadingIcon = { Icon(Icons.Default.UnfoldLess, contentDescription = null) },
-                            onClick = {
-                                menuOpen = false
-                                folding?.cancel(); fold = null
-                                collapsed = graph.roots.map { it.id }.toSet()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.expand_everything)) },
-                            leadingIcon = { Icon(Icons.Default.UnfoldMore, contentDescription = null) },
-                            onClick = {
-                                menuOpen = false
-                                folding?.cancel(); fold = null
-                                collapsed = emptySet()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.change_size_meaning)) },
-                            leadingIcon = { Icon(Icons.Default.Tune, contentDescription = null) },
-                            onClick = { menuOpen = false; weighting = weighting.next() },
-                        )
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    if (showRings) stringResource(R.string.hide_constellations)
-                                    else stringResource(R.string.show_constellations),
-                                )
-                            },
-                            leadingIcon = { Icon(Icons.Default.TrackChanges, contentDescription = null) },
-                            onClick = { menuOpen = false; showRings = !showRings },
-                        )
+    /**
+     * Glides the camera to a [goal] and distance: a straight line in space,
+     * distance eased on a log scale (so a zoom feels the same at every depth),
+     * pulled back mid-flight in proportion to how far it is going — the way you
+     * see where you are headed. The goal is asked again every frame, because a
+     * star moves while the layout morphs and a planet is always moving.
+     * [arrive] runs on landing, to say what the camera follows from there.
+     */
+    fun glide(
+        goal: (FloatArray) -> Unit,
+        toDistance: Float,
+        toPitch: Float = camera.pitch,
+        arrive: () -> Unit = {},
+    ) {
+        travel?.cancel()
+        camera.follow = -1
+        camera.followPlanet = -1
+        val fromX = camera.targetX; val fromY = camera.targetY; val fromZ = camera.targetZ
+        val fromD = ln(camera.distance); val toD = ln(toDistance)
+        val fromPitch = camera.pitch
+        goal(scratch)
+        val span = hypot(hypot(scratch[0] - fromX, scratch[1] - fromY), scratch[2] - fromZ)
+        val arc = (span / GalaxyScene.RADIUS).coerceIn(0f, MAX_ARC)
+        val blurs = !lowPower && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+        travel = scope.launch {
+            try {
+                if (!instant) {
+                    animate(0f, 1f, animationSpec = tween(TRAVEL_MILLIS, easing = TravelEasing)) { p, _ ->
+                        goal(scratch)
+                        camera.targetX = fromX + (scratch[0] - fromX) * p
+                        camera.targetY = fromY + (scratch[1] - fromY) * p
+                        camera.targetZ = fromZ + (scratch[2] - fromZ) * p
+                        val lift = sin(PI.toFloat() * p)
+                        camera.distance = exp(fromD + (toD - fromD) * p) * (1f + arc * lift)
+                        camera.pitch = fromPitch + (toPitch - fromPitch) * p
+                        travelBlur = if (blurs) maxBlurPx * lift else 0f
                     }
                 }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-            modifier = Modifier.onSizeChanged { topBarHeightPx = it.height },
+                goal(scratch)
+                camera.targetX = scratch[0]; camera.targetY = scratch[1]; camera.targetZ = scratch[2]
+                camera.distance = toDistance
+                camera.pitch = toPitch
+                arrive()
+            } finally {
+                travelBlur = 0f
+            }
+        }
+    }
+
+    /** tan of half the view's width, for fitting something across it. */
+    fun tanHalfWidth(): Float =
+        if (viewport == IntSize.Zero) 0.28f
+        else kotlin.math.tan(Math.toRadians(GalaxyCamera.FOV_DEGREES / 2.0)).toFloat() * viewport.width / viewport.height
+
+    fun overviewDistance(): Float =
+        if (viewport == IntSize.Zero) {
+            camera.distance
+        } else {
+            GalaxyCamera.fitDistance(GalaxyScene.RADIUS, viewport.width / viewport.height.toFloat())
+        }
+
+    fun recentre() = glide(
+        goal = { it[0] = 0f; it[1] = 0f; it[2] = 0f },
+        toDistance = overviewDistance(),
+        toPitch = GalaxyCamera.OVERVIEW_PITCH,
+    )
+
+    // The first measurement frames the whole galaxy, before anything flies.
+    val framed = remember { BooleanArray(1) }
+    LaunchedEffect(viewport) {
+        if (viewport != IntSize.Zero && !framed[0]) {
+            framed[0] = true
+            camera.distance = overviewDistance()
+        }
+    }
+
+    // Near enough that the star's planets fill the width when they come.
+    fun starDistance(): Float = maxOf(GALAXY_ARRIVE_DISTANCE, PlanetSystem.MAX_REACH * 1.1f / tanHalfWidth())
+
+    fun travelTo(id: String) {
+        val s = scene ?: return
+        val i = s.index[id] ?: return
+        glide(
+            goal = { s.position(i, morph.value, it, 0) },
+            toDistance = starDistance(),
+            arrive = { camera.follow = i },
         )
+    }
 
-        Box(modifier = Modifier.fillMaxSize()) {
-            val onSurface = MaterialTheme.colorScheme.onSurface
-            val edgeColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
+    /** Planet [p] of the selected star's system, near enough to read its moons. */
+    fun travelToPlanet(p: Int) {
+        val s = scene ?: return
+        val sys = system ?: return
+        val i = s.index[sys.genreId] ?: return
+        val planet = sys.planets.getOrNull(p) ?: return
+        val centre = FloatArray(3)
+        glide(
+            goal = { out ->
+                s.position(i, morph.value, centre, 0)
+                sys.planetPosition(p, clock, centre[0], centre[1], centre[2], out, 0)
+            },
+            toDistance = (planet.reach * 1.25f / tanHalfWidth()).coerceIn(GalaxyCamera.MIN_DISTANCE, 90f),
+            arrive = { camera.follow = i; camera.followPlanet = p },
+        )
+    }
 
-            Canvas(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .hazeSource(mapHaze)
-                    .onSizeChanged { canvasSize = it }
-                    .pointerInput(Unit) {
-                        detectTransformGestures { centroid, pan, zoom, _ ->
-                            // Touching the map takes it back from any camera
-                            // move in progress — being dragged around while
-                            // you're trying to steer is the worst kind of
-                            // animation.
-                            flight?.cancel()
-                            camera = liveCamera.value
-                                .zoomedAt(centroid, pan, zoom, size, liveBounds.value)
-                        }
+    // Selecting a genre — by tapping it, from a chip in the panel, or by
+    // Surprise — travels there. Keyed on the id, so re-selecting the same
+    // genre does not travel again.
+    LaunchedEffect(selected?.id, scene, viewport != IntSize.Zero) {
+        if (viewport == IntSize.Zero) return@LaunchedEffect
+        selected?.let { travelTo(it.id) }
+    }
+
+    // The clock: twinkle, the idle turn, and keeping the camera on a star
+    // that is moving because the layout is.
+    LaunchedEffect(scene, alive) {
+        val s = scene ?: return@LaunchedEffect
+        val p = FloatArray(3)
+        var last = 0L
+        while (true) {
+            withFrameNanos { now ->
+                val dt = if (last == 0L) 0f else ((now - last) / 1_000_000_000f).coerceAtMost(0.1f)
+                last = now
+                idle[0] += dt
+                val moving = travel?.isActive == true
+                val follow = camera.follow
+                if (!moving && follow >= 0) {
+                    s.position(follow, morph.value, p, 0)
+                    val sys = system
+                    val planet = camera.followPlanet
+                    if (planet >= 0 && sys != null && s.index[sys.genreId] == follow && planet < sys.planets.size) {
+                        sys.planetPosition(planet, clock, p[0], p[1], p[2], p, 0)
                     }
-                    .pointerInput(Unit) {
-                        detectTapGestures { point ->
-                            val hit = hitTest(
-                                point, liveVisible.value, size.width, size.height,
-                                liveBounds.value, liveCamera.value, liveFold.value,
-                                timeline = timeline.positions,
-                                morph = liveMorph.value,
-                            ) ?: return@detectTapGestures
-                            viewModel.selectOnMap(hit.id)
-                            toggleBranch(hit.id)
-                        }
-                    },
-            ) {
-                drawSpace(
-                    space = space,
-                    clouds = clouds,
-                    farStars = farStars,
-                    familyColors = familyColors,
-                    bounds = bounds,
-                    camera = camera,
-                    morph = morph.value,
-                    dark = dark,
-                )
-                if (morph.value < 0.999f) {
-                    // The timeline chrome takes over as these fade; drawing
-                    // both at full strength mid-flight is unreadable.
-                    if (showRings) {
-                        drawConstellations(
-                            constellations = constellations,
-                            bounds = bounds,
-                            camera = camera,
-                            familyColors = familyColors,
-                            fade = 1f - morph.value,
-                            morphFit = morph.value,
-                        )
-                    }
+                    camera.targetX = p[0]; camera.targetY = p[1]; camera.targetZ = p[2]
                 }
-                if (morph.value > 0.001f) {
-                    drawTimelineChrome(
-                        timeline = timeline,
-                        bounds = bounds,
-                        camera = camera,
-                        labelColor = onSurface,
-                        labelSizePx = labelPx,
-                        fade = morph.value,
-                        morphFit = morph.value,
-                    )
+                if (alive) {
+                    clock += dt
+                    if (!moving && selected == null && idle[0] > IDLE_TURN_AFTER_S) camera.yaw += dt * IDLE_TURN_RAD_S
                 }
-                drawMap(
-                    nodes = visible,
-                    positions = positionsFor(
-                        visible, size.width, size.height, bounds, camera, fold,
-                        timeline = timeline.positions,
-                        morph = morph.value,
-                    ),
-                    collapsed = collapsed,
-                    selectedId = selected?.id,
-                    selectedScale = selectPop.value,
-                    fold = fold,
-                    familyColors = familyColors,
-                    edgeColor = edgeColor,
-                    labelColor = onSurface,
-                    labelSizePx = labelPx,
-                    scale = camera.scale,
-                    weighting = weighting,
-                    weights = weightScale,
-                    morph = morph.value,
-                    explored = explored,
-                    hearted = hearted,
-                    hereId = here?.id,
-                    hereLabel = youAreHere,
-                    herePulse = herePulse,
-                    dark = dark,
-                    // The map runs full-bleed under the transparent bar on
-                    // purpose, so its dots showing through are intended — but a
-                    // *name* under the bar is two pieces of text on top of each
-                    // other, which is just unreadable.
-                    topInset = maxOf(
-                        topBarHeightPx.toFloat(),
-                        TIMELINE_AXIS_INSET * morph.value,
-                    ),
-                    bottomInset = if (selected != null) {
-                        panelBottomInset.toPx() + panelHeightPx
-                    } else {
-                        panelBottomInset.toPx() + hudHeightPx
-                    },
-                )
             }
+        }
+    }
 
-            // Names the active weighting. Without it a dot's size is a claim
-            // with no stated units — the listener can see that one genre is
-            // bigger without being able to find out in what sense.
-            Text(
-                text = if (morph.value > 0.5f) {
-                    stringResource(R.string.timeline_caption)
-                } else {
-                    stringResource(weighting.caption)
+    // Deep space is dark in every theme, so the status bar's icons are light
+    // while the map is up.
+    val view = LocalView.current
+    DisposableEffect(view) {
+        val window = (view.context as? android.app.Activity)?.window
+        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+        val had = controller?.isAppearanceLightStatusBars
+        controller?.isAppearanceLightStatusBars = false
+        onDispose { had?.let { controller?.isAppearanceLightStatusBars = it } }
+    }
+
+    val labelStyle = MaterialTheme.typography.labelSmall.copy(
+        fontSize = 10.sp,
+        letterSpacing = 1.2.sp,
+        fontWeight = FontWeight.Medium,
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(GALAXY_SPACE)
+            .onSizeChanged { viewport = it },
+    ) {
+        if (scene != null) {
+            GenreGalaxyView(
+                scene = scene,
+                camera = camera,
+                morph = { morph.value },
+                time = { clock },
+                explored = explored,
+                hearted = hearted,
+                hereId = here?.id,
+                selectedId = selected?.id,
+                familyColors = familyColors,
+                hazeState = mapHaze,
+                reserveTopPx = topChromePx.toFloat(),
+                reserveBottomPx = reserveBottom,
+                travelBlurPx = { travelBlur },
+                rays = !lowPower,
+                labelStyle = labelStyle,
+                hereLabel = stringResource(R.string.galaxy_you_are_here),
+                system = system,
+                systemAppear = { systemAppear.value },
+                onTapPlanet = { p -> travelToPlanet(p) },
+                // A moon is a track: tapping it plays it.
+                onTapMoon = { p, m ->
+                    system?.planets?.getOrNull(p)?.moons?.getOrNull(m)?.let {
+                        viewModel.playChartEntry(it.entry, playerViewModel)
+                    }
                 },
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(
-                        start = MonoDimens.spacingLg,
-                        end = MonoDimens.spacingLg,
-                        bottom = MonoDimens.spacingSm,
-                        // The timeline reserves a strip at the very top for its
-                        // year axis, and the caption was landing inside it —
-                        // two lines of text in the same place. Slide below the
-                        // strip in step with the morph so it moves with the
-                        // layout rather than jumping when it arrives.
-                        top = MonoDimens.spacingSm +
-                            with(density) { TIMELINE_AXIS_INSET.toDp() } * morph.value,
-                    ),
+                onTap = { id ->
+                    // The same star again is a way back to it after looking
+                    // around; selecting it would change nothing.
+                    if (id == selected?.id) travelTo(id) else viewModel.selectOnMap(id)
+                },
+                onInteract = {
+                    // Touching the map takes it back from any camera move in
+                    // progress — being steered while you are trying to steer
+                    // is the worst kind of animation.
+                    idle[0] = 0f
+                    travel?.cancel()
+                },
+                modifier = Modifier.fillMaxSize(),
             )
+        }
 
-            if (selected == null && graph.size > 0) {
-                GalaxyHud(
-                    layout = layout,
-                    onLayout = {
-                        if (it != layout) {
-                            // A width fit leaves the timeline's height running
-                            // off the bottom, so it has to arrive at its *top*
-                            // — the oldest music, where the story starts.
-                            // Reset before the morph so the two settle together.
-                            flight?.cancel()
-                            camera = Camera()
-                            layout = it
-                        }
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .fillMaxWidth()
+                .onSizeChanged { topChromePx = it.height },
+        ) {
+            TopAppBar(
+                title = { Text(stringResource(R.string.genre_galaxy)) },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStackSafe() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.surpriseMe() }) {
+                        Icon(Icons.Default.AutoAwesome, contentDescription = stringResource(R.string.galaxy_surprise))
+                    }
+                    IconButton(onClick = { recentre() }) {
+                        Icon(Icons.Default.CenterFocusStrong, contentDescription = stringResource(R.string.recentre))
+                    }
+                },
+                // Light on the dark sky whatever the theme: the map is space,
+                // not a page in the app's colours.
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
+                    navigationIconContentColor = GALAXY_INK,
+                    titleContentColor = GALAXY_INK,
+                    actionIconContentColor = GALAXY_INK,
+                ),
+            )
+            // What a star's place and size mean in this layout. Without it a
+            // star's size is a claim with no stated units.
+            Text(
+                text = stringResource(
+                    when {
+                        system != null && selected != null -> R.string.galaxy_planets_caption
+                        timeline -> R.string.galaxy_time_caption
+                        else -> R.string.map_weight_popularity
                     },
-                    exploredCount = explored.size,
-                    total = graph.size,
-                    hazeState = mapHaze,
-                    glass = glassSettings,
-                    onSurprise = { viewModel.surpriseMe() },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .onSizeChanged { hudHeightPx = it.height }
-                        .padding(bottom = panelBottomInset)
-                        .consumeWindowInsets(WindowInsets.navigationBars),
-                )
-            }
+                ),
+                style = MaterialTheme.typography.labelSmall,
+                color = GALAXY_INK.copy(alpha = 0.7f),
+                modifier = Modifier.padding(
+                    start = MonoDimens.spacingLg,
+                    end = MonoDimens.spacingLg,
+                    bottom = MonoDimens.spacingSm,
+                ),
+            )
+        }
 
-            selected?.let { node ->
-                val related = remember(graph, node.id) { relatedTo(graph, node) }
-                val path = remember(graph, node.id) { graph.ancestors(node.id).reversed() }
-                // The shader modifier reads its parameters from this local, so
-                // the panel has to provide it — this route sits outside the
-                // nav host's provider, which only wraps the mini player.
-                CompositionLocalProvider(LocalPlayerGlass provides glassSettings) {
+        if (selected == null && graph.size > 0) {
+            GalaxyHud(
+                timeline = timeline,
+                onTimeline = { timeline = it },
+                exploredCount = explored.size,
+                total = graph.size,
+                hazeState = mapHaze,
+                glass = glassSettings,
+                onSurprise = { viewModel.surpriseMe() },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .onSizeChanged { hudHeightPx = it.height }
+                    .padding(bottom = panelBottomInset)
+                    .consumeWindowInsets(WindowInsets.navigationBars),
+            )
+        }
+
+        selected?.let { node ->
+            val related = remember(graph, node.id) { relatedTo(graph, node) }
+            val path = remember(graph, node.id) { graph.ancestors(node.id).reversed() }
+            // The shader modifier reads its parameters from this local, so
+            // the panel has to provide it — this route sits outside the
+            // nav host's provider, which only wraps the mini player.
+            CompositionLocalProvider(LocalPlayerGlass provides glassSettings) {
                 GenreCard(
                     node = node,
                     related = related,
@@ -703,11 +603,11 @@ fun GenreMapScreen(
                     //
                     // Two limits, and the smaller wins. The fraction is the one
                     // that matters in portrait; the second is what stops a
-                    // landscape phone — where the whole canvas is barely taller
+                    // landscape phone — where the whole view is barely taller
                     // than the panel's own chrome — from being handed a
                     // scroll region that pushes the buttons off the top.
                     historyMaxHeight = with(density) {
-                        val canvas = canvasSize.height.toFloat()
+                        val canvas = (viewport.height - topChromePx).toFloat()
                         minOf(
                             canvas * HISTORY_HEIGHT_FRACTION,
                             canvas - PANEL_CHROME_RESERVE.toPx(),
@@ -725,13 +625,7 @@ fun GenreMapScreen(
                     },
                     path = path,
                     onPath = { ancestor -> viewModel.selectOnMap(ancestor.id) },
-                    onRelated = { child ->
-                        // A subgenre under a folded branch is not on the map, so
-                        // flying to it would land on nothing. Unfold on the way —
-                        // through the same animation, not by snapping it open.
-                        if (node.id in collapsed) toggleBranch(node.id)
-                        viewModel.selectOnMap(child.id)
-                    },
+                    onRelated = { child -> viewModel.selectOnMap(child.id) },
                     onDismiss = { viewModel.selectOnMap(null) },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -742,20 +636,40 @@ fun GenreMapScreen(
                         .padding(bottom = panelBottomInset)
                         .consumeWindowInsets(WindowInsets.navigationBars),
                 )
-                }
             }
+        }
 
-            if (graph.size == 0) {
-                Text(
-                    text = stringResource(R.string.genre_map_failed),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.Center),
-                )
-            }
+        if (graph.size == 0) {
+            Text(
+                text = stringResource(R.string.genre_map_failed),
+                style = MaterialTheme.typography.bodyMedium,
+                color = GALAXY_INK.copy(alpha = 0.7f),
+                modifier = Modifier.align(Alignment.Center),
+            )
         }
     }
 }
+
+/** Dust grains on a device that asked for less work. */
+private const val LOW_POWER_DUST = 1600
+
+private const val TRAVEL_MILLIS = 1700
+private const val MORPH_MILLIS = 1700
+private const val RESERVE_MILLIS = 420
+private const val SYSTEM_APPEAR_MILLIS = 900
+
+/** Ease in and out, cubic: the travel starts gently and lands gently. */
+private val TravelEasing = CubicBezierEasing(0.65f, 0f, 0.35f, 1f)
+
+/** Most a long journey pulls back mid-flight, as a share of its distance. */
+private const val MAX_ARC = 1.2f
+
+/** The blur at the middle of a journey. Light: a sense of speed, not a smear. */
+private val TRAVEL_BLUR = 6.dp
+
+/** The galaxy turns on its own once it has been left alone this long. */
+private const val IDLE_TURN_AFTER_S = 4f
+private const val IDLE_TURN_RAD_S = 0.035f
 
 /**
  * What to offer next to a genre: its subgenres, or — for a leaf — its closest
@@ -1353,29 +1267,6 @@ private fun RelativeChip(node: GenreNode, accent: Color, onClick: () -> Unit) {
     }
 }
 
-// ── layout & drawing ───────────────────────────────────────────────────────
-
-private const val MIN_SCALE = 0.6f
-private const val MAX_SCALE = 14f
-
-/** Leaves a little air around the map at scale 1 instead of running it to the bezel. */
-private const val FIT_MARGIN = 0.92f
-
-/** Breathing room around a label when testing it against its neighbours. */
-private const val LABEL_GAP = 3f
-
-/**
- * How close the camera gets when you select a genre.
- *
- * Only ever a floor: flying to a node never pulls you *back* from a zoom you
- * chose yourself, it just guarantees that whatever you tapped ends up close
- * enough to read its neighbours' labels.
- */
-private const val FOCUS_SCALE = 2.6f
-
-/** Resting size of the selected dot, relative to its neighbours. */
-private const val SELECTED_SCALE = 1.45f
-
 /**
  * How much of the map the expanded history may take before it starts scrolling.
  *
@@ -1391,1041 +1282,6 @@ private val PANEL_CHROME_RESERVE = 300.dp
 
 /** Below this the history isn't worth opening, so it scrolls in a smaller box. */
 private val MIN_HISTORY_HEIGHT = 120.dp
-
-/**
- * Panel-height granularity, in pixels, that the camera bothers to re-aim for.
- *
- * Opening the history moves the panel by hundreds of pixels and has to be
- * followed; a paragraph reflowing does not.
- */
-private const val FLIGHT_HEIGHT_QUANTUM = 96
-
-private const val FLIGHT_MILLIS = 620
-
-/**
- * The camera over the map: how far in, and where it's looking.
- *
- * One object rather than two pieces of state because zooming about a point
- * changes both together, and a frame that applied the new scale with the old
- * offset would visibly kick sideways.
- */
-private data class Camera(val scale: Float = 1f, val offset: Offset = Offset.Zero) {
-
-    /**
-     * Pinch about [centroid] — the point between the fingers stays under them.
-     *
-     * Zooming about the *screen centre* instead is the thing that makes a map
-     * feel broken: you pinch on the corner you're interested in and the map
-     * runs away from your fingers. The ratio is taken from the clamped scale,
-     * not the raw gesture, so the anchor still holds at the zoom limits.
-     */
-    fun zoomedAt(centroid: Offset, pan: Offset, zoom: Float, size: IntSize, bounds: MapBounds): Camera {
-        val next = (scale * zoom).coerceIn(MIN_SCALE, MAX_SCALE)
-        val ratio = if (scale == 0f) 1f else next / scale
-        val rel = Offset(centroid.x - size.width / 2f, centroid.y - size.height / 2f)
-        return Camera(next, rel * (1f - ratio) + offset * ratio + pan).clampedTo(size, bounds)
-    }
-
-    /**
-     * Keeps a readable amount of map on screen.
-     *
-     * Without this the map can be flung into empty space — trivially easy at
-     * 14× on something 355 nodes wide — and the only way back is the recentre
-     * button, which you have to know is there. The limit lets the map's edge
-     * come inward as far as a quarter of the viewport and no further.
-     */
-    fun clampedTo(size: IntSize, bounds: MapBounds): Camera {
-        if (size.width == 0 || size.height == 0) return this
-        val k = fitFor(size.width.toFloat(), size.height.toFloat(), bounds) * scale
-        val margin = minOf(size.width, size.height) * 0.25f
-        val maxX = (bounds.spanX * k / 2f + size.width / 2f - margin).coerceAtLeast(0f)
-        val maxY = (bounds.spanY * k / 2f + size.height / 2f - margin).coerceAtLeast(0f)
-        return copy(offset = Offset(offset.x.coerceIn(-maxX, maxX), offset.y.coerceIn(-maxY, maxY)))
-    }
-}
-
-/**
- * A camera move that curves.
- *
- * Two things make it read as a move rather than a jump. The timing is a
- * symmetric ease — slow to leave, fast across the middle, slow to arrive — and
- * the path bows sideways, peaking at half-flight, so the camera arcs into
- * position instead of sliding down a ruled line. The bow is proportional to the
- * distance travelled and capped, so a nudge to a neighbouring genre stays
- * nearly straight while a jump across the map genuinely swings.
- *
- * Scale is interpolated on the same curve, which is what keeps the destination
- * growing smoothly under you rather than snapping to size on arrival.
- */
-private suspend fun flyTo(
-    node: GenreNode,
-    canvas: IntSize,
-    panelHeightPx: Int,
-    bounds: MapBounds,
-    from: Camera,
-    instant: Boolean,
-    onFrame: (Camera) -> Unit,
-) {
-    val targetScale = maxOf(from.scale, FOCUS_SCALE)
-    val target = Camera(targetScale, centreOffsetFor(node, canvas, panelHeightPx, bounds, targetScale))
-    if (instant) {
-        onFrame(target)
-        return
-    }
-
-    val delta = target.offset - from.offset
-    val distance = hypot(delta.x, delta.y)
-    // Perpendicular to the direction of travel, so the bow is always across the
-    // path rather than along it.
-    val bow = if (distance < 1f) Offset.Zero else {
-        Offset(-delta.y / distance, delta.x / distance) * (distance * 0.16f).coerceAtMost(220f)
-    }
-
-    animate(0f, 1f, animationSpec = tween(FLIGHT_MILLIS, easing = FlightEasing)) { t, _ ->
-        onFrame(
-            Camera(
-                scale = from.scale + (target.scale - from.scale) * t,
-                offset = from.offset + delta * t + bow * sin(t * PI.toFloat()),
-            ),
-        )
-    }
-}
-
-private val FlightEasing = CubicBezierEasing(0.62f, 0f, 0.28f, 1f)
-
-/**
- * Where the camera has to sit for [node] to land in the middle of the map you
- * can actually see — which is the space above the detail panel, not the middle
- * of the canvas. Centring on the canvas would park every genre you select
- * underneath its own information.
- */
-private fun centreOffsetFor(
-    node: GenreNode,
-    canvas: IntSize,
-    panelHeightPx: Int,
-    bounds: MapBounds,
-    scale: Float,
-): Offset {
-    val k = fitFor(canvas.width.toFloat(), canvas.height.toFloat(), bounds) * scale
-    val focusY = (canvas.height - panelHeightPx) / 2f
-    return Offset(
-        x = -(node.x - bounds.centreX) * k,
-        y = focusY - canvas.height / 2f - (node.y - bounds.centreY) * k,
-    )
-}
-
-/**
- * The extent of the baked layout, in layout units.
- *
- * Taken from the *whole* graph rather than from the visible nodes: measuring
- * what's on screen would make the map silently rescale every time a branch is
- * folded, so collapsing one cluster would shift every other one under your
- * finger.
- */
-private data class MapBounds(
-    val minX: Float,
-    val minY: Float,
-    val maxX: Float,
-    val maxY: Float,
-) {
-    val spanX: Float get() = (maxX - minX).coerceAtLeast(1f)
-    val spanY: Float get() = (maxY - minY).coerceAtLeast(1f)
-    val centreX: Float get() = (minX + maxX) / 2f
-    val centreY: Float get() = (minY + maxY) / 2f
-}
-
-private fun boundsOf(nodes: List<GenreNode>): MapBounds {
-    if (nodes.isEmpty()) return MapBounds(0f, 0f, 1f, 1f)
-    return MapBounds(
-        minX = nodes.minOf { it.x },
-        minY = nodes.minOf { it.y },
-        maxX = nodes.maxOf { it.x },
-        maxY = nodes.maxOf { it.y },
-    )
-}
-
-/** Nodes to draw: everything not sitting under a collapsed branch. */
-private fun visibleNodes(
-    graph: tf.monochrome.android.domain.model.GenreGraph,
-    collapsed: Set<String>,
-): List<GenreNode> {
-    if (collapsed.isEmpty()) return graph.allGenres
-    val hidden = descendantsOf(graph, collapsed)
-    return graph.allGenres.filterNot { it.id in hidden }
-}
-
-private fun descendantsOf(
-    graph: tf.monochrome.android.domain.model.GenreGraph,
-    id: String,
-): Set<String> = descendantsOf(graph, setOf(id))
-
-private fun descendantsOf(
-    graph: tf.monochrome.android.domain.model.GenreGraph,
-    roots: Set<String>,
-): Set<String> {
-    val found = HashSet<String>()
-    var frontier = roots.toList()
-    while (frontier.isNotEmpty()) {
-        val next = ArrayList<String>()
-        for (id in frontier) {
-            for (child in graph.children(id)) {
-                if (found.add(child.id)) next.add(child.id)
-            }
-        }
-        frontier = next
-    }
-    return found
-}
-
-/**
- * A branch being unfolded or folded back, and how far through it is.
- *
- * The whole subtree scales out of the branch's own position, so unfolding reads
- * as the genres growing out of the genre they came from rather than as a set of
- * dots appearing. Folding runs the same thing backwards and slightly faster —
- * putting something away should not take as long as opening it.
- */
-private data class Fold(
-    /**
-     * Which fold this is. Cancelling a coroutine only takes effect at its next
-     * suspension point, so without a token to check, the frame callback of a
-     * fold that has just been superseded can stamp its own progress onto the
-     * new one — and then commit the wrong branch to `collapsed` on the way out.
-     */
-    val epoch: Int,
-    val rootId: String,
-    val subtree: Set<String>,
-    val collapsing: Boolean,
-    val progress: Float,
-)
-
-private const val FOLD_OUT_MILLIS = 380
-private const val FOLD_IN_MILLIS = 240
-private val FoldOutEasing = CubicBezierEasing(0.2f, 1.5f, 0.4f, 1f)
-private val FoldInEasing = CubicBezierEasing(0.5f, 0f, 0.9f, 0.4f)
-
-/**
- * Layout units to pixels at scale 1 — the whole map fitted to the viewport.
- *
- * One factor for both axes, so the clusters stay circular rather than being
- * squashed into ellipses in portrait.
- */
-/**
- * Scale that puts the layout on screen.
- *
- * The radial map is roughly square and fits whole. The timeline is not — 268
- * rows against a single span of years makes it about three times taller than it
- * is wide, and fitting *that* whole shrinks every row until nothing is readable,
- * which is what the first build of it did. Past the halfway point of the morph
- * it fits to width instead and lets the height run off the bottom, the way any
- * long document opens: legible at the top, and scrollable.
- */
-private fun fitFor(width: Float, height: Float, bounds: MapBounds, morph: Float = 0f): Float {
-    val whole = minOf(width / bounds.spanX, height / bounds.spanY)
-    val toWidth = width / bounds.spanX
-    return lerp(whole, toWidth, morph.coerceIn(0f, 1f)) * FIT_MARGIN
-}
-
-/**
- * What a dot's size means.
- *
- * Size was previously depth in the parent forest, which is an artefact of how
- * the tree was authored rather than a fact about the music: techno and Xtra Raw
- * are both one hop below their parent, and drawing them the same size says the
- * scene and the footnote are equally significant. Making the encoding
- * switchable — and naming the active one on screen — is what turns a dot's size
- * from decoration into a claim you can check.
- */
-private enum class MapWeight(@androidx.annotation.StringRes val caption: Int) {
-    POPULARITY(R.string.map_weight_popularity),
-    ERA(R.string.map_weight_era),
-    DEPTH(R.string.map_weight_depth),
-    ;
-
-    fun next(): MapWeight = entries[(ordinal + 1) % entries.size]
-}
-
-/**
- * The ranges the weightings normalise against, measured once from the graph.
- *
- * Reach spans four orders of magnitude — techno has 72,677 taggers, Xtra Raw
- * has 12 — so it is normalised on a log, without which every genre below the
- * few giants would round to the same smallest dot.
- */
-private class WeightScale(graph: GenreGraph) {
-    private val maxLogReach = graph.allGenres
-        .mapNotNull { it.reach }
-        .maxOrNull()
-        ?.let { ln(1f + it) }
-        ?.takeIf { it > 0f } ?: 1f
-    private val earliest = graph.allGenres.mapNotNull { it.era.getOrNull(0) }.minOrNull() ?: 1900
-    private val latest = graph.allGenres.mapNotNull { it.era.getOrNull(0) }.maxOrNull() ?: 2025
-
-    /** 0 for the least prominent genre under this weighting, 1 for the most. */
-    fun prominence(node: GenreNode, weight: MapWeight): Float = when (weight) {
-        // Depth keeps the exact steps the map has always drawn, so switching
-        // back to it is a return rather than a different-looking map.
-        MapWeight.DEPTH -> depthProminence(node)
-        MapWeight.POPULARITY -> node.reach
-            ?.let { (ln(1f + it) / maxLogReach).coerceIn(0f, 1f) }
-            ?: depthProminence(node)
-        MapWeight.ERA -> node.era.getOrNull(0)
-            ?.let { ((it - earliest).toFloat() / (latest - earliest).coerceAtLeast(1)).coerceIn(0f, 1f) }
-            ?: depthProminence(node)
-    }
-
-    private fun depthProminence(node: GenreNode): Float = when (node.ring) {
-        0 -> 1f
-        1 -> 0.47f
-        2 -> 0.2f
-        else -> 0f
-    }
-}
-
-
-// ─── Timeline layout ─────────────────────────────────────────────────────────
-
-/** Which arrangement the map is in. */
-private enum class MapLayout { RADIAL, TIMELINE }
-
-private class Timeline(
-    val positions: Map<String, Offset>,
-    val bounds: MapBounds,
-)
-
-private const val TIMELINE_WIDTH = 3600f
-private const val TIMELINE_ROW = 40f
-
-/** Minimum horizontal clearance before two genres may share a row. */
-private const val TIMELINE_X_GAP = 30f
-
-/**
- * Layout units per character, used to reserve room for a genre's name.
- *
- * The timeline is meant to show all 771 names at once, which a dot-sized gap
- * cannot deliver: "Uptempo Frenchcore" needs an order of magnitude more room
- * than its dot does, so packing on dot width alone produces a compact layout
- * whose labels then have to be thrown away to stay readable. Reserving the
- * text's own width instead makes the layout exactly as tall as naming
- * everything requires — taller, and complete.
- */
-private const val TIMELINE_CHAR_WIDTH = 13.5f
-
-private const val TIMELINE_MIN_YEAR = 400
-private const val TIMELINE_MAX_YEAR = 2025
-private const val TIMELINE_PIVOT_YEAR = 1900
-
-/**
- * Share of the width given to everything before 1900.
- *
- * The dataset is 100 genres spread over the fifteen centuries to 1899 and 671
- * packed into the 123 years since. On a straight linear axis those 671 would
- * occupy eight percent of the map and be unreadable, so the pre-modern era is
- * compressed into a fixed band. That is a distortion, which is why the axis
- * draws the break as a labelled boundary rather than pretending to be uniform —
- * a compressed scale you can see is a scale; a hidden one is a lie.
- */
-private const val TIMELINE_PRE_SPAN = 0.18f
-
-/** Screen-space strip at the top reserved for the year axis. */
-private const val TIMELINE_AXIS_INSET = 46f
-
-/**
- * Tick spacings the axis will choose between, coarsest first.
- *
- * Ends at 1 so that zooming into a single scene resolves to individual years —
- * at that magnification "1990" spanning a third of the screen is no longer
- * telling you anything the position hadn't already.
- */
-private val TIMELINE_TICK_STEPS = intArrayOf(100, 50, 25, 10, 5, 2, 1)
-
-/** Room a labelled tick needs before the axis will subdivide further. */
-private const val TIMELINE_TICK_MIN_PX = 74f
-
-/** Minor rules may sit closer, since they carry no text. */
-private const val TIMELINE_MINOR_MIN_PX = 16f
-
-private fun timelineX(year: Int): Float {
-    val y = year.coerceIn(TIMELINE_MIN_YEAR, TIMELINE_MAX_YEAR)
-    val fraction = if (y < TIMELINE_PIVOT_YEAR) {
-        TIMELINE_PRE_SPAN * (y - TIMELINE_MIN_YEAR) /
-            (TIMELINE_PIVOT_YEAR - TIMELINE_MIN_YEAR).toFloat()
-    } else {
-        TIMELINE_PRE_SPAN + (1f - TIMELINE_PRE_SPAN) * (y - TIMELINE_PIVOT_YEAR) /
-            (TIMELINE_MAX_YEAR - TIMELINE_PIVOT_YEAR).toFloat()
-    }
-    return fraction * TIMELINE_WIDTH
-}
-
-private fun startYear(node: GenreNode): Int = node.era.getOrNull(0) ?: TIMELINE_MAX_YEAR
-
-/**
- * The whole graph as one genealogy: time along x, descent down y.
- *
- * Every genre sits at the year it appeared, so the picture reads left to right
- * as history. One tree, not twelve — the families are not separated into bands,
- * because the interesting thing about this dataset is where they cross. Jazz
- * house descends from both jazz and house; nu metal from both metal and hip-hop.
- * Banding by family puts those two parents on opposite sides of the page and
- * draws a long wire between them; letting the whole forest share one set of rows
- * puts a child directly under whichever parent it was reached from, and the
- * colour change along a branch is then visible as the crossing it is.
- *
- * Genres are walked depth first from the oldest roots, and each is placed on the
- * first row **at or below its parent's** that has room at that year, so descent
- * always reads downward. Rows are shared whenever the years don't collide, so
- * the picture is as tall as the music's actual overlap in time requires rather
- * than one row per genre.
- */
-private fun timelineFor(graph: GenreGraph): Timeline {
-    val children = HashMap<String, MutableList<GenreNode>>()
-    val roots = ArrayList<GenreNode>()
-    for (node in graph.allGenres) {
-        val parent = node.parents.firstOrNull { graph[it] != null }
-        if (parent == null) roots.add(node) else {
-            children.getOrPut(parent) { ArrayList() }.add(node)
-        }
-    }
-
-    val seen = HashSet<String>()
-    val order = ArrayList<GenreNode>()
-    fun visit(node: GenreNode, guard: Int) {
-        if (guard > 40 || !seen.add(node.id)) return
-        order.add(node)
-        children[node.id]?.sortedBy { startYear(it) }?.forEach { visit(it, guard + 1) }
-    }
-    roots.sortedBy { startYear(it) }.forEach { visit(it, 0) }
-    // Anything a cycle or a missing parent kept out of the walk still has to be
-    // placed; dropping a genre off the map would be the worst of the options.
-    graph.allGenres.filterNot { it.id in seen }.sortedBy { startYear(it) }.forEach { visit(it, 0) }
-
-    val positions = HashMap<String, Offset>()
-    val rowOf = HashMap<String, Int>()
-    val rowLastX = ArrayList<Float>()
-    for (node in order) {
-        val x = timelineX(startYear(node))
-        val room = maxOf(TIMELINE_X_GAP, node.name.length * TIMELINE_CHAR_WIDTH)
-        // Never above the parent: descent has to read downward for the shape to
-        // mean anything.
-        var row = node.parents.firstNotNullOfOrNull { rowOf[it] } ?: 0
-        while (row < rowLastX.size && rowLastX[row] > x - room) row++
-        while (rowLastX.size <= row) rowLastX.add(Float.NEGATIVE_INFINITY)
-        // Store the right edge of this genre's *label*, not of its dot, so the
-        // next genre on this row clears the text as well as the circle.
-        rowLastX[row] = x + room
-        rowOf[node.id] = row
-        positions[node.id] = Offset(x, row * TIMELINE_ROW)
-    }
-
-    val bounds = if (positions.isEmpty()) MapBounds(0f, 0f, 1f, 1f) else MapBounds(
-        minX = positions.values.minOf { it.x },
-        minY = positions.values.minOf { it.y },
-        maxX = positions.values.maxOf { it.x },
-        maxY = positions.values.maxOf { it.y },
-    )
-    return Timeline(positions, bounds)
-}
-
-private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
-
-private fun lerpBounds(a: MapBounds, b: MapBounds, t: Float) = MapBounds(
-    minX = lerp(a.minX, b.minX, t),
-    minY = lerp(a.minY, b.minY, t),
-    maxX = lerp(a.maxX, b.maxX, t),
-    maxY = lerp(a.maxY, b.maxY, t),
-)
-
-/**
- * How far a node bows off the straight line on its way between layouts.
- *
- * Everything travelling in straight lines at once reads as a diagram being
- * redrawn; the same nodes on arcs read as a thing rearranging itself. The sign
- * alternates on the id so the field fans out rather than sweeping one way.
- */
-private const val MORPH_ARC = 0.22f
-
-/** Where a node is right now, [morph] of the way from the radial map to the timeline. */
-private fun morphedPoint(node: GenreNode, timeline: Map<String, Offset>?, morph: Float): Offset {
-    val from = Offset(node.x, node.y)
-    val to = timeline?.get(node.id) ?: return from
-    if (morph <= 0.001f) return from
-    if (morph >= 0.999f) return to
-
-    val delta = to - from
-    val length = hypot(delta.x, delta.y).coerceAtLeast(1f)
-    val sign = if (node.id.hashCode() and 1 == 0) 1f else -1f
-    val control = Offset((from.x + to.x) / 2f, (from.y + to.y) / 2f) +
-        Offset(-delta.y / length, delta.x / length) * (length * MORPH_ARC * sign)
-
-    val inv = 1f - morph
-    return from * (inv * inv) + control * (2f * inv * morph) + to * (morph * morph)
-}
-
-/**
- * One depth level of one family, as the shape its genres actually make.
- *
- * [points] are the members in layout units, ordered by bearing from the family
- * root, so stroking through them traces the real outline of that depth rather
- * than a circle fitted to it.
- */
-private data class Constellation(
-    val familyId: String,
-    val depth: Int,
-    val points: List<Offset>,
-)
-
-/**
- * The map's depth structure, drawn from the data rather than idealised.
- *
- * This started as concentric circles at each depth's median radius and that was
- * wrong, because the depths are not circles. Measured from a family's root the
- * medians do order cleanly — rock at 83 → 124 → 157 → 214 layout units — but
- * the spread around them is enormous: electronic's first depth runs from 102 to
- * 488, because it holds the sub-family roots (house, techno, drum & bass) that
- * are spread wide on purpose to seed clusters of their own. A circle through
- * the median of that would pass through almost none of the genres it claimed to
- * describe.
- *
- * So the outline follows the members themselves, sorted by bearing and closed
- * into a loop. It comes out lopsided and lumpy — bulging where a family has
- * grown a dense branch, pinched where it hasn't — which is the point: the shape
- * is evidence about how the music is distributed, and smoothing it into a
- * circle would throw exactly that away.
- *
- * Needs three points to enclose anything; depths with fewer are skipped.
- */
-private fun constellationsFor(graph: GenreGraph): List<Constellation> =
-    graph.allGenres.groupBy { it.family }.flatMap { (family, nodes) ->
-        val root = nodes.firstOrNull { it.ring == 0 } ?: return@flatMap emptyList()
-        nodes.asSequence()
-            .filter { it.ring > 0 }
-            .groupBy { it.ring }
-            .filterValues { it.size >= 3 }
-            .map { (depth, members) ->
-                Constellation(
-                    familyId = family,
-                    depth = depth,
-                    points = members
-                        .sortedBy { atan2(it.y - root.y, it.x - root.x) }
-                        .map { Offset(it.x, it.y) },
-                )
-            }
-    }
-
-/**
- * Trace each depth's outline under the map, in its family's own colour.
- *
- * Smoothed through the midpoints between neighbours rather than drawn as
- * straight segments: a polygon through several hundred points reads as noise,
- * while the same points as one continuous curve read as a shape. The curve
- * still passes near every member, so the lumpiness survives the smoothing.
- */
-private fun DrawScope.drawConstellations(
-    constellations: List<Constellation>,
-    bounds: MapBounds,
-    camera: Camera,
-    familyColors: Map<String, Color>,
-    fade: Float = 1f,
-    morphFit: Float = 0f,
-) {
-    val k = fitFor(size.width, size.height, bounds, morphFit) * camera.scale
-    val cx = size.width / 2f + camera.offset.x
-    val cy = size.height / 2f + camera.offset.y
-
-    for (constellation in constellations) {
-        val colour = familyColors[constellation.familyId] ?: continue
-        val screen = constellation.points.map { point ->
-            Offset(
-                x = cx + (point.x - bounds.centreX) * k,
-                y = cy + (point.y - bounds.centreY) * k,
-            )
-        }
-        if (screen.size < 3) continue
-
-        val path = Path()
-        fun midpoint(a: Offset, b: Offset) = Offset((a.x + b.x) / 2f, (a.y + b.y) / 2f)
-        var previous = screen.last()
-        path.moveTo(midpoint(previous, screen.first()).x, midpoint(previous, screen.first()).y)
-        for (point in screen) {
-            val mid = midpoint(previous, point)
-            // Each member is the control point, so the curve bends toward every
-            // genre without being forced to pass exactly through it.
-            path.quadraticBezierTo(previous.x, previous.y, mid.x, mid.y)
-            previous = point
-        }
-        path.close()
-
-        drawPath(
-            path = path,
-            color = colour,
-            alpha = (0.30f - (constellation.depth - 1) * 0.045f).coerceAtLeast(0.07f) * fade,
-            style = Stroke(width = 1.4f),
-        )
-    }
-}
-
-
-/**
- * The timeline's axis and lanes.
- *
- * Decade rules so a position on the page converts back into a year, and an
- * explicit marker at 1900 where the scale changes. The pre-modern era is compressed roughly
- * fifteen-to-one against the modern one; drawing that boundary is the
- * difference between a compressed axis and a dishonest one.
- */
-private fun DrawScope.drawTimelineChrome(
-    timeline: Timeline,
-    bounds: MapBounds,
-    camera: Camera,
-    labelColor: Color,
-    labelSizePx: Float,
-    fade: Float,
-    morphFit: Float,
-) {
-    val k = fitFor(size.width, size.height, bounds, morphFit) * camera.scale
-    val cx = size.width / 2f + camera.offset.x
-    val cy = size.height / 2f + camera.offset.y
-    fun sx(x: Float) = cx + (x - bounds.centreX) * k
-    fun sy(y: Float) = cy + (y - bounds.centreY) * k
-
-    val top = sy(timeline.bounds.minY - TIMELINE_ROW)
-    val bottom = sy(timeline.bounds.maxY + TIMELINE_ROW)
-
-    // The year axis is pinned to the screen rather than drawn in world space.
-    // In world space it scrolls away the moment you pan down — an axis you have
-    // to scroll back to is no longer telling you where you are — and it slides
-    // under the first lane's genre labels on the way. A reserved strip is both
-    // always visible and never in anything's way; [TIMELINE_AXIS_INSET] keeps
-    // the genre labels out of it.
-    val axisBaseline = labelSizePx + 10f
-    drawRect(
-        color = Color.Black,
-        topLeft = Offset(0f, 0f),
-        size = androidx.compose.ui.geometry.Size(size.width, TIMELINE_AXIS_INSET),
-        alpha = 0.55f * fade,
-    )
-
-    // The rules follow the zoom: centuries when the whole span is on screen,
-    // single years once there is room for them. A fixed decade grid is wrong at
-    // both ends — unreadable stripes zoomed out, and zoomed in on one scene it
-    // stops resolving exactly where the year is the thing you came to read.
-    val pixelsPerYear = (TIMELINE_WIDTH * (1f - TIMELINE_PRE_SPAN) /
-        (TIMELINE_MAX_YEAR - TIMELINE_PIVOT_YEAR)) * k
-    val step = TIMELINE_TICK_STEPS.firstOrNull { it * pixelsPerYear >= TIMELINE_TICK_MIN_PX } ?: 1
-    // Minor rules subdivide the labelled ones, but only while they stay apart.
-    val minorStep = TIMELINE_TICK_STEPS.firstOrNull {
-        it < step && it * pixelsPerYear >= TIMELINE_MINOR_MIN_PX
-    }
-
-    fun rule(year: Int, alpha: Float) {
-        val x = sx(timelineX(year))
-        if (x <= -60f || x >= size.width + 60f) return
-        drawLine(
-            color = labelColor,
-            start = Offset(x, maxOf(top, TIMELINE_AXIS_INSET)),
-            end = Offset(x, bottom),
-            strokeWidth = 1f,
-            alpha = alpha * fade,
-        )
-    }
-
-    if (minorStep != null) {
-        var year = TIMELINE_PIVOT_YEAR
-        while (year <= TIMELINE_MAX_YEAR) {
-            if (year % step != 0) rule(year, 0.035f)
-            year += minorStep
-        }
-    }
-    var year = TIMELINE_PIVOT_YEAR
-    while (year <= TIMELINE_MAX_YEAR) {
-        rule(year, 0.09f)
-        year += step
-    }
-
-    // The scale break, drawn rather than hidden.
-    val pivotX = sx(timelineX(TIMELINE_PIVOT_YEAR))
-    drawLine(
-        color = labelColor,
-        start = Offset(pivotX, maxOf(top, TIMELINE_AXIS_INSET)),
-        end = Offset(pivotX, bottom),
-        strokeWidth = 1.6f,
-        alpha = 0.22f * fade,
-    )
-
-    drawContext.canvas.nativeCanvas.apply {
-        val paint = android.graphics.Paint().apply {
-            color = labelColor.toArgb()
-            textSize = labelSizePx
-            isAntiAlias = true
-            alpha = (150 * fade).toInt()
-            textAlign = android.graphics.Paint.Align.CENTER
-        }
-        var tick = TIMELINE_PIVOT_YEAR
-        while (tick <= TIMELINE_MAX_YEAR) {
-            val x = sx(timelineX(tick))
-            if (x > 20f && x < size.width - 20f) {
-                drawText(tick.toString(), x, axisBaseline, paint)
-            }
-            tick += step
-        }
-        // The pre-1900 caption sits left of the scale break, but the break also
-        // carries its own "1900" tick centred on it, and the two were printed
-        // straight through each other. Only draw it when it clears that label
-        // and still starts on screen.
-        paint.textAlign = android.graphics.Paint.Align.RIGHT
-        val pivotLabelHalf = paint.measureText(TIMELINE_PIVOT_YEAR.toString()) / 2f
-        val preLabel = "before 1900"
-        val preRight = sx(timelineX(TIMELINE_PIVOT_YEAR)) - pivotLabelHalf - 14f
-        if (preRight - paint.measureText(preLabel) > 12f) {
-            drawText(preLabel, preRight, axisBaseline, paint)
-        }
-
-    }
-}
-
-private fun positionsFor(
-    nodes: List<GenreNode>,
-    width: Float,
-    height: Float,
-    bounds: MapBounds,
-    camera: Camera,
-    fold: Fold? = null,
-    timeline: Map<String, Offset>? = null,
-    morph: Float = 0f,
-): Map<String, Offset> {
-    val k = fitFor(width, height, bounds, morph) * camera.scale
-    val cx = width / 2f + camera.offset.x
-    val cy = height / 2f + camera.offset.y
-    fun place(node: GenreNode): Offset {
-        val point = morphedPoint(node, timeline, morph)
-        return Offset(
-            x = cx + (point.x - bounds.centreX) * k,
-            y = cy + (point.y - bounds.centreY) * k,
-        )
-    }
-    // A folding subtree is drawn part of the way home to its branch root, so
-    // hit-testing lands where the dots actually are mid-animation too.
-    val anchor = fold?.let { f -> nodes.firstOrNull { it.id == f.rootId }?.let(::place) }
-    return nodes.associate { node ->
-        val p = place(node)
-        node.id to if (anchor != null && node.id in fold!!.subtree) {
-            anchor + (p - anchor) * fold.progress
-        } else {
-            p
-        }
-    }
-}
-
-private fun hitTest(
-    point: Offset,
-    nodes: List<GenreNode>,
-    width: Int,
-    height: Int,
-    bounds: MapBounds,
-    camera: Camera,
-    fold: Fold? = null,
-    timeline: Map<String, Offset>? = null,
-    morph: Float = 0f,
-): GenreNode? {
-    val positions = positionsFor(
-        nodes, width.toFloat(), height.toFloat(), bounds, camera, fold, timeline, morph,
-    )
-    // Generous radius: these are small targets on a zoomable canvas, and
-    // missing by four pixels should still select the thing you aimed at.
-    val touchRadius = 34f
-    return nodes
-        .mapNotNull { node ->
-            val p = positions[node.id] ?: return@mapNotNull null
-            val d = hypot(p.x - point.x, p.y - point.y)
-            if (d <= touchRadius) node to d else null
-        }
-        .minByOrNull { it.second }
-        ?.first
-}
-
-private fun DrawScope.drawMap(
-    nodes: List<GenreNode>,
-    positions: Map<String, Offset>,
-    collapsed: Set<String>,
-    selectedId: String?,
-    selectedScale: Float,
-    fold: Fold?,
-    familyColors: Map<String, Color>,
-    edgeColor: Color,
-    labelColor: Color,
-    labelSizePx: Float,
-    scale: Float,
-    weighting: MapWeight,
-    weights: WeightScale,
-    morph: Float = 0f,
-    topInset: Float = 0f,
-    bottomInset: Float = 0f,
-    explored: Set<String> = emptySet(),
-    hearted: Set<String> = emptySet(),
-    hereId: String? = null,
-    hereLabel: String = "",
-    herePulse: Float = 0f,
-    dark: Boolean = true,
-) {
-    val byId = nodes.associateBy { it.id }
-
-    // How present a node is right now: 1 for everything settled, and the fold's
-    // progress for the subtree currently growing out of — or shrinking back
-    // into — its branch. Clamped because the grow easing overshoots past 1 on
-    // purpose, and an alpha above 1 is not a brighter dot, it's an exception.
-    fun presence(id: String): Float =
-        if (fold != null && id in fold.subtree) fold.progress.coerceIn(0f, 1f) else 1f
-
-    // Dots grow a little with the zoom, within limits. Fixed-pixel dots have to
-    // be sized for one of the two views and are wrong in the other: big enough
-    // to hit comfortably when you're in among them turns the whole-map view
-    // into a solid blob, and small enough for the overview leaves nothing to
-    // aim at up close. Clamped at both ends so neither view runs away.
-    val dotScale = (0.62f + 0.38f * scale).coerceIn(0.72f, 1.7f)
-
-    // Everything below is culled to the viewport. Zoomed in, most of a
-    // 355-node map is off-screen, and drawing it anyway costs a full pass of
-    // circles and text per frame for pixels nobody can see. The margin keeps
-    // edges whose far end is just outside from popping.
-    val margin = 120f
-    fun onScreen(p: Offset) =
-        p.x > -margin && p.x < size.width + margin && p.y > -margin && p.y < size.height + margin
-
-    // Edges first, so nodes sit on top of their own lines.
-    //
-    // Cross-family sideways links are drawn too, and only those: a genre's
-    // neighbours inside its own cluster are already obvious from the fact that
-    // they're adjacent, whereas the link from jazz house back to jazz is the
-    // thing the clustered layout exists to show. Drawing all ~900 near-edges
-    // instead would be a grey haze over the whole map.
-    for (node in nodes) {
-        val to = positions[node.id] ?: continue
-        val here = presence(node.id)
-        if (here <= 0.01f) continue
-        for (parentId in node.parents) {
-            val from = positions[parentId] ?: continue
-            if (parentId !in byId) continue
-            if (!onScreen(to) && !onScreen(from)) continue
-            if (morph <= 0.01f) {
-                drawLine(
-                    color = edgeColor.copy(alpha = edgeColor.alpha * here),
-                    start = from,
-                    end = to,
-                    strokeWidth = 1.5f,
-                )
-            } else {
-                // On the timeline a parent link is a branch, and a branch that
-                // leaves horizontally and arrives horizontally reads as descent
-                // along the time axis. A straight diagonal reads as a wire.
-                val reach = (to.x - from.x).coerceAtLeast(18f) * 0.5f * morph
-                drawPath(
-                    path = Path().apply {
-                        moveTo(from.x, from.y)
-                        cubicTo(from.x + reach, from.y, to.x - reach, to.y, to.x, to.y)
-                    },
-                    color = edgeColor.copy(alpha = edgeColor.alpha * here),
-                    style = Stroke(width = 1.5f),
-                )
-            }
-        }
-        for ((otherId, weight) in node.nearEdges()) {
-            val other = byId[otherId] ?: continue
-            if (other.family == node.family) continue
-            // Each pair once — otherwise every bridge is drawn twice, at double
-            // the intended opacity.
-            if (otherId < node.id) continue
-            val from = positions[otherId] ?: continue
-            if (!onScreen(to) && !onScreen(from)) continue
-            val alpha = (0.10f + 0.18f * weight) * here * presence(otherId)
-            drawLine(
-                color = (familyColors[node.family] ?: edgeColor).copy(alpha = alpha),
-                start = from,
-                end = to,
-                strokeWidth = 1f,
-            )
-        }
-    }
-
-    var hereAt: Offset? = null
-    var hereRadius = 0f
-    for (node in nodes) {
-        val centre = positions[node.id] ?: continue
-        if (!onScreen(centre)) continue
-        val here = presence(node.id)
-        if (here <= 0.01f) continue
-        val color = (familyColors[node.family] ?: labelColor).copy(alpha = here)
-        // Roots read as anchors, so they stay larger at every zoom level. A dot
-        // growing in scales with the fold, so the subtree swells into place
-        // rather than sliding out at full size, and the selected one carries
-        // the spring that fired when it was tapped.
-        val selected = node.id == selectedId
-        val prominence = weights.prominence(node, weighting)
-        // 6.5..14 px, the range depth sizing has always used, so no weighting
-        // can produce a dot too small to hit or big enough to swamp its cluster.
-        val radius = (6.5f + 7.5f * prominence) *
-            dotScale * here * if (selected) selectedScale else 1f
-        // Mid-fold the branch root's ring would flicker on for one frame at the
-        // end, so it waits until the subtree is actually gone.
-        val folded = node.id in collapsed
-
-        // Lit or still dark. A genre the listener has been to burns: a wide
-        // glow, a full dot and a hot core. One they haven't is a dimmer dot
-        // with only a faint halo — still there to find, plainly not visited.
-        // The halo is also what keeps a dot from disappearing into the edges
-        // crossing behind it.
-        if (node.id in explored) {
-            drawCircle(color = color.copy(alpha = color.alpha * if (dark) 0.26f else 0.16f), radius = radius * 2.6f, center = centre)
-            drawCircle(color = color.copy(alpha = color.alpha * 0.42f), radius = radius * 1.6f, center = centre)
-            drawCircle(color = color, radius = radius, center = centre)
-            if (dark) {
-                drawCircle(color = Color.White.copy(alpha = 0.85f * here), radius = radius * 0.42f, center = centre)
-            } else {
-                drawCircle(color = labelColor.copy(alpha = 0.55f * here), radius = radius, center = centre, style = Stroke(width = 1.4f))
-            }
-        } else {
-            drawCircle(color = color.copy(alpha = color.alpha * 0.12f), radius = radius * 1.5f, center = centre)
-            drawCircle(color = color.copy(alpha = color.alpha * if (dark) 0.5f else 0.6f), radius = radius * 0.85f, center = centre)
-        }
-        if (node.id in hearted) {
-            // Hearted: a dashed ring, so it never reads as the solid ring
-            // that marks a folded branch.
-            drawCircle(
-                color = color,
-                radius = radius + 4f,
-                center = centre,
-                style = Stroke(width = 1.8f, pathEffect = HEART_RING),
-            )
-        }
-        if (node.id == hereId) {
-            hereAt = centre
-            hereRadius = radius
-        }
-        if (folded) {
-            // A ring around a folded branch: the one piece of state on the map
-            // that isn't visible from its children, so it has to be marked.
-            drawCircle(
-                color = color,
-                radius = radius + 6f,
-                center = centre,
-                style = Stroke(width = 2.5f),
-            )
-        }
-        if (selected) {
-            drawCircle(
-                color = labelColor,
-                radius = radius + 10f,
-                center = centre,
-                style = Stroke(width = 3f),
-            )
-        }
-    }
-
-    // "You are here": a ring that breathes outward from the genre the
-    // listener was last in, and the words above it.
-    hereAt?.let { at ->
-        val pulseRadius = hereRadius + 8f + 22f * herePulse
-        drawCircle(color = labelColor.copy(alpha = 0.7f * (1f - herePulse)), radius = pulseRadius, center = at, style = Stroke(width = 2f))
-        drawCircle(color = labelColor.copy(alpha = 0.9f), radius = hereRadius + 6f, center = at, style = Stroke(width = 1.5f))
-        if (hereLabel.isNotEmpty() && at.y - hereRadius - 18f > topInset) {
-            drawContext.canvas.nativeCanvas.drawText(
-                hereLabel,
-                at.x,
-                at.y - hereRadius - 14f,
-                android.graphics.Paint().apply {
-                    color = labelColor.toArgb()
-                    textSize = labelSizePx * 0.95f
-                    isAntiAlias = true
-                    isFakeBoldText = true
-                    textAlign = android.graphics.Paint.Align.CENTER
-                },
-            )
-        }
-    }
-
-    // Labels last and only when they'd be readable. Drawing 355 of them at
-    // every zoom level is both illegible and the single most expensive thing
-    // on this canvas.
-    // Scale 1 fits all twelve clusters on screen at once, so only the family
-    // roots can be named there; the thresholds below track how much room a
-    // label actually has as you zoom in.
-    val labelThreshold = when {
-        scale >= 5f -> 99
-        scale >= 2.8f -> 2
-        scale >= 1.5f -> 1
-        else -> 0
-    }
-    drawContext.canvas.nativeCanvas.apply {
-        val paint = android.graphics.Paint().apply {
-            this.color = labelColor.toArgb()
-            textSize = labelSizePx
-            isAntiAlias = true
-            textAlign = android.graphics.Paint.Align.CENTER
-        }
-        val baseAlpha = paint.alpha
-        // Which names survive has to follow the same weighting as the dots —
-        // labelling by depth while sizing by popularity would name a genre
-        // nobody tags and leave the biggest dot on screen anonymous.
-        //
-        // The threshold only decides which labels are *offered*; collision
-        // decides which are drawn. A threshold alone cannot do this job at 771
-        // nodes, and tuning it was a choice between two failures: strict enough
-        // to keep the zoomed-in view legible left the whole-map view with three
-        // names on it, and loose enough to orient by named a hundred genres
-        // stacked into an unreadable smear. Offering generously and dropping
-        // whatever doesn't fit gives a view that stays legible at every zoom
-        // and fills the space it has.
-        val labelCut = when {
-            // The timeline reserves each name's own width when it packs rows,
-            // so every genre has somewhere to put its label and all 771 are
-            // offered. Collision still arbitrates when zoomed far enough out
-            // that the text no longer fits the space the layout gave it.
-            morph > 0.5f -> 0f
-            scale >= 5f -> 0f
-            scale >= 2.8f -> 0.20f
-            scale >= 1.5f -> 0.40f
-            else -> 0.55f
-        }
-        val taken = ArrayList<android.graphics.RectF>()
-        val candidates = nodes.asSequence()
-            .filter { node ->
-                if (weighting == MapWeight.DEPTH) node.ring <= labelThreshold
-                else weights.prominence(node, weighting) >= labelCut
-            }
-            // Most prominent first, so when two names collide the one that
-            // survives is the one the weighting says matters more.
-            .sortedByDescending { weights.prominence(it, weighting) }
-
-        for (node in candidates) {
-            val centre = positions[node.id] ?: continue
-            if (!onScreen(centre)) continue
-            val here = presence(node.id)
-            if (here <= 0.01f) continue
-
-            val halfWidth = paint.measureText(node.name) / 2f
-            val baseline = centre.y - 14f
-            val box = android.graphics.RectF(
-                centre.x - halfWidth - LABEL_GAP,
-                baseline - labelSizePx - LABEL_GAP,
-                centre.x + halfWidth + LABEL_GAP,
-                baseline + LABEL_GAP,
-            )
-            // Off the side of the canvas is its own kind of collision: a name
-            // sliced in half by the edge is worse than no name.
-            if (box.left < 0f || box.right > size.width) continue
-            // Reserved strips: the app bar above, and the genre panel below
-            // when one is open. A label drawn into either is either sitting on
-            // other text or hidden behind a sheet — both are wasted ink, and
-            // the first is unreadable.
-            if (box.top < topInset) continue
-            if (bottomInset > 0f && box.bottom > size.height - bottomInset) continue
-            if (taken.any { android.graphics.RectF.intersects(it, box) }) continue
-
-            taken.add(box)
-            paint.alpha = (baseAlpha * here).toInt()
-            drawText(node.name, centre.x, baseline, paint)
-        }
-    }
-}
 
 /**
  * A stable colour per family.
@@ -2455,137 +1311,16 @@ internal fun familyPalette(families: List<String>): Map<String, Color> {
 /** The dashes of a hearted genre's ring. */
 private val HEART_RING = PathEffect.dashPathEffect(floatArrayOf(6f, 5f))
 
-/** The galaxy's sky, by theme: deep space on dark, a paper star chart on light. */
-private data class SpaceColors(val base: Color, val star: Color, val chart: Color)
-
-@Composable
-private fun rememberSpaceColors(dark: Boolean): SpaceColors {
-    val background = MaterialTheme.colorScheme.background
-    return remember(background, dark) {
-        if (dark) {
-            SpaceColors(
-                base = androidx.compose.ui.graphics.lerp(background, Color(0xFF04060E), 0.55f),
-                star = Color.White,
-                chart = Color.White,
-            )
-        } else {
-            SpaceColors(
-                base = androidx.compose.ui.graphics.lerp(background, Color(0xFFF4EEDF), 0.55f),
-                star = Color(0xFF34344A),
-                chart = Color(0xFF34344A),
-            )
-        }
-    }
-}
-
-/**
- * Distant stars, behind the map: fixed points across the screen, seeded so
- * they are the same every time the map opens.
- */
-private class FarStars {
-    val faint: List<Offset>
-    val bright: List<Offset>
-
-    init {
-        val random = kotlin.random.Random(7)
-        faint = List(240) { Offset(random.nextFloat(), random.nextFloat()) }
-        bright = List(36) { Offset(random.nextFloat(), random.nextFloat()) }
-    }
-}
-
-/**
- * The sky under the map: its base colour, distant stars that drift a little
- * as the map pans (so the map reads as nearer than they are), and one soft
- * nebula per family behind its genres. On a light theme the nebulae are
- * fainter and the sky carries a star chart's rings instead of a glow.
- *
- * The nebulae fade out as the map becomes the timeline, where a family is not
- * a place.
- */
-private fun DrawScope.drawSpace(
-    space: SpaceColors,
-    clouds: List<tf.monochrome.android.domain.model.FamilyCloud>,
-    farStars: FarStars,
-    familyColors: Map<String, Color>,
-    bounds: MapBounds,
-    camera: Camera,
-    morph: Float,
-    dark: Boolean,
-) {
-    val w = size.width
-    val h = size.height
-    drawRect(space.base)
-
-    // A twentieth of the map's movement: enough to read as depth, little
-    // enough not to swim.
-    val shiftX = camera.offset.x * 0.05f
-    val shiftY = camera.offset.y * 0.05f
-    fun wrap(v: Float, max: Float) = ((v % max) + max) % max
-    drawPoints(
-        points = farStars.faint.map { Offset(wrap(it.x * w + shiftX, w), wrap(it.y * h + shiftY, h)) },
-        pointMode = PointMode.Points,
-        color = space.star.copy(alpha = if (dark) 0.32f else 0.12f),
-        strokeWidth = 1.6f,
-        cap = StrokeCap.Round,
-    )
-    drawPoints(
-        points = farStars.bright.map { Offset(wrap(it.x * w + shiftX * 1.6f, w), wrap(it.y * h + shiftY * 1.6f, h)) },
-        pointMode = PointMode.Points,
-        color = space.star.copy(alpha = if (dark) 0.65f else 0.2f),
-        strokeWidth = 2.6f,
-        cap = StrokeCap.Round,
-    )
-
-    val fade = 1f - morph.coerceIn(0f, 1f)
-    if (fade <= 0.01f) return
-    // The same transform the genres are placed with, so each cloud sits
-    // behind its own family at every zoom.
-    val k = fitFor(w, h, bounds, morph) * camera.scale
-    val cx = w / 2f + camera.offset.x
-    val cy = h / 2f + camera.offset.y
-    for (cloud in clouds) {
-        val centre = Offset(cx + (cloud.x - bounds.centreX) * k, cy + (cloud.y - bounds.centreY) * k)
-        val radius = cloud.radius * k
-        if (radius < 1f) continue
-        if (centre.x + radius < 0f || centre.x - radius > w || centre.y + radius < 0f || centre.y - radius > h) continue
-        val color = familyColors[cloud.family] ?: continue
-        val alpha = (if (dark) 0.2f else 0.09f) * fade
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(color.copy(alpha = alpha), color.copy(alpha = alpha * 0.35f), Color.Transparent),
-                center = centre,
-                radius = radius,
-            ),
-            radius = radius,
-            center = centre,
-        )
-    }
-    if (!dark) {
-        val origin = Offset(cx - bounds.centreX * k, cy - bounds.centreY * k)
-        for (ring in 1..4) {
-            drawCircle(
-                color = space.chart.copy(alpha = 0.07f * fade),
-                radius = ring * CHART_RING_STEP * k,
-                center = origin,
-                style = Stroke(width = 1f),
-            )
-        }
-    }
-}
-
-/** Layout units between a light theme's star-chart rings. */
-private const val CHART_RING_STEP = 320f
-
 /**
  * The galaxy's controls, on the map's glass when no genre is open: Galaxy or
- * Timeline, how much of it the listener has explored, what lit, ringed and
- * dark mean, and a way somewhere new.
+ * Timeline (the disc or the spiral), how much of it the listener has explored,
+ * what lit, ringed and dark mean, and a way somewhere new.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GalaxyHud(
-    layout: MapLayout,
-    onLayout: (MapLayout) -> Unit,
+    timeline: Boolean,
+    onTimeline: (Boolean) -> Unit,
     exploredCount: Int,
     total: Int,
     hazeState: HazeState,
@@ -2597,11 +1332,11 @@ private fun GalaxyHud(
         Column(modifier = Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.weight(1f)) {
-                    listOf(MapLayout.RADIAL to R.string.galaxy_layout_galaxy, MapLayout.TIMELINE to R.string.galaxy_layout_timeline)
+                    listOf(false to R.string.galaxy_layout_galaxy, true to R.string.galaxy_layout_timeline)
                         .forEachIndexed { index, (option, label) ->
                             SegmentedButton(
-                                selected = layout == option,
-                                onClick = { onLayout(option) },
+                                selected = timeline == option,
+                                onClick = { onTimeline(option) },
                                 shape = SegmentedButtonDefaults.itemShape(index, 2),
                                 label = { Text(stringResource(label), maxLines = 1) },
                             )

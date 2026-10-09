@@ -281,6 +281,93 @@ private fun godRaysModifier(light: LyricRayLight, output: RayOutput): Modifier {
     }
 }
 
+/**
+ * The same god rays over something that is not lyrics: the genre galaxy.
+ *
+ * The lyric engine unchanged — [GOD_RAYS_SRC] in Letters mode, every
+ * constant from [GodRayGeometry] — with what shines being whatever this layer
+ * draws (the galaxy's bright stars and its core, on a transparent layer) and
+ * the shafts handed back alone, the way the lyric backdrop takes them
+ * ([RayOutput.SHAFTS]). There is no sung line, so no band and no legibility
+ * guard: the whole layer may shine.
+ *
+ * [light] is the light's point in this layer's px, given its size, read in the draw phase;
+ * null turns the rays off for that frame (the light is behind the camera).
+ * A no-op below API 33, with the low-performance glass switch on, or if the
+ * shader will not compile — the same conditions the lyrics' rays have.
+ */
+@Composable
+internal fun Modifier.sceneGodRays(
+    light: (androidx.compose.ui.geometry.Size) -> Offset?,
+    time: () -> Float,
+    exposure: Float = 0.9f,
+    density: Float = 0.85f,
+    decay: Float = 0.95f,
+    shimmer: Float = 0.35f,
+    quality: Int = 2,
+): Modifier {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
+    if (LocalLowPerformance.current.disableLiquidGlass) return this
+    val shader = rememberGodRaysShader() ?: return this
+    val stripePx = with(androidx.compose.ui.platform.LocalDensity.current) { 7.dp.toPx() }
+    return this.graphicsLayer {
+        val at = light(size)
+        renderEffect = if (at == null || size.minDimension <= 0f) {
+            null
+        } else {
+            setShaftUniforms(shader, at, size.minDimension, time(), exposure, density, decay, shimmer, quality, stripePx)
+            RenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect()
+        }
+    }
+}
+
+/** Every uniform of [GOD_RAYS_SRC] for shafts alone, from a point light, with no lyric band. */
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+private fun setShaftUniforms(
+    shader: RuntimeShader,
+    light: Offset,
+    scale: Float,
+    time: Float,
+    exposure: Float,
+    density: Float,
+    decay: Float,
+    shimmer: Float,
+    quality: Int,
+    stripePx: Float,
+) {
+    val samples = GodRayGeometry.samplesFor(quality)
+    val perSample = GodRayGeometry.perSampleDecay(decay, samples)
+    shader.setFloatUniform("uLight", light.x, light.y)
+    shader.setFloatUniform("uSource", 0f)
+    shader.setFloatUniform("uOnTop", 0f)
+    shader.setFloatUniform("uRaysOnly", 1f)
+    shader.setFloatUniform("uOnLetters", 0f)
+    shader.setFloatUniform("uDensity", density)
+    shader.setFloatUniform("uReachCap", GodRayGeometry.REACH_CAP_SHARE * scale)
+    shader.setFloatUniform("uSamples", samples.toFloat())
+    shader.setFloatUniform("uDecay", perSample)
+    shader.setFloatUniform(
+        "uSampleWeight",
+        GodRayGeometry.sampleWeight(GodRayGeometry.LETTERS_GAIN * exposure, perSample, samples),
+    )
+    shader.setFloatUniform("uCenterTap", GodRayGeometry.CENTER_TAP)
+    shader.setFloatUniform("uBacklightGain", GodRayGeometry.BACKLIGHT_GAIN * exposure)
+    shader.setFloatUniform("uDecayRef", decay)
+    shader.setFloatUniform("uFalloffLen", density * scale)
+    shader.setFloatUniform("uBand", 0f, 1f, 0f, 0f)
+    shader.setFloatUniform("uFeather", 0f, 0f)
+    shader.setFloatUniform("uGuard", 0f)
+    shader.setFloatUniform("uSunR", 0f)
+    shader.setFloatUniform("uSunColor", 1f, 1f, 1f)
+    shader.setFloatUniform("uShimmer", shimmer)
+    shader.setFloatUniform(
+        "uStripeCells",
+        GodRayGeometry.stripeCells(radius = 0.35f * scale, stripePx = stripePx).toFloat(),
+    )
+    shader.setFloatUniform("uTime", time)
+    shader.setFloatUniform("uFrame", GodRayGeometry.jitterFrame(time).toFloat())
+}
+
 /** What a rays layer hands back: [GOD_RAYS_SRC]'s `uRaysOnly` and `uOnLetters`. */
 internal enum class RayOutput {
     /**

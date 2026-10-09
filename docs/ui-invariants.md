@@ -567,6 +567,44 @@ continents punched out. It looked like the theme flickering. `GlobeLandClipTest`
 sweeps 840 cameras and includes a test that reverses the arc direction and
 asserts the sea floods, so the fix cannot be undone by a sign.
 
+### The genre galaxy
+
+**Drawn on Compose canvases, never OpenGL.** The map's panels are glass, and a
+haze pane can only frost what is drawn in the window's own layers. A
+`GLSurfaceView` or `SurfaceView` is not, so glass over one paints as a flat
+slab. `GalaxyCamera` projects every point on the CPU, and `GenreGalaxyView`
+draws in batches: one `drawPoints` per family and depth band, one `drawLines`
+per family, and a sprite per star. Moving it to GL for speed breaks every panel
+on the screen.
+
+**Every size is in dp.** Star sprites, dust, strokes, tap reach and label gaps
+are all multiplied by the density. The 2D map sized them in raw pixels, which is
+why it came out a third of the size on a phone.
+
+**The view's middle is the middle of what the panels leave visible**, not the
+screen's. The top reserve is the measured title plus caption; the bottom is the
+measured panel or HUD plus `LocalBottomChromeInset`, eased so the star slides
+rather than jumps. Labels are never drawn inside either strip. A name under
+glass is two pieces of text on top of each other.
+
+**Gesture handlers read the reserves through `rememberUpdatedState`.** Pointer
+handlers outlive the composition that made them. Captured, a tap is hit-tested
+against the view as it was before the panel opened, and lands on nothing.
+
+**The sky is deep space in every theme, and the status bar icons are light
+while the map is up.** This is deliberate, not a missed theme token. The map is
+a window onto space, and the title, caption and labels use `GALAXY_INK` for that
+reason.
+
+**The travel blur is Android's own `BlurEffect`, only while gliding.** A
+hand-rolled directional blur looked striped. A warp-speed effect was asked for
+and then removed. Low-performance mode drops the blur, the god rays, the twinkle
+and the idle turn, and uses less dust.
+
+**Planets are fetched only after the camera stays on a genre** (`mapSystem`
+waits 0.7 s), and without the MusicBrainz cross-check. Flying past a genre on
+the way somewhere else must not cost a chart request.
+
 ### Discord presence
 
 The animated asset must stay under **~248 KB** or Discord's media proxy shows

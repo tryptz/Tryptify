@@ -1062,6 +1062,34 @@ class DiscoverViewModel @Inject constructor(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GenreChartState.Idle)
 
     /**
+     * The selected genre's planets and moons: its chart's most popular artists
+     * and their charted tracks (see [tf.monochrome.android.ui.discover.galaxy.PlanetSystem]).
+     *
+     * Waits a moment on each genre first, so flying past one on the way
+     * somewhere else — a chip, Surprise, a path step — costs no request. Asks
+     * for the chart without the MusicBrainz cross-check: that only reorders,
+     * and pays a paced page walk to do it, which the Top 100 can wait for and a
+     * glance at a solar system cannot. The repository caches either way.
+     */
+    val mapSystem: StateFlow<tf.monochrome.android.ui.discover.galaxy.PlanetSystem?> =
+        _mapSelection.map { it?.id }
+            .distinctUntilChanged()
+            .transformLatest { genreId ->
+                emit(null)
+                if (genreId == null) return@transformLatest
+                kotlinx.coroutines.delay(MAP_SYSTEM_DWELL_MS)
+                val chart = runCatching {
+                    genreCharts.chart(
+                        genreId,
+                        tf.monochrome.android.data.charts.ChartWindow.DEFAULT,
+                        crossCheck = false,
+                    )
+                }.getOrNull() ?: return@transformLatest
+                emit(tf.monochrome.android.ui.discover.galaxy.PlanetSystem.from(genreId, chart.entries))
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /**
      * Play one chart row.
      *
      * Resolves through the use case's verifying resolver rather than taking the
@@ -1355,5 +1383,8 @@ class DiscoverViewModel @Inject constructor(
 
         /** Seed rotation per page of the personalized feed. */
         const val PAGE_ROTATION = 3
+
+        /** How long the map stays on a genre before its planets are fetched. */
+        const val MAP_SYSTEM_DWELL_MS = 700L
     }
 }
