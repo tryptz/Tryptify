@@ -2165,31 +2165,39 @@ private fun StudioPreview(
                 // overflow. Drawn as one unwrapped row instead, a large size ran
                 // off the box edge and Letters3DRow, which never wraps, cut the
                 // rest away. The box holds fewer rows of very large type than the
-                // player can, so it takes the most rows, up to that setting, whose
-                // measured height fits between the label above and the same
-                // margin below — at most sizes exactly the player's rows and size;
-                // past what the box can show, the largest that fits.
+                // player can, so each row budget, up to that setting, first gets
+                // the largest size whose rows fit between the label above and the
+                // same margin below (measured: one row is one line of type), and
+                // the budget that then draws largest wins. Where the setting's own
+                // budget fits, that is exactly the player's rows and size; past
+                // what the box can show, the largest that fits — never a sudden
+                // drop because a budget was too tall at the slider's size.
                 val sampleWords = remember(sample) { sample.split(' ').filter { it.isNotEmpty() } }
                 val fitWidth = lyricFitWidth(previewWidth, fx)
-                val candidates = (1..fx.maxWrapLines.coerceAtLeast(1)).map { rows ->
+                val measurer = rememberTextMeasurer()
+                val density = LocalDensity.current
+                val roomPx = with(density) { (previewHeight - SAMPLE_VERTICAL_ROOM * 2).toPx() }
+                val budgetSizes = remember(fx.fontSizeSp, fx.maxWrapLines, roomPx, baseStyle, density) {
+                    (1..fx.maxWrapLines.coerceAtLeast(1)).map { rows ->
+                        var sp = fx.fontSizeSp
+                        while (sp > SAMPLE_MIN_SP &&
+                            rows * measurer.measure("Ag", style = baseStyle.copy(fontSize = sp.sp)).size.height > roomPx
+                        ) {
+                            sp = (sp * 0.97f).coerceAtLeast(SAMPLE_MIN_SP)
+                        }
+                        sp
+                    }
+                }
+                val candidates = budgetSizes.mapIndexed { index, sp ->
                     rememberWrappedLyricLayout(
                         words = sampleWords,
                         availableWidth = fitWidth,
-                        baseSp = fx.fontSizeSp,
+                        baseSp = sp,
                         style = baseStyle,
-                        maxRows = rows,
+                        maxRows = index + 1,
                     )
                 }
-                val measurer = rememberTextMeasurer()
-                val density = LocalDensity.current
-                val room = previewHeight - SAMPLE_VERTICAL_ROOM * 2
-                val sampleFit = remember(candidates, room, baseStyle, density) {
-                    candidates.lastOrNull { fit ->
-                        // One row is one line of type at the fitted size.
-                        val rowPx = measurer.measure("Ag", style = baseStyle.copy(fontSize = fit.fontSizeSp.sp)).size.height
-                        with(density) { (rowPx * fit.rowIndices.size).toDp() } <= room
-                    } ?: candidates.first()
-                }
+                val sampleFit = candidates.maxBy { it.fontSizeSp }
                 val sampleStyle = baseStyle.copy(
                     fontSize = sampleFit.fontSizeSp.sp,
                     // Pinned to the base size, as the player pins it.
@@ -2551,6 +2559,9 @@ internal fun FxSlider(
 
 /** Room kept clear above the Studio sample for the reactivity label, and the same below. */
 private val SAMPLE_VERTICAL_ROOM = 28.dp
+
+/** The smallest the Studio sample is set at, as the player's fitter floors a line. */
+private const val SAMPLE_MIN_SP = 11f
 
 /** The slider's touch height: shorter than Material's 48 dp, for a drag that runs sideways. */
 private val FX_SLIDER_HEIGHT = 36.dp

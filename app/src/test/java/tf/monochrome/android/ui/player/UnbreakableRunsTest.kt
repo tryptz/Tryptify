@@ -47,6 +47,15 @@ class UnbreakableRunsTest {
     }
 
     @Test
+    fun `an ellipsis slash or exclamation may break before a letter`() {
+        assertEquals(listOf("Oh…", "oh…", "oh"), unbreakableRuns("Oh…oh…oh"))
+        assertEquals(listOf("and/", "or"), unbreakableRuns("and/or"))
+        assertEquals(listOf("what?!", "who"), unbreakableRuns("what?!who"))
+        // …but not before a digit or at the end.
+        assertEquals(listOf("1/2", "why?"), unbreakableRuns("1/2 why?"))
+    }
+
+    @Test
     fun `blank text has no runs`() {
         assertEquals(emptyList<String>(), unbreakableRuns("   "))
     }

@@ -937,7 +937,9 @@ internal fun lyricFitWidth(maxWidth: Dp, fx: LyricsFxSettings): Dp {
  * words, except that Han, kana and the Thai-family scripts break between any
  * two characters, so each of those characters is a piece of its own, and an
  * em dash, which may break on either side, is one too (a run of them stays
- * together). Hard hyphens do NOT end a piece: with hyphenation off, Compose's
+ * together), and so do an ellipsis, slash, "?" or "!" with a letter after
+ * it, where the line breaker may wrap. Hard hyphens do NOT end a piece: with
+ * hyphenation off, Compose's
  * default, Android's line breaker (minikin) never wraps after a hyphen-minus,
  * hyphen or en dash, so "rock-and-roll" or "867-5309" is drawn as one unit and
  * must be measured as one.
@@ -964,7 +966,10 @@ internal fun unbreakableRuns(text: String): List<String> {
                 run.append(text, i, i + n)
                 if (i + n >= text.length || text.codePointAt(i + n) != EM_DASH) flush()
             }
-            else -> run.append(text, i, i + n)
+            else -> {
+                run.append(text, i, i + n)
+                if (cp in BREAK_BEFORE_LETTER && i + n < text.length && Character.isLetter(text.codePointAt(i + n))) flush()
+            }
         }
         i += n
     }
@@ -973,6 +978,9 @@ internal fun unbreakableRuns(text: String): List<String> {
 }
 
 private const val EM_DASH = 0x2014
+
+/** Ellipsis, slash, "?" and "!": the line breaker may wrap after them when a letter follows (UAX #14 IN, SY, EX). */
+private val BREAK_BEFORE_LETTER = setOf(0x2026, '/'.code, '?'.code, '!'.code)
 
 private fun breaksAnywhere(codePoint: Int): Boolean = when (Character.UnicodeScript.of(codePoint)) {
     Character.UnicodeScript.HAN,
@@ -989,14 +997,33 @@ private fun breaksAnywhere(codePoint: Int): Boolean = when (Character.UnicodeScr
  * The size a freely wrapping lyric line is drawn at: [baseSp], unless one of
  * its words alone is wider than [width] — Android would then break that word
  * between two letters, with no hyphen ("every/thing"), which large type made
- * common. Then the size steps down until the widest word fits. Rows are
- * unlimited, so ordinary wrapping never shrinks anything. For the views that
- * let Text wrap rather than laying out their own rows.
+ * common. Then the size steps down until every word fits. Ordinary wrapping
+ * never shrinks anything. For the views that let Text wrap rather than laying
+ * out their own rows.
+ *
+ * Each candidate size is measured, not scaled from the base size the way
+ * [rememberWrappedLyricLayout] scales: letter spacing in sp is a fixed px per
+ * letter, and large system font scales are not proportional either, so a
+ * scaled width runs short at smaller sizes, and a word that "fit" would split.
  */
 @Composable
 internal fun rememberWordFitSp(text: String, width: Dp, baseSp: Float, style: TextStyle): Float {
-    val runs = remember(text) { unbreakableRuns(text) }
-    return rememberWrappedLyricLayout(runs, width, baseSp, style, maxRows = Int.MAX_VALUE, capacityFactor = 1f).fontSizeSp
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    return remember(text, width, baseSp, style, density) {
+        val runs = unbreakableRuns(text)
+        // A px under the row: measured widths round up, and the row's padding
+        // rounds to whole px.
+        val capacity = with(density) { width.toPx() } - 1f
+        if (runs.isEmpty() || capacity <= 0f) return@remember baseSp
+        fun fits(sp: Float): Boolean {
+            val sized = style.copy(fontSize = sp.sp)
+            return runs.all { measurer.measure(it, style = sized, maxLines = 1, softWrap = false).size.width <= capacity }
+        }
+        var sp = baseSp
+        while (sp > MIN_LYRIC_SP + 0.01f && !fits(sp)) sp = (sp * 0.93f).coerceAtLeast(MIN_LYRIC_SP)
+        sp
+    }
 }
 
 /**
@@ -1029,20 +1056,15 @@ internal fun rememberWrappedLyricLayout(
     baseSp: Float,
     style: TextStyle,
     maxRows: Int,
-    /**
-     * Share of [availableWidth] a row may fill. The default leaves a small
-     * safety margin for the per-letter 3D path, which loses kerning (each
-     * glyph is its own composable at its natural advance) and can run a hair
-     * wider than the same row measured as one string. A Text that wraps
-     * itself measures exactly, so it passes 1.
-     */
-    capacityFactor: Float = 0.97f,
 ): WrappedLyricLayout {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    return remember(words, availableWidth, baseSp, maxRows, capacityFactor, style.fontWeight, style.letterSpacing, style.fontFamily) {
+    return remember(words, availableWidth, baseSp, maxRows, style.fontWeight, style.letterSpacing, style.fontFamily) {
         val rowsBudget = maxRows.coerceAtLeast(1)
-        val capacity = with(density) { availableWidth.toPx() } * capacityFactor
+        // Small safety factor: the per-letter 3D path loses kerning (each glyph
+        // is its own composable at its natural advance), which can run a hair
+        // wider than the same row measured as one string.
+        val capacity = with(density) { availableWidth.toPx() } * 0.97f
         if (words.isEmpty() || capacity.isNaN() || capacity <= 0f) {
             return@remember WrappedLyricLayout(listOf(words.indices.toList()), baseSp)
         }
