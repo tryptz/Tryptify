@@ -62,11 +62,14 @@ class GalaxyCamera {
      * This instant's view, for a viewport [width] × [height] px whose
      * visible middle is at [centerY] — above the panels, not the screen's
      * middle, or every genre you look at would sit under its own panel.
+     *
+     * [spin] is how far the galaxy has turned on its axis, radians. It turns
+     * the galaxy, not the sky: see [CameraFrame].
      */
-    fun frame(width: Float, height: Float, centerY: Float = height / 2f): CameraFrame =
+    fun frame(width: Float, height: Float, centerY: Float = height / 2f, spin: Float = 0f): CameraFrame =
         CameraFrame(
             targetX, targetY, targetZ, yaw, pitch, distance,
-            width, height, centerY,
+            width, height, centerY, spin,
         )
 
     companion object {
@@ -82,27 +85,43 @@ class GalaxyCamera {
         /**
          * How far back the overview sits so the galaxy's [radius] fits across a
          * viewport of [aspect] (width / height) — a portrait phone is limited by
-         * its width, a tablet in landscape by its height. Slightly inside the
-         * rim, the way the demo framed it: the galaxy should fill the screen,
-         * not float small in the middle of it.
+         * its width, a tablet in landscape by its height. [fill] is how much of
+         * the radius has to fit: the disc is framed slightly inside its rim,
+         * the way the demo framed it, so it fills the screen rather than
+         * floating small in the middle; the spiral's arms are densest at the
+         * rim, so the timeline frames the whole of it.
          */
-        fun fitDistance(radius: Float, aspect: Float): Float {
+        fun fitDistance(radius: Float, aspect: Float, fill: Float = DISC_FILL): Float {
             val halfV = Math.toRadians(FOV_DEGREES / 2.0).toFloat()
             val halfH = atan(tan(halfV) * aspect.coerceAtLeast(0.1f))
             val limiting = minOf(halfV, halfH)
-            return (radius * 0.85f / tan(limiting)).coerceIn(1200f, MAX_DISTANCE)
+            return (radius * fill / tan(limiting)).coerceIn(1200f, MAX_DISTANCE)
         }
+
+        const val DISC_FILL = 0.85f
+        const val SPIRAL_FILL = 1.05f
     }
 }
 
 /**
  * One frame of the camera: where the eye is, which way is right and up, and
  * how to put a point in the scene on the screen. Pure arithmetic.
+ *
+ * The galaxy turns on its axis by [spin], and that is done here rather than
+ * by moving thousands of points every frame. Turning the galaxy one way about
+ * its axis looks exactly like turning the camera the other way about the same
+ * axis, so the scene is seen from `yaw - spin`; everything in it, the target
+ * included, stays in the galaxy's own coordinates and needs no change. The
+ * sky is not part of the galaxy, so [projectDirection] and the sky basis
+ * (`s*`) use the camera's own yaw, and the far stars hold still while the
+ * disc turns in front of them. The arms run outwards toward larger angles,
+ * so the turn is toward smaller ones: they trail, as a real galaxy's do.
  */
 class CameraFrame(
     tx: Float, ty: Float, tz: Float,
     yaw: Float, pitch: Float, val distance: Float,
     val width: Float, val height: Float, val centerY: Float,
+    spin: Float = 0f,
 ) {
     val ex: Float
     val ey: Float
@@ -113,26 +132,38 @@ class CameraFrame(
     val rx: Float; val ry: Float; val rz: Float
     val ux: Float; val uy: Float; val uz: Float
 
+    /** Forward, right and up for the sky, which does not turn with the galaxy. */
+    val sfx: Float; val sfy: Float; val sfz: Float
+    val srx: Float; val sry: Float; val srz: Float
+    val sux: Float; val suy: Float; val suz: Float
+
     /** Pixels per unit at one unit of depth. */
     val focal: Float = (height / 2f) / tan(Math.toRadians(GalaxyCamera.FOV_DEGREES / 2.0).toFloat())
     val centerX: Float = width / 2f
 
     init {
         val cp = cos(pitch)
-        ex = tx + distance * cp * sin(yaw)
-        ey = ty + distance * sin(pitch)
-        ez = tz + distance * cp * cos(yaw)
-        var x = tx - ex; var y = ty - ey; var z = tz - ez
-        var n = sqrt(x * x + y * y + z * z).coerceAtLeast(1e-6f)
-        fx = x / n; fy = y / n; fz = z / n
-        // right = forward × world-up (0,1,0)
-        x = -fz; y = 0f; z = fx
-        n = sqrt(x * x + z * z).coerceAtLeast(1e-6f)
-        rx = x / n; ry = 0f; rz = z / n
+        val sp = sin(pitch)
+        val view = yaw - spin
+        ex = tx + distance * cp * sin(view)
+        ey = ty + distance * sp
+        ez = tz + distance * cp * cos(view)
+        // Forward is from the eye to the target: -(cos p sin v, sin p, cos p cos v).
+        fx = -cp * sin(view); fy = -sp; fz = -cp * cos(view)
+        // right = forward × world-up (0,1,0), unit length since |(fx, fz)| = cos p.
+        var n = sqrt(fx * fx + fz * fz).coerceAtLeast(1e-6f)
+        rx = -fz / n; ry = 0f; rz = fx / n
         // up = right × forward
         ux = ry * fz - rz * fy
         uy = rz * fx - rx * fz
         uz = rx * fy - ry * fx
+
+        sfx = -cp * sin(yaw); sfy = -sp; sfz = -cp * cos(yaw)
+        n = sqrt(sfx * sfx + sfz * sfz).coerceAtLeast(1e-6f)
+        srx = -sfz / n; sry = 0f; srz = sfx / n
+        sux = sry * sfz - srz * sfy
+        suy = srz * sfx - srx * sfz
+        suz = srx * sfy - sry * sfx
     }
 
     /**
@@ -156,11 +187,11 @@ class CameraFrame(
 
     /** A direction at infinity (the far sky): only the camera's turn moves it. */
     fun projectDirection(x: Float, y: Float, z: Float, out: FloatArray, at: Int): Boolean {
-        val depth = x * fx + y * fy + z * fz
+        val depth = x * sfx + y * sfy + z * sfz
         if (depth < 0.05f) return false
         val s = focal / depth
-        out[at] = centerX + (x * rx + y * ry + z * rz) * s
-        out[at + 1] = centerY - (x * ux + y * uy + z * uz) * s
+        out[at] = centerX + (x * srx + y * sry + z * srz) * s
+        out[at + 1] = centerY - (x * sux + y * suy + z * suz) * s
         return true
     }
 

@@ -218,7 +218,7 @@ fun GenreMapScreen(
     val density = LocalDensity.current
     val instant = reduceMotion()
     val lowPower = LocalLowPerformance.current.disableLiquidGlass
-    // Twinkle and the idle turn redraw every frame, so they go with the rest
+    // Twinkle and the galaxy's turn redraw every frame, so they go with the rest
     // of the motion when the device or the listener asks for less.
     val alive = !instant && !lowPower
 
@@ -297,8 +297,9 @@ fun GenreMapScreen(
 
     // Seconds of the clock, for twinkle and the god rays' shimmer.
     var clock by remember { mutableFloatStateOf(0f) }
-    // Seconds since the last touch; a plain array, because nothing draws it.
-    val idle = remember { FloatArray(1) }
+    // How far the galaxy has turned on its axis, radians. It turns on its
+    // own, slowly, the whole time the map is up.
+    var spin by remember { mutableFloatStateOf(0f) }
 
     /**
      * Glides the camera to a [goal] and distance: a straight line in space,
@@ -358,7 +359,11 @@ fun GenreMapScreen(
         if (viewport == IntSize.Zero) {
             camera.distance
         } else {
-            GalaxyCamera.fitDistance(GalaxyScene.RADIUS, viewport.width / viewport.height.toFloat())
+            GalaxyCamera.fitDistance(
+                GalaxyScene.RADIUS,
+                viewport.width / viewport.height.toFloat(),
+                fill = if (timeline) GalaxyCamera.SPIRAL_FILL else GalaxyCamera.DISC_FILL,
+            )
         }
 
     fun recentre() = glide(
@@ -414,8 +419,10 @@ fun GenreMapScreen(
         selected?.let { travelTo(it.id) }
     }
 
-    // The clock: twinkle, the idle turn, and keeping the camera on a star
-    // that is moving because the layout is.
+    // The clock: twinkle, the galaxy's turn, and keeping the camera on a
+    // star that is moving because the layout is. (The turn needs nothing
+    // here: the camera follows a star in the galaxy's own coordinates, and
+    // those do not change as it turns — see CameraFrame.)
     LaunchedEffect(scene, alive) {
         val s = scene ?: return@LaunchedEffect
         val p = FloatArray(3)
@@ -424,7 +431,6 @@ fun GenreMapScreen(
             withFrameNanos { now ->
                 val dt = if (last == 0L) 0f else ((now - last) / 1_000_000_000f).coerceAtMost(0.1f)
                 last = now
-                idle[0] += dt
                 val moving = travel?.isActive == true
                 val follow = camera.follow
                 if (!moving && follow >= 0) {
@@ -438,7 +444,7 @@ fun GenreMapScreen(
                 }
                 if (alive) {
                     clock += dt
-                    if (!moving && selected == null && idle[0] > IDLE_TURN_AFTER_S) camera.yaw += dt * IDLE_TURN_RAD_S
+                    spin += dt * GALAXY_TURN_RAD_S
                 }
             }
         }
@@ -482,7 +488,9 @@ fun GenreMapScreen(
                 reserveTopPx = topChromePx.toFloat(),
                 reserveBottomPx = reserveBottom,
                 travelBlurPx = { travelBlur },
+                spin = { spin },
                 rays = !lowPower,
+                spaceShader = !lowPower,
                 labelStyle = labelStyle,
                 hereLabel = stringResource(R.string.galaxy_you_are_here),
                 system = system,
@@ -503,7 +511,6 @@ fun GenreMapScreen(
                     // Touching the map takes it back from any camera move in
                     // progress — being steered while you are trying to steer
                     // is the worst kind of animation.
-                    idle[0] = 0f
                     travel?.cancel()
                 },
                 modifier = Modifier.fillMaxSize(),
@@ -564,7 +571,14 @@ fun GenreMapScreen(
         if (selected == null && graph.size > 0) {
             GalaxyHud(
                 timeline = timeline,
-                onTimeline = { timeline = it },
+                onTimeline = {
+                    if (it != timeline) {
+                        timeline = it
+                        // Looking at the whole galaxy, the framing changes with
+                        // it: the spiral reaches further out than the disc.
+                        if (camera.follow < 0 && travel?.isActive != true) recentre()
+                    }
+                },
                 exploredCount = explored.size,
                 total = graph.size,
                 hazeState = mapHaze,
@@ -667,9 +681,8 @@ private const val MAX_ARC = 1.2f
 /** The blur at the middle of a journey. Light: a sense of speed, not a smear. */
 private val TRAVEL_BLUR = 6.dp
 
-/** The galaxy turns on its own once it has been left alone this long. */
-private const val IDLE_TURN_AFTER_S = 4f
-private const val IDLE_TURN_RAD_S = 0.035f
+/** How fast the galaxy turns on its axis: once round in about three and a half minutes. */
+private const val GALAXY_TURN_RAD_S = 0.03f
 
 /**
  * What to offer next to a genre: its subgenres, or — for a leaf — its closest

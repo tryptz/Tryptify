@@ -20,7 +20,10 @@ import kotlin.random.Random
  * - **Time** (morph 1): a spiral galaxy. Distance from the core is when a
  *   genre began — the oldest music at the centre, the newest at the rim — and
  *   each family is an arm, starting in the direction its cluster sits in the
- *   sound layout so the morph turns the map rather than shuffling it.
+ *   sound layout so the morph turns the map rather than shuffling it. The
+ *   timeline itself is a spiral too: a track wound at the arms' own pitch,
+ *   through the widest gap between them, with the years marked along it
+ *   ([trackPoint]), so time reads outwards along any arm.
  *
  * Pure and seeded: the same graph gives the same galaxy every launch, and
  * the tests can check it without a device.
@@ -59,6 +62,9 @@ class GalaxyScene(
     val sound = FloatArray(size * 3)
     val time = FloatArray(size * 3)
 
+    /** Where the time track leaves the core: the middle of the widest gap between arms. */
+    val trackAngle: Float
+
     init {
         val sumX = FloatArray(families.size)
         val sumZ = FloatArray(families.size)
@@ -75,6 +81,7 @@ class GalaxyScene(
         val armAngle = FloatArray(families.size) { f ->
             atan2(sumZ[f] / count[f].coerceAtLeast(1), sumX[f] / count[f].coerceAtLeast(1))
         }
+        trackAngle = widestGap(armAngle)
         for (i in 0 until size) {
             val r = timeRadius(startYear(i)) * RADIUS * 0.95f + gauss() * 12f
             val a = armAngle[family[i]] + ARM_TWIST * (r / RADIUS) + gauss() * 0.15f
@@ -85,6 +92,18 @@ class GalaxyScene(
     }
 
     fun startYear(i: Int): Int = genres[i].era.getOrNull(0) ?: 2000
+
+    /** The point on the time track at [year], on the disc, written to [out] at [at]. */
+    fun trackPoint(year: Int, out: FloatArray, at: Int = 0) = trackPointAt(timeRadius(year), out, at)
+
+    /** The point on the time track [share] of the way out (0 core, 1 rim). */
+    fun trackPointAt(share: Float, out: FloatArray, at: Int = 0) {
+        val r = share * RADIUS * 0.95f
+        val a = trackAngle + ARM_TWIST * (r / RADIUS)
+        out[at] = cos(a) * r
+        out[at + 1] = 0f
+        out[at + 2] = sin(a) * r
+    }
 
     /** Where genre [i] is at [morph] (0 sound, 1 time), written to [out] at [at]. */
     fun position(i: Int, morph: Float, out: FloatArray, at: Int = 0) {
@@ -165,6 +184,16 @@ class GalaxyScene(
         }.toIntArray()
     }
 
+    /** Each nebula's radius, 190..300 units, so no two families wear the same cloud. */
+    val nebulaRadius = FloatArray(nebulaAnchors.size) { 190f + random.nextFloat() * 110f }
+
+    /** Each nebula's offset from its genre, so the clouds don't sit dead on a star. */
+    val nebulaJitter = FloatArray(nebulaAnchors.size * 3).also { j ->
+        for (k in nebulaAnchors.indices) {
+            j[k * 3] = gauss() * 40f; j[k * 3 + 1] = gauss() * 20f; j[k * 3 + 2] = gauss() * 40f
+        }
+    }
+
     companion object {
         /** Radius of the galaxy, in scene units. */
         const val RADIUS = 1000f
@@ -172,15 +201,34 @@ class GalaxyScene(
         /** The baked layout's extent, so the sound layout fills [RADIUS]. */
         private const val LAYOUT_EXTENT = 1250f
         private const val DISC_THICKNESS = 26f
-        private const val ARM_TWIST = 2.5f
-        private const val NEBULAE_PER_FAMILY = 4
+        /** How far an arm winds from core to rim, radians: a little over half a turn. */
+        const val ARM_TWIST = 3.4f
+        private const val NEBULAE_PER_FAMILY = 5
 
-        const val DEFAULT_DUST = 4200
+        const val DEFAULT_DUST = 6000
         const val DEFAULT_CORE = 700
         const val DEFAULT_SKY = 900
 
-        /** The years the time layout marks with rings. */
-        val RING_YEARS = intArrayOf(1900, 1950, 1980, 2000, 2020)
+        /** The years marked along the time track. */
+        val TRACK_YEARS = intArrayOf(1600, 1900, 1950, 1980, 2000, 2020)
+
+        /** The middle of the widest angular gap between [angles], radians. */
+        internal fun widestGap(angles: FloatArray): Float {
+            if (angles.isEmpty()) return 0f
+            val sorted = angles.map { ((it % TAU) + TAU) % TAU }.sorted()
+            var best = 0f
+            var at = 0f
+            for (k in sorted.indices) {
+                val from = sorted[k]
+                val to = if (k + 1 < sorted.size) sorted[k + 1] else sorted[0] + TAU
+                if (to - from > best) {
+                    best = to - from; at = from + (to - from) / 2f
+                }
+            }
+            return at
+        }
+
+        private const val TAU = 6.2831855f
 
         /**
          * How far from the core a genre that began in [year] sits, 0..1.

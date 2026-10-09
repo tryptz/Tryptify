@@ -598,8 +598,22 @@ reason.
 
 **The travel blur is Android's own `BlurEffect`, only while gliding.** A
 hand-rolled directional blur looked striped. A warp-speed effect was asked for
-and then removed. Low-performance mode drops the blur, the god rays, the twinkle
-and the idle turn, and uses less dust.
+and then removed. Low-performance mode drops the blur, the god rays, the sky
+shader, the twinkle and the turn, and uses less dust.
+
+**The galaxy turns in the camera, not in the points.** `CameraFrame` sees the
+scene from `yaw - spin`, so nothing has to move thousands of points per frame,
+and the target, which is in the galaxy's own coordinates, follows a star with
+no extra work. The sky uses the unturned basis (`s*`, and `SpaceSky`), so the
+far stars hold still. Do not apply the spin to the sky. Do not apply it to the
+target either, or a followed star slides off the centre. The turn is toward
+smaller angles, so the arms trail. `GalaxyMathTest` pins all three.
+
+**The deep sky is one AGSL pass on Android 13 and up** (`SpaceShader.kt`), the
+demo's far stars done procedurally. Each star stays inside the middle half of
+its cube-face cell, which is what lets a pixel test one cell per layer. Let a
+star or its halo reach a cell edge and it is cut in half. Below 13, or in
+low-performance mode, the sky is the flat colour with drawn points.
 
 **Planets are fetched only after the camera stays on a genre** (`mapSystem`
 waits 0.7 s), and without the MusicBrainz cross-check. Flying past a genre on

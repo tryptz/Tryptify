@@ -45,6 +45,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -106,7 +107,9 @@ internal fun GenreGalaxyView(
     reserveTopPx: Float,
     reserveBottomPx: Float,
     travelBlurPx: () -> Float,
+    spin: () -> Float,
     rays: Boolean,
+    spaceShader: Boolean,
     labelStyle: TextStyle,
     hereLabel: String,
     system: PlanetSystem?,
@@ -122,8 +125,10 @@ internal fun GenreGalaxyView(
     val context = LocalContext.current
     val measurer = rememberTextMeasurer(cacheSize = 128)
     val moonStyle = remember(labelStyle) { labelStyle.copy(fontSize = 9.sp, letterSpacing = 0.3.sp) }
+    val yearStyle = remember(labelStyle) { labelStyle.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
     val art = remember(scene, familyColors) { GalaxyArt(scene, familyColors) }
     val bodies = remember { SystemArt() }
+    val space = rememberSpaceSky(spaceShader)
 
     // Read live by the gesture handlers, which outlive the composition that
     // made them: captured, a tap would be hit-tested against the view as it
@@ -156,7 +161,7 @@ internal fun GenreGalaxyView(
     fun frameFor(size: Size): CameraFrame {
         val top = liveTop.value.coerceIn(0f, size.height / 2f)
         val bottom = liveBottom.value.coerceIn(0f, size.height / 2f)
-        return camera.frame(size.width, size.height, centerY = top + (size.height - top - bottom) / 2f)
+        return camera.frame(size.width, size.height, centerY = top + (size.height - top - bottom) / 2f, spin = spin())
     }
 
     Box(
@@ -174,7 +179,7 @@ internal fun GenreGalaxyView(
             },
     ) {
         Canvas(Modifier.fillMaxSize()) {
-            drawSky(art, scene, frameFor(size), morph(), here, selected, dp)
+            drawSky(art, scene, frameFor(size), morph(), time(), here, selected, dp, space)
         }
         if (rays) {
             Canvas(
@@ -270,7 +275,7 @@ internal fun GenreGalaxyView(
             drawMarks(art, scene, f, m, here, selected, dp)
             drawLabels(
                 art, bodies, if (shown) sys else null, scene, f, m, here, selected, dp, measurer, labelStyle, moonStyle,
-                hereLabel, liveTop.value, size.height - liveBottom.value,
+                yearStyle, hereLabel, liveTop.value, size.height - liveBottom.value,
             )
         }
     }
@@ -306,6 +311,7 @@ private class GalaxyArt(scene: GalaxyScene, familyColors: Map<String, Color>) {
     val plain = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     val heartDash: android.graphics.PathEffect
     val pathDash: android.graphics.PathEffect
+    val trackDash: android.graphics.PathEffect
     val rect = RectF()
 
     val tmp = FloatArray(3)
@@ -320,7 +326,7 @@ private class GalaxyArt(scene: GalaxyScene, familyColors: Map<String, Color>) {
     val linkCount = IntArray(scene.families.size)
     val core = Array(2) { FloatArray(scene.core.size / 3 * 2) }
     val coreCount = IntArray(2)
-    val ring = FloatArray(RING_SEGMENTS * 4)
+    val track = android.graphics.Path()
     val labelPick = IntArray(LABEL_CANDIDATES)
     val labelScore = FloatArray(LABEL_CANDIDATES)
 
@@ -328,6 +334,7 @@ private class GalaxyArt(scene: GalaxyScene, familyColors: Map<String, Color>) {
         val dp = android.content.res.Resources.getSystem().displayMetrics.density
         heartDash = android.graphics.DashPathEffect(floatArrayOf(4f * dp, 3f * dp), 0f)
         pathDash = android.graphics.DashPathEffect(floatArrayOf(7f * dp, 5f * dp), 0f)
+        trackDash = android.graphics.DashPathEffect(floatArrayOf(10f * dp, 6f * dp), 0f)
         val perFamilyDust = IntArray(scene.families.size)
         for (k in 0 until scene.dustCount) perFamilyDust[scene.family[scene.dustOwner[k]]]++
         dustBucket = Array(scene.families.size * 3) { FloatArray(perFamilyDust[it / 3] * 2) }
@@ -337,7 +344,7 @@ private class GalaxyArt(scene: GalaxyScene, familyColors: Map<String, Color>) {
     }
 
     companion object {
-        const val RING_SEGMENTS = 72
+        const val TRACK_SEGMENTS = 160
 
         /** Names tried each frame, best first, before giving up on the rest. */
         const val LABEL_CANDIDATES = 64
@@ -370,27 +377,36 @@ private class GalaxyArt(scene: GalaxyScene, familyColors: Map<String, Color>) {
 /** How much a thing at [depth] fades into the distance, 0.15..1. */
 private fun fog(depth: Float): Float = (1f - (depth - 3200f) / 7000f).coerceIn(0.15f, 1f)
 
-private fun DrawScope.drawSky(art: GalaxyArt, scene: GalaxyScene, f: CameraFrame, m: Float, here: Int, selected: Int, dp: Float) {
-    drawRect(GALAXY_SPACE)
+private fun DrawScope.drawSky(
+    art: GalaxyArt, scene: GalaxyScene, f: CameraFrame, m: Float, t: Float, here: Int, selected: Int, dp: Float,
+    space: SpaceSky?,
+) {
     val canvas = drawContext.canvas.nativeCanvas
     val p = art.tmp
 
-    // Far stars.
-    var n = 0
-    for (k in 0 until scene.sky.size / 3) {
-        if (f.projectDirection(scene.sky[k * 3], scene.sky[k * 3 + 1], scene.sky[k * 3 + 2], art.sky, n * 2)) n++
+    // The deep sky: the space shader where there is one, else the flat colour
+    // and the far stars as points.
+    if (space != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        space.draw(canvas, f, t, dp)
+    } else {
+        drawRect(GALAXY_SPACE)
+        var n = 0
+        for (k in 0 until scene.sky.size / 3) {
+            if (f.projectDirection(scene.sky[k * 3], scene.sky[k * 3 + 1], scene.sky[k * 3 + 2], art.sky, n * 2)) n++
+        }
+        art.points.color = Color.White.copy(alpha = 0.42f).toArgb()
+        art.points.strokeWidth = 1.3f * dp
+        canvas.drawPoints(art.sky, 0, n * 2, art.points)
     }
-    art.points.color = Color.White.copy(alpha = 0.42f).toArgb()
-    art.points.strokeWidth = 1.3f * dp
-    canvas.drawPoints(art.sky, 0, n * 2, art.points)
 
     // Nebulae behind each family, then the core's glow.
-    for (i in scene.nebulaAnchors) {
+    for ((k, i) in scene.nebulaAnchors.withIndex()) {
         scene.position(i, m, p, 0)
+        p[0] += scene.nebulaJitter[k * 3]; p[1] += scene.nebulaJitter[k * 3 + 1]; p[2] += scene.nebulaJitter[k * 3 + 2]
         if (!f.project(p[0], p[1], p[2], p, 0)) continue
-        val r = 230f * f.scaleAt(p[2])
+        val r = scene.nebulaRadius[k] * f.scaleAt(p[2])
         art.rect.set(p[0] - r, p[1] - r, p[0] + r, p[1] + r)
-        art.add.alpha = (0.075f * 255 * fog(p[2])).toInt()
+        art.add.alpha = (NEBULA_ALPHA * 255 * fog(p[2])).toInt()
         canvas.drawBitmap(art.nebulaSprite[scene.family[i]], null, art.rect, art.add)
     }
     if (f.project(0f, 0f, 0f, p, 0)) {
@@ -461,25 +477,36 @@ private fun DrawScope.drawSky(art: GalaxyArt, scene: GalaxyScene, f: CameraFrame
         canvas.drawPoints(art.core[band], 0, art.coreCount[band], art.points)
     }
 
-    // The timeline's year rings, fading in with the morph.
+    // The timeline's own spiral: a track wound at the arms' pitch, with a
+    // mark at each year, fading in with the morph.
     if (m > 0.02f) {
-        art.plain.color = SCAN.copy(alpha = 0.28f * m).toArgb()
-        art.plain.strokeWidth = 1f * dp
-        for (year in GalaxyScene.RING_YEARS) {
-            val r = GalaxyScene.timeRadius(year) * GalaxyScene.RADIUS * 0.95f
-            var c = 0
-            var hasLast = false
-            var lx = 0f; var ly = 0f
-            for (s in 0..GalaxyArt.RING_SEGMENTS) {
-                val a = s / GalaxyArt.RING_SEGMENTS.toFloat() * 2f * PI.toFloat()
-                if (f.project(cos(a) * r, 0f, sin(a) * r, p, 0)) {
-                    if (hasLast && c + 4 <= art.ring.size) {
-                        art.ring[c] = lx; art.ring[c + 1] = ly; art.ring[c + 2] = p[0]; art.ring[c + 3] = p[1]; c += 4
-                    }
-                    lx = p[0]; ly = p[1]; hasLast = true
-                } else hasLast = false
+        art.plain.color = SCAN.copy(alpha = 0.32f * m).toArgb()
+        art.plain.strokeWidth = 1.2f * dp
+        art.plain.pathEffect = art.trackDash
+        // One path, so the dashes run on along the whole spiral instead of
+        // starting again at every segment.
+        val path = art.track
+        path.rewind()
+        var open = false
+        val from = GalaxyScene.timeRadius(GalaxyScene.TRACK_YEARS.first())
+        for (k in 0..GalaxyArt.TRACK_SEGMENTS) {
+            scene.trackPointAt(from + (1f - from) * k / GalaxyArt.TRACK_SEGMENTS, p, 0)
+            if (f.project(p[0], p[1], p[2], p, 0)) {
+                if (open) path.lineTo(p[0], p[1]) else path.moveTo(p[0], p[1])
+                open = true
+            } else {
+                open = false
             }
-            canvas.drawLines(art.ring, 0, c, art.plain)
+        }
+        canvas.drawPath(path, art.plain)
+        art.plain.pathEffect = null
+        art.add.alpha = (m * 255).toInt()
+        for (year in GalaxyScene.TRACK_YEARS) {
+            scene.trackPoint(year, p, 0)
+            if (!f.project(p[0], p[1], p[2], p, 0)) continue
+            val r = 3.5f * dp
+            art.rect.set(p[0] - r, p[1] - r, p[0] + r, p[1] + r)
+            canvas.drawBitmap(art.emitterSprite, null, art.rect, art.add)
         }
     }
 
@@ -496,6 +523,9 @@ private fun DrawScope.drawSky(art: GalaxyArt, scene: GalaxyScene, f: CameraFrame
         }
     }
 }
+
+/** A nebula's strength: the demo's, faint enough that a family is a haze, not a fill. */
+private const val NEBULA_ALPHA = 0.07f
 
 private val DUST_ALPHA = floatArrayOf(0.5f, 0.36f, 0.22f)
 private val DUST_SIZE_DP = floatArrayOf(2f, 1.5f, 1.1f)
@@ -925,8 +955,8 @@ private const val MOON_LABEL_GAP_DP = 14f
 private fun DrawScope.drawLabels(
     art: GalaxyArt, bodies: SystemArt, sys: PlanetSystem?, scene: GalaxyScene, f: CameraFrame, m: Float,
     here: Int, selected: Int, dp: Float,
-    measurer: androidx.compose.ui.text.TextMeasurer, style: TextStyle, moonStyle: TextStyle, hereLabel: String,
-    top: Float, bottom: Float,
+    measurer: androidx.compose.ui.text.TextMeasurer, style: TextStyle, moonStyle: TextStyle, yearStyle: TextStyle,
+    hereLabel: String, top: Float, bottom: Float,
 ) {
     val s = art.genreScreen
     val taken = ArrayList<FloatArray>(MAX_LABELS + 8)
@@ -980,6 +1010,16 @@ private fun DrawScope.drawLabels(
         }
     }
 
+    // The years along the timeline's spiral: the axis, so before the stars.
+    if (m > 0.05f) {
+        val p = art.tmp
+        for (year in GalaxyScene.TRACK_YEARS) {
+            scene.trackPoint(year, p, 0)
+            if (!f.project(p[0], p[1], p[2], p, 0)) continue
+            place(year.toString(), yearStyle, SCAN.copy(alpha = m), p[0] + 7f * dp, p[1], centred = false, alpha = 0.95f)
+        }
+    }
+
     if (here >= 0 && here != selected) put(here, WARM, "${scene.genres[here].name} · $hereLabel".uppercase())
     // Then the best known and nearest. A running top list rather than a sort:
     // this is every frame, and only the first few dozen can ever be drawn.
@@ -1004,16 +1044,4 @@ private fun DrawScope.drawLabels(
         put(best[n], art.famLabel[scene.family[best[n]]])
     }
 
-    // Year rings' labels, in the timeline.
-    if (m > 0.05f) {
-        val p = art.tmp
-        val side = kotlin.math.atan2(f.ez, f.ex) + PI.toFloat() / 2f
-        for (year in GalaxyScene.RING_YEARS) {
-            val r = GalaxyScene.timeRadius(year) * GalaxyScene.RADIUS * 0.95f
-            if (!f.project(cos(side) * r, 0f, sin(side) * r, p, 0)) continue
-            if (p[1] < top || p[1] > bottom) continue
-            val layout = measurer.measure(year.toString(), style.copy(fontSize = 10.sp))
-            drawText(layout, color = SCAN, topLeft = Offset(p[0] + 6f * dp, p[1] - layout.size.height / 2f), alpha = 0.9f * m)
-        }
-    }
 }

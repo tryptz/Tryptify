@@ -146,4 +146,48 @@ class GalaxyMathTest {
         assertEquals(-1, c.follow)
         assertEquals(-1, c.followPlanet)
     }
+
+    @Test
+    fun `the galaxy turns, its arms trailing, and the sky holds still`() {
+        val camera = GalaxyCamera().apply { distance = 2400f }
+        val still = camera.frame(1080f, 2200f)
+        val spin = 0.4f
+        val turned = camera.frame(1080f, 2200f, spin = spin)
+        // A point at angle a on the disc, seen turned, is where the point at
+        // a - spin is seen still: the turn is toward smaller angles.
+        val a = 0.9f
+        val r = 600f
+        val out = FloatArray(3)
+        val expected = FloatArray(3)
+        assertTrue(turned.project(kotlin.math.cos(a) * r, 20f, kotlin.math.sin(a) * r, out, 0))
+        assertTrue(still.project(kotlin.math.cos(a - spin) * r, 20f, kotlin.math.sin(a - spin) * r, expected, 0))
+        assertEquals(expected[0], out[0], 0.01f)
+        assertEquals(expected[1], out[1], 0.01f)
+        // The far sky is not part of the galaxy.
+        assertTrue(still.projectDirection(0.3f, 0.2f, -0.93f, expected, 0))
+        assertTrue(turned.projectDirection(0.3f, 0.2f, -0.93f, out, 0))
+        assertEquals(expected[0], out[0], 1e-3f)
+        assertEquals(expected[1], out[1], 1e-3f)
+    }
+
+    @Test
+    fun `the time track winds outwards through the years`() {
+        val p = FloatArray(3)
+        var last = -1f
+        for (year in GalaxyScene.TRACK_YEARS) {
+            scene.trackPoint(year, p)
+            val r = hypot(p[0], p[2])
+            assertTrue("$year at $r", r > last && r <= GalaxyScene.RADIUS)
+            assertEquals(0f, p[1], 0f)
+            last = r
+        }
+    }
+
+    @Test
+    fun `the time track leaves the core between arms`() {
+        assertEquals(4f, GalaxyScene.widestGap(floatArrayOf(0f, 1f, 2f, 3f, 5f)), 1e-4f)
+        // Across the wrap: 5 round to 1 is the widest.
+        assertEquals(5f + (1f + 6.2831855f - 5f) / 2f, GalaxyScene.widestGap(floatArrayOf(1f, 2f, 3f, 4f, 5f)), 1e-4f)
+        assertTrue(scene.trackAngle.isFinite())
+    }
 }
