@@ -27,13 +27,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -44,8 +44,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -79,6 +77,7 @@ import tf.monochrome.android.ui.components.GlassPanel
 import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
+import tf.monochrome.android.ui.settings.LocalSettingsSearchInset
 import tf.monochrome.android.ui.theme.BundledFonts
 import tf.monochrome.android.ui.theme.InterFontFamily
 import tf.monochrome.android.ui.theme.MonoDimens
@@ -100,8 +99,10 @@ private data class FontChoice(
 private enum class FontFilter { ALL, INCLUDED, IMPORTED }
 
 /**
- * Settings › Appearance › Font Library: a browser for every font the app can
- * wear, each one shown in its own letters.
+ * Settings › Fonts: a browser for every font the app can wear, each one shown
+ * in its own letters. A page of the Settings pager, under its own chip, so it
+ * has no bar of its own: Settings' bar is above it, and the import action sits
+ * with the filters.
  *
  * Its glass is the app's, not this screen's: the preview and the import pane
  * are [GlassPanel]s cut from the UI panels material that Visual Studio tunes
@@ -110,10 +111,8 @@ private enum class FontFilter { ALL, INCLUDED, IMPORTED }
  * else. The panels frost a backdrop drawn for them underneath — the screen's
  * own source, as a sibling, never the app-wide one they are drawn inside.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FontBrowserScreen(
-    onBack: () -> Unit,
+fun FontBrowserPage(
     viewModel: FontBrowserViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -178,27 +177,15 @@ fun FontBrowserScreen(
             modifier = Modifier.fillMaxSize().hazeSource(haze),
         )
         Column(modifier = Modifier.fillMaxSize()) {
-            TopAppBar(
-                title = { Text(stringResource(R.string.fonts_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
-                    }
-                },
-                actions = {
-                    FilledTonalButton(onClick = launchPicker, modifier = Modifier.padding(end = 8.dp)) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.fonts_import))
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-            )
-
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 96.dp + LocalBottomChromeInset.current),
+                // The settings search bar floats over the pager; its height
+                // comes down as top padding so the preview starts clear of it.
+                contentPadding = PaddingValues(
+                    top = LocalSettingsSearchInset.current,
+                    bottom = 96.dp + LocalBottomChromeInset.current,
+                ),
             ) {
                 item(key = "preview", span = { GridItemSpan(maxLineSpan) }) {
                     GlassPanel(
@@ -219,7 +206,7 @@ fun FontBrowserScreen(
                     }
                 }
                 item(key = "filters", span = { GridItemSpan(maxLineSpan) }) {
-                    FilterRow(selected = filter, onSelect = { filter = it })
+                    FilterRow(selected = filter, onSelect = { filter = it }, onImport = launchPicker)
                 }
                 itemsIndexed(shown, key = { _, c -> c.key }) { index, choice ->
                     FontCard(
@@ -430,7 +417,7 @@ private fun weightName(weight: Float): Int = when (weight.toInt()) {
 }
 
 @Composable
-private fun FilterRow(selected: FontFilter, onSelect: (FontFilter) -> Unit) {
+private fun FilterRow(selected: FontFilter, onSelect: (FontFilter) -> Unit, onImport: () -> Unit) {
     val labels = listOf(
         FontFilter.ALL to R.string.fonts_filter_all,
         FontFilter.INCLUDED to R.string.settings_included,
@@ -445,6 +432,15 @@ private fun FilterRow(selected: FontFilter, onSelect: (FontFilter) -> Unit) {
                 selected = selected == value,
                 onClick = { onSelect(value) },
                 label = { Text(stringResource(label)) },
+            )
+        }
+        item {
+            AssistChip(
+                onClick = onImport,
+                label = { Text(stringResource(R.string.fonts_import)) },
+                leadingIcon = {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(AssistChipDefaults.IconSize))
+                },
             )
         }
     }

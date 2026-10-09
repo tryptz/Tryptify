@@ -186,10 +186,11 @@ import androidx.compose.ui.res.pluralStringResource
 //
 // The labels here are ids — English, stable, what the search index and the dev
 // editor key on. What a chip says comes from [settingsTabLabelRes].
-private val settingsTabs = listOf("Appearance", "Visual Studio", "Audio", "Equalizer", "Library", "Downloads", "Connections", "Radio", "System", "About")
+private val settingsTabs = listOf("Appearance", "Fonts", "Visual Studio", "Audio", "Equalizer", "Library", "Downloads", "Connections", "Radio", "System", "About")
 
 private val settingsTabLabels: Map<String, Int> = mapOf(
     "Appearance" to R.string.settings_tab_appearance,
+    "Fonts" to R.string.fonts_title,
     "Visual Studio" to R.string.settings_tab_visual_studio,
     "Audio" to R.string.settings_tab_audio,
     "Equalizer" to R.string.settings_tab_equalizer,
@@ -455,7 +456,14 @@ fun SettingsScreen(
                         // the links, so a position here would silently shift
                         // every time a chip became one.
                         when (settingsPages[page]) {
-                            "Appearance" -> AppearanceTab(viewModel, navController)
+                            "Appearance" -> AppearanceTab(
+                                viewModel,
+                                navController,
+                                onOpenFonts = {
+                                    settingsScope.launch { settingsPager.goToPage(settingsTabIndex("Fonts"), animateTabs) }
+                                },
+                            )
+                            "Fonts" -> tf.monochrome.android.ui.settings.fonts.FontBrowserPage()
                             "Audio" -> AudioTab(viewModel, navController)
                             "Equalizer" -> EqualizerTab(navController, viewModel)
                             "Library" -> LibrarySettingsTab(viewModel)
@@ -710,9 +718,9 @@ private tailrec fun android.content.Context.findActivityOrSelf(): android.conten
 }
 
 @Composable
-private fun AppearanceTab(viewModel: SettingsViewModel, navController: NavController) {
+private fun AppearanceTab(viewModel: SettingsViewModel, navController: NavController, onOpenFonts: () -> Unit) {
     SettingsTabContent {
-        AppearanceControls(viewModel, onOpenFonts = { navController.navigateTool(Screen.FontBrowser) })
+        AppearanceControls(viewModel, onOpenFonts = onOpenFonts)
         Spacer(modifier = Modifier.height(16.dp))
         InterfaceControls(viewModel, navController)
     }
@@ -928,9 +936,10 @@ private fun AppearanceControls(viewModel: SettingsViewModel, onOpenFonts: () -> 
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Font Library: one row into the font browser, which previews every
-        // font in its own letters before it is chosen. The row carries the
-        // active font's name so it still answers "what am I using?".
+        // Font Library: one row over to the Fonts chip, whose page previews
+        // every font in its own letters before it is chosen. The row carries
+        // the active font's name so it still answers "what am I using?", and
+        // keeps fonts findable from where they always were.
         val activeFontName = tf.monochrome.android.ui.theme.BundledFonts
             .displayNameOf(customFontUri) ?: stringResource(R.string.settings_inter_default)
         SettingItem(

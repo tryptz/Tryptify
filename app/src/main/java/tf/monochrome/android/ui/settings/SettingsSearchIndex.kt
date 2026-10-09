@@ -79,8 +79,7 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     ),
     entry("Dynamic colours", R.string.settings_dynamic_colors, "Appearance", listOf("album", "art", "material you", "accent")),
     entry("Font scale", R.string.settings_font_size, "Appearance", listOf("text size", "bigger", "smaller", "accessibility")),
-    entry("Custom font", R.string.settings_font_library, "Appearance", listOf("typeface", "import font", "fonts"))
-        .at(SettingsDestination.Route("font_browser")),
+    entry("Custom font", R.string.settings_font_library, "Fonts", listOf("typeface", "import font", "fonts")),
     entry("Now playing view", R.string.settings_view_mode, "Appearance", listOf("player", "layout", "lyrics")),
     entry("Blurred background", R.string.settings_blurred_album_background, "Appearance", listOf("player", "artwork", "blur")),
     entry("Glow behind album art", R.string.settings_glow_behind_album_art, "Appearance", listOf("bloom", "halo", "cover", "kick", "bass", "pump")),
