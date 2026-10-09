@@ -1,17 +1,14 @@
 package tf.monochrome.android.ui.discover
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +18,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -38,20 +34,12 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -62,24 +50,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.launch
 import tf.monochrome.android.domain.model.DiscoveryItem
 import tf.monochrome.android.domain.model.DiscoveryShelf
 import tf.monochrome.android.domain.model.DiscoverySort
@@ -268,22 +248,11 @@ fun DiscoverScreen(
                 viewModel.setGenreQuery("")
             },
             modifier = Modifier.weight(1f),
-            // Room for the bar while it is open.
-            //
-            // The pane is deliberately just the field and one thin line of
-            // context. It briefly carried the matched-genre rail as well, which
-            // made a sheet of glass four rows deep floating over the top of the
-            // page — it covered the mood chips, the map buttons and the first
-            // shelf, so opening the search hid the very feed it filters. The
-            // matches belong on the page, where there is room for them and where
-            // picking one leaves you looking at what changed.
-            barContent = {
-                GenreSearchExtras(
-                    query = genreQuery,
-                    resultCount = genreRail.size,
-                    onOpenMap = { navController.navigateSafe(Screen.GenreMap.route) },
-                )
-            },
+            // Just the field, one slim row like every other glass search bar in
+            // the app. It used to carry a second line ("Browse the map", and
+            // "no match" when nothing did), which made it twice the height of
+            // the rest. Both live on the page now, in the genre row under the
+            // bar, where there is room for them.
         ) { searchTopInset ->
         Column(modifier = Modifier.fillMaxSize().padding(top = searchTopInset)) {
         // The matches, and — with the search folded away — whatever selection is
@@ -292,6 +261,7 @@ fun DiscoverScreen(
         AnimatedVisibility(visible = searchOpen || genreSelected) {
             GenreRail(
                 items = genreRail,
+                query = genreQuery,
                 selected = selectedChip,
                 onSelect = {
                     if (selectedChip == it.node.name) viewModel.selectChip(null)
@@ -608,45 +578,6 @@ private fun DiscoveryLoading(label: String?) {
 }
 
 /**
- * What hangs under the genre search field, inside the same pane of glass.
- *
- * Deliberately not a search screen of its own: the results are right there
- * under what was typed, so typing and picking never leaves the feed and the
- * page you were reading stays where it was.
- */
-@Composable
-private fun GenreSearchExtras(
-    query: String,
-    resultCount: Int,
-    onOpenMap: () -> Unit,
-) {
-    // One tight line. Everything in this pane floats over the feed, so every row
-    // of it is a row of the page nobody can see — it is kept to the two things
-    // that cannot live anywhere else.
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        // A query that matches nothing and a query still being typed look
-        // identical without this.
-        Text(
-            text = if (query.isNotBlank() && resultCount == 0) stringResource(R.string.no_genre_match) else "",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f),
-        )
-        // Always offered, not only when the search failed. The field this
-        // replaced carried the map on its trailing icon whenever it was
-        // empty, so hiding it behind a failed query dropped an entry point
-        // that used to be permanent.
-        TextButton(
-            onClick = onOpenMap,
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-            modifier = Modifier.heightIn(min = 28.dp),
-        ) {
-            Text(stringResource(R.string.browse_the_map), style = MaterialTheme.typography.labelMedium)
-        }
-    }
-}
-
-/**
  * The listener's own genres — hearted on the map, or recently played from it.
  *
  * Sits above the moods because the moods are the same seven for everybody and
@@ -654,10 +585,10 @@ private fun GenreSearchExtras(
  * offers the way there rather than rendering as a blank strip: an invisible
  * feature is one nobody finds.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GenreRail(
     items: List<GenreRailItem>,
+    query: String,
     selected: String?,
     onSelect: (GenreRailItem) -> Unit,
     onOpenMap: () -> Unit,
@@ -669,16 +600,22 @@ private fun GenreRail(
                 .padding(horizontal = 16.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AssistChip(
+            // A query that matches nothing and a query still being typed look
+            // identical without this.
+            if (query.isNotBlank()) {
+                Text(
+                    text = stringResource(R.string.no_genre_match),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(end = 10.dp),
+                )
+            }
+            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                label = stringResource(if (query.isNotBlank()) R.string.browse_the_map else R.string.pick_genres_on_map),
+                selected = false,
+                accent = MaterialTheme.colorScheme.primary,
                 onClick = onOpenMap,
-                label = { Text(stringResource(R.string.pick_genres_on_map)) },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.AccountTree,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                },
+                leadingIcon = Icons.Default.AccountTree,
             )
         }
         return
@@ -689,22 +626,24 @@ private fun GenreRail(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         items(items, key = { it.node.id }) { item ->
-            FilterChip(
+            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                label = item.node.name,
                 selected = selected == item.node.name,
+                accent = MaterialTheme.colorScheme.primary,
                 onClick = { onSelect(item) },
-                label = { Text(item.node.name) },
-                leadingIcon = if (item.hearted) {
-                    {
-                        Icon(
-                            Icons.Default.Favorite,
-                            contentDescription = stringResource(R.string.hearted),
-                            modifier = Modifier.size(16.dp),
-                        )
-                    }
-                } else {
-                    null
-                },
-                colors = FilterChipDefaults.filterChipColors(),
+                leadingIcon = if (item.hearted) Icons.Default.Favorite else null,
+                description = if (item.hearted) item.node.name + ", " + stringResource(R.string.hearted) else item.node.name,
+            )
+        }
+        // The map, always one more pill along: the field this replaced
+        // carried it permanently, and the search bar no longer does.
+        item(key = "open_map") {
+            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                label = stringResource(R.string.browse_the_map),
+                selected = false,
+                accent = MaterialTheme.colorScheme.primary,
+                onClick = onOpenMap,
+                leadingIcon = Icons.Default.AccountTree,
             )
         }
     }
@@ -718,31 +657,25 @@ private fun GenreRail(
  * [tf.monochrome.android.domain.model.DiscoverySort] for why it isn't pushed
  * into the search instead.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SortRow(selected: DiscoverySort, onSelect: (DiscoverySort) -> Unit) {
-    SingleChoiceSegmentedButtonRow(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        DiscoverySort.entries.forEachIndexed { index, option ->
-            SegmentedButton(
-                selected = option == selected,
-                onClick = { onSelect(option) },
-                shape = SegmentedButtonDefaults.itemShape(index, DiscoverySort.entries.size),
-                label = {
-                    Text(
-                        text = when (option) {
-                            tf.monochrome.android.domain.model.DiscoverySort.FOR_YOU -> stringResource(R.string.for_you)
-                            tf.monochrome.android.domain.model.DiscoverySort.POPULAR -> stringResource(R.string.sort_most_popular)
-                            tf.monochrome.android.domain.model.DiscoverySort.NEWEST -> stringResource(R.string.sort_newest)
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.labelMedium,
-                    )
+        DiscoverySort.entries.forEach { option ->
+            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                label = when (option) {
+                    DiscoverySort.FOR_YOU -> stringResource(R.string.for_you)
+                    DiscoverySort.POPULAR -> stringResource(R.string.sort_most_popular)
+                    DiscoverySort.NEWEST -> stringResource(R.string.sort_newest)
                 },
+                selected = option == selected,
+                accent = MaterialTheme.colorScheme.primary,
+                onClick = { onSelect(option) },
+                modifier = Modifier.weight(1f),
             )
         }
     }
@@ -760,7 +693,6 @@ private fun SortRow(selected: DiscoverySort, onSelect: (DiscoverySort) -> Unit) 
  * has them and as previews when it doesn't — a difference you would otherwise
  * only find out about by listening.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ServiceRow(
     selected: ApiService,
@@ -768,24 +700,21 @@ private fun ServiceRow(
     onSelect: (ApiService) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            DISCOVERY_SERVICES.forEachIndexed { index, option ->
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            DISCOVERY_SERVICES.forEach { option ->
                 // Unknown yet counts as reachable: a switch that greys itself
                 // out for the first frame and then lights up reads as broken.
                 val reachable = available == null || option in available
-                SegmentedButton(
+                tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                    label = option.label,
                     selected = option == selected,
+                    accent = MaterialTheme.colorScheme.primary,
                     onClick = { onSelect(option) },
                     enabled = reachable || option == selected,
-                    shape = SegmentedButtonDefaults.itemShape(index, DISCOVERY_SERVICES.size),
-                    label = {
-                        Text(
-                            text = option.label,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                    },
+                    modifier = Modifier.weight(1f),
                 )
             }
         }
@@ -806,7 +735,12 @@ private fun ServiceRow(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * The moods, as a row of the app's glass pills — the same pills as the
+ * Library's section switcher, so the two rows that steer a page look like one
+ * control. "For you" leads; the moods after [COMBINABLE_FROM] combine, and a
+ * tick says which are on.
+ */
 @Composable
 private fun DiscoveryChipRail(
     chips: List<String>,
@@ -815,17 +749,18 @@ private fun DiscoveryChipRail(
     onSelect: (String?) -> Unit,
     onToggle: (String) -> Unit,
 ) {
+    val accent = MaterialTheme.colorScheme.primary
     LazyRow(
         modifier = Modifier.fillMaxWidth().swallowHorizontalScroll(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item(key = "for_you") {
-            FilterChip(
+            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                label = stringResource(R.string.for_you),
                 selected = selected == null && combinedLabels.isEmpty(),
+                accent = accent,
                 onClick = { onSelect(null) },
-                label = { Text(stringResource(R.string.for_you)) },
-                colors = FilterChipDefaults.filterChipColors(),
             )
         }
         itemsIndexed(chips, key = { _, label -> label }) { index, label ->
@@ -834,18 +769,16 @@ private fun DiscoveryChipRail(
             // compose with each other. Moods start after them and do.
             val combinable = index >= COMBINABLE_FROM
             val isOn = if (combinable) label in combinedLabels else selected == label
-            FilterChip(
+            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                // The label is the chip's key; only what is shown is translated.
+                label = moodLabel(label),
                 selected = isOn,
+                accent = accent,
                 onClick = {
                     if (combinable) onToggle(label)
                     else onSelect(if (selected == label) null else label)
                 },
-                // The label is the chip's key; only what is shown is translated.
-                label = { Text(moodLabel(label)) },
-                leadingIcon = if (combinable && isOn) {
-                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                } else null,
-                colors = FilterChipDefaults.filterChipColors(),
+                leadingIcon = if (combinable && isOn) Icons.Default.Check else null,
             )
         }
     }
@@ -893,16 +826,13 @@ private fun CombinedGenreRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(genres, key = { it.id }) { node ->
-                AssistChip(
+                tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                    label = node.name,
+                    selected = false,
+                    accent = MaterialTheme.colorScheme.primary,
                     onClick = { onSubtract(node.id) },
-                    label = { Text(node.name) },
-                    trailingIcon = {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = stringResource(R.string.remove_named, node.name),
-                            modifier = Modifier.size(16.dp),
-                        )
-                    },
+                    leadingIcon = Icons.Default.Close,
+                    description = stringResource(R.string.remove_named, node.name),
                 )
             }
         }

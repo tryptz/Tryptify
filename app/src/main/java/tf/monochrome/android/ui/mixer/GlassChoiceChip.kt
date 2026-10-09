@@ -6,12 +6,18 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
@@ -43,10 +49,20 @@ internal fun GlassChoiceChip(
     modifier: Modifier = Modifier,
     height: Dp = 34.dp,
     description: String = label,
+    /** A small icon before the label: a tick, a heart, a cross. */
+    leadingIcon: ImageVector? = null,
+    /** Off greys the chip and ignores taps, keeping its place in the row. */
+    enabled: Boolean = true,
 ) {
     val cs = MaterialTheme.colorScheme
+    val labelColor = when {
+        !enabled -> cs.onSurface.copy(alpha = 0.38f)
+        selected -> accent
+        else -> cs.onSurface.copy(alpha = 0.82f)
+    }
     PressableGlass(
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier
             .height(height)
             .defaultMinSize(minWidth = 72.dp)
@@ -67,17 +83,25 @@ internal fun GlassChoiceChip(
                     shape = MonoDimens.shapePill,
                 )
         )
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = if (selected) accent else cs.onSurface.copy(alpha = 0.82f),
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .align(Alignment.Center)
                 .padding(horizontal = 14.dp),
-        )
+        ) {
+            if (leadingIcon != null) {
+                Icon(leadingIcon, contentDescription = null, tint = labelColor, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(5.dp))
+            }
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = labelColor,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }

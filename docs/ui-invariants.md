@@ -399,6 +399,9 @@ behaviour and it is not negotiable:
   (it says which of nine tabs you are on, and searching is exactly when you are
   about to be moved between them). Discover's genre rail lives on the page, not
   inside the bar's pane — a pane four rows deep covers the feed it filters.
+  Discover's bar is the field alone, one row like every other: its "Browse the
+  map" line made it twice their height, so the map and "no match" live in the
+  genre row under it.
 - Settings' form runs full height under the bar, with the inset going to each
   tab's own `LazyColumn` via `LocalSettingsSearchInset`. Pushing the form down
   instead leaves an empty strip behind the glass, and glass with nothing behind

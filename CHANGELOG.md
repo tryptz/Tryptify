@@ -11,6 +11,10 @@
 
 ### Changed
 
+#### Discover's pills and search bar match the rest of the app
+- **Every pill on Discover is the app's liquid glass** — the moods, the genre row, the genres you can subtract from a mix, the TIDAL · Qobuz · Deezer switch and the sort. They are `GlassChoiceChip`, the Library section switcher's pill, so they frost, swell under the finger and mark the selected one with an accent rim like everywhere else. The chip gained an optional icon (a tick on combined moods, a heart on hearted genres, a cross on subtractable ones) and an `enabled` flag; its existing uses are unchanged.
+- **The genre search bar is one slim row**, like every other glass search bar. It carried a second line ("Browse the map", and "no match"), which made it twice their height; the map is now a pill at the end of the genre row, and "no match" shows there too.
+
 #### The genre map is a galaxy now
 - **A sky to sit on.** Deep space on dark themes, with a soft nebula behind each family and a field of distant stars that drifts a little as you pan, so the map reads as nearer than they are. On light themes it is a paper star chart, with fainter clouds and the chart's rings instead of a glow. The nebulae fade out as the map turns into the timeline, where a family is not a place.
 - **Your galaxy lights up as you listen.** Genres you have opened or played burn (a glow, a full dot, a hot core); genres you haven't are dimmer dots, still there to find. Hearted genres carry a dashed ring, so they never read as the solid ring of a folded branch. A ring breathes out from "You are here", the genre you were last in (still with reduced motion on).
