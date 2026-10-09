@@ -248,6 +248,9 @@ class PreferencesManager @Inject constructor(
         // "<epoch day>|<genre id>": today's discovery, held for the whole day.
         private val DISCOVERY_TODAY_PICK = stringPreferencesKey("discovery_today_pick")
         private val DISCOVERY_SORT = stringPreferencesKey("discovery_sort")
+        // Which catalogue Discover finds its music on: an ApiService name.
+        // Device-local, like the APIs it depends on being reachable from here.
+        private val DISCOVERY_SERVICE = stringPreferencesKey("discovery_service")
 
         /** How many genres the "recently played" rail remembers. */
         private const val MAX_RECENT_GENRES = 12
@@ -2566,6 +2569,13 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setDiscoveryTodayPick(day: Long, genreId: String) {
         dataStore.edit { it[DISCOVERY_TODAY_PICK] = "$day|$genreId" }
+    }
+
+    /** The stored name of Discover's catalogue; empty when never chosen. */
+    val discoveryService: Flow<String> = dataStore.data.map { it[DISCOVERY_SERVICE].orEmpty() }
+
+    suspend fun setDiscoveryService(name: String) {
+        dataStore.edit { it[DISCOVERY_SERVICE] = name }
     }
 
     val discoverySort: Flow<String> = dataStore.data.map { it[DISCOVERY_SORT].orEmpty() }

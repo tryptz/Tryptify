@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
+import tf.monochrome.android.data.api.ApiService
 import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.repository.GenreGraphRepository
@@ -44,6 +45,8 @@ import tf.monochrome.android.domain.model.GenreGraph
 import tf.monochrome.android.domain.model.GenreHistory
 import tf.monochrome.android.domain.model.GenreNode
 import tf.monochrome.android.domain.model.UnifiedTrack
+import tf.monochrome.android.domain.usecase.DEFAULT_DISCOVERY_SERVICE
+import tf.monochrome.android.domain.usecase.DiscoveryCatalogs
 import tf.monochrome.android.domain.usecase.DiscoveryFeedUseCase
 import tf.monochrome.android.domain.usecase.toUnifiedTrackAuto
 import java.time.LocalDate
@@ -138,6 +141,7 @@ class DiscoverViewModel @Inject constructor(
     private val genreHistoryRepo: GenreHistoryRepository,
     private val genreSearch: tf.monochrome.android.domain.usecase.GenreSearchUseCase,
     private val genreCharts: tf.monochrome.android.domain.usecase.GenreChartUseCase,
+    private val catalogs: DiscoveryCatalogs,
 ) : ViewModel() {
 
     /**
@@ -256,6 +260,42 @@ class DiscoverViewModel @Inject constructor(
         viewModelScope.launch { preferences.setDiscoverySort(value.id) }
     }
 
+    // ── Which service ───────────────────────────────────────────────────
+
+    /** The streaming service the page finds its music on. */
+    val service: StateFlow<ApiService> = catalogs.selected
+        .stateIn(viewModelScope, SharingStarted.Eagerly, DEFAULT_DISCOVERY_SERVICE)
+
+    private val _availableServices = MutableStateFlow<Set<ApiService>?>(null)
+
+    /**
+     * The services with a server under Settings › Connections, or null until
+     * known. The switch offers the others too, disabled, so it says what
+     * exists rather than looking like a two-way switch on one phone and a
+     * three-way one on another.
+     */
+    val availableServices: StateFlow<Set<ApiService>?> = _availableServices.asStateFlow()
+
+    private fun checkServices() {
+        viewModelScope.launch {
+            _availableServices.value = runCatching { catalogs.available() }.getOrNull()
+        }
+    }
+
+    /**
+     * Point Discover at another service, and rebuild the page on it.
+     *
+     * The page that was on screen stays filed under the old service, so
+     * switching back is instant rather than another round of fetching.
+     */
+    fun setService(value: ApiService) {
+        if (value == service.value) return
+        viewModelScope.launch {
+            catalogs.select(value)
+            rebuild()
+        }
+    }
+
     /**
      * Lower-cased names of the artists the listener actually plays, for the
      * "For you" ordering.
@@ -337,6 +377,9 @@ class DiscoverViewModel @Inject constructor(
     /** Called whenever the page comes on screen, so a new day turns over. */
     fun onShown() {
         _day.value = LocalDate.now().toEpochDay()
+        // Coming back from Settings › Connections is the usual way a service
+        // appears or goes, and this is the next time the page is seen.
+        checkServices()
     }
 
     /** The listener's genres, most telling first: hearted, then recently played. */
@@ -540,11 +583,13 @@ class DiscoverViewModel @Inject constructor(
 
     /** What a built page is filed under. Anything that changes the page is in it. */
     private fun pageKey(
+        service: ApiService,
         label: String?,
         moods: List<String>,
         excluded: Set<String>,
         genreId: String?,
     ): String = listOf(
+        service.name,
         label.orEmpty(),
         moods.joinToString(","),
         excluded.sorted().joinToString(","),
@@ -622,7 +667,7 @@ class DiscoverViewModel @Inject constructor(
                 // switching to a chip clears it, rather than the map's
                 // choice silently outliving the label on screen.
                 ?.takeIf { label != null && genreGraphRepo.graph[it]?.name == label }
-            val key = pageKey(label, moods, _excludedGenres.value, genreId)
+            val key = pageKey(catalogs.currentService(), label, moods, _excludedGenres.value, genreId)
 
             // A page we have already built is a page we can put back up now.
             // Note what is *not* here: no spinner, no clearing the list first,

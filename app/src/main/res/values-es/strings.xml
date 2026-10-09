@@ -486,7 +486,7 @@
     <string name="search_genres_hint">Busca entre 771 géneros: prueba dnb, liquid o phonk</string>
     <string name="feed_end">Eso es todo por aquí.</string>
     <string name="discover_empty_feed">Aún no hay nada que mostrar. Escucha algunas canciones: Descubrir se construye a partir de lo que escuchas.</string>
-    <string name="discover_empty_chip">No ha llegado nada para esta. Prueba otro ambiente o revisa la instancia de Qobuz en Ajustes › Conexiones.</string>
+    <string name="discover_empty_chip">No ha llegado nada para esta. Prueba otro ambiente o revisa la instancia de %1$s en Ajustes › Conexiones.</string>
     <string name="not_interested">No me interesa</string>
     <string name="building_label">Preparando %1$s…</string>
     <string name="building_feed">Preparando tu feed…</string>
@@ -2006,4 +2006,6 @@
     <string name="discover_galaxy_next">La próxima en brillar: %1$s</string>
     <string name="discover_galaxy_empty">Reproduce un género para encender tu primera estrella.</string>
     <string name="discover_spotlight_title">El género del día</string>
+    <string name="discover_service_deezer_note">Las canciones de Deezer se reproducen desde Qobuz cuando las tiene, y como avances de 30 segundos cuando no.</string>
+    <string name="discover_service_missing">Aún no hay ningún servidor de %1$s en Ajustes › Conexiones.</string>
 </resources>

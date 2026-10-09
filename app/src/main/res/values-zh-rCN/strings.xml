@@ -442,7 +442,7 @@
     <string name="search_genres_hint">搜索 771 种流派——试试 dnb、liquid、phonk</string>
     <string name="feed_end">这一类就这么多了。</string>
     <string name="discover_empty_feed">暂时没有内容。先播放几首歌——“发现”会根据你的收听记录生成。</string>
-    <string name="discover_empty_chip">这一项没有返回结果。换一个氛围试试，或在“设置 › 连接”中检查 Qobuz 实例。</string>
+    <string name="discover_empty_chip">这一项没有返回结果。换一个氛围试试，或在“设置 › 连接”中检查 %1$s 实例。</string>
     <string name="not_interested">不感兴趣</string>
     <string name="building_label">正在生成 %1$s…</string>
     <string name="building_feed">正在生成你的推荐…</string>
@@ -1906,4 +1906,6 @@
     <string name="discover_galaxy_next">下一个点亮的是 %1$s</string>
     <string name="discover_galaxy_empty">播放一个流派，点亮你的第一颗星。</string>
     <string name="discover_spotlight_title">今日流派</string>
+    <string name="discover_service_deezer_note">Deezer 的歌曲在 Qobuz 有收录时从 Qobuz 播放，没有时播放 30 秒试听。</string>
+    <string name="discover_service_missing">“设置 › 连接”中还没有 %1$s 服务器。</string>
 </resources>

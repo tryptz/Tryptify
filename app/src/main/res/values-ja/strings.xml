@@ -442,7 +442,7 @@
     <string name="search_genres_hint">771 のジャンルを検索 — dnb、liquid、phonk など</string>
     <string name="feed_end">ここにあるのはこれで全部です。</string>
     <string name="discover_empty_feed">まだ表示するものがありません。何曲か再生してください。「見つける」はあなたが聴いた音楽から作られます。</string>
-    <string name="discover_empty_chip">この項目では何も見つかりませんでした。別のムードを試すか、「設定 › 接続」で Qobuz インスタンスを確認してください。</string>
+    <string name="discover_empty_chip">この項目では何も見つかりませんでした。別のムードを試すか、「設定 › 接続」で %1$s インスタンスを確認してください。</string>
     <string name="not_interested">興味なし</string>
     <string name="building_label">%1$s を作成中…</string>
     <string name="building_feed">おすすめを作成中…</string>
@@ -1906,4 +1906,6 @@
     <string name="discover_galaxy_next">次に光るのは %1$s</string>
     <string name="discover_galaxy_empty">ジャンルを再生して、最初の星を灯しましょう。</string>
     <string name="discover_spotlight_title">今日のジャンル</string>
+    <string name="discover_service_deezer_note">Deezer の曲は、Qobuz にあれば Qobuz から再生され、なければ 30 秒の試聴になります。</string>
+    <string name="discover_service_missing">「設定 › 接続」に %1$s のサーバーがまだありません。</string>
 </resources>

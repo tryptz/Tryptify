@@ -464,7 +464,7 @@
     <string name="search_genres_hint">771 Genres durchsuchen – probier dnb, liquid, phonk</string>
     <string name="feed_end">Mehr gibt es hier nicht.</string>
     <string name="discover_empty_feed">Noch nichts zu zeigen. Spiel ein paar Titel ab – Entdecken baut sich aus dem auf, was du hörst.</string>
-    <string name="discover_empty_chip">Dafür kam nichts zurück. Probier eine andere Stimmung oder prüfe die Qobuz-Instanz unter Einstellungen › Verbindungen.</string>
+    <string name="discover_empty_chip">Dafür kam nichts zurück. Probier eine andere Stimmung oder prüfe die %1$s-Instanz unter Einstellungen › Verbindungen.</string>
     <string name="not_interested">Kein Interesse</string>
     <string name="building_label">%1$s wird erstellt …</string>
     <string name="building_feed">Dein Feed wird erstellt …</string>
@@ -1956,4 +1956,6 @@
     <string name="discover_galaxy_next">Als Nächstes leuchtet %1$s auf</string>
     <string name="discover_galaxy_empty">Spiel ein Genre, um deinen ersten Stern zum Leuchten zu bringen.</string>
     <string name="discover_spotlight_title">Genre des Tages</string>
+    <string name="discover_service_deezer_note">Deezer-Titel laufen über Qobuz, wenn es sie hat, sonst als 30-Sekunden-Vorschau.</string>
+    <string name="discover_service_missing">Noch kein %1$s-Server unter Einstellungen › Verbindungen.</string>
 </resources>

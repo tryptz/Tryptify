@@ -83,6 +83,8 @@ import kotlinx.coroutines.launch
 import tf.monochrome.android.domain.model.DiscoveryItem
 import tf.monochrome.android.domain.model.DiscoveryShelf
 import tf.monochrome.android.domain.model.DiscoverySort
+import tf.monochrome.android.data.api.ApiService
+import tf.monochrome.android.domain.usecase.DISCOVERY_SERVICES
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.ui.components.AlbumItem
 import tf.monochrome.android.ui.components.ArtistItem
@@ -156,6 +158,8 @@ fun DiscoverScreen(
     val explored by viewModel.exploredGenres.collectAsStateWithLifecycle()
     val starting by viewModel.startingGenre.collectAsStateWithLifecycle()
     val heartedGenres by viewModel.heartedGenres.collectAsStateWithLifecycle()
+    val service by viewModel.service.collectAsStateWithLifecycle()
+    val availableServices by viewModel.availableServices.collectAsStateWithLifecycle()
     val graph = viewModel.genreGraph
 
     // A new day turns over when the page is next shown, not on a timer.
@@ -345,6 +349,16 @@ fun DiscoverScreen(
                 }
             }
 
+            // Which service the page finds its music on. Above the sort, because
+            // it decides what there is to sort.
+            item(key = "service") {
+                ServiceRow(
+                    selected = service,
+                    available = availableServices,
+                    onSelect = viewModel::setService,
+                )
+            }
+
             // Scrolls with the feed now. It orders what is already on screen,
             // which is a choice made once in a while, not a control the page
             // has to keep in reach.
@@ -483,7 +497,7 @@ fun DiscoverScreen(
                         text = if (selectedChip == null) {
                             stringResource(R.string.discover_empty_feed)
                         } else {
-                            stringResource(R.string.discover_empty_chip)
+                            stringResource(R.string.discover_empty_chip, service.label)
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -706,6 +720,64 @@ private fun SortRow(selected: DiscoverySort, onSelect: (DiscoverySort) -> Unit) 
                         style = MaterialTheme.typography.labelMedium,
                     )
                 },
+            )
+        }
+    }
+}
+
+/**
+ * The three-way switch for where Discover finds its music: TIDAL, Qobuz or
+ * Deezer.
+ *
+ * Every shelf, chart, genre play and today's pick follows it. A service with no
+ * server under Settings › Connections is still shown, disabled, so the switch
+ * reads the same on every phone; if the chosen one has lost its server, it
+ * stays selectable and says what is missing rather than quietly emptying the
+ * page. Deezer carries a note, because its tracks play from Qobuz when Qobuz
+ * has them and as previews when it doesn't — a difference you would otherwise
+ * only find out about by listening.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ServiceRow(
+    selected: ApiService,
+    available: Set<ApiService>?,
+    onSelect: (ApiService) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            DISCOVERY_SERVICES.forEachIndexed { index, option ->
+                // Unknown yet counts as reachable: a switch that greys itself
+                // out for the first frame and then lights up reads as broken.
+                val reachable = available == null || option in available
+                SegmentedButton(
+                    selected = option == selected,
+                    onClick = { onSelect(option) },
+                    enabled = reachable || option == selected,
+                    shape = SegmentedButtonDefaults.itemShape(index, DISCOVERY_SERVICES.size),
+                    label = {
+                        Text(
+                            text = option.label,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    },
+                )
+            }
+        }
+        val note = when {
+            available != null && selected !in available ->
+                stringResource(R.string.discover_service_missing, selected.label)
+            selected == ApiService.DEEZER -> stringResource(R.string.discover_service_deezer_note)
+            else -> null
+        }
+        note?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
             )
         }
     }

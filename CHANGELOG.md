@@ -11,6 +11,12 @@
 
 ### Added
 
+#### Discover: choose TIDAL, Qobuz or Deezer
+- **A three-way switch at the top of the feed picks the service Discover finds its music on.** Every shelf, genre chart, genre play, Top 100 and today's pick follows it. Discover was Qobuz-only all the way down; `DiscoveryCatalog` is now the one place it searches, opens artists and albums, and tags tracks to play from the service they were found on, so a Qobuz id is never played as the TIDAL track with the same number.
+- **A service with no server under Settings › Connections is shown, disabled.** If the chosen one loses its server, the switch says what is missing instead of the page quietly going empty, and the empty-page message names the chosen service rather than always saying Qobuz.
+- **Deezer says what it does.** Its tracks play from Qobuz when Qobuz has the recording and as 30-second previews when it doesn't, and the switch shows that note when Deezer is picked. Deezer publishes no similar-artists list, so "Because you play…" artist rows come up short there rather than borrowing another service's artists, whose ids would open nothing.
+- **Switching back is instant.** Built pages are filed per service, and chart matches and artist top tracks are cached per service, in memory and on disk. Qobuz keeps the cache keys it had, so nothing saved before the switch existed is thrown away.
+
 #### Discover, rebuilt around today
 - **Today's discovery heads "For you".** One genre, picked for you and kept all day: a neighbour of the genres you heart and play, within two steps on the genre graph and over a strong link, that you have not been to yet. The card names the genres it sits beside, or says the pick is somewhere new when it is not near any of them, so it never claims a link that isn't there. Play, Radio, keep it in your genres, or open it on the map. It changes at midnight, never twice in a row, and playing it does not swap it out: the day's pick is stored, because it was picked from the genres you had not explored yet. `DailyDiscovery` does the picking; `DailyDiscoveryTest` checks it against the real graph.
 - **Your genre galaxy.** A card with the whole genre map as stars, the genres you have explored lit in their family's colour, today's pick ringed as the next to light, and a count of how many of the 771 you have been to. Upgrading counts the recent genres you already had, so nobody starts at zero. Tap it to open the map on today's pick.

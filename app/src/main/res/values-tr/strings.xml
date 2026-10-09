@@ -464,7 +464,7 @@
     <string name="search_genres_hint">771 türde ara — dnb, liquid, phonk deneyin</string>
     <string name="feed_end">Bunun için hepsi bu kadar.</string>
     <string name="discover_empty_feed">Henüz gösterilecek bir şey yok. Birkaç parça çalın; Keşfet, dinlediklerinizden oluşur.</string>
-    <string name="discover_empty_chip">Bunun için bir şey gelmedi. Başka bir ruh hali deneyin ya da Ayarlar › Bağlantılar’dan Qobuz örneğini kontrol edin.</string>
+    <string name="discover_empty_chip">Bunun için bir şey gelmedi. Başka bir ruh hali deneyin ya da Ayarlar › Bağlantılar’dan %1$s örneğini kontrol edin.</string>
     <string name="not_interested">İlgilenmiyorum</string>
     <string name="building_label">%1$s hazırlanıyor…</string>
     <string name="building_feed">Akışınız hazırlanıyor…</string>
@@ -1956,4 +1956,6 @@
     <string name="discover_galaxy_next">Sıradaki yıldız: %1$s</string>
     <string name="discover_galaxy_empty">İlk yıldızınızı yakmak için bir tür çalın.</string>
     <string name="discover_spotlight_title">Günün türü</string>
+    <string name="discover_service_deezer_note">Deezer şarkıları Qobuz’da varsa Qobuz’dan, yoksa 30 saniyelik önizleme olarak çalınır.</string>
+    <string name="discover_service_missing">Ayarlar › Bağlantılar’da henüz %1$s sunucusu yok.</string>
 </resources>

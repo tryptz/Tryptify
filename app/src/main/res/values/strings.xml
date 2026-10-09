@@ -465,7 +465,7 @@
     <string name="search_genres_hint">Search 771 genres — try dnb, liquid, phonk</string>
     <string name="feed_end">That’s everything for this one.</string>
     <string name="discover_empty_feed">Nothing to show yet. Play a few tracks — Discover builds itself from what you listen to.</string>
-    <string name="discover_empty_chip">Nothing came back for that one. Try another mood, or check the Qobuz instance in Settings › Connections.</string>
+    <string name="discover_empty_chip">Nothing came back for that one. Try another mood, or check the %1$s instance in Settings › Connections.</string>
     <string name="not_interested">Not interested</string>
     <string name="building_label">Building %1$s…</string>
     <string name="building_feed">Building your feed…</string>
@@ -1957,4 +1957,6 @@
     <string name="discover_galaxy_next">%1$s lights up next</string>
     <string name="discover_galaxy_empty">Play a genre to light up your first star.</string>
     <string name="discover_spotlight_title">Genre of the day</string>
+    <string name="discover_service_deezer_note">Deezer songs play from Qobuz when it has them, and as 30-second previews when it doesn’t.</string>
+    <string name="discover_service_missing">No %1$s server in Settings › Connections yet.</string>
 </resources>

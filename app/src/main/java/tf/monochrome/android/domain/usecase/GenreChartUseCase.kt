@@ -22,7 +22,6 @@ import tf.monochrome.android.data.charts.mapConcurrent
 import tf.monochrome.android.data.charts.normalizeForMatch
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.repository.GenreGraphRepository
-import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.domain.model.GenreNode
 import tf.monochrome.android.domain.model.UnifiedTrack
 import javax.inject.Inject
@@ -46,7 +45,7 @@ class GenreChartUseCase @Inject constructor(
     private val charts: ChartsRepository,
     private val genreGraph: GenreGraphRepository,
     private val preferences: PreferencesManager,
-    private val music: MusicRepository,
+    private val catalogs: DiscoveryCatalogs,
     private val disk: DiscoveryCache,
 ) {
     companion object {
@@ -703,8 +702,12 @@ class GenreChartUseCase @Inject constructor(
      * Memoised, misses included, for the same reason [resolve] is.
      */
     private suspend fun topTracksFor(artistName: String): List<UnifiedTrack> {
-        val key = normalizeForMatch(artistName)
-        if (key.isEmpty()) return emptyList()
+        val name = normalizeForMatch(artistName)
+        if (name.isEmpty()) return emptyList()
+        // Remembered per catalogue: an artist's top tracks on TIDAL are TIDAL
+        // tracks, and must not come back while Discover is on Qobuz.
+        val catalog = catalogs.current()
+        val key = catalog.memoKey(name)
         restore()
         memoisedArtistTracks(key)?.let { return it }
 
@@ -712,14 +715,14 @@ class GenreChartUseCase @Inject constructor(
             memoisedArtistTracks(key)?.let { return@run it }
 
             val tracks = resolveGate.withPermit {
-                val search = music.searchQobuz(artistName).getOrNull()
+                val search = catalog.search(artistName).getOrNull()
                 val credited = search?.tracks.orEmpty()
                     .filter { matchesArtistName(it.displayArtist, artistName) }
                 val seed = search?.artists?.firstOrNull { matchesArtistName(it.name, artistName) }
-                val top = seed?.let { music.getQobuzArtist(it.id).getOrNull()?.topTracks }
+                val top = seed?.let { catalog.artist(it.id).getOrNull()?.topTracks }
                     .orEmpty()
                     .filter { matchesArtistName(it.displayArtist, artistName) }
-                (top.ifEmpty { credited }).map { it.toQobuzUnifiedTrack() }
+                (top.ifEmpty { credited }).map { catalog.unified(it) }
             }
 
             val held = Stamped(tracks)
@@ -771,7 +774,9 @@ class GenreChartUseCase @Inject constructor(
      * otherwise be re-searched once per shelf, forever.
      */
     suspend fun resolve(entry: ChartEntry): UnifiedTrack? {
-        val key = entry.matchKey
+        // Per catalogue, for the reason topTracksFor gives.
+        val catalog = catalogs.current()
+        val key = catalog.memoKey(entry.matchKey)
         restore()
         memoisedResolution(key)?.let { return it.value }
 
@@ -780,10 +785,10 @@ class GenreChartUseCase @Inject constructor(
 
             // Behind the gate, and only past the memo: an answer already in hand
             // must never queue behind six shelves' worth of network.
-            val answered = resolveGate.withPermit { music.searchQobuz(entry.matchQuery) }
+            val answered = resolveGate.withPermit { catalog.search(entry.matchQuery) }
             val track = answered.getOrNull()?.tracks
                 ?.firstOrNull { agrees(entry, it.artists.firstOrNull()?.name ?: "", it.title) }
-                ?.toQobuzUnifiedTrack()
+                ?.let { catalog.unified(it) }
 
             val held = Stamped(track)
             resolveMutex.withLock { resolved[key] = held }
