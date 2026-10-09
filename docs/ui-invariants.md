@@ -142,6 +142,13 @@ window's haze source: `MainPlayerScreen`'s `overlay` slot exists for exactly
 this, and the speed panel goes through it. The cost is owning the scrim, the
 slide and Back by hand, and that is the cheaper half of the trade.
 
+**A `GlassPanel` inside a scrolling list passes `blockTouchesBelow = false`.**
+Its backstop consumes every touch its content does not handle, drags included.
+Over a map that is the point — a tap on the pane must not select the nearest
+genre underneath — but in a list it means a swipe that starts on the pane never
+scrolls the page. The font browser's panes and Discover's cards pass `false`;
+the genre map and the globe keep the default.
+
 **The real backdrop is sampled, not reconstructed — when there is one.** The
 `playerGlass` shader carries a `uArt` sampler holding the current cover
 (`GlassBackdropArt.kt`), so a pane refracts the artwork actually behind it

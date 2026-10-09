@@ -1995,4 +1995,15 @@
     <string name="fonts_unusable">Ce fichier ne peut pas être lu comme une police. Supprimez-le pour faire le ménage.</string>
     <string name="fonts_delete_title">Supprimer %1$s ?</string>
     <string name="fonts_delete_body">Elle est supprimée de cet appareil. Si c’est la police utilisée, l’app revient à Inter.</string>
+    <string name="discover_today_title">La découverte du jour</string>
+    <string name="discover_today_daily">Nouvelle chaque jour</string>
+    <string name="discover_today_via_two">Juste à côté de %1$s et de %2$s, des genres auxquels vous revenez souvent.</string>
+    <string name="discover_today_via_one">Juste à côté de %1$s, un genre auquel vous revenez souvent.</string>
+    <string name="discover_today_fresh">Un coin de la carte où vous n’êtes pas encore allé.</string>
+    <string name="discover_genre_since">Depuis %1$d</string>
+    <string name="discover_galaxy_title">Votre galaxie des genres</string>
+    <string name="discover_galaxy_count">%1$d genres explorés sur %2$d</string>
+    <string name="discover_galaxy_next">Prochaine étoile : %1$s</string>
+    <string name="discover_galaxy_empty">Écoutez un genre pour allumer votre première étoile.</string>
+    <string name="discover_spotlight_title">Le genre du jour</string>
 </resources>

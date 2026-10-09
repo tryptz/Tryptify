@@ -2359,7 +2359,7 @@ private fun DrawScope.drawMap(
  * small sizes, and these are chosen to stay distinguishable as 4-pixel dots on
  * both light and dark backgrounds.
  */
-private fun familyPalette(families: List<String>): Map<String, Color> {
+internal fun familyPalette(families: List<String>): Map<String, Color> {
     val palette = listOf(
         "electronic" to Color(0xFF4FC3F7),
         "hiphop" to Color(0xFFFFB74D),

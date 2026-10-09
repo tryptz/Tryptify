@@ -10,8 +10,10 @@ import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +21,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
@@ -30,6 +35,7 @@ import tf.monochrome.android.data.repository.GenreHistoryRepository
 import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.repository.RecommendationSeed
 import tf.monochrome.android.data.repository.RecommendationSeedsRepository
+import tf.monochrome.android.domain.model.DailyDiscovery
 import tf.monochrome.android.domain.model.DiscoveryAdventure
 import tf.monochrome.android.domain.model.DiscoveryItem
 import tf.monochrome.android.domain.model.DiscoveryShelf
@@ -40,6 +46,7 @@ import tf.monochrome.android.domain.model.GenreNode
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.domain.usecase.DiscoveryFeedUseCase
 import tf.monochrome.android.domain.usecase.toUnifiedTrackAuto
+import java.time.LocalDate
 import javax.inject.Inject
 
 /**
@@ -68,6 +75,9 @@ fun rememberDiscoverViewModel(): DiscoverViewModel {
 
 /** One genre on Discover's genre rail, and why it's there. */
 data class GenreRailItem(val node: GenreNode, val hearted: Boolean)
+
+/** The genre of the day, with the history its card quotes from. */
+data class GenreSpotlight(val genre: GenreNode, val history: GenreHistory)
 
 /**
  * What the map's panel knows about the selected genre's history.
@@ -313,6 +323,107 @@ class DiscoverViewModel @Inject constructor(
 
     private fun noteGenreVisited(genreId: String) {
         viewModelScope.launch { preferences.noteGenreVisited(genreId) }
+    }
+
+    // ── Today ───────────────────────────────────────────────────────────
+
+    /**
+     * The local day, as an epoch day. Re-read by [onShown] rather than by a
+     * timer: this view model outlives a night easily, and the page is the only
+     * place the day is visible.
+     */
+    private val _day = MutableStateFlow(LocalDate.now().toEpochDay())
+
+    /** Called whenever the page comes on screen, so a new day turns over. */
+    fun onShown() {
+        _day.value = LocalDate.now().toEpochDay()
+    }
+
+    /** The listener's genres, most telling first: hearted, then recently played. */
+    private val anchors: Flow<List<String>> =
+        combine(preferences.discoveryHeartedGenres, preferences.discoveryRecentGenres) { hearted, recent ->
+            (hearted.sorted() + recent).distinct()
+        }
+
+    /** Every genre opened or played from Discover or the map. */
+    val exploredGenres: StateFlow<Set<String>> = preferences.discoveryExploredGenres
+        .map { ids -> ids.filterTo(HashSet()) { genreGraphRepo.graph[it] != null } }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
+    /**
+     * Today's discovery.
+     *
+     * Stored for the day once picked: playing it marks it explored, and a pick
+     * recomputed from the explored set would swap itself out the moment it was
+     * used. The reason line is re-derived each time from the current genres.
+     *
+     * Walks the graph on [Dispatchers.Default]; it is a few milliseconds, but
+     * every one of them would otherwise be a frame of the page opening.
+     */
+    private val todayShared: Flow<DailyDiscovery.Pick?> =
+        combine(anchors, preferences.discoveryExploredGenres, preferences.discoveryTodayPick, _day) {
+                anchors, explored, stored, day ->
+            val graph = genreGraphRepo.graph
+            val kept = stored?.takeIf { it.first == day }?.let { graph[it.second] }
+            if (kept != null) {
+                DailyDiscovery.Pick(kept, DailyDiscovery.explain(graph, kept.id, anchors))
+            } else {
+                // Explained the way a stored pick is, so the reason line reads
+                // the same before and after the pick is saved.
+                DailyDiscovery.todaysGenre(graph, anchors, explored, day, avoid = setOfNotNull(stored?.second))
+                    ?.also { preferences.setDiscoveryTodayPick(day, it.genre.id) }
+                    ?.let { DailyDiscovery.Pick(it.genre, DailyDiscovery.explain(graph, it.genre.id, anchors)) }
+            }
+        }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+            .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5000), replay = 1)
+
+    val today: StateFlow<DailyDiscovery.Pick?> =
+        todayShared.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /**
+     * The genre of the day, with its history.
+     *
+     * The history asset is the better part of a megabyte, so it is read only
+     * once this card is actually being collected — never at startup — and on
+     * the IO dispatcher by the repository. Combined with the shared pick rather
+     * than with [today], whose initial null would put a different genre here
+     * for a moment and then swap it.
+     */
+    val spotlight: StateFlow<GenreSpotlight?> =
+        combine(
+            anchors,
+            todayShared,
+            _day,
+            flow { emit(runCatching { genreHistoryRepo.data().entries }.getOrDefault(emptyMap())) },
+        ) { anchors, today, day, histories ->
+            val graph = genreGraphRepo.graph
+            DailyDiscovery.spotlight(graph, histories.keys, anchors, setOfNotNull(today?.genre?.id), day)
+                ?.let { node -> histories[node.id]?.let { GenreSpotlight(node, it) } }
+        }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /**
+     * The genre whose tracks are being fetched to play, if any.
+     *
+     * Playing a genre waits on its chart, a network round trip, and a button
+     * that does nothing visible for a second reads as a button that did not
+     * work — so it is tapped again, and the second tap queued the genre twice.
+     */
+    private val _startingGenre = MutableStateFlow<String?>(null)
+    val startingGenre: StateFlow<String?> = _startingGenre.asStateFlow()
+
+    /**
+     * Opens the map on [genreId], with its history already expanded when
+     * [withHistory]. The map flies to whatever is selected when it opens.
+     */
+    fun openOnMap(genreId: String, withHistory: Boolean) {
+        selectOnMap(genreId)
+        if (withHistory) _mapExpanded.value = true
     }
 
     // ── Paging ──────────────────────────────────────────────────────────
@@ -923,14 +1034,20 @@ class DiscoverViewModel @Inject constructor(
      */
     fun playGenre(genreId: String, player: tf.monochrome.android.ui.player.PlayerViewModel) {
         val node = genreGraphRepo.graph[genreId] ?: return
+        if (_startingGenre.value == genreId) return
         noteGenreVisited(genreId)
+        _startingGenre.value = genreId
         viewModelScope.launch {
-            val tracks = genreQueue(genreId)
-            // Silence rather than a wrong track: if the catalogue has nothing
-            // for this genre there is nothing honest to play.
-            tracks.firstOrNull()?.let { player.playUnifiedTrack(it, tracks) }
-            // The map stays open, so the panel should reflect what's playing.
-            _mapSelection.value = node
+            try {
+                val tracks = genreQueue(genreId)
+                // Silence rather than a wrong track: if the catalogue has nothing
+                // for this genre there is nothing honest to play.
+                tracks.firstOrNull()?.let { player.playUnifiedTrack(it, tracks) }
+                // The map stays open, so the panel should reflect what's playing.
+                _mapSelection.value = node
+            } finally {
+                if (_startingGenre.value == genreId) _startingGenre.value = null
+            }
         }
     }
 
@@ -944,9 +1061,15 @@ class DiscoverViewModel @Inject constructor(
      */
     fun radioGenre(genreId: String, player: tf.monochrome.android.ui.player.PlayerViewModel) {
         val node = genreGraphRepo.graph[genreId] ?: return
+        if (_startingGenre.value == genreId) return
         noteGenreVisited(genreId)
+        _startingGenre.value = genreId
         viewModelScope.launch {
-            val tracks = genreQueue(genreId).take(RADIO_OPENING)
+            val tracks = try {
+                genreQueue(genreId).take(RADIO_OPENING)
+            } finally {
+                if (_startingGenre.value == genreId) _startingGenre.value = null
+            }
             val seed = tracks.firstOrNull() ?: return@launch
             // A short opening run rather than the whole pool. The station is
             // seeded from one track and then follows *that* track's neighbours,
@@ -978,6 +1101,7 @@ class DiscoverViewModel @Inject constructor(
 
     fun refresh() {
         _refreshing.value = true
+        onShown()
         // The gesture means "go and look again", so the pages built earlier
         // stop counting. Without this the restore path would hand the same
         // page straight back and pull-to-refresh would be a spinner that

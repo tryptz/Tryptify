@@ -1945,4 +1945,15 @@
     <string name="fonts_unusable">Diese Datei lässt sich nicht als Schrift lesen. Lösch sie zum Aufräumen.</string>
     <string name="fonts_delete_title">%1$s löschen?</string>
     <string name="fonts_delete_body">Sie wird von diesem Gerät entfernt. Ist sie die aktive Schrift, kehrt die App zu Inter zurück.</string>
+    <string name="discover_today_title">Entdeckung des Tages</string>
+    <string name="discover_today_daily">Jeden Tag neu</string>
+    <string name="discover_today_via_two">Gleich neben %1$s und %2$s, Genres, zu denen du immer wieder zurückkehrst.</string>
+    <string name="discover_today_via_one">Gleich neben %1$s, einem Genre, zu dem du immer wieder zurückkehrst.</string>
+    <string name="discover_today_fresh">Eine Ecke der Karte, in der du noch nicht warst.</string>
+    <string name="discover_genre_since">Seit %1$d</string>
+    <string name="discover_galaxy_title">Deine Genre-Galaxie</string>
+    <string name="discover_galaxy_count">%1$d von %2$d Genres erkundet</string>
+    <string name="discover_galaxy_next">Als Nächstes leuchtet %1$s auf</string>
+    <string name="discover_galaxy_empty">Spiel ein Genre, um deinen ersten Stern zum Leuchten zu bringen.</string>
+    <string name="discover_spotlight_title">Genre des Tages</string>
 </resources>

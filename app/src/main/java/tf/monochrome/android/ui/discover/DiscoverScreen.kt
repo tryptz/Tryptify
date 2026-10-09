@@ -24,14 +24,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
@@ -52,7 +50,6 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
@@ -77,7 +74,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -93,7 +89,6 @@ import tf.monochrome.android.ui.components.ArtistItem
 import tf.monochrome.android.ui.components.DiscoveryTrackCard
 import tf.monochrome.android.ui.components.SectionHeader
 import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
-import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.components.swallowHorizontalScroll
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.navigateTool
@@ -103,6 +98,8 @@ import tf.monochrome.android.ui.navigation.openCatalogArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.components.SearchOverlay
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
 import tf.monochrome.android.R
@@ -118,12 +115,18 @@ import tf.monochrome.android.R
  * mode being designed against is not a thin catalogue, it's decision fatigue:
  * an undifferentiated wall of covers is exactly as unhelpful as an empty page.
  *
- * Which is also why the furniture above the first shelf is kept honest. A
- * header that fills the screen before a single recommendation is visible costs
- * every visit, and the page has twice been asked to carry one — a hero card
- * built from an artist you already play, and a permanent search field for a
- * question most visits don't ask. Neither survived: search folds into an icon
- * in the bar, and the feed starts at the top.
+ * The furniture above the first shelf is kept honest. A header that fills the
+ * screen costs every visit, and two never earned it — a hero built from an
+ * artist you already play, and a permanent search field for a question most
+ * visits don't ask. What heads the feed now is the one thing that changes
+ * daily and only daily, today's discovery: a genre next door to the listener's
+ * own that they have not been to. It scrolls away with the feed rather than
+ * pinning, and only "For you" carries it.
+ *
+ * The page's other ways in — the galaxy that fills in as genres are explored,
+ * the genre of the day with its history, World radio — are cards between the
+ * shelves rather than buttons pinned above them, where they took a row of
+ * every visit.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -148,6 +151,15 @@ fun DiscoverScreen(
     val sort by viewModel.sort.collectAsStateWithLifecycle()
     val loadingMore by viewModel.loadingMore.collectAsStateWithLifecycle()
     val exhausted by viewModel.exhausted.collectAsStateWithLifecycle()
+    val today by viewModel.today.collectAsStateWithLifecycle()
+    val spotlight by viewModel.spotlight.collectAsStateWithLifecycle()
+    val explored by viewModel.exploredGenres.collectAsStateWithLifecycle()
+    val starting by viewModel.startingGenre.collectAsStateWithLifecycle()
+    val heartedGenres by viewModel.heartedGenres.collectAsStateWithLifecycle()
+    val graph = viewModel.genreGraph
+
+    // A new day turns over when the page is next shown, not on a timer.
+    LaunchedEffect(Unit) { viewModel.onShown() }
 
     val listState = rememberLazyListState()
     // Nothing is fetched ahead of time: the next page is requested when the
@@ -179,6 +191,24 @@ fun DiscoverScreen(
     // it stays out while a selection is live even with the field folded.
     val genreSelected = genreRail.any { it.node.name == selectedChip }
 
+    // Today's layer belongs to "For you". A mood or a genre is a page about
+    // that choice, and a hero about something else on top of it would be noise.
+    val forYou = selectedChip == null && selectedMoods.isEmpty()
+    val hero = today.takeIf { forYou }
+
+    // The page's own backdrop for its glass, a sibling of everything drawn over
+    // it — never the app-wide source this page is itself inside.
+    val haze = rememberHazeState()
+    Box(modifier = Modifier.fillMaxSize()) {
+    DiscoverBackdrop(
+        graph = graph,
+        explored = explored,
+        todayId = today?.genre?.id,
+        listState = listState,
+        // Shorter than the hero, which is the first row whenever there is drift.
+        drift = if (hero != null) 200.dp else 0.dp,
+        modifier = Modifier.fillMaxSize().hazeSource(haze),
+    )
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text(stringResource(R.string.discover_beta)) },
@@ -285,31 +315,6 @@ fun DiscoverScreen(
             )
         }
 
-        SortRow(selected = sort, onSelect = viewModel::setSort)
-
-        // Two maps, side by side. Both are the fastest route into music rather
-        // than an afterthought, so they sit above the shelves: one arranges
-        // music by what it is, the other by where it comes from. Each card
-        // carries its own 8.dp horizontal padding, so the gutter between them
-        // forms itself and the Row needs no spacing of its own.
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(0.dp),
-        ) {
-            Box(modifier = Modifier.weight(1f)) {
-                MapEntryButton(onClick = { navController.navigateSafe(Screen.GenreMap.route) })
-            }
-            Box(modifier = Modifier.weight(1f)) {
-                WorldRadioEntryButton(
-                    // A page now, not a destination: move the pager rather
-                    // than pushing a screen onto the stack.
-                    onClick = {
-                        onSelectPage(tf.monochrome.android.ui.navigation.RADIO_PAGE_ID)
-                    },
-                )
-            }
-        }
-
         PullToRefreshBox(
             isRefreshing = refreshing,
             onRefresh = { viewModel.refresh() },
@@ -320,7 +325,78 @@ fun DiscoverScreen(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = tf.monochrome.android.ui.navigation.bottomChromePadding),
         ) {
-            items(shelves, key = { it.id }) { shelf ->
+            hero?.let { pick ->
+                item(key = "today") {
+                    DiscoverGlassCard(haze = haze) {
+                        TodayHero(
+                            graph = graph,
+                            pick = pick,
+                            hearted = pick.genre.id in heartedGenres,
+                            starting = starting == pick.genre.id,
+                            onPlay = { viewModel.playGenre(pick.genre.id, playerViewModel) },
+                            onRadio = { viewModel.radioGenre(pick.genre.id, playerViewModel) },
+                            onHeart = { viewModel.toggleHeartGenre(pick.genre.id) },
+                            onOpenMap = {
+                                viewModel.openOnMap(pick.genre.id, withHistory = false)
+                                navController.navigateSafe(Screen.GenreMap.route)
+                            },
+                        )
+                    }
+                }
+            }
+
+            // Scrolls with the feed now. It orders what is already on screen,
+            // which is a choice made once in a while, not a control the page
+            // has to keep in reach.
+            item(key = "sort") {
+                SortRow(selected = sort, onSelect = viewModel::setSort)
+            }
+
+            // The cards between the shelves, and the shelf each one follows.
+            // Only on "For you", like the hero.
+            val cards = if (!forYou) emptyList() else buildList {
+                add(FeedCard.GALAXY to 1)
+                if (spotlight != null) add(FeedCard.SPOTLIGHT to 3)
+                add(FeedCard.WORLD_RADIO to 5)
+            }
+            val feedCard: @Composable (FeedCard) -> Unit = { card ->
+                when (card) {
+                    FeedCard.GALAXY -> DiscoverGlassCard(
+                        haze = haze,
+                        onClick = {
+                            today?.let { viewModel.openOnMap(it.genre.id, withHistory = false) }
+                            navController.navigateSafe(Screen.GenreMap.route)
+                        },
+                    ) {
+                        GalaxyCard(graph = graph, explored = explored, next = today?.genre)
+                    }
+                    FeedCard.SPOTLIGHT -> spotlight?.let { spot ->
+                        DiscoverGlassCard(haze = haze) {
+                            SpotlightCard(
+                                graph = graph,
+                                spotlight = spot,
+                                starting = starting == spot.genre.id,
+                                onPlay = { viewModel.playGenre(spot.genre.id, playerViewModel) },
+                                onReadHistory = {
+                                    viewModel.openOnMap(spot.genre.id, withHistory = true)
+                                    navController.navigateSafe(Screen.GenreMap.route)
+                                },
+                            )
+                        }
+                    }
+                    FeedCard.WORLD_RADIO -> DiscoverGlassCard(
+                        haze = haze,
+                        // A page, not a destination: move the pager rather
+                        // than pushing a screen onto the stack.
+                        onClick = { onSelectPage(tf.monochrome.android.ui.navigation.RADIO_PAGE_ID) },
+                    ) {
+                        WorldRadioCard()
+                    }
+                }
+            }
+
+            shelves.forEachIndexed { index, shelf ->
+              item(key = shelf.id) {
                 DiscoveryShelfRow(
                     shelf = shelf,
                     onSeeAll = {
@@ -344,6 +420,19 @@ fun DiscoverScreen(
                         )
                     },
                 )
+              }
+              cards.filter { it.second == index }.forEach { (card, _) ->
+                  item(key = card.key) { feedCard(card) }
+              }
+            }
+
+            // A short feed still gets its cards, after the last shelf — but
+            // only once it has stopped loading, or they would land at the
+            // bottom and then jump up between shelves as those arrive.
+            if (!loading) {
+                cards.filter { it.second >= shelves.size }.forEach { (card, _) ->
+                    item(key = card.key) { feedCard(card) }
+                }
             }
 
             // The paging footer. PullToRefreshBox owns the *top* indicator, so
@@ -406,6 +495,7 @@ fun DiscoverScreen(
         }
         }
         }
+    }
     }
 
     UnifiedTrackContextMenuHost(
@@ -725,98 +815,6 @@ private fun CombinedGenreRow(
 }
 
 /**
- * The way into [WorldRadioScreen] — the Earth, and every city on air.
- *
- * Deliberately the same shape as its neighbour: the two are a pair of doors into
- * the same room, and a different silhouette would suggest they do different
- * kinds of thing.
- */
-@Composable
-private fun WorldRadioEntryButton(onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 8.dp)
-            .bounceClick(onClick = onClick),
-        shape = MonoDimens.shapePill,
-        color = MaterialTheme.colorScheme.primaryContainer,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                Icons.Default.Public,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-            Spacer(Modifier.width(10.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.world_radio),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = stringResource(R.string.cities_on_air),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
-/** The way into [GenreMapScreen] — the whole taxonomy as one picture. */
-@Composable
-private fun MapEntryButton(onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 8.dp)
-            .bounceClick(onClick = onClick),
-        shape = MonoDimens.shapePill,
-        color = MaterialTheme.colorScheme.secondaryContainer,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                Icons.Default.AccountTree,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
-            Spacer(Modifier.width(10.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.genre_map),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    // Shorter than it was: the card is half as wide now, and
-                    // "Every genre, linked" hard-clipped mid-word.
-                    text = stringResource(R.string.every_genre),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
-/**
  * One shelf: a header with its reason, then a horizontal row of cards.
  *
  * The reason line is the part that matters. "Because you play Aphex Twin" and
@@ -948,4 +946,11 @@ internal fun openDiscoveryItem(
         is DiscoveryItem.AlbumItem -> navController.openCatalogAlbum(item.album.id)
         is DiscoveryItem.ArtistItem -> navController.openCatalogArtist(item.artist.id)
     }
+}
+
+/** The cards set between the shelves on "For you". */
+private enum class FeedCard(val key: String) {
+    GALAXY("card_galaxy"),
+    SPOTLIGHT("card_spotlight"),
+    WORLD_RADIO("card_world_radio"),
 }

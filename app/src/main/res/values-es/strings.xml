@@ -1995,4 +1995,15 @@
     <string name="fonts_unusable">Este archivo no se puede leer como fuente. Bórralo para ordenar.</string>
     <string name="fonts_delete_title">¿Eliminar %1$s?</string>
     <string name="fonts_delete_body">Se elimina de este dispositivo. Si es la fuente en uso, la app vuelve a Inter.</string>
+    <string name="discover_today_title">El descubrimiento de hoy</string>
+    <string name="discover_today_daily">Nuevo cada día</string>
+    <string name="discover_today_via_two">Justo al lado de %1$s y %2$s, géneros a los que siempre vuelves.</string>
+    <string name="discover_today_via_one">Justo al lado de %1$s, un género al que siempre vuelves.</string>
+    <string name="discover_today_fresh">Un rincón del mapa que aún no has visitado.</string>
+    <string name="discover_genre_since">Desde %1$d</string>
+    <string name="discover_galaxy_title">Tu galaxia de géneros</string>
+    <string name="discover_galaxy_count">%1$d de %2$d géneros explorados</string>
+    <string name="discover_galaxy_next">La próxima en brillar: %1$s</string>
+    <string name="discover_galaxy_empty">Reproduce un género para encender tu primera estrella.</string>
+    <string name="discover_spotlight_title">El género del día</string>
 </resources>

@@ -1895,4 +1895,15 @@
     <string name="fonts_unusable">无法将此文件读取为字体。删除它即可清理。</string>
     <string name="fonts_delete_title">要删除 %1$s 吗？</string>
     <string name="fonts_delete_body">它将从此设备中移除。如果它是正在使用的字体，应用会改回 Inter。</string>
+    <string name="discover_today_title">今日发现</string>
+    <string name="discover_today_daily">每天更新</string>
+    <string name="discover_today_via_two">紧挨着你常听的 %1$s 和 %2$s。</string>
+    <string name="discover_today_via_one">紧挨着你常听的 %1$s。</string>
+    <string name="discover_today_fresh">地图上你还没去过的角落。</string>
+    <string name="discover_genre_since">始于 %1$d 年</string>
+    <string name="discover_galaxy_title">你的流派星系</string>
+    <string name="discover_galaxy_count">已探索 %1$d / %2$d 个流派</string>
+    <string name="discover_galaxy_next">下一个点亮的是 %1$s</string>
+    <string name="discover_galaxy_empty">播放一个流派，点亮你的第一颗星。</string>
+    <string name="discover_spotlight_title">今日流派</string>
 </resources>

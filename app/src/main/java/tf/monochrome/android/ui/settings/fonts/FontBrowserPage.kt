@@ -192,6 +192,8 @@ fun FontBrowserPage(
                         hazeState = haze,
                         glass = LocalMiniPlayerGlass.current,
                         avoidNavigationBar = false,
+                        // In a scrolling grid: a swipe on the pane scrolls it.
+                        blockTouchesBelow = false,
                     ) {
                         PreviewPane(
                             choice = previewChoice,
@@ -229,6 +231,8 @@ fun FontBrowserPage(
                         hazeState = haze,
                         glass = LocalMiniPlayerGlass.current,
                         avoidNavigationBar = false,
+                        // In a scrolling grid: a swipe on the pane scrolls it.
+                        blockTouchesBelow = false,
                     ) {
                         ImportPane(
                             importing = importing,

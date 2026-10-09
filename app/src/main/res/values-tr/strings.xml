@@ -1945,4 +1945,15 @@
     <string name="fonts_unusable">Bu dosya yazı tipi olarak okunamıyor. Temizlemek için silin.</string>
     <string name="fonts_delete_title">%1$s silinsin mi?</string>
     <string name="fonts_delete_body">Bu cihazdan kaldırılır. Kullanımdaki yazı tipiyse uygulama Inter’e döner.</string>
+    <string name="discover_today_title">Bugünün keşfi</string>
+    <string name="discover_today_daily">Her gün yeni</string>
+    <string name="discover_today_via_two">Sık sık döndüğünüz %1$s ve %2$s türlerinin hemen yanında.</string>
+    <string name="discover_today_via_one">Sık sık döndüğünüz %1$s türünün hemen yanında.</string>
+    <string name="discover_today_fresh">Haritada henüz gitmediğiniz bir köşe.</string>
+    <string name="discover_genre_since">%1$d yılından beri</string>
+    <string name="discover_galaxy_title">Tür galaksiniz</string>
+    <string name="discover_galaxy_count">%2$d türün %1$d tanesi keşfedildi</string>
+    <string name="discover_galaxy_next">Sıradaki yıldız: %1$s</string>
+    <string name="discover_galaxy_empty">İlk yıldızınızı yakmak için bir tür çalın.</string>
+    <string name="discover_spotlight_title">Günün türü</string>
 </resources>

@@ -1895,4 +1895,15 @@
     <string name="fonts_unusable">このファイルはフォントとして読み取れません。削除して整理できます。</string>
     <string name="fonts_delete_title">%1$s を削除しますか？</string>
     <string name="fonts_delete_body">この端末から削除されます。使用中のフォントの場合は Inter に戻ります。</string>
+    <string name="discover_today_title">今日の発見</string>
+    <string name="discover_today_daily">毎日更新</string>
+    <string name="discover_today_via_two">よく聴く %1$s と %2$s のすぐ隣のジャンルです。</string>
+    <string name="discover_today_via_one">よく聴く %1$s のすぐ隣のジャンルです。</string>
+    <string name="discover_today_fresh">マップでまだ訪れていない場所です。</string>
+    <string name="discover_genre_since">%1$d 年から</string>
+    <string name="discover_galaxy_title">あなたのジャンル銀河</string>
+    <string name="discover_galaxy_count">%2$d ジャンル中 %1$d を探索済み</string>
+    <string name="discover_galaxy_next">次に光るのは %1$s</string>
+    <string name="discover_galaxy_empty">ジャンルを再生して、最初の星を灯しましょう。</string>
+    <string name="discover_spotlight_title">今日のジャンル</string>
 </resources>

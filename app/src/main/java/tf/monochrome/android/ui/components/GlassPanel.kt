@@ -97,6 +97,13 @@ fun GlassPanel(
      * space for a bar that is nowhere near it.
      */
     avoidNavigationBar: Boolean = true,
+    /**
+     * Whether touches the content did not want stop at the panel. True over a
+     * canvas that would take them — a map selects whatever is nearest. False
+     * for a panel inside a scrolling list: the backstop consumes drags as well
+     * as taps, so a swipe that started on the panel could not scroll the list.
+     */
+    blockTouchesBelow: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val allowHaze = LocalPerformanceProfile.current.allowHazeBlur
@@ -144,17 +151,19 @@ fun GlassPanel(
         // handles the touch, which is exactly the case it was written for — and
         // being a hit at all is what keeps the event inside this panel, so the
         // full-bleed map underneath never sees it.
-        Box(
-            Modifier
-                .matchParentSize()
-                .pointerInput(Unit) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            awaitPointerEvent().changes.forEach { it.consume() }
+        if (blockTouchesBelow) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                awaitPointerEvent().changes.forEach { it.consume() }
+                            }
                         }
-                    }
-                },
-        )
+                    },
+            )
+        }
 
         val liveLens = LIVE_LENS_GLASS && liveLensCompiles && hazeState != null && allowHaze &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU

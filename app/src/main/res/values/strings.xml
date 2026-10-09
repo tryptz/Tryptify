@@ -1946,4 +1946,15 @@
     <string name="fonts_unusable">This file can’t be read as a font. Delete it to tidy up.</string>
     <string name="fonts_delete_title">Delete %1$s?</string>
     <string name="fonts_delete_body">It’s removed from this device. If it’s the font in use, the app goes back to Inter.</string>
+    <string name="discover_today_title">Today’s discovery</string>
+    <string name="discover_today_daily">New every day</string>
+    <string name="discover_today_via_two">Next door to %1$s and %2$s, genres you keep coming back to.</string>
+    <string name="discover_today_via_one">Next door to %1$s, a genre you keep coming back to.</string>
+    <string name="discover_today_fresh">A corner of the map you haven’t been to yet.</string>
+    <string name="discover_genre_since">Since %1$d</string>
+    <string name="discover_galaxy_title">Your genre galaxy</string>
+    <string name="discover_galaxy_count">%1$d of %2$d genres explored</string>
+    <string name="discover_galaxy_next">%1$s lights up next</string>
+    <string name="discover_galaxy_empty">Play a genre to light up your first star.</string>
+    <string name="discover_spotlight_title">Genre of the day</string>
 </resources>
