@@ -1885,4 +1885,30 @@
     <string name="fx_god_ray_glass_catch">Glass catches the light</string>
     <string name="fx_god_ray_glass_catch_desc">The glass letters catch the rays\' light: a glint on the edges facing it, and with a backlight, rims that glow. Needs Liquid glass.</string>
     <string name="fx_lyric_shadow_desc">A soft shadow under the lyrics, on the background, falling away from the light. 0 = none.</string>
+    <string name="playlist_fix_repair">Repair</string>
+    <string name="playlist_fix_regenerate">Regenerate</string>
+    <string name="playlist_fix_repair_title">Repair this playlist?</string>
+    <string name="playlist_fix_repair_body">Checks each song that isn’t downloaded and relinks any whose ID plays a different song, matching by title, artist and length. Downloaded songs stay as they are, and songs with no sure match aren’t changed.</string>
+    <string name="playlist_fix_regenerate_title">Regenerate playlist</string>
+    <string name="playlist_fix_regenerate_body">Finds each song again on the service you pick, by title, artist and length. Songs it can’t find there are looked up on the fallback; songs found on neither stay as they are. Downloaded songs aren’t changed.</string>
+    <string name="playlist_fix_service">Service</string>
+    <string name="playlist_fix_fallback">Fallback</string>
+    <string name="playlist_fix_no_fallback">No fallback</string>
+    <string name="playlist_fix_no_services">Add a TIDAL, Qobuz or Deezer API in Settings › Connections first.</string>
+    <string name="playlist_fix_checking">Checking %1$d of %2$d · Fixed: %3$d</string>
+    <string name="playlist_fix_repairing">Repairing playlist…</string>
+    <string name="playlist_fix_regenerating">Regenerating playlist…</string>
+    <string name="playlist_fix_stop">Stop</string>
+    <string name="playlist_fix_repair_done">Repair finished</string>
+    <string name="playlist_fix_regenerate_done">Regeneration finished</string>
+    <string name="playlist_fix_stopped">Stopped — the songs done so far are kept</string>
+    <string name="playlist_fix_failed">Couldn’t finish: %1$s</string>
+    <string name="playlist_fix_summary">Fixed: %1$d · Already right: %2$d · No sure match: %3$d</string>
+    <string name="playlist_fix_on_device">Downloaded, left as they are: %1$d</string>
+    <string name="playlist_fix_merged">Removed as duplicates: %1$d</string>
+    <string name="playlist_fix_unchecked">Couldn’t check (service not connected or not answering): %1$d</string>
+    <string name="playlist_fix_show_unmatched">Show songs with no match</string>
+    <string name="playlist_fix_unmatched_title">No sure match</string>
+    <string name="playlist_fix_unmatched_body">These songs weren’t changed.</string>
+    <string name="playlist_fix_busy">Another playlist is being fixed — wait for it to finish.</string>
 </resources>

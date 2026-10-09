@@ -1834,4 +1834,30 @@
     <string name="fx_god_ray_glass_catch">玻璃捕捉光线</string>
     <string name="fx_god_ray_glass_catch_desc">玻璃文字会捕捉光束的光：朝向光源的边缘出现闪光；若为背光，边缘会发光。需要开启液态玻璃。</string>
     <string name="fx_lyric_shadow_desc">歌词下方投在背景上的柔和阴影，方向背离光源。0 = 无阴影。</string>
+    <string name="playlist_fix_repair">修复</string>
+    <string name="playlist_fix_regenerate">重新生成</string>
+    <string name="playlist_fix_repair_title">要修复此歌单吗？</string>
+    <string name="playlist_fix_repair_body">逐一检查未下载的歌曲，按标题、艺人和时长匹配，若某首歌的 ID 播放的是另一首歌，就重新关联到正确的歌曲。已下载的歌曲保持不变，没有可靠匹配的歌曲也不会改动。</string>
+    <string name="playlist_fix_regenerate_title">重新生成歌单</string>
+    <string name="playlist_fix_regenerate_body">按标题、艺人和时长在你选择的服务上重新查找每首歌曲。找不到的歌曲会在备用服务上查找；两者都找不到的歌曲保持原样。已下载的歌曲不会改动。</string>
+    <string name="playlist_fix_service">服务</string>
+    <string name="playlist_fix_fallback">备用服务</string>
+    <string name="playlist_fix_no_fallback">不使用备用服务</string>
+    <string name="playlist_fix_no_services">请先在“设置 › 连接”中添加 TIDAL、Qobuz 或 Deezer API。</string>
+    <string name="playlist_fix_checking">正在检查第 %1$d 首，共 %2$d 首 · 已修复：%3$d</string>
+    <string name="playlist_fix_repairing">正在修复歌单…</string>
+    <string name="playlist_fix_regenerating">正在重新生成歌单…</string>
+    <string name="playlist_fix_stop">停止</string>
+    <string name="playlist_fix_repair_done">修复完成</string>
+    <string name="playlist_fix_regenerate_done">重新生成完成</string>
+    <string name="playlist_fix_stopped">已停止——已处理的歌曲会保留</string>
+    <string name="playlist_fix_failed">无法完成：%1$s</string>
+    <string name="playlist_fix_summary">已修复：%1$d · 原本正确：%2$d · 无可靠匹配：%3$d</string>
+    <string name="playlist_fix_on_device">已下载，保持不变：%1$d</string>
+    <string name="playlist_fix_merged">作为重复项移除：%1$d</string>
+    <string name="playlist_fix_unchecked">无法检查（服务未连接或无响应）：%1$d</string>
+    <string name="playlist_fix_show_unmatched">显示没有匹配的歌曲</string>
+    <string name="playlist_fix_unmatched_title">无可靠匹配</string>
+    <string name="playlist_fix_unmatched_body">以下歌曲未被更改。</string>
+    <string name="playlist_fix_busy">另一个歌单正在修复中，请等待其完成。</string>
 </resources>

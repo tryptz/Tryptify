@@ -12,6 +12,7 @@ import tf.monochrome.android.data.db.dao.FavoriteDao
 import tf.monochrome.android.data.db.dao.HistoryDao
 import tf.monochrome.android.data.db.dao.PlayEventDao
 import tf.monochrome.android.data.db.dao.PlaylistDao
+import tf.monochrome.android.data.db.dao.PlaylistTrackReplacement
 import tf.monochrome.android.data.db.entity.DownloadedTrackEntity
 import tf.monochrome.android.data.db.entity.FavoriteAlbumEntity
 import tf.monochrome.android.data.db.entity.FavoriteArtistEntity
@@ -278,6 +279,32 @@ class LibraryRepository @Inject constructor(
     suspend fun removeTrackFromPlaylist(playlistId: String, trackId: Long) {
         playlistDao.removeTrackFromPlaylist(playlistId, trackId)
         supabaseSync.queueChange(SyncKind.PLAYLIST_TRACK, playlistTrackKey(playlistId, trackId), SyncOp.DELETE)
+    }
+
+    /** The playlist's rows as stored, in order — ids, positions and all. */
+    suspend fun getPlaylistTrackRows(playlistId: String): List<PlaylistTrackEntity> =
+        playlistDao.getPlaylistTracksSnapshot(playlistId)
+
+    /**
+     * Swaps the row [oldTrackId] for [replacement] in place (see
+     * [PlaylistDao.replacePlaylistTrack]). Both keys are queued: the old one's
+     * delete, so no pull brings the wrong id back, and the new one's upsert.
+     */
+    suspend fun replacePlaylistTrack(
+        playlistId: String,
+        oldTrackId: Long,
+        replacement: Track,
+    ): PlaylistTrackReplacement {
+        val outcome = playlistDao.replacePlaylistTrack(
+            playlistId, oldTrackId, replacement.toPlaylistTrackEntity(playlistId)
+        )
+        if (outcome == PlaylistTrackReplacement.REPLACED || outcome == PlaylistTrackReplacement.MERGED) {
+            supabaseSync.queueChange(SyncKind.PLAYLIST_TRACK, playlistTrackKey(playlistId, oldTrackId), SyncOp.DELETE)
+        }
+        if (outcome == PlaylistTrackReplacement.REPLACED) {
+            supabaseSync.queueChange(SyncKind.PLAYLIST_TRACK, playlistTrackKey(playlistId, replacement.id), SyncOp.UPSERT)
+        }
+        return outcome
     }
 
     // --- Downloads ---

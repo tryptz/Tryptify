@@ -1884,4 +1884,30 @@
     <string name="fx_god_ray_glass_catch">Cam ışığı yakalar</string>
     <string name="fx_god_ray_glass_catch_desc">Cam harfler huzmelerin ışığını yakalar: ışığa bakan kenarlarda bir parıltı, arka ışıkta ise parlayan kenarlar. Sıvı cam gerekir.</string>
     <string name="fx_lyric_shadow_desc">Sözlerin altında, arka plana düşen ve ışıktan uzağa uzanan yumuşak bir gölge. 0 = yok.</string>
+    <string name="playlist_fix_repair">Onar</string>
+    <string name="playlist_fix_regenerate">Yeniden oluştur</string>
+    <string name="playlist_fix_repair_title">Bu çalma listesi onarılsın mı?</string>
+    <string name="playlist_fix_repair_body">İndirilmemiş her parçayı kontrol eder ve kimliği başka bir parçayı çalanları başlık, sanatçı ve süreye göre eşleştirerek doğru parçaya yeniden bağlar. İndirilen parçalar olduğu gibi kalır, kesin eşleşmesi olmayanlar da değiştirilmez.</string>
+    <string name="playlist_fix_regenerate_title">Çalma listesini yeniden oluştur</string>
+    <string name="playlist_fix_regenerate_body">Seçtiğiniz hizmette her parçayı başlık, sanatçı ve süreye göre yeniden bulur. Orada bulunamayanlar yedek hizmette aranır; hiçbirinde bulunamayanlar olduğu gibi kalır. İndirilen parçalar değiştirilmez.</string>
+    <string name="playlist_fix_service">Hizmet</string>
+    <string name="playlist_fix_fallback">Yedek hizmet</string>
+    <string name="playlist_fix_no_fallback">Yedek yok</string>
+    <string name="playlist_fix_no_services">Önce Ayarlar › Bağlantılar’dan bir TIDAL, Qobuz veya Deezer API’si ekleyin.</string>
+    <string name="playlist_fix_checking">%2$d parçanın %1$d. parçası kontrol ediliyor · Düzeltilen: %3$d</string>
+    <string name="playlist_fix_repairing">Çalma listesi onarılıyor…</string>
+    <string name="playlist_fix_regenerating">Çalma listesi yeniden oluşturuluyor…</string>
+    <string name="playlist_fix_stop">Durdur</string>
+    <string name="playlist_fix_repair_done">Onarım tamamlandı</string>
+    <string name="playlist_fix_regenerate_done">Yeniden oluşturma tamamlandı</string>
+    <string name="playlist_fix_stopped">Durduruldu — işlenen parçalar korunur</string>
+    <string name="playlist_fix_failed">Tamamlanamadı: %1$s</string>
+    <string name="playlist_fix_summary">Düzeltilen: %1$d · Zaten doğru: %2$d · Kesin eşleşme yok: %3$d</string>
+    <string name="playlist_fix_on_device">İndirilmiş, değiştirilmedi: %1$d</string>
+    <string name="playlist_fix_merged">Yinelenen olarak kaldırıldı: %1$d</string>
+    <string name="playlist_fix_unchecked">Kontrol edilemedi (hizmet bağlı değil veya yanıt vermiyor): %1$d</string>
+    <string name="playlist_fix_show_unmatched">Eşleşmeyen parçaları göster</string>
+    <string name="playlist_fix_unmatched_title">Kesin eşleşme yok</string>
+    <string name="playlist_fix_unmatched_body">Bu parçalar değiştirilmedi.</string>
+    <string name="playlist_fix_busy">Başka bir çalma listesi onarılıyor; bitmesini bekleyin.</string>
 </resources>

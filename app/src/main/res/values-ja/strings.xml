@@ -1834,4 +1834,30 @@
     <string name="fx_god_ray_glass_catch">ガラスが光をとらえる</string>
     <string name="fx_god_ray_glass_catch_desc">ガラスの文字が光の筋の光をとらえます。光に向いた縁がきらめき、バックライトでは縁が光ります。リキッドグラスが必要です。</string>
     <string name="fx_lyric_shadow_desc">歌詞の下、背景に落ちるやわらかな影。光と反対側に落ちます。0 = なし。</string>
+    <string name="playlist_fix_repair">修復</string>
+    <string name="playlist_fix_regenerate">再生成</string>
+    <string name="playlist_fix_repair_title">このプレイリストを修復しますか？</string>
+    <string name="playlist_fix_repair_body">ダウンロードされていない曲を1曲ずつ確認し、IDが別の曲を再生するものを、タイトル・アーティスト・長さで照合して正しい曲に付け直します。ダウンロード済みの曲はそのまま、確実な一致がない曲も変更しません。</string>
+    <string name="playlist_fix_regenerate_title">プレイリストを再生成</string>
+    <string name="playlist_fix_regenerate_body">選んだサービスで、タイトル・アーティスト・長さをもとに各曲を探し直します。見つからない曲は代替サービスで探し、どちらにもない曲はそのまま残します。ダウンロード済みの曲は変更しません。</string>
+    <string name="playlist_fix_service">サービス</string>
+    <string name="playlist_fix_fallback">代替サービス</string>
+    <string name="playlist_fix_no_fallback">代替なし</string>
+    <string name="playlist_fix_no_services">先に「設定 › 接続」で TIDAL、Qobuz、Deezer のいずれかの API を追加してください。</string>
+    <string name="playlist_fix_checking">%2$d 曲中 %1$d 曲目を確認中 · 修復：%3$d</string>
+    <string name="playlist_fix_repairing">プレイリストを修復中…</string>
+    <string name="playlist_fix_regenerating">プレイリストを再生成中…</string>
+    <string name="playlist_fix_stop">停止</string>
+    <string name="playlist_fix_repair_done">修復が完了しました</string>
+    <string name="playlist_fix_regenerate_done">再生成が完了しました</string>
+    <string name="playlist_fix_stopped">停止しました。処理済みの曲はそのまま残ります</string>
+    <string name="playlist_fix_failed">完了できませんでした：%1$s</string>
+    <string name="playlist_fix_summary">修復：%1$d · もともと正しい：%2$d · 確実な一致なし：%3$d</string>
+    <string name="playlist_fix_on_device">ダウンロード済みのため変更なし：%1$d</string>
+    <string name="playlist_fix_merged">重複として削除：%1$d</string>
+    <string name="playlist_fix_unchecked">確認できず（サービス未接続または応答なし）：%1$d</string>
+    <string name="playlist_fix_show_unmatched">一致しなかった曲を表示</string>
+    <string name="playlist_fix_unmatched_title">確実な一致なし</string>
+    <string name="playlist_fix_unmatched_body">これらの曲は変更されていません。</string>
+    <string name="playlist_fix_busy">別のプレイリストを修復中です。完了するまでお待ちください。</string>
 </resources>

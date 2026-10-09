@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import tf.monochrome.android.data.playlistfix.PlaylistFixState
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.ui.components.AddToPlaylistSheet
 import tf.monochrome.android.ui.components.CreatePlaylistDialog
@@ -112,6 +113,14 @@ fun PlaylistScreen(
     var showAddToPlaylistForTrack by remember { mutableStateOf<Track?>(null) }
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
     var showAddToPlaylistForSelection by remember { mutableStateOf(false) }
+
+    // Repair and regenerate: the job lives in PlaylistFixer and outlives this screen.
+    val fixState by viewModel.fixState.collectAsStateWithLifecycle()
+    val fixBusyElsewhere by viewModel.fixBusyElsewhere.collectAsStateWithLifecycle()
+    val fixServices by viewModel.fixServices.collectAsStateWithLifecycle()
+    var showRepairDialog by remember { mutableStateOf(false) }
+    var showRegenerateDialog by remember { mutableStateOf(false) }
+    var unmatchedSongs by remember { mutableStateOf<List<String>?>(null) }
 
     // Search text and order live here, not in the ViewModel: they describe how
     // this screen is being looked at right now, not anything about the playlist.
@@ -208,6 +217,32 @@ fun PlaylistScreen(
                 TextButton(onClick = { showDeleteConfirm = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
+    }
+
+    if (showRepairDialog) {
+        RepairPlaylistDialog(
+            services = fixServices,
+            onDismiss = { showRepairDialog = false },
+            onConfirm = {
+                showRepairDialog = false
+                viewModel.repairPlaylist()
+            },
+        )
+    }
+
+    if (showRegenerateDialog) {
+        RegeneratePlaylistDialog(
+            services = fixServices,
+            onDismiss = { showRegenerateDialog = false },
+            onConfirm = { primary, fallback ->
+                showRegenerateDialog = false
+                viewModel.regeneratePlaylist(primary, fallback)
+            },
+        )
+    }
+
+    unmatchedSongs?.let { songs ->
+        UnmatchedSongsDialog(songs = songs, onDismiss = { unmatchedSongs = null })
     }
 
     val editInfo = playlistInfo
@@ -387,6 +422,32 @@ fun PlaylistScreen(
                             Icon(Icons.Default.Download, contentDescription = stringResource(R.string.download_all))
                         }
                     }
+                    }
+
+                    // Only the listener's own playlists can be rewritten.
+                    if (isOwn) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        tf.monochrome.android.devedit.DevEditable("playlist_fix_row", Modifier.fillMaxWidth()) {
+                            PlaylistFixActions(
+                                enabled = tracks.isNotEmpty() &&
+                                    fixState !is PlaylistFixState.Running && !fixBusyElsewhere,
+                                onRepair = {
+                                    viewModel.refreshFixServices()
+                                    showRepairDialog = true
+                                },
+                                onRegenerate = {
+                                    viewModel.refreshFixServices()
+                                    showRegenerateDialog = true
+                                },
+                            )
+                        }
+                        PlaylistFixStatus(
+                            state = fixState,
+                            busyElsewhere = fixBusyElsewhere,
+                            onStop = { viewModel.stopFix() },
+                            onDismiss = { viewModel.dismissFixResult() },
+                            onShowUnmatched = { unmatchedSongs = it },
+                        )
                     }
                 }
                 }

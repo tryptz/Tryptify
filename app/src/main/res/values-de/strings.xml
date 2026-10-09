@@ -1884,4 +1884,30 @@
     <string name="fx_god_ray_glass_catch">Glas fängt das Licht ein</string>
     <string name="fx_god_ray_glass_catch_desc">Die Glasbuchstaben fangen das Licht der Bündel ein: ein Glanz an den Kanten, die ihm zugewandt sind, und bei Gegenlicht leuchtende Ränder. Braucht Liquid Glass.</string>
     <string name="fx_lyric_shadow_desc">Ein weicher Schatten unter dem Songtext, auf dem Hintergrund, vom Licht abgewandt. 0 = keiner.</string>
+    <string name="playlist_fix_repair">Reparieren</string>
+    <string name="playlist_fix_regenerate">Neu erstellen</string>
+    <string name="playlist_fix_repair_title">Diese Playlist reparieren?</string>
+    <string name="playlist_fix_repair_body">Prüft jeden nicht heruntergeladenen Titel und verknüpft die neu, deren ID einen anderen Titel abspielt – abgeglichen nach Titel, Interpret und Länge. Heruntergeladene Titel bleiben, wie sie sind, und Titel ohne sichere Übereinstimmung werden nicht verändert.</string>
+    <string name="playlist_fix_regenerate_title">Playlist neu erstellen</string>
+    <string name="playlist_fix_regenerate_body">Sucht jeden Titel im gewählten Dienst neu, nach Titel, Interpret und Länge. Was dort fehlt, wird im Ausweichdienst gesucht; was in keinem gefunden wird, bleibt, wie es ist. Heruntergeladene Titel werden nicht verändert.</string>
+    <string name="playlist_fix_service">Dienst</string>
+    <string name="playlist_fix_fallback">Ausweichdienst</string>
+    <string name="playlist_fix_no_fallback">Kein Ausweichdienst</string>
+    <string name="playlist_fix_no_services">Füge zuerst unter Einstellungen › Verbindungen eine TIDAL-, Qobuz- oder Deezer-API hinzu.</string>
+    <string name="playlist_fix_checking">Prüfung %1$d von %2$d · Repariert: %3$d</string>
+    <string name="playlist_fix_repairing">Playlist wird repariert…</string>
+    <string name="playlist_fix_regenerating">Playlist wird neu erstellt…</string>
+    <string name="playlist_fix_stop">Stoppen</string>
+    <string name="playlist_fix_repair_done">Reparatur abgeschlossen</string>
+    <string name="playlist_fix_regenerate_done">Neuerstellung abgeschlossen</string>
+    <string name="playlist_fix_stopped">Gestoppt – bereits bearbeitete Titel bleiben erhalten</string>
+    <string name="playlist_fix_failed">Konnte nicht abgeschlossen werden: %1$s</string>
+    <string name="playlist_fix_summary">Repariert: %1$d · Schon richtig: %2$d · Keine sichere Übereinstimmung: %3$d</string>
+    <string name="playlist_fix_on_device">Heruntergeladen, unverändert: %1$d</string>
+    <string name="playlist_fix_merged">Als Duplikate entfernt: %1$d</string>
+    <string name="playlist_fix_unchecked">Nicht geprüft (Dienst nicht verbunden oder antwortet nicht): %1$d</string>
+    <string name="playlist_fix_show_unmatched">Titel ohne Übereinstimmung anzeigen</string>
+    <string name="playlist_fix_unmatched_title">Keine sichere Übereinstimmung</string>
+    <string name="playlist_fix_unmatched_body">Diese Titel wurden nicht verändert.</string>
+    <string name="playlist_fix_busy">Eine andere Playlist wird gerade repariert – warte, bis sie fertig ist.</string>
 </resources>

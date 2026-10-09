@@ -59,6 +59,9 @@ class MusicRepository @Inject constructor(
     /** TIDAL track's ISRC (metadata pool) — used by the Qobuz playback fallback. */
     suspend fun getTidalIsrc(trackId: Long): String? = apiClient.getTidalIsrc(trackId)
 
+    /** The song TIDAL has under this id, or null when none (or unreachable). */
+    suspend fun getTidalTrack(trackId: Long): Track? = apiClient.getTidalTrack(trackId)
+
     /** Qobuz match (track id + album slug + artist id) for an ISRC, or null. */
     suspend fun findQobuzByIsrc(isrc: String): tf.monochrome.android.data.api.QobuzTrackMatch? =
         apiClient.findQobuzTrackByIsrc(isrc)

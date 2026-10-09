@@ -1934,4 +1934,30 @@
     <string name="fx_god_ray_glass_catch">El cristal capta la luz</string>
     <string name="fx_god_ray_glass_catch_desc">Las letras de cristal captan la luz de los haces: un destello en los bordes que miran hacia ella y, a contraluz, contornos que brillan. Requiere el cristal líquido.</string>
     <string name="fx_lyric_shadow_desc">Una sombra suave bajo la letra, sobre el fondo, que cae en dirección contraria a la luz. 0 = ninguna.</string>
+    <string name="playlist_fix_repair">Reparar</string>
+    <string name="playlist_fix_regenerate">Regenerar</string>
+    <string name="playlist_fix_repair_title">¿Reparar esta playlist?</string>
+    <string name="playlist_fix_repair_body">Revisa cada canción que no esté descargada y vuelve a vincular las que tengan un ID que reproduce otra canción, comparando título, artista y duración. Las canciones descargadas no cambian, y las que no tienen una coincidencia segura se quedan como están.</string>
+    <string name="playlist_fix_regenerate_title">Regenerar playlist</string>
+    <string name="playlist_fix_regenerate_body">Busca de nuevo cada canción en el servicio que elijas, por título, artista y duración. Las que no encuentre ahí se buscan en el servicio alternativo; las que no aparezcan en ninguno se quedan como están. Las canciones descargadas no cambian.</string>
+    <string name="playlist_fix_service">Servicio</string>
+    <string name="playlist_fix_fallback">Servicio alternativo</string>
+    <string name="playlist_fix_no_fallback">Sin servicio alternativo</string>
+    <string name="playlist_fix_no_services">Primero añade una API de TIDAL, Qobuz o Deezer en Ajustes › Conexiones.</string>
+    <string name="playlist_fix_checking">Revisando %1$d de %2$d · Corregidas: %3$d</string>
+    <string name="playlist_fix_repairing">Reparando la playlist…</string>
+    <string name="playlist_fix_regenerating">Regenerando la playlist…</string>
+    <string name="playlist_fix_stop">Detener</string>
+    <string name="playlist_fix_repair_done">Reparación terminada</string>
+    <string name="playlist_fix_regenerate_done">Regeneración terminada</string>
+    <string name="playlist_fix_stopped">Detenido: las canciones ya procesadas se conservan</string>
+    <string name="playlist_fix_failed">No se pudo terminar: %1$s</string>
+    <string name="playlist_fix_summary">Corregidas: %1$d · Ya correctas: %2$d · Sin coincidencia segura: %3$d</string>
+    <string name="playlist_fix_on_device">Descargadas, sin cambios: %1$d</string>
+    <string name="playlist_fix_merged">Eliminadas por duplicadas: %1$d</string>
+    <string name="playlist_fix_unchecked">Sin revisar (servicio sin conectar o sin respuesta): %1$d</string>
+    <string name="playlist_fix_show_unmatched">Mostrar canciones sin coincidencia</string>
+    <string name="playlist_fix_unmatched_title">Sin coincidencia segura</string>
+    <string name="playlist_fix_unmatched_body">Estas canciones no se cambiaron.</string>
+    <string name="playlist_fix_busy">Se está reparando otra playlist; espera a que termine.</string>
 </resources>
