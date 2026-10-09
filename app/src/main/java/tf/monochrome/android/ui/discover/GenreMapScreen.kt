@@ -27,6 +27,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.navigationBars
@@ -620,12 +622,23 @@ fun GenreMapScreen(
                     // landscape phone — where the whole view is barely taller
                     // than the panel's own chrome — from being handed a
                     // scroll region that pushes the buttons off the top.
+                    // Measured between the title and the mini player, not the
+                    // whole screen: counting the bottom chrome as room is how
+                    // the open Top 100 pushed the panel up under the status
+                    // bar, where its close button opened the notifications.
                     historyMaxHeight = with(density) {
-                        val canvas = (viewport.height - topChromePx).toFloat()
+                        val canvas = viewport.height - topChromePx - panelBottomInset.toPx()
                         minOf(
                             canvas * HISTORY_HEIGHT_FRACTION,
                             canvas - PANEL_CHROME_RESERVE.toPx(),
                         ).coerceAtLeast(MIN_HISTORY_HEIGHT.toPx()).toDp()
+                    },
+                    // The panel itself never climbs past a strip of map under
+                    // the title, so its top row — close included — is always
+                    // below the title bar, and the title's Back stays tappable.
+                    maxHeight = with(density) {
+                        (viewport.height - topChromePx - panelBottomInset.toPx() - MIN_MAP_STRIP.toPx())
+                            .coerceAtLeast(MIN_PANEL_HEIGHT.toPx()).toDp()
                     },
                     onToggleExpand = { viewModel.toggleMapExpanded() },
                     onHeart = { viewModel.toggleHeartGenre(node.id) },
@@ -716,6 +729,7 @@ private fun GenreCard(
     expanded: Boolean,
     history: GenreHistoryState,
     historyMaxHeight: Dp,
+    maxHeight: Dp,
     chartOpen: Boolean,
     chart: GenreChartState,
     onToggleExpand: () -> Unit,
@@ -738,9 +752,20 @@ private fun GenreCard(
     // one — no lens corner, so its rim was a hairline where every other pane
     // bends. GlassPanel also keeps taps on the panel from reaching the map.
     val instant = reduceMotion()
+    val scroll = rememberScrollState()
+    val chartInView = remember { BringIntoViewRequester() }
+    // Opening Top 100 scrolls the panel to it once it has unfolded, so the
+    // chart is what you see rather than a row of buttons above it.
+    LaunchedEffect(chartOpen) {
+        if (!chartOpen) return@LaunchedEffect
+        if (!instant) kotlinx.coroutines.delay(UNFOLD_MILLIS)
+        chartInView.bringIntoView()
+    }
 
-    GlassPanel(hazeState = hazeState, glass = glass, modifier = modifier) {
+    GlassPanel(hazeState = hazeState, glass = glass, modifier = modifier.heightIn(max = maxHeight)) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // The top row stays put while the rest scrolls: the way out of
+            // the panel is never scrolled away.
             Row(verticalAlignment = Alignment.Top) {
                 Column(modifier = Modifier.weight(1f)) {
                     // Where it sits: Electronic › Trance ›. Each step is a way
@@ -821,131 +846,138 @@ private fun GenreCard(
                     )
                 }
             }
-            if (node.aka.isNotEmpty()) {
-                Text(
-                    text = stringResource(R.string.also_called, node.aka.joinToString(stringResource(R.string.list_separator))),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-
-            // The history, when it's been asked for. Between the identity above
-            // and the navigation below, because it is the answer to the
-            // question the panel's title just raised.
-            //
-            // The last thing worth showing is held rather than read live: the
-            // panel goes back to Idle the instant it is told to close, and the
-            // fold-away animation still has three hundred milliseconds to run —
-            // long enough to watch a finished article turn back into "Looking
-            // it up…" on its way out.
-            var shown by remember(node.id) { mutableStateOf<GenreHistoryState>(history) }
-            LaunchedEffect(history) {
-                if (history != GenreHistoryState.Idle) shown = history
-            }
-            AnimatedVisibility(
-                visible = expanded,
-                enter = if (instant) EnterTransition.None else expandVertically() + fadeIn(),
-                exit = if (instant) ExitTransition.None else shrinkVertically() + fadeOut(),
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(scroll),
             ) {
-                GenreHistoryBody(
-                    node = node,
-                    state = shown,
-                    accent = familyColor,
-                    maxHeight = historyMaxHeight,
-                )
-            }
+                if (node.aka.isNotEmpty()) {
+                    Text(
+                        text = stringResource(R.string.also_called, node.aka.joinToString(stringResource(R.string.list_separator))),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
 
-            // Where to go next. Naming the subgenres rather than counting them
-            // is the difference between "Dub has 3 subgenres" and being one tap
-            // from dub techno — and each tap flies the map to it, so the panel
-            // doubles as a way to steer.
-            if (related.nodes.isNotEmpty()) {
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = if (related.areChildren) stringResource(R.string.subgenres) else stringResource(R.string.closest_to_it),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(6.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(related.nodes, key = { it.id }) { child ->
-                        RelativeChip(
-                            node = child,
-                            accent = familyColor,
-                            onClick = { onRelated(child) },
-                        )
+                // The history, when it's been asked for. Between the identity above
+                // and the navigation below, because it is the answer to the
+                // question the panel's title just raised.
+                //
+                // The last thing worth showing is held rather than read live: the
+                // panel goes back to Idle the instant it is told to close, and the
+                // fold-away animation still has three hundred milliseconds to run —
+                // long enough to watch a finished article turn back into "Looking
+                // it up…" on its way out.
+                var shown by remember(node.id) { mutableStateOf<GenreHistoryState>(history) }
+                LaunchedEffect(history) {
+                    if (history != GenreHistoryState.Idle) shown = history
+                }
+                AnimatedVisibility(
+                    visible = expanded,
+                    enter = if (instant) EnterTransition.None else expandVertically() + fadeIn(),
+                    exit = if (instant) ExitTransition.None else shrinkVertically() + fadeOut(),
+                ) {
+                    GenreHistoryBody(
+                        node = node,
+                        state = shown,
+                        accent = familyColor,
+                        maxHeight = historyMaxHeight,
+                    )
+                }
+
+                // Where to go next. Naming the subgenres rather than counting them
+                // is the difference between "Dub has 3 subgenres" and being one tap
+                // from dub techno — and each tap flies the map to it, so the panel
+                // doubles as a way to steer.
+                if (related.nodes.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = if (related.areChildren) stringResource(R.string.subgenres) else stringResource(R.string.closest_to_it),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(related.nodes, key = { it.id }) { child ->
+                            RelativeChip(
+                                node = child,
+                                accent = familyColor,
+                                onClick = { onRelated(child) },
+                            )
+                        }
                     }
                 }
-            }
 
-            // Three actions instead of two, so they get two rows rather than
-            // being squeezed until "Explore in Discover" ellipsises itself into
-            // "Explore in Disco…". Shuffle and Radio share the top row — both
-            // start music, both are one word — and Explore takes the full width
-            // below, since it's the one that leaves the map.
-            Spacer(Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionPill(
-                    icon = Icons.Default.PlayArrow,
-                    label = stringResource(R.string.play_top),
-                    container = MaterialTheme.colorScheme.primary,
-                    content = MaterialTheme.colorScheme.onPrimary,
-                    onClick = onPlay,
-                    modifier = Modifier.weight(1f),
-                )
-                ActionPill(
-                    icon = Icons.Default.Radio,
-                    label = stringResource(R.string.tab_radio),
-                    container = MaterialTheme.colorScheme.secondaryContainer,
-                    content = MaterialTheme.colorScheme.onSecondaryContainer,
-                    onClick = onRadio,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            // Top 100 opens in place rather than leaving for a screen of its
-            // own. The chart is the same kind of thing as the subgenre chips
-            // above it — something to look at while deciding — and pushing a
-            // route to show it meant losing the map's camera, the panel, and
-            // your place in the family you were reading down.
-            Spacer(Modifier.height(8.dp))
-            Row {
-                ActionPill(
-                    icon = Icons.Default.BarChart,
-                    label = stringResource(R.string.top_100),
-                    container = if (chartOpen) familyColor.copy(alpha = 0.22f)
-                    else MaterialTheme.colorScheme.secondaryContainer,
-                    content = if (chartOpen) familyColor
-                    else MaterialTheme.colorScheme.onSecondaryContainer,
-                    onClick = onToggleChart,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-            AnimatedVisibility(
-                visible = chartOpen,
-                enter = if (instant) EnterTransition.None else expandVertically() + fadeIn(),
-                exit = if (instant) ExitTransition.None else shrinkVertically() + fadeOut(),
-            ) {
-                GenreChartBody(
-                    state = chart,
-                    accent = familyColor,
-                    maxHeight = historyMaxHeight,
-                    onPlay = onPlayChartEntry,
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-            Row {
-                ActionPill(
-                    icon = Icons.AutoMirrored.Filled.ArrowForward,
-                    label = stringResource(R.string.explore_in_discover),
-                    container = Color.Transparent,
-                    content = MaterialTheme.colorScheme.onSurfaceVariant,
-                    onClick = onExplore,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MonoDimens.shapePill),
-                )
+                // Three actions instead of two, so they get two rows rather than
+                // being squeezed until "Explore in Discover" ellipsises itself into
+                // "Explore in Disco…". Shuffle and Radio share the top row — both
+                // start music, both are one word — and Explore takes the full width
+                // below, since it's the one that leaves the map.
+                Spacer(Modifier.height(14.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ActionPill(
+                        icon = Icons.Default.PlayArrow,
+                        label = stringResource(R.string.play_top),
+                        container = MaterialTheme.colorScheme.primary,
+                        content = MaterialTheme.colorScheme.onPrimary,
+                        onClick = onPlay,
+                        modifier = Modifier.weight(1f),
+                    )
+                    ActionPill(
+                        icon = Icons.Default.Radio,
+                        label = stringResource(R.string.tab_radio),
+                        container = MaterialTheme.colorScheme.secondaryContainer,
+                        content = MaterialTheme.colorScheme.onSecondaryContainer,
+                        onClick = onRadio,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                // Top 100 opens in place rather than leaving for a screen of its
+                // own. The chart is the same kind of thing as the subgenre chips
+                // above it — something to look at while deciding — and pushing a
+                // route to show it meant losing the map's camera, the panel, and
+                // your place in the family you were reading down.
+                Spacer(Modifier.height(8.dp))
+                Row {
+                    ActionPill(
+                        icon = Icons.Default.BarChart,
+                        label = stringResource(R.string.top_100),
+                        container = if (chartOpen) familyColor.copy(alpha = 0.22f)
+                        else MaterialTheme.colorScheme.secondaryContainer,
+                        content = if (chartOpen) familyColor
+                        else MaterialTheme.colorScheme.onSecondaryContainer,
+                        onClick = onToggleChart,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                AnimatedVisibility(
+                    visible = chartOpen,
+                    enter = if (instant) EnterTransition.None else expandVertically() + fadeIn(),
+                    exit = if (instant) ExitTransition.None else shrinkVertically() + fadeOut(),
+                ) {
+                    GenreChartBody(
+                        state = chart,
+                        accent = familyColor,
+                        maxHeight = historyMaxHeight,
+                        onPlay = onPlayChartEntry,
+                        modifier = Modifier.bringIntoViewRequester(chartInView),
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Row {
+                    ActionPill(
+                        icon = Icons.AutoMirrored.Filled.ArrowForward,
+                        label = stringResource(R.string.explore_in_discover),
+                        container = Color.Transparent,
+                        content = MaterialTheme.colorScheme.onSurfaceVariant,
+                        onClick = onExplore,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MonoDimens.shapePill),
+                    )
+                }
             }
         }
     }
@@ -981,8 +1013,9 @@ private fun GenreChartBody(
     accent: Color,
     maxHeight: Dp,
     onPlay: (ChartEntry) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Column(modifier = Modifier.padding(top = 12.dp)) {
+    Column(modifier = modifier.padding(top = 12.dp)) {
         when (state) {
             // Idle is the frame between the tap and the flow noticing. Drawn as
             // the loading line rather than as nothing, so the section does not
@@ -1295,6 +1328,19 @@ private val PANEL_CHROME_RESERVE = 300.dp
 
 /** Below this the history isn't worth opening, so it scrolls in a smaller box. */
 private val MIN_HISTORY_HEIGHT = 120.dp
+
+/**
+ * The map the panel always leaves showing under the title: enough to see
+ * the genre it is about, and what keeps the panel's top row, close and all,
+ * clear of the title bar and the status bar above it.
+ */
+private val MIN_MAP_STRIP = 96.dp
+
+/** The least the panel is allowed, on a screen too short for the rule above. */
+private val MIN_PANEL_HEIGHT = 220.dp
+
+/** Roughly how long a section takes to unfold, before it is scrolled to. */
+private const val UNFOLD_MILLIS = 320L
 
 /**
  * A stable colour per family.

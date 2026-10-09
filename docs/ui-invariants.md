@@ -587,6 +587,12 @@ measured panel or HUD plus `LocalBottomChromeInset`, eased so the star slides
 rather than jumps. Labels are never drawn inside either strip. A name under
 glass is two pieces of text on top of each other.
 
+**The genre panel is capped at a strip of map below the title**
+(`MIN_MAP_STRIP`), and its sections' heights are measured between the title and
+`LocalBottomChromeInset`, not across the whole screen. Its top row is outside
+the scrolling part. Uncapped, the open Top 100 pushed the panel under the status
+bar, and its close button opened the notification shade instead.
+
 **Gesture handlers read the reserves through `rememberUpdatedState`.** Pointer
 handlers outlive the composition that made them. Captured, a tap is hit-tested
 against the view as it was before the panel opened, and lands on nothing.
