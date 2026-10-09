@@ -232,7 +232,7 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
 
     // ── Radio ───────────────────────────────────────────────────────────
     entry("AI radio", R.string.search_ai_radio, "Radio", listOf("station", "recommend", "queue", "seed")),
-    entry("Radio weights", R.string.search_radio_weights, "Radio", listOf("tuning", "similarity", "novelty", "familiarity")),
+    entry("Radio weights", R.string.search_radio_weights, "Radio", listOf("tuning", "style", "familiar", "adventurous", "new songs", "originals", "similarity", "novelty", "familiarity")),
 
     // ── System ──────────────────────────────────────────────────────────
     entry("Performance", R.string.settings_performance, "System", listOf("battery", "fps", "low power", "glass", "blur")),

@@ -9,6 +9,14 @@
 - **The real player has no pane there.** The transport and the dock are punched slabs floating straight over the artwork, and the invariants forbid a haze pane under one — an opaque frosted backdrop is exactly what flattens them. The preview was showing a construction that does not exist.
 - **It moved to the UI panels tab**, above the mini player, where the two faces of that one material — the floating sheet and the bar — are previewed together and both answer to the sliders under them.
 
+### Changed
+
+#### Radio settings, rebuilt to make sense
+- **A style, three dials and three switches, instead of eleven 0–3 sliders.** Pick Familiar, Balanced or Adventurous; the dials say what each end means ("Songs you know … Songs you haven't heard", "Its artist and close peers … Further out", "Loose … Same genre and era") instead of showing a number; the switches are Prefer my library, Avoid songs I just heard and Prefer original versions. Moving a dial off a preset shows "Custom mix"; a preset keeps your switches.
+- **Why the old sliders went.** "Qobuz" moved nothing (every candidate on a Qobuz station is a Qobuz track, so all got the same bonus). Novelty and Familiarity only ever mattered by their difference, and Artist similarity and Discovery distance were exact mirrors that cancelled out at their defaults: two settings split into four sliders. "Discovery expansion" boosted the starting song's own artist search, so turning it up gave more of the same artist; it now rides the far-from-the-song dial, high at the close end and gone at the far end.
+- **Nothing changes for a station nobody tuned.** `RadioStyle` is a view of the same `RadioPlannerWeights`, still stored and synced under the same keys. Balanced is exactly the shipped defaults, `RadioStyleTest` proves the ranking of a fixed station is identical, and that Familiar and Adventurous move it the way their names say. Settings made with the old sliders are read back by what they did.
+- **Genre and era say when they can't help:** they need the starting song's genre and year, which songs from playlists often don't carry, and the dial now says so.
+
 ### Added
 
 #### Swipe to discover
