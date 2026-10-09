@@ -966,6 +966,26 @@ class DiscoverViewModel @Inject constructor(
         }
     }
 
+    /** "You are here" on the map: the genre last visited, else the first hearted. */
+    val mapHere: StateFlow<GenreNode?> =
+        combine(preferences.discoveryRecentGenres, preferences.discoveryHeartedGenres) { recent, hearted ->
+            tf.monochrome.android.domain.model.GenreGalaxy.here(genreGraphRepo.graph, recent, hearted)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /**
+     * Flies the map somewhere the listener has not been: a well-known genre
+     * they haven't explored. Selecting it is what moves the camera.
+     */
+    fun surpriseMe() {
+        val pick = tf.monochrome.android.domain.model.GenreGalaxy.surprise(
+            graph = genreGraphRepo.graph,
+            explored = exploredGenres.value,
+            random = kotlin.random.Random.Default,
+            current = _mapSelection.value?.id,
+        ) ?: return
+        selectOnMap(pick.id)
+    }
+
     private val _mapExpanded = MutableStateFlow(false)
 
     /** Whether the map's panel is showing the genre's history. */

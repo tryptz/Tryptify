@@ -1990,4 +1990,17 @@
         <item quantity="one">%1$d day ago</item>
         <item quantity="other">%1$d days ago</item>
     </plurals>
+    <string name="genre_galaxy">Genre galaxy</string>
+    <string name="galaxy_layout_galaxy">Galaxy</string>
+    <string name="galaxy_layout_timeline">Timeline</string>
+    <string name="galaxy_surprise">Surprise me</string>
+    <string name="galaxy_more">More options</string>
+    <string name="galaxy_you_are_here">You are here</string>
+    <string name="galaxy_legend_lit">Lit: you’ve listened</string>
+    <string name="galaxy_legend_hearted">Hearted</string>
+    <string name="galaxy_legend_dark">Still dark</string>
+    <plurals name="galaxy_subgenres">
+        <item quantity="one">%1$d subgenre</item>
+        <item quantity="other">%1$d subgenres</item>
+    </plurals>
 </resources>

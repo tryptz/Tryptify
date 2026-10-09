@@ -1938,4 +1938,16 @@
     <plurals name="radar_days_ago">
         <item quantity="other">%1$d 日前</item>
     </plurals>
+    <string name="genre_galaxy">ジャンル銀河</string>
+    <string name="galaxy_layout_galaxy">銀河</string>
+    <string name="galaxy_layout_timeline">年表</string>
+    <string name="galaxy_surprise">おまかせ</string>
+    <string name="galaxy_more">その他のオプション</string>
+    <string name="galaxy_you_are_here">現在地</string>
+    <string name="galaxy_legend_lit">点灯：聴いた</string>
+    <string name="galaxy_legend_hearted">お気に入り</string>
+    <string name="galaxy_legend_dark">まだ暗い</string>
+    <plurals name="galaxy_subgenres">
+        <item quantity="other">サブジャンル %1$d</item>
+    </plurals>
 </resources>

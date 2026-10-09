@@ -1958,3 +1958,15 @@ radar_yesterday	Yesterday	昨天	昨日	Hier	Ayer	Dün	Gestern
 radar_days_ago#one	%1$d day ago	%1$d 天前	%1$d 日前	Il y a %1$d jour	Hace %1$d día	%1$d gün önce	Vor %1$d Tag
 radar_days_ago#many	%1$d days ago	%1$d 天前	%1$d 日前	Il y a %1$d jours	Hace %1$d días	%1$d gün önce	Vor %1$d Tagen
 radar_days_ago#other	%1$d days ago	%1$d 天前	%1$d 日前	Il y a %1$d jours	Hace %1$d días	%1$d gün önce	Vor %1$d Tagen
+genre_galaxy	Genre galaxy	流派星系	ジャンル銀河	Galaxie des genres	Galaxia de géneros	Tür galaksisi	Genre-Galaxie
+galaxy_layout_galaxy	Galaxy	星系	銀河	Galaxie	Galaxia	Galaksi	Galaxie
+galaxy_layout_timeline	Timeline	时间线	年表	Chronologie	Cronología	Zaman çizelgesi	Zeitleiste
+galaxy_surprise	Surprise me	给我惊喜	おまかせ	Surprenez-moi	Sorpréndeme	Beni şaşırt	Überrasch mich
+galaxy_more	More options	更多选项	その他のオプション	Plus d’options	Más opciones	Diğer seçenekler	Weitere Optionen
+galaxy_you_are_here	You are here	你在这里	現在地	Vous êtes ici	Estás aquí	Buradasınız	Du bist hier
+galaxy_legend_lit	Lit: you’ve listened	亮起：听过	点灯：聴いた	Allumé : écouté	Encendido: escuchado	Yanan: dinlediniz	Leuchtet: gehört
+galaxy_legend_hearted	Hearted	已收藏	お気に入り	Favori	Favorito	Favori	Favorit
+galaxy_legend_dark	Still dark	尚未点亮	まだ暗い	Encore éteint	Aún apagado	Henüz karanlık	Noch dunkel
+galaxy_subgenres#one	%1$d subgenre	%1$d 个子流派	サブジャンル %1$d	%1$d sous-genre	%1$d subgénero	%1$d alt tür	%1$d Subgenre
+galaxy_subgenres#many	%1$d subgenres	%1$d 个子流派	サブジャンル %1$d	%1$d sous-genres	%1$d subgéneros	%1$d alt tür	%1$d Subgenres
+galaxy_subgenres#other	%1$d subgenres	%1$d 个子流派	サブジャンル %1$d	%1$d sous-genres	%1$d subgéneros	%1$d alt tür	%1$d Subgenres

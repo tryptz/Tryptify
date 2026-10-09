@@ -1,7 +1,6 @@
 package tf.monochrome.android.ui.discover
 
 import tf.monochrome.android.ui.navigation.popBackStackSafe
-import android.os.Build
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
@@ -49,7 +48,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CenterFocusStrong
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -60,15 +61,19 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.TrackChanges
-import androidx.compose.material.icons.filled.BubbleChart
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.UnfoldLess
 import androidx.compose.material.icons.filled.UnfoldMore
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -78,20 +83,29 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.ui.res.pluralStringResource
+import tf.monochrome.android.ui.components.GlassPanel
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.PointMode
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.nativeCanvas
@@ -110,9 +124,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlin.math.PI
@@ -126,21 +137,14 @@ import kotlinx.coroutines.launch
 import tf.monochrome.android.domain.model.GenreGraph
 import tf.monochrome.android.domain.model.GenreNode
 import tf.monochrome.android.domain.model.PlayerGlassSettings
-import tf.monochrome.android.performance.LocalLowPerformance
-import tf.monochrome.android.performance.LocalPerformanceProfile
 import coil3.compose.AsyncImage
 import tf.monochrome.android.data.charts.ChartEntry
 import tf.monochrome.android.ui.components.bounceClick
-import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.Screen
-import tf.monochrome.android.ui.navigation.navigateSafe
 import tf.monochrome.android.ui.player.LocalPlayerGlass
 import tf.monochrome.android.ui.player.PlayerViewModel
-import tf.monochrome.android.ui.player.playerGlass
-import tf.monochrome.android.ui.theme.glassTint
 import tf.monochrome.android.ui.theme.MonoDimens
 import tf.monochrome.android.ui.theme.reduceMotion
-import tf.monochrome.android.ui.player.playerFrostTint
 import androidx.compose.ui.res.stringResource
 import tf.monochrome.android.R
 
@@ -331,6 +335,30 @@ fun GenreMapScreen(
     // mini player and the page indicator, not around detail routes.
     val glassSettings by playerViewModel.miniPlayerGlass.collectAsStateWithLifecycle()
     val hearted by viewModel.heartedGenres.collectAsStateWithLifecycle()
+    val explored by viewModel.exploredGenres.collectAsStateWithLifecycle()
+    val here by viewModel.mapHere.collectAsStateWithLifecycle()
+
+    // The galaxy's sky: one cloud per family and a field of distant stars,
+    // worked out once. The sky is dark on dark themes and a paper star chart
+    // on light ones — glowing nebulae on white read as stains.
+    val clouds = remember(graph) { tf.monochrome.android.domain.model.GenreGalaxy.familyClouds(graph) }
+    val farStars = remember { FarStars() }
+    val dark = MaterialTheme.colorScheme.background.luminance() <= 0.5f
+    val space = rememberSpaceColors(dark)
+    val youAreHere = stringResource(R.string.galaxy_you_are_here)
+
+    // "You are here" breathes. Still with reduced motion, like everything else.
+    val herePulse = if (instant) 0f else {
+        val pulse = rememberInfiniteTransition(label = "youAreHere")
+        pulse.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(2200, easing = LinearEasing)),
+            label = "pulse",
+        ).value
+    }
+    var menuOpen by remember { mutableStateOf(false) }
+    var hudHeightPx by remember { mutableIntStateOf(0) }
 
     fun focusOn(node: GenreNode) {
         flight?.cancel()
@@ -419,68 +447,68 @@ fun GenreMapScreen(
     // the devices where the labels have least room.
     var topBarHeightPx by remember { mutableIntStateOf(0) }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().background(space.base)) {
         TopAppBar(
             // "Genre map" wrapped to two lines once the bar carried five
             // actions, and a wrapped title crowds the first row of labels.
-            title = { Text(stringResource(R.string.genres)) },
+            title = { Text(stringResource(R.string.genre_galaxy)) },
             navigationIcon = {
                 IconButton(onClick = { navController.popBackStackSafe() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
             },
             actions = {
-                // These set every branch at once, so they cancel any single fold
-                // in flight — letting it commit afterwards would re-fold one
-                // branch a moment after you asked for all of them.
-                IconButton(onClick = {
-                    folding?.cancel(); fold = null
-                    collapsed = graph.roots.map { it.id }.toSet()
-                }) {
-                    Icon(Icons.Default.UnfoldLess, contentDescription = stringResource(R.string.collapse_everything))
-                }
-                IconButton(onClick = {
-                    folding?.cancel(); fold = null
-                    collapsed = emptySet()
-                }) {
-                    Icon(Icons.Default.UnfoldMore, contentDescription = stringResource(R.string.expand_everything))
-                }
-                IconButton(onClick = {
-                    // A width fit leaves the timeline's height running off the
-                    // bottom, so it has to arrive at its *top* — the oldest
-                    // music, where the story starts — rather than centred on
-                    // some row in the middle of the 1990s. Reset before the
-                    // morph so the two settle together.
-                    flight?.cancel()
-                    camera = Camera()
-                    layout = if (layout == MapLayout.RADIAL) MapLayout.TIMELINE else MapLayout.RADIAL
-                }) {
-                    Icon(
-                        if (layout == MapLayout.TIMELINE) Icons.Default.BubbleChart
-                        else Icons.Default.Timeline,
-                        contentDescription = if (layout == MapLayout.TIMELINE) {
-                            stringResource(R.string.back_to_constellation)
-                        } else {
-                            stringResource(R.string.arrange_by_year)
-                        },
-                    )
-                }
-                IconButton(onClick = { weighting = weighting.next() }) {
-                    Icon(Icons.Default.Tune, contentDescription = stringResource(R.string.change_size_meaning))
-                }
-                IconButton(onClick = { showRings = !showRings }) {
-                    Icon(
-                        Icons.Default.TrackChanges,
-                        contentDescription = if (showRings) stringResource(R.string.hide_constellations) else stringResource(R.string.show_constellations),
-                        tint = if (showRings) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            LocalContentColor.current
-                        },
-                    )
+                // Two in the bar, the rest one tap away. Six icons in a row
+                // were six things to decode before the map said anything.
+                IconButton(onClick = { viewModel.surpriseMe() }) {
+                    Icon(Icons.Default.AutoAwesome, contentDescription = stringResource(R.string.galaxy_surprise))
                 }
                 IconButton(onClick = { flight?.cancel(); camera = Camera() }) {
                     Icon(Icons.Default.CenterFocusStrong, contentDescription = stringResource(R.string.recentre))
+                }
+                Box {
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.galaxy_more))
+                    }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        // These set every branch at once, so they cancel any
+                        // single fold in flight — letting it commit afterwards
+                        // would re-fold one branch a moment after you asked
+                        // for all of them.
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.collapse_everything)) },
+                            leadingIcon = { Icon(Icons.Default.UnfoldLess, contentDescription = null) },
+                            onClick = {
+                                menuOpen = false
+                                folding?.cancel(); fold = null
+                                collapsed = graph.roots.map { it.id }.toSet()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.expand_everything)) },
+                            leadingIcon = { Icon(Icons.Default.UnfoldMore, contentDescription = null) },
+                            onClick = {
+                                menuOpen = false
+                                folding?.cancel(); fold = null
+                                collapsed = emptySet()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.change_size_meaning)) },
+                            leadingIcon = { Icon(Icons.Default.Tune, contentDescription = null) },
+                            onClick = { menuOpen = false; weighting = weighting.next() },
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    if (showRings) stringResource(R.string.hide_constellations)
+                                    else stringResource(R.string.show_constellations),
+                                )
+                            },
+                            leadingIcon = { Icon(Icons.Default.TrackChanges, contentDescription = null) },
+                            onClick = { menuOpen = false; showRings = !showRings },
+                        )
+                    }
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
@@ -520,6 +548,16 @@ fun GenreMapScreen(
                         }
                     },
             ) {
+                drawSpace(
+                    space = space,
+                    clouds = clouds,
+                    farStars = farStars,
+                    familyColors = familyColors,
+                    bounds = bounds,
+                    camera = camera,
+                    morph = morph.value,
+                    dark = dark,
+                )
                 if (morph.value < 0.999f) {
                     // The timeline chrome takes over as these fade; drawing
                     // both at full strength mid-flight is unreadable.
@@ -564,6 +602,12 @@ fun GenreMapScreen(
                     weighting = weighting,
                     weights = weightScale,
                     morph = morph.value,
+                    explored = explored,
+                    hearted = hearted,
+                    hereId = here?.id,
+                    hereLabel = youAreHere,
+                    herePulse = herePulse,
+                    dark = dark,
                     // The map runs full-bleed under the transparent bar on
                     // purpose, so its dots showing through are intended — but a
                     // *name* under the bar is two pieces of text on top of each
@@ -572,7 +616,11 @@ fun GenreMapScreen(
                         topBarHeightPx.toFloat(),
                         TIMELINE_AXIS_INSET * morph.value,
                     ),
-                    bottomInset = if (selected != null) panelBottomInset.toPx() + panelHeightPx else 0f,
+                    bottomInset = if (selected != null) {
+                        panelBottomInset.toPx() + panelHeightPx
+                    } else {
+                        panelBottomInset.toPx() + hudHeightPx
+                    },
                 )
             }
 
@@ -603,8 +651,36 @@ fun GenreMapScreen(
                     ),
             )
 
+            if (selected == null && graph.size > 0) {
+                GalaxyHud(
+                    layout = layout,
+                    onLayout = {
+                        if (it != layout) {
+                            // A width fit leaves the timeline's height running
+                            // off the bottom, so it has to arrive at its *top*
+                            // — the oldest music, where the story starts.
+                            // Reset before the morph so the two settle together.
+                            flight?.cancel()
+                            camera = Camera()
+                            layout = it
+                        }
+                    },
+                    exploredCount = explored.size,
+                    total = graph.size,
+                    hazeState = mapHaze,
+                    glass = glassSettings,
+                    onSurprise = { viewModel.surpriseMe() },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .onSizeChanged { hudHeightPx = it.height }
+                        .padding(bottom = panelBottomInset)
+                        .consumeWindowInsets(WindowInsets.navigationBars),
+                )
+            }
+
             selected?.let { node ->
                 val related = remember(graph, node.id) { relatedTo(graph, node) }
+                val path = remember(graph, node.id) { graph.ancestors(node.id).reversed() }
                 // The shader modifier reads its parameters from this local, so
                 // the panel has to provide it — this route sits outside the
                 // nav host's provider, which only wraps the mini player.
@@ -647,6 +723,8 @@ fun GenreMapScreen(
                         viewModel.selectGenre(node.id)
                         navController.popBackStackSafe()
                     },
+                    path = path,
+                    onPath = { ancestor -> viewModel.selectOnMap(ancestor.id) },
                     onRelated = { child ->
                         // A subgenre under a folded branch is not on the map, so
                         // flying to it would land on nothing. Unfold on the way —
@@ -723,102 +801,41 @@ private fun GenreCard(
     onRelated: (GenreNode) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    path: List<GenreNode> = emptyList(),
+    onPath: (GenreNode) -> Unit = {},
 ) {
-    // Exactly the mini player's glass, from exactly the same settings: the
+    // The app's one glass panel, in exactly the mini player's material: the
     // panel floats directly above the bar, and two sheets of glass with
     // different tints and different tuning an inch apart looked like a mistake.
-    // On the shader path that means the frosted haze backdrop with the tunable
-    // slab relit on top; below API 33, with button glass switched off, or on a
-    // low tier it falls back to the app's plain glassmorphism, and with liquid
-    // glass removed entirely to an opaque surface — a no-op modifier would
-    // otherwise leave the panel with no background at all.
-    val allowHaze = LocalPerformanceProfile.current.allowHazeBlur
-    val flat = LocalLowPerformance.current.disableLiquidGlass
+    // It used to carry its own copy of the glass, which fell behind the shared
+    // one — no lens corner, so its rim was a hairline where every other pane
+    // bends. GlassPanel also keeps taps on the panel from reaching the map.
     val instant = reduceMotion()
-    val shaderGlass = !flat && glass.enabled &&
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-    val tint = glassTint(glass.tintColor)
-    val frostBg = MaterialTheme.colorScheme.background
-    val isDark = frostBg.luminance() <= 0.5f
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(12.dp)
-            .navigationBarsPadding()
-            .clip(MonoDimens.shapeLg)
-            .then(
-                when {
-                    shaderGlass -> Modifier
-                    allowHaze && !flat ->
-                        Modifier.liquidGlass(hazeState = hazeState, shape = MonoDimens.shapeLg)
-                    else -> Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                },
-            ),
-    ) {
-        // Nothing gets through the panel to the map. The canvas underneath is
-        // one big tap target that selects whatever genre is nearest, so without
-        // this a tap on the panel's own background — or a flick that starts on
-        // its text — reaches down and selects some other genre, throwing away
-        // the panel you were reading.
-        //
-        // The bottom sibling, not a modifier on the panel itself. As an ancestor
-        // it consumed every event on its way past, and a gesture that takes
-        // several of them to declare itself — which is every scroll — was
-        // swallowed before the content could claim it. The history section could
-        // be flicked; the chart list below could not.
-        Box(
-            Modifier
-                .matchParentSize()
-                .pointerInput(Unit) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            awaitPointerEvent().changes.forEach { it.consume() }
-                        }
-                    }
-                },
-        )
-
-        if (shaderGlass) {
-            // Frost first. The slab body goes down to 0.2 opacity, and without
-            // this the map's edges and labels read straight through it and
-            // fight the panel's own text.
-            if (allowHaze && glass.hazeBlurDp > 0f) {
-                val frostTint = playerFrostTint(glass, isDark)
-                Box(
-                    Modifier
-                        .matchParentSize()
-                        .hazeEffect(
-                            state = hazeState,
-                            style = HazeStyle(
-                                backgroundColor = frostBg,
-                                blurRadius = glass.hazeBlurDp.dp,
-                                tints = listOf(HazeTint(frostTint)),
-                                noiseFactor = 0f,
-                            ),
-                        ),
-                )
-            }
-            Canvas(
-                modifier = Modifier
-                    .matchParentSize()
-                    .playerGlass(tint = tint),
-            ) {
-                // Round, not a rect. The glass shader builds its bevel and rim
-                // from the gradient of what this canvas draws, so a full-bleed
-                // rect gives it straight edges only: the parent clip then cuts
-                // the square corners away and each corner is left with no rim
-                // at all — four visible gaps in the outline. Drawing the same
-                // radius the panel is clipped to puts an alpha edge on the arc,
-                // so the rim runs continuously around the corner.
-                val r = MonoDimens.radiusLg.toPx()
-                drawRoundRect(color = tint, cornerRadius = CornerRadius(r, r))
-            }
-        }
-
+    GlassPanel(hazeState = hazeState, glass = glass, modifier = modifier) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.Top) {
                 Column(modifier = Modifier.weight(1f)) {
+                    // Where it sits: Electronic › Trance ›. Each step is a way
+                    // up the family, one tap away.
+                    if (path.isNotEmpty()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            path.forEach { step ->
+                                Text(
+                                    text = step.name,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = familyColor,
+                                    maxLines = 1,
+                                    modifier = Modifier.bounceClick(onClick = { onPath(step) }),
+                                )
+                                Text(
+                                    text = " › ",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
                     Text(
                         text = node.name,
                         style = MaterialTheme.typography.titleLarge,
@@ -827,13 +844,13 @@ private fun GenreCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    val tempo = if (node.hasTempo) stringResource(R.string.shelf_tempo, node.bpmLow, node.bpmHigh) else null
+                    val since = node.era.getOrNull(0)?.let { stringResource(R.string.discover_genre_since, it) }
+                    val subgenres = if (related.areChildren) {
+                        pluralStringResource(R.plurals.galaxy_subgenres, related.nodes.size, related.nodes.size)
+                    } else null
                     Text(
-                        text = buildString {
-                            append(familyName)
-                            if (node.hasTempo) append(" · ${node.bpmLow}–${node.bpmHigh} BPM")
-                            node.era.getOrNull(0)?.let { append(" · from $it") }
-                            if (related.areChildren) append(" · ${related.nodes.size} subgenres")
-                        },
+                        text = listOfNotNull(familyName, tempo, since, subgenres).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -2143,6 +2160,12 @@ private fun DrawScope.drawMap(
     morph: Float = 0f,
     topInset: Float = 0f,
     bottomInset: Float = 0f,
+    explored: Set<String> = emptySet(),
+    hearted: Set<String> = emptySet(),
+    hereId: String? = null,
+    hereLabel: String = "",
+    herePulse: Float = 0f,
+    dark: Boolean = true,
 ) {
     val byId = nodes.associateBy { it.id }
 
@@ -2223,6 +2246,8 @@ private fun DrawScope.drawMap(
         }
     }
 
+    var hereAt: Offset? = null
+    var hereRadius = 0f
     for (node in nodes) {
         val centre = positions[node.id] ?: continue
         if (!onScreen(centre)) continue
@@ -2243,10 +2268,38 @@ private fun DrawScope.drawMap(
         // end, so it waits until the subtree is actually gone.
         val folded = node.id in collapsed
 
-        // A soft halo under the bigger dots keeps them from disappearing into
-        // the edges crossing behind them.
-        drawCircle(color = color.copy(alpha = color.alpha * 0.16f), radius = radius * 1.6f, center = centre)
-        drawCircle(color = color, radius = radius, center = centre)
+        // Lit or still dark. A genre the listener has been to burns: a wide
+        // glow, a full dot and a hot core. One they haven't is a dimmer dot
+        // with only a faint halo — still there to find, plainly not visited.
+        // The halo is also what keeps a dot from disappearing into the edges
+        // crossing behind it.
+        if (node.id in explored) {
+            drawCircle(color = color.copy(alpha = color.alpha * if (dark) 0.26f else 0.16f), radius = radius * 2.6f, center = centre)
+            drawCircle(color = color.copy(alpha = color.alpha * 0.42f), radius = radius * 1.6f, center = centre)
+            drawCircle(color = color, radius = radius, center = centre)
+            if (dark) {
+                drawCircle(color = Color.White.copy(alpha = 0.85f * here), radius = radius * 0.42f, center = centre)
+            } else {
+                drawCircle(color = labelColor.copy(alpha = 0.55f * here), radius = radius, center = centre, style = Stroke(width = 1.4f))
+            }
+        } else {
+            drawCircle(color = color.copy(alpha = color.alpha * 0.12f), radius = radius * 1.5f, center = centre)
+            drawCircle(color = color.copy(alpha = color.alpha * if (dark) 0.5f else 0.6f), radius = radius * 0.85f, center = centre)
+        }
+        if (node.id in hearted) {
+            // Hearted: a dashed ring, so it never reads as the solid ring
+            // that marks a folded branch.
+            drawCircle(
+                color = color,
+                radius = radius + 4f,
+                center = centre,
+                style = Stroke(width = 1.8f, pathEffect = HEART_RING),
+            )
+        }
+        if (node.id == hereId) {
+            hereAt = centre
+            hereRadius = radius
+        }
         if (folded) {
             // A ring around a folded branch: the one piece of state on the map
             // that isn't visible from its children, so it has to be marked.
@@ -2263,6 +2316,28 @@ private fun DrawScope.drawMap(
                 radius = radius + 10f,
                 center = centre,
                 style = Stroke(width = 3f),
+            )
+        }
+    }
+
+    // "You are here": a ring that breathes outward from the genre the
+    // listener was last in, and the words above it.
+    hereAt?.let { at ->
+        val pulseRadius = hereRadius + 8f + 22f * herePulse
+        drawCircle(color = labelColor.copy(alpha = 0.7f * (1f - herePulse)), radius = pulseRadius, center = at, style = Stroke(width = 2f))
+        drawCircle(color = labelColor.copy(alpha = 0.9f), radius = hereRadius + 6f, center = at, style = Stroke(width = 1.5f))
+        if (hereLabel.isNotEmpty() && at.y - hereRadius - 18f > topInset) {
+            drawContext.canvas.nativeCanvas.drawText(
+                hereLabel,
+                at.x,
+                at.y - hereRadius - 14f,
+                android.graphics.Paint().apply {
+                    color = labelColor.toArgb()
+                    textSize = labelSizePx * 0.95f
+                    isAntiAlias = true
+                    isFakeBoldText = true
+                    textAlign = android.graphics.Paint.Align.CENTER
+                },
             )
         }
     }
@@ -2375,4 +2450,221 @@ internal fun familyPalette(families: List<String>): Map<String, Color> {
         "experimental" to Color(0xFF90A4AE),
     ).toMap()
     return families.associateWith { palette[it] ?: Color(0xFFBDBDBD) }
+}
+
+/** The dashes of a hearted genre's ring. */
+private val HEART_RING = PathEffect.dashPathEffect(floatArrayOf(6f, 5f))
+
+/** The galaxy's sky, by theme: deep space on dark, a paper star chart on light. */
+private data class SpaceColors(val base: Color, val star: Color, val chart: Color)
+
+@Composable
+private fun rememberSpaceColors(dark: Boolean): SpaceColors {
+    val background = MaterialTheme.colorScheme.background
+    return remember(background, dark) {
+        if (dark) {
+            SpaceColors(
+                base = androidx.compose.ui.graphics.lerp(background, Color(0xFF04060E), 0.55f),
+                star = Color.White,
+                chart = Color.White,
+            )
+        } else {
+            SpaceColors(
+                base = androidx.compose.ui.graphics.lerp(background, Color(0xFFF4EEDF), 0.55f),
+                star = Color(0xFF34344A),
+                chart = Color(0xFF34344A),
+            )
+        }
+    }
+}
+
+/**
+ * Distant stars, behind the map: fixed points across the screen, seeded so
+ * they are the same every time the map opens.
+ */
+private class FarStars {
+    val faint: List<Offset>
+    val bright: List<Offset>
+
+    init {
+        val random = kotlin.random.Random(7)
+        faint = List(240) { Offset(random.nextFloat(), random.nextFloat()) }
+        bright = List(36) { Offset(random.nextFloat(), random.nextFloat()) }
+    }
+}
+
+/**
+ * The sky under the map: its base colour, distant stars that drift a little
+ * as the map pans (so the map reads as nearer than they are), and one soft
+ * nebula per family behind its genres. On a light theme the nebulae are
+ * fainter and the sky carries a star chart's rings instead of a glow.
+ *
+ * The nebulae fade out as the map becomes the timeline, where a family is not
+ * a place.
+ */
+private fun DrawScope.drawSpace(
+    space: SpaceColors,
+    clouds: List<tf.monochrome.android.domain.model.FamilyCloud>,
+    farStars: FarStars,
+    familyColors: Map<String, Color>,
+    bounds: MapBounds,
+    camera: Camera,
+    morph: Float,
+    dark: Boolean,
+) {
+    val w = size.width
+    val h = size.height
+    drawRect(space.base)
+
+    // A twentieth of the map's movement: enough to read as depth, little
+    // enough not to swim.
+    val shiftX = camera.offset.x * 0.05f
+    val shiftY = camera.offset.y * 0.05f
+    fun wrap(v: Float, max: Float) = ((v % max) + max) % max
+    drawPoints(
+        points = farStars.faint.map { Offset(wrap(it.x * w + shiftX, w), wrap(it.y * h + shiftY, h)) },
+        pointMode = PointMode.Points,
+        color = space.star.copy(alpha = if (dark) 0.32f else 0.12f),
+        strokeWidth = 1.6f,
+        cap = StrokeCap.Round,
+    )
+    drawPoints(
+        points = farStars.bright.map { Offset(wrap(it.x * w + shiftX * 1.6f, w), wrap(it.y * h + shiftY * 1.6f, h)) },
+        pointMode = PointMode.Points,
+        color = space.star.copy(alpha = if (dark) 0.65f else 0.2f),
+        strokeWidth = 2.6f,
+        cap = StrokeCap.Round,
+    )
+
+    val fade = 1f - morph.coerceIn(0f, 1f)
+    if (fade <= 0.01f) return
+    // The same transform the genres are placed with, so each cloud sits
+    // behind its own family at every zoom.
+    val k = fitFor(w, h, bounds, morph) * camera.scale
+    val cx = w / 2f + camera.offset.x
+    val cy = h / 2f + camera.offset.y
+    for (cloud in clouds) {
+        val centre = Offset(cx + (cloud.x - bounds.centreX) * k, cy + (cloud.y - bounds.centreY) * k)
+        val radius = cloud.radius * k
+        if (radius < 1f) continue
+        if (centre.x + radius < 0f || centre.x - radius > w || centre.y + radius < 0f || centre.y - radius > h) continue
+        val color = familyColors[cloud.family] ?: continue
+        val alpha = (if (dark) 0.2f else 0.09f) * fade
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(color.copy(alpha = alpha), color.copy(alpha = alpha * 0.35f), Color.Transparent),
+                center = centre,
+                radius = radius,
+            ),
+            radius = radius,
+            center = centre,
+        )
+    }
+    if (!dark) {
+        val origin = Offset(cx - bounds.centreX * k, cy - bounds.centreY * k)
+        for (ring in 1..4) {
+            drawCircle(
+                color = space.chart.copy(alpha = 0.07f * fade),
+                radius = ring * CHART_RING_STEP * k,
+                center = origin,
+                style = Stroke(width = 1f),
+            )
+        }
+    }
+}
+
+/** Layout units between a light theme's star-chart rings. */
+private const val CHART_RING_STEP = 320f
+
+/**
+ * The galaxy's controls, on the map's glass when no genre is open: Galaxy or
+ * Timeline, how much of it the listener has explored, what lit, ringed and
+ * dark mean, and a way somewhere new.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GalaxyHud(
+    layout: MapLayout,
+    onLayout: (MapLayout) -> Unit,
+    exploredCount: Int,
+    total: Int,
+    hazeState: HazeState,
+    glass: PlayerGlassSettings,
+    onSurprise: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    tf.monochrome.android.ui.components.GlassPanel(hazeState = hazeState, glass = glass, modifier = modifier) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.weight(1f)) {
+                    listOf(MapLayout.RADIAL to R.string.galaxy_layout_galaxy, MapLayout.TIMELINE to R.string.galaxy_layout_timeline)
+                        .forEachIndexed { index, (option, label) ->
+                            SegmentedButton(
+                                selected = layout == option,
+                                onClick = { onLayout(option) },
+                                shape = SegmentedButtonDefaults.itemShape(index, 2),
+                                label = { Text(stringResource(label), maxLines = 1) },
+                            )
+                        }
+                }
+                Spacer(Modifier.width(8.dp))
+                FilledTonalButton(onClick = onSurprise) {
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.galaxy_surprise), maxLines = 1)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = stringResource(R.string.discover_galaxy_count, exploredCount, total),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LegendMark(LegendKind.LIT)
+                LegendText(stringResource(R.string.galaxy_legend_lit))
+                LegendMark(LegendKind.HEARTED)
+                LegendText(stringResource(R.string.galaxy_legend_hearted))
+                LegendMark(LegendKind.DARK)
+                LegendText(stringResource(R.string.galaxy_legend_dark))
+            }
+        }
+    }
+}
+
+private enum class LegendKind { LIT, HEARTED, DARK }
+
+/** The legend's marks, drawn the way the map draws them. */
+@Composable
+private fun LegendMark(kind: LegendKind) {
+    val color = MaterialTheme.colorScheme.primary
+    Canvas(modifier = Modifier.size(14.dp)) {
+        val c = Offset(size.width / 2f, size.height / 2f)
+        val r = size.minDimension * 0.24f
+        when (kind) {
+            LegendKind.LIT -> {
+                drawCircle(color.copy(alpha = 0.3f), radius = r * 2f, center = c)
+                drawCircle(color, radius = r, center = c)
+            }
+            LegendKind.HEARTED -> {
+                drawCircle(color.copy(alpha = 0.5f), radius = r * 0.85f, center = c)
+                drawCircle(color, radius = r + 3f, center = c, style = Stroke(width = 1.6f, pathEffect = HEART_RING))
+            }
+            LegendKind.DARK -> drawCircle(color.copy(alpha = 0.4f), radius = r * 0.85f, center = c)
+        }
+    }
+}
+
+@Composable
+private fun LegendText(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(start = 4.dp, end = 10.dp),
+    )
 }

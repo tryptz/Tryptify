@@ -1989,4 +1989,17 @@
         <item quantity="one">Vor %1$d Tag</item>
         <item quantity="other">Vor %1$d Tagen</item>
     </plurals>
+    <string name="genre_galaxy">Genre-Galaxie</string>
+    <string name="galaxy_layout_galaxy">Galaxie</string>
+    <string name="galaxy_layout_timeline">Zeitleiste</string>
+    <string name="galaxy_surprise">Überrasch mich</string>
+    <string name="galaxy_more">Weitere Optionen</string>
+    <string name="galaxy_you_are_here">Du bist hier</string>
+    <string name="galaxy_legend_lit">Leuchtet: gehört</string>
+    <string name="galaxy_legend_hearted">Favorit</string>
+    <string name="galaxy_legend_dark">Noch dunkel</string>
+    <plurals name="galaxy_subgenres">
+        <item quantity="one">%1$d Subgenre</item>
+        <item quantity="other">%1$d Subgenres</item>
+    </plurals>
 </resources>

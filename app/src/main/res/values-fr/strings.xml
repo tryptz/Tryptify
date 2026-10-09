@@ -2040,4 +2040,18 @@
         <item quantity="many">Il y a %1$d jours</item>
         <item quantity="other">Il y a %1$d jours</item>
     </plurals>
+    <string name="genre_galaxy">Galaxie des genres</string>
+    <string name="galaxy_layout_galaxy">Galaxie</string>
+    <string name="galaxy_layout_timeline">Chronologie</string>
+    <string name="galaxy_surprise">Surprenez-moi</string>
+    <string name="galaxy_more">Plus d’options</string>
+    <string name="galaxy_you_are_here">Vous êtes ici</string>
+    <string name="galaxy_legend_lit">Allumé : écouté</string>
+    <string name="galaxy_legend_hearted">Favori</string>
+    <string name="galaxy_legend_dark">Encore éteint</string>
+    <plurals name="galaxy_subgenres">
+        <item quantity="one">%1$d sous-genre</item>
+        <item quantity="many">%1$d sous-genres</item>
+        <item quantity="other">%1$d sous-genres</item>
+    </plurals>
 </resources>

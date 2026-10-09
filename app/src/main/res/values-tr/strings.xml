@@ -1989,4 +1989,17 @@
         <item quantity="one">%1$d gün önce</item>
         <item quantity="other">%1$d gün önce</item>
     </plurals>
+    <string name="genre_galaxy">Tür galaksisi</string>
+    <string name="galaxy_layout_galaxy">Galaksi</string>
+    <string name="galaxy_layout_timeline">Zaman çizelgesi</string>
+    <string name="galaxy_surprise">Beni şaşırt</string>
+    <string name="galaxy_more">Diğer seçenekler</string>
+    <string name="galaxy_you_are_here">Buradasınız</string>
+    <string name="galaxy_legend_lit">Yanan: dinlediniz</string>
+    <string name="galaxy_legend_hearted">Favori</string>
+    <string name="galaxy_legend_dark">Henüz karanlık</string>
+    <plurals name="galaxy_subgenres">
+        <item quantity="one">%1$d alt tür</item>
+        <item quantity="other">%1$d alt tür</item>
+    </plurals>
 </resources>

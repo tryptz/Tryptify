@@ -1938,4 +1938,16 @@
     <plurals name="radar_days_ago">
         <item quantity="other">%1$d 天前</item>
     </plurals>
+    <string name="genre_galaxy">流派星系</string>
+    <string name="galaxy_layout_galaxy">星系</string>
+    <string name="galaxy_layout_timeline">时间线</string>
+    <string name="galaxy_surprise">给我惊喜</string>
+    <string name="galaxy_more">更多选项</string>
+    <string name="galaxy_you_are_here">你在这里</string>
+    <string name="galaxy_legend_lit">亮起：听过</string>
+    <string name="galaxy_legend_hearted">已收藏</string>
+    <string name="galaxy_legend_dark">尚未点亮</string>
+    <plurals name="galaxy_subgenres">
+        <item quantity="other">%1$d 个子流派</item>
+    </plurals>
 </resources>

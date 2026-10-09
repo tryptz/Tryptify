@@ -11,6 +11,13 @@
 
 ### Changed
 
+#### The genre map is a galaxy now
+- **A sky to sit on.** Deep space on dark themes, with a soft nebula behind each family and a field of distant stars that drifts a little as you pan, so the map reads as nearer than they are. On light themes it is a paper star chart, with fainter clouds and the chart's rings instead of a glow. The nebulae fade out as the map turns into the timeline, where a family is not a place.
+- **Your galaxy lights up as you listen.** Genres you have opened or played burn (a glow, a full dot, a hot core); genres you haven't are dimmer dots, still there to find. Hearted genres carry a dashed ring, so they never read as the solid ring of a folded branch. A ring breathes out from "You are here", the genre you were last in (still with reduced motion on).
+- **Controls you can read.** The bar keeps Surprise me and Recentre; collapse, expand, dot size and constellations moved into a menu. With no genre open, a glass bar at the bottom holds Galaxy / Timeline, how many of the 771 genres you have explored, a legend for lit, hearted and still dark, and Surprise me, which flies you to a well-known genre you haven't been to.
+- **The genre panel is the app's glass.** It carried its own older copy of the glass, without the lens corner every other pane bends with; it is now the shared `GlassPanel`, still in the Visual Studio UI panels material. It shows where the genre sits ("Electronic › Trance ›", each step tappable), and its facts line is translated instead of hard-coded English.
+- `GenreGalaxy` works out the family clouds, Surprise me and You are here; `GenreGalaxyTest` checks them against the real map.
+
 #### Radio settings, rebuilt to make sense
 - **A style, three dials and three switches, instead of eleven 0–3 sliders.** Pick Familiar, Balanced or Adventurous; the dials say what each end means ("Songs you know … Songs you haven't heard", "Its artist and close peers … Further out", "Loose … Same genre and era") instead of showing a number; the switches are Prefer my library, Avoid songs I just heard and Prefer original versions. Moving a dial off a preset shows "Custom mix"; a preset keeps your switches.
 - **Why the old sliders went.** "Qobuz" moved nothing (every candidate on a Qobuz station is a Qobuz track, so all got the same bonus). Novelty and Familiarity only ever mattered by their difference, and Artist similarity and Discovery distance were exact mirrors that cancelled out at their defaults: two settings split into four sliders. "Discovery expansion" boosted the starting song's own artist search, so turning it up gave more of the same artist; it now rides the far-from-the-song dial, high at the close end and gone at the far end.
