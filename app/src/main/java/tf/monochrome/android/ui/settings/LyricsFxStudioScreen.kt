@@ -2197,7 +2197,21 @@ private fun StudioPreview(
                         maxRows = index + 1,
                     )
                 }
-                val sampleFit = candidates.maxBy { it.fontSizeSp }
+                // The player's own layout whenever it fits the box; the search
+                // above only where it does not.
+                val playerFit = candidates.last().takeIf { budgetSizes.last() == fx.fontSizeSp }
+                    ?: rememberWrappedLyricLayout(
+                        words = sampleWords,
+                        availableWidth = fitWidth,
+                        baseSp = fx.fontSizeSp,
+                        style = baseStyle,
+                        maxRows = fx.maxWrapLines.coerceAtLeast(1),
+                    )
+                val playerFitsBox = remember(playerFit, roomPx, baseStyle, density) {
+                    val rowPx = measurer.measure("Ag", style = baseStyle.copy(fontSize = playerFit.fontSizeSp.sp)).size.height
+                    playerFit.rowIndices.size * rowPx <= roomPx
+                }
+                val sampleFit = if (playerFitsBox) playerFit else candidates.maxBy { it.fontSizeSp }
                 val sampleStyle = baseStyle.copy(
                     fontSize = sampleFit.fontSizeSp.sp,
                     // Pinned to the base size, as the player pins it.

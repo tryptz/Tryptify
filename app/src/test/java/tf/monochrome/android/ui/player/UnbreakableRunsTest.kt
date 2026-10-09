@@ -56,6 +56,22 @@ class UnbreakableRunsTest {
     }
 
     @Test
+    fun `an opening bracket or quote stays with its word`() {
+        assertEquals(listOf("( everything", ")"), unbreakableRuns("( everything )"))
+        assertEquals(listOf("« Bonjour", "»"), unbreakableRuns("« Bonjour »"))
+        assertEquals(listOf("“ ( yeah"), unbreakableRuns("“ ( yeah"))
+        // A bracket closing the line has no word after it and stays alone.
+        assertEquals(listOf("oh", "("), unbreakableRuns("oh ("))
+    }
+
+    @Test
+    fun `a slash before hebrew and emails or urls stay whole`() {
+        assertEquals(listOf("אהבה/שנאה"), unbreakableRuns("אהבה/שנאה"))
+        assertEquals(listOf("and/or@x.com"), unbreakableRuns("and/or@x.com"))
+        assertEquals(listOf("http://a.com/b!c"), unbreakableRuns("http://a.com/b!c"))
+    }
+
+    @Test
     fun `blank text has no runs`() {
         assertEquals(emptyList<String>(), unbreakableRuns("   "))
     }

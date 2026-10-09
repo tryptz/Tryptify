@@ -933,18 +933,48 @@ internal fun lyricFitWidth(maxWidth: Dp, fx: LyricsFxSettings): Dp {
 }
 
 /**
- * The pieces of [text] a line may not be broken inside: its space-separated
- * words, except that Han, kana and the Thai-family scripts break between any
- * two characters, so each of those characters is a piece of its own, and an
- * em dash, which may break on either side, is one too (a run of them stays
- * together), and so do an ellipsis, slash, "?" or "!" with a letter after
- * it, where the line breaker may wrap. Hard hyphens do NOT end a piece: with
- * hyphenation off, Compose's
- * default, Android's line breaker (minikin) never wraps after a hyphen-minus,
- * hyphen or en dash, so "rock-and-roll" or "867-5309" is drawn as one unit and
- * must be measured as one.
+ * The pieces of [text] a line may not be broken inside, as Android's line
+ * breaker (minikin) keeps them with hyphenation off, Compose's default:
+ *  - space-separated words, an opening bracket or quote staying with the word
+ *    after it ("( everything", "« Bonjour": no break after "( ");
+ *  - but each Han, kana or Thai-family character alone, since those scripts
+ *    break between any two characters;
+ *  - an em dash alone (a run of them together): it breaks on either side;
+ *  - a break after an ellipsis, slash, "?" or "!" when a letter follows,
+ *    except a slash before Hebrew (UAX #14 LB21b);
+ *  - a chunk that looks like an email or URL whole: minikin breaks those by
+ *    rules of its own, never more finely than the chunk's own pieces here.
+ * Hard hyphens do NOT end a piece: minikin never wraps after a hyphen-minus,
+ * hyphen or en dash without hyphenation, so "rock-and-roll" or "867-5309" is
+ * drawn as one unit and must be measured as one.
  */
 internal fun unbreakableRuns(text: String): List<String> {
+    val chunks = mutableListOf<String>()
+    var pendingOpen: String? = null
+    var start = -1
+    var i = 0
+    fun endChunk(at: Int) {
+        if (start < 0) return
+        val chunk = text.substring(start, at)
+        start = -1
+        pendingOpen = when {
+            isOpeningOnly(chunk) -> pendingOpen?.let { "$it $chunk" } ?: chunk
+            pendingOpen != null -> { chunks.add("$pendingOpen $chunk"); null }
+            else -> { chunks.add(chunk); null }
+        }
+    }
+    while (i < text.length) {
+        val cp = text.codePointAt(i)
+        if (Character.isWhitespace(cp)) endChunk(i) else if (start < 0) start = i
+        i += Character.charCount(cp)
+    }
+    endChunk(text.length)
+    pendingOpen?.let { chunks.add(it) }
+    return chunks.flatMap { if (isEmailOrUrl(it)) listOf(it) else splitChunk(it) }
+}
+
+/** One space-free chunk (or an opening mark + spaces + word) cut at its legal breaks. */
+private fun splitChunk(chunk: String): List<String> {
     val runs = mutableListOf<String>()
     val run = StringBuilder()
     fun flush() {
@@ -952,23 +982,25 @@ internal fun unbreakableRuns(text: String): List<String> {
         run.setLength(0)
     }
     var i = 0
-    while (i < text.length) {
-        val cp = text.codePointAt(i)
+    while (i < chunk.length) {
+        val cp = chunk.codePointAt(i)
         val n = Character.charCount(cp)
+        val next = if (i + n < chunk.length) chunk.codePointAt(i + n) else -1
         when {
-            Character.isWhitespace(cp) -> flush()
             breaksAnywhere(cp) -> {
                 flush()
-                runs.add(text.substring(i, i + n))
+                runs.add(chunk.substring(i, i + n))
             }
             cp == EM_DASH -> {
                 if (run.isNotEmpty() && run.codePointBefore(run.length) != EM_DASH) flush()
-                run.append(text, i, i + n)
-                if (i + n >= text.length || text.codePointAt(i + n) != EM_DASH) flush()
+                run.append(chunk, i, i + n)
+                if (next != EM_DASH) flush()
             }
             else -> {
-                run.append(text, i, i + n)
-                if (cp in BREAK_BEFORE_LETTER && i + n < text.length && Character.isLetter(text.codePointAt(i + n))) flush()
+                run.append(chunk, i, i + n)
+                val letterAfter = next >= 0 && Character.isLetter(next) &&
+                    !(cp == '/'.code && Character.UnicodeScript.of(next) == Character.UnicodeScript.HEBREW)
+                if (cp in BREAK_BEFORE_LETTER && letterAfter) flush()
             }
         }
         i += n
@@ -976,6 +1008,16 @@ internal fun unbreakableRuns(text: String): List<String> {
     flush()
     return runs
 }
+
+/** Only opening brackets and opening quotes ("(", "[", "«", "“"). */
+private fun isOpeningOnly(chunk: String): Boolean = chunk.isNotEmpty() && chunk.codePoints().allMatch {
+    val type = Character.getType(it)
+    type == Character.START_PUNCTUATION.toInt() || type == Character.INITIAL_QUOTE_PUNCTUATION.toInt()
+}
+
+/** minikin's email/URL scan: printable ASCII with an "@" or "://" in it. */
+private fun isEmailOrUrl(chunk: String): Boolean =
+    chunk.all { it.code in 0x21..0x7E } && (chunk.contains('@') || chunk.contains("://"))
 
 private const val EM_DASH = 0x2014
 
@@ -1008,20 +1050,25 @@ private fun breaksAnywhere(codePoint: Int): Boolean = when (Character.UnicodeScr
  */
 @Composable
 internal fun rememberWordFitSp(text: String, width: Dp, baseSp: Float, style: TextStyle): Float {
-    val measurer = rememberTextMeasurer()
+    // Every key is unique to its line and size, so a layout cache would only
+    // hold dead entries.
+    val measurer = rememberTextMeasurer(cacheSize = 0)
     val density = LocalDensity.current
     return remember(text, width, baseSp, style, density) {
-        val runs = unbreakableRuns(text)
         // A px under the row: measured widths round up, and the row's padding
         // rounds to whole px.
         val capacity = with(density) { width.toPx() } - 1f
-        if (runs.isEmpty() || capacity <= 0f) return@remember baseSp
-        fun fits(sp: Float): Boolean {
-            val sized = style.copy(fontSize = sp.sp)
-            return runs.all { measurer.measure(it, style = sized, maxLines = 1, softWrap = false).size.width <= capacity }
-        }
+        if (capacity <= 0f) return@remember baseSp
+        fun widthAt(run: String, sp: Float) =
+            measurer.measure(run, style = style.copy(fontSize = sp.sp), maxLines = 1, softWrap = false).size.width
+        // Only a piece too wide now can force a smaller size, and one that fits
+        // keeps fitting as the size falls, so each step measures just those.
+        var over = unbreakableRuns(text).filter { widthAt(it, baseSp) > capacity }
         var sp = baseSp
-        while (sp > MIN_LYRIC_SP + 0.01f && !fits(sp)) sp = (sp * 0.93f).coerceAtLeast(MIN_LYRIC_SP)
+        while (over.isNotEmpty() && sp > MIN_LYRIC_SP + 0.01f) {
+            sp = (sp * 0.93f).coerceAtLeast(MIN_LYRIC_SP)
+            over = over.filter { widthAt(it, sp) > capacity }
+        }
         sp
     }
 }
