@@ -2029,4 +2029,15 @@
     <string name="radio_recent_desc">Vos 30 dernières écoutes descendent dans la file.</string>
     <string name="radio_originals_title">Privilégier les versions originales</string>
     <string name="radio_originals_desc">Les versions studio avant les remasters, les lives et les remixes.</string>
+    <string name="radar_title">Radar des sorties</string>
+    <string name="radar_subtitle">Les nouveautés des artistes que vous écoutez, sorties ces deux derniers mois</string>
+    <string name="radar_new_count">%1$d nouveautés</string>
+    <string name="radar_new_badge">NOUVEAU</string>
+    <string name="radar_today">Aujourd’hui</string>
+    <string name="radar_yesterday">Hier</string>
+    <plurals name="radar_days_ago">
+        <item quantity="one">Il y a %1$d jour</item>
+        <item quantity="many">Il y a %1$d jours</item>
+        <item quantity="other">Il y a %1$d jours</item>
+    </plurals>
 </resources>

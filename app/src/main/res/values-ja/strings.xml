@@ -1929,4 +1929,13 @@
     <string name="radio_recent_desc">直近 30 回の再生曲は後ろに回ります。</string>
     <string name="radio_originals_title">オリジナル版を優先</string>
     <string name="radio_originals_desc">リマスター、ライブ、リミックスより先にスタジオ版が来ます。</string>
+    <string name="radar_title">リリースレーダー</string>
+    <string name="radar_subtitle">よく聴くアーティストの、この 2 か月の新作</string>
+    <string name="radar_new_count">新着 %1$d</string>
+    <string name="radar_new_badge">NEW</string>
+    <string name="radar_today">今日</string>
+    <string name="radar_yesterday">昨日</string>
+    <plurals name="radar_days_ago">
+        <item quantity="other">%1$d 日前</item>
+    </plurals>
 </resources>

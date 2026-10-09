@@ -1979,4 +1979,14 @@
     <string name="radio_recent_desc">Son 30 dinlemeniz sırada aşağı iner.</string>
     <string name="radio_originals_title">Orijinal sürümleri öne çıkar</string>
     <string name="radio_originals_desc">Remaster, canlı ve remikslerden önce stüdyo sürümleri.</string>
+    <string name="radar_title">Yayın radarı</string>
+    <string name="radar_subtitle">Dinlediğiniz sanatçıların son iki aydaki yeni yayınları</string>
+    <string name="radar_new_count">%1$d yeni</string>
+    <string name="radar_new_badge">YENİ</string>
+    <string name="radar_today">Bugün</string>
+    <string name="radar_yesterday">Dün</string>
+    <plurals name="radar_days_ago">
+        <item quantity="one">%1$d gün önce</item>
+        <item quantity="other">%1$d gün önce</item>
+    </plurals>
 </resources>

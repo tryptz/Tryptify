@@ -251,6 +251,8 @@ class PreferencesManager @Inject constructor(
         // Which catalogue Discover finds its music on: an ApiService name.
         // Device-local, like the APIs it depends on being reachable from here.
         private val DISCOVERY_SERVICE = stringPreferencesKey("discovery_service")
+        // Epoch day of the newest release the radar has shown; newer ones are NEW.
+        private val RELEASE_RADAR_SEEN_THROUGH = longPreferencesKey("release_radar_seen_through")
 
         /** How many genres the "recently played" rail remembers. */
         private const val MAX_RECENT_GENRES = 12
@@ -2569,6 +2571,18 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setDiscoveryTodayPick(day: Long, genreId: String) {
         dataStore.edit { it[DISCOVERY_TODAY_PICK] = "$day|$genreId" }
+    }
+
+    /** The newest release day the radar has shown, as an epoch day; null before the first. */
+    val releaseRadarSeenThrough: Flow<Long?> = dataStore.data.map { it[RELEASE_RADAR_SEEN_THROUGH] }
+
+    suspend fun setReleaseRadarSeenThrough(day: Long) {
+        dataStore.edit { prefs ->
+            // Only ever forward: a radar answered from an older cache must not
+            // bring back badges for releases already seen.
+            val current = prefs[RELEASE_RADAR_SEEN_THROUGH]
+            if (current == null || day > current) prefs[RELEASE_RADAR_SEEN_THROUGH] = day
+        }
     }
 
     /** The stored name of Discover's catalogue; empty when never chosen. */

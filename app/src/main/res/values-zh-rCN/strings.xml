@@ -1929,4 +1929,13 @@
     <string name="radio_recent_desc">最近播放的 30 首会排到后面。</string>
     <string name="radio_originals_title">优先原版</string>
     <string name="radio_originals_desc">录音室版本优先于重制、现场和混音版本。</string>
+    <string name="radar_title">新歌雷达</string>
+    <string name="radar_subtitle">你常听的艺人近两个月的新作</string>
+    <string name="radar_new_count">%1$d 个新作</string>
+    <string name="radar_new_badge">新</string>
+    <string name="radar_today">今天</string>
+    <string name="radar_yesterday">昨天</string>
+    <plurals name="radar_days_ago">
+        <item quantity="other">%1$d 天前</item>
+    </plurals>
 </resources>

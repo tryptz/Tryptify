@@ -1979,4 +1979,14 @@
     <string name="radio_recent_desc">Deine letzten 30 Wiedergaben rutschen in der Warteschlange nach unten.</string>
     <string name="radio_originals_title">Originalversionen bevorzugen</string>
     <string name="radio_originals_desc">Studioversionen vor Remasters, Live-Aufnahmen und Remixen.</string>
+    <string name="radar_title">Release-Radar</string>
+    <string name="radar_subtitle">Neues von Künstlern, die du hörst, aus den letzten zwei Monaten</string>
+    <string name="radar_new_count">%1$d neu</string>
+    <string name="radar_new_badge">NEU</string>
+    <string name="radar_today">Heute</string>
+    <string name="radar_yesterday">Gestern</string>
+    <plurals name="radar_days_ago">
+        <item quantity="one">Vor %1$d Tag</item>
+        <item quantity="other">Vor %1$d Tagen</item>
+    </plurals>
 </resources>

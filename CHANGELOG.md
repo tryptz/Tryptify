@@ -19,6 +19,11 @@
 
 ### Added
 
+#### Release radar
+- **A row near the top of "For you": new releases from the artists you play,** with a count of how many are new and a NEW badge on each one out since your last visit (the last two weeks on a first visit). It reads the discographies of your dozen most-played artists on the service the Discover switch is on, keeps the last 60 days, and opens the album on tap.
+- **Right about "new" and "by this artist".** Nothing dated in the future (a pre-order isn't out) and nothing dated by year alone. A compilation credited to someone else ("Various Artists") is not a new release from an artist who appears on it, while a joint credit ("Push & Ferry Corsten") is. Deluxe, explicit and remastered editions of one release count once. `ReleaseRadar` holds the rules and `ReleaseRadarTest` checks them.
+- **Never in the first shelf's way.** It loads after the feed's first page, asks three artists at a time with a budget each, and keeps the answer for six hours per service, on disk too, so reopening Discover doesn't ask again. An answer from a service that couldn't be reached isn't kept, so "offline on the train" never reads as "nothing new". Pull to refresh asks again. With nothing new, the row isn't shown at all.
+
 #### Swipe to discover
 - **A stack of 15 songs a day, one card at a time: right keeps it, left skips it.** It opens from a card at the top of "For you", which shows how far through today's stack you are. It is a screen of its own because a sideways swipe on a Discover page already changes the page.
 - **Dealt from three places, in turn:** today's discovery genre, the genres next door to yours, and artists placed next to the ones you play. Everything comes from the service the Discover switch is on. No song you have liked or skipped in the last 30 days, no song twice (matched by artist and title, so the same recording on another service counts), and never one artist on two cards in a row while there is anyone else to put between them. `SwipeDeck` holds those rules and `SwipeDeckTest` checks them.

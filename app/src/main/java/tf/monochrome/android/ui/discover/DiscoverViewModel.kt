@@ -79,6 +79,9 @@ fun rememberDiscoverViewModel(): DiscoverViewModel {
 /** One genre on Discover's genre rail, and why it's there. */
 data class GenreRailItem(val node: GenreNode, val hearted: Boolean)
 
+/** One release on the radar, and whether it wears the NEW badge. */
+data class RadarItem(val release: tf.monochrome.android.domain.model.RadarRelease, val isNew: Boolean)
+
 /** How far through today's swipe deck the listener is. */
 data class DeckProgress(val swiped: Int, val size: Int, val kept: Int) {
     val done: Boolean get() = swiped >= size
@@ -148,6 +151,7 @@ class DiscoverViewModel @Inject constructor(
     private val genreCharts: tf.monochrome.android.domain.usecase.GenreChartUseCase,
     private val catalogs: DiscoveryCatalogs,
     private val deckStore: tf.monochrome.android.data.discover.SwipeDeckStore,
+    private val radarUseCase: tf.monochrome.android.domain.usecase.ReleaseRadarUseCase,
 ) : ViewModel() {
 
     /**
@@ -299,7 +303,40 @@ class DiscoverViewModel @Inject constructor(
         viewModelScope.launch {
             catalogs.select(value)
             rebuild()
+            loadRadar()
         }
+    }
+
+    // ── Release radar ───────────────────────────────────────────────────
+
+    private val _radar = MutableStateFlow<List<RadarItem>>(emptyList())
+
+    /** New releases from artists the listener plays; empty hides the row. */
+    val radar: StateFlow<List<RadarItem>> = _radar.asStateFlow()
+
+    private var radarJob: Job? = null
+
+    /**
+     * Loads the radar. Badges are worked out here, against what was seen
+     * before this load, so they stay up for as long as this page shows them
+     * even after [markRadarSeen] has moved the marker on.
+     */
+    private fun loadRadar(force: Boolean = false) {
+        radarJob?.cancel()
+        radarJob = viewModelScope.launch {
+            val releases = runCatching { radarUseCase.releases(force) }.getOrDefault(emptyList())
+            val seen = preferences.releaseRadarSeenThrough.first()
+            val today = LocalDate.now()
+            _radar.value = releases.map {
+                RadarItem(it, tf.monochrome.android.domain.model.ReleaseRadar.isNew(it, seen, today))
+            }
+        }
+    }
+
+    /** The radar has been on screen: what it showed is no longer new next time. */
+    fun markRadarSeen() {
+        val newest = _radar.value.maxOfOrNull { it.release.day } ?: return
+        viewModelScope.launch { preferences.setReleaseRadarSeenThrough(newest) }
     }
 
     /**
@@ -1164,6 +1201,7 @@ class DiscoverViewModel @Inject constructor(
     fun refresh() {
         _refreshing.value = true
         onShown()
+        loadRadar(force = true)
         // The gesture means "go and look again", so the pages built earlier
         // stop counting. Without this the restore path would hand the same
         // page straight back and pull-to-refresh would be a spinner that
@@ -1260,6 +1298,15 @@ class DiscoverViewModel @Inject constructor(
      * and the only way to guarantee that for a class this size is to start it
      * once every property above has run. See the note beside [exhaustedShelves].
      */
+    init {
+        // After the feed's first page, never alongside it: the radar is two
+        // dozen requests and the first shelf should not wait on any of them.
+        viewModelScope.launch {
+            _loading.first { !it }
+            loadRadar()
+        }
+    }
+
     init {
         selectChip(null)
     }

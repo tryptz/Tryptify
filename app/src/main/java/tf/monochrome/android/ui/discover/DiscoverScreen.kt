@@ -161,6 +161,7 @@ fun DiscoverScreen(
     val service by viewModel.service.collectAsStateWithLifecycle()
     val availableServices by viewModel.availableServices.collectAsStateWithLifecycle()
     val deckProgress by viewModel.deckProgress.collectAsStateWithLifecycle()
+    val radar by viewModel.radar.collectAsStateWithLifecycle()
     val graph = viewModel.genreGraph
 
     // A new day turns over when the page is next shown, not on a timer.
@@ -347,6 +348,18 @@ fun DiscoverScreen(
                             },
                         )
                     }
+                }
+            }
+
+            // New releases from the artists you play, under today's pick and
+            // above everything that only changes when you ask it to.
+            if (forYou && radar.isNotEmpty()) {
+                item(key = "radar") {
+                    ReleaseRadarRow(
+                        items = radar,
+                        onOpen = { navController.openCatalogAlbum(it.release.albumId) },
+                        onShown = viewModel::markRadarSeen,
+                    )
                 }
             }
 

@@ -1949,3 +1949,12 @@ radio_recent_title	Avoid songs I just heard	避开刚听过的歌	最近聴い�
 radio_recent_desc	Your last 30 plays move down the queue.	最近播放的 30 首会排到后面。	直近 30 回の再生曲は後ろに回ります。	Vos 30 dernières écoutes descendent dans la file.	Tus últimas 30 reproducciones bajan en la cola.	Son 30 dinlemeniz sırada aşağı iner.	Deine letzten 30 Wiedergaben rutschen in der Warteschlange nach unten.
 radio_originals_title	Prefer original versions	优先原版	オリジナル版を優先	Privilégier les versions originales	Preferir versiones originales	Orijinal sürümleri öne çıkar	Originalversionen bevorzugen
 radio_originals_desc	Studio versions before remasters, live takes and remixes.	录音室版本优先于重制、现场和混音版本。	リマスター、ライブ、リミックスより先にスタジオ版が来ます。	Les versions studio avant les remasters, les lives et les remixes.	Versiones de estudio antes que remasterizaciones, en vivo y remixes.	Remaster, canlı ve remikslerden önce stüdyo sürümleri.	Studioversionen vor Remasters, Live-Aufnahmen und Remixen.
+radar_title	Release radar	新歌雷达	リリースレーダー	Radar des sorties	Radar de lanzamientos	Yayın radarı	Release-Radar
+radar_subtitle	New from artists you play, out in the last two months	你常听的艺人近两个月的新作	よく聴くアーティストの、この 2 か月の新作	Les nouveautés des artistes que vous écoutez, sorties ces deux derniers mois	Novedades de los artistas que escuchas, de los últimos dos meses	Dinlediğiniz sanatçıların son iki aydaki yeni yayınları	Neues von Künstlern, die du hörst, aus den letzten zwei Monaten
+radar_new_count	%1$d new	%1$d 个新作	新着 %1$d	%1$d nouveautés	%1$d nuevos	%1$d yeni	%1$d neu
+radar_new_badge	NEW	新	NEW	NOUVEAU	NUEVO	YENİ	NEU
+radar_today	Today	今天	今日	Aujourd’hui	Hoy	Bugün	Heute
+radar_yesterday	Yesterday	昨天	昨日	Hier	Ayer	Dün	Gestern
+radar_days_ago#one	%1$d day ago	%1$d 天前	%1$d 日前	Il y a %1$d jour	Hace %1$d día	%1$d gün önce	Vor %1$d Tag
+radar_days_ago#many	%1$d days ago	%1$d 天前	%1$d 日前	Il y a %1$d jours	Hace %1$d días	%1$d gün önce	Vor %1$d Tagen
+radar_days_ago#other	%1$d days ago	%1$d 天前	%1$d 日前	Il y a %1$d jours	Hace %1$d días	%1$d gün önce	Vor %1$d Tagen

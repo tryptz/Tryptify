@@ -1980,4 +1980,14 @@
     <string name="radio_recent_desc">Your last 30 plays move down the queue.</string>
     <string name="radio_originals_title">Prefer original versions</string>
     <string name="radio_originals_desc">Studio versions before remasters, live takes and remixes.</string>
+    <string name="radar_title">Release radar</string>
+    <string name="radar_subtitle">New from artists you play, out in the last two months</string>
+    <string name="radar_new_count">%1$d new</string>
+    <string name="radar_new_badge">NEW</string>
+    <string name="radar_today">Today</string>
+    <string name="radar_yesterday">Yesterday</string>
+    <plurals name="radar_days_ago">
+        <item quantity="one">%1$d day ago</item>
+        <item quantity="other">%1$d days ago</item>
+    </plurals>
 </resources>
