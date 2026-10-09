@@ -2008,4 +2008,27 @@
     <string name="discover_spotlight_title">Le genre du jour</string>
     <string name="discover_service_deezer_note">Les titres Deezer sont lus depuis Qobuz quand il les a, et en extraits de 30 secondes sinon.</string>
     <string name="discover_service_missing">Aucun serveur %1$s dans Paramètres › Connexions pour l’instant.</string>
+    <string name="deck_title">Balayer pour découvrir</string>
+    <string name="deck_counter">%1$d sur %2$d</string>
+    <string name="deck_dealing">Préparation de la pile du jour…</string>
+    <string name="deck_empty">Rien de nouveau pour l’instant. Vérifiez le serveur %1$s dans Paramètres › Connexions, ou revenez demain.</string>
+    <string name="deck_back">Retour à Découvrir</string>
+    <string name="deck_reason_today">De %1$s, la découverte du jour</string>
+    <string name="deck_reason_genre">De %1$s, juste à côté de vos genres</string>
+    <string name="deck_play_pause">Lire ou mettre en pause</string>
+    <string name="deck_hint">Balayez à gauche pour passer · à droite pour garder</string>
+    <string name="deck_kept_so_far">Gardés : %1$d</string>
+    <string name="deck_undo">Annuler</string>
+    <string name="deck_keep">Garder</string>
+    <string name="deck_done_title">C’est toute la pile</string>
+    <string name="deck_done_summary">Vous en avez gardé %1$d sur %2$d.</string>
+    <string name="deck_done_tomorrow">La pile de demain se construit à partir de ce que vous avez gardé.</string>
+    <string name="deck_save_playlist">Enregistrer comme playlist</string>
+    <string name="deck_saved_playlist">Enregistrée dans vos playlists</string>
+    <string name="deck_playlist_name">Gardés depuis Découvrir · %1$s</string>
+    <string name="deck_go_again">Encore une pile</string>
+    <string name="deck_card_body">%1$d titres juste à côté de vos goûts. À droite pour garder, à gauche pour passer.</string>
+    <string name="deck_card_done">La pile du jour est terminée · gardés : %1$d</string>
+    <string name="deck_card_progress">%1$d sur %2$d aujourd’hui · gardés : %3$d</string>
+    <string name="deck_start">Commencer</string>
 </resources>

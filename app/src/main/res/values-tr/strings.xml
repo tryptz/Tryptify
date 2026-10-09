@@ -1958,4 +1958,27 @@
     <string name="discover_spotlight_title">Günün türü</string>
     <string name="discover_service_deezer_note">Deezer şarkıları Qobuz’da varsa Qobuz’dan, yoksa 30 saniyelik önizleme olarak çalınır.</string>
     <string name="discover_service_missing">Ayarlar › Bağlantılar’da henüz %1$s sunucusu yok.</string>
+    <string name="deck_title">Kaydırarak keşfet</string>
+    <string name="deck_counter">%1$d / %2$d</string>
+    <string name="deck_dealing">Bugünün destesi hazırlanıyor…</string>
+    <string name="deck_empty">Şu an yeni bir şey yok. Ayarlar › Bağlantılar’dan %1$s sunucusunu kontrol edin ya da yarın tekrar gelin.</string>
+    <string name="deck_back">Keşfet’e dön</string>
+    <string name="deck_reason_today">Bugünün keşfi %1$s türünden</string>
+    <string name="deck_reason_genre">Türlerinizin hemen yanındaki %1$s türünden</string>
+    <string name="deck_play_pause">Çal veya duraklat</string>
+    <string name="deck_hint">Geçmek için sola · tutmak için sağa kaydırın</string>
+    <string name="deck_kept_so_far">Tutulan: %1$d</string>
+    <string name="deck_undo">Geri al</string>
+    <string name="deck_keep">Tut</string>
+    <string name="deck_done_title">Deste bitti</string>
+    <string name="deck_done_summary">%2$d şarkının %1$d tanesini tuttunuz.</string>
+    <string name="deck_done_tomorrow">Yarının destesi tuttuklarınızdan oluşturulur.</string>
+    <string name="deck_save_playlist">Çalma listesi olarak kaydet</string>
+    <string name="deck_saved_playlist">Çalma listelerinize kaydedildi</string>
+    <string name="deck_playlist_name">Keşfet’ten tutulanlar · %1$s</string>
+    <string name="deck_go_again">Bir tur daha</string>
+    <string name="deck_card_body">Zevkinizin hemen yanından %1$d şarkı. Sağa tutar, sola geçer.</string>
+    <string name="deck_card_done">Bugünün destesi bitti · tutulan: %1$d</string>
+    <string name="deck_card_progress">Bugün %2$d kartın %1$d tanesi · tutulan: %3$d</string>
+    <string name="deck_start">Başla</string>
 </resources>

@@ -2008,4 +2008,27 @@
     <string name="discover_spotlight_title">El género del día</string>
     <string name="discover_service_deezer_note">Las canciones de Deezer se reproducen desde Qobuz cuando las tiene, y como avances de 30 segundos cuando no.</string>
     <string name="discover_service_missing">Aún no hay ningún servidor de %1$s en Ajustes › Conexiones.</string>
+    <string name="deck_title">Desliza para descubrir</string>
+    <string name="deck_counter">%1$d de %2$d</string>
+    <string name="deck_dealing">Preparando la pila de hoy…</string>
+    <string name="deck_empty">Ahora no hay nada nuevo. Revisa el servidor de %1$s en Ajustes › Conexiones o vuelve mañana.</string>
+    <string name="deck_back">Volver a Descubrir</string>
+    <string name="deck_reason_today">De %1$s, el descubrimiento de hoy</string>
+    <string name="deck_reason_genre">De %1$s, justo al lado de tus géneros</string>
+    <string name="deck_play_pause">Reproducir o pausar</string>
+    <string name="deck_hint">Desliza a la izquierda para saltar · a la derecha para guardar</string>
+    <string name="deck_kept_so_far">Guardadas: %1$d</string>
+    <string name="deck_undo">Deshacer</string>
+    <string name="deck_keep">Guardar</string>
+    <string name="deck_done_title">Esa es la pila</string>
+    <string name="deck_done_summary">Guardaste %1$d de %2$d.</string>
+    <string name="deck_done_tomorrow">La pila de mañana se arma con lo que guardaste.</string>
+    <string name="deck_save_playlist">Guardar como playlist</string>
+    <string name="deck_saved_playlist">Guardada en tus playlists</string>
+    <string name="deck_playlist_name">Guardadas de Descubrir · %1$s</string>
+    <string name="deck_go_again">Otra ronda</string>
+    <string name="deck_card_body">%1$d canciones justo al lado de tu gusto. A la derecha la guardas, a la izquierda la saltas.</string>
+    <string name="deck_card_done">La pila de hoy está lista · guardadas: %1$d</string>
+    <string name="deck_card_progress">%1$d de %2$d hoy · guardadas: %3$d</string>
+    <string name="deck_start">Empezar</string>
 </resources>

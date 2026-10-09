@@ -1908,4 +1908,27 @@
     <string name="discover_spotlight_title">今日のジャンル</string>
     <string name="discover_service_deezer_note">Deezer の曲は、Qobuz にあれば Qobuz から再生され、なければ 30 秒の試聴になります。</string>
     <string name="discover_service_missing">「設定 › 接続」に %1$s のサーバーがまだありません。</string>
+    <string name="deck_title">スワイプで発見</string>
+    <string name="deck_counter">%1$d / %2$d</string>
+    <string name="deck_dealing">今日のスタックを準備中…</string>
+    <string name="deck_empty">今は新しいカードがありません。「設定 › 接続」で %1$s のサーバーを確認するか、明日また来てください。</string>
+    <string name="deck_back">「見つける」に戻る</string>
+    <string name="deck_reason_today">今日の発見「%1$s」から</string>
+    <string name="deck_reason_genre">あなたのジャンルのすぐ隣、%1$s から</string>
+    <string name="deck_play_pause">再生または一時停止</string>
+    <string name="deck_hint">左にスワイプでスキップ・右で残す</string>
+    <string name="deck_kept_so_far">残した曲：%1$d</string>
+    <string name="deck_undo">元に戻す</string>
+    <string name="deck_keep">残す</string>
+    <string name="deck_done_title">今日のスタックは以上です</string>
+    <string name="deck_done_summary">%2$d 曲中 %1$d 曲を残しました。</string>
+    <string name="deck_done_tomorrow">明日のスタックは、残した曲をもとに作られます。</string>
+    <string name="deck_save_playlist">プレイリストとして保存</string>
+    <string name="deck_saved_playlist">プレイリストに保存しました</string>
+    <string name="deck_playlist_name">「見つける」で残した曲 · %1$s</string>
+    <string name="deck_go_again">もう一度</string>
+    <string name="deck_card_body">あなたの好みのすぐ隣から %1$d 曲。右で残し、左でスキップ。</string>
+    <string name="deck_card_done">今日のスタックは完了 · 残した曲：%1$d</string>
+    <string name="deck_card_progress">今日 %2$d 枚中 %1$d 枚 · 残した曲：%3$d</string>
+    <string name="deck_start">始める</string>
 </resources>

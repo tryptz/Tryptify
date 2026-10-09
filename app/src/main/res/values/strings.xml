@@ -1959,4 +1959,27 @@
     <string name="discover_spotlight_title">Genre of the day</string>
     <string name="discover_service_deezer_note">Deezer songs play from Qobuz when it has them, and as 30-second previews when it doesn’t.</string>
     <string name="discover_service_missing">No %1$s server in Settings › Connections yet.</string>
+    <string name="deck_title">Swipe to discover</string>
+    <string name="deck_counter">%1$d of %2$d</string>
+    <string name="deck_dealing">Dealing today’s stack…</string>
+    <string name="deck_empty">Nothing new to deal right now. Check the %1$s server in Settings › Connections, or come back tomorrow.</string>
+    <string name="deck_back">Back to Discover</string>
+    <string name="deck_reason_today">From %1$s, today’s discovery</string>
+    <string name="deck_reason_genre">From %1$s, next door to your genres</string>
+    <string name="deck_play_pause">Play or pause</string>
+    <string name="deck_hint">Swipe left to skip · right to keep</string>
+    <string name="deck_kept_so_far">%1$d kept</string>
+    <string name="deck_undo">Undo</string>
+    <string name="deck_keep">Keep</string>
+    <string name="deck_done_title">That’s the stack</string>
+    <string name="deck_done_summary">You kept %1$d of %2$d.</string>
+    <string name="deck_done_tomorrow">Tomorrow’s stack is built from what you kept.</string>
+    <string name="deck_save_playlist">Save as a playlist</string>
+    <string name="deck_saved_playlist">Saved to your playlists</string>
+    <string name="deck_playlist_name">Kept from Discover · %1$s</string>
+    <string name="deck_go_again">Go again</string>
+    <string name="deck_card_body">%1$d picks from next door to your taste. Right keeps it, left skips it.</string>
+    <string name="deck_card_done">Today’s stack is done · %1$d kept</string>
+    <string name="deck_card_progress">%1$d of %2$d swiped today · %3$d kept</string>
+    <string name="deck_start">Start</string>
 </resources>

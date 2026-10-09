@@ -1958,4 +1958,27 @@
     <string name="discover_spotlight_title">Genre des Tages</string>
     <string name="discover_service_deezer_note">Deezer-Titel laufen über Qobuz, wenn es sie hat, sonst als 30-Sekunden-Vorschau.</string>
     <string name="discover_service_missing">Noch kein %1$s-Server unter Einstellungen › Verbindungen.</string>
+    <string name="deck_title">Wischen und entdecken</string>
+    <string name="deck_counter">%1$d von %2$d</string>
+    <string name="deck_dealing">Der Stapel für heute wird gemischt…</string>
+    <string name="deck_empty">Gerade gibt es nichts Neues. Prüf den %1$s-Server unter Einstellungen › Verbindungen oder komm morgen wieder.</string>
+    <string name="deck_back">Zurück zu Entdecken</string>
+    <string name="deck_reason_today">Aus %1$s, der Entdeckung des Tages</string>
+    <string name="deck_reason_genre">Aus %1$s, gleich neben deinen Genres</string>
+    <string name="deck_play_pause">Abspielen oder pausieren</string>
+    <string name="deck_hint">Nach links wischen zum Überspringen · nach rechts zum Behalten</string>
+    <string name="deck_kept_so_far">Behalten: %1$d</string>
+    <string name="deck_undo">Rückgängig</string>
+    <string name="deck_keep">Behalten</string>
+    <string name="deck_done_title">Das war der Stapel</string>
+    <string name="deck_done_summary">Du hast %1$d von %2$d behalten.</string>
+    <string name="deck_done_tomorrow">Der Stapel von morgen entsteht aus dem, was du behalten hast.</string>
+    <string name="deck_save_playlist">Als Playlist speichern</string>
+    <string name="deck_saved_playlist">In deinen Playlists gespeichert</string>
+    <string name="deck_playlist_name">Behalten aus Entdecken · %1$s</string>
+    <string name="deck_go_again">Noch eine Runde</string>
+    <string name="deck_card_body">%1$d Titel gleich neben deinem Geschmack. Rechts behalten, links überspringen.</string>
+    <string name="deck_card_done">Der Stapel für heute ist fertig · behalten: %1$d</string>
+    <string name="deck_card_progress">Heute %1$d von %2$d · behalten: %3$d</string>
+    <string name="deck_start">Starten</string>
 </resources>

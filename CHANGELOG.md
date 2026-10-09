@@ -11,6 +11,15 @@
 
 ### Added
 
+#### Swipe to discover
+- **A stack of 15 songs a day, one card at a time: right keeps it, left skips it.** It opens from a card at the top of "For you", which shows how far through today's stack you are. It is a screen of its own because a sideways swipe on a Discover page already changes the page.
+- **Dealt from three places, in turn:** today's discovery genre, the genres next door to yours, and artists placed next to the ones you play. Everything comes from the service the Discover switch is on. No song you have liked or skipped in the last 30 days, no song twice (matched by artist and title, so the same recording on another service counts), and never one artist on two cards in a row while there is anyone else to put between them. `SwipeDeck` holds those rules and `SwipeDeckTest` checks them.
+- **Each card plays as it comes up, from about a third of the way in**, past the intro. The seek waits until the player reports this song with a length that matches the card, so it never seeks the previous song, and a 30-second preview plays from the start.
+- **Keeping hearts the song,** so it lands in Liked songs, and liked songs are what the feed and tomorrow's stack are seeded from. Undo takes back the last swipe, including a heart the deck added (never one you already had). The card moves the instant you swipe; the save follows.
+- **The end of the stack** shows what you kept, saves it as a playlist if you want ("Kept from Discover · date"), deals another round from further down the same sources, or takes you back.
+- **The stack, your place in it and your skips are kept in a file of their own,** so leaving halfway resumes on the same card, and swiping never rewrites the whole settings file.
+- **Glass from Visual Studio:** the info panel and the round Skip, Undo and Keep buttons are the UI panels material, frosting the card's own cover behind the screen. The KEEP and SKIP stamps fade in while drawing only, so dragging a card does not recompose it every frame.
+
 #### Discover: choose TIDAL, Qobuz or Deezer
 - **A three-way switch at the top of the feed picks the service Discover finds its music on.** Every shelf, genre chart, genre play, Top 100 and today's pick follows it. Discover was Qobuz-only all the way down; `DiscoveryCatalog` is now the one place it searches, opens artists and albums, and tags tracks to play from the service they were found on, so a Qobuz id is never played as the TIDAL track with the same number.
 - **A service with no server under Settings › Connections is shown, disabled.** If the chosen one loses its server, the switch says what is missing instead of the page quietly going empty, and the empty-page message names the chosen service rather than always saying Qobuz.

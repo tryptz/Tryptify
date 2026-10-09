@@ -160,6 +160,7 @@ fun DiscoverScreen(
     val heartedGenres by viewModel.heartedGenres.collectAsStateWithLifecycle()
     val service by viewModel.service.collectAsStateWithLifecycle()
     val availableServices by viewModel.availableServices.collectAsStateWithLifecycle()
+    val deckProgress by viewModel.deckProgress.collectAsStateWithLifecycle()
     val graph = viewModel.genreGraph
 
     // A new day turns over when the page is next shown, not on a timer.
@@ -369,12 +370,21 @@ fun DiscoverScreen(
             // The cards between the shelves, and the shelf each one follows.
             // Only on "For you", like the hero.
             val cards = if (!forYou) emptyList() else buildList {
+                // The deck first: it is the one thing on the page with a
+                // "today" you can finish.
+                add(FeedCard.DECK to 0)
                 add(FeedCard.GALAXY to 1)
                 if (spotlight != null) add(FeedCard.SPOTLIGHT to 3)
                 add(FeedCard.WORLD_RADIO to 5)
             }
             val feedCard: @Composable (FeedCard) -> Unit = { card ->
                 when (card) {
+                    FeedCard.DECK -> DiscoverGlassCard(
+                        haze = haze,
+                        onClick = { navController.navigateSafe(Screen.DiscoverDeck.route) },
+                    ) {
+                        DeckEntryCard(progress = deckProgress)
+                    }
                     FeedCard.GALAXY -> DiscoverGlassCard(
                         haze = haze,
                         onClick = {
@@ -1022,6 +1032,7 @@ internal fun openDiscoveryItem(
 
 /** The cards set between the shelves on "For you". */
 private enum class FeedCard(val key: String) {
+    DECK("card_deck"),
     GALAXY("card_galaxy"),
     SPOTLIGHT("card_spotlight"),
     WORLD_RADIO("card_world_radio"),

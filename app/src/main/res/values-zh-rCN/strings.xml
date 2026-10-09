@@ -1908,4 +1908,27 @@
     <string name="discover_spotlight_title">今日流派</string>
     <string name="discover_service_deezer_note">Deezer 的歌曲在 Qobuz 有收录时从 Qobuz 播放，没有时播放 30 秒试听。</string>
     <string name="discover_service_missing">“设置 › 连接”中还没有 %1$s 服务器。</string>
+    <string name="deck_title">滑动发现</string>
+    <string name="deck_counter">%1$d / %2$d</string>
+    <string name="deck_dealing">正在准备今天的卡片…</string>
+    <string name="deck_empty">现在没有新的可推荐。请在“设置 › 连接”中检查 %1$s 服务器，或明天再来。</string>
+    <string name="deck_back">返回“发现”</string>
+    <string name="deck_reason_today">来自今日发现：%1$s</string>
+    <string name="deck_reason_genre">来自 %1$s，紧挨着你的流派</string>
+    <string name="deck_play_pause">播放或暂停</string>
+    <string name="deck_hint">左滑跳过 · 右滑保留</string>
+    <string name="deck_kept_so_far">已保留 %1$d</string>
+    <string name="deck_undo">撤销</string>
+    <string name="deck_keep">保留</string>
+    <string name="deck_done_title">今天的卡片完成了</string>
+    <string name="deck_done_summary">%2$d 首中你保留了 %1$d 首。</string>
+    <string name="deck_done_tomorrow">明天的卡片会根据你保留的歌曲生成。</string>
+    <string name="deck_save_playlist">保存为歌单</string>
+    <string name="deck_saved_playlist">已保存到你的歌单</string>
+    <string name="deck_playlist_name">从“发现”保留 · %1$s</string>
+    <string name="deck_go_again">再来一轮</string>
+    <string name="deck_card_body">%1$d 首紧挨着你口味的推荐。右滑保留，左滑跳过。</string>
+    <string name="deck_card_done">今天的卡片已完成 · 保留 %1$d</string>
+    <string name="deck_card_progress">今天已滑 %1$d / %2$d · 保留 %3$d</string>
+    <string name="deck_start">开始</string>
 </resources>

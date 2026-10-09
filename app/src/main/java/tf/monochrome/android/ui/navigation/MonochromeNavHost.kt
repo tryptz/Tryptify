@@ -118,6 +118,7 @@ sealed class Screen(val route: String) {
     data object Search : Screen("search")
     data object Discover : Screen("discover")
     data object GenreMap : Screen("discover/map")
+    data object DiscoverDeck : Screen("discover/deck")
     data object DiscoverShelf : Screen("discover/shelf/{shelfId}") {
         fun createRoute(shelfId: String) = "discover/shelf/${android.net.Uri.encode(shelfId)}"
     }
@@ -642,6 +643,14 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 composable(Screen.GenreMap.route) {
                     tf.monochrome.android.devedit.DevEditScreen("genre_map") {
                         GenreMapScreen(
+                            navController = navController,
+                            playerViewModel = playerViewModel,
+                        )
+                    }
+                }
+                composable(Screen.DiscoverDeck.route) {
+                    tf.monochrome.android.devedit.DevEditScreen("discover_deck") {
+                        tf.monochrome.android.ui.discover.deck.SwipeDeckScreen(
                             navController = navController,
                             playerViewModel = playerViewModel,
                         )

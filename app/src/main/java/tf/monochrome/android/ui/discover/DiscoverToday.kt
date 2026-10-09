@@ -592,3 +592,47 @@ internal fun WorldRadioCard() {
         }
     }
 }
+
+/**
+ * The way into Swipe to discover, as a card in the feed: what it is before
+ * today's stack is dealt, how far through it the listener is after.
+ */
+@Composable
+internal fun DeckEntryCard(progress: DeckProgress?) {
+    val accent = MaterialTheme.colorScheme.secondary
+    Column {
+        Kicker(text = stringResource(R.string.deck_title), color = accent)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = when {
+                progress == null -> stringResource(R.string.deck_card_body, tf.monochrome.android.domain.model.SwipeDeck.SIZE)
+                progress.done -> stringResource(R.string.deck_card_done, progress.kept)
+                else -> stringResource(R.string.deck_card_progress, progress.swiped, progress.size, progress.kept)
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        if (progress != null) {
+            Spacer(Modifier.height(10.dp))
+            LinearProgressIndicator(
+                progress = { if (progress.size == 0) 0f else progress.swiped.toFloat() / progress.size },
+                modifier = Modifier.fillMaxWidth(),
+                color = accent,
+                drawStopIndicator = {},
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = stringResource(
+                when {
+                    progress == null -> R.string.deck_start
+                    progress.done -> R.string.deck_go_again
+                    else -> R.string.action_continue
+                },
+            ),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = accent,
+        )
+    }
+}

@@ -79,6 +79,11 @@ fun rememberDiscoverViewModel(): DiscoverViewModel {
 /** One genre on Discover's genre rail, and why it's there. */
 data class GenreRailItem(val node: GenreNode, val hearted: Boolean)
 
+/** How far through today's swipe deck the listener is. */
+data class DeckProgress(val swiped: Int, val size: Int, val kept: Int) {
+    val done: Boolean get() = swiped >= size
+}
+
 /** The genre of the day, with the history its card quotes from. */
 data class GenreSpotlight(val genre: GenreNode, val history: GenreHistory)
 
@@ -142,6 +147,7 @@ class DiscoverViewModel @Inject constructor(
     private val genreSearch: tf.monochrome.android.domain.usecase.GenreSearchUseCase,
     private val genreCharts: tf.monochrome.android.domain.usecase.GenreChartUseCase,
     private val catalogs: DiscoveryCatalogs,
+    private val deckStore: tf.monochrome.android.data.discover.SwipeDeckStore,
 ) : ViewModel() {
 
     /**
@@ -380,7 +386,18 @@ class DiscoverViewModel @Inject constructor(
         // Coming back from Settings › Connections is the usual way a service
         // appears or goes, and this is the next time the page is seen.
         checkServices()
+        viewModelScope.launch { deckStore.load() }
     }
+
+    /**
+     * Today's swipe deck, for its card in the feed; null before today's stack
+     * is dealt, which is what the card's "Start" means.
+     */
+    val deckProgress: StateFlow<DeckProgress?> =
+        combine(deckStore.state, _day) { stored, day ->
+            stored?.takeIf { it.day == day && it.cards.isNotEmpty() }
+                ?.let { DeckProgress(it.position, it.cards.size, it.kept.size) }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     /** The listener's genres, most telling first: hearted, then recently played. */
     private val anchors: Flow<List<String>> =
