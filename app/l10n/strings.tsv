@@ -1880,3 +1880,38 @@ playlist_fix_show_unmatched	Show songs with no match	显示没有匹配的歌曲
 playlist_fix_unmatched_title	No sure match	无可靠匹配	確実な一致なし	Sans correspondance sûre	Sin coincidencia segura	Kesin eşleşme yok	Keine sichere Übereinstimmung
 playlist_fix_unmatched_body	These songs weren’t changed.	以下歌曲未被更改。	これらの曲は変更されていません。	Ces titres n’ont pas été modifiés.	Estas canciones no se cambiaron.	Bu parçalar değiştirilmedi.	Diese Titel wurden nicht verändert.
 playlist_fix_busy	Another playlist is being fixed — wait for it to finish.	另一个歌单正在修复中，请等待其完成。	別のプレイリストを修復中です。完了するまでお待ちください。	Une autre playlist est en cours de réparation ; attendez qu’elle se termine.	Se está reparando otra playlist; espera a que termine.	Başka bir çalma listesi onarılıyor; bitmesini bekleyin.	Eine andere Playlist wird gerade repariert – warte, bis sie fertig ist.
+fonts_title	Fonts	字体	フォント	Polices	Fuentes	Yazı tipleri	Schriftarten
+fonts_import	Import	导入	読み込む	Importer	Importar	İçe aktar	Importieren
+fonts_preview_label	Preview · %1$s	预览 · %1$s	プレビュー · %1$s	Aperçu · %1$s	Vista previa · %1$s	Önizleme · %1$s	Vorschau · %1$s
+fonts_in_use	In use	使用中	使用中	Utilisée	En uso	Kullanımda	Aktiv
+fonts_sample_default	Everything sounds better in your own type.	用你自己的字体，一切都更动听。	自分の書体なら、すべてがもっと良く響きます。	Tout sonne mieux dans votre propre police.	Todo suena mejor con tu propia tipografía.	Kendi yazı tipinizle her şey daha güzel.	Alles klingt besser in deiner eigenen Schrift.
+fonts_sample_label	Your own sample text	自定义示例文字	サンプルテキスト	Votre texte d’exemple	Tu texto de muestra	Kendi örnek metniniz	Eigener Beispieltext
+fonts_sample_hint	Type anything to preview it	输入任意文字进行预览	入力するとプレビューされます	Saisissez un texte pour le prévisualiser	Escribe algo para previsualizarlo	Önizlemek için bir şey yazın	Tippe etwas für die Vorschau
+fonts_preview_track	Song title	歌曲名	曲名	Nom du titre	Título de la canción	Parça adı	Titelname
+fonts_preview_artist	Artist · Album · 3:24	艺人 · 专辑 · 3:24	アーティスト · アルバム · 3:24	Artiste · Album · 3:24	Artista · Álbum · 3:24	Sanatçı · Albüm · 3:24	Interpret · Album · 3:24
+fonts_preview_heading	New releases	新发行	新着リリース	Nouveautés	Novedades	Yeni çıkanlar	Neuerscheinungen
+fonts_weight	Preview weight	预览字重	プレビューの太さ	Graisse de l’aperçu	Grosor de la vista previa	Önizleme kalınlığı	Vorschau-Stärke
+fonts_weight_light	Light	细体	ライト	Léger	Fina	İnce	Leicht
+fonts_weight_regular	Regular	常规	レギュラー	Normal	Normal	Normal	Normal
+fonts_weight_medium	Medium	中等	ミディアム	Moyen	Media	Orta	Mittel
+fonts_weight_semibold	Semibold	半粗	セミボールド	Demi-gras	Seminegrita	Yarı kalın	Halbfett
+fonts_weight_bold	Bold	粗体	ボールド	Gras	Negrita	Kalın	Fett
+fonts_use	Use %1$s	使用 %1$s	%1$s を使う	Utiliser %1$s	Usar %1$s	%1$s kullan	%1$s verwenden
+fonts_using	%1$s is in use	正在使用 %1$s	%1$s を使用中	%1$s est utilisée	%1$s está en uso	%1$s kullanımda	%1$s ist aktiv
+fonts_filter_all	All	全部	すべて	Toutes	Todas	Tümü	Alle
+fonts_import_title	Import fonts	导入字体	フォントを読み込む	Importer des polices	Importar fuentes	Yazı tiplerini içe aktar	Schriftarten importieren
+fonts_import_formats	.ttf, .otf or .ttc · pick several at once	.ttf、.otf 或 .ttc · 可一次选择多个	.ttf、.otf、.ttc · 複数まとめて選べます	.ttf, .otf ou .ttc · plusieurs à la fois	.ttf, .otf o .ttc · varios a la vez	.ttf, .otf veya .ttc · aynı anda birkaç tane	.ttf, .otf oder .ttc · mehrere auf einmal
+fonts_import_body	Each file is opened before it’s added: anything that isn’t a font is turned away, the name comes from the font itself, and a font you already have isn’t added twice.	每个文件在添加前都会被打开检查：不是字体的文件会被拒绝，名称取自字体本身，已有的字体不会重复添加。	ファイルは追加する前に開いて確認します。フォントでないものは取り込まず、名前はフォント自身から取り、すでにあるフォントは二重に追加しません。	Chaque fichier est ouvert avant d’être ajouté : ce qui n’est pas une police est refusé, le nom vient de la police elle-même, et une police déjà présente n’est pas ajoutée deux fois.	Cada archivo se abre antes de añadirlo: lo que no es una fuente se rechaza, el nombre sale de la propia fuente y una fuente que ya tienes no se añade dos veces.	Her dosya eklenmeden önce açılır: yazı tipi olmayanlar reddedilir, ad yazı tipinin kendisinden alınır ve zaten olan bir yazı tipi ikinci kez eklenmez.	Jede Datei wird vor dem Hinzufügen geöffnet: Was keine Schriftart ist, wird abgelehnt, der Name kommt aus der Schrift selbst, und eine Schrift, die du schon hast, wird nicht doppelt hinzugefügt.
+fonts_choose_files	Choose files	选择文件	ファイルを選ぶ	Choisir des fichiers	Elegir archivos	Dosya seç	Dateien auswählen
+fonts_checking	Checking fonts…	正在检查字体…	フォントを確認しています…	Vérification des polices…	Comprobando fuentes…	Yazı tipleri kontrol ediliyor…	Schriftarten werden geprüft…
+fonts_added	Added: %1$s	已添加：%1$s	追加しました：%1$s	Ajout : %1$s	Añadidas: %1$s	Eklendi: %1$s	Hinzugefügt: %1$s
+fonts_skip_not_a_font	%1$s isn’t a font file	%1$s 不是字体文件	%1$s はフォントファイルではありません	%1$s n’est pas un fichier de police	%1$s no es un archivo de fuente	%1$s bir yazı tipi dosyası değil	%1$s ist keine Schriftdatei
+fonts_skip_web_font	%1$s is a web font (WOFF). Android needs .ttf or .otf	%1$s 是网页字体（WOFF），Android 需要 .ttf 或 .otf	%1$s は Web フォント（WOFF）です。Android では .ttf か .otf が必要です	%1$s est une police web (WOFF). Android a besoin d’un .ttf ou .otf	%1$s es una fuente web (WOFF). Android necesita .ttf u .otf	%1$s bir web yazı tipi (WOFF). Android .ttf veya .otf gerektirir	%1$s ist eine Webschrift (WOFF). Android braucht .ttf oder .otf
+fonts_skip_type1	%1$s is an old PostScript Type 1 font, which Android can’t use	%1$s 是旧版 PostScript Type 1 字体，Android 无法使用	%1$s は古い PostScript Type 1 フォントで、Android では使えません	%1$s est une ancienne police PostScript Type 1, inutilisable sur Android	%1$s es una fuente PostScript Type 1 antigua que Android no puede usar	%1$s eski bir PostScript Type 1 yazı tipi; Android bunu kullanamaz	%1$s ist eine alte PostScript-Type-1-Schrift, die Android nicht nutzen kann
+fonts_skip_empty	%1$s is empty	%1$s 是空文件	%1$s は空です	%1$s est vide	%1$s está vacío	%1$s boş	%1$s ist leer
+fonts_skip_too_large	%1$s is larger than 64 MB	%1$s 大于 64 MB	%1$s は 64 MB を超えています	%1$s dépasse 64 Mo	%1$s supera los 64 MB	%1$s 64 MB’tan büyük	%1$s ist größer als 64 MB
+fonts_skip_duplicate	%1$s is already in your fonts as %2$s	%1$s 已在你的字体中（%2$s）	%1$s はすでに「%2$s」として追加されています	%1$s figure déjà dans vos polices sous le nom %2$s	%1$s ya está en tus fuentes como %2$s	%1$s zaten yazı tiplerinizde %2$s olarak var	%1$s ist schon als %2$s in deinen Schriftarten
+fonts_skip_unreadable	%1$s couldn’t be read	无法读取 %1$s	%1$s を読み取れませんでした	Impossible de lire %1$s	No se pudo leer %1$s	%1$s okunamadı	%1$s konnte nicht gelesen werden
+fonts_unusable	This file can’t be read as a font. Delete it to tidy up.	无法将此文件读取为字体。删除它即可清理。	このファイルはフォントとして読み取れません。削除して整理できます。	Ce fichier ne peut pas être lu comme une police. Supprimez-le pour faire le ménage.	Este archivo no se puede leer como fuente. Bórralo para ordenar.	Bu dosya yazı tipi olarak okunamıyor. Temizlemek için silin.	Diese Datei lässt sich nicht als Schrift lesen. Lösch sie zum Aufräumen.
+fonts_delete_title	Delete %1$s?	要删除 %1$s 吗？	%1$s を削除しますか？	Supprimer %1$s ?	¿Eliminar %1$s?	%1$s silinsin mi?	%1$s löschen?
+fonts_delete_body	It’s removed from this device. If it’s the font in use, the app goes back to Inter.	它将从此设备中移除。如果它是正在使用的字体，应用会改回 Inter。	この端末から削除されます。使用中のフォントの場合は Inter に戻ります。	Elle est supprimée de cet appareil. Si c’est la police utilisée, l’app revient à Inter.	Se elimina de este dispositivo. Si es la fuente en uso, la app vuelve a Inter.	Bu cihazdan kaldırılır. Kullanımdaki yazı tipiyse uygulama Inter’e döner.	Sie wird von diesem Gerät entfernt. Ist sie die aktive Schrift, kehrt die App zu Inter zurück.

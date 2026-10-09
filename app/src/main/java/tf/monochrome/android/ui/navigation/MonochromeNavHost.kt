@@ -154,6 +154,7 @@ sealed class Screen(val route: String) {
     data object Profile : Screen("profile")
     data object Stats : Screen("stats")
     data object ListeningStats : Screen("listening_stats")
+    data object FontBrowser : Screen("font_browser")
     data object FolderBrowser : Screen("folder/{folderPath}") {
         // Uri.encode (not URLEncoder) so spaces become %20 not '+', and every
         // reserved char (incl. '/' and '%') is percent-encoded. Navigation
@@ -819,6 +820,11 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 composable(Screen.ListeningStats.route) {
                     tf.monochrome.android.devedit.DevEditScreen("listening_stats") {
                         ListeningStatsScreen(onBack = { navController.popBackStackSafe() })
+                    }
+                }
+                composable(Screen.FontBrowser.route) {
+                    tf.monochrome.android.devedit.DevEditScreen("font_browser") {
+                        tf.monochrome.android.ui.settings.fonts.FontBrowserScreen(onBack = { navController.popBackStackSafe() })
                     }
                 }
                 composable(

@@ -4,7 +4,6 @@ import tf.monochrome.android.R
 import tf.monochrome.android.ui.components.UiText
 import android.content.Context
 import android.net.Uri
-import android.provider.OpenableColumns
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -432,28 +431,11 @@ class SettingsViewModel @Inject constructor(
     private val _cacheSize = MutableStateFlow("")
     val cacheSize: StateFlow<String> = _cacheSize.asStateFlow()
 
-    // --- Font Library ---
-    // Imported fonts, from filesDir/custom_fonts. The ten that ship in the APK
-    // are a separate, constant list (BundledFonts.ALL) — they can be selected
-    // but not deleted, so they don't belong in mutable state.
-    private val _availableFonts = MutableStateFlow<List<File>>(emptyList())
-    val availableFonts: StateFlow<List<File>> = _availableFonts.asStateFlow()
-
-    val bundledFonts: List<tf.monochrome.android.ui.theme.BundledFont> =
-        tf.monochrome.android.ui.theme.BundledFonts.ALL
+    // The font library lives in its own screen now (FontBrowserViewModel,
+    // over data/fonts/FontLibrary); this screen only names the active font.
 
     init {
         calculateCacheSize()
-        loadFonts()
-    }
-
-    private fun loadFonts() {
-        val fontsDir = File(appContext.filesDir, "custom_fonts")
-        if (fontsDir.exists()) {
-            _availableFonts.value = fontsDir.listFiles()?.filter { it.extension == "ttf" || it.extension == "otf" }?.toList() ?: emptyList()
-        } else {
-            _availableFonts.value = emptyList()
-        }
     }
 
     // --- Appearance actions ---
@@ -517,73 +499,6 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val current = preferences.lyricsFx.first()
             preferences.setLyricsFx(current.copy(artGlowBrightness = percent / 100f))
-        }
-    }
-
-    fun importFont(uri: Uri) {
-        viewModelScope.launch {
-            try {
-                val fontsDir = File(appContext.filesDir, "custom_fonts")
-                fontsDir.mkdirs()
-                
-                var fileName = "font_${System.currentTimeMillis()}.ttf"
-                if (uri.scheme == "content") {
-                    appContext.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                        if (cursor.moveToFirst()) {
-                            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                            if (index != -1) {
-                                fileName = cursor.getString(index)
-                            }
-                        }
-                    }
-                }
-                // Ensure it ends with .ttf (or otf)
-                if (!fileName.lowercase().endsWith(".ttf") && !fileName.lowercase().endsWith(".otf")) {
-                    fileName += ".ttf"
-                }
-
-                val destFile = File(fontsDir, fileName)
-                appContext.contentResolver.openInputStream(uri)?.use { input ->
-                    destFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
-                loadFonts()
-                preferences.setCustomFontUri(destFile.absolutePath)
-                _messages.tryEmit(UiText.Res(R.string.settings_font_imported))
-            } catch (_: Exception) {
-                _messages.tryEmit(UiText.Res(R.string.settings_font_import_failed))
-            }
-        }
-    }
-
-    fun selectFont(file: File) {
-        viewModelScope.launch {
-            preferences.setCustomFontUri(file.absolutePath)
-        }
-    }
-
-    /** Select one of the fonts that ships in the APK. */
-    fun selectBundledFont(font: tf.monochrome.android.ui.theme.BundledFont) {
-        viewModelScope.launch {
-            preferences.setCustomFontUri(tf.monochrome.android.ui.theme.BundledFonts.idOf(font))
-        }
-    }
-
-    fun removeFont(file: File) {
-        viewModelScope.launch {
-            val currentActive = preferences.customFontUri.first()
-            if (file.absolutePath == currentActive) {
-                preferences.setCustomFontUri(null)
-            }
-            file.delete()
-            loadFonts()
-        }
-    }
-
-    fun resetDefaultFont() {
-        viewModelScope.launch {
-            preferences.setCustomFontUri(null)
         }
     }
 
