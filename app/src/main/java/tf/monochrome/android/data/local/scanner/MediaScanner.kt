@@ -45,6 +45,7 @@ class MediaScanner @Inject constructor(
     private val localLibraryRevision: tf.monochrome.android.data.local.LocalLibraryRevision,
     private val genreGraph: tf.monochrome.android.data.repository.GenreGraphRepository,
     private val artworkStore: tf.monochrome.android.data.local.tags.ArtworkStore,
+    private val folderIndexer: FolderIndexer,
 ) {
 
     fun fullScan(
@@ -62,6 +63,23 @@ class MediaScanner @Inject constructor(
             // ScanCoordinator.runFullScan — has nothing to pass, so the setting
             // was written by the UI and then ignored by every scan.
             val excluded = excludedPaths + preferences.excludedPaths.first()
+            // A scan sees only what Android has indexed, and not every way of
+            // putting a file in a folder tells it: a new song stayed missing
+            // through any number of rescans (#136). Ask for the ones it has
+            // not indexed, and wait, before reading. A failure here costs only
+            // those files, never the scan.
+            val unindexed = try {
+                folderIndexer.findUnindexed(folderRoots, excluded)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("MediaScanner", "could not check the folders for unindexed files", e)
+                emptyList()
+            }
+            if (unindexed.isNotEmpty()) {
+                emit(ScanProgress.Grouping("Indexing ${unindexed.size} new file${if (unindexed.size == 1) "" else "s"}..."))
+                folderIndexer.index(unindexed)
+            }
             val mediaStoreFiles =
                 mediaStoreSource.queryAllAudio(minDurationMs, excluded, folderRoots)
             emit(ScanProgress.Started(totalFiles = mediaStoreFiles.size))
@@ -119,6 +137,25 @@ class MediaScanner @Inject constructor(
         }
     }.flowOn(Dispatchers.IO)
 
+    /**
+     * Brings the library up to date with MediaStore at a fraction of a full
+     * scan's cost: what LibraryWatcher runs when Android's audio index
+     * changes, and once at launch.
+     *
+     * A file is read when the library has nothing at its path, or when it was
+     * modified since it was read ([needsIncrementalRead]). It used to take only
+     * files modified since the last scan, by date, and copying or moving a file
+     * keeps its date: a song moved between folders was pruned from the old one
+     * and never read in the new (#136).
+     *
+     * Cheaper than a full scan where it can be. None of the artwork re-read
+     * heuristics. Atmos music videos are listed by path, not opened: the
+     * library keeps the ones it has while their files exist, and a new one
+     * arrives with the next full scan. The prune is careful ([pruneLooksReal]),
+     * since nobody asked for this scan and a MediaStore that answers empty,
+     * before storage is mounted, would otherwise empty the library. And when
+     * nothing changed, nothing is rebuilt or announced.
+     */
     fun incrementalScan(
         minDurationMs: Long = 30_000
     ): Flow<ScanProgress> = flow {
@@ -129,46 +166,40 @@ class MediaScanner @Inject constructor(
             // incremental scan import it straight back — the removal held only
             // until the next song landed in that folder.
             val excluded = preferences.excludedPaths.first()
-            val scanState = localMediaDao.getScanState()
-            val lastScan = scanState?.lastIncremental ?: scanState?.lastFullScan ?: 0
+            val audio = mediaStoreSource.queryAllAudio(
+                minDurationMs, excluded, folderRoots, includeAtmosVideos = false,
+            )
+            val known = localMediaDao.getAllTrackScanInfo().associateBy { it.filePath }
+            val changed = audio.filter { needsIncrementalRead(known[it.absolutePath], it.dateModified) }
 
-            val modifiedFiles =
-                mediaStoreSource.queryModifiedSince(lastScan, minDurationMs, folderRoots, excluded)
-            if (modifiedFiles.isEmpty()) {
-                // No new tag content to read, but still rebuild groupings so
-                // album-cover-into-track propagation runs and the UI picks up
-                // any album-level artwork changes since the last scan.
-                emit(ScanProgress.Grouping("Refreshing library..."))
-                rebuildGroupings()
-                rebuildFolders()
-                updateScanState(full = false)
+            val addedCount = if (changed.isEmpty()) 0 else {
+                emit(ScanProgress.Started(totalFiles = changed.size))
+                processFiles(
+                    files = changed,
+                    shouldRead = { true },
+                    progressChunkSize = 20,
+                    titleFromFileName = preferences.localTitleFromFileName.first(),
+                )
+            }
+
+            // Same roots filter as fullScan so the prune diff never deletes
+            // tracks a full scan would keep; videos by path, for the reason above.
+            val present = audio.mapTo(HashSet()) { it.absolutePath }
+            present += mediaStoreSource.queryAtmosVideoCandidatePaths(minDurationMs, excluded)
+            val removedCount = pruneDeleted(present, cautious = true)
+
+            if (changed.isEmpty() && removedCount == 0) {
                 emit(ScanProgress.Complete(scanned = 0, added = 0, removed = 0))
                 return@flow
             }
-
-            emit(ScanProgress.Started(totalFiles = modifiedFiles.size))
-
-            // MediaStore already filtered to files modified since the last
-            // scan, so every one of them needs a fresh tag read.
-            val addedCount = processFiles(
-                files = modifiedFiles,
-                shouldRead = { true },
-                progressChunkSize = 20,
-                titleFromFileName = preferences.localTitleFromFileName.first(),
-            )
-
-            // Check for deleted files. Same roots filter as fullScan so the
-            // prune diff never mass-deletes tracks a full scan would keep.
-            val allMediaStorePaths = mediaStoreSource
-                .queryAllAudio(minDurationMs, excluded, folderRoots)
-                .mapTo(HashSet()) { it.absolutePath }
-            pruneDeleted(allMediaStorePaths)
 
             rebuildGroupings()
             rebuildFolders()
             updateScanState(full = false)
 
-            emit(ScanProgress.Complete(scanned = modifiedFiles.size, added = addedCount, removed = 0))
+            emit(ScanProgress.Complete(scanned = changed.size, added = addedCount, removed = removedCount))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             emit(ScanProgress.Error(e.message ?: "Incremental scan error"))
         }
@@ -255,10 +286,22 @@ class MediaScanner @Inject constructor(
      * SQLite's 999 bound-variable limit (the old NOT IN variant bound the
      * entire MediaStore path set into a single statement).
      *
+     * [cautious], for a scan nobody asked for: skipped when it does not look
+     * like files really went ([pruneLooksReal]).
+     *
      * @return the number of rows removed.
      */
-    private suspend fun pruneDeleted(mediaStorePaths: Set<String>): Int {
-        val toDelete = localMediaDao.getAllTrackPaths().filterNot { it in mediaStorePaths }
+    private suspend fun pruneDeleted(mediaStorePaths: Set<String>, cautious: Boolean = false): Int {
+        val library = localMediaDao.getAllTrackPaths()
+        val toDelete = library.filterNot { it in mediaStorePaths }
+        if (cautious && !pruneLooksReal(library.size, toDelete.size)) {
+            // Left for a full scan, which someone asked for and which says so.
+            android.util.Log.w(
+                "MediaScanner",
+                "not pruning ${toDelete.size} of ${library.size} tracks MediaStore did not list; a rescan will",
+            )
+            return 0
+        }
         if (toDelete.isNotEmpty()) {
             musicDatabase.withTransaction {
                 toDelete.chunked(DELETE_CHUNK_SIZE).forEach {
@@ -582,6 +625,29 @@ class MediaScanner @Inject constructor(
                 existing.title?.let { tf.monochrome.android.data.local.tags.splitArtistTitle(it) } != null
             ) return true
             return false
+        }
+
+        /**
+         * Whether the incremental scan reads a MediaStore file: the library has
+         * nothing at its path, or the file changed since it was read. By path
+         * first because a copied or moved file keeps its old date.
+         */
+        fun needsIncrementalRead(existing: TrackScanInfo?, mediaStoreDateModified: Long): Boolean =
+            existing == null || existing.lastModified < mediaStoreDateModified
+
+        /**
+         * Whether a prune of [toDelete] of a [libraryTracks]-track library looks
+         * like files really went, rather than MediaStore answering short. Never
+         * the whole library: that is a MediaStore with nothing to say yet, as at
+         * boot before storage is mounted. Never more than half of one of 20 or
+         * more tracks. A full scan prunes regardless; this is for the one that
+         * runs on its own.
+         */
+        fun pruneLooksReal(libraryTracks: Int, toDelete: Int): Boolean = when {
+            toDelete == 0 -> true
+            toDelete >= libraryTracks -> false
+            libraryTracks >= 20 && toDelete * 2 > libraryTracks -> false
+            else -> true
         }
 
         /** A file's name without its folder or extension: the title it is saved under. */

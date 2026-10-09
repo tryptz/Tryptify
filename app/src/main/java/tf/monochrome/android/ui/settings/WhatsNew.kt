@@ -345,7 +345,13 @@ object WhatsNew {
                     kind = WhatsNewKind.CHANGED,
                     section = LIBRARY,
                     title = "Rescans run to the end",
-                    body = "Rescan Library keeps going after you leave Settings, instead of stopping halfway.",
+                    body = "Rescan Library and the Library tab's refresh keep going after you leave the screen, instead of stopping halfway.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LIBRARY,
+                    title = "Folders keep up with your files",
+                    body = "Songs you add, delete or move in your library folders show up by themselves, including changes made while the app was closed. A rescan now also finds new songs Android had not noticed.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,

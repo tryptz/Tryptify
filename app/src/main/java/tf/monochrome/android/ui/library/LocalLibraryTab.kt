@@ -194,10 +194,10 @@ fun LocalLibraryTab(
             val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
             context.contentResolver.takePersistableUriPermission(uri, flags)
             // Persist the selected folder so it shows up in the Folders tab even
-            // before MediaStore re-indexes and the scanner derives it from tracks.
-            safTreeUriToPath(uri)?.let { viewModel.addUserFolderRoot(it) }
-            // Trigger a full scan after adding a folder (MediaStore will include it)
-            viewModel.startFullScan()
+            // before MediaStore re-indexes and the scanner derives it from tracks,
+            // then scan it in: one call, so the scan cannot read the folder list
+            // before the folder is in it.
+            viewModel.addFolderAndScan(safTreeUriToPath(uri))
         }
     }
 

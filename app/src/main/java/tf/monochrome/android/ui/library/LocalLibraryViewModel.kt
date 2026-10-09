@@ -303,11 +303,14 @@ class LocalLibraryViewModel @Inject constructor(
         }
     }
 
-    fun addUserFolderRoot(path: String) {
-        if (path.isBlank()) return
-        viewModelScope.launch {
-            preferencesManager.addUserFolderRoot(path)
-        }
+    /**
+     * Adds a library folder and scans it in, saved before the scan reads the
+     * folder list (see ScanCoordinator.addFolderAndScan). A blank path, from a
+     * picker location with no file path, still gets the scan.
+     */
+    fun addFolderAndScan(path: String?) {
+        if (path.isNullOrBlank()) scanCoordinator.requestFullScanAfterCurrent()
+        else scanCoordinator.addFolderAndScan(path)
     }
 
     // ── Search ────────────────────────────────────────────────────────
@@ -335,18 +338,24 @@ class LocalLibraryViewModel @Inject constructor(
 
     // ── Scan state ──────────────────────────────────────────────────
 
-    // Shared across every scan entry point (Library tab, FileObserver,
-    // onboarding ScanWorker) so worker-driven scans show progress here too.
+    // Shared across every scan entry point (Library tab, Settings, onboarding
+    // ScanWorker) so worker-driven scans show progress here too. LibraryWatcher's
+    // refreshes are quiet and show none.
     val scanProgress: StateFlow<ScanProgress?> = scanCoordinator.scanProgress
     val isScanning: StateFlow<Boolean> = scanCoordinator.isScanning
 
+    /**
+     * In ScanCoordinator's scope, so leaving the Library tab does not cut the
+     * scan off halfway, and queued behind a scan already running rather than
+     * dropped.
+     */
     fun startFullScan() {
-        viewModelScope.launch { scanCoordinator.runFullScan() }
+        scanCoordinator.requestFullScanAfterCurrent()
     }
 
     /** Drops a folder from the library. The files on disk are not touched. */
     fun excludeFolder(path: String) {
-        viewModelScope.launch { scanCoordinator.excludeFolder(path) }
+        scanCoordinator.excludeFolder(path)
     }
 
     /** Dismiss the terminal scan-progress bar (Complete/Error). */

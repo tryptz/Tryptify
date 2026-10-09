@@ -883,8 +883,9 @@ class SettingsViewModel @Inject constructor(
     fun rescanLibrary() {
         // Route through the shared ScanCoordinator (the same guard the Library
         // tab uses), so the button actually scans instead of no-op'ing, and
-        // keeps scanning after the user leaves Settings.
-        scanCoordinator.requestFullScan()
+        // keeps scanning after the user leaves Settings. After the current scan
+        // rather than instead of it: a quiet library refresh may be running.
+        scanCoordinator.requestFullScanAfterCurrent()
     }
 
     // The library_tab_order surface that used to live here is gone: the flat page
