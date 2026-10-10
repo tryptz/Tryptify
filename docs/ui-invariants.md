@@ -702,11 +702,23 @@ the way somewhere else must not cost a chart request.
 **The god rays are an occlusion light pass, not the lyric engine** (`GalaxyLight`).
 Each light — the core, or the star whose planets are up, one taking over from
 the other as you arrive — draws its own layer: the light and its glow in colour,
-and everything standing in it (planets, moons, dust, the bulge, stars, nebulae)
-over it in black. The march averages that, so every planet throws a shadow shaft
+and what stands in it — planets, moons, and the dust and bulge grains for the
+fine rays — over it in black. Never the stars or the nebulae: a star in front of
+another threw a broad black beam across the map. The march averages that, so every planet throws a shadow shaft
 straight away from its star. The hole's shadow is *cleared*, not blacked out, or
 it casts a dark ring over its own disk. Do not add stripes or a starburst to fake
 rays: they come only from what is in the light's way.
+
+**Every star is lit, always**, at full size and brightness; there is no "still
+dark" look for genres not listened to. **The star you are at is a sun** — the
+selected one, else the followed one, else the one whose system the camera sits
+in (`litStar`) — with its disc and its light as soon as you are near, not only
+once its planets have come.
+
+**The links' stardust moves through space, not round its link.** Comets run at
+`FLOW_UNITS_S` scene units a second and the dust drifts at `FLOW_DRIFT_UNITS_S`:
+timed per link, a comet crossed a long link in seconds and raced across the
+screen close in.
 
 **A star system is at real scale, more or less.** The star's radius is the
 genre's size (`GalaxyScene.starRadius`, from its prominence), and everything is

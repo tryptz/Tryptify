@@ -1986,9 +1986,7 @@
     <string name="galaxy_sheet_loading">この星の惑星を探しています…</string>
     <string name="galaxy_sheet_empty">ここにはまだチャート入りしたアーティストがいません</string>
     <string name="galaxy_bios_credit">アーティスト紹介：Last.fm</string>
-    <string name="galaxy_legend_lit">点灯：聴いた</string>
     <string name="galaxy_legend_hearted">お気に入り</string>
-    <string name="galaxy_legend_dark">まだ暗い</string>
     <plurals name="galaxy_subgenres">
         <item quantity="other">サブジャンル %1$d</item>
     </plurals>

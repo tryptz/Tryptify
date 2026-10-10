@@ -2006,9 +2006,7 @@ galaxy_planet_rank	No. %1$d in %2$s	%2$s 第 %1$d 名	%2$s で %1$d 位	N° %1$d
 galaxy_sheet_loading	Finding this star’s planets…	正在寻找这颗恒星的行星…	この星の惑星を探しています…	Recherche des planètes de cette étoile…	Buscando los planetas de esta estrella…	Bu yıldızın gezegenleri aranıyor…	Planeten dieses Sterns werden gesucht…
 galaxy_sheet_empty	No charted artists here yet	这里还没有上榜的艺人	ここにはまだチャート入りしたアーティストがいません	Aucun artiste classé ici pour l’instant	Aún no hay artistas en las listas aquí	Burada henüz listeye giren sanatçı yok	Hier gibt es noch keine Künstler in den Charts
 galaxy_bios_credit	Artist descriptions from Last.fm	艺人简介来自 Last.fm	アーティスト紹介：Last.fm	Descriptions des artistes : Last.fm	Descripciones de artistas: Last.fm	Sanatçı açıklamaları: Last.fm	Künstlerbeschreibungen von Last.fm
-galaxy_legend_lit	Lit: you’ve listened	亮起：听过	点灯：聴いた	Allumé : écouté	Encendido: escuchado	Yanan: dinlediniz	Leuchtet: gehört
 galaxy_legend_hearted	Hearted	已收藏	お気に入り	Favori	Favorito	Favori	Favorit
-galaxy_legend_dark	Still dark	尚未点亮	まだ暗い	Encore éteint	Aún apagado	Henüz karanlık	Noch dunkel
 galaxy_subgenres#one	%1$d subgenre	%1$d 个子流派	サブジャンル %1$d	%1$d sous-genre	%1$d subgénero	%1$d alt tür	%1$d Subgenre
 galaxy_subgenres#many	%1$d subgenres	%1$d 个子流派	サブジャンル %1$d	%1$d sous-genres	%1$d subgéneros	%1$d alt tür	%1$d Subgenres
 galaxy_subgenres#other	%1$d subgenres	%1$d 个子流派	サブジャンル %1$d	%1$d sous-genres	%1$d subgéneros	%1$d alt tür	%1$d Subgenres

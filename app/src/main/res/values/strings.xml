@@ -2041,9 +2041,7 @@
     <string name="galaxy_sheet_loading">Finding this star’s planets…</string>
     <string name="galaxy_sheet_empty">No charted artists here yet</string>
     <string name="galaxy_bios_credit">Artist descriptions from Last.fm</string>
-    <string name="galaxy_legend_lit">Lit: you’ve listened</string>
     <string name="galaxy_legend_hearted">Hearted</string>
-    <string name="galaxy_legend_dark">Still dark</string>
     <plurals name="galaxy_subgenres">
         <item quantity="one">%1$d subgenre</item>
         <item quantity="other">%1$d subgenres</item>

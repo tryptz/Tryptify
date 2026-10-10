@@ -2040,9 +2040,7 @@
     <string name="galaxy_sheet_loading">Planeten dieses Sterns werden gesucht…</string>
     <string name="galaxy_sheet_empty">Hier gibt es noch keine Künstler in den Charts</string>
     <string name="galaxy_bios_credit">Künstlerbeschreibungen von Last.fm</string>
-    <string name="galaxy_legend_lit">Leuchtet: gehört</string>
     <string name="galaxy_legend_hearted">Favorit</string>
-    <string name="galaxy_legend_dark">Noch dunkel</string>
     <plurals name="galaxy_subgenres">
         <item quantity="one">%1$d Subgenre</item>
         <item quantity="other">%1$d Subgenres</item>

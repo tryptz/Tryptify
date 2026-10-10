@@ -2040,9 +2040,7 @@
     <string name="galaxy_sheet_loading">Bu yıldızın gezegenleri aranıyor…</string>
     <string name="galaxy_sheet_empty">Burada henüz listeye giren sanatçı yok</string>
     <string name="galaxy_bios_credit">Sanatçı açıklamaları: Last.fm</string>
-    <string name="galaxy_legend_lit">Yanan: dinlediniz</string>
     <string name="galaxy_legend_hearted">Favori</string>
-    <string name="galaxy_legend_dark">Henüz karanlık</string>
     <plurals name="galaxy_subgenres">
         <item quantity="one">%1$d alt tür</item>
         <item quantity="other">%1$d alt tür</item>

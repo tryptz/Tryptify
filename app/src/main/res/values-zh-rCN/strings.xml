@@ -1986,9 +1986,7 @@
     <string name="galaxy_sheet_loading">正在寻找这颗恒星的行星…</string>
     <string name="galaxy_sheet_empty">这里还没有上榜的艺人</string>
     <string name="galaxy_bios_credit">艺人简介来自 Last.fm</string>
-    <string name="galaxy_legend_lit">亮起：听过</string>
     <string name="galaxy_legend_hearted">已收藏</string>
-    <string name="galaxy_legend_dark">尚未点亮</string>
     <plurals name="galaxy_subgenres">
         <item quantity="other">%1$d 个子流派</item>
     </plurals>

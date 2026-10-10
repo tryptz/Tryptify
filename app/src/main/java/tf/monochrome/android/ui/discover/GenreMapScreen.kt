@@ -1548,43 +1548,24 @@ private fun GalaxyHud(
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Spacer(Modifier.height(6.dp))
-            // Wraps rather than cutting the last one off on a narrow phone.
-            androidx.compose.foundation.layout.FlowRow(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                listOf(
-                    LegendKind.LIT to R.string.galaxy_legend_lit,
-                    LegendKind.HEARTED to R.string.galaxy_legend_hearted,
-                    LegendKind.DARK to R.string.galaxy_legend_dark,
-                ).forEach { (kind, label) ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        LegendMark(kind)
-                        LegendText(stringResource(label))
-                    }
-                }
+            // Every star is lit, so the one mark left to explain is the heart's ring.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LegendMark()
+                LegendText(stringResource(R.string.galaxy_legend_hearted))
             }
         }
     }
 }
 
-private enum class LegendKind { LIT, HEARTED, DARK }
-
-/** The legend's marks, drawn the way the map draws them. */
+/** The hearted mark, drawn the way the map draws it: a dashed ring round the star. */
 @Composable
-private fun LegendMark(kind: LegendKind) {
+private fun LegendMark() {
     val color = MaterialTheme.colorScheme.primary
     Canvas(modifier = Modifier.size(14.dp)) {
         val c = Offset(size.width / 2f, size.height / 2f)
         val r = size.minDimension * 0.24f
-        when (kind) {
-            LegendKind.LIT -> {
-                drawCircle(color.copy(alpha = 0.3f), radius = r * 2f, center = c)
-                drawCircle(color, radius = r, center = c)
-            }
-            LegendKind.HEARTED -> {
-                drawCircle(color.copy(alpha = 0.5f), radius = r * 0.85f, center = c)
-                drawCircle(color, radius = r + 3f, center = c, style = Stroke(width = 1.6f, pathEffect = HEART_RING))
-            }
-            LegendKind.DARK -> drawCircle(color.copy(alpha = 0.4f), radius = r * 0.85f, center = c)
-        }
+        drawCircle(color.copy(alpha = 0.5f), radius = r * 0.85f, center = c)
+        drawCircle(color, radius = r + 3f, center = c, style = Stroke(width = 1.6f, pathEffect = HEART_RING))
     }
 }
 

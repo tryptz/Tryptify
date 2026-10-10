@@ -11,6 +11,12 @@
 
 ### Changed
 
+#### Every star lit, and slower, softer stardust
+- **Every star is lit, always.** Stars used to stay small and dim until you had listened to their genre ("still dark"), so most of the galaxy looked switched off. The legend keeps only the hearted ring.
+- **The star you are at is a sun as soon as you are near it**, with its glow and rays, without waiting for its planets. That is the one you selected, the one the camera is following, or the one whose system the camera is inside.
+- **Only planets and moons cast shadows**, plus the fine dust that makes the thin rays. Other stars and the nebulae no longer throw broad black beams across the map.
+- **The stardust along the links is dust now**: a soft band of fine motes that drifts slowly toward the newer genre and fades in and out, instead of a string of round beads. The comets travel at a slow, steady speed through space, so they no longer race across the screen when you are close in. The swirl and the sparkles slowed too. Links wholly off screen are skipped.
+
 #### The genre galaxy at real scale
 - **A star system is built from its star now.** A genre's star is as big as the genre is well known: a giant for the genres everyone knows, a dwarf for a niche. Its planets and orbits are laid out from it, so a big genre is a wide system and a small one a tight one.
 - **Planets are small beside their star**, 4 to 12 % of it across, and the star is drawn as a real sun disc at its size: white-hot in the middle, its family's colour at the limb, with an uneven corona that turns and breathes slowly. Planets used to be bigger than their star.
