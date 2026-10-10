@@ -13,6 +13,7 @@
 
 #### A fourth glyph in the genre dock: its system
 - **Next to Play, Radio and Top 100, a glyph of three planets of different sizes** does what a long press on the star does: plays it and opens its planets as the system sheet. On a small phone the four pills narrow a little so the row still fits.
+- **The dock's glyphs are holes cut in the glass now, like the tab bar's**, not icons laid on top. The shader bevels each hole's edge and the frost shows through it, and the open Top 100 lights its glyph in the genre's colour, the way the current tab does. Where the shader doesn't run, they are ordinary icons.
 
 #### Every star lit, and slower, softer stardust
 - **Every star is lit, always.** Stars used to stay small and dim until you had listened to their genre ("still dark"), so most of the galaxy looked switched off. The legend keeps only the hearted ring.

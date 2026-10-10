@@ -686,7 +686,11 @@ the map at once; the save waits for the hand to stop (`GALAXY_VISUALS_SAVE_MS`).
 
 **A selected genre is a dock of pills, not a panel.** Up to three related
 genres, by name, and four glyph pills (Play, Radio, Top 100, and its system —
-three planets — which does what a long press on the star does), popping in. The
+three planets — which does what a long press on the star does), popping in.
+The glyphs are cut out of the slab (`GlassPill`'s `punch`, the tab bar's
+recipe: an offscreen slab, the glyph erased with anti-aliased `DstOut` at whole
+pixels), never drawn on it, and only where `glassPunches()` says the shader
+runs; a selected one is lit over its hole. The
 Top 100 and the history are one compact sheet above them, one at a time.
 There is no close button: a tap on empty space or Back deselects.
 

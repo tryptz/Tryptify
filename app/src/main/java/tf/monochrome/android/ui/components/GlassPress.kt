@@ -229,6 +229,8 @@ fun PressableGlass(
     contentAlignment: Alignment = Alignment.Center,
     corner: Dp = Dp.Infinity,
     glass: PlayerGlassSettings = LocalMiniPlayerGlass.current,
+    /** A glyph cut out of the slab; see [GlassMaterial]. */
+    punch: (androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val press = rememberGlassPress()
@@ -244,7 +246,7 @@ fun PressableGlass(
             .glassBase(hazeState, glass, shape),
         contentAlignment = contentAlignment,
     ) {
-        GlassMaterial(hazeState = hazeState, glass = glass, corner = corner, press = press)
+        GlassMaterial(hazeState = hazeState, glass = glass, corner = corner, press = press, punch = punch)
         GlassInkScope(glass) { content() }
     }
 }

@@ -24,6 +24,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -204,6 +210,13 @@ internal fun BoxScope.GlassMaterial(
     glass: PlayerGlassSettings,
     corner: Dp,
     press: GlassPress? = null,
+    /**
+     * Shapes cut out of the slab, the way the tab bar and the mini player cut
+     * their glyphs: whatever this draws is erased from the slab, so the
+     * shader bevels the hole's edge and the frost shows through it. Only when
+     * the shader is really coming ([glassPunches]); otherwise draw the glyph.
+     */
+    punch: (DrawScope.() -> Unit)? = null,
 ) {
     if (!shaderGlassFor(glass)) return
     val allowHaze = LocalPerformanceProfile.current.allowHazeBlur
@@ -271,6 +284,7 @@ internal fun BoxScope.GlassMaterial(
         // case gets the mini player's fill and the bad case still cannot
         // paint a slab.
         val shaded = rememberLiquidGlassAvailable()
+        val cut = punch?.takeIf { shaded }
         Canvas(
             modifier = Modifier
                 .matchParentSize()
@@ -287,13 +301,26 @@ internal fun BoxScope.GlassMaterial(
                     } else {
                         Modifier.playerGlass(tint = tint, lensCorner = corner, liveUnder = liveLens)
                     },
-                ),
+                )
+                // One offscreen layer, so a punch clears only the slab and
+                // never the frost or the page behind the pane.
+                .then(if (cut != null) Modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen } else Modifier),
         ) {
             val r = corner.toPx().coerceAtMost(size.minDimension / 2f)
             drawRoundRect(
                 color = if (shaded) tint else tint.copy(alpha = 0.14f),
                 cornerRadius = CornerRadius(r, r),
             )
+            if (cut != null) {
+                // Anti-aliased DstOut, as the tab bar and the dock cut theirs.
+                val erase = Paint().apply {
+                    blendMode = BlendMode.DstOut
+                    isAntiAlias = true
+                }
+                drawContext.canvas.saveLayer(Rect(0f, 0f, size.width, size.height), erase)
+                cut()
+                drawContext.canvas.restore()
+            }
         }
     }
 }
@@ -327,6 +354,8 @@ fun GlassPill(
     glass: PlayerGlassSettings = LocalMiniPlayerGlass.current,
     enabled: Boolean = true,
     onClickLabel: String? = null,
+    /** A glyph cut out of the slab, as the tab bar's are; see [GlassMaterial]. */
+    punch: (DrawScope.() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
     PressableGlass(
@@ -338,6 +367,16 @@ fun GlassPill(
         onClickLabel = onClickLabel,
         corner = height / 2,
         glass = glass,
+        punch = punch,
         content = content,
     )
 }
+
+/**
+ * Whether a pane of [glass] cuts its glyphs out of the slab here: only when
+ * the shader is really drawing it. Otherwise there is no slab worth cutting,
+ * and the glyph is drawn as an ordinary icon instead.
+ */
+@Composable
+internal fun glassPunches(glass: PlayerGlassSettings = LocalMiniPlayerGlass.current): Boolean =
+    shaderGlassFor(glass) && rememberLiquidGlassAvailable()

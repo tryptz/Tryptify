@@ -123,6 +123,9 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
@@ -1151,7 +1154,13 @@ private fun GenreDock(
     }
 }
 
-/** One of the dock's actions: a glyph in a pill of glass, nothing else. */
+/**
+ * One of the dock's actions: a glyph cut out of a pill of glass, the way the
+ * tab bar's are — a hole the shader bevels, with the frost showing through —
+ * and nothing else. Lit in [accent] over its hole while [selected], as a
+ * selected tab is. Where the shader does not run there is no slab to cut, and
+ * the glyph is an ordinary icon.
+ */
 @Composable
 private fun GlyphPill(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -1163,12 +1172,27 @@ private fun GlyphPill(
     accent: Color = MaterialTheme.colorScheme.primary,
     width: Dp = GLYPH_PILL_WIDTH,
 ) {
+    val painter = androidx.compose.ui.graphics.vector.rememberVectorPainter(icon)
+    val carved = tf.monochrome.android.ui.components.glassPunches()
     tf.monochrome.android.ui.components.GlassPill(
         onClick = onClick,
         hazeState = hazeState,
         height = GLYPH_PILL_HEIGHT,
         onClickLabel = label,
-        modifier = modifier.width(width),
+        modifier = modifier
+            .width(width)
+            .semantics { contentDescription = label },
+        punch = if (carved) {
+            {
+                val g = GLYPH_DP.dp.toPx()
+                // Whole pixels, or the hole's edge comes out soft.
+                translate(kotlin.math.round((size.width - g) / 2f), kotlin.math.round((size.height - g) / 2f)) {
+                    with(painter) { draw(androidx.compose.ui.geometry.Size(g, g)) }
+                }
+            }
+        } else {
+            null
+        },
     ) {
         if (selected) {
             Box(
@@ -1177,12 +1201,14 @@ private fun GlyphPill(
                     .border(1.5.dp, accent.copy(alpha = 0.85f), CircleShape),
             )
         }
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = if (selected) accent else MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(24.dp),
-        )
+        if (!carved || selected) {
+            Icon(
+                painter = painter,
+                contentDescription = null,
+                tint = if (selected) accent else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(GLYPH_DP.dp),
+            )
+        }
     }
 }
 
@@ -1476,6 +1502,9 @@ private const val MAX_RELATED_PILLS = 3
 
 private val GLYPH_PILL_WIDTH = 72.dp
 private val GLYPH_PILL_HEIGHT = 48.dp
+
+/** A dock glyph's size, dp: the hole it is cut as, and the icon where it is not. */
+private const val GLYPH_DP = 24
 
 /** The dock's glyph row: its side margins and the gap between pills, dp. */
 private const val DOCK_MARGIN_DP = 16f
