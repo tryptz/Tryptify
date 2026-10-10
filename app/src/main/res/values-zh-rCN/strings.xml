@@ -1964,6 +1964,8 @@
     <string name="gv_star_size">恒星大小</string>
     <string name="gv_labels">名称</string>
     <string name="gv_planets">行星与卫星</string>
+    <string name="gv_light_glass">轻量玻璃</string>
+    <string name="gv_light_glass_desc">地图上的玻璃改用一半尺寸的画面。更快；对比后保留看起来合适的。</string>
     <string name="gv_low_power">低性能模式下重型特效保持关闭</string>
     <string name="galaxy_surprise">给我惊喜</string>
     <string name="galaxy_you_are_here">你在这里</string>

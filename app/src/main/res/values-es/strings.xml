@@ -2066,6 +2066,8 @@
     <string name="gv_star_size">Tamaño de las estrellas</string>
     <string name="gv_labels">Nombres</string>
     <string name="gv_planets">Planetas y lunas</string>
+    <string name="gv_light_glass">Cristal ligero</string>
+    <string name="gv_light_glass_desc">El cristal sobre el mapa usa una copia a la mitad de tamaño. Más rápido; compara y quédate con lo que se vea bien.</string>
     <string name="gv_low_power">El modo de bajo rendimiento mantiene desactivados los efectos pesados</string>
     <string name="galaxy_surprise">Sorpréndeme</string>
     <string name="galaxy_you_are_here">Estás aquí</string>

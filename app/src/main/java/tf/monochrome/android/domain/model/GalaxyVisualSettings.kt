@@ -44,6 +44,13 @@ data class GalaxyVisualSettings(
     val starSize: Float = 1f,
     val labels: GalaxyAmount = GalaxyAmount.NORMAL,
     val planets: Boolean = true,
+    // The glass over the map.
+    /**
+     * Every pane of glass over the map, the bars included, bends a half-size
+     * copy of what is behind it. Off as shipped: the glass's look is the
+     * app's, and this is for the listener to judge on their own screen.
+     */
+    val lightGlass: Boolean = false,
 ) {
     fun clamped(): GalaxyVisualSettings = copy(
         nebulae = nebulae.finiteOr(1f).coerceIn(NEBULAE_RANGE),

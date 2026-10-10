@@ -11,6 +11,21 @@
 
 ### Changed
 
+#### The genre galaxy does less GPU work for the same picture
+- **The god rays only work where light can land.** Each pixel of a ray pass used to take 32 samples toward its light. Now it takes only the ones near enough to the light to add anything, which is about half of them when you're out among the stars. A pixel that can't be reached at all takes none, and when a light is too far off screen to reach any pixel, its pass doesn't run. The rays look the same: the tests replay the shader both ways at the strongest settings and find no pixel that differs by as much as half a colour step.
+- **The smoke checks whether a pixel is in the gas disc before its noise.** Inside the hole's clearing, past the rim and out toward the horizon it was computing 12 noise lookups and then discarding them.
+- **The deep sky is kept as a picture.** It's redrawn when the camera turns, and 20 times a second for the twinkle. One twinkle takes about four seconds, so those steps can't be seen. Zooming, panning and the galaxy's slow turn no longer redraw it, so the sky shader stops re-running across the whole screen on every frame.
+- **The smoke is drawn 30 times a second while the map is at rest and no music is moving it.** It swirls over minutes. While you steer, or while the music drives it, it's drawn every frame as before.
+- **At rest, the map runs at 60 frames a second on a 120 Hz screen.** When nobody is touching it and nothing is flying, everything on it moves slowly, and 60 looks the same as 120. Touch it and it's back to the full rate immediately. Screens at 90 Hz or less are left alone.
+- **In full screen with nothing open, the galaxy draws straight to the display**, without the extra full-screen copy it keeps for the glass to read.
+- **Halo stars, core grains and nebulae off the screen are skipped** before they're drawn, like the dust and the stars already were.
+
+#### Lighter glass on the map (try it)
+- **A new switch in the map's Look sheet, under Stars: "Lighter glass".** With it on, the glass over the map, including the mini player and the tab bar, bends a half-size copy of what's behind it, which is much less work. The edges, the rim light and the punched glyphs stay sharp. It is off by default, so nothing changes until you try it. Compare it on your own screen and keep whichever looks right.
+
+#### The galaxy reports how its frames went
+- **While the map is open, the debug log gets one `GalaxyFx` line every five seconds** (Settings › Debug Log). Each line gives the frame rate, frame times for the main thread, the render thread and the GPU, how many frames missed their deadline, and how often each layer was drawn. It also estimates how many god-ray samples each pixel took. These numbers show whether a change helped.
+
 #### The genre galaxy runs smoothly
 The debug log showed frames of 0.7 to 0.9 s. The main thread recorded each frame in about 12 ms; the render thread then spent 100 to 740 ms issuing it. Nothing on screen changes with these fixes.
 - **The galaxy is rendered once a frame and reused by every pane of glass over it.** Each pill, chip, the mini player and the tab bar was making the render thread replay the whole galaxy to frost what's behind it: thousands of stars, grains and trail motes, and the light passes.

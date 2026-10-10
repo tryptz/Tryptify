@@ -2016,6 +2016,8 @@
     <string name="gv_star_size">Star size</string>
     <string name="gv_labels">Names</string>
     <string name="gv_planets">Planets and moons</string>
+    <string name="gv_light_glass">Lighter glass</string>
+    <string name="gv_light_glass_desc">Glass over the map works from a half-size copy of it. Faster; compare and keep what looks right.</string>
     <string name="gv_low_power">Low-performance mode keeps the heavy effects off</string>
     <string name="galaxy_surprise">Surprise me</string>
     <string name="galaxy_you_are_here">You are here</string>

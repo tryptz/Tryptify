@@ -85,6 +85,15 @@ half4 main(float2 xy) {
     float3 P = uE + t * dir;
     float r = length(P.xz);
 
+    // Where the disc has no gas, before the noise that would be thrown away:
+    // the density below is at most this, so when this is under the cut
+    // there, so is it. Inside the hole's clearing, past the rim and out at
+    // the horizon, often a large share of the screen, that was the 12 noise
+    // lookups of three fbm calls a pixel for nothing.
+    float disc = smoothstep(1400.0, 650.0, r) * smoothstep(90.0, 320.0, r);
+    float far = exp(-t / 12000.0);
+    if ((0.6 + 0.4 * uAmount) * disc * far <= 0.001) return half4(0.0);
+
     // A swirl that tightens toward the middle and turns, slowly.
     float sw = 1.8 * exp(-r / 650.0) + uTime * 0.012;
     float cs = cos(sw);
@@ -100,9 +109,9 @@ half4 main(float2 xy) {
     // More gas reaches further down the noise, and is brighter where it is.
     float dens = smoothstep(0.42 + 0.12 * (1.0 - uAmount), 0.86, n) * (0.6 + 0.4 * uAmount);
     // In the disc: thinning past the rim, clear inside the hole's reach.
-    dens *= smoothstep(1400.0, 650.0, r) * smoothstep(90.0, 320.0, r);
+    dens *= disc;
     // And less, far off, where the plane runs into the horizon.
-    dens *= exp(-t / 12000.0);
+    dens *= far;
     if (dens <= 0.001) return half4(0.0);
 
     // The hole lights the gas near it; a kick swells it and runs ripples out.

@@ -20,12 +20,17 @@ import androidx.compose.ui.graphics.Color
  * - [ground]: what the chrome is floating over, when that is not the page. The
  *   galaxy is deep space under every theme, so the mini player's glass there is
  *   dark glass, and its text has to be light ([GlassInkScope]).
+ * - [lensDivisor]: the resolution the chrome's live glass runs at, as a
+ *   divisor (`LocalLensDivisor`). The galaxy lowers it when the listener
+ *   asks for lighter glass, so the bars match the map's own panes.
  */
 @Stable
 class AppChrome {
     var hidden by mutableStateOf(false)
         internal set
     var ground by mutableStateOf<Color?>(null)
+        internal set
+    var lensDivisor by mutableStateOf(1)
         internal set
 }
 
@@ -48,5 +53,15 @@ fun AppChromeGround(ground: Color) {
     DisposableEffect(chrome, ground) {
         chrome.ground = ground
         onDispose { if (chrome.ground == ground) chrome.ground = null }
+    }
+}
+
+/** Runs the floating chrome's live glass at 1 / [divisor] resolution while this is in the composition. */
+@Composable
+fun AppChromeLens(divisor: Int) {
+    val chrome = LocalAppChrome.current ?: return
+    DisposableEffect(chrome, divisor) {
+        chrome.lensDivisor = divisor
+        onDispose { if (chrome.lensDivisor == divisor) chrome.lensDivisor = 1 }
     }
 }

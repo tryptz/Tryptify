@@ -82,13 +82,16 @@ private val HALO_STAR = Color(0x66D8DEFF)
  * of dust, and drawn in batches: one `drawPoints` per family and depth band,
  * one `drawLines` per family, a sprite per star.
  *
- * Three layers, back to front, all inside the panels' haze source:
- * 1. the sky — far stars, nebulae, the core, family links, dust, the timeline's
- *    year rings and the path from "you are here" to what you have selected;
- * 2. the light — the god rays ([GalaxyLight]): the core's, and the star's
+ * Layers, back to front, all inside the panels' haze source:
+ * 1. the deep sky — the far stars, in a layer of its own that keeps its
+ *    pixels: redrawn only when the camera turns or the twinkle steps;
+ * 2. the galaxy — nebulae, the core, family links, dust, the timeline's year
+ *    rings and the path from "you are here" to what you have selected, with
+ *    the gas over it at a third of the resolution;
+ * 3. the light — the god rays ([GalaxyLight]): the core's, and the star's
  *    whose planets are showing, each a light pass with everything in the
  *    light's way drawn over it in black, so its shadows stream out with it;
- * 3. the stars on top — twinkling glow sprites, the lock-on bracket, "you are
+ * 4. the stars on top — twinkling glow sprites, the lock-on bracket, "you are
  *    here", and the labels, in the app's own font.
  *
  * Every size is in dp, so the map is the size it should be on any screen —
@@ -112,6 +115,13 @@ internal fun GenreGalaxyView(
     spin: () -> Float,
     rays: Boolean,
     spaceShader: Boolean,
+    /**
+     * Whether any glass is over the map, reading it for its backdrop; with
+     * none (full screen, nothing open) the galaxy draws straight to the screen.
+     */
+    glassOver: Boolean = true,
+    /** Whether the map is resting: nobody steering it and no camera move under way. */
+    idle: () -> Boolean = { false },
     /** The galaxy's gas, moved by [bands]; off on devices that asked for less. */
     smoke: Boolean = false,
     bands: AudioBands? = null,
@@ -180,10 +190,38 @@ internal fun GenreGalaxyView(
     val here = hereId?.let { scene.index[it] } ?: -1
     val selected = selectedId?.let { scene.index[it] } ?: -1
 
-    fun frameFor(size: Size): CameraFrame {
+    fun centerYFor(size: Size): Float {
         val top = liveTop.value.coerceIn(0f, size.height / 2f)
         val bottom = liveBottom.value.coerceIn(0f, size.height / 2f)
-        return camera.frame(size.width, size.height, centerY = top + (size.height - top - bottom) / 2f, spin = spin())
+        return top + (size.height - top - bottom) / 2f
+    }
+
+    fun frameFor(size: Size, spun: Float = spin()): CameraFrame =
+        camera.frame(size.width, size.height, centerY = centerYFor(size), spin = spun)
+
+    /**
+     * The view for the deep sky alone: which way the camera looks and the
+     * viewport, and nothing else. The sky is at infinity and does not turn
+     * with the galaxy, so where the camera is, how far out, and the turn
+     * leave it exactly as it was — and reading none of them, the sky's layer
+     * is not redrawn when they change.
+     */
+    fun skyFrameFor(size: Size): CameraFrame =
+        CameraFrame(0f, 0f, 0f, camera.yaw, camera.pitch, 1f, size.width, size.height, centerYFor(size))
+
+    // Clocks for the layers that need not move every frame (see the sky's and
+    // the gas's layers below). Each changes only when its layer should redraw.
+    val liveTime = rememberUpdatedState(time)
+    val liveIdle = rememberUpdatedState(idle)
+    val liveBands = rememberUpdatedState(bands)
+    val skyTime = remember {
+        androidx.compose.runtime.derivedStateOf { stepped(liveTime.value(), SKY_TWINKLE_HZ) }
+    }
+    val smokeTime = remember {
+        androidx.compose.runtime.derivedStateOf {
+            val t = liveTime.value()
+            if (!liveIdle.value() || driving(liveBands.value)) t else stepped(t, SMOKE_IDLE_HZ)
+        }
     }
 
     Box(
@@ -196,7 +234,17 @@ internal fun GenreGalaxyView(
                 // the render thread replay the whole galaxy, thousands of stars
                 // and grains and the light passes with them, to frost what is
                 // behind it: the half-second frames in the logs.
-                compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+                //
+                // With no glass over the map (full screen, nothing open) nobody
+                // reads that layer, and it would be one more full-screen copy a
+                // frame: then the galaxy draws straight to the screen. The sky
+                // under it is opaque and everything over the sky adds, so the
+                // pixels are the same either way.
+                compositingStrategy = if (glassOver) {
+                    androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+                } else {
+                    androidx.compose.ui.graphics.CompositingStrategy.Auto
+                }
                 // The travel blur: Android's own, so it is cheap and smooth,
                 // and only while the camera glides. Ignored below API 31.
                 val b = travelBlurPx()
@@ -207,8 +255,23 @@ internal fun GenreGalaxyView(
                 }
             },
     ) {
+        // The deep sky, in a layer of its own that keeps its pixels between
+        // frames. It reads only which way the camera looks and its twinkle
+        // clock, which steps SKY_TWINKLE_HZ times a second, so it is redrawn
+        // when the camera turns and at that rate otherwise; every other frame
+        // the layer's last picture is laid down instead of the sky shader
+        // running over every pixel of the screen again. One twinkle takes
+        // about four seconds, so steps that size are not seen.
+        Canvas(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen },
+        ) {
+            GalaxyProbe.skyDraws++
+            drawDeepSky(art, scene, skyFrameFor(size), skyTime.value, dp, space)
+        }
         Canvas(Modifier.fillMaxSize()) {
-            drawSky(art, scene, frameFor(size), morph(), time(), here, selected, dp, space, bands)
+            drawSky(art, scene, frameFor(size), morph(), time(), here, selected, dp, bands)
         }
         if (gas != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             // The gas, at a third of the resolution: measured that small and
@@ -234,8 +297,16 @@ internal fun GenreGalaxyView(
                     }
                 },
             ) {
+                // Its own clock: every frame while you steer or the music moves
+                // it, SMOKE_IDLE_HZ times a second when it only drifts (a swirl
+                // takes minutes). The galaxy's turn is read as it is but not
+                // watched, so the turn alone does not redraw it between steps;
+                // the camera is watched, so it never lags a move.
+                val t = smokeTime.value
                 val full = Size(size.width * SMOKE_SCALE, size.height * SMOKE_SCALE)
-                gas.draw(drawContext.canvas.nativeCanvas, frameFor(full), SMOKE_SCALE.toFloat(), time(), bands, visuals.smokeAmount)
+                val f = frameFor(full, androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { spin() })
+                GalaxyProbe.smokeDraws++
+                gas.draw(drawContext.canvas.nativeCanvas, f, SMOKE_SCALE.toFloat(), t, bands, visuals.smokeAmount)
             }
         }
         // The light passes run at half the resolution (LIGHT_SCALE): each is
@@ -249,7 +320,8 @@ internal fun GenreGalaxyView(
                     val f = frameFor(full)
                     litStar(art, scene, camera, selected, f, morph(), dp, starSpot)
                     coreSpot.strength = 1f - starSpot.strength
-                    renderEffect = if (coreSpot.strength > 0.01f && coreSpotAt(art, f, coreSpot)) {
+                    renderEffect = if (lightOn(coreSpot, coreSpot.strength > 0.01f && coreSpotAt(art, f, coreSpot), full)) {
+                        GalaxyProbe.coreRays++
                         coreLight.effect(coreSpot, time(), visuals.rayStrength * beat(bands), visuals.rayShade, lightK)
                     } else {
                         null
@@ -258,7 +330,7 @@ internal fun GenreGalaxyView(
             ) {
                 val full = Size(size.width * LIGHT_SCALE, size.height * LIGHT_SCALE)
                 val f = frameFor(full)
-                if (coreSpot.strength > 0.01f && coreSpotAt(art, f, coreSpot)) {
+                if (coreSpot.strength > 0.01f && coreSpotAt(art, f, coreSpot) && GalaxyLight.reachesView(coreSpot, full.width, full.height)) {
                     scale(lightK, lightK, pivot = Offset.Zero) {
                         drawCoreLight(art, scene, f, morph(), time(), dp, bands, coreSpot)
                     }
@@ -270,7 +342,8 @@ internal fun GenreGalaxyView(
                 Modifier.reducedLayer(LIGHT_SCALE) { full ->
                     val f = frameFor(full)
                     litStar(art, scene, camera, selected, f, morph(), dp, starSpot)
-                    renderEffect = if (starSpot.strength > 0.01f) {
+                    renderEffect = if (lightOn(starSpot, starSpot.strength > 0.01f, full)) {
+                        GalaxyProbe.starRays++
                         starLight.effect(starSpot, time(), visuals.rayStrength * beat(bands), visuals.rayShade, lightK)
                     } else {
                         null
@@ -280,7 +353,7 @@ internal fun GenreGalaxyView(
                 val full = Size(size.width * LIGHT_SCALE, size.height * LIGHT_SCALE)
                 val f = frameFor(full)
                 val lit = litStar(art, scene, camera, selected, f, morph(), dp, starSpot)
-                if (lit >= 0 && starSpot.strength > 0.01f) {
+                if (lit >= 0 && starSpot.strength > 0.01f && GalaxyLight.reachesView(starSpot, full.width, full.height)) {
                     // Its planets stand in its light once they are up.
                     val sys = liveSystem.value?.takeIf { scene.index[it.genreId] == lit }
                     scale(lightK, lightK, pivot = Offset.Zero) {
@@ -422,6 +495,27 @@ private fun Modifier.reducedLayer(
     }
 }
 
+/**
+ * Whether a light that is [up] runs its pass: only when its rays can reach
+ * the view at all. One that is up but cannot is counted, for the report.
+ */
+private fun lightOn(spot: LightSpot, up: Boolean, full: Size): Boolean {
+    if (!up) return false
+    if (!GalaxyLight.reachesView(spot, full.width, full.height)) {
+        GalaxyProbe.raysUnreachable++
+        return false
+    }
+    GalaxyProbe.light(spot, full.width, full.height)
+    return true
+}
+
+/** [t] seconds held to steps of 1 / [hz]: a clock that ticks [hz] times a second. */
+internal fun stepped(t: Float, hz: Float): Float = kotlin.math.floor(t * hz) / hz
+
+/** Whether the music is moving the gas this instant: any band above its usual level. */
+private fun driving(bands: AudioBands?): Boolean =
+    bands != null && bands.bassLift + bands.midLift + bands.trebLift > 0.001f
+
 private fun maskOf(scene: GalaxyScene, ids: Set<String>): BooleanArray =
     BooleanArray(scene.size).also { mask -> ids.forEach { id -> scene.index[id]?.let { mask[it] = true } } }
 
@@ -430,6 +524,12 @@ private const val SMOKE_SCALE = 3
 
 /** The god rays' resolution, as a divisor of the view's: shafts are soft, and it is a quarter of the pixels. */
 private const val LIGHT_SCALE = 2
+
+/** How often the deep sky's twinkle steps, a second. */
+private const val SKY_TWINKLE_HZ = 20f
+
+/** How often the gas is redrawn, a second, while nothing but time moves it. */
+private const val SMOKE_IDLE_HZ = 30f
 
 /** Dashes one run may hold, how far past the screen they are still laid, and a hearted ring's sides. */
 private const val DASHES = 4096
@@ -652,18 +752,22 @@ private class GalaxyArt(scene: GalaxyScene, familyColors: Map<String, Color>) {
     }
 }
 
+/** Whether the projected point in [p] lies more than [margin] px off the screen of [f]. */
+private fun offScreen(p: FloatArray, f: CameraFrame, margin: Float): Boolean =
+    p[0] < -margin || p[0] > f.width + margin || p[1] < -margin || p[1] > f.height + margin
+
+/** How far off the screen a point may sit and still be drawn: more than the widest grain's half. */
+private const val POINT_MARGIN_PX = 8f
+
 /** How much a thing at [depth] fades into the distance, 0.15..1. */
 private fun fog(depth: Float): Float = (1f - (depth - 3200f) / 7000f).coerceIn(0.15f, 1f)
 
-private fun DrawScope.drawSky(
-    art: GalaxyArt, scene: GalaxyScene, f: CameraFrame, m: Float, t: Float, here: Int, selected: Int, dp: Float,
-    space: SpaceSky?, bands: AudioBands?,
-) {
+/**
+ * The deep sky: the space shader where there is one, else the flat colour and
+ * the far stars as points. [f] need only face the right way (see skyFrameFor).
+ */
+private fun DrawScope.drawDeepSky(art: GalaxyArt, scene: GalaxyScene, f: CameraFrame, t: Float, dp: Float, space: SpaceSky?) {
     val canvas = drawContext.canvas.nativeCanvas
-    val p = art.tmp
-
-    // The deep sky: the space shader where there is one, else the flat colour
-    // and the far stars as points.
     if (space != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         space.draw(canvas, f, t, dp)
     } else {
@@ -676,6 +780,14 @@ private fun DrawScope.drawSky(
         art.points.strokeWidth = 1.3f * dp
         canvas.drawPoints(art.sky, 0, n * 2, art.points)
     }
+}
+
+private fun DrawScope.drawSky(
+    art: GalaxyArt, scene: GalaxyScene, f: CameraFrame, m: Float, t: Float, here: Int, selected: Int, dp: Float,
+    bands: AudioBands?,
+) {
+    val canvas = drawContext.canvas.nativeCanvas
+    val p = art.tmp
 
     // Nebulae behind each family, then the core's glow.
     for ((k, i) in scene.nebulaAnchors.withIndex()) {
@@ -683,6 +795,8 @@ private fun DrawScope.drawSky(
         p[0] += scene.nebulaJitter[k * 3]; p[1] += scene.nebulaJitter[k * 3 + 1]; p[2] += scene.nebulaJitter[k * 3 + 2]
         if (!f.project(p[0], p[1], p[2], p, 0)) continue
         val r = scene.nebulaRadius[k] * f.scaleAt(p[2])
+        // Off the screen it would be clipped to nothing; skipped, it is not even sent.
+        if (p[0] + r < 0f || p[0] - r > f.width || p[1] + r < 0f || p[1] - r > f.height) continue
         art.rect.set(p[0] - r, p[1] - r, p[0] + r, p[1] + r)
         art.add.alpha = (NEBULA_ALPHA * art.nebulae * 255 * fog(p[2])).toInt().coerceIn(0, 255)
         canvas.drawBitmap(art.nebulaSprite[scene.family[i]], null, art.rect, art.add)
@@ -700,6 +814,7 @@ private fun DrawScope.drawSky(
     var hn = 0
     for (k in 0 until scene.halo.size / 3) {
         if (!f.project(scene.halo[k * 3], scene.halo[k * 3 + 1], scene.halo[k * 3 + 2], p, 0)) continue
+        if (offScreen(p, f, POINT_MARGIN_PX)) continue
         art.haloPoints[hn] = p[0]; art.haloPoints[hn + 1] = p[1]; hn += 2
     }
     art.points.color = HALO_STAR.toArgb()
@@ -717,7 +832,7 @@ private fun DrawScope.drawSky(
     for (k in 0 until scene.dustCount) {
         scene.dustPosition(k, m, p, 0)
         if (!f.project(p[0], p[1], p[2], p, 0)) continue
-        if (p[0] < -8f || p[0] > f.width + 8f || p[1] < -8f || p[1] > f.height + 8f) continue
+        if (offScreen(p, f, POINT_MARGIN_PX)) continue
         val band = if (p[2] < 1400f) 0 else if (p[2] < 3200f) 1 else 2
         val bucket = scene.family[scene.dustOwner[k]] * 3 + band
         val c = art.dustCount[bucket]
@@ -739,6 +854,7 @@ private fun DrawScope.drawSky(
     art.coreCount.fill(0)
     for (k in 0 until scene.core.size / 3) {
         if (!f.project(scene.core[k * 3], scene.core[k * 3 + 1], scene.core[k * 3 + 2], p, 0)) continue
+        if (offScreen(p, f, POINT_MARGIN_PX)) continue
         val band = if (p[2] < 2000f) 0 else 1
         val c = art.coreCount[band]
         art.core[band][c] = p[0]; art.core[band][c + 1] = p[1]
@@ -1041,8 +1157,13 @@ private fun beat(bands: AudioBands?): Float = 1f + HOLE_BASS_BOOST * (bands?.bas
 private fun coreSpotAt(art: GalaxyArt, f: CameraFrame, spot: LightSpot): Boolean {
     val p = art.tmp
     if (!f.project(0f, 0f, 0f, p, 0)) return false
+    val scale = f.scaleAt(p[2])
     spot.x = p[0]; spot.y = p[1]
-    spot.glowR = CORE_LIGHT_GLOW * f.scaleAt(p[2])
+    spot.glowR = CORE_LIGHT_GLOW * scale
+    // What shines in its pass: the glow, and the black hole's disk (which can
+    // reach past the glow close up) or the bulge's sprite.
+    val shines = if (art.blackHole) art.hole.lightExtent(f) else CORE_SPRITE_UNITS * scale
+    spot.reach = maxOf(GalaxyLight.SHADE_REACH * spot.glowR, shines) + LIGHT_REACH_MARGIN_PX
     return true
 }
 
@@ -1078,13 +1199,24 @@ private fun litStar(
     if (spot == null) return star
     scene.position(star, m, p, 0)
     if (!f.project(p[0], p[1], p[2], p, 0)) return star
-    val scale = f.scaleAt(p[2])
+    val depth = p[2]
+    val scale = f.scaleAt(depth)
     val reach = PlanetSystem.reachFor(GalaxyScene.starRadius(scene.prominence[star]))
     spot.x = p[0]; spot.y = p[1]
     spot.glowR = (reach * scale * LIT_GLOW_REACH).coerceAtLeast(LIGHT_MIN_GLOW_DP * dp)
     spot.strength = ((reach * scale - SYSTEM_MIN_DP * dp) / (SYSTEM_FADE_DP * dp)).coerceIn(0f, 1f)
+    // The glow and the star's white-hot middle are all that shine in its pass.
+    spot.reach = maxOf(GalaxyLight.SHADE_REACH * spot.glowR, starEmitterPx(art, scene, star, depth, f, dp)) +
+        LIGHT_REACH_MARGIN_PX
     return star
 }
+
+/** The radius of a lit star's white-hot middle in its light pass, px, at [depth]. */
+private fun starEmitterPx(art: GalaxyArt, scene: GalaxyScene, star: Int, depth: Float, f: CameraFrame, dp: Float): Float =
+    maxOf(
+        starSizePx(scene.prominence[star], true, depth, dp, art.starScale) * STAR_LIGHT_CORE,
+        (GalaxyScene.starRadius(scene.prominence[star]) * f.scaleAt(depth)).coerceAtMost(SUN_MAX_PX) * 1.15f,
+    )
 
 /** How far a system is faded in at [scale] px a unit: nothing until it is more than a smudge on screen. */
 private fun systemFade(sys: PlanetSystem, scale: Float, appear: Float, dp: Float): Float =
@@ -1127,7 +1259,7 @@ private fun DrawScope.drawCoreLight(
         }
     } else if (f.project(0f, 0f, 0f, p, 0)) {
         val scale = f.scaleAt(p[2])
-        var r = 120f * scale
+        var r = CORE_SPRITE_UNITS * scale
         art.rect.set(p[0] - r, p[1] - r, p[0] + r, p[1] + r)
         art.add.alpha = 255
         canvas.drawBitmap(art.coreSprite, null, art.rect, art.add)
@@ -1159,10 +1291,7 @@ private fun DrawScope.drawStarLight(
     val spread = appear.coerceIn(0f, 1.2f)
     for (pass in 0..1) {
         if (pass == 1) {
-            val r = maxOf(
-                starSizePx(scene.prominence[star], true, starDepth, dp, art.starScale) * STAR_LIGHT_CORE,
-                (GalaxyScene.starRadius(scene.prominence[star]) * f.scaleAt(starDepth)).coerceAtMost(SUN_MAX_PX) * 1.15f,
-            )
+            val r = starEmitterPx(art, scene, star, starDepth, f, dp)
             art.rect.set(spot.x - r, spot.y - r, spot.x + r, spot.y + r)
             art.add.alpha = 255
             canvas.drawBitmap(art.emitterSprite, null, art.rect, art.add)
@@ -1235,6 +1364,12 @@ private fun DrawScope.drawOccluders(
 
 /** The core's glow, in galaxy units: past the bulge, so the inner arms' dust stands in it. */
 private const val CORE_LIGHT_GLOW = 560f
+
+/** The bulge's sprite in the core's light pass, galaxy units (drawCoreLight, without a black hole). */
+private const val CORE_SPRITE_UNITS = 120f
+
+/** Past a light's reach, px: its sprites' filtering, and a pixel's own size. */
+private const val LIGHT_REACH_MARGIN_PX = 4f
 
 /** A star's glow, as a share of its system's widest reach: every planet stands in it. */
 private const val LIT_GLOW_REACH = 0.95f

@@ -1964,6 +1964,8 @@
     <string name="gv_star_size">星の大きさ</string>
     <string name="gv_labels">名前</string>
     <string name="gv_planets">惑星と衛星</string>
+    <string name="gv_light_glass">軽いガラス</string>
+    <string name="gv_light_glass_desc">マップ上のガラスが半分のサイズの画面から描かれます。より軽快です。見比べて、良い方を残してください。</string>
     <string name="gv_low_power">低パフォーマンスモードでは重い効果はオフのままです</string>
     <string name="galaxy_surprise">おまかせ</string>
     <string name="galaxy_you_are_here">現在地</string>

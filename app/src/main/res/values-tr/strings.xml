@@ -2015,6 +2015,8 @@
     <string name="gv_star_size">Yıldız boyutu</string>
     <string name="gv_labels">Adlar</string>
     <string name="gv_planets">Gezegenler ve uydular</string>
+    <string name="gv_light_glass">Hafif cam</string>
+    <string name="gv_light_glass_desc">Haritanın üstündeki cam, yarı boyutlu bir kopyasıyla çalışır. Daha hızlı; karşılaştırın ve doğru görüneni tutun.</string>
     <string name="gv_low_power">Düşük performans modu ağır efektleri kapalı tutar</string>
     <string name="galaxy_surprise">Beni şaşırt</string>
     <string name="galaxy_you_are_here">Buradasınız</string>

@@ -17,6 +17,8 @@ class GalaxyVisualSettingsTest {
         assertEquals(1f, d.rayShade, 0f)
         assertEquals(GalaxyAmount.NORMAL, d.dust)
         assertEquals(true, d.blackHole && d.godRays && d.smoke && d.musicReactive && d.planets && d.deepSky)
+        // Lighter glass is the listener's to try: the glass stays as it was until they do.
+        assertEquals(false, d.lightGlass)
         assertEquals(d, d.clamped())
     }
 
@@ -37,7 +39,9 @@ class GalaxyVisualSettingsTest {
 
     @Test
     fun `what is stored is what comes back`() {
-        val tuned = GalaxyVisualSettings(blackHole = false, spin = 0f, labels = GalaxyAmount.MORE, smokeAmount = 1.4f)
+        val tuned = GalaxyVisualSettings(
+            blackHole = false, spin = 0f, labels = GalaxyAmount.MORE, smokeAmount = 1.4f, lightGlass = true,
+        )
         val back = json.decodeFromString(GalaxyVisualSettings.serializer(), json.encodeToString(GalaxyVisualSettings.serializer(), tuned))
         assertEquals(tuned, back)
     }

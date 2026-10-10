@@ -72,6 +72,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.graphics.graphicsLayer
@@ -146,6 +147,9 @@ import tf.monochrome.android.ui.discover.galaxy.GALAXY_INK
 import tf.monochrome.android.ui.discover.galaxy.PlanetSystem
 import tf.monochrome.android.ui.discover.galaxy.GALAXY_SPACE
 import tf.monochrome.android.ui.discover.galaxy.GalaxyCamera
+import tf.monochrome.android.ui.discover.galaxy.GalaxyFrameStats
+import tf.monochrome.android.ui.discover.galaxy.GalaxyPacer
+import tf.monochrome.android.ui.discover.galaxy.GalaxyProbe
 import tf.monochrome.android.ui.discover.galaxy.GalaxyScene
 import tf.monochrome.android.ui.discover.galaxy.GenreGalaxyView
 import kotlin.math.exp
@@ -389,6 +393,45 @@ fun GenreMapScreen(
     // own, slowly, the whole time the map is up.
     var spin by remember { mutableFloatStateOf(0f) }
 
+    // Idle frame pacing, fed by every touch on the map and its panels.
+    val pacer = remember { GalaxyPacer() }
+
+    // Glass is over the map unless it is in full screen with nothing open.
+    // Let go of a moment after the chrome has faded, not as it starts to: the
+    // fading panes still read the map until they are gone.
+    val wantsGlass = !fullScreen || sheetOpen
+    var glassOver by remember { mutableStateOf(true) }
+    LaunchedEffect(wantsGlass) {
+        if (wantsGlass) {
+            glassOver = true
+        } else {
+            kotlinx.coroutines.delay(GLASS_FADE_MILLIS)
+            glassOver = false
+        }
+    }
+
+    // Lighter glass, when asked for: every pane over the map, the bars
+    // included, runs its lens at half resolution (see LocalLensDivisor).
+    val lensDivisor = if (visuals.lightGlass) LIGHT_GLASS_DIVISOR else 1
+    tf.monochrome.android.ui.components.AppChromeLens(lensDivisor)
+    androidx.compose.runtime.SideEffect { GalaxyProbe.lensDivisor = lensDivisor }
+
+    // One line in the debug log every few seconds while the map is up: the
+    // frame times and what the galaxy drew (Settings › Debug Log).
+    GalaxyFrameStats { seconds ->
+        GalaxyFrameStats.passes(
+            seconds,
+            smokeOn = !lowPower && visuals.smoke,
+            raysOn = !lowPower && visuals.godRays,
+        ) + " | " + buildString {
+            append(if (fullScreen) "full screen" else "chrome")
+            if (sheetOpen) append(", system sheet")
+            if (settingsOpen) append(", look sheet")
+            append(if (glassOver) ", glass reads map" else ", direct")
+            if (!alive) append(", still")
+        }
+    }
+
     /**
      * Glides the camera to a [goal] and distance: a straight line in space,
      * distance eased on a log scale (so a zoom feels the same at every depth),
@@ -544,6 +587,17 @@ fun GenreMapScreen(
         var last = 0L
         while (true) {
             withFrameNanos { now ->
+                GalaxyProbe.vsyncs++
+                // At rest on a fast display, every other vsync moves nothing
+                // (GalaxyPacer): nothing is redrawn for it, and the next one
+                // moves by both vsyncs' time, since dt runs from the last
+                // vsync that moved.
+                val animating = travel?.isActive == true || systemAppear.isRunning ||
+                    morph.value != (if (timeline) 1f else 0f)
+                if (pacer.hold(now, animating)) {
+                    GalaxyProbe.paced++
+                    return@withFrameNanos
+                }
                 val dt = if (last == 0L) 0f else ((now - last) / 1_000_000_000f).coerceAtMost(0.1f)
                 last = now
                 val moving = travel?.isActive == true
@@ -595,381 +649,401 @@ fun GenreMapScreen(
         fontWeight = FontWeight.Medium,
     )
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(GALAXY_SPACE)
-            .onSizeChanged { viewport = it },
-    ) {
-        if (scene != null) {
-            GenreGalaxyView(
-                scene = scene,
-                camera = camera,
-                morph = { morph.value },
-                time = { clock },
-                explored = explored,
-                hearted = hearted,
-                hereId = here?.id,
-                selectedId = selected?.id,
-                familyColors = familyColors,
-                hazeState = mapHaze,
-                reserveTopPx = if (fullScreen) 0f else topChromePx.toFloat(),
-                reserveBottomPx = reserveBottom,
-                travelBlurPx = { travelBlur },
-                spin = { spin },
-                rays = !lowPower && visuals.godRays,
-                spaceShader = !lowPower && visuals.deepSky,
-                smoke = !lowPower && visuals.smoke,
-                bands = if (listening) bands else null,
-                visuals = visuals,
-                labelStyle = labelStyle,
-                hereLabel = stringResource(R.string.galaxy_you_are_here),
-                system = system.takeIf { visuals.planets },
-                systemAppear = { systemAppear.value },
-                onTapPlanet = { p -> travelToPlanet(p) },
-                // A moon is a track: tapping it plays it.
-                onTapMoon = { p, m ->
-                    system?.planets?.getOrNull(p)?.moons?.getOrNull(m)?.let {
-                        viewModel.playChartEntry(it.entry, playerViewModel)
-                    }
-                },
-                onTapEmpty = { viewModel.selectOnMap(null) },
-                onTap = { id ->
-                    // The same star again is a way back to it after looking
-                    // around; selecting it would change nothing.
-                    if (id == selected?.id) travelTo(id) else viewModel.selectOnMap(id)
-                },
-                onInteract = {
-                    // Touching the map takes it back from any camera move in
-                    // progress — being steered while you are trying to steer
-                    // is the worst kind of animation.
-                    travel?.cancel()
-                },
-                // A long press is "play this": the star's music starts, and its
-                // planets open as a list to pick from.
-                onLongPress = { id ->
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    openSystem(id)
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-
-        AnimatedVisibility(
-            visible = !fullScreen,
-            enter = if (instant) EnterTransition.None else fadeIn(),
-            exit = if (instant) ExitTransition.None else fadeOut(),
-            modifier = Modifier.align(Alignment.TopStart),
-        ) {
-        Column(
+    CompositionLocalProvider(tf.monochrome.android.ui.player.LocalLensDivisor provides lensDivisor) {
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .onSizeChanged { topChromePx = it.height },
-        ) {
-            // As many actions as leave the title room, the rest behind ⋮: a
-            // narrow phone or a large font had the title squeezed to a few
-            // letters by five icons.
-            val node = selected
-            val actions = buildList {
-                if (node == null) {
-                    add(MapAction(Icons.Default.AutoAwesome, stringResource(R.string.galaxy_surprise)) { viewModel.surpriseMe() })
-                } else {
-                    // Keeping a genre pins it to Discover's genre rail.
-                    val isHearted = node.id in hearted
-                    add(
-                        MapAction(
-                            if (isHearted) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            stringResource(if (isHearted) R.string.genre_unkeep else R.string.genre_keep),
-                        ) { viewModel.toggleHeartGenre(node.id) },
-                    )
-                }
-                add(MapAction(Icons.Default.Fullscreen, stringResource(R.string.galaxy_full_screen)) {
-                    settingsOpen = false
-                    manualFullScreen = true
-                })
-                if (node != null) {
-                    // Its researched history, as the dock's sheet.
-                    add(
-                        MapAction(
-                            Icons.AutoMirrored.Filled.MenuBook,
-                            if (expanded) stringResource(R.string.hide_history) else stringResource(R.string.read_history_of, node.name),
-                            tint = if (expanded) familyColors[node.family] ?: GALAXY_INK else GALAXY_INK,
-                        ) {
-                            if (chartOpen) viewModel.toggleMapChart()
-                            viewModel.toggleMapExpanded()
-                        },
-                    )
-                }
-                // The galaxy's look, tuned on the map itself.
-                add(
-                    MapAction(
-                        Icons.Default.Tune,
-                        stringResource(R.string.galaxy_look),
-                        tint = if (settingsOpen) MaterialTheme.colorScheme.primary else GALAXY_INK,
-                    ) { settingsOpen = !settingsOpen },
-                )
-                add(MapAction(Icons.Default.CenterFocusStrong, stringResource(R.string.recentre)) { recentre() })
-            }
-            val room = LocalConfiguration.current.screenWidthDp / LocalDensity.current.fontScale.coerceAtLeast(1f)
-            val slots = ((room - NAV_ICON_DP - MIN_TITLE_DP) / ACTION_DP).toInt().coerceAtLeast(1)
-            val inline = if (actions.size <= slots) actions else actions.take(slots - 1)
-            val overflow = actions.drop(inline.size)
-            TopAppBar(
-                // The genre you are at, once there is one: the title is where
-                // the panel's heading went.
-                title = {
-                    Text(
-                        text = selected?.name ?: stringResource(R.string.genre_galaxy),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStackSafe() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
-                    }
-                },
-                actions = {
-                    inline.forEach { action ->
-                        IconButton(onClick = action.onClick) {
-                            Icon(action.icon, contentDescription = action.label, tint = action.tint)
+                .fillMaxSize()
+                .background(GALAXY_SPACE)
+                .onSizeChanged { viewport = it }
+                // Every touch, on the map or on a panel over it, keeps it at full
+                // frame rate; seen first and never consumed.
+                .pointerInput(pacer) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                            pacer.touch(pressed = event.changes.any { it.pressed })
                         }
                     }
-                    if (overflow.isNotEmpty()) {
-                        var menu by remember { mutableStateOf(false) }
-                        Box {
-                            IconButton(onClick = { menu = true }) {
-                                Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.galaxy_more))
+                },
+        ) {
+            if (scene != null) {
+                GenreGalaxyView(
+                    scene = scene,
+                    camera = camera,
+                    morph = { morph.value },
+                    time = { clock },
+                    explored = explored,
+                    hearted = hearted,
+                    hereId = here?.id,
+                    selectedId = selected?.id,
+                    familyColors = familyColors,
+                    hazeState = mapHaze,
+                    reserveTopPx = if (fullScreen) 0f else topChromePx.toFloat(),
+                    reserveBottomPx = reserveBottom,
+                    travelBlurPx = { travelBlur },
+                    spin = { spin },
+                    rays = !lowPower && visuals.godRays,
+                    spaceShader = !lowPower && visuals.deepSky,
+                    glassOver = glassOver,
+                    idle = { pacer.idle },
+                    smoke = !lowPower && visuals.smoke,
+                    bands = if (listening) bands else null,
+                    visuals = visuals,
+                    labelStyle = labelStyle,
+                    hereLabel = stringResource(R.string.galaxy_you_are_here),
+                    system = system.takeIf { visuals.planets },
+                    systemAppear = { systemAppear.value },
+                    onTapPlanet = { p -> travelToPlanet(p) },
+                    // A moon is a track: tapping it plays it.
+                    onTapMoon = { p, m ->
+                        system?.planets?.getOrNull(p)?.moons?.getOrNull(m)?.let {
+                            viewModel.playChartEntry(it.entry, playerViewModel)
+                        }
+                    },
+                    onTapEmpty = { viewModel.selectOnMap(null) },
+                    onTap = { id ->
+                        // The same star again is a way back to it after looking
+                        // around; selecting it would change nothing.
+                        if (id == selected?.id) travelTo(id) else viewModel.selectOnMap(id)
+                    },
+                    onInteract = {
+                        // Touching the map takes it back from any camera move in
+                        // progress — being steered while you are trying to steer
+                        // is the worst kind of animation.
+                        travel?.cancel()
+                    },
+                    // A long press is "play this": the star's music starts, and its
+                    // planets open as a list to pick from.
+                    onLongPress = { id ->
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        openSystem(id)
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+
+            AnimatedVisibility(
+                visible = !fullScreen,
+                enter = if (instant) EnterTransition.None else fadeIn(),
+                exit = if (instant) ExitTransition.None else fadeOut(),
+                modifier = Modifier.align(Alignment.TopStart),
+            ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onSizeChanged { topChromePx = it.height },
+            ) {
+                // As many actions as leave the title room, the rest behind ⋮: a
+                // narrow phone or a large font had the title squeezed to a few
+                // letters by five icons.
+                val node = selected
+                val actions = buildList {
+                    if (node == null) {
+                        add(MapAction(Icons.Default.AutoAwesome, stringResource(R.string.galaxy_surprise)) { viewModel.surpriseMe() })
+                    } else {
+                        // Keeping a genre pins it to Discover's genre rail.
+                        val isHearted = node.id in hearted
+                        add(
+                            MapAction(
+                                if (isHearted) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                stringResource(if (isHearted) R.string.genre_unkeep else R.string.genre_keep),
+                            ) { viewModel.toggleHeartGenre(node.id) },
+                        )
+                    }
+                    add(MapAction(Icons.Default.Fullscreen, stringResource(R.string.galaxy_full_screen)) {
+                        settingsOpen = false
+                        manualFullScreen = true
+                    })
+                    if (node != null) {
+                        // Its researched history, as the dock's sheet.
+                        add(
+                            MapAction(
+                                Icons.AutoMirrored.Filled.MenuBook,
+                                if (expanded) stringResource(R.string.hide_history) else stringResource(R.string.read_history_of, node.name),
+                                tint = if (expanded) familyColors[node.family] ?: GALAXY_INK else GALAXY_INK,
+                            ) {
+                                if (chartOpen) viewModel.toggleMapChart()
+                                viewModel.toggleMapExpanded()
+                            },
+                        )
+                    }
+                    // The galaxy's look, tuned on the map itself.
+                    add(
+                        MapAction(
+                            Icons.Default.Tune,
+                            stringResource(R.string.galaxy_look),
+                            tint = if (settingsOpen) MaterialTheme.colorScheme.primary else GALAXY_INK,
+                        ) { settingsOpen = !settingsOpen },
+                    )
+                    add(MapAction(Icons.Default.CenterFocusStrong, stringResource(R.string.recentre)) { recentre() })
+                }
+                val room = LocalConfiguration.current.screenWidthDp / LocalDensity.current.fontScale.coerceAtLeast(1f)
+                val slots = ((room - NAV_ICON_DP - MIN_TITLE_DP) / ACTION_DP).toInt().coerceAtLeast(1)
+                val inline = if (actions.size <= slots) actions else actions.take(slots - 1)
+                val overflow = actions.drop(inline.size)
+                TopAppBar(
+                    // The genre you are at, once there is one: the title is where
+                    // the panel's heading went.
+                    title = {
+                        Text(
+                            text = selected?.name ?: stringResource(R.string.genre_galaxy),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { navController.popBackStackSafe() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
+                        }
+                    },
+                    actions = {
+                        inline.forEach { action ->
+                            IconButton(onClick = action.onClick) {
+                                Icon(action.icon, contentDescription = action.label, tint = action.tint)
                             }
-                            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                                overflow.forEach { action ->
-                                    DropdownMenuItem(
-                                        text = { Text(action.label, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-                                        leadingIcon = { Icon(action.icon, contentDescription = null) },
-                                        onClick = {
-                                            menu = false
-                                            action.onClick()
-                                        },
-                                    )
+                        }
+                        if (overflow.isNotEmpty()) {
+                            var menu by remember { mutableStateOf(false) }
+                            Box {
+                                IconButton(onClick = { menu = true }) {
+                                    Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.galaxy_more))
+                                }
+                                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                                    overflow.forEach { action ->
+                                        DropdownMenuItem(
+                                            text = { Text(action.label, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                                            leadingIcon = { Icon(action.icon, contentDescription = null) },
+                                            onClick = {
+                                                menu = false
+                                                action.onClick()
+                                            },
+                                        )
+                                    }
                                 }
                             }
                         }
-                    }
-                },
-                // Light on the dark sky whatever the theme: the map is space,
-                // not a page in the app's colours.
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = Color.Transparent,
-                    navigationIconContentColor = GALAXY_INK,
-                    titleContentColor = GALAXY_INK,
-                    actionIconContentColor = GALAXY_INK,
-                ),
-            )
-            // Under the title: the selected genre's facts, or what a star's
-            // place and size mean in this layout — without it a star's size is
-            // a claim with no stated units.
-            val facts = node?.let {
-                listOfNotNull(
-                    graph.family(it.family)?.name ?: it.family,
-                    if (it.hasTempo) stringResource(R.string.shelf_tempo, it.bpmLow, it.bpmHigh) else null,
-                    it.era.getOrNull(0)?.let { year -> stringResource(R.string.discover_genre_since, year) },
-                ).joinToString(" · ")
+                    },
+                    // Light on the dark sky whatever the theme: the map is space,
+                    // not a page in the app's colours.
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = Color.Transparent,
+                        navigationIconContentColor = GALAXY_INK,
+                        titleContentColor = GALAXY_INK,
+                        actionIconContentColor = GALAXY_INK,
+                    ),
+                )
+                // Under the title: the selected genre's facts, or what a star's
+                // place and size mean in this layout — without it a star's size is
+                // a claim with no stated units.
+                val facts = node?.let {
+                    listOfNotNull(
+                        graph.family(it.family)?.name ?: it.family,
+                        if (it.hasTempo) stringResource(R.string.shelf_tempo, it.bpmLow, it.bpmHigh) else null,
+                        it.era.getOrNull(0)?.let { year -> stringResource(R.string.discover_genre_since, year) },
+                    ).joinToString(" · ")
+                }
+                Text(
+                    text = when {
+                        facts != null && system != null && visuals.planets ->
+                            facts + "\n" + stringResource(R.string.galaxy_planets_caption)
+                        facts != null -> facts
+                        timeline -> stringResource(R.string.galaxy_time_caption)
+                        else -> stringResource(R.string.map_weight_popularity)
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = GALAXY_INK.copy(alpha = 0.7f),
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(
+                        start = MonoDimens.spacingLg,
+                        end = MonoDimens.spacingLg,
+                        bottom = MonoDimens.spacingSm,
+                    ),
+                )
             }
-            Text(
-                text = when {
-                    facts != null && system != null && visuals.planets ->
-                        facts + "\n" + stringResource(R.string.galaxy_planets_caption)
-                    facts != null -> facts
-                    timeline -> stringResource(R.string.galaxy_time_caption)
-                    else -> stringResource(R.string.map_weight_popularity)
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = GALAXY_INK.copy(alpha = 0.7f),
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(
-                    start = MonoDimens.spacingLg,
-                    end = MonoDimens.spacingLg,
-                    bottom = MonoDimens.spacingSm,
-                ),
-            )
-        }
-        }
+            }
 
-        // Full screen says how to use it, once, and then gets out of the way.
-        var hint by remember { mutableStateOf(false) }
-        LaunchedEffect(fullScreen) {
-            hint = fullScreen
-            if (fullScreen) {
-                kotlinx.coroutines.delay(FULL_SCREEN_HINT_MILLIS)
-                hint = false
+            // Full screen says how to use it, once, and then gets out of the way.
+            var hint by remember { mutableStateOf(false) }
+            LaunchedEffect(fullScreen) {
+                hint = fullScreen
+                if (fullScreen) {
+                    kotlinx.coroutines.delay(FULL_SCREEN_HINT_MILLIS)
+                    hint = false
+                }
             }
-        }
-        AnimatedVisibility(
-            visible = hint && !sheetOpen,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 28.dp, start = 24.dp, end = 24.dp),
-        ) {
-            Text(
-                stringResource(R.string.galaxy_full_screen_hint),
-                style = MaterialTheme.typography.labelMedium,
-                color = GALAXY_INK.copy(alpha = 0.85f),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            AnimatedVisibility(
+                visible = hint && !sheetOpen,
+                enter = fadeIn(),
+                exit = fadeOut(),
                 modifier = Modifier
-                    .clip(CircleShape)
-                    .background(GALAXY_SPACE.copy(alpha = 0.55f))
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-            )
-        }
-
-        val sheetNode = selected
-        if (sheetOpen && sheetNode != null) {
-            CompositionLocalProvider(
-                LocalPlayerGlass provides glassSettings,
-                tf.monochrome.android.ui.components.LocalGlassBackdrop provides mapHaze,
+                    .align(Alignment.TopCenter)
+                    .padding(top = 28.dp, start = 24.dp, end = 24.dp),
             ) {
-                tf.monochrome.android.ui.discover.galaxy.GalaxySystemSheet(
-                    genreName = sheetNode.name,
-                    since = sheetNode.era.getOrNull(0),
-                    system = system?.takeIf { it.genreId == sheetNode.id },
-                    bios = bios,
-                    playingTitle = playing?.title,
-                    playingArtist = playing?.displayArtist,
-                    onPlayMoon = { viewModel.playChartEntry(it, playerViewModel) },
-                    onClose = { sheetFor = null },
+                Text(
+                    stringResource(R.string.galaxy_full_screen_hint),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = GALAXY_INK.copy(alpha = 0.85f),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(GALAXY_SPACE.copy(alpha = 0.55f))
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                )
+            }
+
+            val sheetNode = selected
+            if (sheetOpen && sheetNode != null) {
+                CompositionLocalProvider(
+                    LocalPlayerGlass provides glassSettings,
+                    tf.monochrome.android.ui.components.LocalGlassBackdrop provides mapHaze,
+                ) {
+                    tf.monochrome.android.ui.discover.galaxy.GalaxySystemSheet(
+                        genreName = sheetNode.name,
+                        since = sheetNode.era.getOrNull(0),
+                        system = system?.takeIf { it.genreId == sheetNode.id },
+                        bios = bios,
+                        playingTitle = playing?.title,
+                        playingArtist = playing?.displayArtist,
+                        onPlayMoon = { viewModel.playChartEntry(it, playerViewModel) },
+                        onClose = { sheetFor = null },
+                        hazeState = mapHaze,
+                        glass = glassSettings,
+                        // At most half of what is left of the map, so the star it
+                        // came from stays in view above it.
+                        maxHeight = with(density) {
+                            val top = if (fullScreen) 0f else topChromePx.toFloat()
+                            ((viewport.height - top - panelBottomInset.toPx()) * SYSTEM_SHEET_FRACTION)
+                                .coerceAtLeast(MIN_HISTORY_HEIGHT.toPx()).toDp()
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .widthIn(max = MAX_SHEET_WIDTH)
+                            .onSizeChanged { sheetHeightPx = it.height }
+                            .padding(bottom = panelBottomInset)
+                            .consumeWindowInsets(WindowInsets.navigationBars),
+                    )
+                }
+            } else if (fullScreen) {
+                // Nothing else in full screen.
+            } else if (settingsOpen && graph.size > 0) {
+                CompositionLocalProvider(
+                    LocalPlayerGlass provides glassSettings,
+                    tf.monochrome.android.ui.components.LocalGlassBackdrop provides mapHaze,
+                ) {
+                    tf.monochrome.android.ui.discover.galaxy.GalaxyLookSheet(
+                        visuals = visuals,
+                        onChange = viewModel::setGalaxyVisuals,
+                        lowPower = lowPower,
+                        hazeState = mapHaze,
+                        glass = glassSettings,
+                        // Half of what is between the title and the mini player, so
+                        // the galaxy it is tuning stays in view above it.
+                        maxHeight = with(density) {
+                            ((viewport.height - topChromePx - panelBottomInset.toPx()) * 0.5f)
+                                .coerceAtLeast(MIN_HISTORY_HEIGHT.toPx()).toDp()
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .onSizeChanged { lookHeightPx = it.height }
+                            .padding(bottom = panelBottomInset)
+                            .consumeWindowInsets(WindowInsets.navigationBars),
+                    )
+                }
+            } else if (selected == null && graph.size > 0) {
+                GalaxyHud(
+                    timeline = timeline,
+                    onTimeline = {
+                        if (it != timeline) {
+                            timeline = it
+                            // Looking at the whole galaxy, the framing changes with
+                            // it: the spiral reaches further out than the disc.
+                            if (camera.follow < 0 && travel?.isActive != true) recentre()
+                        }
+                    },
+                    exploredCount = explored.size,
+                    total = graph.size,
                     hazeState = mapHaze,
                     glass = glassSettings,
-                    // At most half of what is left of the map, so the star it
-                    // came from stays in view above it.
-                    maxHeight = with(density) {
-                        val top = if (fullScreen) 0f else topChromePx.toFloat()
-                        ((viewport.height - top - panelBottomInset.toPx()) * SYSTEM_SHEET_FRACTION)
-                            .coerceAtLeast(MIN_HISTORY_HEIGHT.toPx()).toDp()
-                    },
+                    onSurprise = { viewModel.surpriseMe() },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .widthIn(max = MAX_SHEET_WIDTH)
-                        .onSizeChanged { sheetHeightPx = it.height }
+                        .onSizeChanged { hudHeightPx = it.height }
                         .padding(bottom = panelBottomInset)
                         .consumeWindowInsets(WindowInsets.navigationBars),
                 )
             }
-        } else if (fullScreen) {
-            // Nothing else in full screen.
-        } else if (settingsOpen && graph.size > 0) {
-            CompositionLocalProvider(
-                LocalPlayerGlass provides glassSettings,
-                tf.monochrome.android.ui.components.LocalGlassBackdrop provides mapHaze,
-            ) {
-                tf.monochrome.android.ui.discover.galaxy.GalaxyLookSheet(
-                    visuals = visuals,
-                    onChange = viewModel::setGalaxyVisuals,
-                    lowPower = lowPower,
-                    hazeState = mapHaze,
-                    glass = glassSettings,
-                    // Half of what is between the title and the mini player, so
-                    // the galaxy it is tuning stays in view above it.
-                    maxHeight = with(density) {
-                        ((viewport.height - topChromePx - panelBottomInset.toPx()) * 0.5f)
-                            .coerceAtLeast(MIN_HISTORY_HEIGHT.toPx()).toDp()
-                    },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .onSizeChanged { lookHeightPx = it.height }
-                        .padding(bottom = panelBottomInset)
-                        .consumeWindowInsets(WindowInsets.navigationBars),
+
+            if (!settingsOpen && !sheetOpen && !fullScreen) selected?.let { node ->
+                val related = remember(graph, node.id) { relatedTo(graph, node) }
+                // The shader modifier reads its parameters from this local, so
+                // the dock has to provide it — this route sits outside the
+                // nav host's provider, which only wraps the mini player.
+                CompositionLocalProvider(
+                    LocalPlayerGlass provides glassSettings,
+                    tf.monochrome.android.ui.components.LocalGlassBackdrop provides mapHaze,
+                ) {
+                    GenreDock(
+                        node = node,
+                        related = related.nodes.take(MAX_RELATED_PILLS),
+                        familyColor = familyColors[node.family] ?: MaterialTheme.colorScheme.primary,
+                        hazeState = mapHaze,
+                        glass = glassSettings,
+                        expanded = expanded,
+                        history = history,
+                        chartOpen = chartOpen,
+                        chart = chart,
+                        // The sheet is as tall as the map lets it be and then
+                        // scrolls, measured between the title and the mini player:
+                        // counting the bottom chrome as room is how the old panel
+                        // climbed under the status bar.
+                        sheetMaxHeight = with(density) {
+                            val canvas = viewport.height - topChromePx - panelBottomInset.toPx()
+                            minOf(
+                                canvas * HISTORY_HEIGHT_FRACTION,
+                                canvas - DOCK_PILLS_RESERVE.toPx() - MIN_MAP_STRIP.toPx(),
+                            ).coerceAtLeast(MIN_HISTORY_HEIGHT.toPx()).toDp()
+                        },
+                        onPlay = { viewModel.playGenre(node.id, playerViewModel) },
+                        onRadio = { viewModel.radioGenre(node.id, playerViewModel) },
+                        onToggleChart = {
+                            // One sheet at a time: the dock is meant to stay small.
+                            if (expanded) viewModel.toggleMapExpanded()
+                            viewModel.toggleMapChart()
+                        },
+                        onPlayChartEntry = { viewModel.playChartEntry(it, playerViewModel) },
+                        onRelated = { child -> viewModel.selectOnMap(child.id) },
+                        onSystem = { openSystem(node.id) },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            // Measured outside the reserve, not inside it: the
+                            // camera centres a genre in what's left of the map, and
+                            // the mini player occludes that too.
+                            .onSizeChanged { panelHeightPx = it.height }
+                            .padding(bottom = panelBottomInset)
+                            .consumeWindowInsets(WindowInsets.navigationBars),
+                    )
+                }
+            }
+
+            if (graph.size == 0) {
+                Text(
+                    text = stringResource(R.string.genre_map_failed),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = GALAXY_INK.copy(alpha = 0.7f),
+                    modifier = Modifier.align(Alignment.Center),
                 )
             }
-        } else if (selected == null && graph.size > 0) {
-            GalaxyHud(
-                timeline = timeline,
-                onTimeline = {
-                    if (it != timeline) {
-                        timeline = it
-                        // Looking at the whole galaxy, the framing changes with
-                        // it: the spiral reaches further out than the disc.
-                        if (camera.follow < 0 && travel?.isActive != true) recentre()
-                    }
-                },
-                exploredCount = explored.size,
-                total = graph.size,
-                hazeState = mapHaze,
-                glass = glassSettings,
-                onSurprise = { viewModel.surpriseMe() },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .onSizeChanged { hudHeightPx = it.height }
-                    .padding(bottom = panelBottomInset)
-                    .consumeWindowInsets(WindowInsets.navigationBars),
-            )
-        }
-
-        if (!settingsOpen && !sheetOpen && !fullScreen) selected?.let { node ->
-            val related = remember(graph, node.id) { relatedTo(graph, node) }
-            // The shader modifier reads its parameters from this local, so
-            // the dock has to provide it — this route sits outside the
-            // nav host's provider, which only wraps the mini player.
-            CompositionLocalProvider(
-                LocalPlayerGlass provides glassSettings,
-                tf.monochrome.android.ui.components.LocalGlassBackdrop provides mapHaze,
-            ) {
-                GenreDock(
-                    node = node,
-                    related = related.nodes.take(MAX_RELATED_PILLS),
-                    familyColor = familyColors[node.family] ?: MaterialTheme.colorScheme.primary,
-                    hazeState = mapHaze,
-                    glass = glassSettings,
-                    expanded = expanded,
-                    history = history,
-                    chartOpen = chartOpen,
-                    chart = chart,
-                    // The sheet is as tall as the map lets it be and then
-                    // scrolls, measured between the title and the mini player:
-                    // counting the bottom chrome as room is how the old panel
-                    // climbed under the status bar.
-                    sheetMaxHeight = with(density) {
-                        val canvas = viewport.height - topChromePx - panelBottomInset.toPx()
-                        minOf(
-                            canvas * HISTORY_HEIGHT_FRACTION,
-                            canvas - DOCK_PILLS_RESERVE.toPx() - MIN_MAP_STRIP.toPx(),
-                        ).coerceAtLeast(MIN_HISTORY_HEIGHT.toPx()).toDp()
-                    },
-                    onPlay = { viewModel.playGenre(node.id, playerViewModel) },
-                    onRadio = { viewModel.radioGenre(node.id, playerViewModel) },
-                    onToggleChart = {
-                        // One sheet at a time: the dock is meant to stay small.
-                        if (expanded) viewModel.toggleMapExpanded()
-                        viewModel.toggleMapChart()
-                    },
-                    onPlayChartEntry = { viewModel.playChartEntry(it, playerViewModel) },
-                    onRelated = { child -> viewModel.selectOnMap(child.id) },
-                    onSystem = { openSystem(node.id) },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        // Measured outside the reserve, not inside it: the
-                        // camera centres a genre in what's left of the map, and
-                        // the mini player occludes that too.
-                        .onSizeChanged { panelHeightPx = it.height }
-                        .padding(bottom = panelBottomInset)
-                        .consumeWindowInsets(WindowInsets.navigationBars),
-                )
-            }
-        }
-
-        if (graph.size == 0) {
-            Text(
-                text = stringResource(R.string.genre_map_failed),
-                style = MaterialTheme.typography.bodyMedium,
-                color = GALAXY_INK.copy(alpha = 0.7f),
-                modifier = Modifier.align(Alignment.Center),
-            )
         }
     }
 }
+
+/** How long the chrome takes to fade out of full screen, with room: the galaxy's glass layer is kept until it has. */
+private const val GLASS_FADE_MILLIS = 700L
+
+/** The lens's resolution divisor with lighter glass on: half. */
+private const val LIGHT_GLASS_DIVISOR = 2
 
 /** Dust grains on a device that asked for less work. */
 private const val LOW_POWER_DUST = 1600

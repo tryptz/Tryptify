@@ -163,6 +163,20 @@ internal class BlackHoleArt {
         }
     }
 
+    /**
+     * How far from the hole's centre on screen, px, its light pass draws
+     * anything (see [draw] with `rays`): the disk's image, the ring well
+     * inside it. Infinite when the hole or part of its rim is behind the
+     * camera, which leaves nothing to bound it by.
+     *
+     * Every point of the rim lies in the square of the disk's four corners,
+     * and a camera in front of all four sees that square as a convex shape,
+     * so no rim point lands farther from the centre than the farthest corner.
+     * The disk is laid as an affine image of its texture on two radii, and
+     * such an image reaches at most √2 times the longer of them.
+     */
+    fun lightExtent(f: CameraFrame): Float = holeLightExtent(f, p, q)
+
     /** The photon ring: a thin bright line on the shadow's edge, and its glow. */
     private fun drawRing(canvas: Canvas, cx: Float, cy: Float, shadowR: Float, dp: Float, strength: Float) {
         ring.color = PHOTON
@@ -258,3 +272,22 @@ internal class BlackHoleArt {
         }
     }
 }
+
+/** [BlackHoleArt.lightExtent], with its scratch arrays [p] and [q] (three floats each) handed in. */
+internal fun holeLightExtent(f: CameraFrame, p: FloatArray, q: FloatArray): Float {
+    if (!f.project(0f, 0f, 0f, p, 0)) return Float.POSITIVE_INFINITY
+    val cx = p[0]; val cy = p[1]
+    val r = GalaxyScene.DISK_OUTER
+    // The ring, well inside the disk, but counted in case the disk is not drawn.
+    var far = GalaxyScene.HOLE_SHADOW * f.scaleAt(p[2]) * 1.3f
+    for (k in 0 until 4) {
+        val x = if (k and 1 == 0) r else -r
+        val z = if (k and 2 == 0) r else -r
+        if (!f.project(x, 0f, z, q, 0)) return Float.POSITIVE_INFINITY
+        far = maxOf(far, hypot(q[0] - cx, q[1] - cy))
+    }
+    return far * HOLE_EXTENT_MARGIN
+}
+
+/** √2 for the affine disk on its radii, and a hair for rounding. */
+private const val HOLE_EXTENT_MARGIN = 1.4143f * 1.01f

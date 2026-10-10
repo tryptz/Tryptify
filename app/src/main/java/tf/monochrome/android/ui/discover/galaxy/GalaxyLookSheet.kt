@@ -172,12 +172,28 @@ private fun StarsGroup(v: GalaxyVisualSettings, onChange: (GalaxyVisualSettings)
     Share(R.string.gv_star_size, v.starSize, GalaxyVisualSettings.STAR_SIZE_RANGE) { onChange(v.copy(starSize = it)) }
     Amount(R.string.gv_labels, v.labels) { onChange(v.copy(labels = it)) }
     Toggle(R.string.gv_planets, v.planets) { onChange(v.copy(planets = it)) }
+    // Here, on the map, so turning it shows at once on this very sheet's glass.
+    Toggle(R.string.gv_light_glass, v.lightGlass, description = R.string.gv_light_glass_desc) {
+        onChange(v.copy(lightGlass = it))
+    }
 }
 
 /** The Studio's switch row; a disabled one shows off whatever is stored, so it never reads as on. */
 @Composable
-private fun Toggle(label: Int, checked: Boolean, enabled: Boolean = true, onChecked: (Boolean) -> Unit) {
-    FxToggle(stringResource(label), checked && enabled, enabled = enabled, onChange = onChecked)
+private fun Toggle(
+    label: Int,
+    checked: Boolean,
+    enabled: Boolean = true,
+    description: Int? = null,
+    onChecked: (Boolean) -> Unit,
+) {
+    FxToggle(
+        stringResource(label),
+        checked && enabled,
+        description = description?.let { stringResource(it) },
+        enabled = enabled,
+        onChange = onChecked,
+    )
 }
 
 /**

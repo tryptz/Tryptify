@@ -1984,6 +1984,8 @@ gv_reactivity	Reaction strength	律动强度	反応の強さ	Intensité de la r�
 gv_star_size	Star size	恒星大小	星の大きさ	Taille des étoiles	Tamaño de las estrellas	Yıldız boyutu	Sterngröße
 gv_labels	Names	名称	名前	Noms	Nombres	Adlar	Namen
 gv_planets	Planets and moons	行星与卫星	惑星と衛星	Planètes et lunes	Planetas y lunas	Gezegenler ve uydular	Planeten und Monde
+gv_light_glass	Lighter glass	轻量玻璃	軽いガラス	Verre allégé	Cristal ligero	Hafif cam	Leichteres Glas
+gv_light_glass_desc	Glass over the map works from a half-size copy of it. Faster; compare and keep what looks right.	地图上的玻璃改用一半尺寸的画面。更快；对比后保留看起来合适的。	マップ上のガラスが半分のサイズの画面から描かれます。より軽快です。見比べて、良い方を残してください。	Le verre sur la carte part d'une copie à moitié taille. Plus rapide ; comparez et gardez ce qui vous plaît.	El cristal sobre el mapa usa una copia a la mitad de tamaño. Más rápido; compara y quédate con lo que se vea bien.	Haritanın üstündeki cam, yarı boyutlu bir kopyasıyla çalışır. Daha hızlı; karşılaştırın ve doğru görüneni tutun.	Das Glas über der Karte arbeitet mit einer Kopie in halber Größe. Schneller; vergleichen und behalten, was richtig aussieht.
 gv_low_power	Low-performance mode keeps the heavy effects off	低性能模式下重型特效保持关闭	低パフォーマンスモードでは重い効果はオフのままです	Le mode basse performance garde les effets lourds désactivés	El modo de bajo rendimiento mantiene desactivados los efectos pesados	Düşük performans modu ağır efektleri kapalı tutar	Der Energiesparmodus lässt aufwendige Effekte aus
 galaxy_surprise	Surprise me	给我惊喜	おまかせ	Surprenez-moi	Sorpréndeme	Beni şaşırt	Überrasch mich
 galaxy_you_are_here	You are here	你在这里	現在地	Vous êtes ici	Estás aquí	Buradasınız	Du bist hier

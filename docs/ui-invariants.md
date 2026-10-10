@@ -700,9 +700,55 @@ its cube-face cell, which is what lets a pixel test one cell per layer. Let a
 star or its halo reach a cell edge and it is cut in half. Below 13, or in
 low-performance mode, the sky is the flat colour with drawn points.
 
-**The galaxy is one offscreen layer** (`CompositingStrategy.Offscreen` on its
-Box). Every pane of glass over the map frosts it, and without the layer each one
-made the render thread replay the whole galaxy: frames of 0.7 to 0.9 s. Keep it.
+**The galaxy is one offscreen layer while glass reads it** (`CompositingStrategy.Offscreen`
+on its Box, `glassOver`). Every pane of glass over the map frosts it, and without
+the layer each one made the render thread replay the whole galaxy: frames of 0.7
+to 0.9 s. Keep it. Only in full screen with nothing open, once the chrome has
+faded (`GLASS_FADE_MILLIS`), does it draw straight to the screen: nobody reads
+the layer then, and the sky under it is opaque with everything over it adding,
+so the pixels are the same.
+
+**The deep sky has a layer of its own and watches only the camera's turn.**
+`skyFrameFor` builds its view from yaw, pitch and the viewport, and its clock is
+`skyTime`, the twinkle stepped at `SKY_TWINKLE_HZ`. That is why HWUI can lay
+last frame's sky down instead of running the sky shader over every pixel again.
+Read `time()`, `spin()`, the camera's target or its distance in that canvas and
+it is redrawn every frame again, with nothing on screen to show for it. The gas
+has its own clock too (`smokeTime`: every frame while the map is steered or the
+music moves it, `SMOKE_IDLE_HZ` at rest), and reads the turn without watching it.
+
+**A god-ray pixel takes only the samples within its light's `reach`.**
+`LightSpot.reach` is what the shader's window is cut to, and the pass is skipped
+when no pixel can come that close (`GalaxyLight.reachesView`). It covers the
+glow, the shade's reach (`SHADE_REACH` glow radii: past it, under half a step of
+8-bit alpha at the strongest shade) and everything drawn *in colour* in the pass —
+the star's white-hot middle (`starEmitterPx`), the black hole's disk
+(`holeLightExtent`, bounded by the disk's corners from any camera). Anything new
+drawn in colour in a light pass has to be inside `reach`, or its light is cut
+off where the window starts; black things may go anywhere. `GalaxyGpuPassesTest`
+replays the shader with and without the window at the strongest settings and
+holds the difference under half a colour step.
+
+**The smoke tests for the disc before its noise.** The density is at most the
+disc's falloff times the amount, so the early return is the same cut the end of
+the shader makes; keep it before the three fbm calls.
+
+**At rest the map moves on every other vsync of a fast display** (`GalaxyPacer`):
+60 frames a second on a 120 Hz screen, every vsync again the moment a finger is
+down, and never paced at 90 Hz or less. Any touch on the screen counts (the root
+`pointerInput`, in the Initial pass). An animation on the map that is not touch-
+driven belongs in the clock's `animating` check, or it runs at half rate at rest.
+
+**Lighter glass is the listener's switch, off by default** (`lightGlass`). On, the
+map's panes and the bars over it run the live lens at half resolution
+(`LocalLensDivisor`, the chrome through `AppChromeLens`), only where the blur is
+wide enough (`REDUCED_LENS_MIN_BLUR_PX`); the clip, the slab and its rim stay at
+full resolution. The shrink before the blur is not exact, which is why it is a
+switch and not the default.
+
+**Each map frame is reported in the debug log** (`GalaxyFrameStats`, tag
+`GalaxyFx`): fps, frame, main thread, render thread and GPU times, late frames,
+and how often each pass ran. Judge GPU work by those lines, before and after.
 
 **No `PathEffect` on the map.** HWUI rasterises a dashed path on the CPU and
 uploads it every frame. Dashes are plain segments from `Dasher`, laid on screen

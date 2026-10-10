@@ -2066,6 +2066,8 @@
     <string name="gv_star_size">Taille des étoiles</string>
     <string name="gv_labels">Noms</string>
     <string name="gv_planets">Planètes et lunes</string>
+    <string name="gv_light_glass">Verre allégé</string>
+    <string name="gv_light_glass_desc">Le verre sur la carte part d\'une copie à moitié taille. Plus rapide ; comparez et gardez ce qui vous plaît.</string>
     <string name="gv_low_power">Le mode basse performance garde les effets lourds désactivés</string>
     <string name="galaxy_surprise">Surprenez-moi</string>
     <string name="galaxy_you_are_here">Vous êtes ici</string>

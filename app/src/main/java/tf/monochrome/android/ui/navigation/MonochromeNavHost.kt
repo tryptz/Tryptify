@@ -952,6 +952,9 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         // so the chrome's frost and its text follow that, not the theme's page.
         if (showChrome) CompositionLocalProvider(
             tf.monochrome.android.ui.components.LocalGlassGround provides appChrome.ground,
+            // And at the resolution the screen asks for its glass (the
+            // galaxy's lighter glass), so the bars match its panes.
+            tf.monochrome.android.ui.player.LocalLensDivisor provides appChrome.lensDivisor,
         ) {
             val miniPlayer: (@Composable (Modifier) -> Unit)? = if (showMiniPlayer) {
                 { mod ->

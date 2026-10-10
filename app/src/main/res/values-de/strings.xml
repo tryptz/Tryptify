@@ -2015,6 +2015,8 @@
     <string name="gv_star_size">Sterngröße</string>
     <string name="gv_labels">Namen</string>
     <string name="gv_planets">Planeten und Monde</string>
+    <string name="gv_light_glass">Leichteres Glas</string>
+    <string name="gv_light_glass_desc">Das Glas über der Karte arbeitet mit einer Kopie in halber Größe. Schneller; vergleichen und behalten, was richtig aussieht.</string>
     <string name="gv_low_power">Der Energiesparmodus lässt aufwendige Effekte aus</string>
     <string name="galaxy_surprise">Überrasch mich</string>
     <string name="galaxy_you_are_here">Du bist hier</string>

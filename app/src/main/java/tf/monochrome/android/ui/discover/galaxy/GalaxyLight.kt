@@ -7,7 +7,9 @@ import androidx.annotation.RequiresApi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.asComposeRenderEffect
+import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.hypot
 import kotlin.math.pow
 
 /**
@@ -18,8 +20,8 @@ import kotlin.math.pow
  *
  * The layer this runs over is a **light pass**, never the scene: the light and
  * its glow drawn in colour, and whatever stands in front of it — planets,
- * moons, dust, the other stars, the nebulae — drawn over it in black. Every
- * pixel marches toward the light and averages what it passes:
+ * moons, dust — drawn over it in black. Every pixel marches toward the light
+ * and averages what it passes:
  *
  * - **Light**: the colour it meets, decaying step by step. A march that runs
  *   into black finds nothing there, so a planet leaves a dark wedge behind it
@@ -33,6 +35,11 @@ import kotlin.math.pow
  * It replaced the lyric engine's rays here, which made every bright star a
  * starburst and drew stripes of its own round the core: rays with nothing
  * casting them. These come only from what is actually in the light's way.
+ *
+ * A pixel takes only the samples that can add anything: those within the
+ * light's [LightSpot.reach]. Out among the stars that is about half of them;
+ * a pixel whose march never comes that close is left untouched, and a pass no
+ * pixel can see is not run at all ([reachesView]).
  */
 private const val LIGHT_SRC = """
 uniform shader content;
@@ -44,6 +51,7 @@ uniform float uDecay;
 uniform float uExposure;
 uniform float uShade;
 uniform float uFrame;
+uniform float uReach;
 
 half4 main(float2 p) {
     float2 toL = uLight - p;
@@ -54,12 +62,20 @@ half4 main(float2 p) {
     // becomes fine grain, so a few dozen samples are enough.
     float2 jp = p + float2(5.588238 * uFrame, 0.0);
     float jitter = fract(52.9829189 * fract(dot(jp, float2(0.06711056, 0.00583715))));
+    // Only samples within uReach of the light can add anything: all of the
+    // light is inside it, and past it the shade is under half a step of 8-bit
+    // alpha. Sample i lies (i + 1 - jitter) steps from this pixel toward the
+    // light, so the first that counts is the first to come within uReach, and
+    // a pixel whose march never does is untouched by this light.
+    float first = max(ceil((dist - uReach) / max(stepLen, 0.0001) - 1.0 + jitter), 0.0);
+    if (first >= uSamples) return half4(0.0);
     float3 light = float3(0.0);
     float shade = 0.0;
-    float w = 1.0;
+    float w = pow(uDecay, first);
     for (int i = 0; i < 40; i++) {
-        if (float(i) < uSamples) {
-            float2 s = p + dir * ((float(i) + 1.0 - jitter) * stepLen);
+        float fi = float(i);
+        if (fi < uSamples && fi >= first) {
+            float2 s = p + dir * ((fi + 1.0 - jitter) * stepLen);
             float4 c = float4(content.eval(s));
             light += c.rgb * w;
             // Cover that gives no light is something in the way.
@@ -83,6 +99,14 @@ internal class LightSpot {
 
     /** How far the light's glow reaches on screen, px: what stands inside it casts a shadow. */
     var glowR = 1f
+
+    /**
+     * How far from the light, px, anything in its pass can add to the rays:
+     * the glow and whatever is drawn in colour, and the shade's reach
+     * ([GalaxyLight.SHADE_REACH] glow radii). Infinite when that is not known,
+     * and then every sample is taken, as they all used to be.
+     */
+    var reach = Float.POSITIVE_INFINITY
 
     /** 0..1: how much of this light there is (it fades as you arrive at another). */
     var strength = 0f
@@ -114,6 +138,7 @@ internal class GalaxyLight {
         shader.setFloatUniform("uExposure", EXPOSURE * exposure * spot.strength / weights)
         shader.setFloatUniform("uShade", SHADE * shade * spot.strength / weights)
         shader.setFloatUniform("uFrame", ((floor(time * 60f).toInt() % 64 + 64) % 64).toFloat())
+        shader.setFloatUniform("uReach", if (spot.reach.isFinite()) spot.reach * resolution else NO_REACH)
         return RenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect()
     }
 
@@ -125,6 +150,42 @@ internal class GalaxyLight {
         const val DECAY = 0.95f
         const val EXPOSURE = 0.8f
         const val SHADE = 1.6f
+
+        /**
+         * How far the shade reaches, in glow radii. It falls off as
+         * exp(-2 g²), and at 2 radii that is 3.4e-4: at the strongest shade
+         * setting, everything past it together darkens a pixel by less than
+         * half a step of 8-bit alpha, so a sample past it is left out.
+         */
+        const val SHADE_REACH = 2f
+
+        /** A reach so far no pixel's samples are skipped, for a light whose reach is not known. */
+        private const val NO_REACH = 1e9f
+
+        /**
+         * The first of the samples of a pixel [dist] px from the light that
+         * comes within [reach] of it, with the march started at [jitter] —
+         * the shader's own arithmetic. [SAMPLES] or more: none does.
+         */
+        fun firstSample(dist: Float, reach: Float, jitter: Float): Int {
+            if (!reach.isFinite()) return 0
+            val step = (dist * DENSITY / SAMPLES).coerceAtLeast(0.0001f)
+            return ceil((dist - reach) / step - 1f + jitter).toInt().coerceAtLeast(0)
+        }
+
+        /**
+         * Whether any pixel of a [width] × [height] view can be lit or shaded
+         * by [spot]. A pixel's march stops [DENSITY] of the way to the light,
+         * so the nearest it comes is the rest of the way; when that is
+         * outside the reach for the pixel nearest the light, it is for all
+         * of them, and the pass would be transparent everywhere.
+         */
+        fun reachesView(spot: LightSpot, width: Float, height: Float): Boolean {
+            if (!spot.reach.isFinite()) return true
+            val dx = maxOf(0f - spot.x, 0f, spot.x - width)
+            val dy = maxOf(0f - spot.y, 0f, spot.y - height)
+            return (1f - DENSITY) * hypot(dx, dy) <= spot.reach
+        }
     }
 }
 
