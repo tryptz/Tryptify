@@ -24,9 +24,13 @@
 - **The genre search bar is one slim row**, like every other glass search bar. It carried a second line ("Browse the map", and "no match"), which made it twice their height; the map is now a pill at the end of the genre row, and "no match" shows there too.
 
 #### The galaxy's links flow, the way time does
-- **The family links are energy now, not hard lines.** Each one is a cable that swirls between its two genres in 3D and slowly undulates. A comet runs along it, with a bright head and a fading tail, always from the older genre to the newer one. The whole map visibly flows forward in time. A parent and child that began the same year flow parent to child.
-- **The cable itself is faint.** The moving light is what you follow. Each pulse has its own phase, so they never march in step.
-- **Still cheap.** Every link is sampled into ten segments and drawn in one batch per family: three draws a family, however many links there are.
+- **The family links are starry, smoky trails now, not hard lines.** Each link swirls between its two genres in 3D and slowly undulates. Along it there is no line at all, only a scatter of stardust.
+- **A comet runs every link, always from the older genre to the newer one.** It has a bright star at its head, soft smoke in its family's colour that spreads and thins behind it, and sparkles twinkling in the smoke. The whole map visibly flows forward in time. A parent and child that began the same year flow parent to child.
+- **The comets never march in step:** each has its own phase.
+- **Still cheap.** It is drawn in one batch per family, with the smoke made from the family's own cloud sprite.
+
+#### Glass buttons no longer stay pressed
+- **A glass pill or button you tapped stayed half swollen.** That covered the genre map's glyph pills, every chip, the deck and the cards. The press animation's value was copied into the glass only when the button recomposed, and the animation never made it recompose. So the swell froze at whatever it was when your finger lifted. The old faint slab hid it; the solid glass showed it. The animation now writes into the glass itself every frame, so every press settles back.
 
 #### The genre galaxy's look, tuned on the map
 - **A tune button in the map's title bar opens a glass sheet**, in the dock's place, so every change shows on the galaxy as you make it. It has five groups:

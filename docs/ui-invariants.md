@@ -418,6 +418,12 @@ width) is for picking one icon out of a row, like the transport and dock.
 List rows keep the quieter scale squeeze; a full dome on a wide text row reads
 heavy.
 
+**A press's swell is animated into `GlassPress.amount` by the animation
+itself** (`animate { press.amount = value }`). It must never be copied across
+in a `SideEffect`. The copy only runs on recomposition, and an animation read
+only inside the `SideEffect` never causes one. The swell then freezes wherever
+it was when the finger lifted, and every pill stays half pressed.
+
 **Every glass button and pill is the panel recipe, never a faint slab.**
 `PressableGlass`, `GlassPill` and `GlassChoiceChip` draw through
 `GlassMaterial`, the same layers `GlassPanel` uses: the live lens or the

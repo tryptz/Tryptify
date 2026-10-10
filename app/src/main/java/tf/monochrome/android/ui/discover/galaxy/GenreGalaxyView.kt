@@ -390,13 +390,16 @@ private class GalaxyArt(scene: GalaxyScene, familyColors: Map<String, Color>) {
     // Dust, bucketed by family and by depth: near, middle, far.
     val dustBucket: Array<FloatArray>
     val dustCount = IntArray(scene.families.size * 3)
-    // The energy along the links, bucketed by family: the cable, the pulse's
-    // tail, and its head.
+    // The energy along the links, bucketed by family: the stardust of the
+    // cable, the smoke behind each comet (x, y, radius, alpha), the sparkles
+    // round it, and its head.
     val flowFamily: IntArray
     val flowBucket: Array<FloatArray>
     val flowCount = IntArray(scene.families.size)
-    val tailBucket: Array<FloatArray>
-    val tailCount = IntArray(scene.families.size)
+    val puffBucket: Array<FloatArray>
+    val puffCount = IntArray(scene.families.size)
+    val sparkBucket: Array<FloatArray>
+    val sparkCount = IntArray(scene.families.size)
     val headBucket: Array<FloatArray>
     val headCount = IntArray(scene.families.size)
     val flowA = FloatArray(3)
@@ -419,8 +422,9 @@ private class GalaxyArt(scene: GalaxyScene, familyColors: Map<String, Color>) {
         flowFamily = IntArray(scene.flows.size / 2) { scene.family[scene.flows[it * 2 + 1]] }
         val perFamily = IntArray(scene.families.size)
         for (f in flowFamily) perFamily[f]++
-        flowBucket = Array(scene.families.size) { FloatArray(perFamily[it] * FLOW_SEGMENTS * 4) }
-        tailBucket = Array(scene.families.size) { FloatArray(perFamily[it] * TAIL_SEGMENTS * 4) }
+        flowBucket = Array(scene.families.size) { FloatArray(perFamily[it] * (FLOW_SEGMENTS + 1) * 2) }
+        puffBucket = Array(scene.families.size) { FloatArray(perFamily[it] * TRAIL_PUFFS * 4) }
+        sparkBucket = Array(scene.families.size) { FloatArray(perFamily[it] * TRAIL_PUFFS * SPARKS_PER_PUFF * 2) }
         headBucket = Array(scene.families.size) { FloatArray(perFamily[it] * 2) }
     }
 
@@ -605,15 +609,18 @@ private fun DrawScope.drawSky(
 }
 
 /**
- * The links as energy flows: per link, a swirl sampled into [FLOW_SEGMENTS]
- * segments and projected, and a comet — a tail of [TAIL_SEGMENTS] and a bright
- * head — at where its pulse is now. All of it batched by family: three draws
- * a family, however many links.
+ * The links as starry, smoky trails. Per link, the cable is a scatter of
+ * stardust along its swirl — no line at all — and a comet runs it from the
+ * older genre to the newer: a bright star at the head, soft smoke behind it
+ * that grows and fades as it ages, and sparkles twinkling round the smoke.
+ * All of it batched by family: the dust, the sparkles and the heads are one
+ * `drawPoints` each, the smoke one run of the family's own cloud sprite.
  */
 private fun DrawScope.drawFlows(art: GalaxyArt, scene: GalaxyScene, f: CameraFrame, m: Float, t: Float, dp: Float) {
     val canvas = drawContext.canvas.nativeCanvas
     art.flowCount.fill(0)
-    art.tailCount.fill(0)
+    art.puffCount.fill(0)
+    art.sparkCount.fill(0)
     art.headCount.fill(0)
     val a = art.flowA
     val b = art.flowB
@@ -625,15 +632,16 @@ private fun DrawScope.drawFlows(art: GalaxyArt, scene: GalaxyScene, f: CameraFra
         val dx = b[0] - ax; val dy = b[1] - ay; val dz = b[2] - az
         val len = kotlin.math.sqrt(dx * dx + dy * dy + dz * dz)
         if (len < 1f) continue
-        // Sideways in the plane, and up: the two ways the cable swirls.
+        // Sideways in the plane, and up: the two ways the trail swirls.
         val hl = kotlin.math.sqrt(dx * dx + dz * dz)
         val sx = if (hl > 1e-3f) -dz / hl else 1f
         val sz = if (hl > 1e-3f) dx / hl else 0f
         val amp = len * FLOW_SWIRL
-        val phase = scene.flowPhase[k] * 6.2831855f
+        val seed = scene.flowPhase[k]
+        val phase = seed * 6.2831855f
         val fam = art.flowFamily[k]
 
-        // Where along the cable u (0 older, 1 newer) is, on screen. False when
+        // Where along the trail u (0 older, 1 newer) is, on screen. False when
         // that point is behind the camera.
         fun at(u: Float): Boolean {
             val bend = sin(PI.toFloat() * u)
@@ -642,85 +650,121 @@ private fun DrawScope.drawFlows(art: GalaxyArt, scene: GalaxyScene, f: CameraFra
             return f.project(ax + dx * u + sx * side, ay + dy * u + lift, az + dz * u + sz * side, p, 0)
         }
 
-        // The cable.
-        val cable = art.flowBucket[fam]
+        // The cable: stardust strewn along it, a little off the line.
+        val dust = art.flowBucket[fam]
         var c = art.flowCount[fam]
-        var has = false
-        var lx = 0f; var ly = 0f
         for (j in 0..FLOW_SEGMENTS) {
-            if (at(j / FLOW_SEGMENTS.toFloat())) {
-                if (has && c + 4 <= cable.size) {
-                    cable[c] = lx; cable[c + 1] = ly; cable[c + 2] = p[0]; cable[c + 3] = p[1]; c += 4
-                }
-                lx = p[0]; ly = p[1]; has = true
-            } else {
-                has = false
+            val u = (j + 0.5f * (trailHash(seed, j) - 0.5f)) / FLOW_SEGMENTS
+            if (u in 0f..1f && at(u) && c + 2 <= dust.size) {
+                val jitter = 3f * dp * (trailHash(seed, j + 17) - 0.5f)
+                dust[c] = p[0] + jitter; dust[c + 1] = p[1] - jitter
+                c += 2
             }
         }
         art.flowCount[fam] = c
 
-        // The pulse: a comet, its head at u and its tail behind it, toward the past.
-        val head = ((t * FLOW_SPEED + scene.flowPhase[k]) % 1f + 1f) % 1f
-        val tail = art.tailBucket[fam]
-        var tc = art.tailCount[fam]
-        has = false
-        for (j in 0..TAIL_SEGMENTS) {
-            val u = head - FLOW_TAIL * (1f - j / TAIL_SEGMENTS.toFloat())
-            if (u >= 0f && at(u)) {
-                if (has && tc + 4 <= tail.size) {
-                    tail[tc] = lx; tail[tc + 1] = ly; tail[tc + 2] = p[0]; tail[tc + 3] = p[1]; tc += 4
-                }
-                lx = p[0]; ly = p[1]; has = true
-            } else {
-                has = false
+        // The comet.
+        val head = ((t * FLOW_SPEED + seed) % 1f + 1f) % 1f
+        if (!at(head)) continue
+        val hx = p[0]; val hy = p[1]; val hDepth = p[2]
+        val heads = art.headBucket[fam]
+        val hc = art.headCount[fam]
+        if (hc + 2 <= heads.size) {
+            heads[hc] = hx; heads[hc + 1] = hy
+            art.headCount[fam] = hc + 2
+        }
+        // Smoke behind it, toward the past, spreading and thinning with age;
+        // sparkles round each puff, twinkling.
+        val puffs = art.puffBucket[fam]
+        val sparks = art.sparkBucket[fam]
+        var pc = art.puffCount[fam]
+        var sc = art.sparkCount[fam]
+        for (n in 0 until TRAIL_PUFFS) {
+            val age = (n + 1f) / TRAIL_PUFFS
+            val u = head - FLOW_TAIL * age
+            if (u < 0f || !at(u)) break
+            val scale = f.scaleAt(p[2])
+            val r = (TRAIL_PUFF_UNITS * (0.5f + age) * scale).coerceIn(3f * dp, 30f * dp)
+            if (pc + 4 <= puffs.size) {
+                puffs[pc] = p[0]; puffs[pc + 1] = p[1]; puffs[pc + 2] = r; puffs[pc + 3] = (1f - age) * fog(hDepth)
+                pc += 4
+            }
+            for (q in 0 until SPARKS_PER_PUFF) {
+                // A sparkle shows for part of its own cycle: a twinkle.
+                val h = trailHash(seed, n * 7 + q)
+                if (((t * 1.7f + h * 3f) % 1f) > 0.65f) continue
+                if (sc + 2 > sparks.size) continue
+                val ox = r * 0.9f * (trailHash(seed, n * 13 + q + 5) - 0.5f) * 2f
+                val oy = r * 0.9f * (trailHash(seed, n * 11 + q + 9) - 0.5f) * 2f
+                sparks[sc] = p[0] + ox; sparks[sc + 1] = p[1] + oy
+                sc += 2
             }
         }
-        art.tailCount[fam] = tc
-        if (has) {
-            val heads = art.headBucket[fam]
-            val hc = art.headCount[fam]
-            if (hc + 2 <= heads.size) {
-                heads[hc] = lx; heads[hc + 1] = ly
-                art.headCount[fam] = hc + 2
-            }
-        }
+        art.puffCount[fam] = pc
+        art.sparkCount[fam] = sc
     }
+
     for (fam in art.flowBucket.indices) {
         val color = art.famColor[fam]
-        if (art.flowCount[fam] > 0) {
-            art.lines.strokeWidth = 0.9f * dp
-            art.lines.color = color.copy(alpha = FLOW_CABLE_ALPHA).toArgb()
-            canvas.drawLines(art.flowBucket[fam], 0, art.flowCount[fam], art.lines)
+        // The smoke first, under its sparkles.
+        val puffs = art.puffBucket[fam]
+        var n = 0
+        while (n < art.puffCount[fam]) {
+            val x = puffs[n]; val y = puffs[n + 1]; val r = puffs[n + 2]
+            art.rect.set(x - r, y - r, x + r, y + r)
+            art.add.alpha = (TRAIL_SMOKE_ALPHA * puffs[n + 3] * 255).toInt().coerceIn(0, 255)
+            canvas.drawBitmap(art.nebulaSprite[fam], null, art.rect, art.add)
+            n += 4
         }
-        if (art.tailCount[fam] > 0) {
-            art.lines.strokeWidth = 1.7f * dp
-            art.lines.color = lerp(color, Color.White, 0.35f).copy(alpha = 0.5f).toArgb()
-            canvas.drawLines(art.tailBucket[fam], 0, art.tailCount[fam], art.lines)
+        if (art.flowCount[fam] > 0) {
+            art.points.strokeWidth = 1.3f * dp
+            art.points.color = lerp(color, Color.White, 0.4f).copy(alpha = FLOW_DUST_ALPHA).toArgb()
+            canvas.drawPoints(art.flowBucket[fam], 0, art.flowCount[fam], art.points)
+        }
+        if (art.sparkCount[fam] > 0) {
+            art.points.strokeWidth = 1.6f * dp
+            art.points.color = lerp(color, Color.White, 0.75f).copy(alpha = 0.85f).toArgb()
+            canvas.drawPoints(art.sparkBucket[fam], 0, art.sparkCount[fam], art.points)
         }
         if (art.headCount[fam] > 0) {
-            art.points.strokeWidth = 3.4f * dp
-            art.points.color = lerp(color, Color.White, 0.65f).copy(alpha = 0.95f).toArgb()
+            // The head: a halo, then the star.
+            art.points.strokeWidth = 7f * dp
+            art.points.color = color.copy(alpha = 0.35f).toArgb()
+            canvas.drawPoints(art.headBucket[fam], 0, art.headCount[fam], art.points)
+            art.points.strokeWidth = 3f * dp
+            art.points.color = lerp(color, Color.White, 0.8f).copy(alpha = 0.95f).toArgb()
             canvas.drawPoints(art.headBucket[fam], 0, art.headCount[fam], art.points)
         }
     }
 }
 
-/** How far a cable swirls out, as a share of its length. */
+/** A steady 0..1 for a trail's [seed] and an index along it: where its dust and sparkles fall. */
+private fun trailHash(seed: Float, i: Int): Float {
+    val v = sin(seed * 127.1f + i * 311.7f) * 43758.547f
+    return v - kotlin.math.floor(v)
+}
+
+/** How far a trail swirls out, as a share of its length. */
 private const val FLOW_SWIRL = 0.12f
 
-/** Segments in a cable, and in a pulse's tail. */
+/** Stardust specks along a cable. */
 private const val FLOW_SEGMENTS = 10
-private const val TAIL_SEGMENTS = 4
 
-/** A pulse runs the length of its link this many times a second, its tail this long. */
+/** A comet runs the length of its link this many times a second; its smoke trails this far behind. */
 private const val FLOW_SPEED = 0.22f
-private const val FLOW_TAIL = 0.16f
+private const val FLOW_TAIL = 0.2f
 
-/** How fast the cable's swirl moves along it. */
+/** Smoke puffs behind a comet, their size in scene units, and the sparkles round each. */
+private const val TRAIL_PUFFS = 4
+private const val TRAIL_PUFF_UNITS = 16f
+private const val SPARKS_PER_PUFF = 2
+
+/** How fast the trail's swirl moves along it. */
 private const val FLOW_WAVE = 0.8f
 
-/** The cable itself is faint: the moving light is what the eye follows. */
-private const val FLOW_CABLE_ALPHA = 0.1f
+/** The stardust is faint and the smoke soft: the comets are what the eye follows. */
+private const val FLOW_DUST_ALPHA = 0.32f
+private const val TRAIL_SMOKE_ALPHA = 0.22f
 
 /** A nebula's strength: the demo's, faint enough that a family is a haze, not a fill. */
 private const val NEBULA_ALPHA = 0.07f

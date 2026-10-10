@@ -1,7 +1,6 @@
 package tf.monochrome.android.ui.components
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.animate
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
@@ -9,9 +8,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -127,15 +127,26 @@ fun rememberGlassPress(): GlassPress {
         }
     }
 
+    // The swell is animated straight into press.amount, every frame, by the
+    // animation itself. It used to be an animateFloatAsState copied across in
+    // a SideEffect, and that copy only ran when this composable recomposed —
+    // which the animation never made it do, since its value was read only
+    // inside the SideEffect. So press.amount froze at whatever it was when the
+    // finger lifted, and the pane stayed swollen. A faint slab hid it; the
+    // solid glass slab shows it plainly.
     val instant = reduceMotion()
-    val amount by animateFloatAsState(
-        targetValue = if (press.held) 1f else 0f,
-        // The dock's spring, so the mini player's slab answers a press exactly
-        // the way the player's does.
-        animationSpec = if (instant) snap() else PressSpring,
-        label = "glassPress",
-    )
-    SideEffect { press.amount = amount }
+    LaunchedEffect(press, instant) {
+        snapshotFlow { press.held }.collectLatest { held ->
+            val target = if (held) 1f else 0f
+            if (instant) {
+                press.amount = target
+            } else {
+                // The dock's spring, so the mini player's slab answers a press
+                // exactly the way the player's does.
+                animate(press.amount, target, animationSpec = PressSpring) { value, _ -> press.amount = value }
+            }
+        }
+    }
     return press
 }
 
