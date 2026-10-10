@@ -224,7 +224,10 @@ internal fun rememberLyricRayLight(
     // Keyed on nothing, so a light rebuilt every recomposition still gets
     // reported, as a high "lights built", instead of restarting the timer.
     val current = rememberUpdatedState(light)
-    LaunchedEffect(Unit) {
+    // Not in the background or with the phone off: there are no rays to report.
+    val onScreen = tf.monochrome.android.ui.components.rememberOnScreen()
+    LaunchedEffect(onScreen) {
+        if (!onScreen) return@LaunchedEffect
         var lastKey = ""
         var lastAt = 0L
         while (true) {

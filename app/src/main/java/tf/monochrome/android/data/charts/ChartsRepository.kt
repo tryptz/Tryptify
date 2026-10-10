@@ -41,6 +41,12 @@ class ChartsRepository @Inject constructor(
     private val artistSetFlight = SingleFlight<String, Set<String>>()
     private val tagChartFlight = SingleFlight<String, List<ChartEntry>>()
     private val artistTagFlight = SingleFlight<String, List<String>>()
+    private val artistFacts = mutableMapOf<String, Cached<ArtistFacts>>()
+    private val artistFactFlight = SingleFlight<String, ArtistFacts?>()
+
+    /** MusicBrainz asks for a request a second at most; the catalogue counts queue for it. */
+    private val musicBrainzPace = Mutex()
+    private var lastMusicBrainzAt = 0L
 
     /** Whether last session's answers have been folded in yet. */
     private val restoreMutex = Mutex()
@@ -214,6 +220,37 @@ class ChartsRepository @Inject constructor(
 
     private suspend fun cachedArtistTags(key: String): List<String>? =
         mutex.withLock { artistTags[key]?.takeIf { it.fresh(TTL_ARTIST_TAGS_MS) }?.value }
+
+    /**
+     * What a planet on the genre galaxy shows of its artist: the opening of
+     * their Last.fm bio and the size of their catalogue (MusicBrainz release
+     * groups). Held for as long as the tags are, in memory, once either is
+     * known; a fetch that found nothing is tried again the next time.
+     */
+    suspend fun artistFacts(artist: String, apiKey: String): ArtistFacts? {
+        val key = normalizeForMatch(artist)
+        if (key.isEmpty() || apiKey.isBlank()) return null
+        mutex.withLock { artistFacts[key]?.takeIf { it.fresh(TTL_ARTIST_TAGS_MS) }?.value }?.let { return it }
+        return artistFactFlight.run(key) {
+            val info = client.artistInfo(artist, apiKey) ?: return@run null
+            val releases = info.mbid?.let { mbid ->
+                musicBrainzPace.withLock {
+                    val wait = lastMusicBrainzAt + ChartsClient.MUSICBRAINZ_PACE_MS - System.currentTimeMillis()
+                    if (wait > 0) kotlinx.coroutines.delay(wait)
+                    try {
+                        client.releaseGroupCount(mbid)
+                    } finally {
+                        lastMusicBrainzAt = System.currentTimeMillis()
+                    }
+                }
+            }
+            val facts = ArtistFacts(bio = info.bio, releases = releases)
+            if (facts.bio != null || facts.releases != null) {
+                mutex.withLock { artistFacts[key] = Cached(facts) }
+            }
+            facts
+        }
+    }
 
     /** A genre's all-time tag chart, if a Last.fm key is configured. */
     suspend fun tagChart(genreId: String, names: List<String>, apiKey: String): List<ChartEntry> {

@@ -76,9 +76,10 @@ fun ParametricEqScreen(
     val spectrumBins by viewModel.spectrumAnalyzer.spectrumBins.collectAsStateWithLifecycle()
 
     if (spectrumEnabled) {
-        DisposableEffect(Unit) {
+        // Only while the screen is started: not in the background, not with the phone off.
+        androidx.lifecycle.compose.LifecycleStartEffect(Unit) {
             viewModel.spectrumAnalyzer.acquire()
-            onDispose { viewModel.spectrumAnalyzer.release() }
+            onStopOrDispose { viewModel.spectrumAnalyzer.release() }
         }
     }
 

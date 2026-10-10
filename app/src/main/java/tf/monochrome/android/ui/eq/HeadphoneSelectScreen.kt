@@ -27,8 +27,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
@@ -195,22 +193,22 @@ fun HeadphoneSelectScreen(
                 val uploadedRig = MeasurementRig.UPLOADED
                 if (uploadedHeadphones.isNotEmpty()) {
                     item(key = "rig_uploaded") {
-                        FilterChip(
+                        tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                            label = uploadedRig.label,
                             selected = selectedRig == uploadedRig,
+                            accent = MaterialTheme.colorScheme.primary,
                             onClick = {
                                 viewModel.setRigFilter(if (selectedRig == uploadedRig) null else uploadedRig)
                             },
-                            label = { Text(uploadedRig.label) },
-                            colors = FilterChipDefaults.filterChipColors(),
                         )
                     }
                 }
                 item(key = "rig_all") {
-                    FilterChip(
+                    tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                        label = stringResource(R.string.eq_all_rigs),
                         selected = selectedRig == null,
+                        accent = MaterialTheme.colorScheme.primary,
                         onClick = { viewModel.setRigFilter(null) },
-                        label = { Text(stringResource(R.string.eq_all_rigs)) },
-                        colors = FilterChipDefaults.filterChipColors(),
                     )
                 }
                 val remoteRigs = availableRigs.filter { it != uploadedRig }
@@ -219,13 +217,13 @@ fun HeadphoneSelectScreen(
                     key = { i -> "rig_${remoteRigs[i].name}" },
                 ) { i ->
                     val rig = remoteRigs[i]
-                    FilterChip(
+                    tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                        label = rig.label,
                         selected = selectedRig == rig,
+                        accent = MaterialTheme.colorScheme.primary,
                         onClick = {
                             viewModel.setRigFilter(if (selectedRig == rig) null else rig)
                         },
-                        label = { Text(rig.label) },
-                        colors = FilterChipDefaults.filterChipColors(),
                     )
                 }
             }

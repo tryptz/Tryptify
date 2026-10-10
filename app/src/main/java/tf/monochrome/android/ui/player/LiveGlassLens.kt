@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -20,6 +21,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
@@ -30,7 +32,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import dev.chrisbanes.haze.HazeState
 import kotlin.math.ceil
-import kotlin.math.roundToInt
 
 /**
  * Glass that bends the real screen behind it, the way iOS draws it.
@@ -79,6 +80,7 @@ internal fun Modifier.liveGlassLens(
 ): Modifier {
     val shader = remember { runCatching { RuntimeShader(LIVE_LENS_SRC) }.getOrNull() } ?: return this
     val view = LocalView.current
+    val divisor = LocalLensDivisor.current
     // Where this pane is on screen. Written by layout, read by draw; not state,
     // because the pre-draw check below is what turns a change into a redraw.
     val anchor = remember { LensAnchor() }
@@ -141,13 +143,22 @@ internal fun Modifier.liveGlassLens(
             // sigma ≈ 0.58 × radius + 0.5. Twice the radius plus 2px covers that.
             val margin = if (blurOn) ceil(blurPx * 2f + 2f) else 0f
             val (lensR, lensW) = lensRimPx(corner, size, glass.roundness)
+            // Asked for lighter glass (LocalLensDivisor), and only where the
+            // blur is wide enough that a smaller copy loses next to nothing it
+            // would keep: the backdrop, its blur and its bend all run at 1 / k
+            // resolution, every px size scaled with them, and the result is
+            // drawn back up to the pane. The bend is the same — the rim's
+            // slope is a ratio of its own width — and the clip, the slab and
+            // its rim light on top stay at full resolution, so the edge is as
+            // crisp as ever.
+            val k = if (divisor > 1 && blurPx >= REDUCED_LENS_MIN_BLUR_PX) divisor.toFloat() else 1f
             backdrop.renderEffect = effect.get(
-                LensEffectKey(size, margin, blurPx, lensR, lensW, glass, frost),
+                LensEffectKey(size, margin, blurPx, lensR, lensW, glass, frost, k),
             ) {
-                shader.setFloatUniform("uSize", size.width, size.height)
-                shader.setFloatUniform("uMargin", margin, margin)
-                shader.setFloatUniform("uLensR", lensR)
-                shader.setFloatUniform("uLensW", lensW)
+                shader.setFloatUniform("uSize", size.width / k, size.height / k)
+                shader.setFloatUniform("uMargin", margin / k, margin / k)
+                shader.setFloatUniform("uLensR", lensR / k)
+                shader.setFloatUniform("uLensW", lensW / k)
                 shader.setFloatUniform("uRefraction", glass.refraction)
                 shader.setFloatUniform("uDepth", glass.depth)
                 shader.setFloatUniform("uDispersion", glass.dispersion)
@@ -163,7 +174,7 @@ internal fun Modifier.liveGlassLens(
                 if (blurOn) {
                     RenderEffect.createChainEffect(
                         lens,
-                        RenderEffect.createBlurEffect(blurPx, blurPx, Shader.TileMode.CLAMP),
+                        RenderEffect.createBlurEffect(blurPx / k, blurPx / k, Shader.TileMode.CLAMP),
                     )
                 } else {
                     lens
@@ -174,23 +185,27 @@ internal fun Modifier.liveGlassLens(
             val here = anchor.screen
             var drew = 0
             val inflated = IntSize(
-                (size.width + 2f * margin).roundToInt(),
-                (size.height + 2f * margin).roundToInt(),
+                ceil((size.width + 2f * margin) / k).toInt(),
+                ceil((size.height + 2f * margin) / k).toInt(),
             )
             backdrop.record(inflated) {
                 drawRect(pageColor)
-                hazeState.areas
-                    .filter { it.windowId == null || it.windowId == windowId }
-                    .sortedBy { it.zIndex }
-                    .forEach { area ->
-                        val layer = area.contentLayer ?: return@forEach
-                        if (layer.isReleased) return@forEach
-                        val at = area.positionOnScreen - here
-                        translate(at.x + margin, at.y + margin) { drawLayer(layer) }
-                        drew++
-                    }
+                scale(1f / k, pivot = Offset.Zero) {
+                    hazeState.areas
+                        .filter { it.windowId == null || it.windowId == windowId }
+                        .sortedBy { it.zIndex }
+                        .forEach { area ->
+                            val layer = area.contentLayer ?: return@forEach
+                            if (layer.isReleased) return@forEach
+                            val at = area.positionOnScreen - here
+                            translate(at.x + margin, at.y + margin) { drawLayer(layer) }
+                            drew++
+                        }
+                }
             }
-            translate(-margin, -margin) { drawLayer(backdrop) }
+            translate(-margin, -margin) {
+                if (k == 1f) drawLayer(backdrop) else scale(k, pivot = Offset.Zero) { drawLayer(backdrop) }
+            }
             // With nothing to draw the lens is a frost over transparent: the
             // page shows through unbent. Say so once, so a report from a
             // device carries it in its recent log.
@@ -214,6 +229,7 @@ private data class LensEffectKey(
     val lensW: Float,
     val glass: tf.monochrome.android.domain.model.PlayerGlassSettings,
     val frost: Color,
+    val divisor: Float,
 )
 
 /**
@@ -249,6 +265,25 @@ internal fun lensClipShape(corner: Dp): Shape =
 
 /** Off restores the haze pane under every GlassPanel and the player's disc and dock, exactly. */
 internal const val LIVE_LENS_GLASS = true
+
+/**
+ * The live lens's resolution, as a divisor: 1 is full; 2 runs its backdrop,
+ * blur and bend at half resolution and draws the result back up. Provided by
+ * a screen whose backdrop redraws every frame — the galaxy, when the
+ * listener asks for lighter glass — where every pane's lens is redone every
+ * frame with it. See [liveGlassLens].
+ */
+internal val LocalLensDivisor = staticCompositionLocalOf { 1 }
+
+/**
+ * The least blur (radius, px) a lens is run smaller with. At half resolution
+ * that is still a sigma of four of its px: a gaussian that wide passes
+ * nothing near the half-size grid's limit, so what the blur keeps fits the
+ * half-size copy. What is not exact is the shrink before it — a sharp point
+ * finer than two px is averaged in, not filtered out — which is why this is a
+ * switch the listener judges by eye. Narrower than this, the lens stays full.
+ */
+private const val REDUCED_LENS_MIN_BLUR_PX = 12f
 
 private const val LENS_TAG = "LiveGlassLens"
 

@@ -101,10 +101,12 @@ internal fun rememberBassPulse(tap: SpectrumAnalyzerTap?, fx: LyricsFxSettings):
     if (tf.monochrome.android.ui.theme.reduceMotion()) return pulse
     if (tap == null) return pulse
 
-    DisposableEffect(tap) {
+    // Held while the screen is started, not merely composed: in the
+    // background, or with the phone locked, nothing is reading the pulse.
+    androidx.lifecycle.compose.LifecycleStartEffect(tap) {
         tap.acquire()
         LyricsDebug.log("FFT analyzer staked (bass pulse active)")
-        onDispose {
+        onStopOrDispose {
             tap.release()
             LyricsDebug.log("FFT analyzer released (bass pulse stopped)")
         }

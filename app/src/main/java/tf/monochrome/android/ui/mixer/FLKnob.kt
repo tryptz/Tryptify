@@ -149,7 +149,7 @@ internal fun FLKnobControl(
         // Knob canvas with advanced touch handling
         Canvas(
             modifier = Modifier
-                .size(64.dp)
+                .size(KNOB_SIZE)
                 .adjustableSemantics(
                     label = label,
                     value = value,
@@ -279,11 +279,19 @@ internal fun FLKnobControl(
                     }
                 }
         ) {
+            // Drawn for KNOB_SIZE, and everything in it shrinks with the knob
+            // when a row squeezes it smaller: a card of narrow columns on a
+            // small screen. With fixed insets the body went to nothing at
+            // 30 dp, and a radial gradient of radius 0 throws — opening the
+            // mixer crashed a Galaxy A35.
+            if (size.minDimension < 1f) return@Canvas
+            val k = (size.minDimension / KNOB_SIZE.toPx()).coerceAtMost(1f)
+            fun d(v: androidx.compose.ui.unit.Dp): Float = v.toPx() * k
             val cx = size.width / 2f
             val cy = size.height / 2f
             val center = Offset(cx, cy)
-            val radius = size.minDimension / 2f - 8.dp.toPx()
-            val strokeW = 3.5.dp.toPx()
+            val radius = size.minDimension / 2f - d(8.dp)
+            val strokeW = d(3.5.dp)
             val shown = shownFraction
 
             // Ticks around the outside; the ones the value has passed are lit.
@@ -294,13 +302,13 @@ internal fun FLKnobControl(
                 val lit = if (bipolar) (t - zeroFraction) * (shown - zeroFraction) >= 0f &&
                     kotlin.math.abs(t - zeroFraction) <= kotlin.math.abs(shown - zeroFraction)
                     else t <= shown
-                val r0 = radius + 4.dp.toPx()
-                val r1 = radius + (if (i == 0 || i == ticks - 1 || i == ticks / 2) 7.5.dp else 6.dp).toPx()
+                val r0 = radius + d(4.dp)
+                val r1 = radius + d(if (i == 0 || i == ticks - 1 || i == ticks / 2) 7.5.dp else 6.dp)
                 drawLine(
                     color = if (lit) color.copy(alpha = 0.75f) else tickColor,
                     start = Offset(cx + r0 * cos(a), cy + r0 * sin(a)),
                     end = Offset(cx + r1 * cos(a), cy + r1 * sin(a)),
-                    strokeWidth = 1.2.dp.toPx(),
+                    strokeWidth = d(1.2.dp),
                     cap = StrokeCap.Round
                 )
             }
@@ -348,27 +356,29 @@ internal fun FLKnobControl(
                 val a = Math.toRadians((135.0 + d * 270.0)).toFloat()
                 drawCircle(
                     color = markerColor,
-                    radius = 1.6.dp.toPx(),
+                    radius = d(1.6.dp),
                     center = Offset(cx + radius * cos(a), cy + radius * sin(a))
                 )
             }
 
             // The body: a drop shadow, a lit dome, and a fine rim.
-            val body = radius - 7.dp.toPx()
+            val body = radius - d(7.dp)
             drawCircle(
                 color = Color.Black.copy(alpha = 0.30f),
-                radius = body + 1.5.dp.toPx(),
-                center = Offset(cx, cy + 2.dp.toPx())
+                radius = body + d(1.5.dp),
+                center = Offset(cx, cy + d(2.dp))
             )
-            drawCircle(
-                brush = Brush.radialGradient(
-                    listOf(bodyLight, bodyDark),
-                    center = Offset(cx - body * 0.35f, cy - body * 0.45f),
-                    radius = body * 1.6f
-                ),
-                radius = body,
-                center = center
-            )
+            if (body > 0f) {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        listOf(bodyLight, bodyDark),
+                        center = Offset(cx - body * 0.35f, cy - body * 0.45f),
+                        radius = body * 1.6f
+                    ),
+                    radius = body,
+                    center = center
+                )
+            }
             drawCircle(
                 color = color.copy(alpha = if (isTouching) 0.22f else 0.08f),
                 radius = body,
@@ -378,7 +388,7 @@ internal fun FLKnobControl(
                 color = Color.White.copy(alpha = 0.10f),
                 radius = body,
                 center = center,
-                style = Stroke(width = 1.dp.toPx())
+                style = Stroke(width = d(1.dp))
             )
 
             // Pointer: a line to a lit dot near the edge.
@@ -388,11 +398,11 @@ internal fun FLKnobControl(
                 color = color.copy(alpha = 0.85f),
                 start = Offset(cx + body * 0.22f * cos(angleRad), cy + body * 0.22f * sin(angleRad)),
                 end = tip,
-                strokeWidth = if (isTouching) 3.dp.toPx() else 2.4.dp.toPx(),
+                strokeWidth = d(if (isTouching) 3.dp else 2.4.dp),
                 cap = StrokeCap.Round
             )
-            drawCircle(color = color.copy(alpha = 0.35f), radius = 4.5.dp.toPx(), center = tip)
-            drawCircle(color = lerp(color, Color.White, 0.35f), radius = 2.dp.toPx(), center = tip)
+            drawCircle(color = color.copy(alpha = 0.35f), radius = d(4.5.dp), center = tip)
+            drawCircle(color = lerp(color, Color.White, 0.35f), radius = d(2.dp), center = tip)
         }
 
         Spacer(modifier = Modifier.height(2.dp))
@@ -473,3 +483,6 @@ internal fun parseEntry(text: String): Float? {
     val v = if (k) n * 1000f else n
     return v.takeIf { it.isFinite() }
 }
+
+/** The knob as drawn at full size; a row may give it less, and it shrinks to fit. */
+private val KNOB_SIZE = 64.dp

@@ -54,7 +54,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -1723,10 +1722,11 @@ private fun SleepTimerSheet(
             Text(text = stringResource(R.string.sleep_timer), style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(0, 15, 30, 45, 60).forEach { minutes ->
-                    FilterChip(
+                    tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                        label = if (minutes == 0) stringResource(R.string.state_off) else stringResource(R.string.minutes_short, minutes),
                         selected = activeMinutes == minutes,
+                        accent = MaterialTheme.colorScheme.primary,
                         onClick = { onSelect(minutes); onDismiss() },
-                        label = { Text(if (minutes == 0) stringResource(R.string.state_off) else stringResource(R.string.minutes_short, minutes)) },
                     )
                 }
             }

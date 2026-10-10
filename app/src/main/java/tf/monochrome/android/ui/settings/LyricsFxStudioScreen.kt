@@ -40,8 +40,6 @@ import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -772,24 +770,22 @@ fun LyricsFxStudioScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 LyricsFxSettings.PRESETS.forEach { (name, preset) ->
-                    FilterChip(
+                    tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                        label = name,
                         selected = fx.matchesPreset(preset),
+                        accent = MaterialTheme.colorScheme.primary,
                         onClick = { viewModel.applyPreset(preset) },
-                        label = { Text(name) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                        ),
                     )
                 }
                 // The user's own saved presets. Tapping applies; the trailing
                 // icon opens a Share / Delete sheet for that preset.
                 customPresets.forEach { saved ->
-                    FilterChip(
+                    tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                        label = saved.name,
                         selected = fx.matchesPreset(saved.settings),
+                        accent = MaterialTheme.colorScheme.primary,
                         onClick = { viewModel.applyPreset(saved.settings) },
-                        label = { Text(saved.name) },
-                        trailingIcon = {
+                        trailingContent = {
                             Icon(
                                 Icons.Default.Share,
                                 contentDescription = null,
@@ -804,10 +800,6 @@ fun LyricsFxStudioScreen(
                                     .size(16.dp),
                             )
                         },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                        ),
                     )
                 }
             }
@@ -1397,24 +1389,22 @@ private fun PlayerGlassTab(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             PlayerGlassSettings.PRESETS.forEach { (name, preset) ->
-                FilterChip(
+                tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                    label = name,
                     selected = glass.matchesPreset(preset),
+                    accent = MaterialTheme.colorScheme.primary,
                     onClick = { onApplyPreset(preset) },
-                    label = { Text(name) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                    ),
                 )
             }
             // The user's own saved themes. Tapping applies; the trailing icon
             // opens a Share / Delete sheet for that theme.
             customPresets.forEach { saved ->
-                FilterChip(
+                tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                    label = saved.name,
                     selected = glass.matchesPreset(saved.settings),
+                    accent = MaterialTheme.colorScheme.primary,
                     onClick = { onApplyPreset(saved.settings) },
-                    label = { Text(saved.name) },
-                    trailingIcon = {
+                    trailingContent = {
                         Icon(
                             Icons.Default.Share,
                             contentDescription = stringResource(R.string.fx_manage_named, saved.name),
@@ -1423,10 +1413,6 @@ private fun PlayerGlassTab(
                                 .clickable { glassPresetAction = saved },
                         )
                     },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                    ),
                 )
             }
         }
@@ -2386,6 +2372,8 @@ internal fun FxToggle(
     label: String,
     checked: Boolean,
     description: String? = null,
+    /** Off greys the row and ignores taps: what it switches cannot run right now. */
+    enabled: Boolean = true,
     onChange: (Boolean) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
@@ -2393,10 +2381,10 @@ internal fun FxToggle(
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else DISABLED_ALPHA),
                 modifier = Modifier.weight(1f),
             )
-            Switch(checked = checked, onCheckedChange = onChange)
+            Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
         }
         description?.let {
             Text(
@@ -2483,6 +2471,8 @@ internal fun FxSlider(
     range: ClosedFloatingPointRange<Float>,
     steps: Int = 0,
     description: String? = null,
+    /** Off greys the row and holds the slider: what it tunes cannot run right now. */
+    enabled: Boolean = true,
     /**
      * Called when the finger lifts. The glass tabs debounce persistence
      * instead and leave this null; release-write settings use it to write
@@ -2520,7 +2510,7 @@ internal fun FxSlider(
                 Text(
                     text = label,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else DISABLED_ALPHA),
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 if (description != null) {
@@ -2535,7 +2525,7 @@ internal fun FxSlider(
             Text(
                 text = valueLabel,
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = if (enabled) 1f else DISABLED_ALPHA),
                 modifier = Modifier.padding(start = 8.dp),
             )
         }
@@ -2554,14 +2544,20 @@ internal fun FxSlider(
                 onValueChangeFinished = onChangeFinished ?: {},
                 valueRange = range,
                 steps = steps,
+                enabled = enabled,
                 interactionSource = interaction,
                 thumb = {
-                    SliderDefaults.Thumb(interactionSource = interaction, thumbSize = DpSize(4.dp, 22.dp))
+                    SliderDefaults.Thumb(
+                        interactionSource = interaction,
+                        enabled = enabled,
+                        thumbSize = DpSize(4.dp, 22.dp),
+                    )
                 },
                 track = { state ->
                     SliderDefaults.Track(
                         sliderState = state,
                         modifier = Modifier.height(8.dp),
+                        enabled = enabled,
                         thumbTrackGapSize = 4.dp,
                     )
                 },
@@ -2579,6 +2575,9 @@ private const val SAMPLE_MIN_SP = 11f
 
 /** The slider's touch height: shorter than Material's 48 dp, for a drag that runs sideways. */
 private val FX_SLIDER_HEIGHT = 36.dp
+
+/** A row that cannot do anything right now, as Material greys disabled text. */
+private const val DISABLED_ALPHA = 0.38f
 
 private fun String.format(vararg args: Any?): String = String.format(Locale.US, this, *args)
 

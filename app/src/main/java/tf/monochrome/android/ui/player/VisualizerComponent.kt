@@ -405,9 +405,9 @@ private fun TouchWaveformOverlay(
 ) {
     val touchPoints = remember { mutableStateMapOf<Long, Offset>() }
 
-    DisposableEffect(audioBus) {
+    androidx.lifecycle.compose.LifecycleStartEffect(audioBus) {
         audioBus.acquire()
-        onDispose { audioBus.release() }
+        onStopOrDispose { audioBus.release() }
     }
 
     Canvas(

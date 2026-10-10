@@ -142,6 +142,13 @@ window's haze source: `MainPlayerScreen`'s `overlay` slot exists for exactly
 this, and the speed panel goes through it. The cost is owning the scrim, the
 slide and Back by hand, and that is the cheaper half of the trade.
 
+**A `GlassPanel` inside a scrolling list passes `blockTouchesBelow = false`.**
+Its backstop consumes every touch its content does not handle, drags included.
+Over a map that is the point — a tap on the pane must not select the nearest
+genre underneath — but in a list it means a swipe that starts on the pane never
+scrolls the page. The font browser's panes and Discover's cards pass `false`;
+the genre map and the globe keep the default.
+
 **The real backdrop is sampled, not reconstructed — when there is one.** The
 `playerGlass` shader carries a `uArt` sampler holding the current cover
 (`GlassBackdropArt.kt`), so a pane refracts the artwork actually behind it
@@ -371,6 +378,25 @@ The rays are off by default, and the 17 presets ahead of `Sunburst` set no
 glass optic and no ray field, so nobody's lyrics change on upgrade. The
 low-performance glass switch drops the rays with the glass.
 
+### Text on glass
+
+**Text on glass follows the glass, not the theme** (`GlassInkScope`). Every pane
+of the shared material (`GlassPanel`, `PressableGlass` and so `GlassPill`) and
+the mini player and tab bar work out how the glass looks as one colour — the
+frost over what is behind it (`LocalGlassGround`, the page unless a screen says
+otherwise; the galaxy says deep space), and the slab's tint over that — and give
+their content light ink on dark glass and dark ink on light, with the accent
+moved only as far as it must to read (3:1). The theme's own ink is the wrong
+answer on dark glass in a light theme, and the other way round. Nested glass
+tints its slab with the parent's original accent (`LocalGlassAccent`), not the
+readable one, so a chip on a sheet stays the sheet's material. `GlassInkTest`
+sweeps grounds, tints and opacities and asserts AA for the text everywhere.
+
+**A selected chip's rim is `matchParentSize`, never `fillMaxSize`.** Filling made
+a selected chip as wide as the room offered: invisible in a scrolling row, but in
+a plain `Row` or a `FlowRow` it swallowed the line and squeezed its label to a
+letter a line.
+
 ### Search bars
 
 Every search bar in the app is `SearchOverlay` + `GlassSearchBar`. There is one
@@ -392,6 +418,9 @@ behaviour and it is not negotiable:
   (it says which of nine tabs you are on, and searching is exactly when you are
   about to be moved between them). Discover's genre rail lives on the page, not
   inside the bar's pane — a pane four rows deep covers the feed it filters.
+  Discover's bar is the field alone, one row like every other: its "Browse the
+  map" line made it twice their height, so the map and "no match" live in the
+  genre row under it.
 - Settings' form runs full height under the bar, with the inset going to each
   tab's own `LazyColumn` via `LocalSettingsSearchInset`. Pushing the form down
   instead leaves an empty strip behind the glass, and glass with nothing behind
@@ -407,6 +436,37 @@ width) is for picking one icon out of a row, like the transport and dock.
 
 List rows keep the quieter scale squeeze; a full dome on a wide text row reads
 heavy.
+
+**A press's swell is animated into `GlassPress.amount` by the animation
+itself** (`animate { press.amount = value }`). It must never be copied across
+in a `SideEffect`. The copy only runs on recomposition, and an animation read
+only inside the `SideEffect` never causes one. The swell then freezes wherever
+it was when the finger lifted, and every pill stays half pressed.
+
+**Every glass button and pill is the panel recipe, never a faint slab.**
+`PressableGlass`, `GlassPill` and `GlassChoiceChip` draw through
+`GlassMaterial`, the same layers `GlassPanel` uses: the live lens or the
+haze frost, then a **solid** slab with `lensCorner` (`Dp.Infinity` for a pill or
+a disc). `PressableGlass` used to draw its slab at a tenth of the tint, so every
+button and pill in the app looked like the low-performance fallback even where
+the shader runs. Their material is the Studio's UI panels settings
+(`LocalMiniPlayerGlass`), the universal glass. Only the player's own controls
+pass `LocalPlayerGlass`, like the status grid. There are no stock Material
+`FilterChip`s or `AssistChip`s left; a row of choices is `GlassChoiceChip`.
+
+**A pill frosts `LocalGlassBackdrop`, which a page provides only for a source
+its pills are siblings of.** Discover provides its page backdrop. With none,
+the pill is the shader glass without a frost under it. That is still glass,
+not a broken blur.
+
+**A screen borrows the mini player through a stable handle**
+(`TakeOverMiniPlayer`, `MiniPlayerSlot`). The nav host reads only
+`slot.handle`; the bar reads `handle.takeover`. The screen hands over a new
+takeover on every composition. If the nav host read it, the nav host would
+recompose, recompose the screen, and be handed a new one forever. Swipe to
+discover uses it: while the deck is up, the bar shows ✕, undo and ♥ punched
+into its glass instead of the track, at the same height, and a swipe along the
+bar skips or keeps.
 
 ### Pages and the tab bar
 
@@ -556,6 +616,227 @@ crossing for every point inside it, so an even-odd fill inverts: sea filled,
 continents punched out. It looked like the theme flickering. `GlobeLandClipTest`
 sweeps 840 cameras and includes a test that reverses the arc direction and
 asserts the sea floods, so the fix cannot be undone by a sign.
+
+### The genre galaxy
+
+**Drawn on Compose canvases, never OpenGL.** The map's panels are glass, and a
+haze pane can only frost what is drawn in the window's own layers. A
+`GLSurfaceView` or `SurfaceView` is not, so glass over one paints as a flat
+slab. `GalaxyCamera` projects every point on the CPU, and `GenreGalaxyView`
+draws in batches: one `drawPoints` per family and depth band, one `drawLines`
+per family, and a sprite per star. Moving it to GL for speed breaks every panel
+on the screen.
+
+**Every size is in dp.** Star sprites, dust, strokes, tap reach and label gaps
+are all multiplied by the density. The 2D map sized them in raw pixels, which is
+why it came out a third of the size on a phone.
+
+**The view's middle is the middle of what the panels leave visible**, not the
+screen's. The top reserve is the measured title plus caption; the bottom is the
+measured panel or HUD plus `LocalBottomChromeInset`, eased so the star slides
+rather than jumps. Labels are never drawn inside either strip. A name under
+glass is two pieces of text on top of each other.
+
+**The genre panel is capped at a strip of map below the title**
+(`MIN_MAP_STRIP`), and its sections' heights are measured between the title and
+`LocalBottomChromeInset`, not across the whole screen. Its top row is outside
+the scrolling part. Uncapped, the open Top 100 pushed the panel under the status
+bar, and its close button opened the notification shade instead.
+
+**Gesture handlers read the reserves through `rememberUpdatedState`.** Pointer
+handlers outlive the composition that made them. Captured, a tap is hit-tested
+against the view as it was before the panel opened, and lands on nothing.
+
+**The sky is deep space in every theme, and the status bar icons are light
+while the map is up.** This is deliberate, not a missed theme token. The map is
+a window onto space, and the title, caption and labels use `GALAXY_INK` for that
+reason.
+
+**The travel blur is Android's own `BlurEffect`, only while gliding.** A
+hand-rolled directional blur looked striped. A warp-speed effect was asked for
+and then removed. Low-performance mode drops the blur, the god rays, the sky
+shader, the twinkle and the turn, and uses less dust.
+
+**The galaxy turns in the camera, not in the points.** `CameraFrame` sees the
+scene from `yaw - spin`, so nothing has to move thousands of points per frame,
+and the target, which is in the galaxy's own coordinates, follows a star with
+no extra work. The sky uses the unturned basis (`s*`, and `SpaceSky`), so the
+far stars hold still. Do not apply the spin to the sky. Do not apply it to the
+target either, or a followed star slides off the centre. The turn is toward
+smaller angles, so the arms trail. `GalaxyMathTest` pins all three.
+
+**The galaxy's gas is AGSL on the canvas, never projectM on a GL surface.**
+It follows MilkDrop's model: bass, mid and treble each read against the song's
+own running average (`AudioBands`, 1 = usual), with `_att` smoothing. Only the
+lift above 1 moves anything. It is drawn at a third of the resolution through
+an offscreen layer scaled back up (`SMOKE_SCALE`). Putting it on a GL surface
+to reuse the visualizer would make every glass pill over the map a flat slab.
+
+**The black hole is drawn in halves.** The far half of the disk, then the
+shadow, the lensed arc and the photon ring, then the near half. The split
+runs along the disk's long axis on screen. Seen face-on there is nothing to
+split, and the disk is drawn whole. Genres stay outside `DISK_OUTER` in both
+layouts (`GalaxyMathTest`).
+
+**The galaxy's look is the listener's wish, not an override.**
+`GalaxyVisualSettings` defaults to the galaxy as it shipped. Every effect it
+turns on is still ANDed with low-performance mode and reduced motion. Its
+sheet takes the dock's place and the camera's bottom reserve. Sliders update
+the map at once; the save waits for the hand to stop (`GALAXY_VISUALS_SAVE_MS`).
+
+**A selected genre is a dock of pills, not a panel.** Up to three related
+genres, by name, and four glyph pills (Play, Radio, Top 100, and its system —
+three planets — which does what a long press on the star does), popping in.
+The glyphs are cut out of the slab (`GlassPill`'s `punch`, the tab bar's
+recipe: an offscreen slab, the glyph erased with anti-aliased `DstOut` at whole
+pixels), never drawn on it, and only where `glassPunches()` says the shader
+runs; a selected one is lit over its hole. The
+Top 100 and the history are one compact sheet above them, one at a time.
+There is no close button: a tap on empty space or Back deselects.
+
+**The deep sky is one AGSL pass on Android 13 and up** (`SpaceShader.kt`), the
+demo's far stars done procedurally. Each star stays inside the middle half of
+its cube-face cell, which is what lets a pixel test one cell per layer. Let a
+star or its halo reach a cell edge and it is cut in half. Below 13, or in
+low-performance mode, the sky is the flat colour with drawn points.
+
+**The galaxy is one offscreen layer while glass reads it** (`CompositingStrategy.Offscreen`
+on its Box, `glassOver`). Every pane of glass over the map frosts it, and without
+the layer each one made the render thread replay the whole galaxy: frames of 0.7
+to 0.9 s. Keep it. Only in full screen with nothing open, once the chrome has
+faded (`GLASS_FADE_MILLIS`), does it draw straight to the screen: nobody reads
+the layer then, and the sky under it is opaque with everything over it adding,
+so the pixels are the same.
+
+**The deep sky has a layer of its own and watches only the camera's turn.**
+`skyFrameFor` builds its view from yaw, pitch and the viewport, and its clock is
+`skyTime`, the twinkle stepped at `SKY_TWINKLE_HZ`. That is why HWUI can lay
+last frame's sky down instead of running the sky shader over every pixel again.
+Read `time()`, `spin()`, the camera's target or its distance in that canvas and
+it is redrawn every frame again, with nothing on screen to show for it. The gas
+has its own clock too (`smokeTime`: every frame while the map is steered or the
+music moves it, `SMOKE_IDLE_HZ` at rest), and reads the turn without watching it.
+
+**A god-ray pixel takes only the samples within its light's `reach`.**
+`LightSpot.reach` is what the shader's window is cut to, and the pass is skipped
+when no pixel can come that close (`GalaxyLight.reachesView`). It covers the
+glow, the shade's reach (`SHADE_REACH` glow radii: past it, under half a step of
+8-bit alpha at the strongest shade) and everything drawn *in colour* in the pass —
+the star's white-hot middle (`starEmitterPx`), the black hole's disk
+(`holeLightExtent`, bounded by the disk's corners from any camera). Anything new
+drawn in colour in a light pass has to be inside `reach`, or its light is cut
+off where the window starts; black things may go anywhere. `GalaxyGpuPassesTest`
+replays the shader with and without the window at the strongest settings and
+holds the difference under half a colour step.
+
+**The other stars' rays are one pass for all of them** (`GalaxyStarRays`, up to
+`StarLights.MAX`). Every star's glow is drawn into one half-resolution light
+pass and each pixel marches toward each light, from that light's first counted
+sample (the same window as above) and breaking at the last. A pass per star
+would be a full-screen layer per star; keep it one. The star with its own pass
+(the one you are at) is left out of it, its planets stay in its own pass, and
+only dust and bulge grains near a star in depth as well as on screen stand in
+these glows. `pickStarLights` fades each star over the gap to the next in line;
+a hard top-N cut would pop. Bloom (`GalaxyArt.bloom`) is the light passes'
+glow, so it scales the light the rays carry, and ray length is the march's
+falloff (`GalaxyLight.decayFor`), neither the reach: the window stays exact.
+
+**Planet and moon size lives in the system, not the drawing**
+(`PlanetSystem.withBodySize`, applied once in `GenreMapScreen`). Scaled there,
+the moons' orbits widen with their planets, and the taps, names, shadows and the
+zoom's near limit all read the same radius. Scaling only the drawn disc would
+leave moons inside a big planet and the camera able to fly into it.
+
+**The map's panels sit on the bar as it stands now** (`LocalBottomChromeNow`),
+following its fold. `LocalBottomChromeInset` is the open bar's height on
+purpose, for lists, and on a panel it left a tab bar of dead space under it
+whenever the bar was folded.
+
+**The smoke tests for the disc before its noise.** The density is at most the
+disc's falloff times the amount, so the early return is the same cut the end of
+the shader makes; keep it before the three fbm calls.
+
+**At rest the map moves on every other vsync of a fast display** (`GalaxyPacer`):
+60 frames a second on a 120 Hz screen, every vsync again the moment a finger is
+down, and never paced at 90 Hz or less. Any touch on the screen counts (the root
+`pointerInput`, in the Initial pass). An animation on the map that is not touch-
+driven belongs in the clock's `animating` check, or it runs at half rate at rest.
+
+**Lighter glass is the listener's switch, off by default** (`lightGlass`). On, the
+map's panes and the bars over it run the live lens at half resolution
+(`LocalLensDivisor`, the chrome through `AppChromeLens`), only where the blur is
+wide enough (`REDUCED_LENS_MIN_BLUR_PX`); the clip, the slab and its rim stay at
+full resolution. The shrink before the blur is not exact, which is why it is a
+switch and not the default.
+
+**Each map frame is reported in the debug log** (`GalaxyFrameStats`, tag
+`GalaxyFx`): fps, frame, main thread, render thread and GPU times, late frames,
+and how often each pass ran. Judge GPU work by those lines, before and after.
+
+**No `PathEffect` on the map.** HWUI rasterises a dashed path on the CPU and
+uploads it every frame. Dashes are plain segments from `Dasher`, laid on screen
+only, the pattern carried across corners. The light passes run at half
+resolution (`LIGHT_SCALE`, through `reducedLayer`, whose render effect works in
+the layer's own pixels), and the links' dust is as dense as each link is long on
+screen. None of it changes what is on screen; `GalaxyFastPathsTest` holds the
+stand-ins (`fastSin`, `Dasher`) to the originals.
+
+**Planets are fetched only after the camera stays on a genre** (`mapSystem`
+waits 0.7 s), and without the MusicBrainz cross-check. Flying past a genre on
+the way somewhere else must not cost a chart request.
+
+**The god rays are an occlusion light pass, not the lyric engine** (`GalaxyLight`).
+Each light — the core, or the star whose planets are up, one taking over from
+the other as you arrive — draws its own layer: the light and its glow in colour,
+and what stands in it — planets, moons, and the dust and bulge grains for the
+fine rays — over it in black. Never the stars or the nebulae: a star in front of
+another threw a broad black beam across the map. The march averages that, so every planet throws a shadow shaft
+straight away from its star. The hole's shadow is *cleared*, not blacked out, or
+it casts a dark ring over its own disk. Do not add stripes or a starburst to fake
+rays: they come only from what is in the light's way.
+
+**Every star is lit, always**, at full size and brightness; there is no "still
+dark" look for genres not listened to. **The star you are at is a sun** — the
+selected one, else the followed one, else the one whose system the camera sits
+in (`litStar`) — with its disc and its light as soon as you are near, not only
+once its planets have come.
+
+**The links' stardust moves through space, not round its link.** Comets run at
+`FLOW_UNITS_S` scene units a second and the dust drifts at `FLOW_DRIFT_UNITS_S`:
+timed per link, a comet crossed a long link in seconds and raced across the
+screen close in.
+
+**A star system is at real scale, more or less.** The star's radius is the
+genre's size (`GalaxyScene.starRadius`, from its prominence), and everything is
+laid out from it: a planet is 4–12 % of its star across, sized by its artist's
+catalogue (MusicBrainz release groups, log scale, `PlanetSystem.catalogShare`);
+its orbit is how hot the artist is this week (the 7-day chart's listens), the
+hottest nearest; moons are a fraction of their planet. The star is drawn as a
+sun disc at its true size once it has one (`drawSun`). Planets are specks from
+the system's own distance, and the camera's `MIN_DISTANCE` is small so you can
+fly to one; `nearLimit` keeps a pinch outside whatever it follows. Do not put
+the old 5 dp floor back on planets: it made them bigger than their star.
+
+**Moon orbits are laid out for the biggest planet the star could have**, and
+planet sizes ease in (`SystemArt.ease`). A catalogue count arrives seconds after
+the system; it must grow the planet, never move its moons or its orbit.
+`PlanetSystemTest` pins both, and that neighbouring planets' moons never cross.
+
+**Full screen hides everything but the map.** Turning the phone sideways enters
+it and turning it back leaves it; the bar's button enters it upright and Back
+leaves. The map asks for `SCREEN_ORIENTATION_SENSOR` while it is up and restores
+the app's own rule on the way out. The nav host's chrome steps aside through
+`HideAppChrome`, the system bars through `SystemBarsHidden`. A long press on a
+star plays it and opens its system as a list (`GalaxySystemSheet`); that sheet
+is the only thing shown in full screen.
+
+**Nothing on the map runs while nobody can see it.** The clock loop stops when
+the screen is not started (the app in the background, the phone off, another
+screen in front), which stops every shader with it, and the spectrum tap is
+released. Work on its own thread or timer elsewhere — the ambient projectM
+render thread, the FFT taps, the loudness meter, the tilt sensor, projectM's
+audio feed — is held with `LifecycleStartEffect` or `rememberOnScreen()`, never
+a bare `DisposableEffect`, which holds it in the background too.
 
 ### Discord presence
 

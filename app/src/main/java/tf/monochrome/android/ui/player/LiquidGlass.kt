@@ -728,9 +728,11 @@ internal val NoTilt: State<Offset> = mutableStateOf(Offset.Zero)
 @Composable
 internal fun rememberGravityTilt(): State<Offset> {
     val context = LocalContext.current
-    DisposableEffect(context) {
+    // The sensor runs only while the screen is started: in the background, or
+    // with the phone off, there is no glass on screen to tilt.
+    androidx.lifecycle.compose.LifecycleStartEffect(context) {
         GravityTiltSource.acquire(context)
-        onDispose { GravityTiltSource.release() }
+        onStopOrDispose { GravityTiltSource.release() }
     }
     return GravityTiltSource.tilt
 }

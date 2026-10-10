@@ -826,6 +826,27 @@ class HiFiApiClient @Inject constructor(
     }.getOrNull()
 
     /**
+     * The song TIDAL has under [trackId] — title, artists, length — or null when
+     * it has none or can't be asked. The playlist repair compares this with what
+     * a row says it is: a Qobuz or Deezer id that lost its catalogue plays as
+     * whatever TIDAL recording has the same number.
+     */
+    suspend fun getTidalTrack(trackId: Long): Track? = runCatching {
+        val infoBody = fetchWithRetry("/info/?id=$trackId")
+        val info = json.decodeFromString<TrackInfoResponse>(unwrapResponse(infoBody))
+        info.takeIf { it.title.isNotBlank() }?.let {
+            Track(
+                id = trackId,
+                title = it.title,
+                duration = it.duration,
+                artist = it.artist?.toDomain(),
+                artists = it.artists.map { a -> a.toDomain() },
+                album = it.album?.toDomain(),
+            )
+        }
+    }.getOrNull()
+
+    /**
      * Resolve the Qobuz match for an ISRC. Qobuz indexes tracks by ISRC, so
      * /api/get-music?q=<isrc> returns the exact recording — far more reliable
      * than a title/artist match. Also carries the Qobuz album slug and artist

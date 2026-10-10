@@ -12,10 +12,14 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import tf.monochrome.android.data.api.ApiService
 import tf.monochrome.android.data.db.entity.UserPlaylistEntity
+import tf.monochrome.android.data.playlistfix.PlaylistFixState
+import tf.monochrome.android.data.playlistfix.PlaylistFixer
 import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.domain.model.Playlist
@@ -26,10 +30,46 @@ import javax.inject.Inject
 class PlaylistViewModel @Inject constructor(
     private val libraryRepository: LibraryRepository,
     private val musicRepository: MusicRepository,
+    private val playlistFixer: PlaylistFixer,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     private val playlistId: String = checkNotNull(savedStateHandle["playlistId"])
+
+    /**
+     * This playlist's repair or regeneration, running or just finished; Idle
+     * when there is none. One job runs at a time across the app, and it
+     * outlives this screen.
+     */
+    val fixState: StateFlow<PlaylistFixState> = playlistFixer.state
+        .map { if (it.playlistId == playlistId) it else PlaylistFixState.Idle }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, PlaylistFixState.Idle)
+
+    /** Another playlist's job is running, so this one can't start yet. */
+    val fixBusyElsewhere: StateFlow<Boolean> = playlistFixer.state
+        .map { it is PlaylistFixState.Running && it.playlistId != playlistId }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /** Catalogues with a server under Settings › Connections, for the repair and regenerate dialogs. */
+    private val _fixServices = MutableStateFlow<List<ApiService>>(emptyList())
+    val fixServices: StateFlow<List<ApiService>> = _fixServices.asStateFlow()
+
+    /** Re-reads which catalogues are connected; called as a fix dialog opens. */
+    fun refreshFixServices() {
+        viewModelScope.launch { _fixServices.value = playlistFixer.availableServices() }
+    }
+
+    fun repairPlaylist() {
+        playlistFixer.repair(playlistId)
+    }
+
+    fun regeneratePlaylist(primary: ApiService, fallback: ApiService?) {
+        playlistFixer.regenerate(playlistId, primary, fallback)
+    }
+
+    fun stopFix() = playlistFixer.stop()
+
+    fun dismissFixResult() = playlistFixer.dismiss(playlistId)
 
     private val _playlistInfo = MutableStateFlow<UserPlaylistEntity?>(null)
     val playlistInfo: StateFlow<UserPlaylistEntity?> = _playlistInfo.asStateFlow()
@@ -54,6 +94,9 @@ class PlaylistViewModel @Inject constructor(
     val catalogFailed: StateFlow<Boolean> = _catalogFailed.asStateFlow()
 
     init {
+        // Ready before a fix dialog opens, which refreshes it again.
+        refreshFixServices()
+
         viewModelScope.launch {
             libraryRepository.getAllPlaylists().collectLatest { playlists ->
                 _playlistInfo.value = playlists.find { it.id == playlistId }

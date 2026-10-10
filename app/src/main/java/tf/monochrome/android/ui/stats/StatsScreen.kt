@@ -46,7 +46,6 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -288,10 +287,11 @@ private fun RangePicker(current: StatsRange, onPick: (StatsRange) -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         StatsRange.values().forEach { r ->
-            FilterChip(
+            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                label = stringResource(r.labelRes()),
                 selected = current == r,
+                accent = MaterialTheme.colorScheme.primary,
                 onClick = { onPick(r) },
-                label = { Text(stringResource(r.labelRes())) }
             )
         }
     }

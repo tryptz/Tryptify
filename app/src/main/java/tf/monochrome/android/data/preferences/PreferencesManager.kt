@@ -242,7 +242,18 @@ class PreferencesManager @Inject constructor(
         private val DISCOVERY_HEARTED_GENRES = stringSetPreferencesKey("discovery_hearted_genres")
         private val FAVOURITE_STATIONS = stringSetPreferencesKey("world_radio_favourite_stations")
         private val DISCOVERY_RECENT_GENRES = stringPreferencesKey("discovery_recent_genres")
+        // Every genre ever opened or played from Discover or the map: the
+        // galaxy's "explored" count. Device state, not a choice, so not synced.
+        private val DISCOVERY_EXPLORED_GENRES = stringSetPreferencesKey("discovery_explored_genres")
+        // "<epoch day>|<genre id>": today's discovery, held for the whole day.
+        private val DISCOVERY_TODAY_PICK = stringPreferencesKey("discovery_today_pick")
         private val DISCOVERY_SORT = stringPreferencesKey("discovery_sort")
+        // Which catalogue Discover finds its music on: an ApiService name.
+        // Device-local, like the APIs it depends on being reachable from here.
+        private val DISCOVERY_SERVICE = stringPreferencesKey("discovery_service")
+        private val GALAXY_VISUALS_JSON = stringPreferencesKey("galaxy_visuals_json")
+        // Epoch day of the newest release the radar has shown; newer ones are NEW.
+        private val RELEASE_RADAR_SEEN_THROUGH = longPreferencesKey("release_radar_seen_through")
 
         /** How many genres the "recently played" rail remembers. */
         private const val MAX_RECENT_GENRES = 12
@@ -2533,7 +2544,69 @@ class PreferencesManager @Inject constructor(
                 (listOf(genreId) + current.filterNot { it == genreId })
                     .take(MAX_RECENT_GENRES)
                     .joinToString("\n")
+            // The recent list forgets past twelve; the explored set never does.
+            prefs[DISCOVERY_EXPLORED_GENRES] = prefs[DISCOVERY_EXPLORED_GENRES].orEmpty() + genreId
         }
+    }
+
+    /**
+     * Every genre opened or played from Discover or the map, uncapped — what
+     * the genre galaxy lights up. [discoveryRecentGenres] is capped at twelve,
+     * so a count taken from it would stop at twelve.
+     */
+    val discoveryExploredGenres: Flow<Set<String>> = dataStore.data.map { prefs ->
+        // The recent list predates this set, so on an upgrade it holds visits
+        // the set never saw. Counted in, or the galaxy opens at zero for
+        // someone with a dozen genres behind them.
+        prefs[DISCOVERY_EXPLORED_GENRES].orEmpty() +
+            prefs[DISCOVERY_RECENT_GENRES].orEmpty().split("\n").filter { it.isNotBlank() }
+    }
+
+    /** Today's discovery as stored: the day it was picked for, and the genre. */
+    val discoveryTodayPick: Flow<Pair<Long, String>?> = dataStore.data.map { prefs ->
+        val raw = prefs[DISCOVERY_TODAY_PICK] ?: return@map null
+        val day = raw.substringBefore('|').toLongOrNull() ?: return@map null
+        val genre = raw.substringAfter('|', "").takeIf { it.isNotBlank() } ?: return@map null
+        day to genre
+    }
+
+    suspend fun setDiscoveryTodayPick(day: Long, genreId: String) {
+        dataStore.edit { it[DISCOVERY_TODAY_PICK] = "$day|$genreId" }
+    }
+
+    /** The newest release day the radar has shown, as an epoch day; null before the first. */
+    val releaseRadarSeenThrough: Flow<Long?> = dataStore.data.map { it[RELEASE_RADAR_SEEN_THROUGH] }
+
+    suspend fun setReleaseRadarSeenThrough(day: Long) {
+        dataStore.edit { prefs ->
+            // Only ever forward: a radar answered from an older cache must not
+            // bring back badges for releases already seen.
+            val current = prefs[RELEASE_RADAR_SEEN_THROUGH]
+            if (current == null || day > current) prefs[RELEASE_RADAR_SEEN_THROUGH] = day
+        }
+    }
+
+    /** The stored name of Discover's catalogue; empty when never chosen. */
+    /** How the genre galaxy looks; the shipped look until the listener tunes it. */
+    val galaxyVisuals: Flow<tf.monochrome.android.domain.model.GalaxyVisualSettings> = dataStore.data
+        .map { it[GALAXY_VISUALS_JSON] }
+        .distinctUntilChanged()
+        .map { raw ->
+            raw?.let {
+                runCatching {
+                    json.decodeFromString<tf.monochrome.android.domain.model.GalaxyVisualSettings>(it).clamped()
+                }.getOrNull()
+            } ?: tf.monochrome.android.domain.model.GalaxyVisualSettings.DEFAULT
+        }
+
+    suspend fun setGalaxyVisuals(settings: tf.monochrome.android.domain.model.GalaxyVisualSettings) {
+        dataStore.edit { it[GALAXY_VISUALS_JSON] = json.encodeToString(settings.clamped()) }
+    }
+
+    val discoveryService: Flow<String> = dataStore.data.map { it[DISCOVERY_SERVICE].orEmpty() }
+
+    suspend fun setDiscoveryService(name: String) {
+        dataStore.edit { it[DISCOVERY_SERVICE] = name }
     }
 
     val discoverySort: Flow<String> = dataStore.data.map { it[DISCOVERY_SORT].orEmpty() }

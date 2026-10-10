@@ -206,19 +206,9 @@ class ProjectMEngineRepository @Inject constructor(
 
     private fun observePreferences() {
         scope.launch {
-            var heldSubscription = false
             preferences.visualizerEngineEnabled.collectLatest { enabled ->
                 _engineEnabled.value = enabled
-                // Acquire/release the audio bus subscription so the audio render
-                // thread skips the per-frame PCM→float conversion when the engine
-                // is disabled in settings.
-                if (enabled && !heldSubscription) {
-                    audioBus.acquire()
-                    heldSubscription = true
-                } else if (!enabled && heldSubscription) {
-                    audioBus.release()
-                    heldSubscription = false
-                }
+                synchronized(engineLock) { syncAudioSubscriptionLocked() }
                 synchronized(engineLock) {
                     if (!enabled) {
                         releaseNativeLocked()
@@ -341,6 +331,31 @@ class ProjectMEngineRepository @Inject constructor(
         }
     }
 
+    /** Whether this holds the audio bus: see [syncAudioSubscriptionLocked]. */
+    private var heldAudioSubscription = false
+
+    /**
+     * Holds the audio bus exactly while something can show what it carries:
+     * the engine on in settings **and** a visualizer surface attached. The
+     * audio render thread skips its per-frame PCM→float conversion whenever
+     * nobody holds it.
+     *
+     * It used to be held for as long as the engine was on, so with no
+     * visualizer anywhere on screen — another page, the app in the background,
+     * the phone locked — every audio buffer was still converted for nobody.
+     * Only the bookkeeping moved: the realtime callback is the same.
+     */
+    private fun syncAudioSubscriptionLocked() {
+        val want = _engineEnabled.value && attachedSurfaceCount > 0
+        if (want && !heldAudioSubscription) {
+            audioBus.acquire()
+            heldAudioSubscription = true
+        } else if (!want && heldAudioSubscription) {
+            audioBus.release()
+            heldAudioSubscription = false
+        }
+    }
+
     /**
      * Called from the GL thread when a new surface is ready.
      * Releases any existing native instance first (since it's tied to the
@@ -349,6 +364,7 @@ class ProjectMEngineRepository @Inject constructor(
     fun onSurfaceAttached(width: Int, height: Int) {
         synchronized(engineLock) {
             attachedSurfaceCount += 1
+            syncAudioSubscriptionLocked()
 
             if (!_engineEnabled.value || !ProjectMNativeBridge.isLibraryLoaded) {
                 updateStatus(
@@ -433,6 +449,7 @@ class ProjectMEngineRepository @Inject constructor(
     fun onSurfaceDetached() {
         synchronized(engineLock) {
             attachedSurfaceCount = (attachedSurfaceCount - 1).coerceAtLeast(0)
+            syncAudioSubscriptionLocked()
             if (attachedSurfaceCount == 0) {
                 releaseNativeLocked()
                 updateStatus(

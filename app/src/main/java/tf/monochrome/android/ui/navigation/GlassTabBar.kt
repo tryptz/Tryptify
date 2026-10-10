@@ -251,6 +251,8 @@ internal fun GlassTabBar(
             }
         }
 
+        // The labels read on this glass: light on dark glass, dark on light.
+        tf.monochrome.android.ui.components.GlassInkScope(glass) {
         Row(modifier = Modifier.matchParentSize()) {
             tabs.forEachIndexed { i, tab ->
                 TabSlot(
@@ -268,6 +270,7 @@ internal fun GlassTabBar(
                     modifier = Modifier.weight(1f),
                 )
             }
+        }
         }
     }
     }

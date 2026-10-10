@@ -9,9 +9,7 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.repository.LibraryRepository
-import tf.monochrome.android.data.repository.MusicRepository
 import tf.monochrome.android.data.repository.RecommendationSeed
 import tf.monochrome.android.data.repository.GenreGraphRepository
 import tf.monochrome.android.data.repository.RecommendationSeedsRepository
@@ -40,15 +38,16 @@ import javax.inject.Inject
  * *only* to users with no taste data at all, so an established listener never
  * saw anything outside their own orbit and a new one never saw anything else.
  *
- * Everything runs through the Qobuz instance so ids stay in one namespace.
+ * Every catalogue call goes through the one Discover has chosen
+ * ([DiscoveryCatalogs] — TIDAL, Qobuz or Deezer), so a page's ids stay in one
+ * namespace and every track is tagged to play from where it was found.
  * Returns whatever it managed to build; an unconfigured or unreachable
  * instance yields an empty list rather than an error.
  */
 class DiscoveryFeedUseCase @Inject constructor(
     private val genreCharts: GenreChartUseCase,
     private val library: LibraryRepository,
-    private val music: MusicRepository,
-    private val registry: QobuzIdRegistry,
+    private val catalogs: DiscoveryCatalogs,
     private val seeds: RecommendationSeedsRepository,
     private val genreGraph: GenreGraphRepository,
 ) {
@@ -130,12 +129,13 @@ class DiscoveryFeedUseCase @Inject constructor(
         query: String,
         itemsPerShelf: Int = 12,
     ): List<DiscoveryShelf> = withTimeoutOrNull(QOBUZ_BUDGET_MS) {
-        val result = music.searchQobuz(query).getOrNull() ?: return@withTimeoutOrNull emptyList()
-        registerArtists(result.tracks.flatMap { it.artists }.map { it.id })
+        val catalog = catalogs.current()
+        val result = catalog.search(query).getOrNull() ?: return@withTimeoutOrNull emptyList()
+        catalog.registerArtists(result.tracks.flatMap { it.artists }.map { it.id })
 
         listOfNotNull(
             result.tracks.take(itemsPerShelf)
-                .map { DiscoveryItem.TrackItem(it.toQobuzUnifiedTrack()) }
+                .map { DiscoveryItem.TrackItem(catalog.unified(it)) }
                 .toShelf("mood_tracks_$query", ShelfLine(ShelfPhrase.Name(label)), ShelfLine(ShelfPhrase.TracksFor(label))),
             result.albums.take(itemsPerShelf)
                 .map { DiscoveryItem.AlbumItem(it) }
@@ -487,8 +487,9 @@ class DiscoveryFeedUseCase @Inject constructor(
         // re-reading the first one. The parameter has been plumbed through
         // MusicRepository and HiFiApiClient all along and was never passed.
         val offset = page * limit * SHELF_OVERFETCH
-        val result = music.searchQobuz(query, offset).getOrNull() ?: return null
-        registerArtists(result.tracks.flatMap { it.artists }.map { it.id })
+        val catalog = catalogs.current()
+        val result = catalog.search(query, offset).getOrNull() ?: return null
+        catalog.registerArtists(result.tracks.flatMap { it.artists }.map { it.id })
 
         // Verification is by artist rather than per track because it is cached
         // per artist for a month and shared across every shelf and chart — a
@@ -512,7 +513,7 @@ class DiscoveryFeedUseCase @Inject constructor(
             .partition { normalizeForMatch(it.artists.firstOrNull()?.name.orEmpty()) in confirmed }
 
         val tracks = (owned + rest).take(limit)
-            .map { DiscoveryItem.TrackItem(it.toQobuzUnifiedTrack().taggedWith(title, genreId)) }
+            .map { DiscoveryItem.TrackItem(catalog.unified(it).taggedWith(title, genreId)) }
         // Albums only when no track survived, and held to the same standard:
         // the shelf that has just dropped every track called "Techno" would
         // otherwise fill itself back up with compilations called "Techno 2024".
@@ -676,9 +677,11 @@ class DiscoveryFeedUseCase @Inject constructor(
     /** "New from <artist>" — tracks off that artist's most recent release. */
     private suspend fun newReleaseShelf(name: String, limit: Int): DiscoveryShelf? =
         withTimeoutOrNull(QOBUZ_BUDGET_MS) {
-            // searchQobuz also registers each album's slug into the QobuzIdRegistry
-            // as a side effect, so the newest album below is resolvable by id.
-            val result = music.searchQobuz(name).getOrNull() ?: return@withTimeoutOrNull null
+            // A Qobuz search also registers each album's slug into the
+            // QobuzIdRegistry as a side effect, so the newest album below is
+            // resolvable by id; the other catalogues fetch albums by id alone.
+            val catalog = catalogs.current()
+            val result = catalog.search(name).getOrNull() ?: return@withTimeoutOrNull null
 
             // Newest release attributed to this artist, by release date.
             val newest = result.albums
@@ -686,18 +689,17 @@ class DiscoveryFeedUseCase @Inject constructor(
                 .maxByOrNull { it.releaseDate!! }
 
             val albumTracks = newest
-                ?.let { registry.albumSlugFor(it.id) }
-                ?.let { slug -> music.getQobuzAlbum(slug).getOrNull()?.tracks }
+                ?.let { catalog.albumTracks(it) }
                 ?.take(limit)
 
             // Fallback: if no resolvable newest album, surface the search's top
-            // Qobuz tracks for this artist so the shelf still populates.
+            // tracks for this artist so the shelf still populates.
             val sourceTracks = albumTracks?.takeIf { it.isNotEmpty() }
                 ?: result.tracks.take(limit)
 
-            registerArtists(sourceTracks.flatMap { it.artists }.map { it.id })
+            catalog.registerArtists(sourceTracks.flatMap { it.artists }.map { it.id })
 
-            sourceTracks.map { DiscoveryItem.TrackItem(it.toQobuzUnifiedTrack()) }.toShelf(
+            sourceTracks.map { DiscoveryItem.TrackItem(catalog.unified(it)) }.toShelf(
                 id = "new_from_$name",
                 title = ShelfLine(ShelfPhrase.NewFrom(name)),
                 reason = ShelfLine(
@@ -718,13 +720,17 @@ class DiscoveryFeedUseCase @Inject constructor(
      */
     private suspend fun similarArtistShelf(name: String, limit: Int): DiscoveryShelf? =
         withTimeoutOrNull(QOBUZ_BUDGET_MS) {
-            val search = music.searchQobuz(name).getOrNull() ?: return@withTimeoutOrNull null
+            val catalog = catalogs.current()
+            val search = catalog.search(name).getOrNull() ?: return@withTimeoutOrNull null
             val seed = search.artists.firstOrNull { matchesArtistName(it.name, name) }
                 ?: search.artists.firstOrNull()
                 ?: return@withTimeoutOrNull null
 
-            val similar = music.getQobuzArtist(seed.id).getOrNull()?.similarArtists.orEmpty()
-            registerArtists(similar.map { it.id } + seed.id)
+            // Empty on Deezer, which publishes no such list: the shelf then
+            // comes up short rather than borrowing another service's artists,
+            // whose ids would open nothing here.
+            val similar = catalog.artist(seed.id).getOrNull()?.similarArtists.orEmpty()
+            catalog.registerArtists(similar.map { it.id } + seed.id)
 
             similar.take(limit).map { DiscoveryItem.ArtistItem(it) }.toShelf(
                 id = "similar_to_${seed.id}",
@@ -805,16 +811,6 @@ class DiscoveryFeedUseCase @Inject constructor(
                 reasonLine = reason,
             )
         }
-
-    /**
-     * Tag every credited artist id as Qobuz, so ArtistDetailViewModel routes it
-     * to getQobuzArtist. getQobuzAlbum registers track ids and album slugs but
-     * not artist ids, so without this a dual-source setup could mis-route a
-     * tapped featured artist to the TIDAL pool.
-     */
-    private fun registerArtists(ids: List<Long>) {
-        ids.filter { it > 0L }.distinct().forEach { registry.registerArtist(it) }
-    }
 
     /**
      * Rotates a list by a caller-supplied offset instead of shuffling.
