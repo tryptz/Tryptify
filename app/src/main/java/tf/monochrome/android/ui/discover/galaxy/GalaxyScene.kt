@@ -208,6 +208,24 @@ class GalaxyScene(
         }.toIntArray()
     }
 
+    /**
+     * The same links as (older, newer) pairs: the way energy flows along them,
+     * which is the way time runs. Ordered by when each genre began; a parent
+     * and child that began the same year flow parent to child.
+     */
+    val flows: IntArray = IntArray(links.size).also { out ->
+        for (k in 0 until links.size / 2) {
+            val child = links[k * 2]
+            val parent = links[k * 2 + 1]
+            val childFirst = startYear(child) < startYear(parent)
+            out[k * 2] = if (childFirst) child else parent
+            out[k * 2 + 1] = if (childFirst) parent else child
+        }
+    }
+
+    /** Each flow's own phase, so the pulses along them never march in step. */
+    val flowPhase: FloatArray = Random(seed + 1).let { r -> FloatArray(links.size / 2) { r.nextFloat() } }
+
     /** Genres each family's nebulae sit behind: a few of its best known, spread down its list. */
     val nebulaAnchors: IntArray = run {
         val n = size

@@ -23,6 +23,11 @@
 - **Every pill on Discover is the app's liquid glass** — the moods, the genre row, the genres you can subtract from a mix, the TIDAL · Qobuz · Deezer switch and the sort. They are `GlassChoiceChip`, the Library section switcher's pill, so they frost, swell under the finger and mark the selected one with an accent rim like everywhere else. The chip gained an optional icon (a tick on combined moods, a heart on hearted genres, a cross on subtractable ones) and an `enabled` flag; its existing uses are unchanged.
 - **The genre search bar is one slim row**, like every other glass search bar. It carried a second line ("Browse the map", and "no match"), which made it twice their height; the map is now a pill at the end of the genre row, and "no match" shows there too.
 
+#### The galaxy's links flow, the way time does
+- **The family links are energy now, not hard lines.** Each one is a cable that swirls between its two genres in 3D and slowly undulates. A comet runs along it, with a bright head and a fading tail, always from the older genre to the newer one. The whole map visibly flows forward in time. A parent and child that began the same year flow parent to child.
+- **The cable itself is faint.** The moving light is what you follow. Each pulse has its own phase, so they never march in step.
+- **Still cheap.** Every link is sampled into ten segments and drawn in one batch per family: three draws a family, however many links there are.
+
 #### The genre galaxy's look, tuned on the map
 - **A tune button in the map's title bar opens a glass sheet**, in the dock's place, so every change shows on the galaxy as you make it. It has five groups:
   - **Sky:** deep-sky stars, nebula strength, and dust (less, normal or more).

@@ -59,6 +59,7 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 import tf.monochrome.android.ui.player.sceneGodRays
+import kotlin.math.PI
 import kotlin.math.hypot
 import kotlin.math.pow
 import kotlin.math.sin
@@ -389,8 +390,17 @@ private class GalaxyArt(scene: GalaxyScene, familyColors: Map<String, Color>) {
     // Dust, bucketed by family and by depth: near, middle, far.
     val dustBucket: Array<FloatArray>
     val dustCount = IntArray(scene.families.size * 3)
-    val linkBucket: Array<FloatArray>
-    val linkCount = IntArray(scene.families.size)
+    // The energy along the links, bucketed by family: the cable, the pulse's
+    // tail, and its head.
+    val flowFamily: IntArray
+    val flowBucket: Array<FloatArray>
+    val flowCount = IntArray(scene.families.size)
+    val tailBucket: Array<FloatArray>
+    val tailCount = IntArray(scene.families.size)
+    val headBucket: Array<FloatArray>
+    val headCount = IntArray(scene.families.size)
+    val flowA = FloatArray(3)
+    val flowB = FloatArray(3)
     val core = Array(2) { FloatArray(scene.core.size / 3 * 2) }
     val coreCount = IntArray(2)
     val track = android.graphics.Path()
@@ -405,9 +415,13 @@ private class GalaxyArt(scene: GalaxyScene, familyColors: Map<String, Color>) {
         val perFamilyDust = IntArray(scene.families.size)
         for (k in 0 until scene.dustCount) perFamilyDust[scene.family[scene.dustOwner[k]]]++
         dustBucket = Array(scene.families.size * 3) { FloatArray(perFamilyDust[it / 3] * 2) }
-        val perFamilyLinks = IntArray(scene.families.size)
-        for (n in 0 until scene.links.size / 2) perFamilyLinks[scene.family[scene.links[n * 2]]]++
-        linkBucket = Array(scene.families.size) { FloatArray(perFamilyLinks[it] * 4) }
+        // A flow is coloured by where it arrives: the newer genre's family.
+        flowFamily = IntArray(scene.flows.size / 2) { scene.family[scene.flows[it * 2 + 1]] }
+        val perFamily = IntArray(scene.families.size)
+        for (f in flowFamily) perFamily[f]++
+        flowBucket = Array(scene.families.size) { FloatArray(perFamily[it] * FLOW_SEGMENTS * 4) }
+        tailBucket = Array(scene.families.size) { FloatArray(perFamily[it] * TAIL_SEGMENTS * 4) }
+        headBucket = Array(scene.families.size) { FloatArray(perFamily[it] * 2) }
     }
 
     companion object {
@@ -495,28 +509,11 @@ private fun DrawScope.drawSky(
     art.points.strokeWidth = 1.3f * dp
     canvas.drawPoints(art.haloPoints, 0, hn, art.points)
 
-    // Family links, faint: the structure, not the subject.
-    art.linkCount.fill(0)
-    val q = art.tmp2
-    for (k in 0 until scene.links.size / 2) {
-        val a = scene.links[k * 2]
-        scene.position(a, m, p, 0)
-        if (!f.project(p[0], p[1], p[2], p, 0)) continue
-        scene.position(scene.links[k * 2 + 1], m, q, 0)
-        if (!f.project(q[0], q[1], q[2], q, 0)) continue
-        val fam = scene.family[a]
-        val arr = art.linkBucket[fam]
-        val c = art.linkCount[fam]
-        if (c + 4 > arr.size) continue
-        arr[c] = p[0]; arr[c + 1] = p[1]; arr[c + 2] = q[0]; arr[c + 3] = q[1]
-        art.linkCount[fam] = c + 4
-    }
-    art.lines.strokeWidth = 0.8f * dp
-    for (fam in art.linkBucket.indices) {
-        if (art.linkCount[fam] == 0) continue
-        art.lines.color = art.famColor[fam].copy(alpha = 0.16f).toArgb()
-        canvas.drawLines(art.linkBucket[fam], 0, art.linkCount[fam], art.lines)
-    }
+    // Family links, as energy: each a cable that swirls between its two
+    // genres and undulates as it goes, with a pulse running along it from the
+    // older genre to the newer — the way time runs, so the whole map flows
+    // forward. The cable is faint; the moving light is what the eye follows.
+    drawFlows(art, scene, f, m, t, dp)
 
     // Dust, in depth bands: near grains bigger and brighter than far ones.
     art.dustCount.fill(0)
@@ -593,6 +590,7 @@ private fun DrawScope.drawSky(
     }
 
     // The way from where you are to what you have selected.
+    val q = art.tmp2
     if (here >= 0 && selected >= 0 && here != selected) {
         scene.position(here, m, p, 0)
         scene.position(selected, m, q, 0)
@@ -605,6 +603,124 @@ private fun DrawScope.drawSky(
         }
     }
 }
+
+/**
+ * The links as energy flows: per link, a swirl sampled into [FLOW_SEGMENTS]
+ * segments and projected, and a comet — a tail of [TAIL_SEGMENTS] and a bright
+ * head — at where its pulse is now. All of it batched by family: three draws
+ * a family, however many links.
+ */
+private fun DrawScope.drawFlows(art: GalaxyArt, scene: GalaxyScene, f: CameraFrame, m: Float, t: Float, dp: Float) {
+    val canvas = drawContext.canvas.nativeCanvas
+    art.flowCount.fill(0)
+    art.tailCount.fill(0)
+    art.headCount.fill(0)
+    val a = art.flowA
+    val b = art.flowB
+    val p = art.tmp
+    for (k in 0 until scene.flows.size / 2) {
+        scene.position(scene.flows[k * 2], m, a, 0)
+        scene.position(scene.flows[k * 2 + 1], m, b, 0)
+        val ax = a[0]; val ay = a[1]; val az = a[2]
+        val dx = b[0] - ax; val dy = b[1] - ay; val dz = b[2] - az
+        val len = kotlin.math.sqrt(dx * dx + dy * dy + dz * dz)
+        if (len < 1f) continue
+        // Sideways in the plane, and up: the two ways the cable swirls.
+        val hl = kotlin.math.sqrt(dx * dx + dz * dz)
+        val sx = if (hl > 1e-3f) -dz / hl else 1f
+        val sz = if (hl > 1e-3f) dx / hl else 0f
+        val amp = len * FLOW_SWIRL
+        val phase = scene.flowPhase[k] * 6.2831855f
+        val fam = art.flowFamily[k]
+
+        // Where along the cable u (0 older, 1 newer) is, on screen. False when
+        // that point is behind the camera.
+        fun at(u: Float): Boolean {
+            val bend = sin(PI.toFloat() * u)
+            val side = amp * bend * (0.55f + 0.45f * sin(9.42f * u + t * FLOW_WAVE + phase))
+            val lift = amp * 0.6f * bend * sin(6.2831855f * u + t * FLOW_WAVE * 0.75f + phase)
+            return f.project(ax + dx * u + sx * side, ay + dy * u + lift, az + dz * u + sz * side, p, 0)
+        }
+
+        // The cable.
+        val cable = art.flowBucket[fam]
+        var c = art.flowCount[fam]
+        var has = false
+        var lx = 0f; var ly = 0f
+        for (j in 0..FLOW_SEGMENTS) {
+            if (at(j / FLOW_SEGMENTS.toFloat())) {
+                if (has && c + 4 <= cable.size) {
+                    cable[c] = lx; cable[c + 1] = ly; cable[c + 2] = p[0]; cable[c + 3] = p[1]; c += 4
+                }
+                lx = p[0]; ly = p[1]; has = true
+            } else {
+                has = false
+            }
+        }
+        art.flowCount[fam] = c
+
+        // The pulse: a comet, its head at u and its tail behind it, toward the past.
+        val head = ((t * FLOW_SPEED + scene.flowPhase[k]) % 1f + 1f) % 1f
+        val tail = art.tailBucket[fam]
+        var tc = art.tailCount[fam]
+        has = false
+        for (j in 0..TAIL_SEGMENTS) {
+            val u = head - FLOW_TAIL * (1f - j / TAIL_SEGMENTS.toFloat())
+            if (u >= 0f && at(u)) {
+                if (has && tc + 4 <= tail.size) {
+                    tail[tc] = lx; tail[tc + 1] = ly; tail[tc + 2] = p[0]; tail[tc + 3] = p[1]; tc += 4
+                }
+                lx = p[0]; ly = p[1]; has = true
+            } else {
+                has = false
+            }
+        }
+        art.tailCount[fam] = tc
+        if (has) {
+            val heads = art.headBucket[fam]
+            val hc = art.headCount[fam]
+            if (hc + 2 <= heads.size) {
+                heads[hc] = lx; heads[hc + 1] = ly
+                art.headCount[fam] = hc + 2
+            }
+        }
+    }
+    for (fam in art.flowBucket.indices) {
+        val color = art.famColor[fam]
+        if (art.flowCount[fam] > 0) {
+            art.lines.strokeWidth = 0.9f * dp
+            art.lines.color = color.copy(alpha = FLOW_CABLE_ALPHA).toArgb()
+            canvas.drawLines(art.flowBucket[fam], 0, art.flowCount[fam], art.lines)
+        }
+        if (art.tailCount[fam] > 0) {
+            art.lines.strokeWidth = 1.7f * dp
+            art.lines.color = lerp(color, Color.White, 0.35f).copy(alpha = 0.5f).toArgb()
+            canvas.drawLines(art.tailBucket[fam], 0, art.tailCount[fam], art.lines)
+        }
+        if (art.headCount[fam] > 0) {
+            art.points.strokeWidth = 3.4f * dp
+            art.points.color = lerp(color, Color.White, 0.65f).copy(alpha = 0.95f).toArgb()
+            canvas.drawPoints(art.headBucket[fam], 0, art.headCount[fam], art.points)
+        }
+    }
+}
+
+/** How far a cable swirls out, as a share of its length. */
+private const val FLOW_SWIRL = 0.12f
+
+/** Segments in a cable, and in a pulse's tail. */
+private const val FLOW_SEGMENTS = 10
+private const val TAIL_SEGMENTS = 4
+
+/** A pulse runs the length of its link this many times a second, its tail this long. */
+private const val FLOW_SPEED = 0.22f
+private const val FLOW_TAIL = 0.16f
+
+/** How fast the cable's swirl moves along it. */
+private const val FLOW_WAVE = 0.8f
+
+/** The cable itself is faint: the moving light is what the eye follows. */
+private const val FLOW_CABLE_ALPHA = 0.1f
 
 /** A nebula's strength: the demo's, faint enough that a family is a haze, not a fill. */
 private const val NEBULA_ALPHA = 0.07f
