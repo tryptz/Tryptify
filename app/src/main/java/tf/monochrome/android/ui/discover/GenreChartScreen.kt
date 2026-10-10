@@ -26,8 +26,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -176,11 +174,11 @@ private fun WindowRail(selected: ChartWindow, onSelect: (ChartWindow) -> Unit) {
         modifier = Modifier.padding(vertical = MonoDimens.spacingSm),
     ) {
         items(ChartWindow.entries.toList(), key = { it.id }) { window ->
-            FilterChip(
+            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                label = stringResource(window.labelRes()),
                 selected = window == selected,
+                accent = MaterialTheme.colorScheme.primary,
                 onClick = { onSelect(window) },
-                label = { Text(stringResource(window.labelRes())) },
-                colors = FilterChipDefaults.filterChipColors(),
             )
         }
     }

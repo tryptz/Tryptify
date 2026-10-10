@@ -78,8 +78,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -355,8 +353,12 @@ fun SettingsScreen(
         ) {
             itemsIndexed(settingsTabs) { _, tab ->
                 val link = settingsLinkTabs[tab]
-                FilterChip(
+                // The app's glass pill, like Discover's and the Library's: the
+                // Studio's UI panels material, not a stock Material chip.
+                tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                    label = stringResource(settingsTabLabelRes(tab)),
                     selected = link == null && settingsPages[selectedTab] == tab,
+                    accent = MaterialTheme.colorScheme.primary,
                     onClick = {
                         if (link != null) {
                             navController.navigateTool(link)
@@ -364,22 +366,9 @@ fun SettingsScreen(
                             settingsScope.launch { settingsPager.goToPage(settingsTabIndex(tab), animateTabs) }
                         }
                     },
-                    label = { Text(stringResource(settingsTabLabelRes(tab)), style = MaterialTheme.typography.labelMedium) },
                     // The arrow the search pills use for "opens a screen": this
                     // chip leaves Settings rather than switching its page.
-                    trailingIcon = if (link != null) {
-                        {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = null,
-                                modifier = Modifier.size(FilterChipDefaults.IconSize),
-                            )
-                        }
-                    } else null,
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                    )
+                    trailingIcon = if (link != null) Icons.AutoMirrored.Filled.ArrowForward else null,
                 )
             }
         }
@@ -917,11 +906,12 @@ private fun AppearanceControls(viewModel: SettingsViewModel, onOpenFonts: () -> 
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 FONT_SCALE_PRESETS.forEach { preset ->
-                    FilterChip(
+                    tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                        label = stringResource(preset.label),
                         selected = !followSystemFontScale && preset == selectedPreset,
+                        accent = MaterialTheme.colorScheme.primary,
                         enabled = !followSystemFontScale,
                         onClick = { viewModel.setFontScale(preset.scale) },
-                        label = { Text(stringResource(preset.label)) }
                     )
                 }
             }
@@ -1852,10 +1842,11 @@ private fun DspBlockSizeSelector(viewModel: SettingsViewModel) {
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         viewModel.dspBlockSizes.forEach { size ->
-            FilterChip(
+            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                label = formatBlockSize(size),
                 selected = size == current,
+                accent = MaterialTheme.colorScheme.primary,
                 onClick = { viewModel.setDspBlockSize(size) },
-                label = { Text(formatBlockSize(size)) },
             )
         }
     }

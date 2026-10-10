@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -52,7 +51,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -83,7 +81,9 @@ import tf.monochrome.android.domain.model.DeckReason
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.ui.components.CoverImage
 import tf.monochrome.android.ui.components.GlassPanel
-import tf.monochrome.android.ui.components.PressableGlass
+import tf.monochrome.android.ui.components.MiniBarAction
+import tf.monochrome.android.ui.components.MiniBarTakeover
+import tf.monochrome.android.ui.components.TakeOverMiniPlayer
 import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
 import tf.monochrome.android.ui.player.PlayerViewModel
@@ -296,6 +296,29 @@ private fun DeckBody(
         }
     }
 
+    // Skip, undo and keep live in the mini player while the deck is up. The
+    // bar was showing the very song on the card above it, with play and skip
+    // that fought the deck's own skip and keep; now it is the deck's controls,
+    // in the same glass, and it goes back to the track when the deck closes.
+    // A swipe along the bar does what a swipe of the card does.
+    TakeOverMiniPlayer(
+        MiniBarTakeover(
+            actions = listOf(
+                MiniBarAction(Icons.Default.Close, skipLabel, onClick = { fling(keep = false) }),
+                MiniBarAction(
+                    Icons.AutoMirrored.Filled.Undo,
+                    stringResource(R.string.deck_undo),
+                    onClick = onUndo,
+                    enabled = canUndo,
+                    small = true,
+                ),
+                MiniBarAction(Icons.Default.Favorite, keepLabel, onClick = { fling(keep = true) }),
+            ),
+            onSwipeLeft = { fling(keep = false) },
+            onSwipeRight = { fling(keep = true) },
+        ),
+    )
+
     Column(modifier = Modifier.fillMaxSize()) {
         BoxWithConstraints(
             modifier = Modifier
@@ -391,50 +414,6 @@ private fun DeckBody(
                     text = stringResource(R.string.deck_hint) + " · " + stringResource(R.string.deck_kept_so_far, state.kept),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            PressableGlass(
-                onClick = { fling(keep = false) },
-                modifier = Modifier.size(68.dp),
-                shape = CircleShape,
-                hazeState = haze,
-                onClickLabel = stringResource(R.string.action_skip),
-            ) {
-                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_skip), modifier = Modifier.size(30.dp))
-            }
-            PressableGlass(
-                onClick = onUndo,
-                enabled = canUndo,
-                modifier = Modifier.size(48.dp),
-                shape = CircleShape,
-                hazeState = haze,
-                onClickLabel = stringResource(R.string.deck_undo),
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Undo,
-                    contentDescription = stringResource(R.string.deck_undo),
-                    tint = if (canUndo) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                )
-            }
-            PressableGlass(
-                onClick = { fling(keep = true) },
-                modifier = Modifier.size(68.dp),
-                shape = CircleShape,
-                hazeState = haze,
-                onClickLabel = stringResource(R.string.deck_keep),
-            ) {
-                Icon(
-                    Icons.Default.Favorite,
-                    contentDescription = stringResource(R.string.deck_keep),
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(30.dp),
                 )
             }
         }

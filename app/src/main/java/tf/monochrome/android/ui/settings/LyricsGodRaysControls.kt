@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -213,14 +211,11 @@ private fun FxChoice(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             options.forEachIndexed { i, option ->
-                FilterChip(
+                tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                    label = option,
                     selected = i == selected,
+                    accent = MaterialTheme.colorScheme.primary,
                     onClick = { onSelect(i) },
-                    label = { Text(option) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                    ),
                 )
             }
         }

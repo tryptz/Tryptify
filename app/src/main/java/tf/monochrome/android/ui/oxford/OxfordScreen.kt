@@ -459,16 +459,11 @@ private fun PresetRail(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         items.forEachIndexed { index, (label, active) ->
-            FilterChip(
+            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                label = label,
                 selected = active,
+                accent = MaterialTheme.colorScheme.primary,
                 onClick = { onSelect(index) },
-                label = {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelSmall,
-                        letterSpacing = 0.4.sp,
-                    )
-                },
             )
         }
     }

@@ -40,8 +40,6 @@ import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -772,24 +770,22 @@ fun LyricsFxStudioScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 LyricsFxSettings.PRESETS.forEach { (name, preset) ->
-                    FilterChip(
+                    tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                        label = name,
                         selected = fx.matchesPreset(preset),
+                        accent = MaterialTheme.colorScheme.primary,
                         onClick = { viewModel.applyPreset(preset) },
-                        label = { Text(name) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                        ),
                     )
                 }
                 // The user's own saved presets. Tapping applies; the trailing
                 // icon opens a Share / Delete sheet for that preset.
                 customPresets.forEach { saved ->
-                    FilterChip(
+                    tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                        label = saved.name,
                         selected = fx.matchesPreset(saved.settings),
+                        accent = MaterialTheme.colorScheme.primary,
                         onClick = { viewModel.applyPreset(saved.settings) },
-                        label = { Text(saved.name) },
-                        trailingIcon = {
+                        trailingContent = {
                             Icon(
                                 Icons.Default.Share,
                                 contentDescription = null,
@@ -804,10 +800,6 @@ fun LyricsFxStudioScreen(
                                     .size(16.dp),
                             )
                         },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                        ),
                     )
                 }
             }
@@ -1397,24 +1389,22 @@ private fun PlayerGlassTab(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             PlayerGlassSettings.PRESETS.forEach { (name, preset) ->
-                FilterChip(
+                tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                    label = name,
                     selected = glass.matchesPreset(preset),
+                    accent = MaterialTheme.colorScheme.primary,
                     onClick = { onApplyPreset(preset) },
-                    label = { Text(name) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                    ),
                 )
             }
             // The user's own saved themes. Tapping applies; the trailing icon
             // opens a Share / Delete sheet for that theme.
             customPresets.forEach { saved ->
-                FilterChip(
+                tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                    label = saved.name,
                     selected = glass.matchesPreset(saved.settings),
+                    accent = MaterialTheme.colorScheme.primary,
                     onClick = { onApplyPreset(saved.settings) },
-                    label = { Text(saved.name) },
-                    trailingIcon = {
+                    trailingContent = {
                         Icon(
                             Icons.Default.Share,
                             contentDescription = stringResource(R.string.fx_manage_named, saved.name),
@@ -1423,10 +1413,6 @@ private fun PlayerGlassTab(
                                 .clickable { glassPresetAction = saved },
                         )
                     },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                    ),
                 )
             }
         }

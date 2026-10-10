@@ -288,7 +288,14 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     // Null before the first destination is placed, which is not a reason to
     // hide anything.
     val showChrome = currentDestination?.route !in chromeHiddenRoutes
-    val showMiniPlayer = currentTrack != null && showChrome
+    // A screen can borrow the mini player's place for its own controls (Swipe
+    // to discover does) — see MiniPlayerSlot. The bar shows while it has them
+    // even with no track loaded yet: they are the screen's, not the track's.
+    val miniPlayerSlot = remember { tf.monochrome.android.ui.components.MiniPlayerSlot() }
+    // The handle only — never its contents, which change on every composition
+    // of the screen that holds it (see MiniBarHandle). The bar reads those.
+    val miniHandle = miniPlayerSlot.handle
+    val showMiniPlayer = (currentTrack != null || miniHandle != null) && showChrome
 
     val scope = rememberCoroutineScope()
 
@@ -547,6 +554,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
             // rather than the untouched defaults.
             LocalMiniPlayerGlass provides miniPlayerGlass,
             LocalGlassOverlayHost provides glassOverlayHost,
+            tf.monochrome.android.ui.components.LocalMiniPlayerSlot provides miniPlayerSlot,
         ) {
         Box(modifier = Modifier.fillMaxSize().hazeSource(hazeState).nestedScroll(collapseOnScroll)) {
             // Pager for main tabs — fills entire screen
@@ -970,6 +978,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                                 userTrackChanges = userTrackChanges,
                                 glassTintColor = chromeGlassTint,
                                 glassGround = chromeGround,
+                                takeover = miniHandle,
                             )
                         }
                     }

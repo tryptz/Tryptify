@@ -9,6 +9,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -183,18 +184,19 @@ fun DiscoverScreen(
     val hero = today.takeIf { forYou }
 
     // The page's own backdrop for its glass, a sibling of everything drawn over
-    // it — never the app-wide source this page is itself inside.
+    // it — never the app-wide source this page is itself inside. The plain
+    // page: the starfield sky that used to be here is gone, on request, and
+    // the glass is the Studio's UI panels material over the page itself.
     val haze = rememberHazeState()
     Box(modifier = Modifier.fillMaxSize()) {
-    DiscoverBackdrop(
-        graph = graph,
-        explored = explored,
-        todayId = today?.genre?.id,
-        listState = listState,
-        // Shorter than the hero, which is the first row whenever there is drift.
-        drift = if (hero != null) 200.dp else 0.dp,
-        modifier = Modifier.fillMaxSize().hazeSource(haze),
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .hazeSource(haze),
     )
+    // Every pill on the page frosts that backdrop (GlassChoiceChip reads it).
+    CompositionLocalProvider(tf.monochrome.android.ui.components.LocalGlassBackdrop provides haze) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text(stringResource(R.string.discover_beta)) },
@@ -502,6 +504,7 @@ fun DiscoverScreen(
         }
         }
         }
+    }
     }
     }
 

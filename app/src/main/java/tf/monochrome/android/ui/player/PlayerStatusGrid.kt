@@ -129,6 +129,10 @@ private fun StatusCard(
         modifier = modifier,
         shape = RoundedCornerShape(PlayerDesignTokens.GlassCornerMedium),
         contentAlignment = Alignment.CenterStart,
+        corner = PlayerDesignTokens.GlassCornerMedium,
+        // The player's own material, like the transport and dock above it —
+        // not the UI panels one the rest of the app's buttons take.
+        glass = tf.monochrome.android.ui.player.LocalPlayerGlass.current,
     ) {
         Row(
             // Tightened with the sheet: it lost 24dp of width when it stopped

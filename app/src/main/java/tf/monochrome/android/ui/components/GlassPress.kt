@@ -2,7 +2,6 @@ package tf.monochrome.android.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
@@ -25,12 +24,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import dev.chrisbanes.haze.HazeState
-import tf.monochrome.android.ui.player.LocalPlayerGlass
-import tf.monochrome.android.ui.player.playerGlass
+import tf.monochrome.android.domain.model.PlayerGlassSettings
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
 import tf.monochrome.android.ui.theme.MonoDimens
-import tf.monochrome.android.ui.theme.glassTint
 import tf.monochrome.android.ui.theme.PressSpring
 import tf.monochrome.android.ui.theme.reduceMotion
 
@@ -188,20 +187,25 @@ fun Modifier.glassSqueeze(
 }
 
 /**
- * A sheet of glass that is itself a button.
+ * A sheet of glass that is itself a button: the app's real glass, from the
+ * same recipe as [GlassPanel] ([GlassMaterial]) — the live lens or the haze
+ * frost of [hazeState], and a *solid* slab the AGSL shader turns into a
+ * bevelled, refracting pane with a lens rim as wide as [corner] — that swells
+ * where the finger lands and gives a little under it.
  *
- * Two layers, because the app's glass is two things. [Modifier.liquidGlass] is
- * the tint, the frost and the rim — what the pane is made of — and it has no
- * idea a finger exists. The dome is the AGSL surface, which is the only part
- * that can deform, and it has to be drawn on a canvas of its own beneath the
- * content. Everything clickable and glassy in the app was getting the first
- * without the second, which is why only the transport and the mini player's two
- * carved-out controls ever swelled: they were the only things reaching for the
- * shader directly.
+ * It used to lay its slab down at a tenth of the tint as insurance against a
+ * device where the shader no-ops. The shader builds its bevel from that slab's
+ * alpha, so every button that *did* get the shader came out a flat grey smudge
+ * with no edge — the low-performance fallback's look, everywhere, on devices
+ * that run the real glass. Asking whether the shader will run replaced the
+ * guess (see [GlassMaterial]).
  *
- * The dome follows the finger rather than sitting in the middle, so pressing a
- * corner of a wide pill swells that corner. On devices where the shader will not
- * compile the give is still there — the pane just doesn't lens.
+ * [glass] is the whole material and defaults to the Studio's UI panels
+ * settings, the universal glass every pane, pill and search bar takes. The
+ * player's own controls pass the player's material instead. [corner] is the
+ * corner of [shape]; [Dp.Infinity], the default, is right for a pill or a
+ * disc. On devices without the shader the give is still there and the pane is
+ * the plain glass of [glassBase].
  */
 @Composable
 fun PressableGlass(
@@ -212,42 +216,24 @@ fun PressableGlass(
     hazeState: HazeState? = null,
     onClickLabel: String? = null,
     contentAlignment: Alignment = Alignment.Center,
+    corner: Dp = Dp.Infinity,
+    glass: PlayerGlassSettings = LocalMiniPlayerGlass.current,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val press = rememberGlassPress()
-    val tint = glassTint(LocalPlayerGlass.current.tintColor)
-
     Box(
         modifier = modifier
-            .clip(shape)
-            .liquidGlass(hazeState = hazeState, shape = shape)
             .glassSqueeze(
                 press = press,
                 enabled = enabled,
                 onClickLabel = onClickLabel,
                 onClick = onClick,
-            ),
+            )
+            .clip(shape)
+            .glassBase(hazeState, glass, shape),
         contentAlignment = contentAlignment,
     ) {
-        // The deforming layer, under the content.
-        //
-        // A near-transparent wash rather than nothing: the shader builds its
-        // dome from the gradient of what the canvas draws, so an empty canvas
-        // has no surface to swell. Kept faint because the pane's colour is
-        // already coming from liquidGlass above — this is here to be bent, not
-        // to be seen.
-        Canvas(
-            modifier = Modifier
-                .matchParentSize()
-                .playerGlass(
-                    tint = tint,
-                    bulgeCenter = press.center,
-                    bulgeAmount = { press.amount },
-                    bulgeRadiusFraction = GlassPressDefaults.BULGE,
-                ),
-        ) {
-            drawRect(color = tint.copy(alpha = 0.10f))
-        }
+        GlassMaterial(hazeState = hazeState, glass = glass, corner = corner, press = press)
         content()
     }
 }

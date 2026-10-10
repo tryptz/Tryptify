@@ -31,11 +31,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -432,19 +429,20 @@ private fun FilterRow(selected: FontFilter, onSelect: (FontFilter) -> Unit, onIm
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         items(labels) { (value, label) ->
-            FilterChip(
+            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                label = stringResource(label),
                 selected = selected == value,
+                accent = MaterialTheme.colorScheme.primary,
                 onClick = { onSelect(value) },
-                label = { Text(stringResource(label)) },
             )
         }
         item {
-            AssistChip(
+            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                label = stringResource(R.string.fonts_import),
+                selected = false,
+                accent = MaterialTheme.colorScheme.primary,
                 onClick = onImport,
-                label = { Text(stringResource(R.string.fonts_import)) },
-                leadingIcon = {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(AssistChipDefaults.IconSize))
-                },
+                leadingIcon = Icons.Default.Add,
             )
         }
     }

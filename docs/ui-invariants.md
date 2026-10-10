@@ -418,6 +418,31 @@ width) is for picking one icon out of a row, like the transport and dock.
 List rows keep the quieter scale squeeze; a full dome on a wide text row reads
 heavy.
 
+**Every glass button and pill is the panel recipe, never a faint slab.**
+`PressableGlass`, `GlassPill` and `GlassChoiceChip` draw through
+`GlassMaterial`, the same layers `GlassPanel` uses: the live lens or the
+haze frost, then a **solid** slab with `lensCorner` (`Dp.Infinity` for a pill or
+a disc). `PressableGlass` used to draw its slab at a tenth of the tint, so every
+button and pill in the app looked like the low-performance fallback even where
+the shader runs. Their material is the Studio's UI panels settings
+(`LocalMiniPlayerGlass`), the universal glass. Only the player's own controls
+pass `LocalPlayerGlass`, like the status grid. There are no stock Material
+`FilterChip`s or `AssistChip`s left; a row of choices is `GlassChoiceChip`.
+
+**A pill frosts `LocalGlassBackdrop`, which a page provides only for a source
+its pills are siblings of.** Discover provides its page backdrop. With none,
+the pill is the shader glass without a frost under it. That is still glass,
+not a broken blur.
+
+**A screen borrows the mini player through a stable handle**
+(`TakeOverMiniPlayer`, `MiniPlayerSlot`). The nav host reads only
+`slot.handle`; the bar reads `handle.takeover`. The screen hands over a new
+takeover on every composition. If the nav host read it, the nav host would
+recompose, recompose the screen, and be handed a new one forever. Swipe to
+discover uses it: while the deck is up, the bar shows ✕, undo and ♥ punched
+into its glass instead of the track, at the same height, and a swipe along the
+bar skips or keeps.
+
 ### Pages and the tab bar
 
 **The app has ONE pager over one flat list of pages** — Home, Discover, World

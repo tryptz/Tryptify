@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountTree
@@ -39,15 +38,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
@@ -161,93 +157,6 @@ private fun DrawScope.drawGalaxy(stars: GalaxyStars) {
         drawCircle(stars.ringColor.copy(alpha = 0.25f), radius = r * 7f, center = at)
         drawCircle(stars.ringColor, radius = r * 4.5f, center = at, style = Stroke(width = r * 0.9f))
         drawCircle(stars.ringColor, radius = r * 1.6f, center = at)
-    }
-}
-
-/**
- * The sky behind Discover, and what its glass frosts.
- *
- * A soft glow in the colour of today's genre and the whole genre map as a
- * starfield, explored genres lit. It gives the glass something with detail to
- * blur and bend — over a smooth gradient, glass has nothing to show — and it
- * makes the page say something before a single shelf has loaded.
- *
- * It drifts up at a third of the feed's speed while the first row scrolls away,
- * and fades out downward, so the shelves below the fold sit on the plain page
- * and stay easy to read. [drift] caps how far the feed's scroll moves it; it
- * must be no taller than the first row, or the sky would jump when that row
- * leaves the screen and the list stops reporting how far it has gone.
- */
-@Composable
-internal fun DiscoverBackdrop(
-    graph: GenreGraph,
-    explored: Set<String>,
-    todayId: String?,
-    listState: LazyListState,
-    drift: androidx.compose.ui.unit.Dp,
-    modifier: Modifier = Modifier,
-) {
-    val colors = rememberFamilyColors(graph)
-    val fit = remember(graph) { GalaxyFit(graph) }
-    val background = MaterialTheme.colorScheme.background
-    val dark = background.luminance() <= 0.5f
-    val glow = todayId?.let { graph[it] }?.let { colors[it.family] } ?: MaterialTheme.colorScheme.primary
-
-    Box(modifier = modifier.background(background)) {
-        Canvas(
-            modifier = Modifier
-                .matchParentSize()
-                .graphicsLayer {
-                    // Offscreen, so the fade below can cut the stars' alpha.
-                    compositingStrategy = CompositingStrategy.Offscreen
-                    // Read here, at draw time: scrolling moves the layer and
-                    // recomposes nothing.
-                    val cap = drift.toPx()
-                    val scrolled = if (listState.firstVisibleItemIndex == 0) {
-                        listState.firstVisibleItemScrollOffset.toFloat().coerceAtMost(cap)
-                    } else {
-                        cap
-                    }
-                    translationY = -scrolled / 3f
-                }
-                .drawWithCache {
-                    val sky = Size(size.width, min(size.height, size.width * 1.15f))
-                    val points = fit.place(sky, inset = 24.dp.toPx())
-                    val starPx = 1.6.dp.toPx()
-                    val fade = Brush.verticalGradient(
-                        0f to Color.Black,
-                        0.55f to Color.Black.copy(alpha = 0.75f),
-                        1f to Color.Transparent,
-                        startY = 0f,
-                        endY = sky.height,
-                    )
-                    val glowA = Brush.radialGradient(
-                        listOf(glow.copy(alpha = if (dark) 0.30f else 0.18f), Color.Transparent),
-                        center = Offset(size.width * 0.15f, sky.height * 0.18f),
-                        radius = size.width * 0.9f,
-                    )
-                    val glowB = Brush.radialGradient(
-                        listOf(glow.copy(alpha = if (dark) 0.18f else 0.10f), Color.Transparent),
-                        center = Offset(size.width * 0.95f, sky.height * 0.55f),
-                        radius = size.width * 0.75f,
-                    )
-                    val stars = galaxyStars(
-                        points = points,
-                        graph = graph,
-                        colors = colors,
-                        explored = explored,
-                        highlight = todayId,
-                        dim = if (dark) 0.30f else 0.40f,
-                        starPx = starPx,
-                    )
-                    onDrawBehind {
-                        drawRect(glowA)
-                        drawRect(glowB)
-                        drawGalaxy(stars)
-                        drawRect(fade, blendMode = BlendMode.DstIn)
-                    }
-                },
-        ) {}
     }
 }
 

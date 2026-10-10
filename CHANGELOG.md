@@ -11,6 +11,14 @@
 
 ### Changed
 
+#### Real glass on every button and pill
+- **Every pill, chip and glass button is now the real glass, from the Visual Studio UI panels settings.** That covers the moods, the TIDAL · Qobuz · Deezer switch and the sort on Discover, the Settings tabs, the font filters, the presets, the EQ, search and stats filters, and the deck's buttons. They were drawing a slab at a tenth of the tint, which left the shader nothing to bevel. On screen it was the flat grey of the low-performance fallback, even on phones that run the real glass. Now each one is a small `GlassPanel`: the frost or live lens, then a solid slab the shader bevels and bends, with a rim as round as the pill. Move a UI panels slider and every pill follows. The player's own buttons keep the player's material.
+- **No stock Material chips are left.** Settings, the font browser, the Studio, the EQ, Search, Stats, Oxford, Crossfeed and the sleep timer all use the app's glass pill.
+- **Discover has no sky behind it now.** The starfield backdrop is gone. The page is plain, and its cards and pills are the UI panels glass over it.
+
+#### Swipe to discover's controls are in the mini player
+- **While the deck is up, the mini player stops showing the song and shows ✕ skip, undo and ♥ keep**, punched into its glass the way play and skip are, in the same place and at the same height. Swiping along the bar skips or keeps too. The bar was showing the same song as the card above it, with play and skip that fought the deck's own buttons. The round buttons under the card are gone, so the card gets the room. When the deck closes, the bar goes back to the track.
+
 #### Discover's pills and search bar match the rest of the app
 - **Every pill on Discover is the app's liquid glass** — the moods, the genre row, the genres you can subtract from a mix, the TIDAL · Qobuz · Deezer switch and the sort. They are `GlassChoiceChip`, the Library section switcher's pill, so they frost, swell under the finger and mark the selected one with an accent rim like everywhere else. The chip gained an optional icon (a tick on combined moods, a heart on hearted genres, a cross on subtractable ones) and an `enabled` flag; its existing uses are unchanged.
 - **The genre search bar is one slim row**, like every other glass search bar. It carried a second line ("Browse the map", and "no match"), which made it twice their height; the map is now a pill at the end of the genre row, and "no match" shows there too.

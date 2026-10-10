@@ -43,7 +43,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -340,15 +339,17 @@ fun EqualizerScreen(
                             modifier = Modifier.padding(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            FilterChip(
+                            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                                label = stringResource(R.string.eq_left_ear),
                                 selected = !editRight,
+                                accent = MaterialTheme.colorScheme.primary,
                                 onClick = { viewModel.setEditChannel(EqChannel.LEFT) },
-                                label = { Text(stringResource(R.string.eq_left_ear)) },
                             )
-                            FilterChip(
+                            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                                label = stringResource(R.string.eq_right_ear),
                                 selected = editRight,
+                                accent = MaterialTheme.colorScheme.primary,
                                 onClick = { viewModel.setEditChannel(EqChannel.RIGHT) },
-                                label = { Text(stringResource(R.string.eq_right_ear)) },
                             )
                         }
                     }
@@ -431,10 +432,11 @@ fun EqualizerScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     tf.monochrome.android.audio.eq.AutoEqAlgorithm.entries.forEach { algo ->
-                        FilterChip(
+                        tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                            label = algo.label,
                             selected = algorithm == algo,
+                            accent = MaterialTheme.colorScheme.primary,
                             onClick = { viewModel.setAlgorithm(algo) },
-                            label = { Text(algo.label) },
                         )
                     }
                 }

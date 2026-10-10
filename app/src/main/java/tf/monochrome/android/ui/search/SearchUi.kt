@@ -37,8 +37,6 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Circle
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -589,10 +587,11 @@ private fun SearchFilterRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(SearchViewModel.SearchTypeFilter.entries) { type ->
-                FilterChip(
+                tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                    label = stringResource(type.label),
                     selected = selectedType == type,
+                    accent = MaterialTheme.colorScheme.primary,
                     onClick = { onTypeSelected(type) },
-                    label = { Text(stringResource(type.label)) }
                 )
             }
         }
@@ -604,18 +603,14 @@ private fun SearchFilterRow(
                 items(SearchViewModel.SearchSourceFilter.entries) { source ->
                     val brand = source.sourceType?.brand()
                     val brandColor = brand?.color()
-                    FilterChip(
+                    // The service's own colour marks the selected one, as
+                    // its rim and label, over the same glass as every pill.
+                    tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                        label = source.labelRes?.let { stringResource(it) } ?: source.label,
                         selected = selectedSource == source,
+                        accent = brandColor ?: MaterialTheme.colorScheme.primary,
                         onClick = { onSourceSelected(source) },
-                        label = { Text(source.labelRes?.let { stringResource(it) } ?: source.label) },
-                        leadingIcon = brand?.let { { SourceBrandMark(it, size = FilterChipDefaults.IconSize) } },
-                        colors = if (brandColor != null) {
-                            FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = brandColor.copy(alpha = 0.22f),
-                                selectedLabelColor = brandColor,
-                                selectedLeadingIconColor = brandColor,
-                            )
-                        } else FilterChipDefaults.filterChipColors(),
+                        leadingContent = brand?.let { { SourceBrandMark(it, size = 16.dp) } },
                     )
                 }
             }
