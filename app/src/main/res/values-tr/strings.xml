@@ -2002,6 +2002,8 @@
     <string name="gv_black_hole">Kara delik</string>
     <string name="gv_god_rays">Işık huzmeleri</string>
     <string name="gv_ray_strength">Huzme gücü</string>
+    <string name="gv_ray_shade">Gölge huzmeleri</string>
+    <string name="gv_off">Kapalı</string>
     <string name="gv_spin">Galaksi dönüşü</string>
     <string name="gv_still">Durgun</string>
     <string name="gv_twinkle">Parıltı</string>
@@ -2016,6 +2018,28 @@
     <string name="gv_low_power">Düşük performans modu ağır efektleri kapalı tutar</string>
     <string name="galaxy_surprise">Beni şaşırt</string>
     <string name="galaxy_you_are_here">Buradasınız</string>
+    <string name="galaxy_full_screen">Tam ekran</string>
+    <string name="galaxy_full_screen_hint">Çalmak için bir yıldıza uzun basın · Tam ekrandan çıkmak için Geri</string>
+    <string name="galaxy_more">Daha fazla</string>
+    <string name="galaxy_close">Kapat</string>
+    <string name="galaxy_show_moons">Uyduları göster</string>
+    <string name="galaxy_play_track">%1$s şarkısını çal</string>
+    <plurals name="galaxy_sheet_planets">
+        <item quantity="one">%1$d gezegen</item>
+        <item quantity="other">%1$d gezegen</item>
+    </plurals>
+    <plurals name="galaxy_sheet_moons">
+        <item quantity="one">%1$d uydu</item>
+        <item quantity="other">%1$d uydu</item>
+    </plurals>
+    <plurals name="galaxy_planet_tracks">
+        <item quantity="one">%1$d listeye giren şarkı</item>
+        <item quantity="other">%1$d listeye giren şarkı</item>
+    </plurals>
+    <string name="galaxy_planet_rank">%2$s içinde %1$d. sırada</string>
+    <string name="galaxy_sheet_loading">Bu yıldızın gezegenleri aranıyor…</string>
+    <string name="galaxy_sheet_empty">Burada henüz listeye giren sanatçı yok</string>
+    <string name="galaxy_bios_credit">Sanatçı açıklamaları: Last.fm</string>
     <string name="galaxy_legend_lit">Yanan: dinlediniz</string>
     <string name="galaxy_legend_hearted">Favori</string>
     <string name="galaxy_legend_dark">Henüz karanlık</string>

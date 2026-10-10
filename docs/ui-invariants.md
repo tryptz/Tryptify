@@ -378,6 +378,25 @@ The rays are off by default, and the 17 presets ahead of `Sunburst` set no
 glass optic and no ray field, so nobody's lyrics change on upgrade. The
 low-performance glass switch drops the rays with the glass.
 
+### Text on glass
+
+**Text on glass follows the glass, not the theme** (`GlassInkScope`). Every pane
+of the shared material (`GlassPanel`, `PressableGlass` and so `GlassPill`) and
+the mini player and tab bar work out how the glass looks as one colour — the
+frost over what is behind it (`LocalGlassGround`, the page unless a screen says
+otherwise; the galaxy says deep space), and the slab's tint over that — and give
+their content light ink on dark glass and dark ink on light, with the accent
+moved only as far as it must to read (3:1). The theme's own ink is the wrong
+answer on dark glass in a light theme, and the other way round. Nested glass
+tints its slab with the parent's original accent (`LocalGlassAccent`), not the
+readable one, so a chip on a sheet stays the sheet's material. `GlassInkTest`
+sweeps grounds, tints and opacities and asserts AA for the text everywhere.
+
+**A selected chip's rim is `matchParentSize`, never `fillMaxSize`.** Filling made
+a selected chip as wide as the room offered: invisible in a scrolling row, but in
+a plain `Row` or a `FlowRow` it swallowed the line and squeezed its label to a
+letter a line.
+
 ### Search bars
 
 Every search bar in the app is `SearchOverlay` + `GlassSearchBar`. There is one
@@ -679,6 +698,47 @@ low-performance mode, the sky is the flat colour with drawn points.
 **Planets are fetched only after the camera stays on a genre** (`mapSystem`
 waits 0.7 s), and without the MusicBrainz cross-check. Flying past a genre on
 the way somewhere else must not cost a chart request.
+
+**The god rays are an occlusion light pass, not the lyric engine** (`GalaxyLight`).
+Each light — the core, or the star whose planets are up, one taking over from
+the other as you arrive — draws its own layer: the light and its glow in colour,
+and everything standing in it (planets, moons, dust, the bulge, stars, nebulae)
+over it in black. The march averages that, so every planet throws a shadow shaft
+straight away from its star. The hole's shadow is *cleared*, not blacked out, or
+it casts a dark ring over its own disk. Do not add stripes or a starburst to fake
+rays: they come only from what is in the light's way.
+
+**A star system is at real scale, more or less.** The star's radius is the
+genre's size (`GalaxyScene.starRadius`, from its prominence), and everything is
+laid out from it: a planet is 4–12 % of its star across, sized by its artist's
+catalogue (MusicBrainz release groups, log scale, `PlanetSystem.catalogShare`);
+its orbit is how hot the artist is this week (the 7-day chart's listens), the
+hottest nearest; moons are a fraction of their planet. The star is drawn as a
+sun disc at its true size once it has one (`drawSun`). Planets are specks from
+the system's own distance, and the camera's `MIN_DISTANCE` is small so you can
+fly to one; `nearLimit` keeps a pinch outside whatever it follows. Do not put
+the old 5 dp floor back on planets: it made them bigger than their star.
+
+**Moon orbits are laid out for the biggest planet the star could have**, and
+planet sizes ease in (`SystemArt.ease`). A catalogue count arrives seconds after
+the system; it must grow the planet, never move its moons or its orbit.
+`PlanetSystemTest` pins both, and that neighbouring planets' moons never cross.
+
+**Full screen hides everything but the map.** Turning the phone sideways enters
+it and turning it back leaves it; the bar's button enters it upright and Back
+leaves. The map asks for `SCREEN_ORIENTATION_SENSOR` while it is up and restores
+the app's own rule on the way out. The nav host's chrome steps aside through
+`HideAppChrome`, the system bars through `SystemBarsHidden`. A long press on a
+star plays it and opens its system as a list (`GalaxySystemSheet`); that sheet
+is the only thing shown in full screen.
+
+**Nothing on the map runs while nobody can see it.** The clock loop stops when
+the screen is not started (the app in the background, the phone off, another
+screen in front), which stops every shader with it, and the spectrum tap is
+released. Work on its own thread or timer elsewhere — the ambient projectM
+render thread, the FFT taps, the loudness meter, the tilt sensor, projectM's
+audio feed — is held with `LifecycleStartEffect` or `rememberOnScreen()`, never
+a bare `DisposableEffect`, which holds it in the background too.
 
 ### Discord presence
 

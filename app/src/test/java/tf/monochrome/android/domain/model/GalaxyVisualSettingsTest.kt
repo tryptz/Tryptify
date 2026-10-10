@@ -14,6 +14,7 @@ class GalaxyVisualSettingsTest {
         val d = GalaxyVisualSettings.DEFAULT
         assertEquals(1f, d.spin, 0f)
         assertEquals(1f, d.starSize, 0f)
+        assertEquals(1f, d.rayShade, 0f)
         assertEquals(GalaxyAmount.NORMAL, d.dust)
         assertEquals(true, d.blackHole && d.godRays && d.smoke && d.musicReactive && d.planets && d.deepSky)
         assertEquals(d, d.clamped())
@@ -23,8 +24,9 @@ class GalaxyVisualSettingsTest {
     fun `out-of-range and broken values are pulled back in`() {
         val wild = GalaxyVisualSettings(
             nebulae = 9f, rayStrength = -1f, spin = Float.NaN, smokeAmount = 100f,
-            reactivity = Float.POSITIVE_INFINITY, starSize = 0f,
+            reactivity = Float.POSITIVE_INFINITY, starSize = 0f, rayShade = 7f,
         ).clamped()
+        assertEquals(GalaxyVisualSettings.SHADE_RANGE.endInclusive, wild.rayShade, 0f)
         assertEquals(GalaxyVisualSettings.NEBULAE_RANGE.endInclusive, wild.nebulae, 0f)
         assertEquals(GalaxyVisualSettings.RAY_RANGE.start, wild.rayStrength, 0f)
         assertEquals(1f, wild.spin, 0f)

@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformLatest
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.api.ApiService
 import tf.monochrome.android.data.api.QobuzIdRegistry
@@ -1095,7 +1096,19 @@ class DiscoverViewModel @Inject constructor(
      * and pays a paced page walk to do it, which the Top 100 can wait for and a
      * glance at a solar system cannot. The repository caches either way.
      */
-    val mapSystem: StateFlow<tf.monochrome.android.ui.discover.galaxy.PlanetSystem?> =
+    /**
+     * The selected genre's planets: its chart as a system, each planet sized
+     * by its artist's catalogue as those counts come in ([planetFacts]). The
+     * counts are asked for as soon as the system is built, so the planets
+     * grow to their sizes while you arrive.
+     */
+    val mapSystem: StateFlow<tf.monochrome.android.ui.discover.galaxy.PlanetSystem?> by lazy {
+        combine(mapSystemFromChart, _planetFacts) { system, facts ->
+            system?.sizedBy(facts.mapNotNull { (artist, f) -> f.releases?.let { artist to it } }.toMap())
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    }
+
+    private val mapSystemFromChart: kotlinx.coroutines.flow.Flow<tf.monochrome.android.ui.discover.galaxy.PlanetSystem?> =
         _mapSelection.map { it?.id }
             .distinctUntilChanged()
             .transformLatest { genreId ->
@@ -1109,9 +1122,16 @@ class DiscoverViewModel @Inject constructor(
                         crossCheck = false,
                     )
                 }.getOrNull() ?: return@transformLatest
-                emit(tf.monochrome.android.ui.discover.galaxy.PlanetSystem.from(genreId, chart.entries))
+                val known = _planetFacts.value.mapNotNull { (artist, f) -> f.releases?.let { artist to it } }.toMap()
+                val system = tf.monochrome.android.ui.discover.galaxy.PlanetSystem.from(
+                    genreId,
+                    chart.entries,
+                    starRadius = genreStarRadius(genreId),
+                    releases = known,
+                )
+                emit(system)
+                system?.let { loadPlanetFacts(it) }
             }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     /**
      * Play one chart row.
@@ -1120,6 +1140,40 @@ class DiscoverViewModel @Inject constructor(
      * search backend's first hit — a chart row names a specific record, and a
      * result agreeing on neither artist nor title is not that record.
      */
+    /** The most-reached genre's reach: what the map measures every star's size against. */
+    private val maxGenreReach: Int by lazy {
+        genreGraphRepo.graph.allGenres.maxOfOrNull { it.reach ?: 0 }?.coerceAtLeast(1) ?: 1
+    }
+
+    /** A genre's star, the way the map sizes it ([tf.monochrome.android.ui.discover.galaxy.GalaxyScene.prominence]). */
+    private fun genreStarRadius(genreId: String): Float {
+        val reach = genreGraphRepo.graph[genreId]?.reach ?: 0
+        val prominence = kotlin.math.sqrt(reach.toFloat() / maxGenreReach)
+        return tf.monochrome.android.ui.discover.galaxy.GalaxyScene.starRadius(prominence)
+    }
+
+    /**
+     * What each planet shows of its artist — the opening of their bio, and
+     * their catalogue's size, which is the planet's — by artist name as the
+     * system names them. Filled as they arrive; an artist nothing is known
+     * of (or with no Last.fm key) is simply never in it.
+     */
+    private val _planetFacts = MutableStateFlow<Map<String, tf.monochrome.android.data.charts.ArtistFacts>>(emptyMap())
+    val planetFacts: StateFlow<Map<String, tf.monochrome.android.data.charts.ArtistFacts>> = _planetFacts.asStateFlow()
+    private val factsAsked = mutableSetOf<String>()
+
+    /** Asks for the facts of [system]'s artists not already known or on their way. */
+    private fun loadPlanetFacts(system: tf.monochrome.android.ui.discover.galaxy.PlanetSystem) {
+        for (planet in system.planets) {
+            val artist = planet.artist
+            if (artist in _planetFacts.value || !factsAsked.add(artist)) continue
+            viewModelScope.launch {
+                val facts = runCatching { genreCharts.artistFacts(artist) }.getOrNull()
+                if (facts != null) _planetFacts.update { it + (artist to facts) } else factsAsked.remove(artist)
+            }
+        }
+    }
+
     fun playChartEntry(
         entry: tf.monochrome.android.data.charts.ChartEntry,
         player: tf.monochrome.android.ui.player.PlayerViewModel,

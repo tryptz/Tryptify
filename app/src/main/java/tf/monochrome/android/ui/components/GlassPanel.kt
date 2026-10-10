@@ -148,7 +148,7 @@ fun GlassPanel(
         }
 
         GlassMaterial(hazeState = hazeState, glass = glass, corner = MonoDimens.radiusLg)
-        content()
+        GlassInkScope(glass) { content() }
     }
 }
 
@@ -208,7 +208,9 @@ internal fun BoxScope.GlassMaterial(
     if (!shaderGlassFor(glass)) return
     val allowHaze = LocalPerformanceProfile.current.allowHazeBlur
     val tint = glassTint(glass.tintColor)
-    val frostBg = MaterialTheme.colorScheme.background
+    // What the pane lies over: the page, unless the screen says otherwise
+    // (the galaxy is space under every theme). The frost washes toward it.
+    val frostBg = LocalGlassGround.current ?: MaterialTheme.colorScheme.background
     val isDark = frostBg.luminance() <= 0.5f
     val liveLens = LIVE_LENS_GLASS && liveLensCompiles && hazeState != null && allowHaze &&
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU

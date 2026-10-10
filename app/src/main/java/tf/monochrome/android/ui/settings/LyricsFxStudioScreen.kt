@@ -2372,6 +2372,8 @@ internal fun FxToggle(
     label: String,
     checked: Boolean,
     description: String? = null,
+    /** Off greys the row and ignores taps: what it switches cannot run right now. */
+    enabled: Boolean = true,
     onChange: (Boolean) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
@@ -2379,10 +2381,10 @@ internal fun FxToggle(
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else DISABLED_ALPHA),
                 modifier = Modifier.weight(1f),
             )
-            Switch(checked = checked, onCheckedChange = onChange)
+            Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
         }
         description?.let {
             Text(
@@ -2469,6 +2471,8 @@ internal fun FxSlider(
     range: ClosedFloatingPointRange<Float>,
     steps: Int = 0,
     description: String? = null,
+    /** Off greys the row and holds the slider: what it tunes cannot run right now. */
+    enabled: Boolean = true,
     /**
      * Called when the finger lifts. The glass tabs debounce persistence
      * instead and leave this null; release-write settings use it to write
@@ -2506,7 +2510,7 @@ internal fun FxSlider(
                 Text(
                     text = label,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else DISABLED_ALPHA),
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 if (description != null) {
@@ -2521,7 +2525,7 @@ internal fun FxSlider(
             Text(
                 text = valueLabel,
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = if (enabled) 1f else DISABLED_ALPHA),
                 modifier = Modifier.padding(start = 8.dp),
             )
         }
@@ -2540,14 +2544,20 @@ internal fun FxSlider(
                 onValueChangeFinished = onChangeFinished ?: {},
                 valueRange = range,
                 steps = steps,
+                enabled = enabled,
                 interactionSource = interaction,
                 thumb = {
-                    SliderDefaults.Thumb(interactionSource = interaction, thumbSize = DpSize(4.dp, 22.dp))
+                    SliderDefaults.Thumb(
+                        interactionSource = interaction,
+                        enabled = enabled,
+                        thumbSize = DpSize(4.dp, 22.dp),
+                    )
                 },
                 track = { state ->
                     SliderDefaults.Track(
                         sliderState = state,
                         modifier = Modifier.height(8.dp),
+                        enabled = enabled,
                         thumbTrackGapSize = 4.dp,
                     )
                 },
@@ -2565,6 +2575,9 @@ private const val SAMPLE_MIN_SP = 11f
 
 /** The slider's touch height: shorter than Material's 48 dp, for a drag that runs sideways. */
 private val FX_SLIDER_HEIGHT = 36.dp
+
+/** A row that cannot do anything right now, as Material greys disabled text. */
+private const val DISABLED_ALPHA = 0.38f
 
 private fun String.format(vararg args: Any?): String = String.format(Locale.US, this, *args)
 

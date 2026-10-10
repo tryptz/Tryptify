@@ -2053,6 +2053,8 @@
     <string name="gv_black_hole">Agujero negro</string>
     <string name="gv_god_rays">Rayos de luz</string>
     <string name="gv_ray_strength">Intensidad de los rayos</string>
+    <string name="gv_ray_shade">Rayos de sombra</string>
+    <string name="gv_off">Desactivado</string>
     <string name="gv_spin">Giro de la galaxia</string>
     <string name="gv_still">Quieta</string>
     <string name="gv_twinkle">Centelleo</string>
@@ -2067,6 +2069,31 @@
     <string name="gv_low_power">El modo de bajo rendimiento mantiene desactivados los efectos pesados</string>
     <string name="galaxy_surprise">Sorpréndeme</string>
     <string name="galaxy_you_are_here">Estás aquí</string>
+    <string name="galaxy_full_screen">Pantalla completa</string>
+    <string name="galaxy_full_screen_hint">Mantén pulsada una estrella para escucharla · Atrás para salir de la pantalla completa</string>
+    <string name="galaxy_more">Más</string>
+    <string name="galaxy_close">Cerrar</string>
+    <string name="galaxy_show_moons">Mostrar lunas</string>
+    <string name="galaxy_play_track">Reproducir %1$s</string>
+    <plurals name="galaxy_sheet_planets">
+        <item quantity="one">%1$d planeta</item>
+        <item quantity="many">%1$d planetas</item>
+        <item quantity="other">%1$d planetas</item>
+    </plurals>
+    <plurals name="galaxy_sheet_moons">
+        <item quantity="one">%1$d luna</item>
+        <item quantity="many">%1$d lunas</item>
+        <item quantity="other">%1$d lunas</item>
+    </plurals>
+    <plurals name="galaxy_planet_tracks">
+        <item quantity="one">%1$d tema en listas</item>
+        <item quantity="many">%1$d temas en listas</item>
+        <item quantity="other">%1$d temas en listas</item>
+    </plurals>
+    <string name="galaxy_planet_rank">N.º %1$d en %2$s</string>
+    <string name="galaxy_sheet_loading">Buscando los planetas de esta estrella…</string>
+    <string name="galaxy_sheet_empty">Aún no hay artistas en las listas aquí</string>
+    <string name="galaxy_bios_credit">Descripciones de artistas: Last.fm</string>
     <string name="galaxy_legend_lit">Encendido: escuchado</string>
     <string name="galaxy_legend_hearted">Favorito</string>
     <string name="galaxy_legend_dark">Aún apagado</string>

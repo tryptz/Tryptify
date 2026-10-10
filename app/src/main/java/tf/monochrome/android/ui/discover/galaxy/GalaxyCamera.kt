@@ -39,19 +39,28 @@ class GalaxyCamera {
     /** A planet of [follow]'s system the camera stays on as it orbits, or -1. */
     var followPlanet: Int = -1
 
+    /**
+     * The nearest a pinch may bring the camera to what it follows: clear of
+     * a star's surface or a planet's, so zooming in never flies into one.
+     * [MIN_DISTANCE] when it follows nothing. Set with the follow, and let go
+     * with it when two fingers pan away.
+     */
+    var nearLimit: Float = MIN_DISTANCE
+
     fun orbit(dxPx: Float, dyPx: Float) {
         yaw -= dxPx * ORBIT_RATE
         pitch = (pitch + dyPx * ORBIT_RATE * 0.8f).coerceIn(MIN_PITCH, MAX_PITCH)
     }
 
     fun zoom(factor: Float) {
-        if (factor > 0f) distance = (distance / factor).coerceIn(MIN_DISTANCE, MAX_DISTANCE)
+        if (factor > 0f) distance = (distance / factor).coerceIn(nearLimit.coerceAtLeast(MIN_DISTANCE), MAX_DISTANCE)
     }
 
     /** Slides the target across the view, so the scene follows two fingers. */
     fun pan(dxPx: Float, dyPx: Float, frame: CameraFrame) {
         follow = -1
         followPlanet = -1
+        nearLimit = MIN_DISTANCE
         val k = distance / frame.focal
         targetX += (-frame.rx * dxPx + frame.ux * dyPx) * k
         targetY += (-frame.ry * dxPx + frame.uy * dyPx) * k
@@ -74,8 +83,12 @@ class GalaxyCamera {
 
     companion object {
         const val FOV_DEGREES = 60f
-        /** Near enough to read a planet's moons. */
-        const val MIN_DISTANCE = 15f
+        /**
+         * The nearest the camera comes to anything. Small: planets are small
+         * beside their stars, as they are, so seeing one up close takes a
+         * long zoom. [nearLimit] keeps it outside whatever it is following.
+         */
+        const val MIN_DISTANCE = 1.2f
         const val MAX_DISTANCE = 9000f
         const val MIN_PITCH = 0.06f
         const val MAX_PITCH = 1.5f
@@ -199,6 +212,7 @@ class CameraFrame(
     fun scaleAt(depth: Float): Float = focal / depth
 
     companion object {
-        const val NEAR = 1f
+        /** Nearer than this to the eye is behind it. Small, for the long zoom onto a planet. */
+        const val NEAR = 0.3f
     }
 }

@@ -69,7 +69,10 @@ class PlanetSystemTest {
         assertEquals(PlanetSystem.MAX_PLANETS, system.planets.size)
         assertTrue(system.planets.all { it.moons.size <= PlanetSystem.MAX_MOONS })
         for (planet in system.planets) {
-            assertTrue("${planet.artist} reaches past the fit", planet.orbit + planet.reach <= PlanetSystem.MAX_REACH)
+            assertTrue(
+                "${planet.artist} reaches past the fit",
+                planet.orbit + planet.reach <= PlanetSystem.reachFor(system.starRadius) + 1e-3f,
+            )
         }
     }
 
@@ -100,5 +103,84 @@ class PlanetSystemTest {
         a.moonPosition(0, 1, 12.5f, 0f, 0f, 0f, pa)
         b.moonPosition(0, 1, 12.5f, 0f, 0f, 0f, pb)
         assertTrue(pa.contentEquals(pb))
+    }
+
+    @Test
+    fun `planets are small beside their star, and moons beside their planet`() {
+        for (star in listOf(GalaxyScene.STAR_RADIUS_MIN, PlanetSystem.DEFAULT_STAR_RADIUS, GalaxyScene.STAR_RADIUS_MAX)) {
+            val system = PlanetSystem.from("dubstep", chart, starRadius = star)!!
+            for (planet in system.planets) {
+                assertTrue("${planet.artist} is not much smaller than its star", planet.radius <= star / 8f + 1e-4f)
+                // Clear of the star, and of the planet inside it.
+                assertTrue(planet.orbit - planet.reach > star)
+                for (moon in planet.moons) {
+                    assertTrue(moon.radius < planet.radius / 3f)
+                    assertTrue(moon.orbit > planet.radius + moon.radius)
+                }
+            }
+            for ((inner, outer) in system.planets.zipWithNext()) {
+                assertTrue("moons of neighbouring planets cross", inner.orbit + inner.reach < outer.orbit + outer.reach)
+                assertTrue(outer.orbit - inner.orbit > inner.reach)
+            }
+        }
+    }
+
+    @Test
+    fun `the hottest artist this week orbits nearest, a cold one far out`() {
+        val system = PlanetSystem.from("dubstep", chart)!!
+        val orbits = system.planets.map { it.orbit }
+        assertTrue(orbits.zipWithNext().all { (a, b) -> b > a })
+        assertEquals(PlanetSystem.firstOrbit(system.starRadius), orbits.first(), 1e-3f)
+        // In proportion to heat, not evenly spaced: Four Tet is far less hot
+        // than Burial, so the gap after Burial is wider than an even step.
+        val even = PlanetSystem.orbitStep(system.starRadius)
+        assertTrue(orbits[1] - orbits[0] > even)
+    }
+
+    @Test
+    fun `orbits never come close enough for moons to cross, however the heat falls`() {
+        for (heat in listOf(List(6) { 1f }, List(6) { 0f }, listOf(1f, 0.99f, 0.98f, 0.1f, 0.09f, 0.08f))) {
+            val orbits = PlanetSystem.heatOrbits(heat, PlanetSystem.DEFAULT_STAR_RADIUS)
+            val first = PlanetSystem.firstOrbit(PlanetSystem.DEFAULT_STAR_RADIUS)
+            val last = first + (PlanetSystem.MAX_PLANETS - 1) * PlanetSystem.orbitStep(PlanetSystem.DEFAULT_STAR_RADIUS)
+            assertTrue(orbits.all { it >= first - 1e-3f && it <= last + 1e-3f })
+            assertTrue(orbits.toList().zipWithNext().all { (a, b) -> b - a > PlanetSystem.DEFAULT_STAR_RADIUS * 0.5f })
+        }
+    }
+
+    @Test
+    fun `a planet is the size of its artist's catalogue`() {
+        val sized = PlanetSystem.from("dubstep", chart, releases = mapOf("Burial" to 12, "Four Tet" to 160, "Beyoncé" to 2))!!
+        val byName = sized.planets.associateBy { it.artist }
+        assertTrue(byName.getValue("Four Tet").radius > byName.getValue("Burial").radius)
+        assertTrue(byName.getValue("Burial").radius > byName.getValue("Beyoncé").radius)
+        // Unknown is middling, and the biggest catalogue tops out.
+        assertEquals(PlanetSystem.CATALOG_UNKNOWN_SHARE, PlanetSystem.catalogShare(null), 0f)
+        assertEquals(1f, PlanetSystem.catalogShare(PlanetSystem.CATALOG_FULL * 10), 0f)
+    }
+
+    @Test
+    fun `a size coming in late moves nothing but the planet itself`() {
+        val before = PlanetSystem.from("dubstep", chart)!!
+        val after = before.sizedBy(mapOf("Burial" to 300))
+        assertTrue(after.planets[0].radius > before.planets[0].radius)
+        for (p in before.planets.indices) {
+            assertEquals(before.planets[p].orbit, after.planets[p].orbit, 0f)
+            assertEquals(before.planets[p].moons.map { it.orbit }, after.planets[p].moons.map { it.orbit })
+        }
+        assertTrue(before.sizedBy(emptyMap()) === before)
+    }
+
+    @Test
+    fun `a giant genre is a wide system and a niche one a tight one`() {
+        val giant = PlanetSystem.from("pop", chart, starRadius = GalaxyScene.starRadius(1f))!!
+        val dwarf = PlanetSystem.from("philly club", chart, starRadius = GalaxyScene.starRadius(0f))!!
+        assertEquals(GalaxyScene.STAR_RADIUS_MAX, giant.starRadius, 1e-4f)
+        assertEquals(GalaxyScene.STAR_RADIUS_MIN, dwarf.starRadius, 1e-4f)
+        assertTrue(giant.reach > dwarf.reach * 2f)
+        assertTrue(giant.planets[0].radius > dwarf.planets[0].radius * 2f)
+        // And the stars in between grow with how well known the genre is.
+        val radii = (0..10).map { GalaxyScene.starRadius(it / 10f) }
+        assertTrue(radii.zipWithNext().all { (a, b) -> b > a })
     }
 }

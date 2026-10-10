@@ -1951,6 +1951,8 @@
     <string name="gv_black_hole">黑洞</string>
     <string name="gv_god_rays">光芒</string>
     <string name="gv_ray_strength">光芒强度</string>
+    <string name="gv_ray_shade">阴影光束</string>
+    <string name="gv_off">关闭</string>
     <string name="gv_spin">星系旋转</string>
     <string name="gv_still">静止</string>
     <string name="gv_twinkle">闪烁</string>
@@ -1965,6 +1967,25 @@
     <string name="gv_low_power">低性能模式下重型特效保持关闭</string>
     <string name="galaxy_surprise">给我惊喜</string>
     <string name="galaxy_you_are_here">你在这里</string>
+    <string name="galaxy_full_screen">全屏</string>
+    <string name="galaxy_full_screen_hint">长按恒星即可播放 · 按返回键退出全屏</string>
+    <string name="galaxy_more">更多</string>
+    <string name="galaxy_close">关闭</string>
+    <string name="galaxy_show_moons">显示卫星</string>
+    <string name="galaxy_play_track">播放 %1$s</string>
+    <plurals name="galaxy_sheet_planets">
+        <item quantity="other">%1$d 颗行星</item>
+    </plurals>
+    <plurals name="galaxy_sheet_moons">
+        <item quantity="other">%1$d 颗卫星</item>
+    </plurals>
+    <plurals name="galaxy_planet_tracks">
+        <item quantity="other">%1$d 首上榜曲目</item>
+    </plurals>
+    <string name="galaxy_planet_rank">%2$s 第 %1$d 名</string>
+    <string name="galaxy_sheet_loading">正在寻找这颗恒星的行星…</string>
+    <string name="galaxy_sheet_empty">这里还没有上榜的艺人</string>
+    <string name="galaxy_bios_credit">艺人简介来自 Last.fm</string>
     <string name="galaxy_legend_lit">亮起：听过</string>
     <string name="galaxy_legend_hearted">已收藏</string>
     <string name="galaxy_legend_dark">尚未点亮</string>

@@ -11,6 +11,40 @@
 
 ### Changed
 
+#### The genre galaxy at real scale
+- **A star system is built from its star now.** A genre's star is as big as the genre is well known: a giant for the genres everyone knows, a dwarf for a niche. Its planets and orbits are laid out from it, so a big genre is a wide system and a small one a tight one.
+- **Planets are small beside their star**, 4 to 12 % of it across, and the star is drawn as a real sun disc at its size: white-hot in the middle, its family's colour at the limb, with an uneven corona that turns and breathes slowly. Planets used to be bigger than their star.
+- **A planet's distance from its star is how hot the artist is right now**: the hottest this week orbits nearest. The orbits are spaced by that, not evenly, and each leans its own way, so they cross instead of nesting as rings.
+- **A planet's size is its artist's catalogue**, counted on MusicBrainz. It is a log scale, so a debut EP is a small world and a long career a big one. The count is fetched once and cached. The planet grows to its size when the count arrives, without moving its orbit or its moons.
+- **You can zoom much closer**, onto a single planet and its moons, and a pinch stops before it flies into a star or a planet.
+
+#### Full screen on the genre galaxy
+- **Turn the phone on its side and the map goes full screen**: no title bar, dock, mini player, tab bar or status bar, only the galaxy to fly around. Turn it back and everything returns. A new button in the title bar does the same upright, and Back leaves.
+- **Long-press a star to play it.** Its music starts and its system opens as a short glass sheet (demo B). Each planet shows the artist's picture as a lit sphere, their name and the opening of their Last.fm bio, or where they stand in the chart when there is no bio. Their moons, the tracks, hang underneath on a dashed orbit line, and a tap plays one.
+
+#### God rays from the bright star, with real shadows
+- **The rays come from one light**: the core, or the star whose planets you are visiting. Everything in its way casts a shadow through them, so each planet throws a dark shaft straight out from its star, and dust and gas break the light into fine rays. The old rays made every bright star a starburst and drew stripes round the core with nothing casting them.
+- **New "Shade rays" setting** in the galaxy's look, under Core, for how dark those shadows are.
+
+#### The galaxy's settings, condensed like the Visual Studio
+- **One tab per group** (Sky, Core, Motion, Music, Stars) with the Studio's own compact rows, so a group is a few rows and never a long scroll. Less, normal and more is a three-stop slider. On a small phone the tab names shrink to fit instead of being cut off.
+
+#### Text on glass reads on the glass
+- **Light text on dark glass, dark text on light glass**, worked out from the glass itself (its tint, its frost and what is behind it) rather than from the theme. This applies to every glass sheet, pill and chip, the mini player and the tab bar. The accent is nudged where it would vanish into the glass. On the galaxy the panes know they are over deep space, so a light theme no longer puts dark text on dark glass.
+
+#### Every phone size
+- **The galaxy's title bar keeps its title on a narrow phone or with large text.** The actions that don't fit go behind a ⋮ menu.
+- **The bottom panel fits too:** the Surprise button becomes its sparkle icon when room is short, and the legend wraps instead of cutting its last item off.
+
+#### Nothing heavy runs when you can't see it
+- **The galaxy stops completely** when the app is in the background, the phone is off, or another screen covers it. That covers its clock, every shader and its music tap.
+- **The same goes for work elsewhere that used to keep going in the background:** the ambient visualizer's render thread, the music-analysis taps (lyrics' bass pulse, EQ, Settings), the loudness meter, the tilt sensor behind the glass, and projectM's audio feed. The feed now runs only while a visualizer is actually on screen, not whenever the engine setting is on.
+
+### Fixed
+
+#### A selected glass chip swallowed its row
+- **In a row of chips the selected one stretched to the full width** and squeezed everything beside it: the galaxy's settings showed "Dust" one letter per line next to a full-width "Less". Its accent rim filled all the room it was offered. It now matches the chip.
+
 #### Real glass on every button and pill
 - **Every pill, chip and glass button is now the real glass, from the Visual Studio UI panels settings.** That covers the moods, the TIDAL · Qobuz · Deezer switch and the sort on Discover, the Settings tabs, the font filters, the presets, the EQ, search and stats filters, and the deck's buttons. They were drawing a slab at a tenth of the tint, which left the shader nothing to bevel. On screen it was the flat grey of the low-performance fallback, even on phones that run the real glass. Now each one is a small `GlassPanel`: the frost or live lens, then a solid slab the shader bevels and bends, with a rim as round as the pill. Move a UI panels slider and every pill follows. The player's own buttons keep the player's material.
 - **No stock Material chips are left.** Settings, the font browser, the Studio, the EQ, Search, Stats, Oxford, Crossfeed and the sleep timer all use the app's glass pill.

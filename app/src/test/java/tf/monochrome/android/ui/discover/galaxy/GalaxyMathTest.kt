@@ -213,4 +213,16 @@ class GalaxyMathTest {
         }
         assertTrue(GalaxyScene.HOLE_SHADOW < GalaxyScene.DISK_INNER)
     }
+
+    @Test
+    fun `a pinch never flies into what the camera follows`() {
+        val c = GalaxyCamera().apply { follow = 3; nearLimit = 13f }
+        c.zoom(1e6f)
+        assertEquals(13f, c.distance, 0f)
+        // Panning lets go of it, and the limit with it.
+        c.pan(10f, 0f, c.frame(1080f, 2000f))
+        assertEquals(GalaxyCamera.MIN_DISTANCE, c.nearLimit, 0f)
+        c.zoom(1e6f)
+        assertEquals(GalaxyCamera.MIN_DISTANCE, c.distance, 0f)
+    }
 }

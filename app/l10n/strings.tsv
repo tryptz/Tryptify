@@ -1971,6 +1971,8 @@ gv_more	More	多	多め	Plus	Más	Çok	Mehr
 gv_black_hole	Black hole	黑洞	ブラックホール	Trou noir	Agujero negro	Kara delik	Schwarzes Loch
 gv_god_rays	God rays	光芒	光芒	Rayons de lumière	Rayos de luz	Işık huzmeleri	Lichtstrahlen
 gv_ray_strength	Ray strength	光芒强度	光芒の強さ	Intensité des rayons	Intensidad de los rayos	Huzme gücü	Strahlenstärke
+gv_ray_shade	Shade rays	阴影光束	影の光芒	Rayons d’ombre	Rayos de sombra	Gölge huzmeleri	Schattenstrahlen
+gv_off	Off	关闭	オフ	Désactivé	Desactivado	Kapalı	Aus
 gv_spin	Galaxy turn	星系旋转	銀河の回転	Rotation de la galaxie	Giro de la galaxia	Galaksi dönüşü	Drehung der Galaxie
 gv_still	Still	静止	停止	Immobile	Quieta	Durgun	Still
 gv_twinkle	Twinkle	闪烁	またたき	Scintillement	Centelleo	Parıltı	Funkeln
@@ -1985,6 +1987,25 @@ gv_planets	Planets and moons	行星与卫星	惑星と衛星	Planètes et lunes	
 gv_low_power	Low-performance mode keeps the heavy effects off	低性能模式下重型特效保持关闭	低パフォーマンスモードでは重い効果はオフのままです	Le mode basse performance garde les effets lourds désactivés	El modo de bajo rendimiento mantiene desactivados los efectos pesados	Düşük performans modu ağır efektleri kapalı tutar	Der Energiesparmodus lässt aufwendige Effekte aus
 galaxy_surprise	Surprise me	给我惊喜	おまかせ	Surprenez-moi	Sorpréndeme	Beni şaşırt	Überrasch mich
 galaxy_you_are_here	You are here	你在这里	現在地	Vous êtes ici	Estás aquí	Buradasınız	Du bist hier
+galaxy_full_screen	Full screen	全屏	全画面	Plein écran	Pantalla completa	Tam ekran	Vollbild
+galaxy_full_screen_hint	Long-press a star to play it · Back to leave full screen	长按恒星即可播放 · 按返回键退出全屏	星を長押しで再生 · 戻るで全画面を終了	Appui long sur une étoile pour l’écouter · Retour pour quitter le plein écran	Mantén pulsada una estrella para escucharla · Atrás para salir de la pantalla completa	Çalmak için bir yıldıza uzun basın · Tam ekrandan çıkmak için Geri	Stern lange drücken zum Abspielen · Zurück beendet den Vollbildmodus
+galaxy_more	More	更多	その他	Plus	Más	Daha fazla	Mehr
+galaxy_close	Close	关闭	閉じる	Fermer	Cerrar	Kapat	Schließen
+galaxy_show_moons	Show moons	显示卫星	衛星を表示	Afficher les lunes	Mostrar lunas	Uyduları göster	Monde anzeigen
+galaxy_play_track	Play %1$s	播放 %1$s	%1$s を再生	Écouter %1$s	Reproducir %1$s	%1$s şarkısını çal	%1$s abspielen
+galaxy_sheet_planets#one	%1$d planet	%1$d 颗行星	惑星 %1$d	%1$d planète	%1$d planeta	%1$d gezegen	%1$d Planet
+galaxy_sheet_planets#many	%1$d planets	%1$d 颗行星	惑星 %1$d	%1$d planètes	%1$d planetas	%1$d gezegen	%1$d Planeten
+galaxy_sheet_planets#other	%1$d planets	%1$d 颗行星	惑星 %1$d	%1$d planètes	%1$d planetas	%1$d gezegen	%1$d Planeten
+galaxy_sheet_moons#one	%1$d moon	%1$d 颗卫星	衛星 %1$d	%1$d lune	%1$d luna	%1$d uydu	%1$d Mond
+galaxy_sheet_moons#many	%1$d moons	%1$d 颗卫星	衛星 %1$d	%1$d lunes	%1$d lunas	%1$d uydu	%1$d Monde
+galaxy_sheet_moons#other	%1$d moons	%1$d 颗卫星	衛星 %1$d	%1$d lunes	%1$d lunas	%1$d uydu	%1$d Monde
+galaxy_planet_tracks#one	%1$d charted track	%1$d 首上榜曲目	チャート入り %1$d 曲	%1$d titre classé	%1$d tema en listas	%1$d listeye giren şarkı	%1$d Titel in den Charts
+galaxy_planet_tracks#many	%1$d charted tracks	%1$d 首上榜曲目	チャート入り %1$d 曲	%1$d titres classés	%1$d temas en listas	%1$d listeye giren şarkı	%1$d Titel in den Charts
+galaxy_planet_tracks#other	%1$d charted tracks	%1$d 首上榜曲目	チャート入り %1$d 曲	%1$d titres classés	%1$d temas en listas	%1$d listeye giren şarkı	%1$d Titel in den Charts
+galaxy_planet_rank	No. %1$d in %2$s	%2$s 第 %1$d 名	%2$s で %1$d 位	N° %1$d en %2$s	N.º %1$d en %2$s	%2$s içinde %1$d. sırada	Nr. %1$d in %2$s
+galaxy_sheet_loading	Finding this star’s planets…	正在寻找这颗恒星的行星…	この星の惑星を探しています…	Recherche des planètes de cette étoile…	Buscando los planetas de esta estrella…	Bu yıldızın gezegenleri aranıyor…	Planeten dieses Sterns werden gesucht…
+galaxy_sheet_empty	No charted artists here yet	这里还没有上榜的艺人	ここにはまだチャート入りしたアーティストがいません	Aucun artiste classé ici pour l’instant	Aún no hay artistas en las listas aquí	Burada henüz listeye giren sanatçı yok	Hier gibt es noch keine Künstler in den Charts
+galaxy_bios_credit	Artist descriptions from Last.fm	艺人简介来自 Last.fm	アーティスト紹介：Last.fm	Descriptions des artistes : Last.fm	Descripciones de artistas: Last.fm	Sanatçı açıklamaları: Last.fm	Künstlerbeschreibungen von Last.fm
 galaxy_legend_lit	Lit: you’ve listened	亮起：听过	点灯：聴いた	Allumé : écouté	Encendido: escuchado	Yanan: dinlediniz	Leuchtet: gehört
 galaxy_legend_hearted	Hearted	已收藏	お気に入り	Favori	Favorito	Favori	Favorit
 galaxy_legend_dark	Still dark	尚未点亮	まだ暗い	Encore éteint	Aún apagado	Henüz karanlık	Noch dunkel

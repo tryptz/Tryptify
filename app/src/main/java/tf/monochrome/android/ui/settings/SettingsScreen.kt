@@ -1122,9 +1122,10 @@ internal fun VisualizerSettings(
             }
         }
         if (spectrumEnabled) {
-            androidx.compose.runtime.DisposableEffect(Unit) {
+            // Only while the screen is started: not in the background, not with the phone off.
+            androidx.lifecycle.compose.LifecycleStartEffect(Unit) {
                 viewModel.acquireSpectrum()
-                onDispose { viewModel.releaseSpectrum() }
+                onStopOrDispose { viewModel.releaseSpectrum() }
             }
         }
 
@@ -1939,9 +1940,9 @@ private fun DebugScreenRecorderRow() {
 @Composable
 private fun ChannelDetectorCard(viewModel: SettingsViewModel) {
     val state by viewModel.channelDetectorState.collectAsStateWithLifecycle()
-    DisposableEffect(Unit) {
+    androidx.lifecycle.compose.LifecycleStartEffect(Unit) {
         viewModel.acquireChannelDetector()
-        onDispose { viewModel.releaseChannelDetector() }
+        onStopOrDispose { viewModel.releaseChannelDetector() }
     }
     Text(
         text = stringResource(R.string.settings_channel_detector),

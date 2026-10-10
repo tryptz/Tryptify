@@ -40,9 +40,10 @@ import tf.monochrome.android.R
  */
 @Composable
 internal fun MasterLoudnessReadout(accent: Color, modifier: Modifier = Modifier) {
-    DisposableEffect(Unit) {
+    // Metered only while the screen is started: not in the background, not with the phone off.
+    androidx.lifecycle.compose.LifecycleStartEffect(Unit) {
         LoudnessNative.acquire()
-        onDispose { LoudnessNative.release() }
+        onStopOrDispose { LoudnessNative.release() }
     }
     val reading by produceState<LoudnessReading?>(initialValue = null) {
         while (true) {

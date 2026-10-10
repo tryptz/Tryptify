@@ -245,6 +245,6 @@ fun PressableGlass(
         contentAlignment = contentAlignment,
     ) {
         GlassMaterial(hazeState = hazeState, glass = glass, corner = corner, press = press)
-        content()
+        GlassInkScope(glass) { content() }
     }
 }

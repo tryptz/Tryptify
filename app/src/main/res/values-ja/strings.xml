@@ -1951,6 +1951,8 @@
     <string name="gv_black_hole">ブラックホール</string>
     <string name="gv_god_rays">光芒</string>
     <string name="gv_ray_strength">光芒の強さ</string>
+    <string name="gv_ray_shade">影の光芒</string>
+    <string name="gv_off">オフ</string>
     <string name="gv_spin">銀河の回転</string>
     <string name="gv_still">停止</string>
     <string name="gv_twinkle">またたき</string>
@@ -1965,6 +1967,25 @@
     <string name="gv_low_power">低パフォーマンスモードでは重い効果はオフのままです</string>
     <string name="galaxy_surprise">おまかせ</string>
     <string name="galaxy_you_are_here">現在地</string>
+    <string name="galaxy_full_screen">全画面</string>
+    <string name="galaxy_full_screen_hint">星を長押しで再生 · 戻るで全画面を終了</string>
+    <string name="galaxy_more">その他</string>
+    <string name="galaxy_close">閉じる</string>
+    <string name="galaxy_show_moons">衛星を表示</string>
+    <string name="galaxy_play_track">%1$s を再生</string>
+    <plurals name="galaxy_sheet_planets">
+        <item quantity="other">惑星 %1$d</item>
+    </plurals>
+    <plurals name="galaxy_sheet_moons">
+        <item quantity="other">衛星 %1$d</item>
+    </plurals>
+    <plurals name="galaxy_planet_tracks">
+        <item quantity="other">チャート入り %1$d 曲</item>
+    </plurals>
+    <string name="galaxy_planet_rank">%2$s で %1$d 位</string>
+    <string name="galaxy_sheet_loading">この星の惑星を探しています…</string>
+    <string name="galaxy_sheet_empty">ここにはまだチャート入りしたアーティストがいません</string>
+    <string name="galaxy_bios_credit">アーティスト紹介：Last.fm</string>
     <string name="galaxy_legend_lit">点灯：聴いた</string>
     <string name="galaxy_legend_hearted">お気に入り</string>
     <string name="galaxy_legend_dark">まだ暗い</string>

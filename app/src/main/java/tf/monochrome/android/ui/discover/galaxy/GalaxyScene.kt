@@ -7,6 +7,7 @@ import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.sin
+import kotlin.math.pow
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -249,6 +250,19 @@ class GalaxyScene(
     }
 
     companion object {
+        /**
+         * A genre's star, its radius in scene units, from how well known it is
+         * (its [prominence], 0..1): a dwarf for a niche, a giant for the
+         * genres everyone has heard of. Its planets and orbits are laid out
+         * from this ([PlanetSystem]), so the size of a genre is the size of
+         * its whole system, not only of its dot.
+         */
+        fun starRadius(prominence: Float): Float =
+            STAR_RADIUS_MIN + (STAR_RADIUS_MAX - STAR_RADIUS_MIN) * prominence.coerceIn(0f, 1f).pow(1.2f)
+
+        const val STAR_RADIUS_MIN = 1.4f
+        const val STAR_RADIUS_MAX = 6f
+
         /** Radius of the galaxy, in scene units. */
         const val RADIUS = 1000f
 

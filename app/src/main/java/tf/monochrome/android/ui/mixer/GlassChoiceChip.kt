@@ -3,7 +3,6 @@ package tf.monochrome.android.ui.mixer
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
@@ -93,10 +92,16 @@ internal fun GlassChoiceChip(
         // The selection rim, drawn over the glass rather than replacing it.
         // Only on the selected one: the shader draws every pill's own edge,
         // and a hairline outline on top of that is a second, flatter rim.
+        //
+        // Matched to the pill, never filling: fillMaxSize here made a selected
+        // chip as wide as whatever room it was offered. In a scrolling row
+        // that is unbounded and it did nothing; in a plain Row or a FlowRow
+        // the selected chip swallowed the line and squeezed its neighbours,
+        // and the label beside it, to a letter a line.
         if (selected) {
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .matchParentSize()
                     .border(width = 1.5.dp, color = accent.copy(alpha = 0.85f), shape = MonoDimens.shapePill),
             )
         }

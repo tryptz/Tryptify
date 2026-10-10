@@ -25,6 +25,8 @@ data class GalaxyVisualSettings(
     val godRays: Boolean = true,
     /** The rays' exposure, as a share of the usual. */
     val rayStrength: Float = 1f,
+    /** How dark the shadows are that planets, dust and stars cast through the rays; 0 for none. */
+    val rayShade: Float = 1f,
     // Motion.
     /** How fast the galaxy turns, as a share of the usual; 0 holds it still. */
     val spin: Float = 1f,
@@ -46,6 +48,7 @@ data class GalaxyVisualSettings(
     fun clamped(): GalaxyVisualSettings = copy(
         nebulae = nebulae.finiteOr(1f).coerceIn(NEBULAE_RANGE),
         rayStrength = rayStrength.finiteOr(1f).coerceIn(RAY_RANGE),
+        rayShade = rayShade.finiteOr(1f).coerceIn(SHADE_RANGE),
         spin = spin.finiteOr(1f).coerceIn(SPIN_RANGE),
         smokeAmount = smokeAmount.finiteOr(1f).coerceIn(SMOKE_RANGE),
         reactivity = reactivity.finiteOr(1f).coerceIn(REACTIVITY_RANGE),
@@ -57,6 +60,7 @@ data class GalaxyVisualSettings(
 
         val NEBULAE_RANGE = 0f..2f
         val RAY_RANGE = 0.3f..1.6f
+        val SHADE_RANGE = 0f..2f
         val SPIN_RANGE = 0f..3f
         val SMOKE_RANGE = 0.3f..2f
         val REACTIVITY_RANGE = 0.3f..2f

@@ -165,3 +165,10 @@ internal fun normalizeForMatch(raw: String): String {
         }
     }.trim()
 }
+
+/**
+ * What the genre galaxy shows of an artist beside their chart: the opening of
+ * their bio, and how many releases they have — the size of their catalogue,
+ * which is the size of their planet. Either may be unknown.
+ */
+data class ArtistFacts(val bio: String?, val releases: Int?)

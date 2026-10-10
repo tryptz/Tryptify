@@ -287,7 +287,10 @@ fun MonochromeNavHost(initialRoute: String? = null) {
 
     // Null before the first destination is placed, which is not a reason to
     // hide anything.
-    val showChrome = currentDestination?.route !in chromeHiddenRoutes
+    // A screen can also ask for the whole window for a while (the genre
+    // galaxy in full screen) — see AppChrome.
+    val appChrome = remember { tf.monochrome.android.ui.components.AppChrome() }
+    val showChrome = currentDestination?.route !in chromeHiddenRoutes && !appChrome.hidden
     // A screen can borrow the mini player's place for its own controls (Swipe
     // to discover does) — see MiniPlayerSlot. The bar shows while it has them
     // even with no track loaded yet: they are the screen's, not the track's.
@@ -555,6 +558,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
             LocalMiniPlayerGlass provides miniPlayerGlass,
             LocalGlassOverlayHost provides glassOverlayHost,
             tf.monochrome.android.ui.components.LocalMiniPlayerSlot provides miniPlayerSlot,
+            tf.monochrome.android.ui.components.LocalAppChrome provides appChrome,
         ) {
         Box(modifier = Modifier.fillMaxSize().hazeSource(hazeState).nestedScroll(collapseOnScroll)) {
             // Pager for main tabs — fills entire screen
@@ -944,14 +948,18 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         // A sibling of the haze source, never inside it: each pane frosts the
         // content layer behind it, and a pane drawn inside its own source would
         // be asked to blur a picture it is part of — the flat slab.
-        if (showChrome) {
+        // Over whatever the screen says it is under — deep space on the galaxy —
+        // so the chrome's frost and its text follow that, not the theme's page.
+        if (showChrome) CompositionLocalProvider(
+            tf.monochrome.android.ui.components.LocalGlassGround provides appChrome.ground,
+        ) {
             val miniPlayer: (@Composable (Modifier) -> Unit)? = if (showMiniPlayer) {
                 { mod ->
                     // The glass tint is taken here, outside the album scope, so
                     // the bar's glass is the tab bar's colour exactly.
                     val chromeGlassTint = tf.monochrome.android.ui.theme.glassTint(miniPlayerGlass.tintColor)
                     // Likewise the page colour its live lens lays under the capture.
-                    val chromeGround = MaterialTheme.colorScheme.background
+                    val chromeGround = appChrome.ground ?: MaterialTheme.colorScheme.background
                     // Mini player follows the album art (dynamic colours), while
                     // the menus around it — the tab bar included — stay on the
                     // base theme. Its glass does not: see chromeGlassTint.

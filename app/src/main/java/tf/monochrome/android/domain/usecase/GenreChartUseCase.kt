@@ -48,6 +48,13 @@ class GenreChartUseCase @Inject constructor(
     private val catalogs: DiscoveryCatalogs,
     private val disk: DiscoveryCache,
 ) {
+
+    /** [artist]'s bio opening and catalogue size, for their planet on the genre galaxy; null when unknown. */
+    suspend fun artistFacts(artist: String): tf.monochrome.android.data.charts.ArtistFacts? {
+        val apiKey = runCatching { preferences.lastFmChartsApiKey.first() }.getOrNull().orEmpty()
+        return charts.artistFacts(artist, apiKey)
+    }
+
     companion object {
         /**
          * Below this many rows a window isn't a Top 100, it's a rumour. Ten is
