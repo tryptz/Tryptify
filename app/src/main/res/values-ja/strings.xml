@@ -1967,6 +1967,7 @@
     <string name="gv_low_power">低パフォーマンスモードでは重い効果はオフのままです</string>
     <string name="galaxy_surprise">おまかせ</string>
     <string name="galaxy_you_are_here">現在地</string>
+    <string name="galaxy_system_button">再生して惑星を表示</string>
     <string name="galaxy_full_screen">全画面</string>
     <string name="galaxy_full_screen_hint">星を長押しで再生 · 戻るで全画面を終了</string>
     <string name="galaxy_more">その他</string>

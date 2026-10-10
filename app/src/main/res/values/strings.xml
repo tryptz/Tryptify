@@ -2019,6 +2019,7 @@
     <string name="gv_low_power">Low-performance mode keeps the heavy effects off</string>
     <string name="galaxy_surprise">Surprise me</string>
     <string name="galaxy_you_are_here">You are here</string>
+    <string name="galaxy_system_button">Play it and show its planets</string>
     <string name="galaxy_full_screen">Full screen</string>
     <string name="galaxy_full_screen_hint">Long-press a star to play it · Back to leave full screen</string>
     <string name="galaxy_more">More</string>

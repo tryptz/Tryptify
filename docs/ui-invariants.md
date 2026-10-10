@@ -685,7 +685,8 @@ sheet takes the dock's place and the camera's bottom reserve. Sliders update
 the map at once; the save waits for the hand to stop (`GALAXY_VISUALS_SAVE_MS`).
 
 **A selected genre is a dock of pills, not a panel.** Up to three related
-genres, by name, and three glyph pills (Play, Radio, Top 100), popping in. The
+genres, by name, and four glyph pills (Play, Radio, Top 100, and its system —
+three planets — which does what a long press on the star does), popping in. The
 Top 100 and the history are one compact sheet above them, one at a time.
 There is no close button: a tap on empty space or Back deselects.
 

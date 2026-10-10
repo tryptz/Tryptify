@@ -1967,6 +1967,7 @@
     <string name="gv_low_power">低性能模式下重型特效保持关闭</string>
     <string name="galaxy_surprise">给我惊喜</string>
     <string name="galaxy_you_are_here">你在这里</string>
+    <string name="galaxy_system_button">播放并显示它的行星</string>
     <string name="galaxy_full_screen">全屏</string>
     <string name="galaxy_full_screen_hint">长按恒星即可播放 · 按返回键退出全屏</string>
     <string name="galaxy_more">更多</string>

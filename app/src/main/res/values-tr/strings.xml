@@ -2018,6 +2018,7 @@
     <string name="gv_low_power">Düşük performans modu ağır efektleri kapalı tutar</string>
     <string name="galaxy_surprise">Beni şaşırt</string>
     <string name="galaxy_you_are_here">Buradasınız</string>
+    <string name="galaxy_system_button">Çal ve gezegenlerini göster</string>
     <string name="galaxy_full_screen">Tam ekran</string>
     <string name="galaxy_full_screen_hint">Çalmak için bir yıldıza uzun basın · Tam ekrandan çıkmak için Geri</string>
     <string name="galaxy_more">Daha fazla</string>

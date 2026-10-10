@@ -2069,6 +2069,7 @@
     <string name="gv_low_power">Le mode basse performance garde les effets lourds désactivés</string>
     <string name="galaxy_surprise">Surprenez-moi</string>
     <string name="galaxy_you_are_here">Vous êtes ici</string>
+    <string name="galaxy_system_button">L’écouter et voir ses planètes</string>
     <string name="galaxy_full_screen">Plein écran</string>
     <string name="galaxy_full_screen_hint">Appui long sur une étoile pour l’écouter · Retour pour quitter le plein écran</string>
     <string name="galaxy_more">Plus</string>

@@ -11,6 +11,9 @@
 
 ### Changed
 
+#### A fourth glyph in the genre dock: its system
+- **Next to Play, Radio and Top 100, a glyph of three planets of different sizes** does what a long press on the star does: plays it and opens its planets as the system sheet. On a small phone the four pills narrow a little so the row still fits.
+
 #### Every star lit, and slower, softer stardust
 - **Every star is lit, always.** Stars used to stay small and dim until you had listened to their genre ("still dark"), so most of the galaxy looked switched off. The legend keeps only the hearted ring.
 - **The star you are at is a sun as soon as you are near it**, with its glow and rays, without waiting for its planets. That is the one you selected, the one the camera is following, or the one whose system the camera is inside.

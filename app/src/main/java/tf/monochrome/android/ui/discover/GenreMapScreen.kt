@@ -510,6 +510,17 @@ fun GenreMapScreen(
         )
     }
 
+    /**
+     * A star's music, and its planets as a list: what a long press on the star
+     * does, and the dock's system glyph.
+     */
+    fun openSystem(id: String) {
+        settingsOpen = false
+        if (id == selected?.id) travelTo(id) else viewModel.selectOnMap(id)
+        viewModel.playGenre(id, playerViewModel)
+        sheetFor = id
+    }
+
     // Selecting a genre — by tapping it, from a chip in the panel, or by
     // Surprise — travels there. Keyed on the id, so re-selecting the same
     // genre does not travel again.
@@ -635,10 +646,7 @@ fun GenreMapScreen(
                 // planets open as a list to pick from.
                 onLongPress = { id ->
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    settingsOpen = false
-                    if (id == selected?.id) travelTo(id) else viewModel.selectOnMap(id)
-                    viewModel.playGenre(id, playerViewModel)
-                    sheetFor = id
+                    openSystem(id)
                 },
                 modifier = Modifier.fillMaxSize(),
             )
@@ -936,6 +944,7 @@ fun GenreMapScreen(
                     },
                     onPlayChartEntry = { viewModel.playChartEntry(it, playerViewModel) },
                     onRelated = { child -> viewModel.selectOnMap(child.id) },
+                    onSystem = { openSystem(node.id) },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         // Measured outside the reserve, not inside it: the
@@ -1054,6 +1063,8 @@ private fun GenreDock(
     onToggleChart: () -> Unit,
     onPlayChartEntry: (ChartEntry) -> Unit,
     onRelated: (GenreNode) -> Unit,
+    /** Play the star and open its planets as a list, as a long press on it does. */
+    onSystem: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val instant = reduceMotion()
@@ -1106,13 +1117,17 @@ private fun GenreDock(
             }
         }
 
+        // Four pills as wide as they are elsewhere, narrowing on a small phone
+        // so the row always fits beside its margins.
+        val room = LocalConfiguration.current.screenWidthDp.toFloat()
+        val pillWidth = ((room - 2 * DOCK_MARGIN_DP - 3 * DOCK_GAP_DP) / 4f).coerceIn(56f, GLYPH_PILL_WIDTH.value).dp
         Row(
             modifier = Modifier.padding(top = 6.dp, bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(DOCK_GAP_DP.dp),
         ) {
             val base = related.size
-            GlyphPill(Icons.Default.PlayArrow, stringResource(R.string.play_top), onPlay, hazeState, Modifier.popIn(node.id, base))
-            GlyphPill(Icons.Default.Radio, stringResource(R.string.tab_radio), onRadio, hazeState, Modifier.popIn(node.id, base + 1))
+            GlyphPill(Icons.Default.PlayArrow, stringResource(R.string.play_top), onPlay, hazeState, Modifier.popIn(node.id, base), width = pillWidth)
+            GlyphPill(Icons.Default.Radio, stringResource(R.string.tab_radio), onRadio, hazeState, Modifier.popIn(node.id, base + 1), width = pillWidth)
             GlyphPill(
                 Icons.Default.BarChart,
                 stringResource(R.string.top_100),
@@ -1121,6 +1136,16 @@ private fun GenreDock(
                 Modifier.popIn(node.id, base + 2),
                 selected = chartOpen,
                 accent = familyColor,
+                width = pillWidth,
+            )
+            // Its system: three planets of different sizes.
+            GlyphPill(
+                tf.monochrome.android.ui.discover.galaxy.SystemGlyph,
+                stringResource(R.string.galaxy_system_button),
+                onSystem,
+                hazeState,
+                Modifier.popIn(node.id, base + 3),
+                width = pillWidth,
             )
         }
     }
@@ -1136,13 +1161,14 @@ private fun GlyphPill(
     modifier: Modifier = Modifier,
     selected: Boolean = false,
     accent: Color = MaterialTheme.colorScheme.primary,
+    width: Dp = GLYPH_PILL_WIDTH,
 ) {
     tf.monochrome.android.ui.components.GlassPill(
         onClick = onClick,
         hazeState = hazeState,
         height = GLYPH_PILL_HEIGHT,
         onClickLabel = label,
-        modifier = modifier.width(GLYPH_PILL_WIDTH),
+        modifier = modifier.width(width),
     ) {
         if (selected) {
             Box(
@@ -1450,6 +1476,10 @@ private const val MAX_RELATED_PILLS = 3
 
 private val GLYPH_PILL_WIDTH = 72.dp
 private val GLYPH_PILL_HEIGHT = 48.dp
+
+/** The dock's glyph row: its side margins and the gap between pills, dp. */
+private const val DOCK_MARGIN_DP = 16f
+private const val DOCK_GAP_DP = 12f
 
 /** How long after the previous pill each pops in. */
 private const val POP_STAGGER_MILLIS = 45L

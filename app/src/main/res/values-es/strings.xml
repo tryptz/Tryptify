@@ -2069,6 +2069,7 @@
     <string name="gv_low_power">El modo de bajo rendimiento mantiene desactivados los efectos pesados</string>
     <string name="galaxy_surprise">Sorpréndeme</string>
     <string name="galaxy_you_are_here">Estás aquí</string>
+    <string name="galaxy_system_button">Reproducirlo y ver sus planetas</string>
     <string name="galaxy_full_screen">Pantalla completa</string>
     <string name="galaxy_full_screen_hint">Mantén pulsada una estrella para escucharla · Atrás para salir de la pantalla completa</string>
     <string name="galaxy_more">Más</string>

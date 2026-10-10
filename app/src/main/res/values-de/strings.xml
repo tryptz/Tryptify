@@ -2018,6 +2018,7 @@
     <string name="gv_low_power">Der Energiesparmodus lässt aufwendige Effekte aus</string>
     <string name="galaxy_surprise">Überrasch mich</string>
     <string name="galaxy_you_are_here">Du bist hier</string>
+    <string name="galaxy_system_button">Abspielen und Planeten zeigen</string>
     <string name="galaxy_full_screen">Vollbild</string>
     <string name="galaxy_full_screen_hint">Stern lange drücken zum Abspielen · Zurück beendet den Vollbildmodus</string>
     <string name="galaxy_more">Mehr</string>
