@@ -237,17 +237,21 @@ private fun PlanetRow(planet: PlanetSystem.Planet, description: String, open: Bo
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 64.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(14.dp))
             .clickable(role = Role.Button, onClickLabel = toggleLabel, onClick = onToggle)
             .semantics(mergeDescendants = true) {
                 contentDescription = "${planet.artist}, $moons. $description"
                 stateDescription = toggleLabel
             }
-            .padding(horizontal = 4.dp, vertical = 6.dp),
+            .padding(horizontal = 4.dp, vertical = 3.dp),
     ) {
-        PlanetImage(planet, PLANET_DP.dp)
-        Spacer(Modifier.width(12.dp))
+        // The picture is the planet, so it is as big as the planet is: a
+        // bigger catalogue, a bigger world, and a short sheet when they are small.
+        Box(Modifier.size(PLANET_SLOT_DP.dp), contentAlignment = Alignment.Center) {
+            PlanetImage(planet, planetImageDp(planet).dp)
+        }
+        Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 planet.artist,
@@ -260,7 +264,7 @@ private fun PlanetRow(planet: PlanetSystem.Planet, description: String, open: Bo
                 description,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
@@ -339,7 +343,7 @@ private fun MoonTree(
     val count = planet.moons.size
     Column(
         modifier = Modifier
-            .padding(start = (4 + PLANET_DP / 2).dp)
+            .padding(start = (4 + PLANET_SLOT_DP / 2).dp)
             .drawBehind {
                 if (count == 0) return@drawBehind
                 val row = MOON_ROW_DP.dp.toPx()
@@ -411,5 +415,13 @@ private fun MoonRow(title: String, on: Boolean, onClick: () -> Unit) {
     }
 }
 
-private const val PLANET_DP = 52
+/** The room a planet's picture has in its row, and the smallest and largest it is drawn there. */
+private const val PLANET_SLOT_DP = 40
+private const val PLANET_MIN_DP = 24f
+private const val PLANET_MAX_DP = 40f
+
+/** A planet's picture size in the sheet: its catalogue's share, as the map sizes the planet. */
+private fun planetImageDp(planet: PlanetSystem.Planet): Float =
+    PLANET_MIN_DP + (PLANET_MAX_DP - PLANET_MIN_DP) * PlanetSystem.catalogShare(planet.releases)
+
 private const val MOON_ROW_DP = 44

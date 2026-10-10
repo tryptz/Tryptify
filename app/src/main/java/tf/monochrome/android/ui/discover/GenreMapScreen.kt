@@ -986,7 +986,7 @@ private const val PLANET_NEAR_RADII = 2.6f
 private const val FULL_SCREEN_HINT_MILLIS = 3200L
 
 /** The long-press sheet: at most this share of the map's height, and never wider than this. */
-private const val SYSTEM_SHEET_FRACTION = 0.55f
+private const val SYSTEM_SHEET_FRACTION = 0.42f
 private val MAX_SHEET_WIDTH = 560.dp
 
 private const val TRAVEL_MILLIS = 1700

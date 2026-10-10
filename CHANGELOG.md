@@ -20,7 +20,7 @@
 
 #### Full screen on the genre galaxy
 - **Turn the phone on its side and the map goes full screen**: no title bar, dock, mini player, tab bar or status bar, only the galaxy to fly around. Turn it back and everything returns. A new button in the title bar does the same upright, and Back leaves.
-- **Long-press a star to play it.** Its music starts and its system opens as a short glass sheet (demo B). Each planet shows the artist's picture as a lit sphere, their name and the opening of their Last.fm bio, or where they stand in the chart when there is no bio. Their moons, the tracks, hang underneath on a dashed orbit line, and a tap plays one.
+- **Long-press a star to play it.** Its music starts and its system opens as a short glass sheet (demo B). Each planet shows the artist's picture as a lit sphere, their name and the opening of their Last.fm bio, or where they stand in the chart when there is no bio. Their moons, the tracks, hang underneath on a dashed orbit line, and a tap plays one. The sheet is short: it hugs what it lists, each row is one line, and each planet's picture is sized like the planet.
 
 #### God rays from the bright star, with real shadows
 - **The rays come from one light**: the core, or the star whose planets you are visiting. Everything in its way casts a shadow through them, so each planet throws a dark shaft straight out from its star, and dust and gas break the light into fine rays. The old rays made every bright star a starburst and drew stripes round the core with nothing casting them.
