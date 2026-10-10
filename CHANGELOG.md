@@ -23,6 +23,18 @@
 - **Every pill on Discover is the app's liquid glass** — the moods, the genre row, the genres you can subtract from a mix, the TIDAL · Qobuz · Deezer switch and the sort. They are `GlassChoiceChip`, the Library section switcher's pill, so they frost, swell under the finger and mark the selected one with an accent rim like everywhere else. The chip gained an optional icon (a tick on combined moods, a heart on hearted genres, a cross on subtractable ones) and an `enabled` flag; its existing uses are unchanged.
 - **The genre search bar is one slim row**, like every other glass search bar. It carried a second line ("Browse the map", and "no match"), which made it twice their height; the map is now a pill at the end of the genre row, and "no match" shows there too.
 
+#### The genre galaxy's look, tuned on the map
+- **A tune button in the map's title bar opens a glass sheet**, in the dock's place, so every change shows on the galaxy as you make it. It has five groups:
+  - **Sky:** deep-sky stars, nebula strength, and dust (less, normal or more).
+  - **Core:** the black hole, the god rays, and ray strength.
+  - **Motion:** how fast the galaxy turns (down to still), twinkle, and travel blur.
+  - **Music:** gas and smoke with its amount, and whether it reacts to music, with the reaction strength.
+  - **Stars:** star size, how many names (fewer, normal or more), and planets and moons.
+- **Reset puts it back as it ships.** The defaults are the galaxy exactly as it was, so nothing changes until you change it.
+- **Your look is kept.** It is stored like the app's other settings and clamped when read back.
+- **Low-performance mode still has the last word.** It keeps the heavy effects off, and the sheet says so.
+- **Back closes the sheet first.**
+
 #### The genre galaxy: a black hole, lit planets, music in the gas, and pills instead of the panel
 - **A black hole at the middle**, as it is usually pictured since Interstellar. A black shadow, a thin bright photon ring, and an accretion disk lying in the galaxy's plane: white-hot inside, orange, then a dull red at the rim. The disk passes in front of the hole below and behind it above, its far side bends up over the top, and the side turning toward you is brighter. The god rays now come off the disk and the ring. The flat map already had a hole in the middle (its nearest genre is 423 units out), and the timeline now starts outside the disk.
 - **Shaped like the Milky Way.** A thin disc, a puffed nuclear bulge round the hole, and a halo of old stars with nine globular clusters. In the timeline the twelve families wind as four arms of three, side by side in their colours, about a full turn.

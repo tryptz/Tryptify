@@ -46,6 +46,7 @@ uniform float uTreb;
 uniform float3 uCool;
 uniform float3 uViolet;
 uniform float3 uWarm;
+uniform float uAmount;
 
 float hash(float2 p) {
     float3 p3 = fract(float3(p.xyx) * 0.1031);
@@ -96,7 +97,8 @@ half4 main(float2 xy) {
     float v = fbm(q * 1.1 - flow + 4.0);
     float n = fbm(q + (1.5 + 0.5 * uMid) * float2(w, v));
 
-    float dens = smoothstep(0.42, 0.86, n);
+    // More gas reaches further down the noise, and is brighter where it is.
+    float dens = smoothstep(0.42 + 0.12 * (1.0 - uAmount), 0.86, n) * (0.6 + 0.4 * uAmount);
     // In the disc: thinning past the rim, clear inside the hole's reach.
     dens *= smoothstep(1400.0, 650.0, r) * smoothstep(90.0, 320.0, r);
     // And less, far off, where the plane runs into the horizon.
@@ -130,7 +132,8 @@ internal class GalaxySmoke {
      * Draws the smoke onto a canvas [scale] times smaller than the view [f]
      * describes, at [time] seconds, moved by [bands].
      */
-    fun draw(canvas: android.graphics.Canvas, f: CameraFrame, scale: Float, time: Float, bands: AudioBands?) {
+    fun draw(canvas: android.graphics.Canvas, f: CameraFrame, scale: Float, time: Float, bands: AudioBands?, amount: Float = 1f) {
+        shader.setFloatUniform("uAmount", amount)
         shader.setFloatUniform("uScale", scale)
         shader.setFloatUniform("uCenter", f.centerX, f.centerY)
         shader.setFloatUniform("uFocal", f.focal)
@@ -178,10 +181,13 @@ class AudioBands {
 
     private val average = FloatArray(3)
 
+    /** How hard the galaxy answers: the listener's reactivity, 1 as shipped. */
+    var gain = 1f
+
     /** How far each band runs above its usual level, 0 when it is at or under it. */
-    val bassLift: Float get() = ((bassAtt - LIFT_FROM) * LIFT_GAIN).coerceIn(0f, 2f)
-    val midLift: Float get() = ((midAtt - LIFT_FROM) * LIFT_GAIN).coerceIn(0f, 2f)
-    val trebLift: Float get() = ((trebAtt - LIFT_FROM) * LIFT_GAIN).coerceIn(0f, 2f)
+    val bassLift: Float get() = ((bassAtt - LIFT_FROM) * LIFT_GAIN * gain).coerceIn(0f, 2f)
+    val midLift: Float get() = ((midAtt - LIFT_FROM) * LIFT_GAIN * gain).coerceIn(0f, 2f)
+    val trebLift: Float get() = ((trebAtt - LIFT_FROM) * LIFT_GAIN * gain).coerceIn(0f, 2f)
 
     fun update(bins: FloatArray, dt: Float) {
         val now = floatArrayOf(

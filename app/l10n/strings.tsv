@@ -1955,6 +1955,34 @@ galaxy_layout_galaxy	Galaxy	星系	銀河	Galaxie	Galaxia	Galaksi	Galaxie
 galaxy_layout_timeline	Timeline	时间线	年表	Chronologie	Cronología	Zaman çizelgesi	Zeitleiste
 galaxy_time_caption	Oldest at the core, newest at the rim	最古老的在核心，最新的在边缘	古いものほど中心に、新しいものほど外側に	Les plus anciens au centre, les plus récents au bord	Los más antiguos en el centro, los más nuevos en el borde	En eskiler merkezde, en yeniler kenarda	Die ältesten im Kern, die neuesten am Rand
 galaxy_planets_caption	Planets: its most played artists · Moons: their tracks · Tap a moon to play	行星：最常播放的艺人 · 卫星：他们的曲目 · 点按卫星即可播放	惑星：よく聴かれるアーティスト · 衛星：その曲 · 衛星をタップして再生	Planètes : les artistes les plus écoutés · Lunes : leurs titres · Touchez une lune pour l’écouter	Planetas: los artistas más escuchados · Lunas: sus canciones · Toca una luna para reproducir	Gezegenler: en çok dinlenen sanatçılar · Uydular: şarkıları · Çalmak için bir uyduya dokunun	Planeten: die meistgehörten Künstler · Monde: ihre Titel · Tippe auf einen Mond zum Abspielen
+galaxy_look	Galaxy look	星系外观	銀河の見た目	Apparence de la galaxie	Aspecto de la galaxia	Galaksi görünümü	Galaxie-Aussehen
+galaxy_look_reset	Reset	重置	リセット	Réinitialiser	Restablecer	Sıfırla	Zurücksetzen
+gv_sky	Sky	天空	空	Ciel	Cielo	Gökyüzü	Himmel
+gv_core	Core	核心	中心	Cœur	Núcleo	Çekirdek	Kern
+gv_motion	Motion	动态	動き	Mouvement	Movimiento	Hareket	Bewegung
+gv_music	Music	音乐	音楽	Musique	Música	Müzik	Musik
+gv_stars	Stars	恒星	星	Étoiles	Estrellas	Yıldızlar	Sterne
+gv_deep_sky	Deep-sky stars	深空星辰	遠くの星	Étoiles lointaines	Estrellas lejanas	Uzak yıldızlar	Ferne Sterne
+gv_nebulae	Nebulae	星云	星雲	Nébuleuses	Nebulosas	Bulutsular	Nebel
+gv_dust	Dust	星尘	星屑	Poussière	Polvo	Toz	Staub
+gv_less	Less	少	少なめ	Moins	Menos	Az	Weniger
+gv_normal	Normal	标准	標準	Normal	Normal	Normal	Normal
+gv_more	More	多	多め	Plus	Más	Çok	Mehr
+gv_black_hole	Black hole	黑洞	ブラックホール	Trou noir	Agujero negro	Kara delik	Schwarzes Loch
+gv_god_rays	God rays	光芒	光芒	Rayons de lumière	Rayos de luz	Işık huzmeleri	Lichtstrahlen
+gv_ray_strength	Ray strength	光芒强度	光芒の強さ	Intensité des rayons	Intensidad de los rayos	Huzme gücü	Strahlenstärke
+gv_spin	Galaxy turn	星系旋转	銀河の回転	Rotation de la galaxie	Giro de la galaxia	Galaksi dönüşü	Drehung der Galaxie
+gv_still	Still	静止	停止	Immobile	Quieta	Durgun	Still
+gv_twinkle	Twinkle	闪烁	またたき	Scintillement	Centelleo	Parıltı	Funkeln
+gv_travel_blur	Travel blur	飞行模糊	移動時のぼかし	Flou de déplacement	Desenfoque al viajar	Yolculuk bulanıklığı	Reiseunschärfe
+gv_smoke	Gas and smoke	气体与烟雾	ガスと煙	Gaz et fumée	Gas y humo	Gaz ve duman	Gas und Rauch
+gv_smoke_amount	Gas amount	气体浓度	ガスの量	Quantité de gaz	Cantidad de gas	Gaz miktarı	Gasmenge
+gv_music_reactive	React to music	随音乐律动	音楽に反応	Réagir à la musique	Reaccionar a la música	Müziğe tepki ver	Auf Musik reagieren
+gv_reactivity	Reaction strength	律动强度	反応の強さ	Intensité de la réaction	Intensidad de la reacción	Tepki gücü	Reaktionsstärke
+gv_star_size	Star size	恒星大小	星の大きさ	Taille des étoiles	Tamaño de las estrellas	Yıldız boyutu	Sterngröße
+gv_labels	Names	名称	名前	Noms	Nombres	Adlar	Namen
+gv_planets	Planets and moons	行星与卫星	惑星と衛星	Planètes et lunes	Planetas y lunas	Gezegenler ve uydular	Planeten und Monde
+gv_low_power	Low-performance mode keeps the heavy effects off	低性能模式下重型特效保持关闭	低パフォーマンスモードでは重い効果はオフのままです	Le mode basse performance garde les effets lourds désactivés	El modo de bajo rendimiento mantiene desactivados los efectos pesados	Düşük performans modu ağır efektleri kapalı tutar	Der Energiesparmodus lässt aufwendige Effekte aus
 galaxy_surprise	Surprise me	给我惊喜	おまかせ	Surprenez-moi	Sorpréndeme	Beni şaşırt	Überrasch mich
 galaxy_you_are_here	You are here	你在这里	現在地	Vous êtes ici	Estás aquí	Buradasınız	Du bist hier
 galaxy_legend_lit	Lit: you’ve listened	亮起：听过	点灯：聴いた	Allumé : écouté	Encendido: escuchado	Yanan: dinlediniz	Leuchtet: gehört

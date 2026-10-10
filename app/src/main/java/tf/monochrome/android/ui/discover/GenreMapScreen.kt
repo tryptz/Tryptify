@@ -72,6 +72,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.spring
 import androidx.compose.material.icons.automirrored.filled.MenuBook
@@ -218,11 +220,22 @@ fun GenreMapScreen(
     // of the motion when the device or the listener asks for less.
     val alive = !instant && !lowPower
 
-    val scene = remember(graph, lowPower) {
+    // The listener's look for the map, from its settings sheet. Low-performance
+    // mode still has the last word on the heavy effects.
+    val visuals by viewModel.galaxyVisuals.collectAsStateWithLifecycle()
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
+
+    val dustCount = when {
+        lowPower -> LOW_POWER_DUST
+        visuals.dust == tf.monochrome.android.domain.model.GalaxyAmount.LESS -> GalaxyScene.DEFAULT_DUST * 2 / 5
+        visuals.dust == tf.monochrome.android.domain.model.GalaxyAmount.MORE -> GalaxyScene.DEFAULT_DUST * 3 / 2
+        else -> GalaxyScene.DEFAULT_DUST
+    }
+    val scene = remember(graph, dustCount) {
         if (graph.size == 0) {
             null
         } else {
-            GalaxyScene(graph, dustCount = if (lowPower) LOW_POWER_DUST else GalaxyScene.DEFAULT_DUST)
+            GalaxyScene(graph, dustCount = dustCount)
         }
     }
     val camera = remember { GalaxyCamera() }
@@ -271,6 +284,7 @@ fun GenreMapScreen(
     var viewport by remember { mutableStateOf(IntSize.Zero) }
     var topChromePx by remember { mutableIntStateOf(0) }
     var hudHeightPx by remember { mutableIntStateOf(0) }
+    var lookHeightPx by remember { mutableIntStateOf(0) }
     var panelHeightPx by remember { mutableIntStateOf(with(density) { 230.dp.roundToPx() }) }
 
     // The middle of the view is the middle of what the panels leave visible,
@@ -279,7 +293,11 @@ fun GenreMapScreen(
     // jumping.
     val reserveBottom by animateFloatAsState(
         targetValue = with(density) { panelBottomInset.toPx() } +
-            (if (selected != null) panelHeightPx else hudHeightPx),
+            when {
+                settingsOpen -> lookHeightPx
+                selected != null -> panelHeightPx
+                else -> hudHeightPx
+            },
         animationSpec = if (instant) snap() else tween(RESERVE_MILLIS, easing = FastOutSlowInEasing),
         label = "galaxyReserve",
     )
@@ -296,8 +314,10 @@ fun GenreMapScreen(
     // The music, read the way a MilkDrop preset reads it, for the gas and the
     // black hole. The spectrum tap only runs while the map is up and moving.
     val spectrum = playerViewModel.spectrumAnalyzer
-    val listening = alive && spectrum != null
+    val listening = alive && spectrum != null && visuals.musicReactive && visuals.smoke
     val bands = remember { AudioBands() }
+    // Read by the clock, which outlives the composition that started it.
+    val liveVisuals = rememberUpdatedState(visuals)
     if (listening) {
         DisposableEffect(spectrum) {
             spectrum.acquire()
@@ -332,7 +352,7 @@ fun GenreMapScreen(
         goal(scratch)
         val span = hypot(hypot(scratch[0] - fromX, scratch[1] - fromY), scratch[2] - fromZ)
         val arc = (span / GalaxyScene.RADIUS).coerceIn(0f, MAX_ARC)
-        val blurs = !lowPower && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+        val blurs = !lowPower && visuals.travelBlur && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
         travel = scope.launch {
             try {
                 if (!instant) {
@@ -452,8 +472,9 @@ fun GenreMapScreen(
                 }
                 if (alive) {
                     clock += dt
-                    spin += dt * GALAXY_TURN_RAD_S
+                    spin += dt * GALAXY_TURN_RAD_S * liveVisuals.value.spin
                 }
+                bands.gain = liveVisuals.value.reactivity
                 if (listening) bands.update(spectrum.spectrumBins.value, dt) else bands.quiet(dt)
             }
         }
@@ -472,7 +493,9 @@ fun GenreMapScreen(
 
     // Back puts the genre away before it leaves the map; so does a tap on
     // empty space. The dock has no close of its own.
-    androidx.activity.compose.BackHandler(enabled = selected != null) { viewModel.selectOnMap(null) }
+    androidx.activity.compose.BackHandler(enabled = selected != null || settingsOpen) {
+        if (settingsOpen) settingsOpen = false else viewModel.selectOnMap(null)
+    }
 
     val labelStyle = MaterialTheme.typography.labelSmall.copy(
         fontSize = 10.sp,
@@ -502,13 +525,14 @@ fun GenreMapScreen(
                 reserveBottomPx = reserveBottom,
                 travelBlurPx = { travelBlur },
                 spin = { spin },
-                rays = !lowPower,
-                spaceShader = !lowPower,
-                smoke = !lowPower,
+                rays = !lowPower && visuals.godRays,
+                spaceShader = !lowPower && visuals.deepSky,
+                smoke = !lowPower && visuals.smoke,
                 bands = if (listening) bands else null,
+                visuals = visuals,
                 labelStyle = labelStyle,
                 hereLabel = stringResource(R.string.galaxy_you_are_here),
-                system = system,
+                system = system.takeIf { visuals.planets },
                 systemAppear = { systemAppear.value },
                 onTapPlanet = { p -> travelToPlanet(p) },
                 // A moon is a track: tapping it plays it.
@@ -582,6 +606,14 @@ fun GenreMapScreen(
                             )
                         }
                     }
+                    // The galaxy's look, tuned on the map itself.
+                    IconButton(onClick = { settingsOpen = !settingsOpen }) {
+                        Icon(
+                            Icons.Default.Tune,
+                            contentDescription = stringResource(R.string.galaxy_look),
+                            tint = if (settingsOpen) MaterialTheme.colorScheme.primary else GALAXY_INK,
+                        )
+                    }
                     IconButton(onClick = { recentre() }) {
                         Icon(Icons.Default.CenterFocusStrong, contentDescription = stringResource(R.string.recentre))
                     }
@@ -611,7 +643,8 @@ fun GenreMapScreen(
             }
             Text(
                 text = when {
-                    facts != null && system != null -> facts + "\n" + stringResource(R.string.galaxy_planets_caption)
+                    facts != null && system != null && visuals.planets ->
+                        facts + "\n" + stringResource(R.string.galaxy_planets_caption)
                     facts != null -> facts
                     timeline -> stringResource(R.string.galaxy_time_caption)
                     else -> stringResource(R.string.map_weight_popularity)
@@ -626,7 +659,31 @@ fun GenreMapScreen(
             )
         }
 
-        if (selected == null && graph.size > 0) {
+        if (settingsOpen && graph.size > 0) {
+            CompositionLocalProvider(
+                LocalPlayerGlass provides glassSettings,
+                tf.monochrome.android.ui.components.LocalGlassBackdrop provides mapHaze,
+            ) {
+                tf.monochrome.android.ui.discover.galaxy.GalaxyLookSheet(
+                    visuals = visuals,
+                    onChange = viewModel::setGalaxyVisuals,
+                    lowPower = lowPower,
+                    hazeState = mapHaze,
+                    glass = glassSettings,
+                    // Half of what is between the title and the mini player, so
+                    // the galaxy it is tuning stays in view above it.
+                    maxHeight = with(density) {
+                        ((viewport.height - topChromePx - panelBottomInset.toPx()) * 0.5f)
+                            .coerceAtLeast(MIN_HISTORY_HEIGHT.toPx()).toDp()
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .onSizeChanged { lookHeightPx = it.height }
+                        .padding(bottom = panelBottomInset)
+                        .consumeWindowInsets(WindowInsets.navigationBars),
+                )
+            }
+        } else if (selected == null && graph.size > 0) {
             GalaxyHud(
                 timeline = timeline,
                 onTimeline = {
@@ -650,7 +707,7 @@ fun GenreMapScreen(
             )
         }
 
-        selected?.let { node ->
+        if (!settingsOpen) selected?.let { node ->
             val related = remember(graph, node.id) { relatedTo(graph, node) }
             // The shader modifier reads its parameters from this local, so
             // the dock has to provide it — this route sits outside the

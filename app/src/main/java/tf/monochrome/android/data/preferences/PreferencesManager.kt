@@ -251,6 +251,7 @@ class PreferencesManager @Inject constructor(
         // Which catalogue Discover finds its music on: an ApiService name.
         // Device-local, like the APIs it depends on being reachable from here.
         private val DISCOVERY_SERVICE = stringPreferencesKey("discovery_service")
+        private val GALAXY_VISUALS_JSON = stringPreferencesKey("galaxy_visuals_json")
         // Epoch day of the newest release the radar has shown; newer ones are NEW.
         private val RELEASE_RADAR_SEEN_THROUGH = longPreferencesKey("release_radar_seen_through")
 
@@ -2586,6 +2587,22 @@ class PreferencesManager @Inject constructor(
     }
 
     /** The stored name of Discover's catalogue; empty when never chosen. */
+    /** How the genre galaxy looks; the shipped look until the listener tunes it. */
+    val galaxyVisuals: Flow<tf.monochrome.android.domain.model.GalaxyVisualSettings> = dataStore.data
+        .map { it[GALAXY_VISUALS_JSON] }
+        .distinctUntilChanged()
+        .map { raw ->
+            raw?.let {
+                runCatching {
+                    json.decodeFromString<tf.monochrome.android.domain.model.GalaxyVisualSettings>(it).clamped()
+                }.getOrNull()
+            } ?: tf.monochrome.android.domain.model.GalaxyVisualSettings.DEFAULT
+        }
+
+    suspend fun setGalaxyVisuals(settings: tf.monochrome.android.domain.model.GalaxyVisualSettings) {
+        dataStore.edit { it[GALAXY_VISUALS_JSON] = json.encodeToString(settings.clamped()) }
+    }
+
     val discoveryService: Flow<String> = dataStore.data.map { it[DISCOVERY_SERVICE].orEmpty() }
 
     suspend fun setDiscoveryService(name: String) {

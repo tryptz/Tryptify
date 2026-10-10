@@ -113,6 +113,9 @@ internal fun GenreGalaxyView(
     /** The galaxy's gas, moved by [bands]; off on devices that asked for less. */
     smoke: Boolean = false,
     bands: AudioBands? = null,
+    /** The listener's look for the map (the parts the view draws itself). */
+    visuals: tf.monochrome.android.domain.model.GalaxyVisualSettings =
+        tf.monochrome.android.domain.model.GalaxyVisualSettings.DEFAULT,
     labelStyle: TextStyle,
     hereLabel: String,
     system: PlanetSystem?,
@@ -134,6 +137,7 @@ internal fun GenreGalaxyView(
     val art = remember(scene, familyColors) { GalaxyArt(scene, familyColors) }
     val bodies = remember { SystemArt() }
     val space = rememberSpaceSky(spaceShader)
+    art.look(visuals)
     val gas = rememberGalaxySmoke(smoke)
 
     // Read live by the gesture handlers, which outlive the composition that
@@ -213,7 +217,7 @@ internal fun GenreGalaxyView(
                 },
             ) {
                 val full = Size(size.width * SMOKE_SCALE, size.height * SMOKE_SCALE)
-                gas.draw(drawContext.canvas.nativeCanvas, frameFor(full), SMOKE_SCALE.toFloat(), time(), bands)
+                gas.draw(drawContext.canvas.nativeCanvas, frameFor(full), SMOKE_SCALE.toFloat(), time(), bands, visuals.smokeAmount)
             }
         }
         if (rays) {
@@ -227,6 +231,7 @@ internal fun GenreGalaxyView(
                             if (f.project(0f, 0f, 0f, out, 0)) Offset(out[0], out[1]) else null
                         },
                         time = time,
+                        exposure = 0.9f * visuals.rayStrength,
                     ),
             ) {
                 drawEmitters(art, scene, frameFor(size), morph(), time(), exploredMask, dp, bands)
@@ -346,6 +351,25 @@ private class GalaxyArt(scene: GalaxyScene, familyColors: Map<String, Color>) {
     val coreSprite: Bitmap = sprite(128, CORE_WARM, coreWhite = false)
     val emitterSprite: Bitmap = sprite(32, Color.White, coreWhite = true)
     val hole = BlackHoleArt()
+
+    // The listener's look, set from the view each composition (see look).
+    var nebulae = 1f; private set
+    var blackHole = true; private set
+    var twinkle = true; private set
+    var starScale = 1f; private set
+    var maxLabels = MAX_LABELS; private set
+
+    fun look(v: tf.monochrome.android.domain.model.GalaxyVisualSettings) {
+        nebulae = v.nebulae
+        blackHole = v.blackHole
+        twinkle = v.twinkle
+        starScale = v.starSize
+        maxLabels = when (v.labels) {
+            tf.monochrome.android.domain.model.GalaxyAmount.LESS -> MAX_LABELS / 2
+            tf.monochrome.android.domain.model.GalaxyAmount.NORMAL -> MAX_LABELS
+            tf.monochrome.android.domain.model.GalaxyAmount.MORE -> MAX_LABELS * 5 / 3
+        }
+    }
     val haloPoints = FloatArray(scene.halo.size / 3 * 2)
 
     val add = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { additive() }
@@ -449,15 +473,15 @@ private fun DrawScope.drawSky(
         if (!f.project(p[0], p[1], p[2], p, 0)) continue
         val r = scene.nebulaRadius[k] * f.scaleAt(p[2])
         art.rect.set(p[0] - r, p[1] - r, p[0] + r, p[1] + r)
-        art.add.alpha = (NEBULA_ALPHA * 255 * fog(p[2])).toInt()
+        art.add.alpha = (NEBULA_ALPHA * art.nebulae * 255 * fog(p[2])).toInt().coerceIn(0, 255)
         canvas.drawBitmap(art.nebulaSprite[scene.family[i]], null, art.rect, art.add)
     }
     if (f.project(0f, 0f, 0f, p, 0)) {
-        // The bulge's glow, kept low: the black hole in the middle of it has
-        // to read as dark.
+        // The bulge's glow, kept low when there is a black hole in the middle
+        // of it, which has to read as dark.
         val r = 380f * f.scaleAt(p[2])
         art.rect.set(p[0] - r, p[1] - r, p[0] + r, p[1] + r)
-        art.add.alpha = (0.16f * 255).toInt()
+        art.add.alpha = ((if (art.blackHole) 0.16f else 0.3f) * 255).toInt()
         canvas.drawBitmap(art.coreSprite, null, art.rect, art.add)
     }
 
@@ -533,7 +557,7 @@ private fun DrawScope.drawSky(
     }
 
     // The black hole, over the dust and the bulge behind it.
-    art.hole.draw(canvas, f, t, dp, boost = 1f + HOLE_BASS_BOOST * (bands?.bassLift ?: 0f))
+    if (art.blackHole) art.hole.draw(canvas, f, t, dp, boost = 1f + HOLE_BASS_BOOST * (bands?.bassLift ?: 0f))
 
     // The timeline's own spiral: a track wound at the arms' pitch, with a
     // mark at each year, fading in with the morph.
@@ -598,9 +622,9 @@ private val DUST_SIZE_DP = floatArrayOf(2f, 1.5f, 1.1f)
  * the best known, with the disc's stars about 11 dp apart, and so a star you
  * have travelled to tops out at [MAX_STAR_DP].
  */
-private fun starSizePx(prominence: Float, lit: Boolean, depth: Float, dp: Float): Float =
-    ((3.7f + 12f * prominence) * (if (lit) 1.35f else 1f) * (STAR_REF_DEPTH / depth).pow(0.75f) * dp)
-        .coerceIn(1.2f * dp, MAX_STAR_DP * dp)
+private fun starSizePx(prominence: Float, lit: Boolean, depth: Float, dp: Float, scale: Float = 1f): Float =
+    ((3.7f + 12f * prominence) * (if (lit) 1.35f else 1f) * (STAR_REF_DEPTH / depth).pow(0.75f) * dp * scale)
+        .coerceIn(1.2f * dp, MAX_STAR_DP * dp * scale.coerceAtLeast(1f))
 
 private const val STAR_REF_DEPTH = 1400f
 private const val MAX_STAR_DP = 26f
@@ -614,13 +638,21 @@ private fun DrawScope.drawEmitters(
     val p = art.tmp
     // The rays come off the accretion disk and the photon ring, and swell
     // with the bass.
-    art.hole.draw(canvas, f, t, dp, rays = true, boost = 1f + HOLE_BASS_BOOST * (bands?.bassLift ?: 0f))
+    if (art.blackHole) {
+        art.hole.draw(canvas, f, t, dp, rays = true, boost = 1f + HOLE_BASS_BOOST * (bands?.bassLift ?: 0f))
+    } else if (f.project(0f, 0f, 0f, p, 0)) {
+        // Without the hole, the core itself shines.
+        val r = 120f * f.scaleAt(p[2])
+        art.rect.set(p[0] - r, p[1] - r, p[0] + r, p[1] + r)
+        art.add.alpha = 255
+        canvas.drawBitmap(art.coreSprite, null, art.rect, art.add)
+    }
     for (i in 0 until scene.size) {
         val lit = explored[i]
         if (!lit && scene.prominence[i] < 0.35f) continue
         scene.position(i, m, p, 0)
         if (!f.project(p[0], p[1], p[2], p, 0)) continue
-        val r = starSizePx(scene.prominence[i], lit, p[2], dp) * 0.6f
+        val r = starSizePx(scene.prominence[i], lit, p[2], dp, art.starScale) * 0.6f
         art.rect.set(p[0] - r, p[1] - r, p[0] + r, p[1] + r)
         art.add.alpha = (255 * fog(p[2])).toInt()
         canvas.drawBitmap(art.emitterSprite, null, art.rect, art.add)
@@ -653,9 +685,9 @@ private fun DrawScope.drawStar(
 ) {
     val canvas = drawContext.canvas.nativeCanvas
     val lit = explored[i]
-    val twinkle = 0.8f + 0.2f * sin(t * 1.6f + scene.phase[i])
+    val twinkle = if (art.twinkle) 0.8f + 0.2f * sin(t * 1.6f + scene.phase[i]) else 0.9f
     // The sprite carries the halo, so it is drawn well past the star's own size.
-    val r = starSizePx(scene.prominence[i], lit || i == selected, depth, dp) * 1.25f * twinkle
+    val r = starSizePx(scene.prominence[i], lit || i == selected, depth, dp, art.starScale) * 1.25f * twinkle
     art.rect.set(x - r, y - r, x + r, y + r)
     art.add.alpha = ((if (lit) 1f else 0.7f) * fog(depth) * (1f - dim) * 255).toInt()
     canvas.drawBitmap(art.starSprite[scene.family[i]], null, art.rect, art.add)
@@ -1117,12 +1149,13 @@ private fun DrawScope.drawLabels(
     hereLabel: String, top: Float, bottom: Float,
 ) {
     val s = art.genreScreen
-    val taken = ArrayList<FloatArray>(MAX_LABELS + 8)
+    val maxLabels = art.maxLabels
+    val taken = ArrayList<FloatArray>(maxLabels + 8)
     var used = 0
 
     /** Draws [text] with its top-left at [x], [y] if it is clear of everything already placed. */
     fun place(text: String, textStyle: TextStyle, color: Color, x0: Float, y0: Float, centred: Boolean, alpha: Float): Boolean {
-        if (used >= MAX_LABELS) return false
+        if (used >= maxLabels) return false
         val layout: TextLayoutResult = measurer.measure(text, textStyle)
         val w = layout.size.width.toFloat(); val h = layout.size.height.toFloat()
         val x = if (centred) x0 - w / 2f else x0
@@ -1198,7 +1231,7 @@ private fun DrawScope.drawLabels(
         best[at] = i; score[at] = v
     }
     for (n in 0 until picked) {
-        if (used >= MAX_LABELS) break
+        if (used >= maxLabels) break
         put(best[n], art.famLabel[scene.family[best[n]]])
     }
 

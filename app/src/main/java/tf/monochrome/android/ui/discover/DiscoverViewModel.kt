@@ -1061,6 +1061,30 @@ class DiscoverViewModel @Inject constructor(
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GenreChartState.Idle)
 
+    // ── The galaxy's look ──
+
+    /**
+     * The edit in progress, ahead of the save: sliders move the map every
+     * frame they move, and the write waits for the hand to stop.
+     */
+    private val galaxyVisualsEdit = MutableStateFlow<tf.monochrome.android.domain.model.GalaxyVisualSettings?>(null)
+    private var galaxyVisualsSave: kotlinx.coroutines.Job? = null
+
+    /** How the genre galaxy looks, from the map's own settings sheet. */
+    val galaxyVisuals: StateFlow<tf.monochrome.android.domain.model.GalaxyVisualSettings> =
+        combine(preferences.galaxyVisuals, galaxyVisualsEdit) { saved, edit -> edit ?: saved }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.GalaxyVisualSettings.DEFAULT)
+
+    fun setGalaxyVisuals(settings: tf.monochrome.android.domain.model.GalaxyVisualSettings) {
+        val clamped = settings.clamped()
+        galaxyVisualsEdit.value = clamped
+        galaxyVisualsSave?.cancel()
+        galaxyVisualsSave = viewModelScope.launch {
+            kotlinx.coroutines.delay(GALAXY_VISUALS_SAVE_MS)
+            preferences.setGalaxyVisuals(clamped)
+        }
+    }
+
     /**
      * The selected genre's planets and moons: its chart's most popular artists
      * and their charted tracks (see [tf.monochrome.android.ui.discover.galaxy.PlanetSystem]).
@@ -1386,5 +1410,8 @@ class DiscoverViewModel @Inject constructor(
 
         /** How long the map stays on a genre before its planets are fetched. */
         const val MAP_SYSTEM_DWELL_MS = 700L
+
+        /** How long after the last change to the galaxy's look it is saved. */
+        const val GALAXY_VISUALS_SAVE_MS = 350L
     }
 }
