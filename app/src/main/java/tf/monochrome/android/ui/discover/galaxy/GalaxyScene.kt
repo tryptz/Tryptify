@@ -78,13 +78,14 @@ class GalaxyScene(
             sound[i * 3 + 2] = z
             sumX[family[i]] += x; sumZ[family[i]] += z; count[family[i]]++
         }
-        val armAngle = FloatArray(families.size) { f ->
+        val clusterAngle = FloatArray(families.size) { f ->
             atan2(sumZ[f] / count[f].coerceAtLeast(1), sumX[f] / count[f].coerceAtLeast(1))
         }
+        val armAngle = bundleArms(clusterAngle)
         trackAngle = widestGap(armAngle)
         for (i in 0 until size) {
-            val r = timeRadius(startYear(i)) * RADIUS * 0.95f + gauss() * 12f
-            val a = armAngle[family[i]] + ARM_TWIST * (r / RADIUS) + gauss() * 0.15f
+            val r = timeDistance(timeRadius(startYear(i))) + gauss() * 12f
+            val a = armAngle[family[i]] + ARM_TWIST * (r / RADIUS) + gauss() * 0.09f
             time[i * 3] = cos(a) * r
             time[i * 3 + 1] = gauss() * 34f * (1.15f - r / RADIUS)
             time[i * 3 + 2] = sin(a) * r
@@ -98,7 +99,7 @@ class GalaxyScene(
 
     /** The point on the time track [share] of the way out (0 core, 1 rim). */
     fun trackPointAt(share: Float, out: FloatArray, at: Int = 0) {
-        val r = share * RADIUS * 0.95f
+        val r = timeDistance(share)
         val a = trackAngle + ARM_TWIST * (r / RADIUS)
         out[at] = cos(a) * r
         out[at + 1] = 0f
@@ -137,12 +138,47 @@ class GalaxyScene(
     // ── The core: a warm bulge at the centre, the same in both layouts ──
 
     val core = FloatArray(coreCount * 3).also { c ->
+        // The nuclear bulge: a puffed lens of old stars round the black hole,
+        // thickest at the middle and thinning out across the inner disc, as
+        // the Milky Way's is seen side on. Starts outside the hole's shadow,
+        // so the shadow is not full of stars in front of it.
         for (k in 0 until coreCount) {
-            val r = kotlin.math.abs(gauss()) * 150f
+            val r = DISK_INNER * 1.4f + kotlin.math.abs(gauss()) * 190f
             val a = random.nextFloat() * 6.2832f
             c[k * 3] = cos(a) * r
-            c[k * 3 + 1] = gauss() * 46f * exp(-r / 220f)
+            c[k * 3 + 1] = gauss() * 105f * exp(-(r - DISK_INNER) / 240f)
             c[k * 3 + 2] = sin(a) * r
+        }
+    }
+
+    /**
+     * The halo: a sparse sphere of old stars round the whole disc, and a few
+     * globular clusters in it — the galaxy's outskirts in the side view of the
+     * Milky Way, where the disc is a line and the halo is a cloud.
+     */
+    val halo = FloatArray((HALO_STARS + GLOBULARS * GLOBULAR_STARS) * 3).also { h ->
+        var k = 0
+        fun put(x: Float, y: Float, z: Float) {
+            h[k * 3] = x; h[k * 3 + 1] = y; h[k * 3 + 2] = z; k++
+        }
+        fun direction(out: FloatArray) {
+            val u = random.nextFloat() * 2f - 1f
+            val t = random.nextFloat() * 6.2832f
+            val m = sqrt(1f - u * u)
+            out[0] = m * cos(t); out[1] = u; out[2] = m * sin(t)
+        }
+        val d = FloatArray(3)
+        repeat(HALO_STARS) {
+            direction(d)
+            // Denser toward the middle: radius drawn on 1/r², 0.6 to 1.5 of the disc.
+            val r = RADIUS * (0.6f + 0.9f * random.nextFloat() * random.nextFloat())
+            put(d[0] * r, d[1] * r * 0.8f, d[2] * r)
+        }
+        repeat(GLOBULARS) {
+            direction(d)
+            val r = RADIUS * (0.55f + 0.6f * random.nextFloat())
+            val cx = d[0] * r; val cy = d[1] * r * 0.8f; val cz = d[2] * r
+            repeat(GLOBULAR_STARS) { put(cx + gauss() * 16f, cy + gauss() * 16f, cz + gauss() * 16f) }
         }
     }
 
@@ -202,11 +238,62 @@ class GalaxyScene(
         private const val LAYOUT_EXTENT = 1250f
         private const val DISC_THICKNESS = 26f
         /** How far an arm winds from core to rim, radians: a little over half a turn. */
-        const val ARM_TWIST = 3.4f
+        const val ARM_TWIST = 5.6f
+
+        /**
+         * The black hole at the middle: the shadow's radius, and the accretion
+         * disk's inner and outer edges. The disc layout's nearest genre is over
+         * four hundred units out, so it all sits in the hole the baked map
+         * already has; the timeline starts outside it ([timeDistance]).
+         */
+        const val HOLE_SHADOW = 58f
+        const val DISK_INNER = 80f
+        const val DISK_OUTER = 300f
+
+        /** Where the timeline's oldest music starts: clear of the accretion disk. */
+        const val CORE_CLEAR = 340f
+
+        /** How far out a genre [share] of the way through time sits (0 oldest, 1 newest). */
+        fun timeDistance(share: Float): Float = CORE_CLEAR + share * (RADIUS * 0.95f - CORE_CLEAR)
+
+        /** Families per arm: the timeline's twelve families wound as four arms, like the Milky Way's. */
+        private const val ARMS = 4
+        private const val ARM_SPREAD = 0.2f
+
+        /**
+         * Each family's arm angle: the families, in the order their clusters
+         * sit round the disc, dealt into [ARMS] bundles of neighbours, each
+         * bundle an arm, its families side by side in it. The bundles sit
+         * where their families' clusters sit on average, so the morph turns
+         * the map rather than shuffling it.
+         */
+        internal fun bundleArms(clusterAngle: FloatArray): FloatArray {
+            val n = clusterAngle.size
+            if (n == 0) return clusterAngle
+            val order = clusterAngle.indices.sortedBy { ((clusterAngle[it] % TAU) + TAU) % TAU }
+            val perArm = (n + ARMS - 1) / ARMS
+            val out = FloatArray(n)
+            for (b in 0 until ARMS) {
+                val members = order.drop(b * perArm).take(perArm)
+                if (members.isEmpty()) continue
+                // The circular mean of the members' angles.
+                var sx = 0f; var sz = 0f
+                members.forEach { sx += cos(clusterAngle[it]); sz += sin(clusterAngle[it]) }
+                val centre = atan2(sz, sx)
+                members.forEachIndexed { k, f ->
+                    out[f] = centre + (k - (members.size - 1) / 2f) * ARM_SPREAD
+                }
+            }
+            return out
+        }
+
+        private const val HALO_STARS = 420
+        private const val GLOBULARS = 9
+        private const val GLOBULAR_STARS = 28
         private const val NEBULAE_PER_FAMILY = 5
 
         const val DEFAULT_DUST = 6000
-        const val DEFAULT_CORE = 700
+        const val DEFAULT_CORE = 1300
         const val DEFAULT_SKY = 900
 
         /** The years marked along the time track. */

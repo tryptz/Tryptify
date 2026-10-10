@@ -1,6 +1,7 @@
 package tf.monochrome.android.ui.discover.galaxy
 
 import tf.monochrome.android.data.charts.ChartEntry
+import tf.monochrome.android.data.charts.isLastFmPlaceholder
 import tf.monochrome.android.data.charts.normalizeForMatch
 import kotlin.math.cos
 import kotlin.math.pow
@@ -130,7 +131,11 @@ class PlanetSystem(val genreId: String, val planets: List<Planet>) {
                     tilt = (unit(seed ushr 8) - 0.5f) * 0.5f,
                     radius = radius,
                     hue = unit(seed ushr 16) * 360f,
-                    artworkUrl = tracks.firstNotNullOfOrNull { it.artworkUrl?.takeIf(String::isNotBlank) },
+                    // Charts cached before the placeholder was filtered still
+                    // carry it, so it is passed over here too.
+                    artworkUrl = tracks.firstNotNullOfOrNull { e ->
+                        e.artworkUrl?.takeIf { it.isNotBlank() && !isLastFmPlaceholder(it) }
+                    },
                     moons = moonTracks.mapIndexed { m, entry ->
                         val moonSeed = stableHash(entry.title + name)
                         Moon(

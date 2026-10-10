@@ -27,8 +27,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.navigationBars
@@ -37,7 +35,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,18 +42,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CenterFocusStrong
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Radio
-import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -66,7 +58,6 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -81,10 +72,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.spring
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.pluralStringResource
 import tf.monochrome.android.ui.components.GlassPanel
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -131,6 +124,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import tf.monochrome.android.performance.LocalLowPerformance
+import tf.monochrome.android.ui.discover.galaxy.AudioBands
 import tf.monochrome.android.ui.discover.galaxy.GALAXY_ARRIVE_DISTANCE
 import tf.monochrome.android.ui.discover.galaxy.GALAXY_INK
 import tf.monochrome.android.ui.discover.galaxy.PlanetSystem
@@ -299,6 +293,18 @@ fun GenreMapScreen(
 
     // Seconds of the clock, for twinkle and the god rays' shimmer.
     var clock by remember { mutableFloatStateOf(0f) }
+    // The music, read the way a MilkDrop preset reads it, for the gas and the
+    // black hole. The spectrum tap only runs while the map is up and moving.
+    val spectrum = playerViewModel.spectrumAnalyzer
+    val listening = alive && spectrum != null
+    val bands = remember { AudioBands() }
+    if (listening) {
+        DisposableEffect(spectrum) {
+            spectrum.acquire()
+            onDispose { spectrum.release() }
+        }
+    }
+
     // How far the galaxy has turned on its axis, radians. It turns on its
     // own, slowly, the whole time the map is up.
     var spin by remember { mutableFloatStateOf(0f) }
@@ -448,6 +454,7 @@ fun GenreMapScreen(
                     clock += dt
                     spin += dt * GALAXY_TURN_RAD_S
                 }
+                if (listening) bands.update(spectrum.spectrumBins.value, dt) else bands.quiet(dt)
             }
         }
     }
@@ -462,6 +469,10 @@ fun GenreMapScreen(
         controller?.isAppearanceLightStatusBars = false
         onDispose { had?.let { controller?.isAppearanceLightStatusBars = it } }
     }
+
+    // Back puts the genre away before it leaves the map; so does a tap on
+    // empty space. The dock has no close of its own.
+    androidx.activity.compose.BackHandler(enabled = selected != null) { viewModel.selectOnMap(null) }
 
     val labelStyle = MaterialTheme.typography.labelSmall.copy(
         fontSize = 10.sp,
@@ -493,6 +504,8 @@ fun GenreMapScreen(
                 spin = { spin },
                 rays = !lowPower,
                 spaceShader = !lowPower,
+                smoke = !lowPower,
+                bands = if (listening) bands else null,
                 labelStyle = labelStyle,
                 hereLabel = stringResource(R.string.galaxy_you_are_here),
                 system = system,
@@ -504,6 +517,7 @@ fun GenreMapScreen(
                         viewModel.playChartEntry(it.entry, playerViewModel)
                     }
                 },
+                onTapEmpty = { viewModel.selectOnMap(null) },
                 onTap = { id ->
                     // The same star again is a way back to it after looking
                     // around; selecting it would change nothing.
@@ -526,15 +540,47 @@ fun GenreMapScreen(
                 .onSizeChanged { topChromePx = it.height },
         ) {
             TopAppBar(
-                title = { Text(stringResource(R.string.genre_galaxy)) },
+                // The genre you are at, once there is one: the title is where
+                // the panel's heading went.
+                title = {
+                    Text(
+                        text = selected?.name ?: stringResource(R.string.genre_galaxy),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStackSafe() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.surpriseMe() }) {
-                        Icon(Icons.Default.AutoAwesome, contentDescription = stringResource(R.string.galaxy_surprise))
+                    val node = selected
+                    if (node == null) {
+                        IconButton(onClick = { viewModel.surpriseMe() }) {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = stringResource(R.string.galaxy_surprise))
+                        }
+                    } else {
+                        // Keeping a genre pins it to Discover's genre rail.
+                        val isHearted = node.id in hearted
+                        IconButton(onClick = { viewModel.toggleHeartGenre(node.id) }) {
+                            Icon(
+                                if (isHearted) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = stringResource(if (isHearted) R.string.genre_unkeep else R.string.genre_keep),
+                            )
+                        }
+                        // Its researched history, as the dock's sheet.
+                        IconButton(onClick = {
+                            if (chartOpen) viewModel.toggleMapChart()
+                            viewModel.toggleMapExpanded()
+                        }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.MenuBook,
+                                contentDescription = if (expanded) stringResource(R.string.hide_history)
+                                else stringResource(R.string.read_history_of, node.name),
+                                tint = if (expanded) familyColors[node.family] ?: GALAXY_INK else GALAXY_INK,
+                            )
+                        }
                     }
                     IconButton(onClick = { recentre() }) {
                         Icon(Icons.Default.CenterFocusStrong, contentDescription = stringResource(R.string.recentre))
@@ -552,14 +598,24 @@ fun GenreMapScreen(
             )
             // What a star's place and size mean in this layout. Without it a
             // star's size is a claim with no stated units.
+            // Under the title: the selected genre's facts, or what a star's
+            // place and size mean in this layout — without it a star's size is
+            // a claim with no stated units.
+            val node = selected
+            val facts = node?.let {
+                listOfNotNull(
+                    graph.family(it.family)?.name ?: it.family,
+                    if (it.hasTempo) stringResource(R.string.shelf_tempo, it.bpmLow, it.bpmHigh) else null,
+                    it.era.getOrNull(0)?.let { year -> stringResource(R.string.discover_genre_since, year) },
+                ).joinToString(" · ")
+            }
             Text(
-                text = stringResource(
-                    when {
-                        system != null && selected != null -> R.string.galaxy_planets_caption
-                        timeline -> R.string.galaxy_time_caption
-                        else -> R.string.map_weight_popularity
-                    },
-                ),
+                text = when {
+                    facts != null && system != null -> facts + "\n" + stringResource(R.string.galaxy_planets_caption)
+                    facts != null -> facts
+                    timeline -> stringResource(R.string.galaxy_time_caption)
+                    else -> stringResource(R.string.map_weight_popularity)
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = GALAXY_INK.copy(alpha = 0.7f),
                 modifier = Modifier.padding(
@@ -596,64 +652,43 @@ fun GenreMapScreen(
 
         selected?.let { node ->
             val related = remember(graph, node.id) { relatedTo(graph, node) }
-            val path = remember(graph, node.id) { graph.ancestors(node.id).reversed() }
             // The shader modifier reads its parameters from this local, so
-            // the panel has to provide it — this route sits outside the
+            // the dock has to provide it — this route sits outside the
             // nav host's provider, which only wraps the mini player.
-            CompositionLocalProvider(LocalPlayerGlass provides glassSettings) {
-                GenreCard(
+            CompositionLocalProvider(
+                LocalPlayerGlass provides glassSettings,
+                tf.monochrome.android.ui.components.LocalGlassBackdrop provides mapHaze,
+            ) {
+                GenreDock(
                     node = node,
-                    related = related,
-                    familyName = graph.family(node.family)?.name ?: node.family,
+                    related = related.nodes.take(MAX_RELATED_PILLS),
                     familyColor = familyColors[node.family] ?: MaterialTheme.colorScheme.primary,
                     hazeState = mapHaze,
                     glass = glassSettings,
-                    hearted = node.id in hearted,
                     expanded = expanded,
                     history = history,
                     chartOpen = chartOpen,
                     chart = chart,
-                    // The history is as tall as the map lets it be and then
-                    // scrolls, so the panel can never grow to cover the genre
-                    // it is describing however long the article runs.
-                    //
-                    // Two limits, and the smaller wins. The fraction is the one
-                    // that matters in portrait; the second is what stops a
-                    // landscape phone — where the whole view is barely taller
-                    // than the panel's own chrome — from being handed a
-                    // scroll region that pushes the buttons off the top.
-                    // Measured between the title and the mini player, not the
-                    // whole screen: counting the bottom chrome as room is how
-                    // the open Top 100 pushed the panel up under the status
-                    // bar, where its close button opened the notifications.
-                    historyMaxHeight = with(density) {
+                    // The sheet is as tall as the map lets it be and then
+                    // scrolls, measured between the title and the mini player:
+                    // counting the bottom chrome as room is how the old panel
+                    // climbed under the status bar.
+                    sheetMaxHeight = with(density) {
                         val canvas = viewport.height - topChromePx - panelBottomInset.toPx()
                         minOf(
                             canvas * HISTORY_HEIGHT_FRACTION,
-                            canvas - PANEL_CHROME_RESERVE.toPx(),
+                            canvas - DOCK_PILLS_RESERVE.toPx() - MIN_MAP_STRIP.toPx(),
                         ).coerceAtLeast(MIN_HISTORY_HEIGHT.toPx()).toDp()
                     },
-                    // The panel itself never climbs past a strip of map under
-                    // the title, so its top row — close included — is always
-                    // below the title bar, and the title's Back stays tappable.
-                    maxHeight = with(density) {
-                        (viewport.height - topChromePx - panelBottomInset.toPx() - MIN_MAP_STRIP.toPx())
-                            .coerceAtLeast(MIN_PANEL_HEIGHT.toPx()).toDp()
-                    },
-                    onToggleExpand = { viewModel.toggleMapExpanded() },
-                    onHeart = { viewModel.toggleHeartGenre(node.id) },
                     onPlay = { viewModel.playGenre(node.id, playerViewModel) },
                     onRadio = { viewModel.radioGenre(node.id, playerViewModel) },
-                    onToggleChart = { viewModel.toggleMapChart() },
-                    onPlayChartEntry = { viewModel.playChartEntry(it, playerViewModel) },
-                    onExplore = {
-                        viewModel.selectGenre(node.id)
-                        navController.popBackStackSafe()
+                    onToggleChart = {
+                        // One sheet at a time: the dock is meant to stay small.
+                        if (expanded) viewModel.toggleMapExpanded()
+                        viewModel.toggleMapChart()
                     },
-                    path = path,
-                    onPath = { ancestor -> viewModel.selectOnMap(ancestor.id) },
+                    onPlayChartEntry = { viewModel.playChartEntry(it, playerViewModel) },
                     onRelated = { child -> viewModel.selectOnMap(child.id) },
-                    onDismiss = { viewModel.selectOnMap(null) },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         // Measured outside the reserve, not inside it: the
@@ -716,272 +751,164 @@ private fun relatedTo(graph: tf.monochrome.android.domain.model.GenreGraph, node
     )
 }
 
-/** The detail panel for a tapped genre — what it is, where to go next, what to do with it. */
+/**
+ * What a selected genre offers, as a few pills of glass that pop up over the
+ * map rather than a panel over half of it: three glyphs — play, radio, its
+ * Top 100 — and up to three genres next to it, by name. The Top 100 and the
+ * history open as a compact sheet above the pills, one at a time.
+ *
+ * It replaced a panel that carried the path, the title, the facts, the
+ * subgenres, four buttons in three rows and a close: a page over the map
+ * rather than a control on it. The title and the facts are the screen's title
+ * now, the way out is a tap on empty space or Back, and the heart and the
+ * history are in the top bar.
+ */
 @Composable
-private fun GenreCard(
+private fun GenreDock(
     node: GenreNode,
-    related: Related,
-    familyName: String,
+    related: List<GenreNode>,
     familyColor: Color,
     hazeState: HazeState,
     glass: PlayerGlassSettings,
-    hearted: Boolean,
     expanded: Boolean,
     history: GenreHistoryState,
-    historyMaxHeight: Dp,
-    maxHeight: Dp,
     chartOpen: Boolean,
     chart: GenreChartState,
-    onToggleExpand: () -> Unit,
-    onHeart: () -> Unit,
+    sheetMaxHeight: Dp,
     onPlay: () -> Unit,
     onRadio: () -> Unit,
     onToggleChart: () -> Unit,
     onPlayChartEntry: (ChartEntry) -> Unit,
-    onExplore: () -> Unit,
     onRelated: (GenreNode) -> Unit,
-    onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
-    path: List<GenreNode> = emptyList(),
-    onPath: (GenreNode) -> Unit = {},
 ) {
-    // The app's one glass panel, in exactly the mini player's material: the
-    // panel floats directly above the bar, and two sheets of glass with
-    // different tints and different tuning an inch apart looked like a mistake.
-    // It used to carry its own copy of the glass, which fell behind the shared
-    // one — no lens corner, so its rim was a hairline where every other pane
-    // bends. GlassPanel also keeps taps on the panel from reaching the map.
     val instant = reduceMotion()
-    val scroll = rememberScrollState()
-    val chartInView = remember { BringIntoViewRequester() }
-    // Opening Top 100 scrolls the panel to it once it has unfolded, so the
-    // chart is what you see rather than a row of buttons above it.
-    LaunchedEffect(chartOpen) {
-        if (!chartOpen) return@LaunchedEffect
-        if (!instant) kotlinx.coroutines.delay(UNFOLD_MILLIS)
-        chartInView.bringIntoView()
-    }
+    // The last thing worth showing is held rather than read live: the sheet
+    // goes back to Idle the instant it is told to close, and the fold-away
+    // still has a moment to run — long enough to watch a finished article
+    // turn back into "Looking it up…" on its way out.
+    var shownHistory by remember(node.id) { mutableStateOf<GenreHistoryState>(history) }
+    LaunchedEffect(history) { if (history != GenreHistoryState.Idle) shownHistory = history }
 
-    GlassPanel(hazeState = hazeState, glass = glass, modifier = modifier.heightIn(max = maxHeight)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // The top row stays put while the rest scrolls: the way out of
-            // the panel is never scrolled away.
-            Row(verticalAlignment = Alignment.Top) {
-                Column(modifier = Modifier.weight(1f)) {
-                    // Where it sits: Electronic › Trance ›. Each step is a way
-                    // up the family, one tap away.
-                    if (path.isNotEmpty()) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            path.forEach { step ->
-                                Text(
-                                    text = step.name,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = familyColor,
-                                    maxLines = 1,
-                                    modifier = Modifier.bounceClick(onClick = { onPath(step) }),
-                                )
-                                Text(
-                                    text = " › ",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        AnimatedVisibility(
+            visible = chartOpen || expanded,
+            enter = if (instant) EnterTransition.None else expandVertically() + fadeIn(),
+            exit = if (instant) ExitTransition.None else shrinkVertically() + fadeOut(),
+        ) {
+            GlassPanel(hazeState = hazeState, glass = glass, avoidNavigationBar = false) {
+                Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) {
+                    if (chartOpen) {
+                        GenreChartBody(state = chart, accent = familyColor, maxHeight = sheetMaxHeight, onPlay = onPlayChartEntry)
+                    } else {
+                        GenreHistoryBody(node = node, state = shownHistory, accent = familyColor, maxHeight = sheetMaxHeight)
                     }
-                    Text(
-                        text = node.name,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    val tempo = if (node.hasTempo) stringResource(R.string.shelf_tempo, node.bpmLow, node.bpmHigh) else null
-                    val since = node.era.getOrNull(0)?.let { stringResource(R.string.discover_genre_since, it) }
-                    val subgenres = if (related.areChildren) {
-                        pluralStringResource(R.plurals.galaxy_subgenres, related.nodes.size, related.nodes.size)
-                    } else null
-                    Text(
-                        text = listOfNotNull(familyName, tempo, since, subgenres).joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                // The expander. First of the three because it is the one that
-                // changes what the panel *is* — the other two act on the genre.
-                IconButton(onClick = onToggleExpand, modifier = Modifier.size(32.dp)) {
-                    Icon(
-                        // Pointing the way the panel is about to move: up to
-                        // open, because it grows upward off the mini player,
-                        // and down to put it away again.
-                        imageVector = if (expanded) Icons.Default.ExpandMore
-                        else Icons.Default.ExpandLess,
-                        contentDescription = if (expanded) stringResource(R.string.hide_history)
-                    else stringResource(R.string.read_history_of, node.name),
-                        tint = if (expanded) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Spacer(Modifier.width(4.dp))
-                // Hearting a genre pins it to Discover's genre rail, which is
-                // the only place the map's choices survive leaving the map.
-                IconButton(onClick = onHeart, modifier = Modifier.size(32.dp)) {
-                    Icon(
-                        imageVector = if (hearted) Icons.Default.Favorite
-                        else Icons.Default.FavoriteBorder,
-                        contentDescription = if (hearted) stringResource(R.string.genre_unkeep)
-                    else stringResource(R.string.genre_keep),
-                        tint = if (hearted) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Spacer(Modifier.width(4.dp))
-                // Close moves up here out of the action row, which now has to
-                // hold three things and had no room left for a fourth.
-                IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = stringResource(R.string.action_close),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
             }
-            Column(
-                modifier = Modifier
-                    .weight(1f, fill = false)
-                    .verticalScroll(scroll),
+        }
+
+        // Where to go next, by name: three at most, and no glyph — the
+        // glyphs are the actions, a name is a place.
+        if (related.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             ) {
-                if (node.aka.isNotEmpty()) {
-                    Text(
-                        text = stringResource(R.string.also_called, node.aka.joinToString(stringResource(R.string.list_separator))),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-
-                // The history, when it's been asked for. Between the identity above
-                // and the navigation below, because it is the answer to the
-                // question the panel's title just raised.
-                //
-                // The last thing worth showing is held rather than read live: the
-                // panel goes back to Idle the instant it is told to close, and the
-                // fold-away animation still has three hundred milliseconds to run —
-                // long enough to watch a finished article turn back into "Looking
-                // it up…" on its way out.
-                var shown by remember(node.id) { mutableStateOf<GenreHistoryState>(history) }
-                LaunchedEffect(history) {
-                    if (history != GenreHistoryState.Idle) shown = history
-                }
-                AnimatedVisibility(
-                    visible = expanded,
-                    enter = if (instant) EnterTransition.None else expandVertically() + fadeIn(),
-                    exit = if (instant) ExitTransition.None else shrinkVertically() + fadeOut(),
-                ) {
-                    GenreHistoryBody(
-                        node = node,
-                        state = shown,
+                related.forEachIndexed { index, child ->
+                    tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                        label = child.name,
+                        selected = false,
                         accent = familyColor,
-                        maxHeight = historyMaxHeight,
-                    )
-                }
-
-                // Where to go next. Naming the subgenres rather than counting them
-                // is the difference between "Dub has 3 subgenres" and being one tap
-                // from dub techno — and each tap flies the map to it, so the panel
-                // doubles as a way to steer.
-                if (related.nodes.isNotEmpty()) {
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = if (related.areChildren) stringResource(R.string.subgenres) else stringResource(R.string.closest_to_it),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(related.nodes, key = { it.id }) { child ->
-                            RelativeChip(
-                                node = child,
-                                accent = familyColor,
-                                onClick = { onRelated(child) },
-                            )
-                        }
-                    }
-                }
-
-                // Three actions instead of two, so they get two rows rather than
-                // being squeezed until "Explore in Discover" ellipsises itself into
-                // "Explore in Disco…". Shuffle and Radio share the top row — both
-                // start music, both are one word — and Explore takes the full width
-                // below, since it's the one that leaves the map.
-                Spacer(Modifier.height(14.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ActionPill(
-                        icon = Icons.Default.PlayArrow,
-                        label = stringResource(R.string.play_top),
-                        container = MaterialTheme.colorScheme.primary,
-                        content = MaterialTheme.colorScheme.onPrimary,
-                        onClick = onPlay,
-                        modifier = Modifier.weight(1f),
-                    )
-                    ActionPill(
-                        icon = Icons.Default.Radio,
-                        label = stringResource(R.string.tab_radio),
-                        container = MaterialTheme.colorScheme.secondaryContainer,
-                        content = MaterialTheme.colorScheme.onSecondaryContainer,
-                        onClick = onRadio,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                // Top 100 opens in place rather than leaving for a screen of its
-                // own. The chart is the same kind of thing as the subgenre chips
-                // above it — something to look at while deciding — and pushing a
-                // route to show it meant losing the map's camera, the panel, and
-                // your place in the family you were reading down.
-                Spacer(Modifier.height(8.dp))
-                Row {
-                    ActionPill(
-                        icon = Icons.Default.BarChart,
-                        label = stringResource(R.string.top_100),
-                        container = if (chartOpen) familyColor.copy(alpha = 0.22f)
-                        else MaterialTheme.colorScheme.secondaryContainer,
-                        content = if (chartOpen) familyColor
-                        else MaterialTheme.colorScheme.onSecondaryContainer,
-                        onClick = onToggleChart,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                AnimatedVisibility(
-                    visible = chartOpen,
-                    enter = if (instant) EnterTransition.None else expandVertically() + fadeIn(),
-                    exit = if (instant) ExitTransition.None else shrinkVertically() + fadeOut(),
-                ) {
-                    GenreChartBody(
-                        state = chart,
-                        accent = familyColor,
-                        maxHeight = historyMaxHeight,
-                        onPlay = onPlayChartEntry,
-                        modifier = Modifier.bringIntoViewRequester(chartInView),
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                Row {
-                    ActionPill(
-                        icon = Icons.AutoMirrored.Filled.ArrowForward,
-                        label = stringResource(R.string.explore_in_discover),
-                        container = Color.Transparent,
-                        content = MaterialTheme.colorScheme.onSurfaceVariant,
-                        onClick = onExplore,
+                        onClick = { onRelated(child) },
+                        height = 36.dp,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MonoDimens.shapePill),
+                            .weight(1f, fill = false)
+                            .popIn(node.id, index),
                     )
                 }
             }
         }
+
+        Row(
+            modifier = Modifier.padding(top = 6.dp, bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            val base = related.size
+            GlyphPill(Icons.Default.PlayArrow, stringResource(R.string.play_top), onPlay, hazeState, Modifier.popIn(node.id, base))
+            GlyphPill(Icons.Default.Radio, stringResource(R.string.tab_radio), onRadio, hazeState, Modifier.popIn(node.id, base + 1))
+            GlyphPill(
+                Icons.Default.BarChart,
+                stringResource(R.string.top_100),
+                onToggleChart,
+                hazeState,
+                Modifier.popIn(node.id, base + 2),
+                selected = chartOpen,
+                accent = familyColor,
+            )
+        }
     }
 }
+
+/** One of the dock's actions: a glyph in a pill of glass, nothing else. */
+@Composable
+private fun GlyphPill(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    hazeState: HazeState,
+    modifier: Modifier = Modifier,
+    selected: Boolean = false,
+    accent: Color = MaterialTheme.colorScheme.primary,
+) {
+    tf.monochrome.android.ui.components.GlassPill(
+        onClick = onClick,
+        hazeState = hazeState,
+        height = GLYPH_PILL_HEIGHT,
+        onClickLabel = label,
+        modifier = modifier.width(GLYPH_PILL_WIDTH),
+    ) {
+        if (selected) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .border(1.5.dp, accent.copy(alpha = 0.85f), CircleShape),
+            )
+        }
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = if (selected) accent else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(24.dp),
+        )
+    }
+}
+
+/**
+ * Pops a pill in when the genre it belongs to is selected: from a little small
+ * and clear to full size with a spring's overshoot, [index] steps after the
+ * first so a row arrives one pill at a time. Still with reduced motion.
+ */
+@Composable
+private fun Modifier.popIn(key: Any, index: Int): Modifier {
+    val instant = reduceMotion()
+    val pop = remember(key) { Animatable(if (instant) 1f else 0f) }
+    LaunchedEffect(key) {
+        if (instant) return@LaunchedEffect
+        kotlinx.coroutines.delay(index * POP_STAGGER_MILLIS)
+        pop.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = 420f))
+    }
+    return graphicsLayer {
+        val v = pop.value
+        val sc = 0.6f + 0.4f * v
+        scaleX = sc
+        scaleY = sc
+        alpha = v.coerceIn(0f, 1f)
+    }
+}
+
 
 /**
  * The expanded half of the panel: what this genre is, where it came from, and
@@ -1231,88 +1158,6 @@ private fun HistoryFact(label: String, value: String, accent: Color) {
     }
 }
 
-/** One action in the panel's button rows — icon, then label, centred. */
-@Composable
-private fun ActionPill(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    container: Color,
-    content: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier.bounceClick(onClick = onClick),
-        shape = MonoDimens.shapePill,
-        color = container,
-    ) {
-        Row(
-            modifier = Modifier.padding(vertical = 12.dp, horizontal = 12.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = content,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                color = content,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
-
-/**
- * One subgenre (or close relative) in the panel's rail.
- *
- * Tinted with the family colour so the chips read as the same thing as the dots
- * on the map behind them, and carrying its tempo because on a map about genres
- * "138–142 BPM" is often the fastest way to know whether you want it.
- */
-@Composable
-private fun RelativeChip(node: GenreNode, accent: Color, onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier.bounceClick(onClick = onClick),
-        shape = MonoDimens.shapePill,
-        color = accent.copy(alpha = 0.16f),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(accent),
-            )
-            Spacer(Modifier.width(7.dp))
-            Text(
-                text = node.name,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-            )
-            if (node.hasTempo) {
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = "${node.bpmLow}–${node.bpmHigh}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
-            }
-        }
-    }
-}
-
 /**
  * How much of the map the expanded history may take before it starts scrolling.
  *
@@ -1323,8 +1168,17 @@ private fun RelativeChip(node: GenreNode, accent: Color, onClick: () -> Unit) {
  */
 private const val HISTORY_HEIGHT_FRACTION = 0.52f
 
-/** Roughly what the panel needs for its title, subgenre rail and buttons. */
-private val PANEL_CHROME_RESERVE = 300.dp
+/** Roughly what the dock's two rows of pills take, under its sheet. */
+private val DOCK_PILLS_RESERVE = 130.dp
+
+/** At most this many genres next to the selected one, as pills. */
+private const val MAX_RELATED_PILLS = 3
+
+private val GLYPH_PILL_WIDTH = 72.dp
+private val GLYPH_PILL_HEIGHT = 48.dp
+
+/** How long after the previous pill each pops in. */
+private const val POP_STAGGER_MILLIS = 45L
 
 /** Below this the history isn't worth opening, so it scrolls in a smaller box. */
 private val MIN_HISTORY_HEIGHT = 120.dp
@@ -1336,11 +1190,6 @@ private val MIN_HISTORY_HEIGHT = 120.dp
  */
 private val MIN_MAP_STRIP = 96.dp
 
-/** The least the panel is allowed, on a screen too short for the rule above. */
-private val MIN_PANEL_HEIGHT = 220.dp
-
-/** Roughly how long a section takes to unfold, before it is scrolled to. */
-private const val UNFOLD_MILLIS = 320L
 
 /**
  * A stable colour per family.

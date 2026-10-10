@@ -190,4 +190,27 @@ class GalaxyMathTest {
         assertEquals(5f + (1f + 6.2831855f - 5f) / 2f, GalaxyScene.widestGap(floatArrayOf(1f, 2f, 3f, 4f, 5f)), 1e-4f)
         assertTrue(scene.trackAngle.isFinite())
     }
+
+    @Test
+    fun `the timeline's twelve families wind as four arms`() {
+        val angles = FloatArray(12) { it * 0.5236f }
+        val arms = GalaxyScene.bundleArms(angles)
+        val distinct = arms.map { kotlin.math.round(it * 10) / 10 }.toSet()
+        assertEquals(12, distinct.size)
+        // Three families to an arm, side by side within it.
+        val sorted = arms.sorted()
+        assertTrue(sorted.zipWithNext().count { (a, b) -> b - a > 0.5f } in 3..4)
+    }
+
+    @Test
+    fun `the black hole has room in both layouts`() {
+        val clear = GalaxyScene.DISK_OUTER
+        for (i in 0 until scene.size) {
+            val s = hypot(scene.sound[i * 3], scene.sound[i * 3 + 2])
+            val t = hypot(scene.time[i * 3], scene.time[i * 3 + 2])
+            assertTrue("${scene.genres[i].name} in the disc at $s", s > clear)
+            assertTrue("${scene.genres[i].name} in the spiral at $t", t > clear)
+        }
+        assertTrue(GalaxyScene.HOLE_SHADOW < GalaxyScene.DISK_INNER)
+    }
 }

@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextLayoutResult
@@ -58,8 +59,6 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 import tf.monochrome.android.ui.player.sceneGodRays
-import kotlin.math.PI
-import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.pow
 import kotlin.math.sin
@@ -70,6 +69,7 @@ internal val GALAXY_INK = Color(0xFFEEF0FF)
 private val SCAN = Color(0xFF86F6FF)
 private val WARM = Color(0xFFFFCF7A)
 private val CORE_WARM = Color(0xFFFFD9A8)
+private val HALO_STAR = Color(0x66D8DEFF)
 
 /**
  * The genre galaxy, drawn in 3D on Compose canvases.
@@ -110,11 +110,16 @@ internal fun GenreGalaxyView(
     spin: () -> Float,
     rays: Boolean,
     spaceShader: Boolean,
+    /** The galaxy's gas, moved by [bands]; off on devices that asked for less. */
+    smoke: Boolean = false,
+    bands: AudioBands? = null,
     labelStyle: TextStyle,
     hereLabel: String,
     system: PlanetSystem?,
     systemAppear: () -> Float,
     onTap: (String) -> Unit,
+    /** A tap that lands on nothing. */
+    onTapEmpty: () -> Unit = {},
     onTapPlanet: (Int) -> Unit,
     onTapMoon: (Int, Int) -> Unit,
     onInteract: () -> Unit,
@@ -129,6 +134,7 @@ internal fun GenreGalaxyView(
     val art = remember(scene, familyColors) { GalaxyArt(scene, familyColors) }
     val bodies = remember { SystemArt() }
     val space = rememberSpaceSky(spaceShader)
+    val gas = rememberGalaxySmoke(smoke)
 
     // Read live by the gesture handlers, which outlive the composition that
     // made them: captured, a tap would be hit-tested against the view as it
@@ -137,6 +143,7 @@ internal fun GenreGalaxyView(
     val liveBottom = rememberUpdatedState(reserveBottomPx)
     val liveSystem = rememberUpdatedState(system)
     val liveOnTap = rememberUpdatedState(onTap)
+    val liveOnTapEmpty = rememberUpdatedState(onTapEmpty)
     val liveOnPlanet = rememberUpdatedState(onTapPlanet)
     val liveOnMoon = rememberUpdatedState(onTapMoon)
     val liveOnInteract = rememberUpdatedState(onInteract)
@@ -179,7 +186,35 @@ internal fun GenreGalaxyView(
             },
     ) {
         Canvas(Modifier.fillMaxSize()) {
-            drawSky(art, scene, frameFor(size), morph(), time(), here, selected, dp, space)
+            drawSky(art, scene, frameFor(size), morph(), time(), here, selected, dp, space, bands)
+        }
+        if (gas != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // The gas, at a third of the resolution: measured that small and
+            // put through an offscreen layer scaled back up, so the shader
+            // runs for a ninth of the pixels. Smoke has no finer detail.
+            Canvas(
+                Modifier.layout { measurable, constraints ->
+                    val w = constraints.maxWidth
+                    val h = constraints.maxHeight
+                    val small = measurable.measure(
+                        androidx.compose.ui.unit.Constraints.fixed(
+                            (w + SMOKE_SCALE - 1) / SMOKE_SCALE,
+                            (h + SMOKE_SCALE - 1) / SMOKE_SCALE,
+                        ),
+                    )
+                    layout(w, h) {
+                        small.placeWithLayer(0, 0) {
+                            scaleX = SMOKE_SCALE.toFloat()
+                            scaleY = SMOKE_SCALE.toFloat()
+                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)
+                            compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+                        }
+                    }
+                },
+            ) {
+                val full = Size(size.width * SMOKE_SCALE, size.height * SMOKE_SCALE)
+                gas.draw(drawContext.canvas.nativeCanvas, frameFor(full), SMOKE_SCALE.toFloat(), time(), bands)
+            }
         }
         if (rays) {
             Canvas(
@@ -194,7 +229,7 @@ internal fun GenreGalaxyView(
                         time = time,
                     ),
             ) {
-                drawEmitters(art, scene, frameFor(size), morph(), exploredMask, dp)
+                drawEmitters(art, scene, frameFor(size), morph(), time(), exploredMask, dp, bands)
             }
         }
         Canvas(
@@ -253,7 +288,7 @@ internal fun GenreGalaxyView(
                                 best = i; bestDepth = p[2]
                             }
                         }
-                        if (best >= 0) liveOnTap.value(scene.genres[best].id)
+                        if (best >= 0) liveOnTap.value(scene.genres[best].id) else liveOnTapEmpty.value()
                     }
                 },
         ) {
@@ -284,6 +319,12 @@ internal fun GenreGalaxyView(
 private fun maskOf(scene: GalaxyScene, ids: Set<String>): BooleanArray =
     BooleanArray(scene.size).also { mask -> ids.forEach { id -> scene.index[id]?.let { mask[it] = true } } }
 
+/** The smoke's resolution, as a divisor of the view's. */
+private const val SMOKE_SCALE = 3
+
+/** How much brighter the black hole burns at full bass. */
+private const val HOLE_BASS_BOOST = 0.45f
+
 /** How close to a star a tap has to land to pick it. */
 private const val TAP_RADIUS_DP = 28f
 
@@ -304,6 +345,8 @@ private class GalaxyArt(scene: GalaxyScene, familyColors: Map<String, Color>) {
     val nebulaSprite: List<Bitmap> = famColor.map { sprite(128, it, coreWhite = false) }
     val coreSprite: Bitmap = sprite(128, CORE_WARM, coreWhite = false)
     val emitterSprite: Bitmap = sprite(32, Color.White, coreWhite = true)
+    val hole = BlackHoleArt()
+    val haloPoints = FloatArray(scene.halo.size / 3 * 2)
 
     val add = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { additive() }
     val points = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND; additive() }
@@ -379,7 +422,7 @@ private fun fog(depth: Float): Float = (1f - (depth - 3200f) / 7000f).coerceIn(0
 
 private fun DrawScope.drawSky(
     art: GalaxyArt, scene: GalaxyScene, f: CameraFrame, m: Float, t: Float, here: Int, selected: Int, dp: Float,
-    space: SpaceSky?,
+    space: SpaceSky?, bands: AudioBands?,
 ) {
     val canvas = drawContext.canvas.nativeCanvas
     val p = art.tmp
@@ -410,11 +453,23 @@ private fun DrawScope.drawSky(
         canvas.drawBitmap(art.nebulaSprite[scene.family[i]], null, art.rect, art.add)
     }
     if (f.project(0f, 0f, 0f, p, 0)) {
+        // The bulge's glow, kept low: the black hole in the middle of it has
+        // to read as dark.
         val r = 380f * f.scaleAt(p[2])
         art.rect.set(p[0] - r, p[1] - r, p[0] + r, p[1] + r)
-        art.add.alpha = (0.3f * 255).toInt()
+        art.add.alpha = (0.16f * 255).toInt()
         canvas.drawBitmap(art.coreSprite, null, art.rect, art.add)
     }
+
+    // The halo: old stars and globular clusters round the whole disc.
+    var hn = 0
+    for (k in 0 until scene.halo.size / 3) {
+        if (!f.project(scene.halo[k * 3], scene.halo[k * 3 + 1], scene.halo[k * 3 + 2], p, 0)) continue
+        art.haloPoints[hn] = p[0]; art.haloPoints[hn + 1] = p[1]; hn += 2
+    }
+    art.points.color = HALO_STAR.toArgb()
+    art.points.strokeWidth = 1.3f * dp
+    canvas.drawPoints(art.haloPoints, 0, hn, art.points)
 
     // Family links, faint: the structure, not the subject.
     art.linkCount.fill(0)
@@ -476,6 +531,9 @@ private fun DrawScope.drawSky(
         art.points.strokeWidth = (if (band == 0) 2f else 1.4f) * dp
         canvas.drawPoints(art.core[band], 0, art.coreCount[band], art.points)
     }
+
+    // The black hole, over the dust and the bulge behind it.
+    art.hole.draw(canvas, f, t, dp, boost = 1f + HOLE_BASS_BOOST * (bands?.bassLift ?: 0f))
 
     // The timeline's own spiral: a track wound at the arms' pitch, with a
     // mark at each year, fading in with the morph.
@@ -548,15 +606,15 @@ private const val STAR_REF_DEPTH = 1400f
 private const val MAX_STAR_DP = 26f
 
 /** What shines for the god rays: the core and the brighter stars, white-hot, on nothing. */
-private fun DrawScope.drawEmitters(art: GalaxyArt, scene: GalaxyScene, f: CameraFrame, m: Float, explored: BooleanArray, dp: Float) {
+private fun DrawScope.drawEmitters(
+    art: GalaxyArt, scene: GalaxyScene, f: CameraFrame, m: Float, t: Float, explored: BooleanArray, dp: Float,
+    bands: AudioBands?,
+) {
     val canvas = drawContext.canvas.nativeCanvas
     val p = art.tmp
-    if (f.project(0f, 0f, 0f, p, 0)) {
-        val r = 120f * f.scaleAt(p[2])
-        art.rect.set(p[0] - r, p[1] - r, p[0] + r, p[1] + r)
-        art.add.alpha = 255
-        canvas.drawBitmap(art.coreSprite, null, art.rect, art.add)
-    }
+    // The rays come off the accretion disk and the photon ring, and swell
+    // with the bass.
+    art.hole.draw(canvas, f, t, dp, rays = true, boost = 1f + HOLE_BASS_BOOST * (bands?.bassLift ?: 0f))
     for (i in 0 until scene.size) {
         val lit = explored[i]
         if (!lit && scene.prominence[i] < 0.35f) continue
@@ -656,6 +714,10 @@ private class SystemArt {
     val r = FloatArray(n)
     val depth = FloatArray(n)
     val shown = BooleanArray(n)
+    /** Where each body is in the scene, for the light's direction to it. */
+    val wx = FloatArray(n)
+    val wy = FloatArray(n)
+    val wz = FloatArray(n)
 
     /** How far in the system was faded last frame, 0..1. */
     var fade = 0f
@@ -667,20 +729,44 @@ private class SystemArt {
     val matrix = android.graphics.Matrix()
     val src = RectF()
 
-    /** The dark side of a sphere lit from +x. */
-    val shade: Bitmap = Bitmap.createBitmap(SPRITE, SPRITE, Bitmap.Config.ARGB_8888).also { b ->
+    // ── Lightweight global illumination, baked ──
+    //
+    // Three masks per phase of the light, made once: the shadow (what the star
+    // does not reach, down to an ambient floor rather than black), the
+    // starlight (a highlight and a Fresnel rim, tinted with the star's colour)
+    // and the bounce (the night side lit faintly by the galaxy around it, in
+    // the family's colour). Five phases, from the light behind the body to
+    // the light behind the camera, so a planet between you and its star is a
+    // crescent and one beside it is half lit. Each is drawn turned toward the
+    // star: three bitmap draws a body, no gradients built per frame.
+    val shade: Array<Bitmap> = Array(PHASES) { bakeSphere(LIGHT_PX, phaseZ(it), SHADE) }
+    val light: Array<Bitmap> = Array(PHASES) { bakeSphere(LIGHT_PX, phaseZ(it), LIGHT) }
+    val bounce: Array<Bitmap> = Array(PHASES) { bakeSphere(LIGHT_PX, phaseZ(it), BOUNCE) }
+
+    /** A soft white glow, tinted when drawn: the atmosphere's scatter round a planet. */
+    val glow: Bitmap = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888).also { b ->
         val c = android.graphics.Canvas(b)
-        val h = SPRITE / 2f
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = RadialGradient(
-                h + h * 0.55f, h, SPRITE * 0.82f,
-                intArrayOf(0x00000000, 0x00000000, 0x66000000, 0xEE000000.toInt()),
-                floatArrayOf(0f, 0.36f, 0.62f, 1f),
+                32f, 32f, 32f,
+                intArrayOf(0x66FFFFFF, 0x22FFFFFF, 0x00FFFFFF),
+                floatArrayOf(0.45f, 0.7f, 1f),
                 Shader.TileMode.CLAMP,
             )
         }
-        c.drawCircle(h, h, h, paint)
+        c.drawCircle(32f, 32f, 32f, paint)
     }
+
+    /** Additive, tinted per draw through a cached colour filter. */
+    val tinted = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) blendMode = BlendMode.PLUS
+        else xfermode = PorterDuffXfermode(PorterDuff.Mode.ADD)
+    }
+    private val filters = HashMap<Int, android.graphics.ColorFilter>()
+
+    /** A white mask multiplied into [argb]. Cached: a system has a handful of colours. */
+    fun tint(argb: Int): android.graphics.ColorFilter =
+        filters.getOrPut(argb) { android.graphics.LightingColorFilter(argb and 0xFFFFFF, 0) }
 
     /** A moon: pale rock, a little lighter where the star is. */
     val moon: Bitmap = Bitmap.createBitmap(SPRITE / 2, SPRITE / 2, Bitmap.Config.ARGB_8888).also { b ->
@@ -772,6 +858,55 @@ private class SystemArt {
     companion object {
         const val SPRITE = 128
         const val ORBIT_SEGMENTS = 64
+        const val PHASES = 5
+        const val LIGHT_PX = 96
+        private const val SHADE = 0
+        private const val LIGHT = 1
+        private const val BOUNCE = 2
+
+        /** The light's pull toward the camera for phase [k]: -0.8 behind the body to 0.8 behind you. */
+        fun phaseZ(k: Int): Float = -0.8f + 1.6f * k / (PHASES - 1)
+
+        /** The phase nearest a light whose pull toward the camera is [z]. */
+        fun phaseOf(z: Float): Int = kotlin.math.round((z.coerceIn(-0.8f, 0.8f) + 0.8f) / 1.6f * (PHASES - 1)).toInt()
+
+        /**
+         * One mask of a unit sphere lit from +x (and [lz] toward the viewer):
+         * wrapped Lambert for the shadow, its fourth power plus a Fresnel rim
+         * for the light, and the unlit side's Fresnel for the bounce. The edge
+         * is anti-aliased across one pixel.
+         */
+        fun bakeSphere(px: Int, lz: Float, mode: Int): Bitmap {
+            val lx = kotlin.math.sqrt((1f - lz * lz).coerceAtLeast(0f))
+            val out = IntArray(px * px)
+            val half = px / 2f
+            for (j in 0 until px) for (i in 0 until px) {
+                val x = (i + 0.5f) / half - 1f
+                val y = (j + 0.5f) / half - 1f
+                val rr = x * x + y * y
+                val cover = ((1f - kotlin.math.sqrt(rr)) * half).coerceIn(0f, 1f)
+                if (cover <= 0f) continue
+                val nz = kotlin.math.sqrt((1f - rr).coerceAtLeast(0f))
+                val ndl = x * lx + nz * lz
+                val diffuse = ((ndl + WRAP) / (1f + WRAP)).coerceIn(0f, 1f)
+                val fresnel = (1f - nz).let { it * it * it }
+                val (rgb, a) = when (mode) {
+                    SHADE -> 0x000000 to (1f - (AMBIENT + (1f - AMBIENT) * diffuse))
+                    LIGHT -> 0xFFFFFF to (0.5f * diffuse * diffuse * diffuse * diffuse +
+                        0.9f * fresnel * (0.15f + 0.85f * (ndl + 0.35f).coerceIn(0f, 1f)))
+                    else -> 0xFFFFFF to (0.6f * (1f - diffuse) * (0.35f + 0.65f * fresnel))
+                }
+                val alpha = (a.coerceIn(0f, 1f) * cover * 255f).toInt()
+                out[j * px + i] = (alpha shl 24) or rgb
+            }
+            return Bitmap.createBitmap(out, px, px, Bitmap.Config.ARGB_8888)
+        }
+
+        /** How far round the terminator the light wraps: soft, like a world with air. */
+        private const val WRAP = 0.2f
+
+        /** The least light anything gets: the galaxy is bright, nothing goes black. */
+        private const val AMBIENT = 0.16f
     }
 }
 
@@ -839,6 +974,7 @@ private fun DrawScope.drawSystem(
             val k = bodies.slot(p, mi)
             if (mi < 0) sys.planetPosition(p, t, cx, cy, cz, p3, 0, spread)
             else sys.moonPosition(p, mi, t, cx, cy, cz, p3, 0, spread)
+            bodies.wx[k] = p3[0]; bodies.wy[k] = p3[1]; bodies.wz[k] = p3[2]
             if (!f.project(p3[0], p3[1], p3[2], p3, 0)) continue
             val units = if (mi < 0) planet.radius else planet.moons[mi].radius
             // Never specks: a planet is a disc with a cover, a moon a target.
@@ -867,6 +1003,11 @@ private fun DrawScope.drawSystem(
     }
 
     val alpha = (fade * 255).toInt()
+    // The star's light, white-hot with its family's colour in it, and the
+    // galaxy's, the family's own colour, for the bounce on the night side.
+    val family = art.famColor[scene.family[star]]
+    val starLight = lerp(family, Color.White, 0.55f).toArgb()
+    val galaxyLight = family.toArgb()
     for (o in 0 until count) {
         val k = bodies.order[o]
         if (k == starSlot) {
@@ -877,9 +1018,22 @@ private fun DrawScope.drawSystem(
         val p = k / (1 + PlanetSystem.MAX_MOONS)
         val mi = k % (1 + PlanetSystem.MAX_MOONS) - 1
         val x = bodies.x[k]; val y = bodies.y[k]; val r = bodies.r[k]
-        // The lit side faces the star, wherever it is on screen.
-        val toward = if (sDepth > 0f) kotlin.math.atan2(sy - y, sx - x) else -PI.toFloat() / 2f
+        // The light: from the body to its star, in the camera's terms. Its
+        // turn on screen is which way the lit side faces; its pull toward the
+        // camera is the phase, from a crescent (backlit) to full.
+        var lx = cx - bodies.wx[k]; var ly = cy - bodies.wy[k]; var lz = cz - bodies.wz[k]
+        val ll = kotlin.math.sqrt(lx * lx + ly * ly + lz * lz).coerceAtLeast(1e-4f)
+        lx /= ll; ly /= ll; lz /= ll
+        val toward = kotlin.math.atan2(-(lx * f.ux + ly * f.uy + lz * f.uz), lx * f.rx + ly * f.ry + lz * f.rz)
+        val phase = SystemArt.phaseOf(-(lx * f.fx + ly * f.fy + lz * f.fz))
         art.rect.set(x - r, y - r, x + r, y + r)
+        // The atmosphere's scatter, behind the body, in its own colour.
+        val bodyColor = if (mi < 0) android.graphics.Color.HSVToColor(floatArrayOf(sys.planets[p].hue, 0.45f, 1f)) else starLight
+        bodies.tinted.colorFilter = bodies.tint(bodyColor)
+        bodies.tinted.alpha = (GLOW_ALPHA * fade * 255).toInt()
+        val g = r * 1.55f
+        bodies.src.set(x - g, y - g, x + g, y + g)
+        canvas.drawBitmap(bodies.glow, null, bodies.src, bodies.tinted)
         if (mi < 0) {
             val shader = bodies.coverShader(covers, p)
             val cover = covers.getOrNull(p)
@@ -901,15 +1055,15 @@ private fun DrawScope.drawSystem(
         canvas.save()
         canvas.rotate(Math.toDegrees(toward.toDouble()).toFloat(), x, y)
         bodies.sprite.alpha = alpha
-        canvas.drawBitmap(bodies.shade, null, art.rect, bodies.sprite)
+        canvas.drawBitmap(bodies.shade[phase], null, art.rect, bodies.sprite)
+        bodies.tinted.colorFilter = bodies.tint(starLight)
+        bodies.tinted.alpha = alpha
+        canvas.drawBitmap(bodies.light[phase], null, art.rect, bodies.tinted)
+        bodies.tinted.colorFilter = bodies.tint(galaxyLight)
+        bodies.tinted.alpha = (BOUNCE_ALPHA * fade * 255).toInt()
+        canvas.drawBitmap(bodies.bounce[phase], null, art.rect, bodies.tinted)
         canvas.restore()
-        if (mi < 0) {
-            // A thin atmosphere, so a dark cover still reads as a planet.
-            bodies.rim.color = android.graphics.Color.HSVToColor(floatArrayOf(sys.planets[p].hue, 0.35f, 1f))
-            bodies.rim.alpha = (0.5f * fade * 255).toInt()
-            bodies.rim.strokeWidth = (r * 0.07f).coerceIn(0.8f * dp, 2.5f * dp)
-            canvas.drawCircle(x, y, r, bodies.rim)
-        } else if (ping > 0f && pinged[0] == p && pinged[1] == mi) {
+        if (ping > 0f && mi >= 0 && pinged[0] == p && pinged[1] == mi) {
             art.plain.color = SCAN.copy(alpha = ping).toArgb()
             art.plain.strokeWidth = 1.5f * dp
             canvas.drawCircle(x, y, r + (1f - ping) * 22f * dp + 3f * dp, art.plain)
@@ -917,6 +1071,10 @@ private fun DrawScope.drawSystem(
     }
     return true
 }
+
+/** The atmosphere's glow round a body, and the galaxy's bounce on its night side. */
+private const val GLOW_ALPHA = 0.32f
+private const val BOUNCE_ALPHA = 0.55f
 
 /** How far the other stars dim while a solar system is showing. */
 private const val STAR_DIM_NEAR_SYSTEM = 0.55f

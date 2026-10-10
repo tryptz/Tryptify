@@ -640,6 +640,24 @@ far stars hold still. Do not apply the spin to the sky. Do not apply it to the
 target either, or a followed star slides off the centre. The turn is toward
 smaller angles, so the arms trail. `GalaxyMathTest` pins all three.
 
+**The galaxy's gas is AGSL on the canvas, never projectM on a GL surface.**
+It follows MilkDrop's model: bass, mid and treble each read against the song's
+own running average (`AudioBands`, 1 = usual), with `_att` smoothing. Only the
+lift above 1 moves anything. It is drawn at a third of the resolution through
+an offscreen layer scaled back up (`SMOKE_SCALE`). Putting it on a GL surface
+to reuse the visualizer would make every glass pill over the map a flat slab.
+
+**The black hole is drawn in halves.** The far half of the disk, then the
+shadow, the lensed arc and the photon ring, then the near half. The split
+runs along the disk's long axis on screen. Seen face-on there is nothing to
+split, and the disk is drawn whole. Genres stay outside `DISK_OUTER` in both
+layouts (`GalaxyMathTest`).
+
+**A selected genre is a dock of pills, not a panel.** Up to three related
+genres, by name, and three glyph pills (Play, Radio, Top 100), popping in. The
+Top 100 and the history are one compact sheet above them, one at a time.
+There is no close button: a tap on empty space or Back deselects.
+
 **The deep sky is one AGSL pass on Android 13 and up** (`SpaceShader.kt`), the
 demo's far stars done procedurally. Each star stays inside the middle half of
 its cube-face cell, which is what lets a pixel test one cell per layer. Let a

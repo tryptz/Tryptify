@@ -184,7 +184,8 @@ internal fun parseTagTopTracks(body: String): List<ChartEntry> =
                 title = title,
                 artistName = artist,
                 recordingMbid = track.mbid?.takeIf { it.isNotBlank() },
-                artworkUrl = track.image.orEmpty().lastOrNull { !it.text.isNullOrBlank() }?.text,
+                artworkUrl = track.image.orEmpty().lastOrNull { !it.text.isNullOrBlank() }?.text
+                    ?.takeUnless(::isLastFmPlaceholder),
             )
         }
 
