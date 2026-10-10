@@ -700,6 +700,18 @@ its cube-face cell, which is what lets a pixel test one cell per layer. Let a
 star or its halo reach a cell edge and it is cut in half. Below 13, or in
 low-performance mode, the sky is the flat colour with drawn points.
 
+**The galaxy is one offscreen layer** (`CompositingStrategy.Offscreen` on its
+Box). Every pane of glass over the map frosts it, and without the layer each one
+made the render thread replay the whole galaxy: frames of 0.7 to 0.9 s. Keep it.
+
+**No `PathEffect` on the map.** HWUI rasterises a dashed path on the CPU and
+uploads it every frame. Dashes are plain segments from `Dasher`, laid on screen
+only, the pattern carried across corners. The light passes run at half
+resolution (`LIGHT_SCALE`, through `reducedLayer`, whose render effect works in
+the layer's own pixels), and the links' dust is as dense as each link is long on
+screen. None of it changes what is on screen; `GalaxyFastPathsTest` holds the
+stand-ins (`fastSin`, `Dasher`) to the originals.
+
 **Planets are fetched only after the camera stays on a genre** (`mapSystem`
 waits 0.7 s), and without the MusicBrainz cross-check. Flying past a genre on
 the way somewhere else must not cost a chart request.

@@ -11,6 +11,14 @@
 
 ### Changed
 
+#### The genre galaxy runs smoothly
+The debug log showed frames of 0.7 to 0.9 s. The main thread recorded each frame in about 12 ms; the render thread then spent 100 to 740 ms issuing it. Nothing on screen changes with these fixes.
+- **The galaxy is rendered once a frame and reused by every pane of glass over it.** Each pill, chip, the mini player and the tab bar was making the render thread replay the whole galaxy to frost what's behind it: thousands of stars, grains and trail motes, and the light passes.
+- **No dashed path is drawn in software any more.** The timeline spiral, the way from "you are here" and the hearted rings were dashed with a path effect, which Android rasterises on the CPU and uploads every frame (the `writePixels` lines in the log). They are drawn as plain line segments now, with the dash rhythm carried along the spiral as before, and only on screen.
+- **The god rays are worked out at half the resolution.** Shafts of light have no finer detail, and it is a quarter of the pixels.
+- **Less work for the same dust.** A link gets as many motes as it is long on screen, so a short far link isn't 26 dots stacked on each other. Each mote's randomness is worked out once, not with six sines a frame. The swirl uses a fast sine accurate to a hundredth of a pixel. The dust that casts the fine rays is skipped before any maths when it's too far from the light to stand in it, and is drawn as square points, since only its shadow shows.
+- **Stars are drawn a family at a time**, so the GPU batches them by sprite instead of switching texture at nearly every star. They add, so the order changes nothing.
+
 #### A fourth glyph in the genre dock: its system
 - **Next to Play, Radio and Top 100, a glyph of three planets of different sizes** does what a long press on the star does: plays it and opens its planets as the system sheet. On a small phone the four pills narrow a little so the row still fits.
 - **The dock's glyphs are holes cut in the glass now, like the tab bar's**, not icons laid on top. The shader bevels each hole's edge and the frost shows through it, and the open Top 100 lights its glyph in the genre's colour, the way the current tab does. Where the shader doesn't run, they are ordinary icons.

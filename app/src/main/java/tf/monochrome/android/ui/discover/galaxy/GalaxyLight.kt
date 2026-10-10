@@ -97,10 +97,17 @@ internal class GalaxyLight {
      * The render effect for [spot] at [time] seconds: [exposure] and [shade]
      * as shares of the usual (the listener's ray strength and shade).
      */
-    fun effect(spot: LightSpot, time: Float, exposure: Float, shade: Float): androidx.compose.ui.graphics.RenderEffect {
+    fun effect(
+        spot: LightSpot,
+        time: Float,
+        exposure: Float,
+        shade: Float,
+        /** The light pass's resolution against the view's: its pixels are this many of the view's. */
+        resolution: Float = 1f,
+    ): androidx.compose.ui.graphics.RenderEffect {
         val weights = (1f - DECAY.pow(SAMPLES)) / (1f - DECAY)
-        shader.setFloatUniform("uLight", spot.x, spot.y)
-        shader.setFloatUniform("uGlowR", spot.glowR.coerceAtLeast(1f))
+        shader.setFloatUniform("uLight", spot.x * resolution, spot.y * resolution)
+        shader.setFloatUniform("uGlowR", (spot.glowR * resolution).coerceAtLeast(1f))
         shader.setFloatUniform("uSamples", SAMPLES.toFloat())
         shader.setFloatUniform("uDensity", DENSITY)
         shader.setFloatUniform("uDecay", DECAY)

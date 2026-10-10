@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.nativeCanvas
@@ -189,6 +190,13 @@ internal fun GenreGalaxyView(
         modifier = modifier
             .hazeSource(hazeState)
             .graphicsLayer {
+                // Rendered once a frame into its own layer, which every pane of
+                // glass over the map then reads. Without it each of them — the
+                // dock's pills, the chips, the mini player, the tab bar — made
+                // the render thread replay the whole galaxy, thousands of stars
+                // and grains and the light passes with them, to frost what is
+                // behind it: the half-second frames in the logs.
+                compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
                 // The travel blur: Android's own, so it is cheap and smooth,
                 // and only while the camera glides. Ignored below API 31.
                 val b = travelBlurPx()
@@ -230,47 +238,54 @@ internal fun GenreGalaxyView(
                 gas.draw(drawContext.canvas.nativeCanvas, frameFor(full), SMOKE_SCALE.toFloat(), time(), bands, visuals.smokeAmount)
             }
         }
+        // The light passes run at half the resolution (LIGHT_SCALE): each is
+        // drawn small, in full-size coordinates scaled down, and its layer is
+        // scaled back up. The scatter runs on a quarter of the pixels, and
+        // shafts of light have nothing finer than that in them.
+        val lightK = 1f / LIGHT_SCALE
         if (coreLight != null) {
             Canvas(
-                Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        val f = frameFor(size)
-                        litStar(art, scene, camera, selected, f, morph(), dp, starSpot)
-                        coreSpot.strength = 1f - starSpot.strength
-                        renderEffect = if (coreSpot.strength > 0.01f && coreSpotAt(art, f, coreSpot)) {
-                            coreLight.effect(coreSpot, time(), visuals.rayStrength * beat(bands), visuals.rayShade)
-                        } else {
-                            null
-                        }
-                    },
+                Modifier.reducedLayer(LIGHT_SCALE) { full ->
+                    val f = frameFor(full)
+                    litStar(art, scene, camera, selected, f, morph(), dp, starSpot)
+                    coreSpot.strength = 1f - starSpot.strength
+                    renderEffect = if (coreSpot.strength > 0.01f && coreSpotAt(art, f, coreSpot)) {
+                        coreLight.effect(coreSpot, time(), visuals.rayStrength * beat(bands), visuals.rayShade, lightK)
+                    } else {
+                        null
+                    }
+                },
             ) {
-                val f = frameFor(size)
+                val full = Size(size.width * LIGHT_SCALE, size.height * LIGHT_SCALE)
+                val f = frameFor(full)
                 if (coreSpot.strength > 0.01f && coreSpotAt(art, f, coreSpot)) {
-                    drawCoreLight(art, scene, f, morph(), time(), dp, bands, coreSpot)
+                    scale(lightK, lightK, pivot = Offset.Zero) {
+                        drawCoreLight(art, scene, f, morph(), time(), dp, bands, coreSpot)
+                    }
                 }
             }
         }
         if (starLight != null) {
             Canvas(
-                Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        val f = frameFor(size)
-                        litStar(art, scene, camera, selected, f, morph(), dp, starSpot)
-                        renderEffect = if (starSpot.strength > 0.01f) {
-                            starLight.effect(starSpot, time(), visuals.rayStrength * beat(bands), visuals.rayShade)
-                        } else {
-                            null
-                        }
-                    },
+                Modifier.reducedLayer(LIGHT_SCALE) { full ->
+                    val f = frameFor(full)
+                    litStar(art, scene, camera, selected, f, morph(), dp, starSpot)
+                    renderEffect = if (starSpot.strength > 0.01f) {
+                        starLight.effect(starSpot, time(), visuals.rayStrength * beat(bands), visuals.rayShade, lightK)
+                    } else {
+                        null
+                    }
+                },
             ) {
-                val f = frameFor(size)
+                val full = Size(size.width * LIGHT_SCALE, size.height * LIGHT_SCALE)
+                val f = frameFor(full)
                 val lit = litStar(art, scene, camera, selected, f, morph(), dp, starSpot)
                 if (lit >= 0 && starSpot.strength > 0.01f) {
                     // Its planets stand in its light once they are up.
                     val sys = liveSystem.value?.takeIf { scene.index[it.genreId] == lit }
-                    drawStarLight(art, bodies, scene, sys, f, morph(), time(), systemAppear(), lit, dp, starSpot)
+                    scale(lightK, lightK, pivot = Offset.Zero) {
+                        drawStarLight(art, bodies, scene, sys, f, morph(), time(), systemAppear(), lit, dp, starSpot)
+                    }
                 }
             }
         }
@@ -382,11 +397,44 @@ internal fun GenreGalaxyView(
     }
 }
 
+/**
+ * A layer [divisor] times smaller than the space it fills, scaled back up to
+ * fill it: what is drawn in it is drawn at that resolution, and so is any
+ * render effect on it, which works in the layer's own pixels. [layer] sets
+ * the layer up each frame, given the full size it stands for.
+ */
+private fun Modifier.reducedLayer(
+    divisor: Int,
+    layer: androidx.compose.ui.graphics.GraphicsLayerScope.(full: Size) -> Unit,
+): Modifier = this.layout { measurable, constraints ->
+    val w = constraints.maxWidth
+    val h = constraints.maxHeight
+    val small = measurable.measure(
+        androidx.compose.ui.unit.Constraints.fixed((w + divisor - 1) / divisor, (h + divisor - 1) / divisor),
+    )
+    layout(w, h) {
+        small.placeWithLayer(0, 0) {
+            scaleX = divisor.toFloat()
+            scaleY = divisor.toFloat()
+            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)
+            layer(Size(w.toFloat(), h.toFloat()))
+        }
+    }
+}
+
 private fun maskOf(scene: GalaxyScene, ids: Set<String>): BooleanArray =
     BooleanArray(scene.size).also { mask -> ids.forEach { id -> scene.index[id]?.let { mask[it] = true } } }
 
 /** The smoke's resolution, as a divisor of the view's. */
 private const val SMOKE_SCALE = 3
+
+/** The god rays' resolution, as a divisor of the view's: shafts are soft, and it is a quarter of the pixels. */
+private const val LIGHT_SCALE = 2
+
+/** Dashes one run may hold, how far past the screen they are still laid, and a hearted ring's sides. */
+private const val DASHES = 4096
+private const val DASH_MARGIN_DP = 24f
+private const val RING_SIDES = 28
 
 /** How much brighter the black hole burns at full bass. */
 private const val HOLE_BASS_BOOST = 0.45f
@@ -423,10 +471,12 @@ private class GalaxyArt(scene: GalaxyScene, familyColors: Map<String, Color>) {
     fun sunDisc(family: Int): Bitmap = suns[family] ?: sunSprite(128, famColor[family]).also { suns[family] = it }
     val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     val shadowFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.BLACK }
-    val shadowPoints = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    // Square: these are never seen, only their shadows are, and a square
+    // point is one quad where a round one is a circle the render thread builds.
+    val shadowPoints = Paint().apply {
         color = android.graphics.Color.BLACK
         alpha = (0.85f * 255).toInt()
-        strokeCap = Paint.Cap.ROUND
+        strokeCap = Paint.Cap.SQUARE
     }
     val shadowCloud = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
         colorFilter = android.graphics.PorterDuffColorFilter(android.graphics.Color.BLACK, PorterDuff.Mode.SRC_IN)
@@ -463,13 +513,13 @@ private class GalaxyArt(scene: GalaxyScene, familyColors: Map<String, Color>) {
     val points = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND; additive() }
     val lines = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; additive() }
     val plain = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
-    val heartDash: android.graphics.PathEffect
-    val pathDash: android.graphics.PathEffect
-    val trackDash: android.graphics.PathEffect
+    /** Dashed lines as plain segments: the timeline's spiral, the way from here, the hearts' rings. */
+    val dasher = Dasher(DASHES)
+    val dashDp = android.content.res.Resources.getSystem().displayMetrics.density
     val rect = RectF()
 
     val tmp = FloatArray(3)
-    val tmp2 = FloatArray(3)
+    val tmp2 = FloatArray(4)
     val genreScreen = FloatArray(scene.size * 3)
     val sky = FloatArray(scene.sky.size / 3 * 2)
 
@@ -481,6 +531,11 @@ private class GalaxyArt(scene: GalaxyScene, familyColors: Map<String, Color>) {
     // round it, and its head.
     val flowFamily: IntArray
     val flowBucket: Array<FloatArray>
+    val motes: FloatArray
+
+    /** Each family's stars, so they are drawn a family at a time (see drawStars). */
+    val starsByFamily: Array<IntArray> =
+        Array(scene.families.size) { fam -> (0 until scene.size).filter { scene.family[it] == fam }.toIntArray() }
     val flowCount = IntArray(scene.families.size)
     val puffBucket: Array<FloatArray>
     val puffCount = IntArray(scene.families.size)
@@ -498,9 +553,6 @@ private class GalaxyArt(scene: GalaxyScene, familyColors: Map<String, Color>) {
 
     init {
         val dp = android.content.res.Resources.getSystem().displayMetrics.density
-        heartDash = android.graphics.DashPathEffect(floatArrayOf(4f * dp, 3f * dp), 0f)
-        pathDash = android.graphics.DashPathEffect(floatArrayOf(7f * dp, 5f * dp), 0f)
-        trackDash = android.graphics.DashPathEffect(floatArrayOf(10f * dp, 6f * dp), 0f)
         val perFamilyDust = IntArray(scene.families.size)
         for (k in 0 until scene.dustCount) perFamilyDust[scene.family[scene.dustOwner[k]]]++
         dustBucket = Array(scene.families.size * 3) { FloatArray(perFamilyDust[it / 3] * 2) }
@@ -509,6 +561,24 @@ private class GalaxyArt(scene: GalaxyScene, familyColors: Map<String, Color>) {
         val perFamily = IntArray(scene.families.size)
         for (f in flowFamily) perFamily[f]++
         flowBucket = Array(scene.families.size) { FloatArray(perFamily[it] * FLOW_MOTES * 2) }
+        // Every link's dust, its randomness drawn once: where along it each
+        // mote starts, how fast it drifts, how far off the line it sits
+        // sideways and up, and its flicker's phase. It was six hashes a mote a
+        // frame, each a sine.
+        motes = FloatArray(scene.flows.size / 2 * FLOW_MOTES * MOTE_FIELDS).also { mt ->
+            for (k in 0 until scene.flows.size / 2) {
+                val seed = scene.flowPhase[k]
+                for (j in 0 until FLOW_MOTES) {
+                    val o = (k * FLOW_MOTES + j) * MOTE_FIELDS
+                    val h = trailHash(seed, j)
+                    mt[o] = (j + h) / FLOW_MOTES
+                    mt[o + 1] = 0.6f + 0.8f * trailHash(seed, j + 31)
+                    mt[o + 2] = trailHash(seed, j + 7) + trailHash(seed, j + 11) - 1f
+                    mt[o + 3] = (trailHash(seed, j + 13) + trailHash(seed, j + 19) - 1f) * 0.6f
+                    mt[o + 4] = h * 5f
+                }
+            }
+        }
         puffBucket = Array(scene.families.size) { FloatArray(perFamily[it] * TRAIL_PUFFS * 4) }
         sparkBucket = Array(scene.families.size) { FloatArray(perFamily[it] * TRAIL_PUFFS * SPARKS_PER_PUFF * 2) }
         headBucket = Array(scene.families.size) { FloatArray(perFamily[it] * 2) }
@@ -688,24 +758,16 @@ private fun DrawScope.drawSky(
     if (m > 0.02f) {
         art.plain.color = SCAN.copy(alpha = 0.32f * m).toArgb()
         art.plain.strokeWidth = 1.2f * dp
-        art.plain.pathEffect = art.trackDash
-        // One path, so the dashes run on along the whole spiral instead of
-        // starting again at every segment.
-        val path = art.track
-        path.rewind()
-        var open = false
+        // One run of dashes, so they carry on along the whole spiral instead
+        // of starting again at every segment.
+        val dash = art.dasher
+        dash.start(10f * dp, 6f * dp, f.width, f.height, DASH_MARGIN_DP * dp)
         val from = GalaxyScene.timeRadius(GalaxyScene.TRACK_YEARS.first())
         for (k in 0..GalaxyArt.TRACK_SEGMENTS) {
             scene.trackPointAt(from + (1f - from) * k / GalaxyArt.TRACK_SEGMENTS, p, 0)
-            if (f.project(p[0], p[1], p[2], p, 0)) {
-                if (open) path.lineTo(p[0], p[1]) else path.moveTo(p[0], p[1])
-                open = true
-            } else {
-                open = false
-            }
+            if (f.project(p[0], p[1], p[2], p, 0)) dash.to(p[0], p[1]) else dash.lift()
         }
-        canvas.drawPath(path, art.plain)
-        art.plain.pathEffect = null
+        canvas.drawLines(dash.out, 0, dash.count, art.plain)
         art.add.alpha = (m * 255).toInt()
         for (year in GalaxyScene.TRACK_YEARS) {
             scene.trackPoint(year, p, 0)
@@ -724,9 +786,10 @@ private fun DrawScope.drawSky(
         if (f.project(p[0], p[1], p[2], p, 0) && f.project(q[0], q[1], q[2], q, 0)) {
             art.plain.color = SCAN.copy(alpha = 0.8f).toArgb()
             art.plain.strokeWidth = 1.4f * dp
-            art.plain.pathEffect = art.pathDash
-            canvas.drawLine(p[0], p[1], q[0], q[1], art.plain)
-            art.plain.pathEffect = null
+            val dash = art.dasher
+            dash.start(7f * dp, 5f * dp, f.width, f.height, DASH_MARGIN_DP * dp)
+            dash.line(p[0], p[1], q[0], q[1])
+            canvas.drawLines(dash.out, 0, dash.count, art.plain)
         }
     }
 }
@@ -757,6 +820,11 @@ private fun DrawScope.drawFlows(art: GalaxyArt, scene: GalaxyScene, f: CameraFra
         if (len < 1f) continue
         // Off the screen at both ends and to one side of it: nothing of it shows.
         if (offToOneSide(f, a, b, art.tmp2, len * FLOW_SWIRL)) continue
+        // As much dust as the link is long on screen: a short one far off is
+        // a few motes, not the full count stacked on one another.
+        val onScreen = art.tmp2[3]
+        val stride = (FLOW_MOTES / (onScreen / (FLOW_MOTE_SPACING_DP * dp)).coerceIn(FLOW_MIN_MOTES.toFloat(), FLOW_MOTES.toFloat()))
+            .toInt().coerceAtLeast(1)
         // Sideways in the plane, and up: the two ways the trail swirls.
         val hl = kotlin.math.sqrt(dx * dx + dz * dz)
         val sx = if (hl > 1e-3f) -dz / hl else 1f
@@ -771,9 +839,9 @@ private fun DrawScope.drawFlows(art: GalaxyArt, scene: GalaxyScene, f: CameraFra
         // [off] and [up] push a point off the line, sideways and up, as
         // shares of the swirl: how the dust spreads into a band.
         fun at(u: Float, off: Float = 0f, up: Float = 0f): Boolean {
-            val bend = sin(PI.toFloat() * u)
-            val side = amp * (bend * (0.55f + 0.45f * sin(9.42f * u + t * FLOW_WAVE + phase)) + off)
-            val lift = amp * (0.6f * bend * sin(6.2831855f * u + t * FLOW_WAVE * 0.75f + phase) + up)
+            val bend = fastSin(PI.toFloat() * u)
+            val side = amp * (bend * (0.55f + 0.45f * fastSin(9.42f * u + t * FLOW_WAVE + phase)) + off)
+            val lift = amp * (0.6f * bend * fastSin(6.2831855f * u + t * FLOW_WAVE * 0.75f + phase) + up)
             return f.project(ax + dx * u + sx * side, ay + dy * u + lift, az + dz * u + sz * side, p, 0)
         }
 
@@ -783,16 +851,18 @@ private fun DrawScope.drawFlows(art: GalaxyArt, scene: GalaxyScene, f: CameraFra
         val drift = t * FLOW_DRIFT_UNITS_S / len
         val dust = art.flowBucket[fam]
         var c = art.flowCount[fam]
-        for (j in 0 until FLOW_MOTES) {
-            val h = trailHash(seed, j)
-            val u = ((j + h) / FLOW_MOTES + drift * (0.6f + 0.8f * trailHash(seed, j + 31))) % 1f
-            // Thin at the ends, where the link meets its stars.
-            val spread = FLOW_BAND * sin(PI.toFloat() * u)
-            val off = spread * (trailHash(seed, j + 7) + trailHash(seed, j + 11) - 1f)
-            val up = spread * (trailHash(seed, j + 13) + trailHash(seed, j + 19) - 1f) * 0.6f
+        // Each mote's own randomness, worked out once when the art was made.
+        val motes = art.motes
+        var j = 0
+        while (j < FLOW_MOTES) {
+            val o = (k * FLOW_MOTES + j) * MOTE_FIELDS
+            j += stride
             // A slow flicker: each mote is out for a part of its own cycle.
-            if (((t * FLOW_FLICKER + h * 5f) % 1f) > 0.82f) continue
-            if (c + 2 <= dust.size && at(u, off, up)) {
+            if (((t * FLOW_FLICKER + motes[o + 4]) % 1f) > 0.82f) continue
+            val u = (motes[o] + drift * motes[o + 1]) % 1f
+            // Thin at the ends, where the link meets its stars.
+            val spread = FLOW_BAND * fastSin(PI.toFloat() * u)
+            if (c + 2 <= dust.size && at(u, spread * motes[o + 2], spread * motes[o + 3])) {
                 dust[c] = p[0]; dust[c + 1] = p[1]
                 c += 2
             }
@@ -883,10 +953,14 @@ private fun DrawScope.drawFlows(art: GalaxyArt, scene: GalaxyScene, f: CameraFra
  * of what a frame saves.
  */
 private fun offToOneSide(f: CameraFrame, a: FloatArray, b: FloatArray, out: FloatArray, margin: Float): Boolean {
+    // How long it is on screen, for the dust to be spread to: unknown (long)
+    // when an end is behind the camera.
+    out[3] = Float.MAX_VALUE
     if (!f.project(a[0], a[1], a[2], out, 0)) return false
     val ax = out[0]; val ay = out[1]; val ma = margin * f.scaleAt(out[2])
     if (!f.project(b[0], b[1], b[2], out, 0)) return false
     val bx = out[0]; val by = out[1]; val mb = margin * f.scaleAt(out[2])
+    out[3] = hypot(bx - ax, by - ay) + ma + mb
     val m = maxOf(ma, mb)
     return (ax < -m && bx < -m) || (ax > f.width + m && bx > f.width + m) ||
         (ay < -m && by < -m) || (ay > f.height + m && by > f.height + m)
@@ -910,6 +984,13 @@ private const val FLOW_BAND = 0.35f
 private const val FLOW_DRIFT_UNITS_S = 2.5f
 private const val FLOW_FLICKER = 0.12f
 private const val FLOW_MOTE_DP = 1.05f
+
+/** On screen, one mote every this many dp of a link at the least, and never fewer than this many. */
+private const val FLOW_MOTE_SPACING_DP = 7f
+private const val FLOW_MIN_MOTES = 4
+
+/** What [GalaxyArt.motes] holds for each mote. */
+private const val MOTE_FIELDS = 5
 
 /** How fast a comet travels, scene units a second, and how far behind it its smoke trails, as a share of the link. */
 private const val FLOW_UNITS_S = 9f
@@ -1054,7 +1135,7 @@ private fun DrawScope.drawCoreLight(
         art.rect.set(p[0] - r, p[1] - r, p[0] + r, p[1] + r)
         canvas.drawBitmap(art.emitterSprite, null, art.rect, art.add)
     }
-    drawOccluders(art, scene, f, m, dp, spot)
+    drawOccluders(art, scene, f, m, dp, spot, 0f, 0f, 0f, CORE_LIGHT_GLOW)
 }
 
 /**
@@ -1099,7 +1180,7 @@ private fun DrawScope.drawStarLight(
             }
         }
     }
-    drawOccluders(art, scene, f, m, dp, spot)
+    drawOccluders(art, scene, f, m, dp, spot, cx, cy, cz, PlanetSystem.reachFor(GalaxyScene.starRadius(scene.prominence[star])) * LIT_GLOW_REACH)
 }
 
 /** The light's glow, the medium its shadows show in: a soft disc in [argb], as far as [spot] reaches. */
@@ -1110,16 +1191,27 @@ private fun DrawScope.drawLightGlow(art: GalaxyArt, spot: LightSpot, argb: Int) 
     drawContext.canvas.nativeCanvas.drawBitmap(art.lightGlow, null, art.rect, art.glowPaint)
 }
 
-/** The dust and the bulge's grains inside [spot]'s glow, in black, as one batch of points: the fine rays. */
-private fun DrawScope.drawOccluders(art: GalaxyArt, scene: GalaxyScene, f: CameraFrame, m: Float, dp: Float, spot: LightSpot) {
+/**
+ * The dust and the bulge's grains inside [spot]'s glow, in black, as one batch
+ * of points: the fine rays. A grain further than [worldR] from the light at
+ * ([wx], [wy], [wz]) cannot be inside its glow, and is passed over before it
+ * is projected — most of them, for a star's light.
+ */
+private fun DrawScope.drawOccluders(
+    art: GalaxyArt, scene: GalaxyScene, f: CameraFrame, m: Float, dp: Float, spot: LightSpot,
+    wx: Float, wy: Float, wz: Float, worldR: Float,
+) {
     val canvas = drawContext.canvas.nativeCanvas
     val p = art.tmp
     val reach = spot.glowR * spot.glowR
+    val near = worldR * worldR
     val pts = art.occluders
     var n = 0
     for (k in 0 until scene.dustCount) {
         if (n + 2 > pts.size) break
         scene.dustPosition(k, m, p, 0)
+        val ex = p[0] - wx; val ey = p[1] - wy; val ez = p[2] - wz
+        if (ex * ex + ey * ey + ez * ez > near) continue
         if (!f.project(p[0], p[1], p[2], p, 0)) continue
         val dx = p[0] - spot.x; val dy = p[1] - spot.y
         if (dx * dx + dy * dy > reach) continue
@@ -1127,7 +1219,10 @@ private fun DrawScope.drawOccluders(art: GalaxyArt, scene: GalaxyScene, f: Camer
     }
     for (k in 0 until scene.core.size / 3) {
         if (n + 2 > pts.size) break
-        if (!f.project(scene.core[k * 3], scene.core[k * 3 + 1], scene.core[k * 3 + 2], p, 0)) continue
+        val cx = scene.core[k * 3]; val cy = scene.core[k * 3 + 1]; val cz = scene.core[k * 3 + 2]
+        val ex = cx - wx; val ey = cy - wy; val ez = cz - wz
+        if (ex * ex + ey * ey + ez * ez > near) continue
+        if (!f.project(cx, cy, cz, p, 0)) continue
         val dx = p[0] - spot.x; val dy = p[1] - spot.y
         if (dx * dx + dy * dy > reach) continue
         pts[n] = p[0]; pts[n + 1] = p[1]; n += 2
@@ -1161,13 +1256,24 @@ private fun DrawScope.drawStars(
         scene.position(i, m, art.tmp, 0)
         f.project(art.tmp[0], art.tmp[1], art.tmp[2], s, i * 3)
     }
-    for (i in 0 until scene.size) {
-        if (i == skip) continue
+    // Family by family: the sprites add, so their order changes nothing on
+    // screen, and one family's run is one texture the GPU can batch where the
+    // genres' own order switched texture at nearly every star. The hearts'
+    // rings, which do not add, go on after, over them all.
+    fun visible(i: Int): Boolean {
+        if (i == skip) return false
         val depth = s[i * 3 + 2]
-        if (depth < 0f) continue
+        if (depth < 0f) return false
         val x = s[i * 3]; val y = s[i * 3 + 1]
-        if (x < -40f * dp || x > f.width + 40f * dp || y < -40f * dp || y > f.height + 40f * dp) continue
-        drawStar(art, scene, i, x, y, depth, t, explored, hearted, selected, dp, dim)
+        return !(x < -40f * dp || x > f.width + 40f * dp || y < -40f * dp || y > f.height + 40f * dp)
+    }
+    for (members in art.starsByFamily) {
+        for (i in members) {
+            if (visible(i)) drawStar(art, scene, i, s[i * 3], s[i * 3 + 1], s[i * 3 + 2], t, explored, hearted, selected, dp, dim, ring = false)
+        }
+    }
+    for (i in 0 until scene.size) {
+        if (hearted[i] && visible(i)) drawHeartRing(art, scene, i, s[i * 3], s[i * 3 + 1], s[i * 3 + 2], t, dp)
     }
 }
 
@@ -1181,21 +1287,36 @@ private fun DrawScope.drawStars(
 private fun DrawScope.drawStar(
     art: GalaxyArt, scene: GalaxyScene, i: Int, x: Float, y: Float, depth: Float, t: Float,
     @Suppress("UNUSED_PARAMETER") explored: BooleanArray, hearted: BooleanArray, selected: Int, dp: Float, dim: Float = 0f,
+    ring: Boolean = true,
 ) {
     val canvas = drawContext.canvas.nativeCanvas
-    val twinkle = if (art.twinkle) 0.8f + 0.2f * sin(t * 1.6f + scene.phase[i]) else 0.9f
     // The sprite carries the halo, so it is drawn well past the star's own size.
-    val r = starSizePx(scene.prominence[i], true, depth, dp, art.starScale) * 1.25f * twinkle
+    val r = starRadiusPx(art, scene, i, depth, t, dp)
     art.rect.set(x - r, y - r, x + r, y + r)
     art.add.alpha = (fog(depth) * (1f - dim) * 255).toInt()
     canvas.drawBitmap(art.starSprite[scene.family[i]], null, art.rect, art.add)
-    if (hearted[i]) {
-        art.plain.color = art.famColor[scene.family[i]].copy(alpha = 0.9f).toArgb()
-        art.plain.strokeWidth = 1.4f * dp
-        art.plain.pathEffect = art.heartDash
-        canvas.drawCircle(x, y, r * 0.55f + 4f * dp, art.plain)
-        art.plain.pathEffect = null
+    if (ring && hearted[i]) drawHeartRing(art, scene, i, x, y, depth, t, dp)
+}
+
+/** A star's sprite radius this frame, twinkle and all. */
+private fun starRadiusPx(art: GalaxyArt, scene: GalaxyScene, i: Int, depth: Float, t: Float, dp: Float): Float {
+    val twinkle = if (art.twinkle) 0.8f + 0.2f * fastSin(t * 1.6f + scene.phase[i]) else 0.9f
+    return starSizePx(scene.prominence[i], true, depth, dp, art.starScale) * 1.25f * twinkle
+}
+
+/** A hearted star's dashed ring, in its family's colour. */
+private fun DrawScope.drawHeartRing(art: GalaxyArt, scene: GalaxyScene, i: Int, x: Float, y: Float, depth: Float, t: Float, dp: Float) {
+    art.plain.color = art.famColor[scene.family[i]].copy(alpha = 0.9f).toArgb()
+    art.plain.strokeWidth = 1.4f * dp
+    // The ring as a polygon fine enough to read as a circle, dashed.
+    val ring = starRadiusPx(art, scene, i, depth, t, dp) * 0.55f + 4f * dp
+    val dash = art.dasher
+    dash.start(4f * dp, 3f * dp, Float.MAX_VALUE / 4f, Float.MAX_VALUE / 4f, 0f)
+    for (k in 0..RING_SIDES) {
+        val a = k * (6.2831855f / RING_SIDES)
+        dash.to(x + ring * kotlin.math.cos(a), y + ring * kotlin.math.sin(a))
     }
+    drawContext.canvas.nativeCanvas.drawLines(dash.out, 0, dash.count, art.plain)
 }
 
 /** The lock-on bracket round the selected star, and "you are here". */
