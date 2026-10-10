@@ -1958,7 +1958,7 @@ galaxy_planets_caption	Planets: its most played artists · Moons: their tracks �
 galaxy_look	Galaxy look	星系外观	銀河の見た目	Apparence de la galaxie	Aspecto de la galaxia	Galaksi görünümü	Galaxie-Aussehen
 galaxy_look_reset	Reset	重置	リセット	Réinitialiser	Restablecer	Sıfırla	Zurücksetzen
 gv_sky	Sky	天空	空	Ciel	Cielo	Gökyüzü	Himmel
-gv_core	Core	核心	中心	Cœur	Núcleo	Çekirdek	Kern
+gv_rays	Rays	光线	光線	Rayons	Rayos	Işınlar	Strahlen
 gv_motion	Motion	动态	動き	Mouvement	Movimiento	Hareket	Bewegung
 gv_music	Music	音乐	音楽	Musique	Música	Müzik	Musik
 gv_stars	Stars	恒星	星	Étoiles	Estrellas	Yıldızlar	Sterne
@@ -1972,6 +1972,9 @@ gv_black_hole	Black hole	黑洞	ブラックホール	Trou noir	Agujero negro	Ka
 gv_god_rays	God rays	光芒	光芒	Rayons de lumière	Rayos de luz	Işık huzmeleri	Lichtstrahlen
 gv_ray_strength	Ray strength	光芒强度	光芒の強さ	Intensité des rayons	Intensidad de los rayos	Huzme gücü	Strahlenstärke
 gv_ray_shade	Shade rays	阴影光束	影の光芒	Rayons d’ombre	Rayos de sombra	Gölge huzmeleri	Schattenstrahlen
+gv_star_rays	Star rays	恒星光束	星の光線	Rayons des étoiles	Rayos de estrellas	Yıldız ışınları	Sternstrahlen
+gv_bloom	Bloom	泛光	ブルーム	Halo	Resplandor	Parlama	Leuchten
+gv_ray_length	Ray length	光束长度	光線の長さ	Longueur des rayons	Longitud de los rayos	Işın uzunluğu	Strahlenlänge
 gv_off	Off	关闭	オフ	Désactivé	Desactivado	Kapalı	Aus
 gv_spin	Galaxy turn	星系旋转	銀河の回転	Rotation de la galaxie	Giro de la galaxia	Galaksi dönüşü	Drehung der Galaxie
 gv_still	Still	静止	停止	Immobile	Quieta	Durgun	Still
@@ -1984,6 +1987,7 @@ gv_reactivity	Reaction strength	律动强度	反応の強さ	Intensité de la r�
 gv_star_size	Star size	恒星大小	星の大きさ	Taille des étoiles	Tamaño de las estrellas	Yıldız boyutu	Sterngröße
 gv_labels	Names	名称	名前	Noms	Nombres	Adlar	Namen
 gv_planets	Planets and moons	行星与卫星	惑星と衛星	Planètes et lunes	Planetas y lunas	Gezegenler ve uydular	Planeten und Monde
+gv_body_size	Planet & moon size	行星与卫星大小	惑星と衛星の大きさ	Taille des planètes et lunes	Tamaño de planetas y lunas	Gezegen ve uydu boyutu	Größe von Planeten und Monden
 gv_light_glass	Lighter glass	轻量玻璃	軽いガラス	Verre allégé	Cristal ligero	Hafif cam	Leichteres Glas
 gv_light_glass_desc	Glass over the map works from a half-size copy of it. Faster; compare and keep what looks right.	地图上的玻璃改用一半尺寸的画面。更快；对比后保留看起来合适的。	マップ上のガラスが半分のサイズの画面から描かれます。より軽快です。見比べて、良い方を残してください。	Le verre sur la carte part d'une copie à moitié taille. Plus rapide ; comparez et gardez ce qui vous plaît.	El cristal sobre el mapa usa una copia a la mitad de tamaño. Más rápido; compara y quédate con lo que se vea bien.	Haritanın üstündeki cam, yarı boyutlu bir kopyasıyla çalışır. Daha hızlı; karşılaştırın ve doğru görüneni tutun.	Das Glas über der Karte arbeitet mit einer Kopie in halber Größe. Schneller; vergleichen und behalten, was richtig aussieht.
 gv_low_power	Low-performance mode keeps the heavy effects off	低性能模式下重型特效保持关闭	低パフォーマンスモードでは重い効果はオフのままです	Le mode basse performance garde les effets lourds désactivés	El modo de bajo rendimiento mantiene desactivados los efectos pesados	Düşük performans modu ağır efektleri kapalı tutar	Der Energiesparmodus lässt aufwendige Effekte aus

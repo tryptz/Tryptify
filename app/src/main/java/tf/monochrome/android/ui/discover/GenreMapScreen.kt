@@ -117,6 +117,7 @@ import tf.monochrome.android.ui.theme.reduceMotion
 import androidx.compose.ui.res.stringResource
 import tf.monochrome.android.R
 import android.os.Build
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.runtime.DisposableEffect
@@ -309,7 +310,13 @@ fun GenreMapScreen(
     val hearted by viewModel.heartedGenres.collectAsStateWithLifecycle()
     val explored by viewModel.exploredGenres.collectAsStateWithLifecycle()
     val here by viewModel.mapHere.collectAsStateWithLifecycle()
-    val system by viewModel.mapSystem.collectAsStateWithLifecycle()
+    val chartSystem by viewModel.mapSystem.collectAsStateWithLifecycle()
+    // The chart's system at the listener's planet and moon size. Everything
+    // downstream reads this one — the drawing, the taps, the zoom's stop short
+    // of a planet — so they all agree on how big a world is. Watching only the
+    // size, not the whole look, so another slider does not rebuild it.
+    val bodySize by remember { androidx.compose.runtime.derivedStateOf { visuals.bodySize } }
+    val system by remember { androidx.compose.runtime.derivedStateOf { chartSystem?.withBodySize(bodySize) } }
     val sheetOpen = sheetFor != null && sheetFor == selected?.id
     val facts by viewModel.planetFacts.collectAsStateWithLifecycle()
     val bios = remember(facts) { facts.mapNotNull { (artist, f) -> f.bio?.let { artist to it } }.toMap() }
@@ -338,7 +345,14 @@ fun GenreMapScreen(
     // lens, so the panel has to clear them itself. The inset includes the
     // system bar, which this full-bleed route also runs under — the panel's
     // own navigationBarsPadding is consumed below so it is not counted twice.
-    val panelBottomInset = tf.monochrome.android.ui.navigation.LocalBottomChromeInset.current
+    // The bar as it stands now, folded or open, and following its fold: the
+    // open bar's height left a tab bar's worth of empty space under every
+    // panel while it was folded.
+    val panelBottomInset by animateDpAsState(
+        targetValue = tf.monochrome.android.ui.navigation.LocalBottomChromeNow.current,
+        animationSpec = if (instant) snap() else tween(CHROME_FOLD_MILLIS),
+        label = "galaxyPanelInset",
+    )
 
     // Measured rather than assumed: the bar moves with font scale and the
     // display cutout, the panel with whatever it is showing.
@@ -1038,6 +1052,9 @@ fun GenreMapScreen(
         }
     }
 }
+
+/** The bottom chrome's fold, which the panels over the map follow (TabChrome's own 240 ms). */
+private const val CHROME_FOLD_MILLIS = 240
 
 /** How long the chrome takes to fade out of full screen, with room: the galaxy's glass layer is kept until it has. */
 private const val GLASS_FADE_MILLIS = 700L

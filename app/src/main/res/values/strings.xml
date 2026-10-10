@@ -1990,7 +1990,7 @@
     <string name="galaxy_look">Galaxy look</string>
     <string name="galaxy_look_reset">Reset</string>
     <string name="gv_sky">Sky</string>
-    <string name="gv_core">Core</string>
+    <string name="gv_rays">Rays</string>
     <string name="gv_motion">Motion</string>
     <string name="gv_music">Music</string>
     <string name="gv_stars">Stars</string>
@@ -2004,6 +2004,9 @@
     <string name="gv_god_rays">God rays</string>
     <string name="gv_ray_strength">Ray strength</string>
     <string name="gv_ray_shade">Shade rays</string>
+    <string name="gv_star_rays">Star rays</string>
+    <string name="gv_bloom">Bloom</string>
+    <string name="gv_ray_length">Ray length</string>
     <string name="gv_off">Off</string>
     <string name="gv_spin">Galaxy turn</string>
     <string name="gv_still">Still</string>
@@ -2016,6 +2019,7 @@
     <string name="gv_star_size">Star size</string>
     <string name="gv_labels">Names</string>
     <string name="gv_planets">Planets and moons</string>
+    <string name="gv_body_size">Planet &amp; moon size</string>
     <string name="gv_light_glass">Lighter glass</string>
     <string name="gv_light_glass_desc">Glass over the map works from a half-size copy of it. Faster; compare and keep what looks right.</string>
     <string name="gv_low_power">Low-performance mode keeps the heavy effects off</string>

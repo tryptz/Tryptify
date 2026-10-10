@@ -1989,7 +1989,7 @@
     <string name="galaxy_look">Galaksi görünümü</string>
     <string name="galaxy_look_reset">Sıfırla</string>
     <string name="gv_sky">Gökyüzü</string>
-    <string name="gv_core">Çekirdek</string>
+    <string name="gv_rays">Işınlar</string>
     <string name="gv_motion">Hareket</string>
     <string name="gv_music">Müzik</string>
     <string name="gv_stars">Yıldızlar</string>
@@ -2003,6 +2003,9 @@
     <string name="gv_god_rays">Işık huzmeleri</string>
     <string name="gv_ray_strength">Huzme gücü</string>
     <string name="gv_ray_shade">Gölge huzmeleri</string>
+    <string name="gv_star_rays">Yıldız ışınları</string>
+    <string name="gv_bloom">Parlama</string>
+    <string name="gv_ray_length">Işın uzunluğu</string>
     <string name="gv_off">Kapalı</string>
     <string name="gv_spin">Galaksi dönüşü</string>
     <string name="gv_still">Durgun</string>
@@ -2015,6 +2018,7 @@
     <string name="gv_star_size">Yıldız boyutu</string>
     <string name="gv_labels">Adlar</string>
     <string name="gv_planets">Gezegenler ve uydular</string>
+    <string name="gv_body_size">Gezegen ve uydu boyutu</string>
     <string name="gv_light_glass">Hafif cam</string>
     <string name="gv_light_glass_desc">Haritanın üstündeki cam, yarı boyutlu bir kopyasıyla çalışır. Daha hızlı; karşılaştırın ve doğru görüneni tutun.</string>
     <string name="gv_low_power">Düşük performans modu ağır efektleri kapalı tutar</string>

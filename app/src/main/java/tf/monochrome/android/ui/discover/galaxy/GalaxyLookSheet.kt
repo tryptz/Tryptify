@@ -113,7 +113,7 @@ internal fun GalaxyLookSheet(
             ) {
                 when (tab) {
                     0 -> SkyGroup(visuals, lowPower, onChange)
-                    1 -> CoreGroup(visuals, lowPower, onChange)
+                    1 -> RaysGroup(visuals, lowPower, onChange)
                     2 -> MotionGroup(visuals, lowPower, onChange)
                     3 -> MusicGroup(visuals, lowPower, onChange)
                     else -> StarsGroup(visuals, onChange)
@@ -123,25 +123,39 @@ internal fun GalaxyLookSheet(
     }
 }
 
-private val GROUPS = listOf(R.string.gv_sky, R.string.gv_core, R.string.gv_motion, R.string.gv_music, R.string.gv_stars)
+private val GROUPS = listOf(R.string.gv_sky, R.string.gv_rays, R.string.gv_motion, R.string.gv_music, R.string.gv_stars)
 
 @Composable
 private fun SkyGroup(v: GalaxyVisualSettings, lowPower: Boolean, onChange: (GalaxyVisualSettings) -> Unit) {
     Toggle(R.string.gv_deep_sky, v.deepSky, enabled = !lowPower) { onChange(v.copy(deepSky = it)) }
     Share(R.string.gv_nebulae, v.nebulae, GalaxyVisualSettings.NEBULAE_RANGE) { onChange(v.copy(nebulae = it)) }
     Amount(R.string.gv_dust, v.dust, enabled = !lowPower) { onChange(v.copy(dust = it)) }
+    Toggle(R.string.gv_black_hole, v.blackHole) { onChange(v.copy(blackHole = it)) }
 }
 
+/**
+ * The god rays: whether there are any, how many of the other stars shine
+ * their own, and the light itself — how bright, how dark its shadows, how much
+ * its glow blooms, and how far it runs.
+ */
 @Composable
-private fun CoreGroup(v: GalaxyVisualSettings, lowPower: Boolean, onChange: (GalaxyVisualSettings) -> Unit) {
-    Toggle(R.string.gv_black_hole, v.blackHole) { onChange(v.copy(blackHole = it)) }
+private fun RaysGroup(v: GalaxyVisualSettings, lowPower: Boolean, onChange: (GalaxyVisualSettings) -> Unit) {
     Toggle(R.string.gv_god_rays, v.godRays, enabled = !lowPower) { onChange(v.copy(godRays = it)) }
     val rays = v.godRays && !lowPower
+    Count(R.string.gv_star_rays, v.starRays, GalaxyVisualSettings.STAR_RAYS_RANGE, enabled = rays) {
+        onChange(v.copy(starRays = it))
+    }
     Share(R.string.gv_ray_strength, v.rayStrength, GalaxyVisualSettings.RAY_RANGE, enabled = rays) {
         onChange(v.copy(rayStrength = it))
     }
     Share(R.string.gv_ray_shade, v.rayShade, GalaxyVisualSettings.SHADE_RANGE, enabled = rays, zero = R.string.gv_off) {
         onChange(v.copy(rayShade = it))
+    }
+    Share(R.string.gv_bloom, v.bloom, GalaxyVisualSettings.BLOOM_RANGE, enabled = rays, zero = R.string.gv_off) {
+        onChange(v.copy(bloom = it))
+    }
+    Share(R.string.gv_ray_length, v.rayLength, GalaxyVisualSettings.RAY_LENGTH_RANGE, enabled = rays) {
+        onChange(v.copy(rayLength = it))
     }
 }
 
@@ -172,6 +186,9 @@ private fun StarsGroup(v: GalaxyVisualSettings, onChange: (GalaxyVisualSettings)
     Share(R.string.gv_star_size, v.starSize, GalaxyVisualSettings.STAR_SIZE_RANGE) { onChange(v.copy(starSize = it)) }
     Amount(R.string.gv_labels, v.labels) { onChange(v.copy(labels = it)) }
     Toggle(R.string.gv_planets, v.planets) { onChange(v.copy(planets = it)) }
+    Share(R.string.gv_body_size, v.bodySize, GalaxyVisualSettings.BODY_SIZE_RANGE, enabled = v.planets) {
+        onChange(v.copy(bodySize = it))
+    }
     // Here, on the map, so turning it shows at once on this very sheet's glass.
     Toggle(R.string.gv_light_glass, v.lightGlass, description = R.string.gv_light_glass_desc) {
         onChange(v.copy(lightGlass = it))
@@ -211,6 +228,16 @@ private fun Share(
 ) {
     val shown = if (zero != null && value <= 0.001f) stringResource(zero) else "${(value * 100).roundToInt()}%"
     FxSlider(stringResource(label), shown, value, range, enabled = enabled, onChange = onValue)
+}
+
+/** A whole number in [range] as a stepped slider: the number, or the zero word at nothing. */
+@Composable
+private fun Count(label: Int, value: Int, range: IntRange, enabled: Boolean = true, onValue: (Int) -> Unit) {
+    val shown = if (value <= 0) stringResource(R.string.gv_off) else value.toString()
+    FxSlider(
+        stringResource(label), shown, value.toFloat(), range.first.toFloat()..range.last.toFloat(),
+        steps = (range.last - range.first - 1).coerceAtLeast(0), enabled = enabled,
+    ) { onValue(it.roundToInt().coerceIn(range)) }
 }
 
 /** Less, the usual or more, as a three-stop slider: one row, like every other control here. */

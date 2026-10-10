@@ -2040,7 +2040,7 @@
     <string name="galaxy_look">Apparence de la galaxie</string>
     <string name="galaxy_look_reset">Réinitialiser</string>
     <string name="gv_sky">Ciel</string>
-    <string name="gv_core">Cœur</string>
+    <string name="gv_rays">Rayons</string>
     <string name="gv_motion">Mouvement</string>
     <string name="gv_music">Musique</string>
     <string name="gv_stars">Étoiles</string>
@@ -2054,6 +2054,9 @@
     <string name="gv_god_rays">Rayons de lumière</string>
     <string name="gv_ray_strength">Intensité des rayons</string>
     <string name="gv_ray_shade">Rayons d’ombre</string>
+    <string name="gv_star_rays">Rayons des étoiles</string>
+    <string name="gv_bloom">Halo</string>
+    <string name="gv_ray_length">Longueur des rayons</string>
     <string name="gv_off">Désactivé</string>
     <string name="gv_spin">Rotation de la galaxie</string>
     <string name="gv_still">Immobile</string>
@@ -2066,6 +2069,7 @@
     <string name="gv_star_size">Taille des étoiles</string>
     <string name="gv_labels">Noms</string>
     <string name="gv_planets">Planètes et lunes</string>
+    <string name="gv_body_size">Taille des planètes et lunes</string>
     <string name="gv_light_glass">Verre allégé</string>
     <string name="gv_light_glass_desc">Le verre sur la carte part d\'une copie à moitié taille. Plus rapide ; comparez et gardez ce qui vous plaît.</string>
     <string name="gv_low_power">Le mode basse performance garde les effets lourds désactivés</string>

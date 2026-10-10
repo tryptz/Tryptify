@@ -27,6 +27,15 @@ data class GalaxyVisualSettings(
     val rayStrength: Float = 1f,
     /** How dark the shadows are that planets, dust and stars cast through the rays; 0 for none. */
     val rayShade: Float = 1f,
+    /**
+     * How many of the other stars shine rays of their own, the biggest on
+     * screen first; 0 for none. They came with this setting, so they ship on.
+     */
+    val starRays: Int = 6,
+    /** How strongly each light's glow blooms in its rays, as a share of the usual; 0 for none. */
+    val bloom: Float = 1f,
+    /** How far the rays run before they fade, as a share of the usual. */
+    val rayLength: Float = 1f,
     // Motion.
     /** How fast the galaxy turns, as a share of the usual; 0 holds it still. */
     val spin: Float = 1f,
@@ -44,6 +53,11 @@ data class GalaxyVisualSettings(
     val starSize: Float = 1f,
     val labels: GalaxyAmount = GalaxyAmount.NORMAL,
     val planets: Boolean = true,
+    /**
+     * Planet and moon size, as a share of the usual. The moons' orbits widen
+     * with them; the planets' orbits and the star stay as they are.
+     */
+    val bodySize: Float = 1f,
     // The glass over the map.
     /**
      * Every pane of glass over the map, the bars included, bends a half-size
@@ -56,10 +70,14 @@ data class GalaxyVisualSettings(
         nebulae = nebulae.finiteOr(1f).coerceIn(NEBULAE_RANGE),
         rayStrength = rayStrength.finiteOr(1f).coerceIn(RAY_RANGE),
         rayShade = rayShade.finiteOr(1f).coerceIn(SHADE_RANGE),
+        starRays = starRays.coerceIn(STAR_RAYS_RANGE),
+        bloom = bloom.finiteOr(1f).coerceIn(BLOOM_RANGE),
+        rayLength = rayLength.finiteOr(1f).coerceIn(RAY_LENGTH_RANGE),
         spin = spin.finiteOr(1f).coerceIn(SPIN_RANGE),
         smokeAmount = smokeAmount.finiteOr(1f).coerceIn(SMOKE_RANGE),
         reactivity = reactivity.finiteOr(1f).coerceIn(REACTIVITY_RANGE),
         starSize = starSize.finiteOr(1f).coerceIn(STAR_SIZE_RANGE),
+        bodySize = bodySize.finiteOr(1f).coerceIn(BODY_SIZE_RANGE),
     )
 
     companion object {
@@ -68,10 +86,18 @@ data class GalaxyVisualSettings(
         val NEBULAE_RANGE = 0f..2f
         val RAY_RANGE = 0.3f..1.6f
         val SHADE_RANGE = 0f..2f
+
+        /** Up to the star rays shader's twelve lights. */
+        val STAR_RAYS_RANGE = 0..12
+        val BLOOM_RANGE = 0f..2f
+        val RAY_LENGTH_RANGE = 0.5f..2f
         val SPIN_RANGE = 0f..3f
         val SMOKE_RANGE = 0.3f..2f
         val REACTIVITY_RANGE = 0.3f..2f
         val STAR_SIZE_RANGE = 0.6f..1.6f
+
+        /** At the top, a planet is still under a third of its star across. */
+        val BODY_SIZE_RANGE = 0.5f..2.5f
 
         private fun Float.finiteOr(fallback: Float) = if (isFinite()) this else fallback
     }

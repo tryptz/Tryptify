@@ -183,4 +183,48 @@ class PlanetSystemTest {
         val radii = (0..10).map { GalaxyScene.starRadius(it / 10f) }
         assertTrue(radii.zipWithNext().all { (a, b) -> b > a })
     }
+
+    @Test
+    fun `the listener's planet size scales the worlds and their moons, and moves no planet`() {
+        val base = PlanetSystem.from("dubstep", chart)!!
+        assertTrue(base.withBodySize(1f) === base)
+        val big = base.withBodySize(2f)
+        assertEquals(2f, big.bodyScale, 0f)
+        assertEquals(base.starRadius, big.starRadius, 0f)
+        base.planets.zip(big.planets).forEach { (a, b) ->
+            assertEquals(a.orbit, b.orbit, 0f)
+            assertEquals(a.radius * 2f, b.radius, 1e-5f)
+            a.moons.zip(b.moons).forEach { (m, n) ->
+                assertEquals(m.radius * 2f, n.radius, 1e-5f)
+                assertEquals(m.orbit * 2f, n.orbit, 1e-5f)
+            }
+        }
+        // Back to the usual is the system it came from, size for size.
+        val back = big.withBodySize(1f)
+        base.planets.zip(back.planets).forEach { (a, b) -> assertEquals(a.radius, b.radius, 1e-5f) }
+    }
+
+    @Test
+    fun `however big the planets are, every moon is clear of its own planet`() {
+        val top = tf.monochrome.android.domain.model.GalaxyVisualSettings.BODY_SIZE_RANGE.endInclusive
+        val sized = PlanetSystem.from("dubstep", chart, releases = mapOf("Burial" to 400, "Four Tet" to 300))!!
+        for (k in listOf(0.5f, 1f, top)) {
+            for (planet in sized.withBodySize(k).planets) {
+                for (moon in planet.moons) assertTrue("at $k", moon.orbit - moon.radius > planet.radius)
+            }
+        }
+    }
+
+    @Test
+    fun `a catalogue arriving after the size was set keeps the size`() {
+        val base = PlanetSystem.from("dubstep", chart)!!
+        val counts = mapOf("Burial" to 120)
+        val sizedThenScaled = base.sizedBy(counts).withBodySize(1.8f)
+        val scaledThenSized = base.withBodySize(1.8f).sizedBy(counts)
+        assertEquals(1.8f, scaledThenSized.bodyScale, 0f)
+        sizedThenScaled.planets.zip(scaledThenSized.planets).forEach { (a, b) ->
+            assertEquals(a.radius, b.radius, 1e-5f)
+            a.moons.zip(b.moons).forEach { (m, n) -> assertEquals(m.radius, n.radius, 1e-5f) }
+        }
+    }
 }

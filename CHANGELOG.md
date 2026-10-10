@@ -20,6 +20,19 @@
 - **In full screen with nothing open, the galaxy draws straight to the display**, without the extra full-screen copy it keeps for the glass to read.
 - **Halo stars, core grains and nebulae off the screen are skipped** before they're drawn, like the dust and the stars already were.
 
+#### God rays for the other stars, and a Rays tab
+- **The biggest stars on screen shine god rays of their own now**, six by default and up to twelve. The dust in each star's glow casts fine dark streaks through its light, the way the planets and moons do round the star you're at. All of them share one extra half-resolution pass. Each pixel only works on the stars near it, so a pixel far from every star costs nothing. A star moving out of the few dims out gradually instead of switching off.
+- **A Rays tab in the Look sheet** holds the god rays switch and the new **Star rays** count, with **Ray strength** (how bright the light is), **Ray shade**, and two new sliders: **Bloom**, how strongly each light's glow blooms in its rays (none leaves only the white-hot middle), and **Ray length**, how far the shafts run before they fade. The black hole switch moved to Sky.
+
+#### Planet and moon size
+- **A new "Planet & moon size" slider under Stars**, from half to two and a half times the usual. Moons' orbits widen with their planet, so a bigger planet never swallows its moons. The planets' own orbits stay where their artists' heat put them. Taps, names, shadows and the zoom's stop short of a planet all follow the new size. Even at the top, a planet is under a third of its star across.
+
+#### Star size reaches the near stars too
+- **The Star size slider shrinks the stars close to the camera now.** Those stars sit at a size cap, and the cap only grew above 100 %, so at 78 % they looked the same as at 160 %. The cap and the smallest a far star is drawn at now both follow the slider. At 100 % nothing changes. The star you're at is its real sun size, which its planets are measured against, so the slider leaves it alone.
+
+#### No gap under the map's panels
+- **The Look sheet, the system sheet, the genre dock and the map's bottom buttons now sit right on the bar below them.** They used to leave room for the open bar (mini player stacked on the tabs) even while it was folded to one row, which left a tab bar's height of empty space under them. They follow the bar as it folds and opens.
+
 #### Lighter glass on the map (try it)
 - **A new switch in the map's Look sheet, under Stars: "Lighter glass".** With it on, the glass over the map, including the mini player and the tab bar, bends a half-size copy of what's behind it, which is much less work. The edges, the rim light and the punched glyphs stay sharp. It is off by default, so nothing changes until you try it. Compare it on your own screen and keep whichever looks right.
 

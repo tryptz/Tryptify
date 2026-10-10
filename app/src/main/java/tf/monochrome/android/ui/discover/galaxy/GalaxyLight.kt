@@ -128,13 +128,15 @@ internal class GalaxyLight {
         shade: Float,
         /** The light pass's resolution against the view's: its pixels are this many of the view's. */
         resolution: Float = 1f,
+        /** The march's falloff a sample, for the listener's ray length: see [decayFor]. */
+        decay: Float = DECAY,
     ): androidx.compose.ui.graphics.RenderEffect {
-        val weights = (1f - DECAY.pow(SAMPLES)) / (1f - DECAY)
+        val weights = (1f - decay.pow(SAMPLES)) / (1f - decay)
         shader.setFloatUniform("uLight", spot.x * resolution, spot.y * resolution)
         shader.setFloatUniform("uGlowR", (spot.glowR * resolution).coerceAtLeast(1f))
         shader.setFloatUniform("uSamples", SAMPLES.toFloat())
         shader.setFloatUniform("uDensity", DENSITY)
-        shader.setFloatUniform("uDecay", DECAY)
+        shader.setFloatUniform("uDecay", decay)
         shader.setFloatUniform("uExposure", EXPOSURE * exposure * spot.strength / weights)
         shader.setFloatUniform("uShade", SHADE * shade * spot.strength / weights)
         shader.setFloatUniform("uFrame", ((floor(time * 60f).toInt() % 64 + 64) % 64).toFloat())
@@ -158,6 +160,13 @@ internal class GalaxyLight {
          * half a step of 8-bit alpha, so a sample past it is left out.
          */
         const val SHADE_REACH = 2f
+
+        /**
+         * The march's falloff a sample for a ray [length], a share of the
+         * usual: what fades with each step is divided by it, so at 2 the
+         * shafts fade half as fast and run on twice as far into the dark.
+         */
+        fun decayFor(length: Float): Float = 1f - (1f - DECAY) / length.coerceAtLeast(0.1f)
 
         /** A reach so far no pixel's samples are skipped, for a light whose reach is not known. */
         private const val NO_REACH = 1e9f

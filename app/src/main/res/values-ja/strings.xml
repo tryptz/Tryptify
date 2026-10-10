@@ -1938,7 +1938,7 @@
     <string name="galaxy_look">銀河の見た目</string>
     <string name="galaxy_look_reset">リセット</string>
     <string name="gv_sky">空</string>
-    <string name="gv_core">中心</string>
+    <string name="gv_rays">光線</string>
     <string name="gv_motion">動き</string>
     <string name="gv_music">音楽</string>
     <string name="gv_stars">星</string>
@@ -1952,6 +1952,9 @@
     <string name="gv_god_rays">光芒</string>
     <string name="gv_ray_strength">光芒の強さ</string>
     <string name="gv_ray_shade">影の光芒</string>
+    <string name="gv_star_rays">星の光線</string>
+    <string name="gv_bloom">ブルーム</string>
+    <string name="gv_ray_length">光線の長さ</string>
     <string name="gv_off">オフ</string>
     <string name="gv_spin">銀河の回転</string>
     <string name="gv_still">停止</string>
@@ -1964,6 +1967,7 @@
     <string name="gv_star_size">星の大きさ</string>
     <string name="gv_labels">名前</string>
     <string name="gv_planets">惑星と衛星</string>
+    <string name="gv_body_size">惑星と衛星の大きさ</string>
     <string name="gv_light_glass">軽いガラス</string>
     <string name="gv_light_glass_desc">マップ上のガラスが半分のサイズの画面から描かれます。より軽快です。見比べて、良い方を残してください。</string>
     <string name="gv_low_power">低パフォーマンスモードでは重い効果はオフのままです</string>

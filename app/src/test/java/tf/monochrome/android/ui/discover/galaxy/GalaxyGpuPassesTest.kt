@@ -132,6 +132,38 @@ class GalaxyGpuPassesTest {
         assertTrue("$some", some > 0f && some < GalaxyLight.SAMPLES)
     }
 
+    @Test
+    fun `the star rays' march, from the first sample with a break, is the windowed march exactly`() {
+        // GalaxyStarRays loops from each light's first counted sample and
+        // stops at the last; GalaxyLight loops over all and skips. Same sum.
+        val rnd = Random(21)
+        val w = 300
+        val h = 500
+        val pass = LightPass(150f, 250f, 40f, emitterR = 8f, rnd = rnd, width = w, height = h)
+        val reach = GalaxyLight.SHADE_REACH * 40f + 2f
+        var y = 2
+        while (y < h) {
+            var x = 2
+            while (x < w) {
+                val j = rnd.nextFloat()
+                val a = pass.march(x + 0.5f, y + 0.5f, reach, j, 1f, 1f)
+                val b = pass.marchFromFirst(x + 0.5f, y + 0.5f, reach, j, 1f, 1f)
+                for (c in 0..3) assertEquals(a[c], b[c], 1e-6f)
+                x += 7
+            }
+            y += 7
+        }
+    }
+
+    @Test
+    fun `the usual ray length is the usual falloff, and a longer one fades slower`() {
+        assertEquals(GalaxyLight.DECAY, GalaxyLight.decayFor(1f), 1e-7f)
+        assertTrue(GalaxyLight.decayFor(2f) > GalaxyLight.DECAY && GalaxyLight.decayFor(2f) < 1f)
+        assertTrue(GalaxyLight.decayFor(0.5f) < GalaxyLight.DECAY)
+        val shortest = GalaxyLight.decayFor(GalaxyVisualSettings.RAY_LENGTH_RANGE.start)
+        assertTrue("a falloff of $shortest still has weights to share", shortest > 0f)
+    }
+
     // ── The black hole's light ──────────────────────────────────────────
 
     @Test
@@ -267,6 +299,41 @@ private class LightPass(
         for (i in 0 until 40) {
             val fi = i.toFloat()
             if (fi < samples && fi >= first) {
+                val sx = px + dx * ((fi + 1f - jitter) * stepLen)
+                val sy = py + dy * ((fi + 1f - jitter) * stepLen)
+                content(sx, sy, c)
+                lr += c[0] * w; lg += c[1] * w; lb += c[2] * w
+                val block = (c[3] - max(c[0], max(c[1], c[2]))).coerceIn(0f, 1f)
+                val g = hypot(sx - lx, sy - ly) / glowR
+                shade += block * exp(-2f * g * g) * w
+                w *= decay
+            }
+        }
+        val cr = 1f - exp(-lr * uExposure); val cg = 1f - exp(-lg * uExposure); val cb = 1f - exp(-lb * uExposure)
+        val a = max(cr, max(cg, cb))
+        val sa = (shade * uShade).coerceIn(0f, 0.6f)
+        return floatArrayOf(cr, cg, cb, a + sa * (1f - a))
+    }
+
+    /** GalaxyStarRays' loop for one light at full power: from the first counted sample, breaking at the last. */
+    fun marchFromFirst(px: Float, py: Float, reach: Float, jitter: Float, exposure: Float, shadeShare: Float): FloatArray {
+        val samples = GalaxyLight.SAMPLES
+        val decay = GalaxyLight.DECAY
+        val weights = (1f - decay.pow(samples)) / (1f - decay)
+        val uExposure = GalaxyLight.EXPOSURE * exposure / weights
+        val uShade = GalaxyLight.SHADE * shadeShare / weights
+        val tx = lx - px; val ty = ly - py
+        val dist = hypot(tx, ty)
+        val stepLen = dist * GalaxyLight.DENSITY / samples
+        val first = max(ceil((dist - reach) / max(stepLen, 0.0001f) - 1f + jitter), 0f)
+        var lr = 0f; var lg = 0f; var lb = 0f
+        var shade = 0f
+        if (first < samples) {
+            val dx = tx / max(dist, 0.001f); val dy = ty / max(dist, 0.001f)
+            var w = decay.pow(first) * 1f
+            for (k in 0 until 32) {
+                val fi = first + k
+                if (fi >= samples) break
                 val sx = px + dx * ((fi + 1f - jitter) * stepLen)
                 val sy = py + dy * ((fi + 1f - jitter) * stepLen)
                 content(sx, sy, c)

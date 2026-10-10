@@ -489,6 +489,13 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         showMiniPlayer && !miniPlayerHideWithTabs -> CHROME_GAP + TabBarHeight + CHROME_GAP + MINI_PLAYER_HEIGHT
         else -> CHROME_GAP + TabBarHeight
     }
+    // And as it stands now: folded, it is one row — the pill's glyph, the mini
+    // player and Search side by side (see TabChrome). For LocalBottomChromeNow.
+    val chromeHeightNow = if (showChrome && !flatChrome && chromeCollapsed && showMiniPlayer) {
+        CHROME_GAP + maxOf(TabBarHeight, MINI_PLAYER_HEIGHT)
+    } else {
+        chromeHeight
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
 
@@ -548,6 +555,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
             // full-bleed routes run underneath the system bar, and get it added
             // — see the providers around each below.
             LocalBottomChromeInset provides if (fullBleedRoute) navBarHeight + chromeHeight else chromeHeight,
+            LocalBottomChromeNow provides if (fullBleedRoute) navBarHeight + chromeHeightNow else chromeHeightNow,
             // So a song row anywhere in the app can show that it is the one
             // playing, without every list having to pass it down.
             LocalNowPlayingTrackId provides currentTrack?.id,
@@ -564,6 +572,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
             // Pager for main tabs — fills entire screen
             if (isOnMainTab) CompositionLocalProvider(
                 LocalBottomChromeInset provides navBarHeight + chromeHeight,
+                LocalBottomChromeNow provides navBarHeight + chromeHeightNow,
             ) {
                 HorizontalPager(
                     state = pagerState,

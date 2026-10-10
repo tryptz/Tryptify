@@ -1989,7 +1989,7 @@
     <string name="galaxy_look">Galaxie-Aussehen</string>
     <string name="galaxy_look_reset">Zurücksetzen</string>
     <string name="gv_sky">Himmel</string>
-    <string name="gv_core">Kern</string>
+    <string name="gv_rays">Strahlen</string>
     <string name="gv_motion">Bewegung</string>
     <string name="gv_music">Musik</string>
     <string name="gv_stars">Sterne</string>
@@ -2003,6 +2003,9 @@
     <string name="gv_god_rays">Lichtstrahlen</string>
     <string name="gv_ray_strength">Strahlenstärke</string>
     <string name="gv_ray_shade">Schattenstrahlen</string>
+    <string name="gv_star_rays">Sternstrahlen</string>
+    <string name="gv_bloom">Leuchten</string>
+    <string name="gv_ray_length">Strahlenlänge</string>
     <string name="gv_off">Aus</string>
     <string name="gv_spin">Drehung der Galaxie</string>
     <string name="gv_still">Still</string>
@@ -2015,6 +2018,7 @@
     <string name="gv_star_size">Sterngröße</string>
     <string name="gv_labels">Namen</string>
     <string name="gv_planets">Planeten und Monde</string>
+    <string name="gv_body_size">Größe von Planeten und Monden</string>
     <string name="gv_light_glass">Leichteres Glas</string>
     <string name="gv_light_glass_desc">Das Glas über der Karte arbeitet mit einer Kopie in halber Größe. Schneller; vergleichen und behalten, was richtig aussieht.</string>
     <string name="gv_low_power">Der Energiesparmodus lässt aufwendige Effekte aus</string>

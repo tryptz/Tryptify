@@ -43,6 +43,10 @@ internal object GalaxyProbe {
     /** Light passes with a light up but nowhere on screen its rays could reach: skipped whole. */
     var raysUnreachable = 0
 
+    /** The other stars' rays pass, and how many stars it last carried. */
+    var starRayPasses = 0
+    var starRayLights = 0
+
     /** The last light pass that ran, in the view's px, for the sample estimate in the report. */
     var lastLightX = 0f
     var lastLightY = 0f
@@ -55,7 +59,7 @@ internal object GalaxyProbe {
 
     fun reset() {
         vsyncs = 0; paced = 0
-        skyDraws = 0; smokeDraws = 0; coreRays = 0; starRays = 0; raysUnreachable = 0
+        skyDraws = 0; smokeDraws = 0; coreRays = 0; starRays = 0; raysUnreachable = 0; starRayPasses = 0
     }
 
     fun light(spot: LightSpot, width: Float, height: Float) {
@@ -132,6 +136,8 @@ internal object GalaxyFrameStats {
             append(" | smoke ").append(if (smokeOn) rate(p.smokeDraws) else "off")
             if (raysOn) {
                 append(" | rays star ").append(rate(p.starRays)).append(" core ").append(rate(p.coreRays))
+                append(" others ").append(rate(p.starRayPasses))
+                if (p.starRayPasses > 0) append(" x").append(p.starRayLights)
                 if (p.raysUnreachable > 0) append(" unreachable ").append(rate(p.raysUnreachable))
                 if (p.lastWidth > 0f) {
                     val reads = raySamplesPerPixel(

@@ -729,6 +729,29 @@ off where the window starts; black things may go anywhere. `GalaxyGpuPassesTest`
 replays the shader with and without the window at the strongest settings and
 holds the difference under half a colour step.
 
+**The other stars' rays are one pass for all of them** (`GalaxyStarRays`, up to
+`StarLights.MAX`). Every star's glow is drawn into one half-resolution light
+pass and each pixel marches toward each light, from that light's first counted
+sample (the same window as above) and breaking at the last. A pass per star
+would be a full-screen layer per star; keep it one. The star with its own pass
+(the one you are at) is left out of it, its planets stay in its own pass, and
+only dust and bulge grains near a star in depth as well as on screen stand in
+these glows. `pickStarLights` fades each star over the gap to the next in line;
+a hard top-N cut would pop. Bloom (`GalaxyArt.bloom`) is the light passes'
+glow, so it scales the light the rays carry, and ray length is the march's
+falloff (`GalaxyLight.decayFor`), neither the reach: the window stays exact.
+
+**Planet and moon size lives in the system, not the drawing**
+(`PlanetSystem.withBodySize`, applied once in `GenreMapScreen`). Scaled there,
+the moons' orbits widen with their planets, and the taps, names, shadows and the
+zoom's near limit all read the same radius. Scaling only the drawn disc would
+leave moons inside a big planet and the camera able to fly into it.
+
+**The map's panels sit on the bar as it stands now** (`LocalBottomChromeNow`),
+following its fold. `LocalBottomChromeInset` is the open bar's height on
+purpose, for lists, and on a panel it left a tab bar of dead space under it
+whenever the bar was folded.
+
 **The smoke tests for the disc before its noise.** The density is at most the
 disc's falloff times the amount, so the early return is the same cut the end of
 the shader makes; keep it before the three fbm calls.

@@ -15,6 +15,11 @@ class GalaxyVisualSettingsTest {
         assertEquals(1f, d.spin, 0f)
         assertEquals(1f, d.starSize, 0f)
         assertEquals(1f, d.rayShade, 0f)
+        assertEquals(1f, d.bodySize, 0f)
+        assertEquals(1f, d.bloom, 0f)
+        assertEquals(1f, d.rayLength, 0f)
+        // The other stars' rays came with their setting, and ship on.
+        assertEquals(6, d.starRays)
         assertEquals(GalaxyAmount.NORMAL, d.dust)
         assertEquals(true, d.blackHole && d.godRays && d.smoke && d.musicReactive && d.planets && d.deepSky)
         // Lighter glass is the listener's to try: the glass stays as it was until they do.
@@ -26,8 +31,14 @@ class GalaxyVisualSettingsTest {
     fun `out-of-range and broken values are pulled back in`() {
         val wild = GalaxyVisualSettings(
             nebulae = 9f, rayStrength = -1f, spin = Float.NaN, smokeAmount = 100f,
-            reactivity = Float.POSITIVE_INFINITY, starSize = 0f, rayShade = 7f,
+            reactivity = Float.POSITIVE_INFINITY, starSize = 0f, rayShade = 7f, bodySize = 40f,
         ).clamped()
+        assertEquals(GalaxyVisualSettings.BODY_SIZE_RANGE.endInclusive, wild.bodySize, 0f)
+        val wilder = GalaxyVisualSettings(starRays = 99, bloom = Float.NaN, rayLength = 0f).clamped()
+        assertEquals(GalaxyVisualSettings.STAR_RAYS_RANGE.last, wilder.starRays)
+        assertEquals(1f, wilder.bloom, 0f)
+        assertEquals(GalaxyVisualSettings.RAY_LENGTH_RANGE.start, wilder.rayLength, 0f)
+        assertEquals(0, GalaxyVisualSettings(starRays = -3).clamped().starRays)
         assertEquals(GalaxyVisualSettings.SHADE_RANGE.endInclusive, wild.rayShade, 0f)
         assertEquals(GalaxyVisualSettings.NEBULAE_RANGE.endInclusive, wild.nebulae, 0f)
         assertEquals(GalaxyVisualSettings.RAY_RANGE.start, wild.rayStrength, 0f)

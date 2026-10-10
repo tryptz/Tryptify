@@ -2040,7 +2040,7 @@
     <string name="galaxy_look">Aspecto de la galaxia</string>
     <string name="galaxy_look_reset">Restablecer</string>
     <string name="gv_sky">Cielo</string>
-    <string name="gv_core">Núcleo</string>
+    <string name="gv_rays">Rayos</string>
     <string name="gv_motion">Movimiento</string>
     <string name="gv_music">Música</string>
     <string name="gv_stars">Estrellas</string>
@@ -2054,6 +2054,9 @@
     <string name="gv_god_rays">Rayos de luz</string>
     <string name="gv_ray_strength">Intensidad de los rayos</string>
     <string name="gv_ray_shade">Rayos de sombra</string>
+    <string name="gv_star_rays">Rayos de estrellas</string>
+    <string name="gv_bloom">Resplandor</string>
+    <string name="gv_ray_length">Longitud de los rayos</string>
     <string name="gv_off">Desactivado</string>
     <string name="gv_spin">Giro de la galaxia</string>
     <string name="gv_still">Quieta</string>
@@ -2066,6 +2069,7 @@
     <string name="gv_star_size">Tamaño de las estrellas</string>
     <string name="gv_labels">Nombres</string>
     <string name="gv_planets">Planetas y lunas</string>
+    <string name="gv_body_size">Tamaño de planetas y lunas</string>
     <string name="gv_light_glass">Cristal ligero</string>
     <string name="gv_light_glass_desc">El cristal sobre el mapa usa una copia a la mitad de tamaño. Más rápido; compara y quédate con lo que se vea bien.</string>
     <string name="gv_low_power">El modo de bajo rendimiento mantiene desactivados los efectos pesados</string>

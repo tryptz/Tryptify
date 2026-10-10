@@ -35,6 +35,13 @@ class PlanetSystem(
      * round a dwarf.
      */
     val starRadius: Float = DEFAULT_STAR_RADIUS,
+    /**
+     * The listener's planet and moon size, as a share of the usual, already
+     * in every radius and moon orbit here ([withBodySize]). Kept so what is
+     * drawn from it — the least speck a far planet is drawn at — scales the
+     * same way.
+     */
+    val bodyScale: Float = 1f,
 ) {
 
     class Planet(
@@ -67,15 +74,24 @@ class PlanetSystem(
         /** The outermost moon's orbit, or the planet's own size without moons. */
         val reach: Float get() = moons.maxOfOrNull { it.orbit } ?: radius
 
-        /** This planet at the size of a catalogue of [count] releases, round a star of [starRadius]. */
-        internal fun sizedFor(count: Int?, starRadius: Float): Planet {
-            val r = planetRadius(count, starRadius)
+        /**
+         * This planet at the size of a catalogue of [count] releases, round a
+         * star of [starRadius], at the listener's [bodyScale].
+         */
+        internal fun sizedFor(count: Int?, starRadius: Float, bodyScale: Float = 1f): Planet {
+            val r = planetRadius(count, starRadius) * bodyScale
             val k = r / radius
             return Planet(
                 artist, share, count, orbit, period, phase, tilt, node, r, hue, artworkUrl,
                 moons.map { Moon(it.entry, it.orbit, it.period, it.phase, it.tilt, it.node, it.radius * k) },
             )
         }
+
+        /** This planet and its moons [k] times the size, the moons' orbits widened with them. */
+        internal fun scaled(k: Float): Planet = Planet(
+            artist, share, releases, orbit, period, phase, tilt, node, radius * k, hue, artworkUrl,
+            moons.map { Moon(it.entry, it.orbit * k, it.period, it.phase, it.tilt, it.node, it.radius * k) },
+        )
     }
 
     class Moon(
@@ -122,7 +138,24 @@ class PlanetSystem(
      */
     fun sizedBy(releases: Map<String, Int>): PlanetSystem {
         if (planets.none { releases[it.artist] != it.releases }) return this
-        return PlanetSystem(genreId, planets.map { it.sizedFor(releases[it.artist] ?: it.releases, starRadius) }, starRadius)
+        return PlanetSystem(
+            genreId,
+            planets.map { it.sizedFor(releases[it.artist] ?: it.releases, starRadius, bodyScale) },
+            starRadius,
+            bodyScale,
+        )
+    }
+
+    /**
+     * The same system with its planets and moons at the listener's [size], a
+     * share of the usual. The moons' orbits widen with them, so a bigger
+     * planet never swallows its own moons; the planets' orbits stay where
+     * their artists' heat put them, and the star is its genre's size still.
+     */
+    fun withBodySize(size: Float): PlanetSystem {
+        val k = size / bodyScale
+        if (k == 1f || !k.isFinite() || k <= 0f) return this
+        return PlanetSystem(genreId, planets.map { it.scaled(k) }, starRadius, size)
     }
 
     companion object {
