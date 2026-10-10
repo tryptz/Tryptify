@@ -23,7 +23,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -141,15 +140,11 @@ fun CrossfeedScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         CrossfeedAlgorithm.entries.forEach { algo ->
-                            FilterChip(
+                            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                                label = algo.label,
                                 selected = state.algorithm == algo,
+                                accent = MaterialTheme.colorScheme.primary,
                                 onClick = { effect.setAlgorithm(algo) },
-                                label = {
-                                    Text(
-                                        text = algo.label,
-                                        style = MaterialTheme.typography.labelSmall,
-                                    )
-                                },
                             )
                         }
                     }

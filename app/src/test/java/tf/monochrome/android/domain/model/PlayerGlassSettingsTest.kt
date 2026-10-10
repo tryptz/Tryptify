@@ -34,6 +34,20 @@ class PlayerGlassSettingsTest {
     }
 
     @Test
+    fun `every glass setting starts from Float, the first chip, and DEFAULT is not offered`() {
+        val m = PlayerGlassSettings.INITIAL
+        assertEquals(PlayerGlassSettings.FLOAT, m)
+        assertEquals(m, m.clamped())
+        assertEquals("Float" to m, PlayerGlassSettings.PRESETS.first())
+        assertTrue(PlayerGlassSettings.PRESETS.none { it.second == PlayerGlassSettings.DEFAULT })
+        // Still until touched: on the app-wide bar a moving surface runs a
+        // frame clock and tilt holds the gravity sensor, on every screen.
+        assertEquals(0f, m.surfaceMotion)
+        assertEquals(0f, m.tiltReactivity)
+        assertTrue(m != PlayerGlassSettings.DEFAULT)
+    }
+
+    @Test
     fun `clamped coerces out-of-range values`() {
         val c = PlayerGlassSettings(
             bodyOpacity = 9f,
@@ -107,7 +121,7 @@ class PlayerGlassSettingsTest {
             tintColor = 0xFF22CCFF.toInt(),
             previewBg = 0xFF000000.toInt(),
         )
-        val theme = PlayerGlassSettings.PRESETS.first { it.first == "Neon" }.second
+        val theme = PlayerGlassSettings.PRESETS.first { it.first == "Tinted" }.second
         val applied = theme.withPersonalFrom(personal)
         assertEquals(1, applied.sampleRings)
         assertEquals(0xFF22CCFF.toInt(), applied.tintColor)
@@ -148,11 +162,27 @@ class PlayerGlassSettingsTest {
     }
 
     @Test
-    fun `matchesPreset is false for a different material`() {
-        val chrome = PlayerGlassSettings.PRESETS.first { it.first == "Chrome" }.second
-        val frosted = PlayerGlassSettings.PRESETS.first { it.first == "Frosted" }.second
-        assertTrue(chrome.matchesPreset(chrome))
-        assertTrue(!chrome.matchesPreset(frosted))
+    fun `every preset is its own material, so exactly one chip lights`() {
+        val presets = PlayerGlassSettings.PRESETS
+        val names = presets.map { it.first.lowercase() }
+        assertEquals("preset names must be unique", names.distinct(), names)
+        presets.forEach { (name, a) ->
+            assertTrue("$name should match its own chip", a.matchesPreset(a))
+            presets.filter { it.first != name }.forEach { (other, b) ->
+                assertTrue("$name and $other are the same material", !a.matchesPreset(b))
+            }
+        }
+    }
+
+    @Test
+    fun `no preset uses more than a light frost grain`() {
+        // Frosted glass is made from backdrop blur. The shader's frost is
+        // per-pixel grain, and heavy grain read as noise on the rim on
+        // device. A light grain was tuned in on device for Blurred (0.03)
+        // and Frosted Ripple (0.11, the heaviest); nothing goes past that.
+        PlayerGlassSettings.PRESETS.forEach { (name, preset) ->
+            assertTrue("$name uses heavy frost grain (${preset.frost})", preset.frost <= 0.15f)
+        }
     }
 
     @Test

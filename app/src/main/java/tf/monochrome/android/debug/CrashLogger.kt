@@ -1,5 +1,7 @@
 package tf.monochrome.android.debug
 
+import android.app.ActivityManager
+import android.app.ApplicationExitInfo
 import android.content.ContentValues
 import android.content.Context
 import android.os.Build
@@ -8,6 +10,9 @@ import android.provider.MediaStore
 import android.util.Log
 import androidx.annotation.RequiresApi
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import tf.monochrome.android.BuildConfig
 import java.io.File
 import java.io.PrintWriter
@@ -39,6 +44,13 @@ import javax.inject.Singleton
  * forward the original throwable to the prior handler — losing the crash
  * dialog because of a logging side effect would be worse than losing the
  * log.
+ *
+ * Both reports can be switched off in Settings › System › Diagnostics
+ * ([saveReports]). A native report carries the tombstone's readable strings
+ * and the process's own log, which a user may not want lying in Downloads.
+ * The switch lives in this class's SharedPreferences rather than DataStore:
+ * the handler reads it while the process is dying, synchronously, and
+ * DataStore can only be read by suspending.
  */
 @Singleton
 class CrashLogger @Inject constructor(
@@ -47,13 +59,27 @@ class CrashLogger @Inject constructor(
 ) {
     private var installed = false
 
+    // Opened on first use, off the startup path: the report thread or the
+    // Settings screen, whichever comes first.
+    private val prefs by lazy { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
+
+    private val _saveReports by lazy { MutableStateFlow(prefs.getBoolean(KEY_SAVE_REPORTS, true)) }
+
+    /** Whether crash and native-crash reports are written to Downloads. On unless switched off. */
+    val saveReports: StateFlow<Boolean> get() = _saveReports.asStateFlow()
+
+    fun setSaveReports(enabled: Boolean) {
+        _saveReports.value = enabled
+        prefs.edit().putBoolean(KEY_SAVE_REPORTS, enabled).apply()
+    }
+
     fun install() {
         if (installed) return
         installed = true
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
-                writeCrashDump(thread, throwable)
+                if (_saveReports.value) writeCrashDump(thread, throwable)
             } catch (t: Throwable) {
                 Log.w(TAG, "Crash dump failed", t)
             }
@@ -62,6 +88,75 @@ class CrashLogger @Inject constructor(
             // exception would leave the app in an undefined state.
             previous?.uncaughtException(thread, throwable)
         }
+        // Off the startup path: reading a tombstone is disk work.
+        Thread({ runCatching { reportPreviousNativeExit() } }, "crash-report").start()
+    }
+
+    /**
+     * A native crash (a signal in the audio, DSP or Atmos code) or an ANR
+     * kills the process without ever reaching the handler above, so it left
+     * no dump and a debug log taken after it starts from the next launch. On
+     * Android 11+ the system remembers why the last process ended; this
+     * writes that, once, to Downloads/monotrypt-crash-native-*.log: the
+     * reason, the signal and, from the tombstone (a protobuf on Android 12+),
+     * its readable strings, which name the crashing library and functions.
+     */
+    private fun reportPreviousNativeExit() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        if (!_saveReports.value) return
+        val activityManager = context.getSystemService(ActivityManager::class.java) ?: return
+        val exit = activityManager.getHistoricalProcessExitReasons(context.packageName, 0, 1)
+            .firstOrNull() ?: return
+        if (exit.reason != ApplicationExitInfo.REASON_CRASH_NATIVE && exit.reason != ApplicationExitInfo.REASON_ANR) return
+        if (prefs.getLong(KEY_LAST_EXIT, 0L) >= exit.timestamp) return
+        prefs.edit().putLong(KEY_LAST_EXIT, exit.timestamp).apply()
+
+        val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(exit.timestamp))
+        val trace = runCatching { exit.traceInputStream?.use { it.readBytes() } }.getOrNull()
+        val content = buildString {
+            appendLine("MonoTrypT crash dump (previous process)")
+            appendLine("=======================================")
+            appendLine("when:      $stamp")
+            appendLine("app:       ${BuildConfig.APPLICATION_ID} ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+            appendLine("android:   ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+            appendLine("device:    ${Build.MANUFACTURER} ${Build.MODEL} (${Build.PRODUCT})")
+            appendLine("reason:    ${if (exit.reason == ApplicationExitInfo.REASON_ANR) "ANR (not responding)" else "native crash"}")
+            appendLine("status:    ${exit.status}")
+            appendLine("detail:    ${exit.description}")
+            appendLine()
+            when {
+                trace == null -> appendLine("(no trace kept by the system)")
+                exit.reason == ApplicationExitInfo.REASON_ANR -> {
+                    appendLine("--- ANR traces ---")
+                    appendLine(String(trace, Charsets.UTF_8))
+                }
+                else -> {
+                    appendLine("--- tombstone strings ---")
+                    readableStrings(trace).forEach { appendLine(it) }
+                }
+            }
+        }
+        val bytes = content.toByteArray(Charsets.UTF_8)
+        val fileName = "monotrypt-crash-native-$stamp.log"
+        val wrote = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) writeViaMediaStore(fileName, bytes)
+            else writeViaPublicDirectory(fileName, bytes)
+        if (!wrote) Log.w(TAG, "Native crash report could not be written to Downloads")
+    }
+
+    /** Runs of printable ASCII at least 4 long: what a tombstone's frames and libraries read as. */
+    private fun readableStrings(bytes: ByteArray): List<String> {
+        val out = ArrayList<String>()
+        val run = StringBuilder()
+        for (b in bytes) {
+            val c = b.toInt() and 0xFF
+            if (c in 0x20..0x7E) run.append(c.toChar())
+            else {
+                if (run.length >= 4) out += run.toString()
+                run.setLength(0)
+            }
+        }
+        if (run.length >= 4) out += run.toString()
+        return out
     }
 
     private fun writeCrashDump(thread: Thread, throwable: Throwable) {
@@ -130,5 +225,8 @@ class CrashLogger @Inject constructor(
 
     companion object {
         private const val TAG = "CrashLogger"
+        private const val PREFS = "crash_logger"
+        private const val KEY_LAST_EXIT = "last_reported_exit"
+        private const val KEY_SAVE_REPORTS = "save_reports"
     }
 }

@@ -92,6 +92,9 @@ object WhatsNew {
     /** What Search looks in, and how it shows where each result came from. */
     private const val SEARCH = "Search and Deezer"
 
+    /** TIDAL's own pages, playlists, lyrics and playback, from a HiFi API server. */
+    private const val TIDAL = "TIDAL"
+
     /** The DSP mixer, its buses and the presets that ship with it. */
     private const val MIXER = "Mixer"
 
@@ -118,6 +121,264 @@ object WhatsNew {
 
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
+        WhatsNewRelease(
+            versionCode = 193,
+            versionName = "1.9.3",
+            entries = listOf(
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LOOK,
+                    title = "Liquid glass",
+                    body = "The mini player, nav bar, search bars and panels bend what is behind them at their rounded edges, the way real glass does, and stay clear across the middle.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LOOK,
+                    title = "New glass themes",
+                    body = "Float, Opal, Ripple, Glint, Blurred and Frosted Ripple, tuned on device, then Clear, Tinted and Tilt, after iOS, and Pure, Droplet, Prism, Bubble, Mercury, Ice, Halo, Aurora, Dusk and Holo. Float is the new starting look; glass you tuned yourself is kept.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LOOK,
+                    title = "Shadows under the bars",
+                    body = "The nav bar and the mini player cast the same drop shadow as the play button, from the shadow depth, softness and tint in Player Visuals Studio.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "Glass play button and dock",
+                    body = "The play button and the action dock bend the album art behind them too.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "God rays on the lyrics",
+                    body = "Light streams out of the line being sung, or from a light behind the lyrics that the letters block, and runs on down the screen under the player's glass. Aim it in Player Visuals Studio › Lyrics, under or over the letters. Off until you turn it on.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "Lyrics in any glass",
+                    body = "The letters can be made of any of the player's glass: roundness, depth, motion, reflection, gloss, tilt, light angle, edge and frost, or Match player glass to copy it. With god rays on, the letters catch their light.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "Nine new lyric looks",
+                    body = "Sunburst, Cathedral, Eclipse, Daybreak, Searchlight, Spotlight, Crepuscular, Mercury and Sea Glass, in Player Visuals Studio. Your own look and the presets you had stay as they were.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "A Lyrics button on the legacy player",
+                    body = "The legacy player has a Lyrics button beside Timer, Mixer/FX and Playlist, lit while the lyrics show. It used to be in the Audio tools panel only.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LOOK,
+                    title = "One clean glass edge",
+                    body = "Glass edges catch the light as one rim at the edge, instead of a second bright line inside it that made a pane look like two layers.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LOOK,
+                    title = "Mini player matches the nav bar",
+                    body = "The mini player's glass takes the nav bar's colour rather than the album's, so the two read as one piece of glass. Its text and cover still follow the album.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "Titles from file names",
+                    body = "Settings › Library can name local songs after their files instead of their title tags, for files whose tags are wrong or shared. Renaming a file then renames the song.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "Better folder browsing",
+                    body = "Sort folders by name, songs or newest file, and songs by file name, year, date, format, quality or size; the choice sticks. Tap the path to jump up, and Play or Shuffle a folder with everything inside it.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = TIDAL,
+                    title = "Dolby Atmos badge",
+                    body = "TIDAL songs and albums with a Dolby Atmos mix carry the badge, and the player shows it while that mix plays. The TIDAL Dolby Atmos switch is in Settings › Audio now too.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYBACK,
+                    title = "Play alongside other apps",
+                    body = "Settings › Audio can keep music playing under a game or a video, instead of pausing whenever another app makes a sound.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = USB_DAC,
+                    title = "A volume for USB DACs",
+                    body = "With a USB DAC in exclusive mode the player has a glass volume bar, and the volume keys bring one up anywhere in the app, or Android's own panel with the screen off. Unmuting goes back to where you were.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = EQUALIZER,
+                    title = "AutoEQ per device",
+                    body = "An AutoEQ preset can follow your headphones: give it to the speaker, wired, Bluetooth or USB, or to one device by name, with the devices button on the preset. It switches when they connect. AutoEQ off can be given too.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = DOWNLOADS,
+                    title = "Dolby Atmos downloads",
+                    body = "TIDAL's download quality can be Dolby Atmos: a track with an Atmos mix downloads it as an untouched .m4a, and the rest as Hi-Res FLAC.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = DOWNLOADS,
+                    title = "Artist and album folders",
+                    body = "Downloads to a folder you picked are filed as Artist / Album / 01. Title, with one cover.jpg per album and tags other players can group by.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = APP,
+                    title = "Crash reports you can switch off",
+                    body = "A crash or freeze, even one deep in the audio engine, is saved to Downloads as a .log file to attach to a bug report. Settings › System › Diagnostics can turn that off.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LOOK,
+                    title = "Song titles get the whole line",
+                    body = "Song rows are laid out like Library › Local: the title has its line to itself, with the artist, album, source and quality under it. Like a song from its menu or the player.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LOOK,
+                    title = "Low performance mode draws flat",
+                    body = "With Remove liquid glass on, the nav bar is Android's own Material 3 bar, with Search in it, and the mini player and every pane are flat surfaces. They used to turn see-through, and the page showed through the nav bar.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYER,
+                    title = "A soft shadow under the lyrics",
+                    body = "The lyrics' shadow falls on the background under each line, soft and away from the light, instead of a dark copy stuck to every letter. Shadow depth sets how dark and how soft.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYER,
+                    title = "The Studio preview beats with the song",
+                    body = "Player Visuals Studio's preview of the song playing pulses with the song itself, as the player does, and is still while it is paused. The sample line, with no song behind it, keeps its steady beat.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYER,
+                    title = "The legacy player fills the screen",
+                    body = "With Legacy player on in Settings › System › Performance, the controls sit at the bottom of the screen and the album art is as big as it fits, instead of a small cover over a band of empty space. Lyrics get the full width.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = TIDAL,
+                    title = "TIDAL playlists open",
+                    body = "A TIDAL playlist from search opened empty. It loads now, hundreds of songs at a time, ready to play, though it can't be edited here.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = TIDAL,
+                    title = "More than songs in TIDAL search",
+                    body = "Artists, albums and playlists show up in TIDAL search, artist pages have their name, picture and similar artists, and TIDAL's own lyrics and radio work.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = TIDAL,
+                    title = "TIDAL songs stop skipping",
+                    body = "On a server signed in with your own TIDAL account, every song skipped to the next instead of playing. They play now.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYBACK,
+                    title = "Quality per service",
+                    body = "TIDAL, Qobuz and Deezer each stream and download in a quality of their own, named in their own terms: AAC or MP3, CD or Hi-Res FLAC. A Streaming | Download switch picks which you are setting.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYBACK,
+                    title = "Skipping songs no longer crashes",
+                    body = "Skipping from one song to the next, most often in a Dolby Atmos or surround playlist, could close the app.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = USB_DAC,
+                    title = "USB DACs start quiet",
+                    body = "A DAC in exclusive mode starts at −24 dB every time and fades in, instead of at full volume. Volume works at 24 and 32 bits now too, and moves smoothly without clicks.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = USB_DAC,
+                    title = "DAC volume stays with the DAC",
+                    body = "The volume keys on a DAC no longer turn down the app's own volume, which left everything quiet afterwards with no way back up. That volume is set back to full once.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PIPELINE,
+                    title = "16-bit FLAC plays cleanly on hi-res output",
+                    body = "On some phones a 16-bit FLAC on the hi-res output played as loud static at double speed, because the decoder said float and wrote 16-bit. It is caught and read as 16-bit now.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = DOWNLOADS,
+                    title = "Downloads opens at once",
+                    body = "It said there were no downloads for a few seconds before showing them. Songs you put in the download folder yourself now show their own titles, artists and covers.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = DOWNLOADS,
+                    title = "Hi-Res downloads fall back to CD",
+                    body = "When TIDAL sends a Hi-Res song in pieces your server can't join into one file, it downloads as CD FLAC instead of failing.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = DOWNLOADS,
+                    title = "No broken files left behind",
+                    body = "A download that fails partway no longer leaves half a file in your folder, and names starting with a dot (.38 Special) no longer hide songs from other players.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LIBRARY,
+                    title = "Singles stay with their album",
+                    body = "A song downloaded on its own, next to the album it is from, no longer shows up as a second copy of that album. Rescan the library to regroup it.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LIBRARY,
+                    title = "Rescans run to the end",
+                    body = "Rescan Library and the Library tab's refresh keep going after you leave the screen, instead of stopping halfway.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LIBRARY,
+                    title = "Folders keep up with your files",
+                    body = "Songs you add, delete or move in your library folders show up by themselves, including changes made while the app was closed. A rescan now also finds new songs Android had not noticed.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LIBRARY,
+                    title = "Folders play in their real order",
+                    body = "Songs in a folder go in album, disc and track order, and files without track numbers in file-name order, instead of alphabetically by title.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = APP,
+                    title = "Album and artist pages stop crashing",
+                    body = "Opening an album or an artist, especially one opened before, could close the app.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = ACCOUNT_SYNC,
+                    title = "Your plays reach your account",
+                    body = "Songs played with the screen off were not saved to your account, so your listening stats missed most of them. They are now, and plays that never made it go up the next time you open the app.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = ACCOUNT_SYNC,
+                    title = "Less background data",
+                    body = "Changing the visualizer's preset no longer saves your settings to your account each time. The preset on screen stays on this phone; your favourite presets and rotation still sync.",
+                ),
+            ),
+        ),
         WhatsNewRelease(
             versionCode = 192,
             versionName = "1.9.2",

@@ -220,6 +220,17 @@ fun DownloadsMonitorSheet(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
+                            // Why it failed, as the service put it (e.g. why
+                            // its Dolby Atmos mix could not be had).
+                            if (d.status == DownloadStatus.FAILED && d.error != null) {
+                                Text(
+                                    text = d.error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                             // No progress bar for a failed row; queued shows an
                             // indeterminate bar, downloading shows real progress.
                             when (d.status) {

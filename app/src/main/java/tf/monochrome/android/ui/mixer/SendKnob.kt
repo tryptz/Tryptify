@@ -129,15 +129,19 @@ internal fun SendKnob(
             val c = Offset(size.width / 2f, size.height / 2f)
             // The body: a dark dome, lit from above, with a soft drop below.
             drawCircle(Color.Black.copy(alpha = 0.35f), radius = bodyRadius + 1.dp.toPx(), center = c + Offset(0f, 1.dp.toPx()))
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(Color(0xFF5C6168), Color(0xFF2E3237)),
-                    center = c - Offset(0f, bodyRadius * 0.45f),
-                    radius = bodyRadius * 1.6f,
-                ),
-                radius = bodyRadius,
-                center = c,
-            )
+            // Squeezed below its insets the body has no size, and a radial
+            // gradient of radius 0 throws (the FLKnob crash).
+            if (bodyRadius > 0f) {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color(0xFF5C6168), Color(0xFF2E3237)),
+                        center = c - Offset(0f, bodyRadius * 0.45f),
+                        radius = bodyRadius * 1.6f,
+                    ),
+                    radius = bodyRadius,
+                    center = c,
+                )
+            }
             // The ring: groove, then the level.
             val arcSize = androidx.compose.ui.geometry.Size(ringRadius * 2f, ringRadius * 2f)
             val arcTopLeft = c - Offset(ringRadius, ringRadius)

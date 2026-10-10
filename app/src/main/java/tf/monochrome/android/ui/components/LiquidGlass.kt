@@ -13,12 +13,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.Dp
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
+import tf.monochrome.android.performance.LocalLowPerformance
 import tf.monochrome.android.performance.LocalPerformanceProfile
 import tf.monochrome.android.ui.theme.MonoDimens
 
@@ -79,6 +81,25 @@ fun Modifier.liquidGlass(
     // colorScheme.outline keeps UI-element outlines clearly visible on every
     // theme by default (many schemes' outline color is too low-contrast to read).
     val borderColor = if (isDark) Color.White else Color.Black
+
+    // "Remove liquid glass" (Settings › System › Performance): flat Material 3
+    // surfaces where the glass was. This used to fall through to the LOW-tier
+    // return below, which draws nothing, so the nav bar, the mini player and
+    // every pane went see-through and the page read straight through them
+    // (seen on device: a Settings slider showing through the nav bar, the mini
+    // player's title written over a setting). A plain fill is not what the
+    // switch is for; the blur, the rim and the refraction are.
+    if (LocalLowPerformance.current.disableLiquidGlass) {
+        val scheme = MaterialTheme.colorScheme
+        // The tint a caller asks for says how present the pane is meant to be
+        // (an idle mixer bus asks for less than an active one), so it picks
+        // the tone: a quiet pane a container low, the default one between.
+        val emphasis = (tintAlpha / MonoDimens.glassAlpha / 2f).coerceIn(0f, 1f)
+        return@composed this.background(
+            lerp(scheme.surfaceContainerLow, scheme.surfaceContainerHighest, emphasis),
+            shape,
+        )
+    }
 
     // LOW-tier devices skip the full glass chrome — no backdrop blur, no specular
     // rim, no refraction overlay. Those three layers together are the dominant

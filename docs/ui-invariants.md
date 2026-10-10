@@ -41,6 +41,90 @@ The reason it was ever faint: on a device where the shader silently no-ops
 compile it), a solid fill is left on screen as an opaque rounded rectangle. Ask
 `rememberLiquidGlassAvailable()` rather than hedging with a low alpha.
 
+**A rounded-rect slab passes its corner as `lensCorner`.** The alpha
+heightfield alone gives a solid fill a bevel 2–4px wide: the fill steps from 0
+to 1 across one anti-aliased pixel, so everything inside it is flat and
+`refract()` bends nothing. The pane then reads as a tinted sheet with a
+garbled hairline, not as glass. With `lensCorner` set, the shader lays a
+rounded (circular) edge across a band as wide as the corner (capped at 24dp, scaled by
+`roundness`), and measures the bend in pixels against that band rather than as
+a fraction of the pane, so the backdrop bends hardest at the rim and not at all
+in the middle. The mini player, `GlassPanel` (so every search bar), the tab
+bar, the action dock and the play disc all pass it. Leave it unspecified for
+anything that is not one rounded rect filling the layer — glyphs, icons, the
+spectrum — or the rim lands where the edge is not. With it unspecified, the
+output is bit-identical to the alpha-only glass. The profile is circular, not a squircle: a squircle is flat for most of its
+width, only its outermost pixels bent, and on device the refraction read as too
+weak.
+
+**With "Remove liquid glass" on, glass is flat Material 3, never nothing.**
+`Modifier.liquidGlass` draws a flat fill in the caller's shape, between
+`surfaceContainerLow` and `surfaceContainerHighest` by the caller's `tintAlpha`
+(a quieter pane a tone lower), and `GlassPanel` its own `surfaceContainerHigh`. The switch turns off the haze
+blur too, and the shared modifier used to fall through to the LOW-tier return
+and draw nothing: the nav bar, the mini player and every pane went
+see-through, and the page read straight through them (seen on device). The
+switch is for the blur, the rim and the refraction, not the surface.
+
+**Prototype: the mini player, the tab bar, `GlassPanel` and the full player's disc and dock bend the live screen**
+(`LiveGlassLens.kt`, behind `LIVE_LENS_GLASS`). **The mini player and the tab bar are one
+material and must match exactly:** same lens, same blur share
+(`LIVE_LENS_CHROME_BLUR_SHARE`, now the same share as every other pane's, kept
+as its own name so the two bars always pass one value), same frost, and the
+same tint — the nav host takes the tab bar's tint *outside* `DynamicColorScope`
+and hands it to the mini player
+(`glassTintColor`), because inside it `primary` is the album's colour and the
+bar came out a different hue from the tab bar under it. Their haze pane is replaced by a
+layer that draws Haze's own capture of the screen behind them
+(`HazeState.areas[i].contentLayer`, offset by `positionOnScreen`), blurs it (a
+fifth of `hazeBlurDp`, 6.3dp on Float) and bends it with the same lens rim,
+with no frost veil at all (clear glass: a veil read as a dull frosted pane on
+device), and blurs exactly as much as "Backdrop blur" asks: 0 is crisp, unblurred
+refraction. (A 6dp floor was tried and removed on device.) The blur runs
+first and the lens bends its result, and the blur covers a margin of the page
+around the pane (twice the radius plus 2px), drawn into an inflated layer that
+the pane's clip trims back. Blurring only the pane's own rectangle clamps at its
+edges and smears the edge row into the rim, which is the band that refracts.
+The lens layer is opaque: it lays the page colour (`ground`, the haze pane's
+`HazeStyle.backgroundColor`) down before the capture. Haze's capture has no app
+background, so without it the blurred text was see-through and the sharp text
+under the bar read straight through it. The mini player gets that colour from
+outside its album scope (`glassGround`), like its tint. Glass frosts as well as bends: at 2-3dp page
+text read straight through and fought the labels on top; at 10dp nothing was
+left for the rim to bend. Earlier, an 8dp blur together with full frost and the
+slab's own 20% veil on top flattened the bend into a dark
+smear. For the same reason the slab over a live lens is told so
+(`playerGlass(liveUnder = true)`): it drops its stand-in refraction and draws its
+body as plain tint at half the body opacity, leaving the rim, reflection and
+glint to carry the glass. With `liveUnder` false the slab is bit-identical.
+
+**The mini player and the tab bar cast their shadow from outside their clip.**
+Both clip to their rounded shape, so a shadow drawn inside is cut away. Each
+wraps its clipped bar in an unclipped box that draws `GlassBarShadow` first,
+and only when the bar has an opaque backdrop pane (live lens or haze), which
+covers the footprint so only the spill reads; without a pane the shadow would
+show through the bar as a dark slab. The stacked mini player's
+`AnimatedVisibility` expands and shrinks with `clip = false` for the same reason.
+
+**A lens rim is lit through a flattened normal** (`NL`, 10% of the rim's slope)
+while it bends through the full one. Lit at full slope, the glint and the key
+light peak where the rim tilts ~15° toward them — several dp inside the edge —
+so a second bright edge sat inside the bevel's
+crisp outer line and the pane read as two layers, worse at some light angles.
+Do not light with `N` on a lens pane. These
+surfaces start from the `Float` preset (`PlayerGlassSettings.INITIAL`), as does
+every glass setting; `DEFAULT` keeps the classic values because presets inherit
+omitted fields from it. On the full player the disc and dock get it through
+`PlayerGlassHaze(lensCorner = …)` over the player background's haze source, and
+their slabs ask `rememberPlayerLiveLens()` for `liveUnder`, so the pane and the
+slab always agree on whether the real backdrop is underneath. This is possible only because the lens rim is computed from the
+corner: the slab shader spends its single RenderEffect input on the alpha
+heightfield, while this layer spends its input on the backdrop. The slab still
+draws on top for the tint, the rim light and the control holes. Same sibling
+rule as haze: drawing a source's layer from inside that source recurses. The two
+surfaces are one material, so they move together; turning the flag off restores
+the haze pane on both, exactly.
+
 **Do not put a haze pane under a punched glass slab** (the transport disc, the
 action dock, the mini player). Those are drawn solid and made see-through by the
 shader's body opacity, and what shows through is whatever is composited
@@ -57,6 +141,13 @@ rendered in the window whose background it is meant to blur, as a sibling of tha
 window's haze source: `MainPlayerScreen`'s `overlay` slot exists for exactly
 this, and the speed panel goes through it. The cost is owning the scrim, the
 slide and Back by hand, and that is the cheaper half of the trade.
+
+**A `GlassPanel` inside a scrolling list passes `blockTouchesBelow = false`.**
+Its backstop consumes every touch its content does not handle, drags included.
+Over a map that is the point — a tap on the pane must not select the nearest
+genre underneath — but in a list it means a swipe that starts on the pane never
+scrolls the page. The font browser's panes and Discover's cards pass `false`;
+the genre map and the globe keep the default.
 
 **The real backdrop is sampled, not reconstructed — when there is one.** The
 `playerGlass` shader carries a `uArt` sampler holding the current cover
@@ -135,6 +226,177 @@ how the real screen is built, and a `GlassPanel` there would be drawing the *UI
 panels* blob, which those sliders do not control. The pane belongs to the UI
 panels tab, alongside the mini player bar, because that tab is what tunes it.
 
+**The UI panels preview is a small screen built the way the real one is**
+(`UiPanelsPreview`): a page of drawn covers and song rows as the haze source,
+and as its siblings the real `GlassSearchBar` on top and the mini player
+stacked over the tab pill and Search button below, with the nav host's tint
+and ground handed to the mini player. **Every one of them is given the
+preview's haze state.** A mini player without it draws neither its live lens
+nor its shadow, and the preview shows a flat pill that is not what ships,
+which is what it did until this was fixed. The backdrop must have detail:
+over a smooth gradient, blur, refraction and dispersion move nothing visible.
+
+### Lyrics: letter glass and god rays
+
+**The lyric glass reads the same optics as the player's, and its defaults are
+the old pins.** `liquidGlassModifier` used to set roundness, depth, motion,
+reflection, gloss, tilt, light angle, Fresnel and frost by hand; they are
+`LyricsFxSettings.glass*` now, mapped exactly as `playerGlassModifier` maps the
+glass fields, and each default reproduces the pinned uniform
+(`the letter glass defaults are the uniforms the lyric shader used to pin`).
+Moving a default restyles every listener's lyrics. Still letters
+(`glassSurfaceMotion` 0) run no frame clock and tilt-blind ones
+(`glassTiltReactivity` 0) hold no gravity sensor, as on the player glass. The
+letters get no lens rim, haze or drop shadow: those belong to panes.
+
+**The shadow and the god rays live on the background, under the glass UI — in
+both modes.** They are drawn by `LyricBackdropFx` in the player's `fxUnderlay`:
+full screen, after the album background, inside the haze sources, before the
+hero and the chrome. Drawn inside the lyric surface, a shaft stopped dead at its
+bottom edge, just above the song title, and the title, the progress tube, the
+disc and the dock had none of the light under them (seen on device, in "Under"
+and then again in "On top", which was left behind in the surface). A render
+effect reads only its own layer, so the lyric view records its letters into a
+`GraphicsLayer` (`captureLetters`, innermost, before the glass, so the glass
+shader does not run twice) and the backdrop draws that copy as its input and
+hands back only the shadow and the shafts (`uRaysOnly`); the real letters draw
+over them. Where a pixel's march misses the sung line it hands back nothing,
+never the copy: returning the copy there drew plain letters under the glass
+ones on every line the march missed. It fades the copy's top and bottom as
+`lyricsEdgeFade` fades the real ones, and fades as a whole with
+`lyricsProgress`. The legacy player has no `fxUnderlay` and is given no
+backdrop, so its lyric view draws both itself. The Studio's preview is built
+the same way as the player, down to the `lyricsEdgeFade` box around the
+playing song's lyrics.
+
+**A `GraphicsLayer` recorded in a draw modifier gets a plain `Density`.**
+`LyricBackdropFx` records its copy with `layer.record(Density(density,
+fontScale), layoutDirection, size) { … }`, never the node's `record { … }`
+shorthand. Inside the shorthand's block the node's draw scope is its own
+density (Compose 1.10's `LayoutNodeDrawScope.record` hands itself to the layer
+as the density and then reads it back), so the first `dp.toPx()` there
+recursed until the stack overflowed: the app crashed the moment the lyrics
+opened (seen on device, a `StackOverflowError` in `getDensity`). Work out
+every length before recording either way. `record { drawContent() }` is safe:
+`drawContent()` draws the children in their own scopes.
+
+**"On top" is the backdrop's shafts plus the letters' own light, added to
+their own pixels.** A layer under the letters cannot add light over them, so
+`lyricRaysOnLetters` does that part alone (`uOnLetters`): a render effect on
+the real letters' layer, outside the glass, that adds the light falling on
+each letter to it, capped where the old composite capped it, at what the
+letter covers. Over the shafts that is the old in-surface composite, to float
+precision under white light (checked by running the shader through Skia:
+1.2e-7); under a coloured backlight a see-through letter can come out a few
+percent dimmer, because its colour cannot pass its own coverage. Two ways of
+doing it are wrong, and both were tried. Measuring the cap on the backdrop's
+copy: the copy is drawn before the glass at full strength, so there was never
+any room and the sung line stood grey under its own light (seen in that
+render). Adding the light as a separate layer: the layer brings alpha of its
+own, which in the edge fade's offscreen buffer hides that much of the shafts
+behind every soft letter. The effect leaves the letters' alpha alone, so the
+edge fade takes them like any letters.
+
+**The light is one light, in root px, sized by the window.** `LyricRayLight`
+works it out once, in root px, and every layer that draws it — the backdrop,
+the light on the letters, the glass, the shadow — only moves it into its own
+pixels (`frameFor`). Every distance in it (how far the light stands off the
+line, the reach cap, the tilt and the sway, the backlight disc) is a share of
+the window's short side, and it centres on the lyric surface's box, not on the
+layer drawing it. It was worked out as shares of the rays layer's long side,
+which is the preview's width in the Studio and the screen's height in the
+player, so the same settings put the light more than twice as far from the
+sung line in the player and the preview showed a different picture (seen on
+device). `GodRayGeometryTest` pins it.
+
+**The Studio previews the playing song with the song's beat.** Its lyrics pulse
+from the player's own analyzer, still when the song is paused. The synthetic
+kick under them pushed every shaft brighter and longer twice a second, so a
+paused song's preview showed shafts its player did not. The sample row, with no
+song behind it, keeps the kick: it is the only way to see the beat settings.
+
+**God rays drawn in the lyric surface (no backdrop) wrap the lyric list outside
+its side inset and outside the glass.**
+`lyricGodRays` is a RenderEffect, and a layer cannot draw past its own bounds,
+so a rays layer inside the inset cuts every shaft off in a hard vertical line
+14dp from the edge. Outside the glass, so the shafts are gathered from the
+finished glass letters. The effect is rebuilt in the layer block every draw,
+like the glass: a RuntimeShader effect takes its uniforms when it is created.
+
+**Only what is being sung shines, and it is dimmed on itself.** The band is
+the active line from `layoutInfo` (`item.offset - viewportStartOffset`, read in
+the draw phase so the shafts follow the scroll glide) or, with "Follow the sung
+word", the word the karaoke line reports. Letting every visible line emit made
+the screen a wash; with no guard at all the sung line was buried under its own
+light (the first prototype, at 90° elevation). The guard takes 65% of the light
+off *under the sung letters, in their shape* (their coverage, `src.a * lit`),
+never across the band: dimmed across the whole band, the shafts showed on device
+a darker rectangle wherever the sung line was. The band's sides
+are `GodRayGeometry.UNBOUNDED`, not infinity: an infinity reaching
+`smoothstep` comes back NaN. The one exception is "All lyrics shine", which is
+the Shadertoy's whole image as the light and asks for exactly that trade.
+
+**The Letters march is the Shadertoy, tap for tap.** "Crepuscular light"
+(ls2Xzd) starts from a centre tap, `texture(tc) * 0.4`, and steps *before* it
+samples, so its taps sit 1..N steps toward the light. Both are kept: without
+the centre tap the port was 5% off the original, and with it, at the 50-sample
+quality, 0.1% (correlation 0.99998, checked against the GLSL run verbatim).
+`GodRayGeometryTest` pins the weights, so a change to the gain, the tap or the
+decay conversion that drifts from the original fails there. The jitter is the
+one deliberate difference: interleaved gradient noise instead of its sine hash,
+for the same banding fix with less visible grain.
+
+**Backlight decays from the light, Letters from the pixel.** The article's
+decay weights samples by their distance from the pixel. In Backlight the light
+is always at the far end of the march, so that weighting all but erased it;
+there the march is averaged plainly and the decay is counted out from the light.
+Letters keeps the article's weighting. Both normalise by the sample count, so
+the quality setting changes grain, not length or brightness (`GodRayGeometryTest`).
+
+**The lyrics' shadow is on the background, never on the letters.** Nothing
+dark may be drawn inside the lyric glass layer: the glass bevels and relights
+everything in it, so an extruded backing glyph and a contact `Shadow` there came
+out as solid blocks with dark slabs stuck to every letter (seen on device). The
+shadow is `lyricShadow`, its own layer outside the glass and the side inset — a
+blurred, offset, darkened silhouette of the finished letters laid under them,
+falling away from the light — and inside the rays, whose shader weighs every
+sample by `lit` so the shadow neither shines nor blocks the light, and composites
+it under the shafts.
+
+**The glass letters catch the rays' light from one shared light.**
+`LyricRayLight` computes the light once, from the rays layer's own box, and
+both layers read it in their draw phase; the glass moves it into its own pixels
+through the two layers' root positions (`frameFor`). Computing it twice, once
+per layer, is how a glint ends up somewhere the shafts are not. The `uRay*`
+term in `LIQUID_GLASS_SRC` is gated on `uRayAmount`, and every pane — the
+transport, the mini player, every panel — sets it to 0 (`setNoRayLight`), which
+leaves their pixels bit-identical: added exactly 0. The term only ever adds
+light. It used to dim the bevels turned away from the light and darken backlit
+letters into silhouettes, and on device that read as shadows on the letters.
+
+The rays are off by default, and the 17 presets ahead of `Sunburst` set no
+glass optic and no ray field, so nobody's lyrics change on upgrade. The
+low-performance glass switch drops the rays with the glass.
+
+### Text on glass
+
+**Text on glass follows the glass, not the theme** (`GlassInkScope`). Every pane
+of the shared material (`GlassPanel`, `PressableGlass` and so `GlassPill`) and
+the mini player and tab bar work out how the glass looks as one colour — the
+frost over what is behind it (`LocalGlassGround`, the page unless a screen says
+otherwise; the galaxy says deep space), and the slab's tint over that — and give
+their content light ink on dark glass and dark ink on light, with the accent
+moved only as far as it must to read (3:1). The theme's own ink is the wrong
+answer on dark glass in a light theme, and the other way round. Nested glass
+tints its slab with the parent's original accent (`LocalGlassAccent`), not the
+readable one, so a chip on a sheet stays the sheet's material. `GlassInkTest`
+sweeps grounds, tints and opacities and asserts AA for the text everywhere.
+
+**A selected chip's rim is `matchParentSize`, never `fillMaxSize`.** Filling made
+a selected chip as wide as the room offered: invisible in a scrolling row, but in
+a plain `Row` or a `FlowRow` it swallowed the line and squeezed its label to a
+letter a line.
+
 ### Search bars
 
 Every search bar in the app is `SearchOverlay` + `GlassSearchBar`. There is one
@@ -156,6 +418,9 @@ behaviour and it is not negotiable:
   (it says which of nine tabs you are on, and searching is exactly when you are
   about to be moved between them). Discover's genre rail lives on the page, not
   inside the bar's pane — a pane four rows deep covers the feed it filters.
+  Discover's bar is the field alone, one row like every other: its "Browse the
+  map" line made it twice their height, so the map and "no match" live in the
+  genre row under it.
 - Settings' form runs full height under the bar, with the inset going to each
   tab's own `LazyColumn` via `LocalSettingsSearchInset`. Pushing the form down
   instead leaves an empty strip behind the glass, and glass with nothing behind
@@ -171,6 +436,37 @@ width) is for picking one icon out of a row, like the transport and dock.
 
 List rows keep the quieter scale squeeze; a full dome on a wide text row reads
 heavy.
+
+**A press's swell is animated into `GlassPress.amount` by the animation
+itself** (`animate { press.amount = value }`). It must never be copied across
+in a `SideEffect`. The copy only runs on recomposition, and an animation read
+only inside the `SideEffect` never causes one. The swell then freezes wherever
+it was when the finger lifted, and every pill stays half pressed.
+
+**Every glass button and pill is the panel recipe, never a faint slab.**
+`PressableGlass`, `GlassPill` and `GlassChoiceChip` draw through
+`GlassMaterial`, the same layers `GlassPanel` uses: the live lens or the
+haze frost, then a **solid** slab with `lensCorner` (`Dp.Infinity` for a pill or
+a disc). `PressableGlass` used to draw its slab at a tenth of the tint, so every
+button and pill in the app looked like the low-performance fallback even where
+the shader runs. Their material is the Studio's UI panels settings
+(`LocalMiniPlayerGlass`), the universal glass. Only the player's own controls
+pass `LocalPlayerGlass`, like the status grid. There are no stock Material
+`FilterChip`s or `AssistChip`s left; a row of choices is `GlassChoiceChip`.
+
+**A pill frosts `LocalGlassBackdrop`, which a page provides only for a source
+its pills are siblings of.** Discover provides its page backdrop. With none,
+the pill is the shader glass without a frost under it. That is still glass,
+not a broken blur.
+
+**A screen borrows the mini player through a stable handle**
+(`TakeOverMiniPlayer`, `MiniPlayerSlot`). The nav host reads only
+`slot.handle`; the bar reads `handle.takeover`. The screen hands over a new
+takeover on every composition. If the nav host read it, the nav host would
+recompose, recompose the screen, and be handed a new one forever. Swipe to
+discover uses it: while the deck is up, the bar shows ✕, undo and ♥ punched
+into its glass instead of the track, at the same height, and a swipe along the
+bar skips or keeps.
 
 ### Pages and the tab bar
 
@@ -199,6 +495,13 @@ frosted pane with ordinary icons, because a solid slab without the shader is an
 opaque block with holes in it. Its titles are plain text, not punched: the
 glyphs are chunky because the bevel needs about 3dp of stroke to read as an
 edge, and an 11sp title's strokes are thinner than the bevel.
+
+**With liquid glass removed, the bar is Material 3's.** `FlatTabChrome`: a
+`NavigationBar` across the bottom with every tab in it, Search included, and
+the mini player docked flat above it. It stands on the system bar's inset
+itself, so `chromeHeight` has its own value for it (`FLAT_NAV_BAR_HEIGHT`),
+and it does not fold. The floating pill without its glass was a shape with
+nothing under it.
 
 **Scrolling down folds the mini player into the bar; scrolling up unfolds it.**
 It is driven by nested scroll at the nav host, so every list drives it without
@@ -313,6 +616,227 @@ crossing for every point inside it, so an even-odd fill inverts: sea filled,
 continents punched out. It looked like the theme flickering. `GlobeLandClipTest`
 sweeps 840 cameras and includes a test that reverses the arc direction and
 asserts the sea floods, so the fix cannot be undone by a sign.
+
+### The genre galaxy
+
+**Drawn on Compose canvases, never OpenGL.** The map's panels are glass, and a
+haze pane can only frost what is drawn in the window's own layers. A
+`GLSurfaceView` or `SurfaceView` is not, so glass over one paints as a flat
+slab. `GalaxyCamera` projects every point on the CPU, and `GenreGalaxyView`
+draws in batches: one `drawPoints` per family and depth band, one `drawLines`
+per family, and a sprite per star. Moving it to GL for speed breaks every panel
+on the screen.
+
+**Every size is in dp.** Star sprites, dust, strokes, tap reach and label gaps
+are all multiplied by the density. The 2D map sized them in raw pixels, which is
+why it came out a third of the size on a phone.
+
+**The view's middle is the middle of what the panels leave visible**, not the
+screen's. The top reserve is the measured title plus caption; the bottom is the
+measured panel or HUD plus `LocalBottomChromeInset`, eased so the star slides
+rather than jumps. Labels are never drawn inside either strip. A name under
+glass is two pieces of text on top of each other.
+
+**The genre panel is capped at a strip of map below the title**
+(`MIN_MAP_STRIP`), and its sections' heights are measured between the title and
+`LocalBottomChromeInset`, not across the whole screen. Its top row is outside
+the scrolling part. Uncapped, the open Top 100 pushed the panel under the status
+bar, and its close button opened the notification shade instead.
+
+**Gesture handlers read the reserves through `rememberUpdatedState`.** Pointer
+handlers outlive the composition that made them. Captured, a tap is hit-tested
+against the view as it was before the panel opened, and lands on nothing.
+
+**The sky is deep space in every theme, and the status bar icons are light
+while the map is up.** This is deliberate, not a missed theme token. The map is
+a window onto space, and the title, caption and labels use `GALAXY_INK` for that
+reason.
+
+**The travel blur is Android's own `BlurEffect`, only while gliding.** A
+hand-rolled directional blur looked striped. A warp-speed effect was asked for
+and then removed. Low-performance mode drops the blur, the god rays, the sky
+shader, the twinkle and the turn, and uses less dust.
+
+**The galaxy turns in the camera, not in the points.** `CameraFrame` sees the
+scene from `yaw - spin`, so nothing has to move thousands of points per frame,
+and the target, which is in the galaxy's own coordinates, follows a star with
+no extra work. The sky uses the unturned basis (`s*`, and `SpaceSky`), so the
+far stars hold still. Do not apply the spin to the sky. Do not apply it to the
+target either, or a followed star slides off the centre. The turn is toward
+smaller angles, so the arms trail. `GalaxyMathTest` pins all three.
+
+**The galaxy's gas is AGSL on the canvas, never projectM on a GL surface.**
+It follows MilkDrop's model: bass, mid and treble each read against the song's
+own running average (`AudioBands`, 1 = usual), with `_att` smoothing. Only the
+lift above 1 moves anything. It is drawn at a third of the resolution through
+an offscreen layer scaled back up (`SMOKE_SCALE`). Putting it on a GL surface
+to reuse the visualizer would make every glass pill over the map a flat slab.
+
+**The black hole is drawn in halves.** The far half of the disk, then the
+shadow, the lensed arc and the photon ring, then the near half. The split
+runs along the disk's long axis on screen. Seen face-on there is nothing to
+split, and the disk is drawn whole. Genres stay outside `DISK_OUTER` in both
+layouts (`GalaxyMathTest`).
+
+**The galaxy's look is the listener's wish, not an override.**
+`GalaxyVisualSettings` defaults to the galaxy as it shipped. Every effect it
+turns on is still ANDed with low-performance mode and reduced motion. Its
+sheet takes the dock's place and the camera's bottom reserve. Sliders update
+the map at once; the save waits for the hand to stop (`GALAXY_VISUALS_SAVE_MS`).
+
+**A selected genre is a dock of pills, not a panel.** Up to three related
+genres, by name, and four glyph pills (Play, Radio, Top 100, and its system —
+three planets — which does what a long press on the star does), popping in.
+The glyphs are cut out of the slab (`GlassPill`'s `punch`, the tab bar's
+recipe: an offscreen slab, the glyph erased with anti-aliased `DstOut` at whole
+pixels), never drawn on it, and only where `glassPunches()` says the shader
+runs; a selected one is lit over its hole. The
+Top 100 and the history are one compact sheet above them, one at a time.
+There is no close button: a tap on empty space or Back deselects.
+
+**The deep sky is one AGSL pass on Android 13 and up** (`SpaceShader.kt`), the
+demo's far stars done procedurally. Each star stays inside the middle half of
+its cube-face cell, which is what lets a pixel test one cell per layer. Let a
+star or its halo reach a cell edge and it is cut in half. Below 13, or in
+low-performance mode, the sky is the flat colour with drawn points.
+
+**The galaxy is one offscreen layer while glass reads it** (`CompositingStrategy.Offscreen`
+on its Box, `glassOver`). Every pane of glass over the map frosts it, and without
+the layer each one made the render thread replay the whole galaxy: frames of 0.7
+to 0.9 s. Keep it. Only in full screen with nothing open, once the chrome has
+faded (`GLASS_FADE_MILLIS`), does it draw straight to the screen: nobody reads
+the layer then, and the sky under it is opaque with everything over it adding,
+so the pixels are the same.
+
+**The deep sky has a layer of its own and watches only the camera's turn.**
+`skyFrameFor` builds its view from yaw, pitch and the viewport, and its clock is
+`skyTime`, the twinkle stepped at `SKY_TWINKLE_HZ`. That is why HWUI can lay
+last frame's sky down instead of running the sky shader over every pixel again.
+Read `time()`, `spin()`, the camera's target or its distance in that canvas and
+it is redrawn every frame again, with nothing on screen to show for it. The gas
+has its own clock too (`smokeTime`: every frame while the map is steered or the
+music moves it, `SMOKE_IDLE_HZ` at rest), and reads the turn without watching it.
+
+**A god-ray pixel takes only the samples within its light's `reach`.**
+`LightSpot.reach` is what the shader's window is cut to, and the pass is skipped
+when no pixel can come that close (`GalaxyLight.reachesView`). It covers the
+glow, the shade's reach (`SHADE_REACH` glow radii: past it, under half a step of
+8-bit alpha at the strongest shade) and everything drawn *in colour* in the pass —
+the star's white-hot middle (`starEmitterPx`), the black hole's disk
+(`holeLightExtent`, bounded by the disk's corners from any camera). Anything new
+drawn in colour in a light pass has to be inside `reach`, or its light is cut
+off where the window starts; black things may go anywhere. `GalaxyGpuPassesTest`
+replays the shader with and without the window at the strongest settings and
+holds the difference under half a colour step.
+
+**The other stars' rays are one pass for all of them** (`GalaxyStarRays`, up to
+`StarLights.MAX`). Every star's glow is drawn into one half-resolution light
+pass and each pixel marches toward each light, from that light's first counted
+sample (the same window as above) and breaking at the last. A pass per star
+would be a full-screen layer per star; keep it one. The star with its own pass
+(the one you are at) is left out of it, its planets stay in its own pass, and
+only dust and bulge grains near a star in depth as well as on screen stand in
+these glows. `pickStarLights` fades each star over the gap to the next in line;
+a hard top-N cut would pop. Bloom (`GalaxyArt.bloom`) is the light passes'
+glow, so it scales the light the rays carry, and ray length is the march's
+falloff (`GalaxyLight.decayFor`), neither the reach: the window stays exact.
+
+**Planet and moon size lives in the system, not the drawing**
+(`PlanetSystem.withBodySize`, applied once in `GenreMapScreen`). Scaled there,
+the moons' orbits widen with their planets, and the taps, names, shadows and the
+zoom's near limit all read the same radius. Scaling only the drawn disc would
+leave moons inside a big planet and the camera able to fly into it.
+
+**The map's panels sit on the bar as it stands now** (`LocalBottomChromeNow`),
+following its fold. `LocalBottomChromeInset` is the open bar's height on
+purpose, for lists, and on a panel it left a tab bar of dead space under it
+whenever the bar was folded.
+
+**The smoke tests for the disc before its noise.** The density is at most the
+disc's falloff times the amount, so the early return is the same cut the end of
+the shader makes; keep it before the three fbm calls.
+
+**At rest the map moves on every other vsync of a fast display** (`GalaxyPacer`):
+60 frames a second on a 120 Hz screen, every vsync again the moment a finger is
+down, and never paced at 90 Hz or less. Any touch on the screen counts (the root
+`pointerInput`, in the Initial pass). An animation on the map that is not touch-
+driven belongs in the clock's `animating` check, or it runs at half rate at rest.
+
+**Lighter glass is the listener's switch, off by default** (`lightGlass`). On, the
+map's panes and the bars over it run the live lens at half resolution
+(`LocalLensDivisor`, the chrome through `AppChromeLens`), only where the blur is
+wide enough (`REDUCED_LENS_MIN_BLUR_PX`); the clip, the slab and its rim stay at
+full resolution. The shrink before the blur is not exact, which is why it is a
+switch and not the default.
+
+**Each map frame is reported in the debug log** (`GalaxyFrameStats`, tag
+`GalaxyFx`): fps, frame, main thread, render thread and GPU times, late frames,
+and how often each pass ran. Judge GPU work by those lines, before and after.
+
+**No `PathEffect` on the map.** HWUI rasterises a dashed path on the CPU and
+uploads it every frame. Dashes are plain segments from `Dasher`, laid on screen
+only, the pattern carried across corners. The light passes run at half
+resolution (`LIGHT_SCALE`, through `reducedLayer`, whose render effect works in
+the layer's own pixels), and the links' dust is as dense as each link is long on
+screen. None of it changes what is on screen; `GalaxyFastPathsTest` holds the
+stand-ins (`fastSin`, `Dasher`) to the originals.
+
+**Planets are fetched only after the camera stays on a genre** (`mapSystem`
+waits 0.7 s), and without the MusicBrainz cross-check. Flying past a genre on
+the way somewhere else must not cost a chart request.
+
+**The god rays are an occlusion light pass, not the lyric engine** (`GalaxyLight`).
+Each light — the core, or the star whose planets are up, one taking over from
+the other as you arrive — draws its own layer: the light and its glow in colour,
+and what stands in it — planets, moons, and the dust and bulge grains for the
+fine rays — over it in black. Never the stars or the nebulae: a star in front of
+another threw a broad black beam across the map. The march averages that, so every planet throws a shadow shaft
+straight away from its star. The hole's shadow is *cleared*, not blacked out, or
+it casts a dark ring over its own disk. Do not add stripes or a starburst to fake
+rays: they come only from what is in the light's way.
+
+**Every star is lit, always**, at full size and brightness; there is no "still
+dark" look for genres not listened to. **The star you are at is a sun** — the
+selected one, else the followed one, else the one whose system the camera sits
+in (`litStar`) — with its disc and its light as soon as you are near, not only
+once its planets have come.
+
+**The links' stardust moves through space, not round its link.** Comets run at
+`FLOW_UNITS_S` scene units a second and the dust drifts at `FLOW_DRIFT_UNITS_S`:
+timed per link, a comet crossed a long link in seconds and raced across the
+screen close in.
+
+**A star system is at real scale, more or less.** The star's radius is the
+genre's size (`GalaxyScene.starRadius`, from its prominence), and everything is
+laid out from it: a planet is 4–12 % of its star across, sized by its artist's
+catalogue (MusicBrainz release groups, log scale, `PlanetSystem.catalogShare`);
+its orbit is how hot the artist is this week (the 7-day chart's listens), the
+hottest nearest; moons are a fraction of their planet. The star is drawn as a
+sun disc at its true size once it has one (`drawSun`). Planets are specks from
+the system's own distance, and the camera's `MIN_DISTANCE` is small so you can
+fly to one; `nearLimit` keeps a pinch outside whatever it follows. Do not put
+the old 5 dp floor back on planets: it made them bigger than their star.
+
+**Moon orbits are laid out for the biggest planet the star could have**, and
+planet sizes ease in (`SystemArt.ease`). A catalogue count arrives seconds after
+the system; it must grow the planet, never move its moons or its orbit.
+`PlanetSystemTest` pins both, and that neighbouring planets' moons never cross.
+
+**Full screen hides everything but the map.** Turning the phone sideways enters
+it and turning it back leaves it; the bar's button enters it upright and Back
+leaves. The map asks for `SCREEN_ORIENTATION_SENSOR` while it is up and restores
+the app's own rule on the way out. The nav host's chrome steps aside through
+`HideAppChrome`, the system bars through `SystemBarsHidden`. A long press on a
+star plays it and opens its system as a list (`GalaxySystemSheet`); that sheet
+is the only thing shown in full screen.
+
+**Nothing on the map runs while nobody can see it.** The clock loop stops when
+the screen is not started (the app in the background, the phone off, another
+screen in front), which stops every shader with it, and the spectrum tap is
+released. Work on its own thread or timer elsewhere — the ambient projectM
+render thread, the FFT taps, the loudness meter, the tilt sensor, projectM's
+audio feed — is held with `LifecycleStartEffect` or `rememberOnScreen()`, never
+a bare `DisposableEffect`, which holds it in the background too.
 
 ### Discord presence
 

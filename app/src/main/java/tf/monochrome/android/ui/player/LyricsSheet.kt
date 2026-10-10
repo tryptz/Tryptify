@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -32,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -117,9 +119,11 @@ private fun SyncedLyrics(
     val position by positionMs.collectAsStateWithLifecycle()
     // Bluetooth sync delay (tunable in the Player Visuals Studio): audio lands later
     // than the reported position over Bluetooth, so rewind the clock we match
-    // lyrics against to keep them in step with what's heard.
-    val syncDelayMs = LocalLyricsFx.current.bluetoothDelayMs.toLong()
+    // lyrics against to keep them in step with what's heard. Wall-time latency,
+    // so scaled into song time by the playback speed.
+    val syncDelayMs = LyricClock.delayInSongMs(LocalLyricsFx.current.bluetoothDelayMs, LocalPlaybackSpeed.current)
     val lyricFont = rememberLyricFontFamily(LocalLyricsFx.current)
+    val fontSizeSp = LocalLyricsFx.current.fontSizeSp
     val listState = rememberLazyListState()
     var currentLineIndex by remember { mutableIntStateOf(-1) }
 
@@ -157,50 +161,59 @@ private fun SyncedLyrics(
         }
     }
 
-    LazyColumn(
-        state = listState,
-        modifier = Modifier
-            .fillMaxSize()
-            .fxaa()
-            .liquidGlass(),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        itemsIndexed(lines) { index, line ->
-            val isActive = index == currentLineIndex
+    // Measured in Bold, the weight a line takes when it lights up, so lighting
+    // up never changes a line's size.
+    val measureStyle = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold).withLyricFont(lyricFont)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val rowWidth = maxWidth
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .fxaa()
+                .liquidGlass(),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            itemsIndexed(lines) { index, line ->
+                val isActive = index == currentLineIndex
             
-            if (line.words.isNotEmpty()) {
-                KaraokeLine(
-                    line = line,
-                    isActive = isActive,
-                    position = position - syncDelayMs,
-                    onClick = { onSeekTo(line.timeMs) }
-                )
-            } else {
-                val textColor by animateColorAsState(
-                    targetValue = when {
-                        isActive -> MaterialTheme.colorScheme.primary
-                        index < currentLineIndex -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    },
-                    label = "lyricColor"
-                )
+                if (line.words.isNotEmpty()) {
+                    KaraokeLine(
+                        line = line,
+                        isActive = isActive,
+                        position = position - syncDelayMs,
+                        rowWidth = rowWidth,
+                        onClick = { onSeekTo(line.timeMs) }
+                    )
+                } else {
+                    // The Studio's size, unless a word alone would not fit the row.
+                    val sp = rememberWordFitSp(line.text.ifBlank { "♪" }, rowWidth, fontSizeSp, measureStyle)
+                    val textColor by animateColorAsState(
+                        targetValue = when {
+                            isActive -> MaterialTheme.colorScheme.primary
+                            index < currentLineIndex -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        },
+                        label = "lyricColor"
+                    )
 
-                Text(
-                    text = line.text.ifBlank { "♪" },
-                    // Fixed size: the active line is marked by colour/weight only,
-                    // so the list never reflows mid-song (see LyricsHero.kt).
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontSize = 23.sp,
-                        lineHeight = 29.sp,
-                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
-                    ).withLyricFont(lyricFont),
-                    color = textColor,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSeekTo(line.timeMs) }
-                        .padding(vertical = 3.dp)
-                )
+                    Text(
+                        text = line.text.ifBlank { "♪" },
+                        // The line keeps its size when it lights up (measured in
+                        // Bold above); only colour and weight mark the active line.
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontSize = sp.sp,
+                            lineHeight = (sp * LINE_HEIGHT_RATIO).sp,
+                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
+                        ).withLyricFont(lyricFont),
+                        color = textColor,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSeekTo(line.timeMs) }
+                            .padding(vertical = 3.dp)
+                    )
+                }
             }
         }
     }
@@ -212,9 +225,14 @@ private fun KaraokeLine(
     line: LyricLine,
     isActive: Boolean,
     position: Long,
+    rowWidth: Dp,
     onClick: () -> Unit
 ) {
     val lyricFont = rememberLyricFontFamily(LocalLyricsFx.current)
+    val measureStyle = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold).withLyricFont(lyricFont)
+    // One size for the whole line, so its words stay one size.
+    val lineText = remember(line.words) { line.words.joinToString(" ") { it.text } }
+    val fontSizeSp = rememberWordFitSp(lineText, rowWidth, LocalLyricsFx.current.fontSizeSp, measureStyle)
     FlowRow(
         modifier = Modifier
             .fillMaxWidth()
@@ -240,8 +258,8 @@ private fun KaraokeLine(
             Text(
                 text = word.text + " ",
                 style = MaterialTheme.typography.bodyLarge.copy(
-                    fontSize = 23.sp,
-                    lineHeight = 29.sp,
+                    fontSize = fontSizeSp.sp,
+                    lineHeight = (fontSizeSp * LINE_HEIGHT_RATIO).sp,
                     fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
                 ).withLyricFont(lyricFont),
                 color = color
@@ -253,24 +271,32 @@ private fun KaraokeLine(
 @Composable
 private fun UnsyncedLyrics(lines: List<LyricLine>) {
     val lyricFont = rememberLyricFontFamily(LocalLyricsFx.current)
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .fxaa()
-            .liquidGlass(),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        itemsIndexed(lines) { _, line ->
-            Text(
-                text = line.text.ifBlank { "" },
-                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 23.sp, lineHeight = 29.sp)
-                    .withLyricFont(lyricFont),
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 2.dp)
-            )
+    val fontSizeSp = LocalLyricsFx.current.fontSizeSp
+    val style = MaterialTheme.typography.bodyLarge.withLyricFont(lyricFont)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val rowWidth = maxWidth
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .fxaa()
+                .liquidGlass(),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            itemsIndexed(lines) { _, line ->
+                val sp = rememberWordFitSp(line.text, rowWidth, fontSizeSp, style)
+                Text(
+                    text = line.text.ifBlank { "" },
+                    style = style.copy(fontSize = sp.sp, lineHeight = (sp * LINE_HEIGHT_RATIO).sp),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp)
+                )
+            }
         }
     }
 }
+
+/** Line height over font size, the player lyrics' ratio: 23 sp gives the sheet's old fixed 29 sp. */
+private const val LINE_HEIGHT_RATIO = 1.26f

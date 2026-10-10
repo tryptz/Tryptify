@@ -6,6 +6,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logging
@@ -32,6 +33,10 @@ object NetworkModule {
         // session is opened, and a second client just for one socket would
         // duplicate the engine and its connection pool.
         install(WebSockets)
+        // No timeouts of its own: every request keeps the engine's 30 s below.
+        // Installed so one request can ask for longer with timeout {} — the
+        // TIDAL Atmos download, which can wait on the server building the file.
+        install(HttpTimeout)
         engine {
             config {
                 connectTimeout(30, TimeUnit.SECONDS)

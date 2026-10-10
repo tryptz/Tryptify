@@ -3,6 +3,7 @@ package tf.monochrome.android.data.downloads
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.core.net.toUri
 import java.util.Locale
 import android.util.Log
@@ -15,14 +16,20 @@ import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.readBytes
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readAvailable
+import tf.monochrome.android.data.api.ApiService
 import tf.monochrome.android.data.api.HiFiApiClient
 import tf.monochrome.android.data.db.dao.DownloadDao
 import tf.monochrome.android.data.db.entity.DownloadedTrackEntity
+import tf.monochrome.android.data.preferences.AppleQuality
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.buildCoverUrl
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -58,17 +65,45 @@ class TrackDownloader @Inject constructor(
 
     private companion object {
         const val TAG = "TrackDownloader"
+        const val COVER_STEM = "cover"
+        const val COVER_FILE = "cover.jpg"
     }
+
+    private val folderLock = Any()
 
     /**
      * Runs one download to completion, reporting 0..1 through [onProgress].
+     * A PERMANENT failure the track's service explained is passed to
+     * [onFailure], for the Download Center to show.
      *
      * Cancellation propagates as it would anywhere else — the caller's scope
      * cancelling mid-transfer throws out of the read loop and the temp file is
      * cleaned up in the finally below.
      */
-    suspend fun download(item: DownloadItem, onProgress: (Float) -> Unit): Outcome {
+    suspend fun download(
+        item: DownloadItem,
+        onFailure: (String) -> Unit = {},
+        onProgress: (Float) -> Unit,
+    ): Outcome = withContext(Dispatchers.IO) {
+        // Disk copies, tag writes and storage-provider queries all block, and
+        // a CoroutineWorker runs on Dispatchers.Default, whose few threads are
+        // meant for CPU work. IO is the pool sized for waiting.
+        downloadOnIo(item, onFailure, onProgress)
+    }
+
+    private suspend fun downloadOnIo(
+        item: DownloadItem,
+        onFailure: (String) -> Unit,
+        onProgress: (Float) -> Unit,
+    ): Outcome {
         val trackId = item.trackId
+        // A queue restored at startup can run before the registry has read
+        // its ids back from disk, and an id it does not know yet is taken for
+        // TIDAL's. Wait for it, then teach it this track if the queue knew it
+        // was Qobuz's: the registry saves 750 ms after a change, which a
+        // process death can beat.
+        qobuzIdRegistry.awaitLoaded()
+        if (item.isQobuz) qobuzIdRegistry.registerTrack(trackId)
         val trackTitle = item.title
         val artistName = item.artistName
         val albumTitle = item.albumTitle
@@ -86,19 +121,29 @@ class TrackDownloader @Inject constructor(
             ?: trackId.takeIf { qobuzIdRegistry.isDeezerTrack(it) && !qobuzIdRegistry.isQobuzTrack(it) }
 
         return try {
-            // Get download quality preference
-            val quality = preferences.downloadQuality.first()
+            // Each service downloads in its own quality setting. Apple's ladder
+            // is its own (getAppleStreamUrl reads appleQuality), so its tier is
+            // only what gets recorded.
+            val service = when {
+                deezerId != null -> ApiService.DEEZER
+                isApple -> ApiService.APPLE
+                qobuzIdRegistry.isQobuzTrack(trackId) -> ApiService.QOBUZ
+                else -> ApiService.TIDAL
+            }
+            val quality = if (service == ApiService.APPLE) {
+                appleTier(preferences.appleQuality.first())
+            } else {
+                preferences.downloadQuality(service).first()
+            }
 
-            // Resolve the download URL. Apple tracks go through getAppleStreamUrl,
-            // which streams straight from the home wrapper/agent over Tailscale when
-            // an Apple Wrapper URL is configured, else falls back to the cloud
-            // /api/apple/download-music. Everything else uses the Qobuz instance.
-            // Apple first when the track carries an Apple identity. Otherwise
-            // try the native (Qobuz/TIDAL) path, and if that yields nothing,
-            // bridge to Apple by metadata — a track whose catalog id is a
-            // synthetic hash has no usable native id, but the same recording is
-            // almost always in the Apple catalog and the wrapper can decrypt it.
-            var usedApple = isApple
+            // Resolve the download URL from the track's own service, and only
+            // that one. Apple tracks go through getAppleStreamUrl, which streams
+            // straight from the home wrapper/agent over Tailscale when an Apple
+            // Wrapper URL is configured, else from the cloud
+            // /api/apple/download-music. Deezer, Qobuz and TIDAL each use their
+            // own server's download route.
+            // Set when TIDAL's Dolby Atmos mix is what downloads (TIDAL Dolby Atmos on).
+            var isAtmosDownload = false
             val streamUrl = if (deezerId != null) {
                 // A Deezer pick downloads from Deezer, the same way a Qobuz
                 // pick downloads from Qobuz: /api/deezer/download in the
@@ -122,36 +167,30 @@ class TrackDownloader @Inject constructor(
                     return Outcome.PERMANENT
                 }
             } else {
-                val native = runCatching {
-                    apiClient.getTrackStream(trackId, quality, forDownload = true).streamUrl
-                }.getOrNull()
-                native ?: run {
-                    // A Qobuz pick is Qobuz-only, on the same principle as the
-                    // Apple branch above: the metadata bridge matches by title
-                    // and artist, so it can hand back a different master or
-                    // version than the one chosen in search. If Qobuz can't
-                    // serve it, the download fails and says so.
-                    if (qobuzIdRegistry.isQobuzTrack(trackId)) {
-                        Log.w(TAG, "Qobuz could not serve \"$trackTitle\" (id=$trackId, q=$quality) - not falling back to another catalog")
-                        return Outcome.PERMANENT
-                    }
-                    val bridged = apiClient.findAppleIdFor(
-                        trackId = trackId,
-                        title = trackTitle,
-                        artist = artistName,
-                        durationSeconds = duration,
-                    )
-                    if (bridged == null) {
-                        Log.w(TAG, "no stream url for \"$trackTitle\" (id=$trackId, q=$quality) and no Apple match")
-                        return Outcome.PERMANENT
-                    }
-                    Log.i(TAG, "bridged \"$trackTitle\" (id=$trackId) to Apple adamId=$bridged")
-                    usedApple = true
-                    apiClient.getAppleStreamUrl(bridged, quality, atmos = isThxSpatialAudio) ?: run {
-                        Log.w(TAG, "Apple bridge found adamId=$bridged but no stream url for \"$trackTitle\"")
-                        return Outcome.PERMANENT
-                    }
+                // A Qobuz or TIDAL pick downloads from its own catalogue only:
+                // getTrackStream sends a Qobuz id to the Qobuz server and any
+                // other id to the TIDAL server. Nothing stands in for it — a
+                // title-and-artist match in another catalogue can be a
+                // different master or version than the one chosen — so if its
+                // own service can't serve it, the download fails and says so.
+                val stream = try {
+                    apiClient.getTrackStream(trackId, quality, forDownload = true, expectAtmos = item.isDolbyAtmos)
+                } catch (e: CancellationException) {
+                    // The user cancelled, or WorkManager stopped the job: not
+                    // a verdict on the track.
+                    throw e
+                } catch (e: IOException) {
+                    // No answer at all (no signal, a timeout): the queue tries
+                    // again, up to its attempt limit, rather than failing for good.
+                    Log.w(TAG, "${service.label} did not answer for \"$trackTitle\" (id=$trackId): ${e.message} - will retry")
+                    return Outcome.RETRYABLE
+                } catch (e: Exception) {
+                    Log.w(TAG, "${service.label} could not serve \"$trackTitle\" (id=$trackId, q=$quality): ${e.message} - not falling back to another catalog")
+                    e.message?.let(onFailure)
+                    return Outcome.PERMANENT
                 }
+                isAtmosDownload = stream.isDolbyAtmos
+                stream.streamUrl
             }
 
             // Stream the audio into a temp FILE with progress. Never hold the
@@ -208,37 +247,45 @@ class TrackDownloader @Inject constructor(
             // mislabelled .flac (breaks MediaStore + other players) and makes the
             // saved quality accurate. Only the 22-byte header is read.
             val customFolderUri = preferences.downloadFolderUri.first()
-            // Apple delivers an MP4/M4A container (ALAC/AAC/EC-3 Atmos), never
-            // FLAC/MP3 — skip header sniffing + FLAC tagging for it.
+            // Apple delivers an MP4/M4A container (ALAC/AAC/EC-3 Atmos) and is
+            // left untagged: an Atmos file must reach players byte-for-byte.
+            // TIDAL's Atmos mix is an E-AC-3 JOC .m4a that TrypT HiFi has
+            // already tagged in its header. Everything else is sniffed —
+            // TIDAL's lossy tiers are AAC in MP4, Qobuz's and Deezer's MP3,
+            // lossless is FLAC.
             val actualQuality: AudioQuality
-            val isFlac: Boolean
-            if (usedApple) {
+            val format: DownloadFormat
+            if (isApple || isAtmosDownload) {
                 actualQuality = quality
-                isFlac = false
+                format = DownloadFormat.M4A
             } else {
                 val header = ByteArray(22)
                 val headerRead = tempAudio.inputStream().use { it.read(header) }
-                actualQuality =
-                    detectActualQuality(if (headerRead > 0) header.copyOf(headerRead) else ByteArray(0), quality)
-                isFlac = actualQuality == AudioQuality.LOSSLESS || actualQuality == AudioQuality.HI_RES
+                val bytes = if (headerRead > 0) header.copyOf(headerRead) else ByteArray(0)
+                actualQuality = detectActualQuality(bytes, quality)
+                format = DownloadFormat.sniff(bytes)
             }
 
-            // Fetched once and used twice: embedded in the FLAC below and saved
+            // Fetched once and used twice: embedded in the file below and saved
             // as the folder's cover.jpg afterwards. Losing the cover never fails
             // the download.
             val artBytes = albumCover?.takeIf { it.isNotBlank() }
                 ?.let { runCatching { fetchAlbumArt(it) }.getOrNull() }
 
-            // The Qobuz CDN FLACs arrive with no embedded metadata, so without
-            // this every download lands on disk anonymous, and strict offline
-            // players (Auxio, Symfonium, MediaStore) sort and group purely on
-            // embedded tags. So every FLAC gets Vorbis comments and the cover,
-            // not only THX/versioned ones. Tagging happens in place on the temp
-            // file (JAudioTagger is file-based). Best-effort: a tagging failure
-            // never fails the download (the bytes are good).
-            if (isFlac) {
-                tagFlacFile(
+            // The Qobuz CDN FLACs and TIDAL's AAC files arrive with no embedded
+            // metadata, so without this every download lands on disk anonymous,
+            // and strict offline players (Auxio, Symfonium, MediaStore) sort and
+            // group purely on embedded tags. So every FLAC gets Vorbis comments
+            // and every AAC .m4a iTunes atoms, with the cover. Tagging works on
+            // the temp file (JAudioTagger is file-based): in place for FLAC, on
+            // a copy for .m4a (see tagAudioFile). Best-effort: a tagging
+            // failure never fails the download (the bytes are good).
+            Log.i(TAG, "\"$trackTitle\" (id=$trackId) from ${service.label}: ${format.extension}" + if (isAtmosDownload) ", Dolby Atmos" else "")
+            if (format == DownloadFormat.FLAC) repairFlacHeader(tempAudio, trackTitle)
+            if (!isApple && !isAtmosDownload && format != DownloadFormat.MP3) {
+                tagAudioFile(
                     file = tempAudio,
+                    format = format,
                     item = item,
                     title = EmbeddedTags.baseTitle(trackTitle, version),
                     artwork = artBytes,
@@ -246,29 +293,46 @@ class TrackDownloader @Inject constructor(
             }
             val audioSizeBytes = tempAudio.length()
 
-            val fileExt = if (usedApple) "m4a" else if (isFlac) "flac" else "mp3"
-            val audioMime = if (usedApple) "audio/mp4" else if (isFlac) "audio/flac" else "audio/mpeg"
-            val sanitizedTitle = "${artistName} - ${trackTitle}".replace(Regex("[\\\\/:*?\"<>|]"), "_")
-            val fileName = "$sanitizedTitle.$fileExt"
+            val fileExt = format.extension
+            val audioMime = format.mimeType
+            // Artist / Album / "01. Title" — see DownloadLayout.
+            val target = DownloadLayout.target(
+                title = trackTitle,
+                artistName = artistName,
+                albumArtist = item.albumArtist,
+                albumTitle = albumTitle,
+                trackNumber = item.trackNumber,
+                discNumber = item.discNumber,
+            )
+            val stem = target.stem
             val filePath: String
+            // The folder the audio went into, when it went to the user's folder.
+            var targetDir: DocumentFile? = null
+            var inAlbumFolder = false
 
-            if (customFolderUri != null) {
-                // Save to user-selected folder via SAF
-                val treeUri = customFolderUri.toUri()
-                val docFile = DocumentFile.fromTreeUri(context, treeUri)
-                if (docFile != null && docFile.canWrite()) {
-                    val existing = docFile.findFile(fileName)
-                    existing?.delete()
-                    val newFile = docFile.createFile(audioMime, sanitizedTitle)
-                    if (newFile != null) {
-                        context.contentResolver.openOutputStream(newFile.uri)?.use { out ->
-                            tempAudio.inputStream().use { input -> input.copyTo(out) }
-                        }
-                        filePath = newFile.uri.toString()
-                    } else {
-                        // Fallback to internal
-                        filePath = saveToInternal(trackId, fileExt, tempAudio)
+            val rootDoc = customFolderUri
+                ?.let { DocumentFile.fromTreeUri(context, it.toUri()) }
+                ?.takeIf { it.canWrite() }
+            if (rootDoc != null) {
+                val placed = folderFor(rootDoc, target)
+                val dir = placed.dir
+                dir.findChild("$stem.$fileExt")?.delete()
+                val newFile = dir.createFile(audioMime, stem)
+                if (newFile != null) {
+                    try {
+                        val out = context.contentResolver.openOutputStream(newFile.uri)
+                            ?: throw IOException("could not open ${newFile.uri} for writing")
+                        out.use { tempAudio.inputStream().use { input -> input.copyTo(it) } }
+                    } catch (e: Exception) {
+                        // A half-written file (storage full, card pulled) or an
+                        // empty one would be indexed as a broken track. Remove
+                        // it; the catch below decides whether to try again.
+                        runCatching { newFile.delete() }
+                        throw e
                     }
+                    filePath = newFile.uri.toString()
+                    targetDir = dir
+                    inAlbumFolder = placed.isAlbumFolder
                 } else {
                     filePath = saveToInternal(trackId, fileExt, tempAudio)
                 }
@@ -284,10 +348,12 @@ class TrackDownloader @Inject constructor(
                 try {
                     val lyrics = apiClient.getLyrics(trackId)
                         ?: lrcLibClient.lookup(
-                            title = trackTitle,
-                            artist = artistName,
-                            album = albumTitle,
-                            durationSeconds = duration.takeIf { it > 0 },
+                            tf.monochrome.android.data.api.LyricsQuery(
+                                title = trackTitle,
+                                artist = artistName,
+                                album = albumTitle,
+                                durationMs = duration.takeIf { it > 0 }?.let { it * 1000L },
+                            ),
                         )
                     if (lyrics != null && lyrics.isSynced) {
                         val lrcContent = StringBuilder()
@@ -298,21 +364,23 @@ class TrackDownloader @Inject constructor(
                             lrcContent.append("$timeStr${line.text}\n")
                         }
 
-                        val lrcFileName = "$sanitizedTitle.lrc"
-                        if (customFolderUri != null) {
-                            val treeUri = customFolderUri.toUri()
-                            val docFile = DocumentFile.fromTreeUri(context, treeUri)
-                            if (docFile != null && docFile.canWrite()) {
-                                val existing = docFile.findFile(lrcFileName)
-                                existing?.delete()
-                                val lrcFile = docFile.createFile("text/plain", sanitizedTitle)
-                                lrcFile?.let {
-                                    context.contentResolver.openOutputStream(it.uri)?.use { out ->
-                                        out.write(lrcContent.toString().toByteArray())
-                                    }
+                        val dir = targetDir
+                        if (dir != null) {
+                            // Beside the audio, with the same stem, which is how
+                            // players pair the two. Created as octet-stream with the
+                            // extension in the name: as text/plain, Android's storage
+                            // provider appends its own ".txt" to a name with no
+                            // matching extension, so the file came out as
+                            // "<name>.txt", which no player reads as lyrics, and the
+                            // findFile(".lrc") meant to replace it never matched.
+                            val lrcName = "$stem.lrc"
+                            dir.findChild(lrcName)?.delete()
+                            dir.createFile("application/octet-stream", lrcName)?.let {
+                                context.contentResolver.openOutputStream(it.uri)?.use { out ->
+                                    out.write(lrcContent.toString().toByteArray())
                                 }
                             }
-                        } else {
+                        } else if (rootDoc == null) {
                             val downloadsDir = File(context.getExternalFilesDir(null), "downloads")
                             val lrcFile = File(downloadsDir, "$trackId.lrc")
                             lrcFile.writeText(lrcContent.toString())
@@ -322,19 +390,26 @@ class TrackDownloader @Inject constructor(
                 }
             }
 
-            // Save the album art alongside the track. Two reasons:
-            //   1. The system MediaScanner picks up `cover.jpg` /
-            //      `albumart.jpg` in the same folder as audio files and
-            //      attaches them as the album image automatically — that's
-            //      what makes downloaded albums show their cover in the
-            //      Local tab on a fresh install.
-            //   2. Other Android players (and our own DownloadsScreen) can
-            //      load the cover off-line.
-            // Errors here are non-fatal — losing the cover shouldn't fail
+            // One cover.jpg per album folder, and per disc folder. The system MediaScanner picks it
+            // up as the album image for the audio beside it, which is the only
+            // art an MP3 or M4A download has (only FLAC gets it embedded), and
+            // the Downloads screen uses it for files it finds with no database
+            // row. Errors here are non-fatal: losing the cover shouldn't fail
             // the whole download.
-            if (artBytes != null) {
-                runCatching { saveAlbumArt(artBytes, sanitizedTitle, customFolderUri) }
+            // Only into the album's own folders: a fallback to the artist's folder
+            // would let the first album there claim it for every other.
+            val albumDir = targetDir
+            if (artBytes != null && albumDir != null && inAlbumFolder) {
+                runCatching { saveAlbumCover(albumDir, artBytes) }
             }
+
+            // A re-download that lands somewhere new (the old flat layout, or
+            // app storage before a folder was chosen) would otherwise leave the
+            // old copy behind. Its database row is about to be replaced, so the
+            // Downloads screen would list the old file again as a stray.
+            downloadDao.getDownloadedTrack(trackId)?.filePath
+                ?.takeIf { !sameFile(it, filePath) }
+                ?.let { runCatching { deleteFile(it) } }
 
             // Tell MediaStore about the new audio + cover so the Local tab
             // sees them without a manual rescan. Only meaningful when the
@@ -356,7 +431,8 @@ class TrackDownloader @Inject constructor(
                     sizeBytes = audioSizeBytes,
                     downloadedAt = System.currentTimeMillis(),
                     version = version,
-                    isThxSpatialAudio = isThxSpatialAudio
+                    isThxSpatialAudio = isThxSpatialAudio,
+                    isDolbyAtmos = isAtmosDownload,
                 )
             )
             // A new file is on disk — let the player stop streaming this song.
@@ -367,6 +443,11 @@ class TrackDownloader @Inject constructor(
             } finally {
                 tempAudio.delete()
             }
+        } catch (e: CancellationException) {
+            // As the KDoc above promises: cancellation propagates. Caught as an
+            // Exception below, it was turned into a retry or a failure, and
+            // DownloadQueueWorker's own cancellation branch never ran.
+            throw e
         } catch (e: Exception) {
             // Never swallow this silently. A throw here puts the request back to
             // ENQUEUED for the backoff window, which the download list renders as
@@ -409,44 +490,106 @@ class TrackDownloader @Inject constructor(
     }
 
     /**
-     * Saves the album cover both as `<sanitizedTitle>.jpg` (per-track
-     * sidecar, matched by some MP3-style players) and as `cover.jpg` in the
-     * same folder (the Android MediaScanner convention). Skipped silently on
-     * SAF failure.
+     * The folder [target] belongs in under [root], made if it is missing:
+     * the artist's folder, the album's inside it when there is an album, and
+     * a disc folder inside that from disc 2 on. Falls back to the nearest
+     * folder that could be had.
+     *
+     * Locked because downloads run several at a time, and two tracks of one
+     * album would otherwise both find no "Artist" folder and both create one:
+     * the provider names the second "Artist (1)" and splits the album in two.
      */
-    private fun saveAlbumArt(
-        bytes: ByteArray,
-        sanitizedTitle: String,
-        customFolderUri: String?,
-    ) {
-        if (customFolderUri != null) {
-            val treeUri = customFolderUri.toUri()
-            val docFile = DocumentFile.fromTreeUri(context, treeUri) ?: return
-            if (!docFile.canWrite()) return
-            // Per-track sidecar.
-            val perTrackName = "$sanitizedTitle.jpg"
-            docFile.findFile(perTrackName)?.delete()
-            docFile.createFile("image/jpeg", sanitizedTitle)?.let { file ->
+    private fun folderFor(root: DocumentFile, target: DownloadLayout.Target): Placement =
+        synchronized(folderLock) {
+            val artist = root.childDirectory(target.artistFolder) ?: return Placement(root, false)
+            val albumName = target.albumFolder ?: return Placement(artist, false)
+            val album = artist.childDirectory(albumName) ?: return Placement(artist, false)
+            val disc = target.discFolder ?: return Placement(album, true)
+            Placement(album.childDirectory(disc) ?: album, true)
+        }
+
+    /**
+     * Where [folderFor] put a track, and whether that folder is the album's
+     * own (or one of its disc folders), which is where a cover.jpg belongs.
+     */
+    private class Placement(val dir: DocumentFile, val isAlbumFolder: Boolean)
+
+    /**
+     * Writes the album's cover.jpg into [albumDir] unless it already has one.
+     * Under the same lock as [folderFor], for the same race: two tracks would
+     * both find none, and the second would write "cover (1).jpg".
+     */
+    private fun saveAlbumCover(albumDir: DocumentFile, bytes: ByteArray) {
+        synchronized(folderLock) {
+            if (albumDir.findChild(COVER_FILE) != null) return
+            albumDir.createFile("image/jpeg", COVER_STEM)?.let { file ->
                 context.contentResolver.openOutputStream(file.uri)?.use { it.write(bytes) }
                 notifyMediaScanner(file.uri.toString())
             }
-            // Folder-level cover.jpg — MediaScanner reads this for the
-            // album thumbnail, and it covers the MP3/M4A downloads that
-            // don't get an embedded METADATA_BLOCK_PICTURE.
-            if (docFile.findFile("cover.jpg") == null) {
-                docFile.createFile("image/jpeg", "cover")?.let { file ->
-                    context.contentResolver.openOutputStream(file.uri)?.use { it.write(bytes) }
-                    notifyMediaScanner(file.uri.toString())
-                }
+        }
+    }
+
+    private fun DocumentFile.childDirectory(name: String): DocumentFile? =
+        findChild(name)?.takeIf { it.isDirectory } ?: createDirectory(name)
+
+    /**
+     * [DocumentFile.findFile], ignoring case. Shared storage does not tell
+     * "Abba" from "ABBA", so a case-sensitive miss followed by a create gets
+     * "ABBA (1)" from the provider rather than the folder already there.
+     *
+     * Two provider queries whatever the folder holds. Reading each child's
+     * [DocumentFile.getName] is a query of its own, so a download folder with
+     * 1,500 artists cost 1,500 of them per lookup, five lookups a track, with
+     * every other download waiting on [folderLock]. One query reads every
+     * name; [listFiles] then gives the child itself. (It has to come from
+     * there: documentfile is 1.0.0 here, whose fromTreeUri always opens the
+     * root of the tree, whatever document the uri names.)
+     */
+    private fun DocumentFile.findChild(name: String): DocumentFile? {
+        val names = runCatching {
+            context.contentResolver.query(
+                DocumentsContract.buildChildDocumentsUriUsingTree(uri, DocumentsContract.getDocumentId(uri)),
+                arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+                null, null, null,
+            )
+        }.getOrNull()
+            // A provider that will not list this way: look one name at a time.
+            ?: return listFiles().firstOrNull { it.name.equals(name, ignoreCase = true) }
+        val childId = names.use { cursor ->
+            var found: String? = null
+            while (found == null && cursor.moveToNext()) {
+                if (cursor.getString(1).equals(name, ignoreCase = true)) found = cursor.getString(0)
             }
+            found
+        } ?: return null
+        val childUri = DocumentsContract.buildDocumentUriUsingTree(uri, childId)
+        return listFiles().firstOrNull { it.uri == childUri }
+    }
+
+    /**
+     * Whether two stored locations are the same file. Two content URIs can
+     * name one document through different folder grants (the download folder
+     * picked again, or a parent of it), so they are compared by provider and
+     * document id, not as strings. Deleting the "old" copy of a re-download on
+     * a string mismatch would otherwise delete the file just written.
+     */
+    private fun sameFile(a: String, b: String): Boolean {
+        if (a == b) return true
+        if (!a.startsWith("content://") || !b.startsWith("content://")) return false
+        return runCatching {
+            val ua = a.toUri()
+            val ub = b.toUri()
+            ua.authority == ub.authority &&
+                DocumentsContract.getDocumentId(ua) == DocumentsContract.getDocumentId(ub)
+        }.getOrDefault(true) // unsure: keep the old file rather than risk the new one
+    }
+
+    /** Removes a download's file, by content URI or by path. */
+    private fun deleteFile(pathOrUri: String) {
+        if (pathOrUri.startsWith("content://")) {
+            DocumentFile.fromSingleUri(context, pathOrUri.toUri())?.delete()
         } else {
-            val downloadsDir = File(context.getExternalFilesDir(null), "downloads")
-            if (!downloadsDir.exists()) downloadsDir.mkdirs()
-            File(downloadsDir, "$sanitizedTitle.jpg").writeBytes(bytes)
-            // App-private storage isn't MediaStore-visible, so cover.jpg
-            // is purely for the in-app off-line cover lookup.
-            val coverFile = File(downloadsDir, "cover.jpg")
-            if (!coverFile.exists()) coverFile.writeBytes(bytes)
+            File(pathOrUri).delete()
         }
     }
 
@@ -480,6 +623,25 @@ class TrackDownloader @Inject constructor(
     }
 
     /**
+     * Marks a FLAC's last metadata block as last when it is not (see
+     * [FlacMetadata]), so JAudioTagger can tag the file. One header bit, in
+     * place; best-effort like the tagging it is for.
+     */
+    private fun repairFlacHeader(file: File, title: String) {
+        runCatching {
+            java.io.RandomAccessFile(file, "rw").use { raf ->
+                val head = ByteArray(minOf(raf.length(), 65_536L).toInt())
+                raf.readFully(head)
+                FlacMetadata.unmarkedLastBlock(head)?.let { at ->
+                    raf.seek(at.toLong())
+                    raf.write(head[at].toInt() or 0x80)
+                    Log.i(TAG, "tag: marked the last FLAC metadata block of \"$title\"")
+                }
+            }
+        }.onFailure { Log.w(TAG, "tag: FLAC header check failed for \"$title\": ${it.message}") }
+    }
+
+    /**
      * Infer the format actually delivered from the file bytes, so the saved record
      * reflects reality rather than the requested tier:
      *  - "fLaC" magic → FLAC; read bits-per-sample from STREAMINFO to tell
@@ -487,6 +649,13 @@ class TrackDownloader @Inject constructor(
      *  - anything else → lossy (MP3) → report as HIGH.
      * Falls back to [requested] if the bytes are too short to classify.
      */
+    /** The tier an Apple download is recorded as, from Apple's own ladder. */
+    private fun appleTier(quality: AppleQuality): AudioQuality = when (quality) {
+        AppleQuality.HIRES_LOSSLESS -> AudioQuality.HI_RES
+        AppleQuality.ALAC -> AudioQuality.LOSSLESS
+        AppleQuality.AAC -> AudioQuality.HIGH
+    }
+
     private fun detectActualQuality(data: ByteArray, requested: AudioQuality): AudioQuality {
         if (data.size < 4) return requested
         val isFlac = data[0] == 'f'.code.toByte() && data[1] == 'L'.code.toByte() &&
@@ -514,28 +683,38 @@ class TrackDownloader @Inject constructor(
     }
 
     /**
-     * Embed Vorbis comments and the front cover into a FLAC file in place
-     * (JAudioTagger is file-based, so no byte-array round trip). The download
-     * temp carries a ".dl" extension and JAudioTagger picks its reader by
-     * extension, so the file is renamed to a ".flac" alias for the tagging and
-     * renamed back. Best-effort: on any failure the file is left playable and
-     * the download still succeeds.
+     * Embed tags and the front cover into a FLAC (Vorbis comments) or AAC
+     * .m4a (iTunes atoms) file in place (JAudioTagger is file-based, so no
+     * byte-array round trip). The download temp carries a ".dl" extension and
+     * JAudioTagger picks its reader by extension, so the file is renamed to an
+     * alias with the format's extension for the tagging and renamed back.
+     * Best-effort: on any failure the file is left playable and the download
+     * still succeeds.
      */
-    private fun tagFlacFile(
+    private fun tagAudioFile(
         file: File,
+        format: DownloadFormat,
         item: DownloadItem,
         title: String,
         artwork: ByteArray?,
     ) {
-        val alias = File(file.parentFile, "${file.nameWithoutExtension}_tag.flac")
-        if (!file.renameTo(alias)) {
-            Log.w(TAG, "tag: rename for tagging failed for \"$title\"")
+        val alias = File(file.parentFile, "${file.nameWithoutExtension}_tag.${format.extension}")
+        // An .m4a is tagged on a copy that replaces the download only once
+        // JAudioTagger finishes. Tagging MP4 rewrites box offsets, and on a
+        // fragmented MP4 (a DASH track assembled into one file) JAudioTagger
+        // writes the tags, then finds the offsets wrong and throws — a file
+        // that must not replace the good one. A FLAC's tags sit in front of
+        // the audio, so it is tagged in place.
+        val onCopy = format == DownloadFormat.M4A
+        val staged = if (onCopy) runCatching { file.copyTo(alias, overwrite = true) }.isSuccess else file.renameTo(alias)
+        if (!staged) {
+            Log.w(TAG, "tag: staging the file for tagging failed for \"$title\"")
             return
         }
+        var committed = false
         try {
             val audioFile = org.jaudiotagger.audio.AudioFileIO.read(alias)
-            val tag = audioFile.tagOrCreateAndSetDefault as? org.jaudiotagger.tag.flac.FlacTag
-                ?: return
+            val tag = audioFile.tagOrCreateAndSetDefault ?: return
             fun write(key: org.jaudiotagger.tag.FieldKey, value: String?) {
                 value?.takeIf { it.isNotBlank() }?.let { tag.setField(key, it) }
             }
@@ -551,18 +730,49 @@ class TrackDownloader @Inject constructor(
             // FieldKey.YEAR is the Vorbis DATE comment.
             write(org.jaudiotagger.tag.FieldKey.YEAR, EmbeddedTags.releaseDate(item.releaseDate))
             write(org.jaudiotagger.tag.FieldKey.GENRE, item.genre)
-            // Raw VERSION comment — the field Qobuz itself uses for the release.
-            item.version?.takeIf { it.isNotBlank() }?.let { tag.setField("VERSION", it) }
             // COMMENT marker as belt-and-braces for players that ignore VERSION.
             if (item.isThxSpatialAudio) tag.setField(org.jaudiotagger.tag.FieldKey.COMMENT, "THX Spatial Audio")
-            // A picture the source already embedded is the label's own — keep it.
-            if (artwork != null && tag.images.isEmpty()) embedCover(tag, artwork, title)
+            when (tag) {
+                is org.jaudiotagger.tag.flac.FlacTag -> {
+                    // Raw VERSION comment — the field Qobuz itself uses for the release.
+                    item.version?.takeIf { it.isNotBlank() }?.let { tag.setField("VERSION", it) }
+                    // A picture the source already embedded is the label's own — keep it.
+                    if (artwork != null && tag.images.isEmpty()) embedCover(tag, artwork, title)
+                }
+                is org.jaudiotagger.tag.mp4.Mp4Tag -> {
+                    if (artwork != null && !tag.hasField(org.jaudiotagger.tag.mp4.Mp4FieldKey.ARTWORK)) {
+                        embedCover(tag, artwork, title)
+                    }
+                }
+            }
             audioFile.commit()
+            committed = true
         } catch (e: Exception) {
-            Log.w(TAG, "tag: FLAC tagging failed for \"$title\": ${e.message}")
+            Log.w(TAG, "tag: ${format.name} tagging failed for \"$title\": ${e.message}")
         } finally {
-            alias.renameTo(file)
+            when {
+                !onCopy -> alias.renameTo(file)
+                // rename(2) replaces the untagged file in one step.
+                committed && alias.renameTo(file) -> Unit
+                // Not tagged, or not swapped in: keep the download as it came.
+                else -> alias.delete()
+            }
         }
+    }
+
+    /**
+     * Adds [bytes] as an .m4a's `covr` atom. Built from the bytes alone
+     * ([org.jaudiotagger.tag.mp4.field.Mp4TagCoverField] reads the image type
+     * from its header), for the same reason as the FLAC overload: JAudioTagger's
+     * `Artwork` type needs `javax.imageio`, which Android lacks.
+     */
+    private fun embedCover(tag: org.jaudiotagger.tag.mp4.Mp4Tag, bytes: ByteArray, title: String) {
+        val mime = EmbeddedTags.imageMime(bytes)
+        if (mime == null || bytes.size > EmbeddedTags.MAX_EMBEDDED_ART_BYTES) {
+            Log.i(TAG, "tag: not embedding cover for \"$title\" (type=$mime, ${bytes.size} bytes)")
+            return
+        }
+        tag.setField(org.jaudiotagger.tag.mp4.field.Mp4TagCoverField(bytes))
     }
 
     /**

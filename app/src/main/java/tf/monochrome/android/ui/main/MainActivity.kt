@@ -314,45 +314,38 @@ class MainActivity : ComponentActivity() {
      * normally only steers AudioFlinger's STREAM_MUSIC, which has no
      * audible effect when the libusb bypass path is hot — the iso
      * pump writes PCM directly to the DAC and AudioFlinger isn't in
-     * the chain. So when the iso pump is streaming, we consume the
-     * key event, nudge the BypassVolumeController, persist the new
-     * value to preferences (so the slider in NowPlaying mirrors it
-     * and the value survives restart), and return true.
+     * the chain. So while a DAC is claimed for exclusive output (paused
+     * or between tracks too, so a press before play still counts), we
+     * consume the key event and step the DAC level instead (BypassVolumeController,
+     * 2 dB a press); the step also brings up the glass volume pop-up,
+     * since Android's own panel would show a volume that does nothing.
+     * Not while the playing stream went to Android's output although a DAC
+     * is claimed (a format the DAC has no alt for): then STREAM_MUSIC is
+     * the volume heard, and the keys go to it.
+     *
+     * The level is the DAC's alone: it is not written into the player's
+     * volume preference, which the non-exclusive path also plays at —
+     * doing that left normal playback quiet after a session on a DAC.
      *
      * When bypass is NOT active (delegate sink path, or USB DAC
      * unplugged), we fall through to super and let the system do its
      * thing — STREAM_MUSIC volume actually reaches the speakers /
-     * Bluetooth / non-exclusive USB output as expected.
+     * Bluetooth / non-exclusive USB output as expected. With the app in
+     * the background the keys reach the DAC through the media session's
+     * remote volume instead (PlaybackService).
      *
-     * Step size is 1/25 ≈ 4% per press, picked to roughly match the
-     * granularity of Android's STREAM_MUSIC slider on most phones
-     * so the press cadence feels familiar. ACTION_DOWN only —
-     * ACTION_UP fires on every key release and would double the
-     * step otherwise.
+     * ACTION_DOWN only — ACTION_UP fires on every key release and would
+     * double the step otherwise. A held key repeats ACTION_DOWN.
      */
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
             val isVolumeKey = event.keyCode == KeyEvent.KEYCODE_VOLUME_UP ||
                               event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN
-            if (isVolumeKey && libusbDriver.isStreaming.value) {
-                val current = bypassVolumeController.getVolume()
-                val step = 1f / 25f
-                val next = if (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
-                    current + step
-                } else {
-                    current - step
-                }
-                // Floor at 1/25 so vol-down presses can never drive the
-                // app to total silence — without an in-flow volume
-                // slider the user has no way back from a silenced
-                // state, and a stale 0.0 in preferences silences the
-                // app on every subsequent launch.
-                val clamped = next.coerceIn(step, 1f)
-                bypassVolumeController.setVolume(clamped)
-                lifecycleScope.launch {
-                    preferences.setVolume(clamped.toDouble())
-                }
+            if (isVolumeKey && bypassVolumeController.steersOutput(libusbDriver.isOpen.value)) {
+                bypassVolumeController.stepLevel(
+                    if (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP) 1 else -1
+                )
                 return true
             }
         } else if (event.action == KeyEvent.ACTION_UP) {
@@ -362,7 +355,7 @@ class MainActivity : ComponentActivity() {
             // — when bypass is off, the system handles both.
             val isVolumeKey = event.keyCode == KeyEvent.KEYCODE_VOLUME_UP ||
                               event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN
-            if (isVolumeKey && libusbDriver.isStreaming.value) return true
+            if (isVolumeKey && bypassVolumeController.steersOutput(libusbDriver.isOpen.value)) return true
         }
         return super.dispatchKeyEvent(event)
     }

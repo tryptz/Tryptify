@@ -81,6 +81,10 @@ fun DiscoveryTrackCard(
                     ThxBadgePill()
                     Spacer(modifier = Modifier.width(MonoDimens.spacingXs))
                 }
+                if (track.isDolbyAtmos) {
+                    DolbyAtmosBadgePill()
+                    Spacer(modifier = Modifier.width(MonoDimens.spacingXs))
+                }
                 Text(
                     text = track.title,
                     style = MaterialTheme.typography.bodyMedium,

@@ -114,10 +114,10 @@ class DspEngineManager @Inject constructor(
      * The live state, captured the instant it changes.
      *
      * The DataStore write below is debounced by half a second, which is right
-     * for flash but wrong as a source of truth: the native engine is destroyed
-     * and rebuilt whenever the audio format changes — a track at a different
-     * sample rate is enough — and whatever reapplies state to the new engine
-     * has to reapply what the user *has*, not what was last written. Reading
+     * for flash but wrong as a source of truth: the native engine is
+     * reconfigured whenever the audio format changes — a track at a different
+     * sample rate is enough — and whatever reapplies state afterwards has to
+     * reapply what the user *has*, not what was last written. Reading
      * the preference there meant a knob moved less than 500 ms before a track
      * change was reverted to its previous value, and then saved in that
      * reverted state, which made it permanent.

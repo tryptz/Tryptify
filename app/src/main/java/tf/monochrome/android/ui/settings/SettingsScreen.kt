@@ -78,8 +78,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -110,6 +108,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -126,6 +126,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import tf.monochrome.android.data.api.ApiService
+import tf.monochrome.android.data.api.ServiceQuality
 import tf.monochrome.android.domain.model.AudioQuality
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.filled.CheckCircle
@@ -182,10 +184,11 @@ import androidx.compose.ui.res.pluralStringResource
 //
 // The labels here are ids — English, stable, what the search index and the dev
 // editor key on. What a chip says comes from [settingsTabLabelRes].
-private val settingsTabs = listOf("Appearance", "Visual Studio", "Audio", "Equalizer", "Library", "Downloads", "Connections", "Radio", "System", "About")
+private val settingsTabs = listOf("Appearance", "Fonts", "Visual Studio", "Audio", "Equalizer", "Library", "Downloads", "Connections", "Radio", "System", "About")
 
 private val settingsTabLabels: Map<String, Int> = mapOf(
     "Appearance" to R.string.settings_tab_appearance,
+    "Fonts" to R.string.fonts_title,
     "Visual Studio" to R.string.settings_tab_visual_studio,
     "Audio" to R.string.settings_tab_audio,
     "Equalizer" to R.string.settings_tab_equalizer,
@@ -350,8 +353,12 @@ fun SettingsScreen(
         ) {
             itemsIndexed(settingsTabs) { _, tab ->
                 val link = settingsLinkTabs[tab]
-                FilterChip(
+                // The app's glass pill, like Discover's and the Library's: the
+                // Studio's UI panels material, not a stock Material chip.
+                tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                    label = stringResource(settingsTabLabelRes(tab)),
                     selected = link == null && settingsPages[selectedTab] == tab,
+                    accent = MaterialTheme.colorScheme.primary,
                     onClick = {
                         if (link != null) {
                             navController.navigateTool(link)
@@ -359,22 +366,9 @@ fun SettingsScreen(
                             settingsScope.launch { settingsPager.goToPage(settingsTabIndex(tab), animateTabs) }
                         }
                     },
-                    label = { Text(stringResource(settingsTabLabelRes(tab)), style = MaterialTheme.typography.labelMedium) },
                     // The arrow the search pills use for "opens a screen": this
                     // chip leaves Settings rather than switching its page.
-                    trailingIcon = if (link != null) {
-                        {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = null,
-                                modifier = Modifier.size(FilterChipDefaults.IconSize),
-                            )
-                        }
-                    } else null,
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                    )
+                    trailingIcon = if (link != null) Icons.AutoMirrored.Filled.ArrowForward else null,
                 )
             }
         }
@@ -451,7 +445,14 @@ fun SettingsScreen(
                         // the links, so a position here would silently shift
                         // every time a chip became one.
                         when (settingsPages[page]) {
-                            "Appearance" -> AppearanceTab(viewModel, navController)
+                            "Appearance" -> AppearanceTab(
+                                viewModel,
+                                navController,
+                                onOpenFonts = {
+                                    settingsScope.launch { settingsPager.goToPage(settingsTabIndex("Fonts"), animateTabs) }
+                                },
+                            )
+                            "Fonts" -> tf.monochrome.android.ui.settings.fonts.FontBrowserPage()
                             "Audio" -> AudioTab(viewModel, navController)
                             "Equalizer" -> EqualizerTab(navController, viewModel)
                             "Library" -> LibrarySettingsTab(viewModel)
@@ -706,9 +707,9 @@ private tailrec fun android.content.Context.findActivityOrSelf(): android.conten
 }
 
 @Composable
-private fun AppearanceTab(viewModel: SettingsViewModel, navController: NavController) {
+private fun AppearanceTab(viewModel: SettingsViewModel, navController: NavController, onOpenFonts: () -> Unit) {
     SettingsTabContent {
-        AppearanceControls(viewModel)
+        AppearanceControls(viewModel, onOpenFonts = onOpenFonts)
         Spacer(modifier = Modifier.height(16.dp))
         InterfaceControls(viewModel, navController)
     }
@@ -718,7 +719,7 @@ private fun AppearanceTab(viewModel: SettingsViewModel, navController: NavContro
 private enum class CustomColorTarget { Accent, Background }
 
 @Composable
-private fun AppearanceControls(viewModel: SettingsViewModel) {
+private fun AppearanceControls(viewModel: SettingsViewModel, onOpenFonts: () -> Unit) {
     val themeName by viewModel.theme.collectAsStateWithLifecycle()
     val dynamicColors by viewModel.dynamicColors.collectAsStateWithLifecycle()
     val dynamicColorMenus by viewModel.dynamicColorMenus.collectAsStateWithLifecycle()
@@ -729,7 +730,6 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
     val themePaper by viewModel.themePaper.collectAsStateWithLifecycle()
     val fontScale by viewModel.fontScale.collectAsStateWithLifecycle()
     val customFontUri by viewModel.customFontUri.collectAsStateWithLifecycle()
-    val availableFonts by viewModel.availableFonts.collectAsStateWithLifecycle()
     val followSystemFontScale by viewModel.fontScaleFollowSystem.collectAsStateWithLifecycle()
     val glowBehindArt by viewModel.glowBehindArt.collectAsStateWithLifecycle()
     val artGlowRadius by viewModel.artGlowRadius.collectAsStateWithLifecycle()
@@ -741,13 +741,7 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
     // Which picker is open, if any — accent or ground.
     var editingColor by remember { mutableStateOf<CustomColorTarget?>(null) }
 
-    // File picker for .ttf font import
     val context = LocalContext.current
-    val fontPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        uri?.let { viewModel.importFont(it) }
-    }
 
         LanguageSetting()
 
@@ -912,11 +906,12 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 FONT_SCALE_PRESETS.forEach { preset ->
-                    FilterChip(
+                    tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                        label = stringResource(preset.label),
                         selected = !followSystemFontScale && preset == selectedPreset,
+                        accent = MaterialTheme.colorScheme.primary,
                         enabled = !followSystemFontScale,
                         onClick = { viewModel.setFontScale(preset.scale) },
-                        label = { Text(stringResource(preset.label)) }
                     )
                 }
             }
@@ -931,156 +926,17 @@ private fun AppearanceControls(viewModel: SettingsViewModel) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Font Library. Collapsed by default: with ten bundled faces plus
-        // anything imported it is the longest thing on this tab, and it is not
-        // what most people opened Appearance for. The header carries the active
-        // font's name so the section still answers "what am I using?" shut.
-        var fontLibraryExpanded by rememberSaveable { mutableStateOf(false) }
+        // Font Library: one row over to the Fonts chip, whose page previews
+        // every font in its own letters before it is chosen. The row carries
+        // the active font's name so it still answers "what am I using?", and
+        // keeps fonts findable from where they always were.
         val activeFontName = tf.monochrome.android.ui.theme.BundledFonts
             .displayNameOf(customFontUri) ?: stringResource(R.string.settings_inter_default)
-
-        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { fontLibraryExpanded = !fontLibraryExpanded }
-                    .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        stringResource(R.string.settings_font_library),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        activeFontName,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Icon(
-                    imageVector = if (fontLibraryExpanded) Icons.Default.KeyboardArrowUp
-                        else Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (fontLibraryExpanded) stringResource(R.string.settings_collapse_font_library)
-                        else stringResource(R.string.settings_expand_font_library),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            if (fontLibraryExpanded) {
-                // The built-in default, so switching back is a pick like any
-                // other rather than a separate "Reset" the user has to find.
-                FontRow(
-                    name = "Inter",
-                    note = stringResource(R.string.settings_the_default_neutral_ui_grotesque),
-                    selected = customFontUri == null,
-                    onSelect = { viewModel.resetDefaultFont() },
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    stringResource(R.string.settings_included),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
-                )
-                viewModel.bundledFonts.forEach { font ->
-                    val id = tf.monochrome.android.ui.theme.BundledFonts.idOf(font)
-                    FontRow(
-                        name = font.displayName,
-                        note = font.note,
-                        selected = customFontUri == id,
-                        onSelect = { viewModel.selectBundledFont(font) },
-                    )
-                }
-
-                if (availableFonts.isNotEmpty()) {
-                    Text(
-                        stringResource(R.string.settings_imported),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
-                    )
-                    availableFonts.forEach { file ->
-                        FontRow(
-                            name = file.nameWithoutExtension,
-                            note = null,
-                            selected = file.absolutePath == customFontUri,
-                            onSelect = { viewModel.selectFont(file) },
-                            onDelete = { viewModel.removeFont(file) },
-                        )
-                    }
-                }
-
-                OutlinedButton(
-                    onClick = {
-                        fontPickerLauncher.launch(
-                            arrayOf("font/ttf", "font/otf", "application/x-font-ttf", "application/octet-stream")
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                ) {
-                    Text(stringResource(R.string.settings_import_a_font_ttf_otf))
-                }
-            }
-        }
-    
-}
-
-/**
- * One row in the Font Library — the default, a bundled face, or an import.
- * [onDelete] is only passed for imports; bundled fonts live in the APK and
- * have nothing to delete.
- */
-@Composable
-private fun FontRow(
-    name: String,
-    note: String?,
-    selected: Boolean,
-    onSelect: () -> Unit,
-    onDelete: (() -> Unit)? = null,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onSelect)
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            Icons.Default.Check,
-            contentDescription = null,
-            tint = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
-            modifier = Modifier.size(20.dp),
+        SettingItem(
+            title = stringResource(R.string.settings_font_library),
+            subtitle = activeFontName,
+            onClick = onOpenFonts,
         )
-        Spacer(modifier = Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                name,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (selected) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurface,
-            )
-            if (note != null) {
-                Text(
-                    note,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        if (onDelete != null) {
-            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = stringResource(R.string.settings_delete_font, name),
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
-    }
 }
 
 @Composable
@@ -1105,7 +961,7 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
     )
 
     // Word-level lyrics provider — which karaoke-timing source(s) run when
-    // TIDAL has no synced lyrics. "Both" tries NetEase first, then Kugou.
+    // TIDAL has no word-timed lyrics. "All" races every source (LyricsResolver).
     val lyricsProvider by viewModel.lyricsWordProvider.collectAsStateWithLifecycle()
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Text(
@@ -1266,9 +1122,10 @@ internal fun VisualizerSettings(
             }
         }
         if (spectrumEnabled) {
-            androidx.compose.runtime.DisposableEffect(Unit) {
+            // Only while the screen is started: not in the background, not with the phone off.
+            androidx.lifecycle.compose.LifecycleStartEffect(Unit) {
                 viewModel.acquireSpectrum()
-                onDispose { viewModel.releaseSpectrum() }
+                onStopOrDispose { viewModel.releaseSpectrum() }
             }
         }
 
@@ -1698,12 +1555,12 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
     val gapless by viewModel.gaplessPlayback.collectAsStateWithLifecycle()
     val crossfade by viewModel.crossfadeDuration.collectAsStateWithLifecycle()
     val gaplessNoResample by viewModel.gaplessNoResample.collectAsStateWithLifecycle()
-    val wifiQuality by viewModel.wifiQuality.collectAsStateWithLifecycle()
-    val cellularQuality by viewModel.cellularQuality.collectAsStateWithLifecycle()
+    val qualities by viewModel.qualities.collectAsStateWithLifecycle()
+    val tidalAtmos by viewModel.tidalAtmosPreferred.collectAsStateWithLifecycle()
+    val tidalDownloadAtmos by viewModel.tidalDownloadAtmos.collectAsStateWithLifecycle()
     val playbackSpeed by viewModel.playbackSpeed.collectAsStateWithLifecycle()
     val preservePitch by viewModel.preservePitch.collectAsStateWithLifecycle()
-    var showWifiDropdown by remember { mutableStateOf(false) }
-    var showCellularDropdown by remember { mutableStateOf(false) }
+    val ignoreAudioFocus by viewModel.ignoreAudioFocus.collectAsStateWithLifecycle()
     // Plain local state (NOT keyed on playbackSpeed) so typing isn't reset by
     // the value round-tripping back from the ViewModel; sync from external
     // changes (slider/reset) only while the field is unfocused, and commit on
@@ -1767,19 +1624,78 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader(stringResource(R.string.settings_streaming_quality))
-        SettingItem(title = stringResource(R.string.settings_wi_fi_streaming), subtitle = wifiQuality.displayName, onClick = { showWifiDropdown = true })
-        DropdownMenu(expanded = showWifiDropdown, onDismissRequest = { showWifiDropdown = false }) {
-            AudioQuality.entries.forEach { q ->
-                DropdownMenuItem(text = { Text(q.displayName) }, onClick = { viewModel.setWifiQuality(q); showWifiDropdown = false })
-            }
-        }
+        // Issue #131: music under a game without the game pausing it.
+        SettingSwitchItem(
+            title = stringResource(R.string.settings_play_alongside_other_apps),
+            subtitle = if (ignoreAudioFocus) {
+                stringResource(R.string.settings_play_alongside_on)
+            } else {
+                stringResource(R.string.settings_play_alongside_off)
+            },
+            checked = ignoreAudioFocus,
+            onCheckedChange = { viewModel.setIgnoreAudioFocus(it) },
+        )
 
-        SettingItem(title = stringResource(R.string.settings_cellular_streaming), subtitle = cellularQuality.displayName, onClick = { showCellularDropdown = true })
-        DropdownMenu(expanded = showCellularDropdown, onDismissRequest = { showCellularDropdown = false }) {
-            AudioQuality.entries.forEach { q ->
-                DropdownMenuItem(text = { Text(q.displayName) }, onClick = { viewModel.setCellularQuality(q); showCellularDropdown = false })
+        Spacer(modifier = Modifier.height(16.dp))
+        // One section, two sets of settings: how each service streams, or how
+        // it downloads (the same settings as the Downloads tab's).
+        var downloadQualities by rememberSaveable { mutableStateOf(false) }
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.weight(1f)) {
+                SettingsGroupHeader(
+                    stringResource(
+                        if (downloadQualities) R.string.settings_download_quality else R.string.settings_streaming_quality
+                    )
+                )
+            }
+            QualityModeSwitch(download = downloadQualities, onChange = { downloadQualities = it })
+        }
+        if (downloadQualities) {
+            val qualityTitle = stringResource(R.string.settings_quality)
+            ServiceQuality.services.forEach { service ->
+                ServiceQualityRow(
+                    title = "${service.label} · $qualityTitle",
+                    service = service,
+                    setting = ServiceQuality.Setting.DOWNLOAD,
+                    quality = qualities[service to ServiceQuality.Setting.DOWNLOAD],
+                    onPick = { viewModel.setQuality(service, ServiceQuality.Setting.DOWNLOAD, it) },
+                    atmos = if (service == ApiService.TIDAL) tidalDownloadAtmos else null,
+                    onPickAtmos = { viewModel.pickTidalDownloadAtmos() },
+                )
+            }
+        } else {
+            // Each service streams in its own setting, in its own terms: TIDAL's
+            // lossy tiers are AAC, Qobuz's and Deezer's MP3, and Deezer stops at CD.
+            val wifiTitle = stringResource(R.string.settings_wi_fi_streaming)
+            val cellularTitle = stringResource(R.string.settings_cellular_streaming)
+            ServiceQuality.services.forEach { service ->
+                listOf(
+                    ServiceQuality.Setting.WIFI to wifiTitle,
+                    ServiceQuality.Setting.CELLULAR to cellularTitle,
+                ).forEach { (setting, title) ->
+                    ServiceQualityRow(
+                        title = "${service.label} · $title",
+                        service = service,
+                        setting = setting,
+                        quality = qualities[service to setting],
+                        onPick = { viewModel.setQuality(service, setting, it) },
+                    )
+                }
+                // TIDAL's Dolby Atmos mix goes ahead of the stereo tier above: a
+                // track with the Atmos badge plays its Atmos mix, the rest stereo.
+                if (service == ApiService.TIDAL) {
+                    SettingSwitchItem(
+                        title = stringResource(R.string.atmos_tidal_dolby_atmos),
+                        subtitle = if (tidalAtmos) {
+                            stringResource(R.string.atmos_tidal_on)
+                        } else {
+                            stringResource(R.string.atmos_tidal_off)
+                        },
+                        checked = tidalAtmos,
+                        onCheckedChange = { viewModel.setTidalAtmosPreferred(it) },
+                        titleIcon = { tf.monochrome.android.ui.components.DolbyAtmosBadgePill() },
+                    )
+                }
             }
         }
 
@@ -1927,10 +1843,11 @@ private fun DspBlockSizeSelector(viewModel: SettingsViewModel) {
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         viewModel.dspBlockSizes.forEach { size ->
-            FilterChip(
+            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                label = formatBlockSize(size),
                 selected = size == current,
+                accent = MaterialTheme.colorScheme.primary,
                 onClick = { viewModel.setDspBlockSize(size) },
-                label = { Text(formatBlockSize(size)) },
             )
         }
     }
@@ -2023,9 +1940,9 @@ private fun DebugScreenRecorderRow() {
 @Composable
 private fun ChannelDetectorCard(viewModel: SettingsViewModel) {
     val state by viewModel.channelDetectorState.collectAsStateWithLifecycle()
-    DisposableEffect(Unit) {
+    androidx.lifecycle.compose.LifecycleStartEffect(Unit) {
         viewModel.acquireChannelDetector()
-        onDispose { viewModel.releaseChannelDetector() }
+        onStopOrDispose { viewModel.releaseChannelDetector() }
     }
     Text(
         text = stringResource(R.string.settings_channel_detector),
@@ -2397,9 +2314,9 @@ private fun exclusiveSubtitle(
 // ─── Tab 6: Downloads ──────────────────────────────────────────────────
 @Composable
 private fun DownloadsTab(viewModel: SettingsViewModel) {
-    val downloadQuality by viewModel.downloadQuality.collectAsStateWithLifecycle()
+    val qualities by viewModel.qualities.collectAsStateWithLifecycle()
+    val tidalDownloadAtmos by viewModel.tidalDownloadAtmos.collectAsStateWithLifecycle()
     val downloadFolder by viewModel.downloadFolderUri.collectAsStateWithLifecycle()
-    var showQualityDropdown by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
     val downloadedCount by viewModel.downloadedCount.collectAsStateWithLifecycle()
     val downloadedSize by viewModel.downloadedSize.collectAsStateWithLifecycle()
@@ -2460,11 +2377,19 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader(stringResource(R.string.settings_download_quality))
-        SettingItem(title = stringResource(R.string.settings_quality), subtitle = downloadQuality.displayName, onClick = { showQualityDropdown = true })
-        DropdownMenu(expanded = showQualityDropdown, onDismissRequest = { showQualityDropdown = false }) {
-            AudioQuality.entries.forEach { q ->
-                DropdownMenuItem(text = { Text(q.displayName) }, onClick = { viewModel.setDownloadQuality(q); showQualityDropdown = false })
-            }
+        // A track downloads from its own service, in that service's setting.
+        // Apple keeps its own ladder (PreferencesManager.appleQuality).
+        val qualityTitle = stringResource(R.string.settings_quality)
+        ServiceQuality.services.forEach { service ->
+            ServiceQualityRow(
+                title = "${service.label} · $qualityTitle",
+                service = service,
+                setting = ServiceQuality.Setting.DOWNLOAD,
+                quality = qualities[service to ServiceQuality.Setting.DOWNLOAD],
+                onPick = { viewModel.setQuality(service, ServiceQuality.Setting.DOWNLOAD, it) },
+                atmos = if (service == ApiService.TIDAL) tidalDownloadAtmos else null,
+                onPickAtmos = { viewModel.pickTidalDownloadAtmos() },
+            )
         }
 
         val dlLyrics by viewModel.downloadLyrics.collectAsStateWithLifecycle()
@@ -3058,6 +2983,19 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
             subtitle = stringResource(R.string.settings_live_logcat_stream_for_this_process_copy_or),
             onClick = { navController.navigateTool(Screen.DebugLog) },
         )
+        // A native crash report carries the tombstone's readable strings and
+        // the app's own log tail, which not everyone wants left in Downloads.
+        val saveCrashReports by viewModel.saveCrashReports.collectAsStateWithLifecycle()
+        SettingSwitchItem(
+            title = stringResource(R.string.settings_save_crash_reports),
+            subtitle = if (saveCrashReports) {
+                stringResource(R.string.settings_save_crash_reports_on)
+            } else {
+                stringResource(R.string.settings_save_crash_reports_off)
+            },
+            checked = saveCrashReports,
+            onCheckedChange = { viewModel.setSaveCrashReports(it) },
+        )
 
         // Moved from Audio, where it had ended up under the "Spatial Audio"
         // header. A screen recorder is a diagnostic, not an audio setting.
@@ -3357,6 +3295,131 @@ private fun LitGroupHeader(title: String, badge: String? = null) {
 }
 
 @Composable
+private fun ServiceQualityRow(
+    title: String,
+    service: ApiService,
+    setting: ServiceQuality.Setting,
+    quality: AudioQuality?,
+    onPick: (AudioQuality) -> Unit,
+    /** TIDAL downloads: whether Dolby Atmos is chosen; null offers no Atmos choice. */
+    atmos: Boolean? = null,
+    onPickAtmos: () -> Unit = {},
+) {
+    // The row says what the chosen tier sends; the menu lists every tier the
+    // service offers the same way, so the choice is made knowing the codec,
+    // bit depth and rate each one delivers.
+    var expanded by remember { mutableStateOf(false) }
+    val current = if (atmos == true) {
+        ServiceQuality.TIDAL_DOWNLOAD_ATMOS
+    } else {
+        quality?.let { ServiceQuality.option(service, setting, it) }
+    }
+    Box {
+        SettingItem(
+            title = title,
+            subtitle = current?.let { "${it.label} · ${stringResource(it.detail)}" } ?: "",
+            onClick = { expanded = true },
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            if (atmos != null) {
+                val option = ServiceQuality.TIDAL_DOWNLOAD_ATMOS
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(option.label, style = MaterialTheme.typography.bodyLarge)
+                                Spacer(Modifier.width(6.dp))
+                                tf.monochrome.android.ui.components.DolbyAtmosBadgePill()
+                            }
+                            Text(
+                                stringResource(option.detail),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    trailingIcon = if (atmos) {
+                        { Icon(Icons.Default.Check, contentDescription = null) }
+                    } else null,
+                    onClick = {
+                        onPickAtmos()
+                        expanded = false
+                    },
+                )
+            }
+            ServiceQuality.options(service, setting).forEach { option ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(option.label, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                stringResource(option.detail),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    trailingIcon = if (atmos != true && option.quality == current?.quality) {
+                        { Icon(Icons.Default.Check, contentDescription = null) }
+                    } else null,
+                    onClick = {
+                        onPick(option.quality)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Streaming | Download: which quality settings the section shows. Two
+ * choices, not on and off, so the switch keeps its colour in both positions
+ * and the chosen side's label is the one lit.
+ */
+@Composable
+private fun QualityModeSwitch(download: Boolean, onChange: (Boolean) -> Unit) {
+    val primary = MaterialTheme.colorScheme.primary
+    val onPrimary = MaterialTheme.colorScheme.onPrimary
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val streamLabel = stringResource(R.string.streaming)
+    val downloadLabel = stringResource(R.string.action_download)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = streamLabel,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (download) FontWeight.Normal else FontWeight.SemiBold,
+            color = if (download) muted else primary,
+            modifier = Modifier.clickable { onChange(false) }.padding(4.dp),
+        )
+        Switch(
+            checked = download,
+            onCheckedChange = onChange,
+            // A thumb always full size, as Material draws a checked one.
+            thumbContent = { Spacer(Modifier.size(androidx.compose.material3.SwitchDefaults.IconSize)) },
+            colors = androidx.compose.material3.SwitchDefaults.colors(
+                checkedThumbColor = onPrimary,
+                checkedTrackColor = primary,
+                checkedBorderColor = primary,
+                uncheckedThumbColor = onPrimary,
+                uncheckedTrackColor = primary,
+                uncheckedBorderColor = primary,
+            ),
+            modifier = Modifier
+                .padding(horizontal = 6.dp)
+                .semantics { stateDescription = if (download) downloadLabel else streamLabel },
+        )
+        Text(
+            text = downloadLabel,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (download) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (download) primary else muted,
+            modifier = Modifier.clickable { onChange(true) }.padding(4.dp),
+        )
+    }
+}
+
+@Composable
 fun SettingItem(title: String, subtitle: String, onClick: (() -> Unit)? = null) {
     tf.monochrome.android.devedit.DevEditable("item_${devSlug(title)}", Modifier.fillMaxWidth()) {
         Column(
@@ -3382,6 +3445,8 @@ fun SettingSwitchItem(
     onCheckedChange: (Boolean) -> Unit,
     badge: String? = null,
     caution: String? = null,
+    /** Drawn after the title, like [badge]: a mark such as the Dolby Atmos pill. */
+    titleIcon: (@Composable () -> Unit)? = null,
 ) {
     // [badge] and [caution] sit beside and under the row rather than being folded
     // into [title] and [subtitle]: the title is the anchor id that settings search
@@ -3400,6 +3465,10 @@ fun SettingSwitchItem(
                         if (badge != null) {
                             Spacer(modifier = Modifier.width(6.dp))
                             SettingBadge(badge)
+                        }
+                        if (titleIcon != null) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            titleIcon()
                         }
                     }
                     Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -3593,6 +3662,14 @@ private fun LibrarySettingsTab(viewModel: SettingsViewModel) {
             Spacer(modifier = Modifier.width(8.dp))
             Text(if (isScanning) "Scanning…" else "Rescan Library Now")
         }
+
+        val titleFromFileName by viewModel.localTitleFromFileName.collectAsStateWithLifecycle()
+        SettingSwitchItem(
+            title = stringResource(R.string.settings_titles_from_file_names),
+            subtitle = stringResource(R.string.settings_titles_from_file_names_desc),
+            checked = titleFromFileName,
+            onCheckedChange = { viewModel.setLocalTitleFromFileName(it) }
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
         // This was one "Page Order" list over every page, back when pages were

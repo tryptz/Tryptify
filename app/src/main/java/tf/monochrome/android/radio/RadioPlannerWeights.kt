@@ -5,9 +5,13 @@ const val PLANNER_WEIGHT_MIN = 0.0f
 const val PLANNER_WEIGHT_MAX = 3.0f
 
 /**
- * User-editable weights radio ranks candidates with, from Settings › Radio.
- * `0.0` down-ranks a signal, `1.0` is neutral, values above `1.0` strengthen
- * it. Every one of these is scored on-device by [LocalRadioPlanner].
+ * The weights radio ranks candidates with. `0.0` down-ranks a signal, `1.0` is
+ * neutral, values above `1.0` strengthen it. Every one of these is scored
+ * on-device by [LocalRadioPlanner].
+ *
+ * Nobody edits these directly any more: Settings › Radio shows [RadioStyle],
+ * three dials and three switches, and writes them down as these weights. They
+ * stay the stored and synced form, so nothing about persistence changed.
  *
  * Three more used to live here — MetaBrainz metadata, ListenBrainz graph and
  * mood continuity — describing datasets that are not on the device. They were

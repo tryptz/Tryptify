@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
@@ -37,12 +38,16 @@ import androidx.compose.ui.res.stringResource
 import tf.monochrome.android.R
 
 /**
- * Compact tool row beneath the transport controls: Timer · Mixer/FX · Playlist.
- * (Monitoring + effect controls live in the pull-up "Audio tools" panel.)
+ * Compact tool row beneath the transport controls: Lyrics · Timer · Mixer/FX ·
+ * Playlist. (Monitoring + effect controls live in the pull-up "Audio tools"
+ * panel.) Lyrics lights while they are showing, as on the current player's
+ * dock: it used to be only in the Audio tools panel, two taps away.
  */
 @Composable
 fun LegacyPlayerActionDock(
     accent: Color,
+    lyricsActive: Boolean,
+    onLyrics: () -> Unit,
     onTimer: () -> Unit,
     onMixer: () -> Unit,
     onPlaylist: () -> Unit,
@@ -59,6 +64,7 @@ fun LegacyPlayerActionDock(
             .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
+        DockAction(Icons.Default.Lyrics, stringResource(R.string.mode_lyrics), accent, lyricsActive, onLyrics)
         DockAction(Icons.Default.Timer, stringResource(R.string.status_timer), accent, false, onTimer)
         DockAction(Icons.Default.Tune, stringResource(R.string.legacy_mixer_fx), accent, false, onMixer)
         DockAction(Icons.AutoMirrored.Filled.QueueMusic, stringResource(R.string.playlist), accent, false, onPlaylist)

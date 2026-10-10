@@ -1,12 +1,18 @@
 package tf.monochrome.android.ui.library
 
+import android.provider.DocumentsContract
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +25,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tf.monochrome.android.data.db.dao.DownloadDao
 import tf.monochrome.android.data.db.entity.DownloadedTrackEntity
+import tf.monochrome.android.data.downloads.SafPaths
+import tf.monochrome.android.data.local.db.LocalMediaDao
+import tf.monochrome.android.data.local.db.LocalTrackEntity
+import tf.monochrome.android.data.local.db.folderRangeEnd
+import tf.monochrome.android.data.local.scanner.MediaScanner
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.AudioCodec
 import tf.monochrome.android.domain.model.AudioQuality
@@ -47,34 +58,59 @@ class DownloadsViewModel @Inject constructor(
     private val appCtx: android.app.Application,
     private val downloadDao: DownloadDao,
     private val preferences: PreferencesManager,
+    private val localMediaDao: LocalMediaDao,
 ) : ViewModel() {
 
+    /** This user's own storage, for [SafPaths]: not /storage/emulated/0 in a work profile. */
+    @Suppress("DEPRECATION")
+    private val primaryRoot: String = android.os.Environment.getExternalStorageDirectory().path
+
     /**
-     * Combined view of downloads: every track tracked by Room
-     * (downloaded by this app) plus every audio file present in the
-     * user-selected SAF folder that the app didn't write itself
-     * (sideloaded files, prior installs, manual copies). Sideloaded
-     * files are surfaced as synthetic DownloadedTrackEntity rows so
-     * the rest of the screen — album grouping, tap-to-play, delete —
-     * works uniformly. The synthetic id is a stable hash of the URI
-     * so re-scans don't shuffle the list.
+     * Combined view of downloads: every track tracked by Room (downloaded by
+     * this app) plus every other audio file in the download folder
+     * (sideloaded files, prior installs, manual copies), as synthetic
+     * DownloadedTrackEntity rows so the rest of the screen — album grouping,
+     * tap-to-play, delete — works uniformly.
+     *
+     * The other files come from the local library, which has already scanned
+     * them with their tags, rather than from a walk of the SAF folder of its
+     * own: that walk took seconds, and the list waited for it. Both halves
+     * are Room queries, so the list arrives at once. Null until it does, so
+     * the screen does not claim there are no downloads while still looking.
      */
-    val downloadedTracks: StateFlow<List<DownloadedTrackEntity>> =
-        combine(
-            downloadDao.getDownloadedTracks(),
-            preferences.downloadFolderUri,
-        ) { roomRows, folderUri ->
-            val sideloaded = scanFolderForSideloadedTracks(folderUri, roomRows)
-            // Newest first overall; synthetic rows bias to file timestamp.
-            (roomRows + sideloaded).sortedByDescending { it.downloadedAt }
+    private val roomTracks = downloadDao.getDownloadedTracks()
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private val folderTracks: Flow<List<DownloadedTrackEntity>> =
+        preferences.downloadFolderUri
+            .map { folder -> folder?.let { SafPaths.absolutePath(it, primaryRoot) }?.trimEnd('/')?.plus('/') }
+            .distinctUntilChanged()
+            .flatMapLatest { prefix ->
+                // No folder picked: downloads are in app storage, which the
+                // local library does not scan, and nothing else is there.
+                if (prefix == null) flowOf(emptyList())
+                else localMediaDao.observeTracksUnder(prefix, folderRangeEnd(prefix))
+                    .map { rows -> rows.map { it.toDownloadedTrack() } }
+                    // Room re-runs the query on any write to the library, a
+                    // scan batch elsewhere included; the same rows again need
+                    // no re-sort or regroup below.
+                    .distinctUntilChanged()
+            }
+
+    val downloadedTracks: StateFlow<List<DownloadedTrackEntity>?> =
+        combine(roomTracks, folderTracks) { roomRows, folderRows ->
+            // A file this app downloaded is Room's row, not a second one.
+            val known = roomRows.mapTo(HashSet()) { SafPaths.absolutePath(it.filePath, primaryRoot) ?: it.filePath }
+            // Newest first overall; folder rows bias to file timestamp.
+            (roomRows + folderRows.filter { it.filePath !in known }).sortedByDescending { it.downloadedAt }
         }
-            .flowOn(Dispatchers.IO)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val albumGroups: StateFlow<List<DownloadedAlbumGroup>> =
         downloadedTracks
             .map { entities ->
-                entities
+                entities.orEmpty()
                     .groupBy { (it.albumTitle ?: SINGLES_LABEL) to it.artistName }
                     .map { (key, list) ->
                         val cover = list.firstNotNullOfOrNull { it.albumCover }
@@ -92,102 +128,30 @@ class DownloadsViewModel @Inject constructor(
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /**
-     * Walk the SAF tree the user picked as the download folder and surface
-     * any audio file not already represented in Room. Slow on large folders
-     * (DocumentFile.listFiles round-trips through ContentResolver), so we
-     * only run it from the combine() flow which is dispatched on IO.
-     */
-    private fun scanFolderForSideloadedTracks(
-        folderUriString: String?,
-        knownRoomRows: List<DownloadedTrackEntity>,
-    ): List<DownloadedTrackEntity> {
-        if (folderUriString.isNullOrBlank()) return emptyList()
-        val tree = runCatching {
-            DocumentFile.fromTreeUri(appCtx, folderUriString.toUri())
-        }.getOrNull() ?: return emptyList()
-        if (!tree.canRead()) return emptyList()
-
-        // First pass — collect everything once. listFiles() is the expensive
-        // call; iterating the local list afterwards is free.
-        val children = tree.listFiles().filter { it.isFile && it.canRead() }
-
-        // Folder-level art (cover.jpg / folder.png / albumart.webp). The
-        // TrackDownloader drops one of these alongside the audio so the system
-        // MediaScanner picks it up. We match by stem so any of the four
-        // common names work.
-        val folderArtUri = children
-            .firstOrNull { f ->
-                val n = f.name?.lowercase() ?: return@firstOrNull false
-                val stem = n.substringBeforeLast('.')
-                val ext = n.substringAfterLast('.', "")
-                stem in COVER_STEMS && ext in IMAGE_EXTENSIONS
-            }
-            ?.uri
-            ?.toString()
-
-        // Per-track sidecar art (e.g. "Artist - Title.jpg" next to
-        // "Artist - Title.flac"). Index by stem so the audio loop is O(n).
-        val sidecarArtByStem: Map<String, String> = children.asSequence()
-            .mapNotNull { f ->
-                val n = f.name ?: return@mapNotNull null
-                val ext = n.substringAfterLast('.', "").lowercase()
-                if (ext !in IMAGE_EXTENSIONS) return@mapNotNull null
-                val stem = n.substringBeforeLast('.')
-                if (stem.lowercase() in COVER_STEMS) return@mapNotNull null
-                stem to f.uri.toString()
-            }
-            .toMap()
-
-        val knownPaths = knownRoomRows.mapTo(HashSet()) { it.filePath }
-        val out = mutableListOf<DownloadedTrackEntity>()
-        for (file in children) {
-            val name = file.name ?: continue
-            if (!isAudioFile(name, file.type)) continue
-            val pathString = file.uri.toString()
-            if (pathString in knownPaths) continue
-            val stem = name.substringBeforeLast('.')
-            val cover = sidecarArtByStem[stem] ?: folderArtUri
-            out += syntheticEntityFor(file, pathString, name, cover)
-        }
-        return out
-    }
-
-    private fun isAudioFile(name: String, mime: String?): Boolean {
-        if (mime?.startsWith("audio/") == true) return true
-        val lower = name.lowercase()
-        return AUDIO_EXTENSIONS.any { lower.endsWith(".$it") }
-    }
-
-    private fun syntheticEntityFor(
-        file: DocumentFile,
-        path: String,
-        name: String,
-        coverUri: String?,
-    ): DownloadedTrackEntity {
-        // Filename convention written by TrackDownloader is
-        // "<artist> - <title>.<ext>" — try to recover the split, fall
-        // back to the bare name.
-        val withoutExt = name.substringBeforeLast('.', name)
-        val (artist, title) = withoutExt.split(" - ", limit = 2)
-            .let { if (it.size == 2) it[0] to it[1] else "" to withoutExt }
-        // Stable id derived from the URI so successive scans don't drift the
-        // LazyColumn keying. Always negative so it can't collide with a real
-        // catalog track id (those are positive Longs from TIDAL/Qobuz).
-        val syntheticId = -((path.hashCode().toLong() and 0x7FFFFFFFL) or 1L)
-        return DownloadedTrackEntity(
-            id = syntheticId,
-            title = title,
-            duration = 0,
-            artistName = artist,
-            albumTitle = null,
-            albumCover = coverUri,
-            filePath = path,
-            quality = AudioQuality.LOSSLESS.name,
-            sizeBytes = file.length(),
-            downloadedAt = file.lastModified().takeIf { it > 0 } ?: 0L,
-        )
-    }
+    /** A local-library track in the download folder, as a Downloads row. */
+    private fun LocalTrackEntity.toDownloadedTrack(): DownloadedTrackEntity = DownloadedTrackEntity(
+        // Stable id derived from the path so the list keeps its keys, and a
+        // queued "download_<id>" still finds the file after a rescan. Always
+        // negative so it can't collide with a real catalog track id (those
+        // are positive Longs from TIDAL/Qobuz).
+        id = pathId(filePath),
+        title = title ?: MediaScanner.titleFromPath(filePath),
+        duration = durationSeconds,
+        artistName = artist ?: albumArtist ?: "Unknown Artist",
+        albumTitle = album,
+        albumCover = artworkCacheKey,
+        filePath = filePath,
+        quality = when {
+            !codec.equals("FLAC", ignoreCase = true) && !codec.equals("ALAC", ignoreCase = true) -> AudioQuality.HIGH
+            (bitDepth ?: 16) > 16 -> AudioQuality.HI_RES
+            else -> AudioQuality.LOSSLESS
+        }.name,
+        sizeBytes = fileSizeBytes,
+        // MediaStore dates files in seconds; download rows in milliseconds.
+        downloadedAt = if (lastModified in 1 until 100_000_000_000L) lastModified * 1000 else lastModified,
+        isThxSpatialAudio = isThxSpatialAudio,
+        isDolbyAtmos = isDolbyAtmos,
+    )
 
     // One-shot user messages (e.g. a delete that couldn't remove the file).
     private val _messages = MutableSharedFlow<tf.monochrome.android.ui.components.UiText>(extraBufferCapacity = 4)
@@ -219,27 +183,53 @@ class DownloadsViewModel @Inject constructor(
                 }
             } else {
                 val file = File(track.filePath)
-                !file.exists() || file.delete()
+                !file.exists() || file.delete() || deleteThroughFolder(track.filePath)
             }
             // App-written downloads live in Room; sideloaded rows don't, so this
-            // is a harmless no-op for them (they leave once the file is gone).
+            // is a harmless no-op for them.
             downloadDao.deleteDownloadedTrack(track.id)
+            // The library's row for the file goes too. Nothing else prunes it
+            // until the next full scan, and the list is built from it: the
+            // deleted download came straight back, as a row with no file.
+            if (fileRemoved) {
+                val path = SafPaths.absolutePath(track.filePath, primaryRoot) ?: track.filePath
+                localMediaDao.deleteTracksByPaths(listOf(path))
+            }
             fileRemoved
         }
 
+    /**
+     * Deletes file [path] through the download folder's SAF grant. A file the
+     * app did not write is out of reach of File.delete on Android 11+, but the
+     * folder picked for downloads was granted with write access.
+     */
+    private suspend fun deleteThroughFolder(path: String): Boolean = runCatching {
+        val tree = preferences.downloadFolderUri.first()?.toUri() ?: return false
+        val documentId = SafPaths.documentIdOfPath(path, primaryRoot) ?: return false
+        DocumentsContract.deleteDocument(
+            appCtx.contentResolver,
+            DocumentsContract.buildDocumentUriUsingTree(tree, documentId),
+        )
+    }.getOrDefault(false)
+
     companion object {
         const val SINGLES_LABEL = "Singles"
-        // Lower-case extensions TrackDownloader may produce + the formats
-        // users typically sideload. Mime-type sniff still wins; this list
-        // catches files SAF reports without a type (common on some
-        // providers).
-        private val AUDIO_EXTENSIONS = setOf(
-            "flac", "alac", "mp3", "m4a", "aac", "ogg", "opus", "wav", "wma",
-        )
-        // Common folder-level cover filenames (see also Android's MediaScanner
-        // and most desktop tag editors). TrackDownloader writes "cover.jpg".
-        private val COVER_STEMS = setOf("cover", "folder", "albumart", "album")
-        private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
+
+        /**
+         * A negative id for a file the app did not record, from its path: 64
+         * bits of FNV-1a. The 31-bit String.hashCode it replaces left 2^30
+         * values, and a download folder of 20,000 tracks then had about a one
+         * in six chance of two rows with one key, which crashes the list.
+         */
+        internal fun pathId(path: String): Long {
+            var hash = -0x340d631b7bdddcdbL // FNV-1a 64-bit offset basis
+            for (byte in path.encodeToByteArray()) {
+                hash = hash xor (byte.toLong() and 0xFF)
+                hash *= 0x100000001b3L // FNV-1a 64-bit prime
+            }
+            // Clear the sign bit, then negate: never 0, never positive.
+            return -((hash and Long.MAX_VALUE) or 1L)
+        }
     }
 }
 
@@ -248,10 +238,12 @@ class DownloadsViewModel @Inject constructor(
 // label; ExoPlayer sniffs the actual container so these are advisory.
 fun DownloadedTrackEntity.toUnifiedTrack(): UnifiedTrack {
     val quality = runCatching { AudioQuality.valueOf(quality) }.getOrDefault(AudioQuality.LOSSLESS)
-    val (codec, sampleRate, bitDepth) = when (quality) {
-        AudioQuality.HI_RES -> Triple(AudioCodec.FLAC, 96_000, 24)
-        AudioQuality.LOSSLESS -> Triple(AudioCodec.FLAC, 44_100, 16)
-        AudioQuality.HIGH, AudioQuality.LOW -> Triple(AudioCodec.MP3, 44_100, null)
+    val (codec, sampleRate, bitDepth) = when {
+        // TIDAL's Atmos mix: E-AC-3 JOC at 48 kHz, whatever tier was asked for.
+        isDolbyAtmos -> Triple(AudioCodec.EAC3, 48_000, null)
+        quality == AudioQuality.HI_RES -> Triple(AudioCodec.FLAC, 96_000, 24)
+        quality == AudioQuality.LOSSLESS -> Triple(AudioCodec.FLAC, 44_100, 16)
+        else -> Triple(AudioCodec.MP3, 44_100, null)
     }
     return UnifiedTrack(
         id = "download_$id",
@@ -262,7 +254,9 @@ fun DownloadedTrackEntity.toUnifiedTrack(): UnifiedTrack {
         albumArtistName = artistName.takeIf { it.isNotBlank() },
         albumTitle = albumTitle,
         albumId = albumTitle?.let { "download_album_${it.hashCode()}" },
-        artworkUri = albumCover,
+        // The record keeps TIDAL's cover id, not a URL: handed over as it was,
+        // the notification and lock screen tried to open "/<id>" as a file.
+        artworkUri = albumCover?.let { tf.monochrome.android.domain.model.buildCoverUrl(it, 640) },
         source = PlaybackSource.LocalFile(
             filePath = filePath,
             codec = codec,
@@ -270,5 +264,6 @@ fun DownloadedTrackEntity.toUnifiedTrack(): UnifiedTrack {
             bitDepth = bitDepth,
         ),
         sourceType = SourceType.LOCAL,
+        isDolbyAtmos = isDolbyAtmos,
     )
 }

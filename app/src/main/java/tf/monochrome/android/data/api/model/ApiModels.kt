@@ -40,7 +40,11 @@ data class SearchItem(
     val description: String? = null,
     val creator: ApiPlaylistCreator? = null,
     val squareImage: String? = null,
-    val image: String? = null
+    val image: String? = null,
+    // Dolby Atmos: TIDAL lists "DOLBY_ATMOS" in audioModes and/or
+    // mediaMetadata.tags for items with an Atmos mix (see hasDolbyAtmos).
+    val audioModes: List<String>? = null,
+    val mediaMetadata: ApiMediaMetadata? = null
 )
 
 @Serializable
@@ -59,7 +63,11 @@ data class ApiTrack(
     val type: String? = "track",
     val streamStartDate: String? = null,
     @SerialName("isUnavailable")
-    val unavailable: Boolean? = null
+    val unavailable: Boolean? = null,
+    // Dolby Atmos: TIDAL lists "DOLBY_ATMOS" in audioModes and/or
+    // mediaMetadata.tags for items with an Atmos mix (see hasDolbyAtmos).
+    val audioModes: List<String>? = null,
+    val mediaMetadata: ApiMediaMetadata? = null
 )
 
 @Serializable
@@ -73,7 +81,11 @@ data class ApiAlbum(
     val cover: String? = null,
     val explicit: Boolean = false,
     val type: String? = null,
-    val duration: Int? = null
+    val duration: Int? = null,
+    // Dolby Atmos: TIDAL lists "DOLBY_ATMOS" in audioModes and/or
+    // mediaMetadata.tags for items with an Atmos mix (see hasDolbyAtmos).
+    val audioModes: List<String>? = null,
+    val mediaMetadata: ApiMediaMetadata? = null
 )
 
 @Serializable
@@ -103,7 +115,11 @@ data class AlbumResponse(
     val type: String? = null,
     val duration: Int? = null,
     val items: List<AlbumTrackItem>? = null,
-    val tracks: AlbumTracksWrapper? = null
+    val tracks: AlbumTracksWrapper? = null,
+    // Dolby Atmos: TIDAL lists "DOLBY_ATMOS" in audioModes and/or
+    // mediaMetadata.tags for items with an Atmos mix (see hasDolbyAtmos).
+    val audioModes: List<String>? = null,
+    val mediaMetadata: ApiMediaMetadata? = null
 )
 
 @Serializable
@@ -126,7 +142,11 @@ data class AlbumTrackItem(
     val audioQuality: String? = null,
     val explicit: Boolean = false,
     val popularity: Int? = null,
-    val item: ApiTrack? = null // Some API versions wrap in item
+    val item: ApiTrack? = null, // Some API versions wrap in item
+    // Dolby Atmos: TIDAL lists "DOLBY_ATMOS" in audioModes and/or
+    // mediaMetadata.tags for items with an Atmos mix (see hasDolbyAtmos).
+    val audioModes: List<String>? = null,
+    val mediaMetadata: ApiMediaMetadata? = null
 )
 
 @Serializable
@@ -151,7 +171,9 @@ data class ApiTracksWrapper(
 data class ArtistContentResponse(
     val items: List<ArtistContentItem>? = null,
     val albums: ApiAlbumsWrapper? = null,
-    val topTracks: ApiTracksWrapper? = null
+    val topTracks: ApiTracksWrapper? = null,
+    // hifi-api's /artist/?f= sends the top tracks here, as a bare list.
+    val tracks: List<ApiTrack>? = null
 )
 
 @Serializable
@@ -173,6 +195,7 @@ data class PlaylistResponse(
     val title: String = "",
     val description: String? = null,
     val numberOfTracks: Int? = null,
+    val numberOfVideos: Int? = null,
     val duration: Int? = null,
     val cover: String? = null,
     val squareImage: String? = null,
@@ -185,6 +208,8 @@ data class PlaylistResponse(
 @Serializable
 data class PlaylistTrackItem(
     val item: ApiTrack? = null,
+    // TIDAL marks each playlist entry "track" or "video".
+    val type: String? = null,
     // Some responses have flat track data
     val id: Long? = null,
     val title: String? = null,
@@ -194,7 +219,11 @@ data class PlaylistTrackItem(
     val album: ApiAlbum? = null,
     val trackNumber: Int? = null,
     val audioQuality: String? = null,
-    val explicit: Boolean? = null
+    val explicit: Boolean? = null,
+    // Dolby Atmos: TIDAL lists "DOLBY_ATMOS" in audioModes and/or
+    // mediaMetadata.tags for items with an Atmos mix (see hasDolbyAtmos).
+    val audioModes: List<String>? = null,
+    val mediaMetadata: ApiMediaMetadata? = null
 )
 
 @Serializable
@@ -267,3 +296,20 @@ data class ApiWrapper<T>(
     val data: T? = null,
     val version: String? = null
 )
+
+@Serializable
+data class ApiMediaMetadata(
+    val tags: List<String>? = null
+)
+
+/**
+ * Whether TIDAL lists a Dolby Atmos mix for an item: "DOLBY_ATMOS" in its
+ * audioModes or its mediaMetadata tags (TrypT HiFi's web UI checks the same
+ * two). Null when the item carries neither field, so "no Atmos" and "not
+ * said" stay apart.
+ */
+fun hasDolbyAtmos(audioModes: List<String>?, mediaMetadata: ApiMediaMetadata?): Boolean? {
+    if (audioModes == null && mediaMetadata?.tags == null) return null
+    return audioModes.orEmpty().contains("DOLBY_ATMOS") ||
+        mediaMetadata?.tags.orEmpty().contains("DOLBY_ATMOS")
+}

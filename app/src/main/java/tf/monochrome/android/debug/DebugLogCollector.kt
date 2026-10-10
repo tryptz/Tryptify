@@ -184,9 +184,17 @@ class DebugLogCollector @Inject constructor(
          * The codec one is Android 15's `getRequiredSystemResources` query
          * against a component that does not implement it. It is logged once per
          * MediaCodec the player creates, and playback is unaffected.
+         *
+         * The frame-rate one is Samsung's: One UI logs every
+         * `setRequestedFrameRate` call under the plain `View` tag, at INFO, and
+         * Compose makes one or two a frame. On a Galaxy A35 it was 820 of a
+         * 946-line log, and at that rate it pushes everything else out of the
+         * buffer in minutes. `View` itself stays: the platform's own view
+         * warnings come under it.
          */
         private val NOISE_MESSAGES = listOf(
             "Failed to query component interface for required system resources",
+            "setRequestedFrameRate frameRate=",
         )
     }
 }

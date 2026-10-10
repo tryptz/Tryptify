@@ -339,8 +339,6 @@ fun ArtistDetailScreen(
                         items(visibleTracks, key = { it.id }) { track ->
                             TrackItem(
                                 track = track,
-                                isLiked = favoriteTrackIds.contains(track.id),
-                                onLikeClick = { playerViewModel.toggleFavorite(track) },
                                 onClick = {
                                     if (selection.active) selection.toggle(track.id)
                                     else playerViewModel.playTrack(track, orderedTopTracks)

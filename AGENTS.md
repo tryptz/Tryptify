@@ -149,6 +149,28 @@ silenced, because nobody has verified generation on this combination yet.
 And regenerate the profile when startup or the first screens change shape: a
 stale profile is not wrong, only progressively less useful.
 
+## Sending files to the owner
+
+The file upload limit is 30 MiB per file, so anything over 30 MB (a release APK
+is about 87 MB) goes as **zip parts**, never as one file and never left
+undelivered:
+
+```
+zip -q -0 Tryptify-<version>-release.zip app-release.apk   # -0: an APK is already compressed
+split -b 29M -a 3 --numeric-suffixes=1 Tryptify-<version>-release.zip Tryptify-<version>-release.zip.
+```
+
+That gives `.zip.001`, `.zip.002`, … each under the limit. Prove the round trip
+before sending: `cat` the parts back together and `cmp` the result against the
+zip, `unzip -t` it, extract it and `cmp` the file against the original, and for
+an APK check the signer again with `apksigner`. Send every part in one go, and
+tell the owner to keep them in one folder and open the `.001` (ZArchiver or
+MiXplorer on Android, 7-Zip on Windows), or `cat *.zip.0* > joined.zip`.
+
+Do not use Info-ZIP's own split (`zip -s`, giving `.z01`, `.z02`, `.zip`). It
+failed that round trip here — the rejoined archive was corrupt and the APK in it
+was not the one built — and Android extractors handle it poorly anyway.
+
 ## Commits
 
 Author as `tryptz`. No co-author trailers and no tool attribution in commit

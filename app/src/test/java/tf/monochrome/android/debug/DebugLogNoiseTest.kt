@@ -50,6 +50,16 @@ class DebugLogNoiseTest {
     }
 
     @Test
+    fun `Samsung's per-frame frame rate line is dropped, other View lines are not`() {
+        assertTrue(
+            collector.isNoise(
+                line('I', "View", "setRequestedFrameRate frameRate=NaN, this=v2.s{203ccb3 VFED..... ......ID 0,0-1080,2340}")
+            )
+        )
+        assertFalse(collector.isNoise(line('W', "View", "requestLayout() improperly called by android.widget.TextView")))
+    }
+
+    @Test
     fun `a real native error under the same tag survives`() {
         // The reason the codec line is matched on its message and not its tag.
         assertFalse(collector.isNoise(line('E', "notrypt.android", "dlopen failed: library \"libfoo.so\" not found")))

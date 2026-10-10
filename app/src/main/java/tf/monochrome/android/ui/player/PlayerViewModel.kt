@@ -69,11 +69,11 @@ class PlayerViewModel @Inject constructor(
     private val projectMEngineRepository: ProjectMEngineRepository,
     private val unifiedTrackRegistry: tf.monochrome.android.player.UnifiedTrackRegistry,
     private val qobuzIdRegistry: tf.monochrome.android.data.api.QobuzIdRegistry,
-    private val apiClient: tf.monochrome.android.data.api.HiFiApiClient,
     private val trackShareHelper: tf.monochrome.android.share.TrackShareHelper,
     private val radioQueueManager: RadioQueueManager,
     val spectrumAnalyzer: SpectrumAnalyzerTap,
     private val bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController,
+    private val libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver,
     private val inflatorEffect: tf.monochrome.android.audio.dsp.oxford.InflatorEffect,
     private val compressorEffect: tf.monochrome.android.audio.dsp.oxford.CompressorEffect,
     private val crossfeedEffect: tf.monochrome.android.audio.dsp.crossfeed.CrossfeedEffect,
@@ -81,6 +81,7 @@ class PlayerViewModel @Inject constructor(
     private val playbackState: tf.monochrome.android.player.PlaybackStateRepository,
     private val bpmTap: tf.monochrome.android.audio.tempo.BpmTapProcessor,
     private val sourceConsent: tf.monochrome.android.player.SourceConsent,
+    private val audioPipelineMonitor: tf.monochrome.android.audio.pipeline.AudioPipelineMonitor,
 ) : ViewModel() {
 
     /**
@@ -187,6 +188,16 @@ class PlayerViewModel @Inject constructor(
     private val _isLyricsLoading = MutableStateFlow(false)
     val isLyricsLoading: StateFlow<Boolean> = _isLyricsLoading.asStateFlow()
 
+    /**
+     * The audio being decoded is E-AC-3, the codec that carries a Dolby Atmos
+     * mix. The player marks a track as playing in Atmos only then: a track
+     * TIDAL lists as Atmos still plays its stereo stream when its Atmos file
+     * cannot be had, and the mark used to claim Atmos regardless.
+     */
+    val decodingEac3: StateFlow<Boolean> = audioPipelineMonitor.stream
+        .map { tf.monochrome.android.domain.model.isEac3Codec(mimeType = it?.mimeType) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     // --- Parity Settings ---
     val visualizerSensitivity: StateFlow<Int> = preferences.visualizerSensitivity
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 50)
@@ -222,9 +233,9 @@ class PlayerViewModel @Inject constructor(
     val playerBlurredBackground: StateFlow<Boolean> = preferences.playerBlurredBackground
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val playerGlass: StateFlow<tf.monochrome.android.domain.model.PlayerGlassSettings> = preferences.playerGlass
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.PlayerGlassSettings.INITIAL)
     val miniPlayerGlass: StateFlow<tf.monochrome.android.domain.model.PlayerGlassSettings> = preferences.miniPlayerGlass
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.PlayerGlassSettings.DEFAULT)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.PlayerGlassSettings.INITIAL)
     val waveCandy: StateFlow<tf.monochrome.android.domain.model.WaveCandySettings> = preferences.waveCandy
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.WaveCandySettings.DEFAULT)
     fun setWaveCandy(settings: tf.monochrome.android.domain.model.WaveCandySettings) {
@@ -312,6 +323,15 @@ class PlayerViewModel @Inject constructor(
     // --- Playback Speed ---
     val playbackSpeed: StateFlow<Float> = preferences.playbackSpeed
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1.0f)
+
+    private val _liveSpeed = MutableStateFlow(1.0f)
+
+    /**
+     * The speed the player is running at, from the player itself rather than
+     * the saved setting — a BPM nudge bends it without touching the setting.
+     * Lyrics timing converts wall time to song time by it (see LyricClock).
+     */
+    val liveSpeed: StateFlow<Float> = _liveSpeed.asStateFlow()
 
     // When true, changing speed preserves the original pitch (tempo-only);
     // when false, pitch shifts with speed (vinyl-style). Applied by
@@ -441,6 +461,24 @@ class PlayerViewModel @Inject constructor(
     val volume: StateFlow<Float> = preferences.volume
         .map { it.toFloat() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1.0f)
+
+    // --- The USB DAC's own volume (exclusive output) ---
+    /** Whether a DAC is claimed for exclusive output, which is when its volume bar shows. */
+    val dacExclusive: StateFlow<Boolean> = libusbDriver.isOpen
+
+    /** The DAC level in dB, MIN_DB (muted) to 0; see BypassVolumeController. */
+    val dacLevelDb: StateFlow<Float> = bypassVolumeController.levelDb
+
+    /** A volume key moved the DAC level: the cue for the glass volume pop-up. */
+    val dacVolumeKeyPresses: kotlinx.coroutines.flow.SharedFlow<Unit> = bypassVolumeController.keyPresses
+
+    fun setDacLevelDb(db: Float) {
+        bypassVolumeController.setLevelDb(db)
+    }
+
+    fun setDacMuted(muted: Boolean) {
+        bypassVolumeController.setMuted(muted)
+    }
 
     // --- Global Favorites State ---
     val favoriteTrackIds: StateFlow<Set<Long>> = libraryRepository.getFavoriteTracks()
@@ -627,6 +665,10 @@ class PlayerViewModel @Inject constructor(
                 _isPlaying.value = isPlaying
             }
 
+            override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
+                _liveSpeed.value = playbackParameters.speed
+            }
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 _isBuffering.value = playbackState == Player.STATE_BUFFERING
                 syncState()
@@ -675,6 +717,7 @@ class PlayerViewModel @Inject constructor(
             if (mc.currentMediaItem == null && playbackState.pendingStart.value != null) return@let
             _durationMs.value = mc.duration.coerceAtLeast(0)
             _positionMs.value = mc.currentPosition.coerceAtLeast(0)
+            _liveSpeed.value = mc.playbackParameters.speed
         }
     }
 
@@ -692,9 +735,20 @@ class PlayerViewModel @Inject constructor(
                     _isPlaying.first { it }
                     continue
                 }
-                _positionMs.value = mc.currentPosition.coerceAtLeast(0)
+                val position = mc.currentPosition.coerceAtLeast(0)
+                _positionMs.value = position
                 _durationMs.value = mc.duration.coerceAtLeast(0)
-                delay(250) // 4 updates/sec for smooth progress
+                // 4 updates/sec for smooth progress, and sooner when a lyric
+                // word or line is due: a fixed 250 ms let the karaoke
+                // highlight move only in 250 ms × speed steps of the song.
+                delay(
+                    LyricClock.nextPollDelayMs(
+                        positionMs = position,
+                        speed = _liveSpeed.value,
+                        delayMs = lyricsFx.value.bluetoothDelayMs,
+                        lyrics = _currentLyrics.value,
+                    ),
+                )
             }
         }
     }
@@ -1339,35 +1393,6 @@ class PlayerViewModel @Inject constructor(
     val isCurrentTrackLocal: StateFlow<Boolean> = currentTrack
         .map { track -> track != null && isLocalTrack(track) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-
-    /**
-     * Resolve (and cache) the Apple adamId for whatever is playing, so the
-     * downloader already has an Apple source ready by the time the user taps
-     * download. Fire-and-forget: the result lands in QobuzIdRegistry and the
-     * lookup is skipped entirely once a track has been checked once.
-     */
-    private fun prefetchAppleId(track: Track) {
-        // A station is not in anyone's catalogue; searching Apple for its name
-        // and city is a request that can only miss.
-        if (track.appleId != null || isLocalTrack(track) || isLiveStreamTrack(track)) return
-        if (qobuzIdRegistry.hasAppleLookup(track.id)) return
-        viewModelScope.launch {
-            runCatching {
-                apiClient.findAppleIdFor(
-                    trackId = track.id,
-                    title = track.title,
-                    artist = track.displayArtist,
-                    durationSeconds = track.duration,
-                )
-            }
-        }
-    }
-
-    init {
-        viewModelScope.launch {
-            currentTrack.collect { track -> track?.let(::prefetchAppleId) }
-        }
-    }
 
     fun downloadTrack(track: Track) {
         // There is no file behind a live stream to download.

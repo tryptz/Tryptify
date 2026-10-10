@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 import tf.monochrome.android.data.db.entity.PlayEventEntity
 
@@ -26,9 +27,36 @@ interface PlayEventDao {
     @Query("DELETE FROM play_events")
     suspend fun clearAll()
 
-    /** Events not yet pushed to the cloud (cloudRowId IS NULL) — for pushAll. */
-    @Query("SELECT * FROM play_events WHERE cloudRowId IS NULL ORDER BY playedAt DESC LIMIT :limit")
-    suspend fun getUnsynced(limit: Int = 1000): List<PlayEventEntity>
+    /**
+     * Plays the cloud has never accepted, played before [before], in row order
+     * after [afterRowId]. Walking by row id means a backfill always moves on,
+     * even past a row it could not settle this time.
+     */
+    @Query(
+        "SELECT * FROM play_events WHERE cloudRowId IS NULL AND playedAt < :before " +
+            "AND rowId > :afterRowId ORDER BY rowId LIMIT :limit"
+    )
+    suspend fun getUnsyncedBatch(before: Long, afterRowId: Long, limit: Int): List<PlayEventEntity>
+
+    @Query("SELECT COUNT(*) FROM play_events WHERE cloudRowId = :cloudId")
+    suspend fun countWithCloudId(cloudId: Long): Int
+
+    @Query("DELETE FROM play_events WHERE rowId = :rowId")
+    suspend fun deleteRow(rowId: Long)
+
+    /**
+     * Ties a local play to the cloud row that already holds it.
+     *
+     * When another local row holds that cloud id already, this one is a
+     * duplicate of it: the upload landed, its reply was lost, and a later pull
+     * brought the cloud copy down as a second row. Dropping this one is what
+     * makes the stats count the play once. In one transaction, so a pull
+     * inserting the same id in between cannot trip the unique index.
+     */
+    @Transaction
+    suspend fun adoptCloudId(localId: Long, cloudId: Long) {
+        if (countWithCloudId(cloudId) > 0) deleteRow(localId) else setCloudId(localId, cloudId)
+    }
 
     // --- Totals ---
 

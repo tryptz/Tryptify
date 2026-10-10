@@ -37,6 +37,7 @@ class ChartsClient @Inject constructor(
         private const val LISTENBRAINZ_STATS_URL =
             "https://api.listenbrainz.org/1/stats/sitewide/recordings"
         private const val MUSICBRAINZ_ARTIST_URL = "https://musicbrainz.org/ws/2/artist"
+        private const val MUSICBRAINZ_RELEASE_GROUP_URL = "https://musicbrainz.org/ws/2/release-group"
 
         /**
          * MusicBrainz asks every client to identify itself and throttles those
@@ -134,6 +135,43 @@ class ChartsClient @Inject constructor(
     }
 
     /**
+     * What Last.fm knows of an artist that the galaxy's planets use: the
+     * opening of their bio, as plain text for a caption ([bioBlurb]), and
+     * their MusicBrainz id, which is how their catalogue is counted
+     * ([releaseGroupCount]). Null with no key or no such artist.
+     */
+    suspend fun artistInfo(artist: String, apiKey: String): ArtistInfo? {
+        if (apiKey.isBlank() || artist.isBlank()) return null
+        return runCatching {
+            val body = httpClient.get(LASTFM_API_URL) {
+                header("User-Agent", USER_AGENT)
+                parameter("method", "artist.getinfo")
+                parameter("artist", artist)
+                parameter("autocorrect", 1)
+                parameter("api_key", apiKey)
+                parameter("format", "json")
+            }.bodyAsText()
+            parseArtistInfo(body)
+        }.getOrNull()
+    }
+
+    /**
+     * How many release groups MusicBrainz lists for the artist [mbid] —
+     * albums, EPs and singles, each counted once however many editions it
+     * had: the size of their catalogue. Null when it cannot be asked.
+     * One request; the caller paces these ([MUSICBRAINZ_PACE_MS]).
+     */
+    suspend fun releaseGroupCount(mbid: String): Int? = runCatching {
+        val body = httpClient.get(MUSICBRAINZ_RELEASE_GROUP_URL) {
+            header("User-Agent", USER_AGENT)
+            parameter("artist", mbid)
+            parameter("limit", 1)
+            parameter("fmt", "json")
+        }.bodyAsText()
+        parseReleaseGroupCount(body)
+    }.getOrNull()
+
+    /**
      * The windowed half: what the world actually played inside a real time range.
      *
      * No genre filter and no authentication — the caller narrows it with
@@ -184,7 +222,8 @@ internal fun parseTagTopTracks(body: String): List<ChartEntry> =
                 title = title,
                 artistName = artist,
                 recordingMbid = track.mbid?.takeIf { it.isNotBlank() },
-                artworkUrl = track.image.orEmpty().lastOrNull { !it.text.isNullOrBlank() }?.text,
+                artworkUrl = track.image.orEmpty().lastOrNull { !it.text.isNullOrBlank() }?.text
+                    ?.takeUnless(::isLastFmPlaceholder),
             )
         }
 
@@ -197,6 +236,53 @@ internal fun parseArtistTopTags(body: String, minCount: Int = 3): List<String> =
     chartsJson.decodeFromString<LastFmArtistTags>(body).topTags?.tag.orEmpty()
         .filter { it.count >= minCount }
         .mapNotNull { it.name?.takeIf { name -> name.isNotBlank() } }
+
+/** An artist as Last.fm describes them: the opening of their bio, and their MusicBrainz id. */
+data class ArtistInfo(val bio: String?, val mbid: String?)
+
+internal fun parseArtistInfo(body: String): ArtistInfo? {
+    val artist = chartsJson.decodeFromString<LastFmArtistInfo>(body).artist ?: return null
+    return ArtistInfo(
+        bio = artist.bio?.summary?.let { bioBlurb(it) },
+        mbid = artist.mbid?.takeIf { it.isNotBlank() },
+    )
+}
+
+internal fun parseReleaseGroupCount(body: String): Int? =
+    chartsJson.decodeFromString<MusicBrainzReleaseGroups>(body).count
+
+/**
+ * Last.fm's bio summary as one or two whole sentences of plain text, at most
+ * [maxChars]: its "Read more on Last.fm" link, the tags and the entities gone.
+ * Null when nothing is left, or when it is a disambiguation note ("There are
+ * multiple artists with this name") rather than anyone's story.
+ */
+internal fun bioBlurb(summary: String, maxChars: Int = BIO_CHARS): String? {
+    val text = summary
+        .replace(Regex("<a [^>]*>\\s*Read more on Last\\.fm\\s*</a>\\.?", RegexOption.IGNORE_CASE), " ")
+        // Breaks and paragraphs part words; any other tag sits inside a sentence.
+        .replace(Regex("<(br|p|/p|div|/div)\\b[^>]*>", RegexOption.IGNORE_CASE), " ")
+        .replace(Regex("<[^>]+>"), "")
+        .replace("&quot;", "\"").replace("&#39;", "'").replace("&apos;", "'")
+        .replace("&lt;", "<").replace("&gt;", ">").replace("&nbsp;", " ").replace("&amp;", "&")
+        .replace(Regex("\\s+"), " ")
+        .replace(Regex(" ([,.;:!?])"), "$1")
+        .trim()
+    if (text.isEmpty()) return null
+    if (text.startsWith("There are", ignoreCase = true) && text.contains("artists", ignoreCase = true)) return null
+    val out = StringBuilder()
+    for (sentence in text.split(Regex("(?<=[.!?])\\s+"))) {
+        if (out.isNotEmpty() && out.length + 1 + sentence.length > maxChars) break
+        if (out.isNotEmpty()) out.append(' ')
+        out.append(sentence)
+        if (out.length >= maxChars) break
+    }
+    val blurb = out.toString()
+    return if (blurb.length <= maxChars) blurb else blurb.take(maxChars - 1).trimEnd() + "…"
+}
+
+/** About two lines of a planet's caption. */
+internal const val BIO_CHARS = 150
 
 internal fun parseSitewide(body: String): SitewideChart {
     val payload = chartsJson.decodeFromString<ListenBrainzStats>(body).payload
@@ -282,6 +368,18 @@ private data class LastFmTagList(val tag: List<LastFmTag> = emptyList())
 
 @Serializable
 private data class LastFmTag(val name: String? = null, val count: Int = 0)
+
+@Serializable
+private data class LastFmArtistInfo(val artist: LastFmArtistBioHolder? = null)
+
+@Serializable
+private data class LastFmArtistBioHolder(val bio: LastFmBio? = null, val mbid: String? = null)
+
+@Serializable
+private data class MusicBrainzReleaseGroups(@SerialName("release-group-count") val count: Int? = null)
+
+@Serializable
+private data class LastFmBio(val summary: String? = null)
 
 @Serializable
 private data class ListenBrainzStats(val payload: ListenBrainzPayload? = null)

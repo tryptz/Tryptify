@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+
+#### The mixer crashed on smaller screens
+- **Opening the mixer crashed on a Galaxy A35** with "ending radius must be > 0". A knob is drawn for 64 dp, but a row of them in an effect card squeezes each one narrower on a smaller screen, and the knob's body was its size minus fixed margins. At 30 dp or less that left a body of zero, and Android refuses to draw a round gradient of radius zero. Now the whole knob shrinks with the space it gets, margins, ticks and pointer included, so a small knob is a smaller knob, and the gradient is skipped if there's no body to draw. The send knob on the channel strips had the same pattern and the same guard now.
+- **Samsung's per-frame frame-rate lines are left out of the debug log.** One UI logs them one or two a frame. They were 820 of the 946 lines in the A35's log, and they push everything else out of the buffer.
+
 ### Removed
 
 #### The pane behind the Player tab's preview
@@ -9,7 +15,195 @@
 - **The real player has no pane there.** The transport and the dock are punched slabs floating straight over the artwork, and the invariants forbid a haze pane under one — an opaque frosted backdrop is exactly what flattens them. The preview was showing a construction that does not exist.
 - **It moved to the UI panels tab**, above the mini player, where the two faces of that one material — the floating sheet and the bar — are previewed together and both answer to the sliders under them.
 
+### Changed
+
+#### The genre galaxy does less GPU work for the same picture
+- **The god rays only work where light can land.** Each pixel of a ray pass used to take 32 samples toward its light. Now it takes only the ones near enough to the light to add anything, which is about half of them when you're out among the stars. A pixel that can't be reached at all takes none, and when a light is too far off screen to reach any pixel, its pass doesn't run. The rays look the same: the tests replay the shader both ways at the strongest settings and find no pixel that differs by as much as half a colour step.
+- **The smoke checks whether a pixel is in the gas disc before its noise.** Inside the hole's clearing, past the rim and out toward the horizon it was computing 12 noise lookups and then discarding them.
+- **The deep sky is kept as a picture.** It's redrawn when the camera turns, and 20 times a second for the twinkle. One twinkle takes about four seconds, so those steps can't be seen. Zooming, panning and the galaxy's slow turn no longer redraw it, so the sky shader stops re-running across the whole screen on every frame.
+- **The smoke is drawn 30 times a second while the map is at rest and no music is moving it.** It swirls over minutes. While you steer, or while the music drives it, it's drawn every frame as before.
+- **At rest, the map runs at 60 frames a second on a 120 Hz screen.** When nobody is touching it and nothing is flying, everything on it moves slowly, and 60 looks the same as 120. Touch it and it's back to the full rate immediately. Screens at 90 Hz or less are left alone.
+- **In full screen with nothing open, the galaxy draws straight to the display**, without the extra full-screen copy it keeps for the glass to read.
+- **Halo stars, core grains and nebulae off the screen are skipped** before they're drawn, like the dust and the stars already were.
+
+#### God rays for the other stars, and a Rays tab
+- **The biggest stars on screen shine god rays of their own now**, six by default and up to twelve. The dust in each star's glow casts fine dark streaks through its light, the way the planets and moons do round the star you're at. All of them share one extra half-resolution pass. Each pixel only works on the stars near it, so a pixel far from every star costs nothing. A star moving out of the few dims out gradually instead of switching off.
+- **A Rays tab in the Look sheet** holds the god rays switch and the new **Star rays** count, with **Ray strength** (how bright the light is), **Ray shade**, and two new sliders: **Bloom**, how strongly each light's glow blooms in its rays (none leaves only the white-hot middle), and **Ray length**, how far the shafts run before they fade. The black hole switch moved to Sky.
+
+#### Planet and moon size
+- **A new "Planet & moon size" slider under Stars**, from half to two and a half times the usual. Moons' orbits widen with their planet, so a bigger planet never swallows its moons. The planets' own orbits stay where their artists' heat put them. Taps, names, shadows and the zoom's stop short of a planet all follow the new size. Even at the top, a planet is under a third of its star across.
+
+#### Star size reaches the near stars too
+- **The Star size slider shrinks the stars close to the camera now.** Those stars sit at a size cap, and the cap only grew above 100 %, so at 78 % they looked the same as at 160 %. The cap and the smallest a far star is drawn at now both follow the slider. At 100 % nothing changes. The star you're at is its real sun size, which its planets are measured against, so the slider leaves it alone.
+
+#### No gap under the map's panels
+- **The Look sheet, the system sheet, the genre dock and the map's bottom buttons now sit right on the bar below them.** They used to leave room for the open bar (mini player stacked on the tabs) even while it was folded to one row, which left a tab bar's height of empty space under them. They follow the bar as it folds and opens.
+
+#### Lighter glass on the map (try it)
+- **A new switch in the map's Look sheet, under Stars: "Lighter glass".** With it on, the glass over the map, including the mini player and the tab bar, bends a half-size copy of what's behind it, which is much less work. The edges, the rim light and the punched glyphs stay sharp. It is off by default, so nothing changes until you try it. Compare it on your own screen and keep whichever looks right.
+
+#### The galaxy reports how its frames went
+- **While the map is open, the debug log gets one `GalaxyFx` line every five seconds** (Settings › Debug Log). Each line gives the frame rate, frame times for the main thread, the render thread and the GPU, how many frames missed their deadline, and how often each layer was drawn. It also estimates how many god-ray samples each pixel took. These numbers show whether a change helped.
+
+#### The genre galaxy runs smoothly
+The debug log showed frames of 0.7 to 0.9 s. The main thread recorded each frame in about 12 ms; the render thread then spent 100 to 740 ms issuing it. Nothing on screen changes with these fixes.
+- **The galaxy is rendered once a frame and reused by every pane of glass over it.** Each pill, chip, the mini player and the tab bar was making the render thread replay the whole galaxy to frost what's behind it: thousands of stars, grains and trail motes, and the light passes.
+- **No dashed path is drawn in software any more.** The timeline spiral, the way from "you are here" and the hearted rings were dashed with a path effect, which Android rasterises on the CPU and uploads every frame (the `writePixels` lines in the log). They are drawn as plain line segments now, with the dash rhythm carried along the spiral as before, and only on screen.
+- **The god rays are worked out at half the resolution.** Shafts of light have no finer detail, and it is a quarter of the pixels.
+- **Less work for the same dust.** A link gets as many motes as it is long on screen, so a short far link isn't 26 dots stacked on each other. Each mote's randomness is worked out once, not with six sines a frame. The swirl uses a fast sine accurate to a hundredth of a pixel. The dust that casts the fine rays is skipped before any maths when it's too far from the light to stand in it, and is drawn as square points, since only its shadow shows.
+- **Stars are drawn a family at a time**, so the GPU batches them by sprite instead of switching texture at nearly every star. They add, so the order changes nothing.
+
+#### A fourth glyph in the genre dock: its system
+- **Next to Play, Radio and Top 100, a glyph of three planets of different sizes** does what a long press on the star does: plays it and opens its planets as the system sheet. On a small phone the four pills narrow a little so the row still fits.
+- **The dock's glyphs are holes cut in the glass now, like the tab bar's**, not icons laid on top. The shader bevels each hole's edge and the frost shows through it, and the open Top 100 lights its glyph in the genre's colour, the way the current tab does. Where the shader doesn't run, they are ordinary icons.
+
+#### Every star lit, and slower, softer stardust
+- **Every star is lit, always.** Stars used to stay small and dim until you had listened to their genre ("still dark"), so most of the galaxy looked switched off. The legend keeps only the hearted ring.
+- **The star you are at is a sun as soon as you are near it**, with its glow and rays, without waiting for its planets. That is the one you selected, the one the camera is following, or the one whose system the camera is inside.
+- **Only planets and moons cast shadows**, plus the fine dust that makes the thin rays. Other stars and the nebulae no longer throw broad black beams across the map.
+- **The stardust along the links is dust now**: a soft band of fine motes that drifts slowly toward the newer genre and fades in and out, instead of a string of round beads. The comets travel at a slow, steady speed through space, so they no longer race across the screen when you are close in. The swirl and the sparkles slowed too. Links wholly off screen are skipped.
+
+#### The genre galaxy at real scale
+- **A star system is built from its star now.** A genre's star is as big as the genre is well known: a giant for the genres everyone knows, a dwarf for a niche. Its planets and orbits are laid out from it, so a big genre is a wide system and a small one a tight one.
+- **Planets are small beside their star**, 4 to 12 % of it across, and the star is drawn as a real sun disc at its size: white-hot in the middle, its family's colour at the limb, with an uneven corona that turns and breathes slowly. Planets used to be bigger than their star.
+- **A planet's distance from its star is how hot the artist is right now**: the hottest this week orbits nearest. The orbits are spaced by that, not evenly, and each leans its own way, so they cross instead of nesting as rings.
+- **A planet's size is its artist's catalogue**, counted on MusicBrainz. It is a log scale, so a debut EP is a small world and a long career a big one. The count is fetched once and cached. The planet grows to its size when the count arrives, without moving its orbit or its moons.
+- **You can zoom much closer**, onto a single planet and its moons, and a pinch stops before it flies into a star or a planet.
+
+#### Full screen on the genre galaxy
+- **Turn the phone on its side and the map goes full screen**: no title bar, dock, mini player, tab bar or status bar, only the galaxy to fly around. Turn it back and everything returns. A new button in the title bar does the same upright, and Back leaves.
+- **Long-press a star to play it.** Its music starts and its system opens as a short glass sheet (demo B). Each planet shows the artist's picture as a lit sphere, their name and the opening of their Last.fm bio, or where they stand in the chart when there is no bio. Their moons, the tracks, hang underneath on a dashed orbit line, and a tap plays one. The sheet is short: it hugs what it lists, each row is one line, and each planet's picture is sized like the planet.
+
+#### God rays from the bright star, with real shadows
+- **The rays come from one light**: the core, or the star whose planets you are visiting. Everything in its way casts a shadow through them, so each planet throws a dark shaft straight out from its star, and dust and gas break the light into fine rays. The old rays made every bright star a starburst and drew stripes round the core with nothing casting them.
+- **New "Shade rays" setting** in the galaxy's look, under Core, for how dark those shadows are.
+
+#### The galaxy's settings, condensed like the Visual Studio
+- **One tab per group** (Sky, Core, Motion, Music, Stars) with the Studio's own compact rows, so a group is a few rows and never a long scroll. Less, normal and more is a three-stop slider. On a small phone the tab names shrink to fit instead of being cut off.
+
+#### Text on glass reads on the glass
+- **Light text on dark glass, dark text on light glass**, worked out from the glass itself (its tint, its frost and what is behind it) rather than from the theme. This applies to every glass sheet, pill and chip, the mini player and the tab bar. The accent is nudged where it would vanish into the glass. On the galaxy the panes know they are over deep space, so a light theme no longer puts dark text on dark glass.
+
+#### Every phone size
+- **The galaxy's title bar keeps its title on a narrow phone or with large text.** The actions that don't fit go behind a ⋮ menu.
+- **The bottom panel fits too:** the Surprise button becomes its sparkle icon when room is short, and the legend wraps instead of cutting its last item off.
+
+#### Nothing heavy runs when you can't see it
+- **The galaxy stops completely** when the app is in the background, the phone is off, or another screen covers it. That covers its clock, every shader and its music tap.
+- **The same goes for work elsewhere that used to keep going in the background:** the ambient visualizer's render thread, the music-analysis taps (lyrics' bass pulse, EQ, Settings), the loudness meter, the tilt sensor behind the glass, and projectM's audio feed. The feed now runs only while a visualizer is actually on screen, not whenever the engine setting is on.
+
+### Fixed
+
+#### A selected glass chip swallowed its row
+- **In a row of chips the selected one stretched to the full width** and squeezed everything beside it: the galaxy's settings showed "Dust" one letter per line next to a full-width "Less". Its accent rim filled all the room it was offered. It now matches the chip.
+
+#### Real glass on every button and pill
+- **Every pill, chip and glass button is now the real glass, from the Visual Studio UI panels settings.** That covers the moods, the TIDAL · Qobuz · Deezer switch and the sort on Discover, the Settings tabs, the font filters, the presets, the EQ, search and stats filters, and the deck's buttons. They were drawing a slab at a tenth of the tint, which left the shader nothing to bevel. On screen it was the flat grey of the low-performance fallback, even on phones that run the real glass. Now each one is a small `GlassPanel`: the frost or live lens, then a solid slab the shader bevels and bends, with a rim as round as the pill. Move a UI panels slider and every pill follows. The player's own buttons keep the player's material.
+- **No stock Material chips are left.** Settings, the font browser, the Studio, the EQ, Search, Stats, Oxford, Crossfeed and the sleep timer all use the app's glass pill.
+- **Discover has no sky behind it now.** The starfield backdrop is gone. The page is plain, and its cards and pills are the UI panels glass over it.
+
+#### Swipe to discover's controls are in the mini player
+- **While the deck is up, the mini player stops showing the song and shows ✕ skip, undo and ♥ keep**, punched into its glass the way play and skip are, in the same place and at the same height. Swiping along the bar skips or keeps too. The bar was showing the same song as the card above it, with play and skip that fought the deck's own buttons. The round buttons under the card are gone, so the card gets the room. When the deck closes, the bar goes back to the track.
+
+#### Discover's pills and search bar match the rest of the app
+- **Every pill on Discover is the app's liquid glass** — the moods, the genre row, the genres you can subtract from a mix, the TIDAL · Qobuz · Deezer switch and the sort. They are `GlassChoiceChip`, the Library section switcher's pill, so they frost, swell under the finger and mark the selected one with an accent rim like everywhere else. The chip gained an optional icon (a tick on combined moods, a heart on hearted genres, a cross on subtractable ones) and an `enabled` flag; its existing uses are unchanged.
+- **The genre search bar is one slim row**, like every other glass search bar. It carried a second line ("Browse the map", and "no match"), which made it twice their height; the map is now a pill at the end of the genre row, and "no match" shows there too.
+
+#### The galaxy's links flow, the way time does
+- **The family links are starry, smoky trails now, not hard lines.** Each link swirls between its two genres in 3D and slowly undulates. Along it there is no line at all, only a scatter of stardust.
+- **A comet runs every link, always from the older genre to the newer one.** It has a bright star at its head, soft smoke in its family's colour that spreads and thins behind it, and sparkles twinkling in the smoke. The whole map visibly flows forward in time. A parent and child that began the same year flow parent to child.
+- **The comets never march in step:** each has its own phase.
+- **Still cheap.** It is drawn in one batch per family, with the smoke made from the family's own cloud sprite.
+
+#### Glass buttons no longer stay pressed
+- **A glass pill or button you tapped stayed half swollen.** That covered the genre map's glyph pills, every chip, the deck and the cards. The press animation's value was copied into the glass only when the button recomposed, and the animation never made it recompose. So the swell froze at whatever it was when your finger lifted. The old faint slab hid it; the solid glass showed it. The animation now writes into the glass itself every frame, so every press settles back.
+
+#### The genre galaxy's look, tuned on the map
+- **A tune button in the map's title bar opens a glass sheet**, in the dock's place, so every change shows on the galaxy as you make it. It has five groups:
+  - **Sky:** deep-sky stars, nebula strength, and dust (less, normal or more).
+  - **Core:** the black hole, the god rays, and ray strength.
+  - **Motion:** how fast the galaxy turns (down to still), twinkle, and travel blur.
+  - **Music:** gas and smoke with its amount, and whether it reacts to music, with the reaction strength.
+  - **Stars:** star size, how many names (fewer, normal or more), and planets and moons.
+- **Reset puts it back as it ships.** The defaults are the galaxy exactly as it was, so nothing changes until you change it.
+- **Your look is kept.** It is stored like the app's other settings and clamped when read back.
+- **Low-performance mode still has the last word.** It keeps the heavy effects off, and the sheet says so.
+- **Back closes the sheet first.**
+
+#### The genre galaxy: a black hole, lit planets, music in the gas, and pills instead of the panel
+- **A black hole at the middle**, as it is usually pictured since Interstellar. A black shadow, a thin bright photon ring, and an accretion disk lying in the galaxy's plane: white-hot inside, orange, then a dull red at the rim. The disk passes in front of the hole below and behind it above, its far side bends up over the top, and the side turning toward you is brighter. The god rays now come off the disk and the ring. The flat map already had a hole in the middle (its nearest genre is 423 units out), and the timeline now starts outside the disk.
+- **Shaped like the Milky Way.** A thin disc, a puffed nuclear bulge round the hole, and a halo of old stars with nine globular clusters. In the timeline the twelve families wind as four arms of three, side by side in their colours, about a full turn.
+- **Planets with light.** Each body is lit by its star: a shadow that never goes fully black, a highlight and rim in the star's colour, a faint bounce on the night side in the galaxy's colour, and a glow of atmosphere. A planet between you and its star is a crescent, one beside it half lit. It is all baked once, so a frame is three bitmap draws per body. Last.fm's grey star picture, which it serves for most tracks now, is no longer used as a planet's cover or a chart row's art, so a planet without real art wears its own colours.
+- **Gas that moves with the music.** An original shader for this map, written the way a MilkDrop preset is: smoke in the galaxy's plane that swirls toward the middle, read against bass, mid and treble the way MilkDrop reads them, each against the song's own running average. Mid stirs the smoke, bass makes the black hole light the gas near it warm and sends ripples out across the disc (and brightens the hole and its rays), and treble glints in the thickest gas. A steady passage rests; only what runs above the song's usual level moves anything. It runs on the map's canvas at a third of the resolution, never on a GL surface, so the glass still frosts it. Off in low-performance mode; still with reduced motion; the spectrum tap runs only while the map is up.
+- **Pills, not a panel.** The panel that covered half the map is gone. Selecting a genre pops up, one after another, up to three pills of genres next to it, by name, and three glyph pills of glass: Play, Radio and Top 100. The Top 100 and the history open as a compact glass sheet above them, one at a time. The title is the genre's name, with its family, tempo and year under it. Keep and history are in the top bar. A tap on empty space, or Back, puts the genre away. The breadcrumb path and Explore in Discover went with the panel.
+
+#### The genre map is a 3D galaxy you can fly through
+- **All 771 genres are stars in 3D**, with a warm core, a nebula behind each family, dust and far stars. One finger orbits, two pinch and pan. On Android 13 and up, the core and the brightest stars shine through the lyrics' god rays.
+- **A deep sky behind it, as in the demo.** On Android 13 and up, a shader draws the space and thousands of far stars, faint to bright, blue-white, each twinkling on its own, the bright ones with a soft bloom. It is a real sky: the stars hold still while the galaxy turns and only move when you turn the camera.
+- **The galaxy turns.** The whole disc rotates slowly on its axis, about once every three and a half minutes, with its arms trailing as a real galaxy's do. A star you are looking at turns with it, and the camera stays on it.
+- **Two layouts, and the stars glide between them.** *Galaxy* is the map's own layout as a disc: twelve families, neighbours by what they share. *Timeline* is a spiral galaxy: the oldest music at the core, the newest at the rim, one arm per family. The timeline itself is a spiral: a dashed track winds out between the arms at their own pitch, with 1600, 1900, 1950, 1980, 2000 and 2020 marked along it, so time reads outwards along any arm. Switching layouts reframes the view so the whole spiral fits.
+- **Tapping a star travels there.** The camera glides, pulling back on long trips so you see where you are heading, with a light blur while it moves. Touching the map takes the controls back. Tap the selected star again to go back to it after looking around.
+- **Planets and moons.** The genre you stop on gets a solar system from its chart. Its most-played artists are planets, the most popular nearest and biggest, each wearing its cover when the chart has one. Their charted tracks are moons. Tap a planet to fly in close enough to read its moons, and tap a moon to play that track. The chart is fetched only once you have stayed on a genre for a moment, so flying past genres costs nothing.
+- **Sized right on every screen.** Everything is in dp and centred in the part of the screen the panels leave visible. The old map sized its dots and lines in raw pixels, so they came out a third of the size on a phone. Names never land under the title or the panels.
+- **The genre panel stays below the title bar.** With Top 100 open it used to grow up under the status bar, where tapping its close button pulled down the notifications. It now stops a strip of map short of the title, keeps its top row (path, history, heart, close) fixed, scrolls the rest, and scrolls to the chart when you open it.
+- **Your galaxy lights up as you listen.** Genres you have opened or played burn brighter. Hearted genres carry a dashed ring. "You are here" is a warm diamond with its name, and a dashed line runs from it to the genre you have selected.
+- **Controls you can read.** The bar keeps Surprise me and Recentre. Collapse, expand, dot size and constellations are gone: they belonged to the flat map. With no genre open, a glass bar at the bottom holds Galaxy / Timeline, how many of the 771 genres you have explored, a legend, and Surprise me. The caption under the title says what a star's size and place mean in each layout.
+- **The genre panel is the app's glass.** It carried its own older copy of the glass, without the lens corner every other pane bends with. It is now the shared `GlassPanel`, still in the Visual Studio UI panels material. It shows where the genre sits ("Electronic › Trance ›", each step tappable), and its facts line is translated instead of hard-coded English.
+- **Lighter where it needs to be.** Low-performance mode drops the sky shader (for a flat sky with drawn stars), the god rays, the blur, the twinkle and the turn, and uses less dust. Reduced motion holds the galaxy still and jumps instead of gliding.
+- `GalaxyScene` (both layouts, the dust and the core) and `PlanetSystem` (artists into planets, tracks into moons) are pure and seeded. `GalaxyMathTest` and `PlanetSystemTest` check them, and `GenreGalaxyTest` checks Surprise me and You are here.
+
+#### Radio settings, rebuilt to make sense
+- **A style, three dials and three switches, instead of eleven 0–3 sliders.** Pick Familiar, Balanced or Adventurous; the dials say what each end means ("Songs you know … Songs you haven't heard", "Its artist and close peers … Further out", "Loose … Same genre and era") instead of showing a number; the switches are Prefer my library, Avoid songs I just heard and Prefer original versions. Moving a dial off a preset shows "Custom mix"; a preset keeps your switches.
+- **Why the old sliders went.** "Qobuz" moved nothing (every candidate on a Qobuz station is a Qobuz track, so all got the same bonus). Novelty and Familiarity only ever mattered by their difference, and Artist similarity and Discovery distance were exact mirrors that cancelled out at their defaults: two settings split into four sliders. "Discovery expansion" boosted the starting song's own artist search, so turning it up gave more of the same artist; it now rides the far-from-the-song dial, high at the close end and gone at the far end.
+- **Nothing changes for a station nobody tuned.** `RadioStyle` is a view of the same `RadioPlannerWeights`, still stored and synced under the same keys. Balanced is exactly the shipped defaults, `RadioStyleTest` proves the ranking of a fixed station is identical, and that Familiar and Adventurous move it the way their names say. Settings made with the old sliders are read back by what they did.
+- **Genre and era say when they can't help:** they need the starting song's genre and year, which songs from playlists often don't carry, and the dial now says so.
+
 ### Added
+
+#### Release radar
+- **A row near the top of "For you": new releases from the artists you play,** with a count of how many are new and a NEW badge on each one out since your last visit (the last two weeks on a first visit). It reads the discographies of your dozen most-played artists on the service the Discover switch is on, keeps the last 60 days, and opens the album on tap.
+- **Right about "new" and "by this artist".** Nothing dated in the future (a pre-order isn't out) and nothing dated by year alone. A compilation credited to someone else ("Various Artists") is not a new release from an artist who appears on it, while a joint credit ("Push & Ferry Corsten") is. Deluxe, explicit and remastered editions of one release count once. `ReleaseRadar` holds the rules and `ReleaseRadarTest` checks them.
+- **Never in the first shelf's way.** It loads after the feed's first page, asks three artists at a time with a budget each, and keeps the answer for six hours per service, on disk too, so reopening Discover doesn't ask again. An answer from a service that couldn't be reached isn't kept, so "offline on the train" never reads as "nothing new". Pull to refresh asks again. With nothing new, the row isn't shown at all.
+
+#### Swipe to discover
+- **A stack of 15 songs a day, one card at a time: right keeps it, left skips it.** It opens from a card at the top of "For you", which shows how far through today's stack you are. It is a screen of its own because a sideways swipe on a Discover page already changes the page.
+- **Dealt from three places, in turn:** today's discovery genre, the genres next door to yours, and artists placed next to the ones you play. Everything comes from the service the Discover switch is on. No song you have liked or skipped in the last 30 days, no song twice (matched by artist and title, so the same recording on another service counts), and never one artist on two cards in a row while there is anyone else to put between them. `SwipeDeck` holds those rules and `SwipeDeckTest` checks them.
+- **Each card plays as it comes up, from about a third of the way in**, past the intro. The seek waits until the player reports this song with a length that matches the card, so it never seeks the previous song, and a 30-second preview plays from the start.
+- **Keeping hearts the song,** so it lands in Liked songs, and liked songs are what the feed and tomorrow's stack are seeded from. Undo takes back the last swipe, including a heart the deck added (never one you already had). The card moves the instant you swipe; the save follows.
+- **The end of the stack** shows what you kept, saves it as a playlist if you want ("Kept from Discover · date"), deals another round from further down the same sources, or takes you back.
+- **The stack, your place in it and your skips are kept in a file of their own,** so leaving halfway resumes on the same card, and swiping never rewrites the whole settings file.
+- **Glass from Visual Studio:** the info panel and the round Skip, Undo and Keep buttons are the UI panels material, frosting the card's own cover behind the screen. The KEEP and SKIP stamps fade in while drawing only, so dragging a card does not recompose it every frame.
+
+#### Discover: choose TIDAL, Qobuz or Deezer
+- **A three-way switch at the top of the feed picks the service Discover finds its music on.** Every shelf, genre chart, genre play, Top 100 and today's pick follows it. Discover was Qobuz-only all the way down; `DiscoveryCatalog` is now the one place it searches, opens artists and albums, and tags tracks to play from the service they were found on, so a Qobuz id is never played as the TIDAL track with the same number.
+- **A service with no server under Settings › Connections is shown, disabled.** If the chosen one loses its server, the switch says what is missing instead of the page quietly going empty, and the empty-page message names the chosen service rather than always saying Qobuz.
+- **Deezer says what it does.** Its tracks play from Qobuz when Qobuz has the recording and as 30-second previews when it doesn't, and the switch shows that note when Deezer is picked. Deezer publishes no similar-artists list, so "Because you play…" artist rows come up short there rather than borrowing another service's artists, whose ids would open nothing.
+- **Switching back is instant.** Built pages are filed per service, and chart matches and artist top tracks are cached per service, in memory and on disk. Qobuz keeps the cache keys it had, so nothing saved before the switch existed is thrown away.
+
+#### Discover, rebuilt around today
+- **Today's discovery heads "For you".** One genre, picked for you and kept all day: a neighbour of the genres you heart and play, within two steps on the genre graph and over a strong link, that you have not been to yet. The card names the genres it sits beside, or says the pick is somewhere new when it is not near any of them, so it never claims a link that isn't there. Play, Radio, keep it in your genres, or open it on the map. It changes at midnight, never twice in a row, and playing it does not swap it out: the day's pick is stored, because it was picked from the genres you had not explored yet. `DailyDiscovery` does the picking; `DailyDiscoveryTest` checks it against the real graph.
+- **Your genre galaxy.** A card with the whole genre map as stars, the genres you have explored lit in their family's colour, today's pick ringed as the next to light, and a count of how many of the 771 you have been to. Upgrading counts the recent genres you already had, so nobody starts at zero. Tap it to open the map on today's pick.
+- **The genre of the day**, with the start of its history from the researched Wikipedia text, credited and linked as the map's panel does. Drawn from documented genres three steps out from yours when there are enough, and from the best-known ones otherwise. "Read the history" opens the map on it with the history already expanded. The history file loads only when this card is on screen, never at startup.
+- **The page has a sky.** The genre map, drawn as a starfield in the colour of today's genre, sits behind the page and drifts up as the feed scrolls. The cards are the app's glass in the UI panels material from Visual Studio, frosting that sky as a sibling haze source. "Remove liquid glass" flattens them like everything else.
+- **Less pinned above the feed.** The sort control scrolls with the feed, and the Genre map and World radio buttons became cards between the shelves, so the first shelf starts a row higher. The mood and genre rails stay pinned.
+- **Play shows that it heard you.** Playing a genre waits on its chart, so the button shows a spinner until the music starts and ignores a second tap, which used to queue the genre twice.
+
+#### Glass cards scroll their list
+- **`GlassPanel` takes `blockTouchesBelow`.** Its backstop swallows touches the content does not want, which is right over a map (a stray tap would select the nearest genre) and wrong in a list: it swallowed drags too, so a swipe that started on a pane could not scroll the page. The font browser's preview and import panes, and Discover's cards, pass `false`; the maps are unchanged.
+
+#### A font browser
+- **Fonts has its own chip in Settings**, next to Appearance, and its page draws every font in its own letters. Appearance keeps a Font Library row that goes there. The old list was collapsed inside Appearance and drew every name in the current font, so nothing showed what a font looked like until it already was the whole interface. A tap now only previews — your own sample text, a song row, a heading, at any weight — and "Use" is what changes the app. Settings search for "font" lands there.
+- **Imports are checked before they are kept.** `FontFileInspector` reads the sfnt structure directly: a known signature, a table directory that fits in the file, and `head`, `cmap` and outlines (`glyf` or `CFF `/`CFF2`). Web fonts (WOFF/WOFF2) and Type 1 fonts are refused by name; a text file, a truncated font or a broken header as "not a font". The platform then has to load it too. The old importer copied whatever was picked and pasted `.ttf` on, so a wrong pick became an entry the app silently could not render.
+- **Several files at once, named by the font, never overwriting.** Each import is stored under the family it declares — its style too for a static cut, never the default instance of a variable one ("Fraunces", not "Fraunces Black") — and a name already taken gets the next number. The old importer kept the picker's file name, so a second "font.ttf" replaced the first; a font already in the library, by content, is now refused as a duplicate. The report says what was added and why anything was skipped.
+- **Glass from Visual Studio, like everywhere else.** The preview and import panes are `GlassPanel`s in the UI panels material (`LocalMiniPlayerGlass`) over the screen's own backdrop — a sibling haze source, never the app-wide one — and the cards are row glass. "Remove liquid glass" flattens them the same as the rest of the app.
+- **Deleting asks first**, and deleting the font in use returns the app to Inter before the file goes. An imported file that cannot be read stays listed, drawn in the default font, so it can be deleted rather than crash a render.
+
+#### Repair and Regenerate, on top of a playlist
+- **Repair relinks the songs whose id plays a different song.** A playlist row stores a bare number, and which catalogue it belongs to is remembered apart from it, in `QobuzIdRegistry`. Lose that — a playlist pulled from the cloud onto a new device — and a Qobuz or Deezer id plays as the TIDAL track with the same number, under this row's title. Repair searches each row's own catalogue for its title and artist: an id the search lists as this song is right; one it lists as another song is wrong; an unlisted TIDAL id is asked about directly (`/info/`). A wrong id whose own catalogue turns up elsewhere is put back without rewriting the row; otherwise the row takes the closest sure match.
+- **Regenerate finds every song again on a chosen service, with an optional fallback**, from the catalogues Settings › Connections serves (TIDAL, Qobuz, Deezer). A row already on the chosen service stays unless it is proven wrong; a song found on neither stays as it was.
+- **Matching is by title, artist and length, never a first hit.** `TrackMatcher` folds case, accents and punctuation, drops featured-artist credits, and reads versions both ways a catalogue writes them (`(Space Club Mix)`, ` — Radio Mix`). Two different versions are two different songs; labels that name no other recording (remaster years, "Original Mix", "Album Version") are ignored; a version shown on one side only — TIDAL's search results carry none — needs the lengths to agree within 3 s. A replacement's id must be known to its catalogue alone, or the player and the source tag could disagree about where it plays from.
+- **Downloaded songs, and songs a file on the device answers for, are never touched** — they play from disk whatever the id says, and rewriting one would detach it from its download. A row with no sure match is left, never removed, and listed in the summary.
+- **Rows keep their place and their sync.** `PlaylistDao.replacePlaylistTrack` rewrites a row at its position and date added; both keys go through the outbox (the old one's delete, the new one's upsert), so no pull brings a wrong id back. Each row is written under `NonCancellable`, so Stop never leaves one half-done. The job runs on `PlaylistFixer`'s own scope and outlives the screen.
 
 #### Deezer, from the trypt-hifi catalog
 - **Search asks the instance's Deezer routes alongside TIDAL and Qobuz**: `/api/deezer/get-music`, `get-album`, `get-artist` and `preview`, on whichever API serves them. They come back in the Qobuz envelopes, so search and album detail reuse the Qobuz decoding; only the artist payload (object-shaped `releases`, a string `id`) has its own model, `DeezerArtistEnvelope`, with `DeezerModelsTest` pinning real payloads.
@@ -152,6 +346,13 @@
 
 ### Changed
 
+#### Six glass themes tuned on device lead the roster, and Float is the starting look
+- **Float, Opal, Ripple, Glint, Blurred and Frosted Ripple** come first in `PlayerGlassSettings.PRESETS`, ahead of Clear, Tinted and Tilt. They are `TRYPTGLASS1` codes tuned on a phone, with the personal fields (`sampleRings`, `miniProgressBar`, `tintColor`, `previewBg`) left out, so applying one keeps the listener's own.
+- **`INITIAL` is `FLOAT`**: half a body of glass, a broad mirror shoulder and the deepest, softest shadow on the roster. Only a setting never saved, or reset, takes it. Like Clear before it, it is still, with no surface motion and no tilt, so the app-wide mini player runs no frame clock and holds no gravity sensor until the listener picks a theme that moves.
+- **Opal's surface motion is 0.** Its code carried 0.0069, too little to see, and anything above 0 runs a frame clock under the mini player on every screen.
+- **Ripple and Frosted Ripple move, and Glint and Blurred follow tilt**, because that is what those looks are; each costs the battery only while it is chosen.
+- **A light frost grain is allowed.** `no preset uses the frost grain` became `no preset uses more than a light frost grain`, capped at 0.15. Blurred carries 0.03 and Frosted Ripple 0.11, as tuned on device; the heavy grain that read as noise on the rim stays out.
+
 #### Search keeps its filter pills
 - **Home never handed the floating search bar's height to the results**, so the bar sat on the type and source pills. It is the list's top `contentPadding` now, as the Search bars invariant asks.
 - **The source row shows for every type** and filters albums and artists too, by catalog tags the view model records as results arrive, rather than disappearing on anything but Tracks.
@@ -167,6 +368,35 @@
 - Geometry is otherwise untouched: the bars, the triangle, the optical centre and the corner cut are the numbers the button already had, so both ends of the morph are the glyphs that shipped. `PlayPauseMorphTest` pins the seam shared exactly, the apex collapsed, the corner order held across the sweep, and the seam radius opening monotonically.
 
 ### Fixed
+
+#### Plays recorded in the background reach the account again
+- **Two in three play uploads were refused**, and every refused one carried the anon key rather than the listener's token. Supabase's edge log for one day: 123 `play_events` inserts and 126 `play_history` inserts answered 401 with `role = anon`, against 68 and 67 that went through signed in. None of the refused requests had an expired user token; they had no user token at all.
+- **The Supabase Kotlin client parks the session when the app leaves the foreground.** On Android its lifecycle observer stops the refresh job and sets the session status to `Initializing`, and `currentSessionOrNull()` answers null for any status but `Authenticated`. The request then falls back to the anon key, and the client's own expired-token check never runs, because there is no user token to check. Tryptify records plays from the playback service with the screen off, so that was most of them.
+- **`enableLifecycleCallbacks = false`** keeps the session and its refresh job alive for as long as the process is. A token that expires anyway, because the device slept through the scheduled refresh, is refreshed by the client before the next request that carries it.
+- **`requireValidSession = true` on Postgrest** makes a call with no session throw `SessionRequiredException` on the device instead of going out as anon. An anon insert at least failed loudly. An anon update or delete matches no rows under RLS and returns success, so a delete queued in `SyncOutbox` could be settled without having happened, and the next pull would bring the row back.
+- **Plays refused before this release go up by themselves.** They are still on the device with no cloud row id, and used to wait for somebody to press Sync now, so most never reached the account's stats. `LibraryRestoreCoordinator` now uploads them after its pull on every launch, through `SupabaseSyncRepository.uploadUnsyncedPlayEvents`, which Sync now uses too.
+- **Safe to repeat on every launch.** Each batch of 200 first asks which of its plays the cloud already holds, by track and millisecond (`matchPlays`, pinned by `PlayEventBackfillTest`), and adopts those rows: a play whose upload landed and whose reply was lost is not inserted twice. The rest go up in one bulk insert instead of one request per play. Plays from the last ten minutes are left to the push that follows the play, which they could otherwise race. A local row that duplicates a cloud row the device already holds — the cloud copy came down in a pull — is dropped, so stats count that play once.
+- **The bulk insert row has no defaults** (`SbPlayEventUpload`). A bulk insert names the union of every row's keys, and a row that leaves one out sends NULL for it; with `duration = 0` or `artist_name = ""` left out as defaults, the NOT NULL columns would refuse the whole batch.
+
+#### The track catalog fills for the first time
+- **`ensure_catalog_track` had answered 404 to every call it was ever sent.** PostgREST matches a body's top-level keys to the function's parameter names, and the function's one parameter is `p jsonb`; sent bare, the payload named a function with parameters `source`, `source_ref`, `title` and so on that does not exist. No play had a `track_uuid` and the catalog tables were empty. The payload now goes as `{"p": …}`.
+- **The function was rebuilt before it started taking writes**, as migration `catalog_unique_names_and_race_safe_ensure`. Its artist and album lookups compared `lower(name)` and `is not distinct from`, which no index could serve, so every miss would have scanned the whole shared catalog. Unique indexes on `lower(name)` and on `(primary_artist_id, lower(title))` make each lookup one probe and stop two calls creating the same artist or album twice; creating a new track is serialised per source key with a transaction-scoped advisory lock. All cost nothing to add while the tables were empty.
+- **A track played again skips the call**: resolved ids are kept per process, keyed by source and source ref.
+
+#### play_history is no longer written
+- **Nothing ever read it.** Every play inserted a row, and every Sync now inserted up to 500 more with no conflict key, so they piled up as duplicates. Its prune trigger, which ran on every insert, was a third of all the database time the app used, before it was rewritten to use its index. Every play still goes to `play_events`; the table and its rows stay, unwritten.
+
+#### One device row per install
+- **`DeviceRegistry` inserted a new `user_devices` row on every sign-in**, because the cached row id was cleared on sign-out and nothing else identified the install: 774 rows for 327 accounts, one with 87. A cached id whose row had gone was worse, because the update matched nothing and the dead id went onto every play.
+- **It now upserts on `(user_id, local_id)`**, where `local_id` is `DeviceIdProvider`'s per-install id, which already survived sign-out and already claimed to be this key. The column and its unique constraint went in first, as migration `user_devices_keyed_by_local_id`; older app versions send no `local_id`, and nulls never collide.
+
+#### Playlists restore in one paged request
+- **The launch restore fetched each playlist's tracks separately**, one round trip per playlist. It now asks for all of them together, 50 playlists to a request.
+- **Paged, because the server truncates silently.** PostgREST caps a response at 1,000 rows by default, and one account already holds 1,577 playlist tracks. Pages follow the primary key's order and continue until one comes back empty, so a lower cap cannot cut the list short either.
+
+#### The visualizer's preset was half of all API traffic
+- **`visualizer_preset_id` is no longer a synced setting.** It is the preset on screen, rewritten on every Next on the visualizer and every per-track rotation, and every rewrite was a full settings sync: a read of the account's settings row and a write of the whole thing. In one day that was 1,616 of about 3,650 requests to Supabase. Two accounts, both with the visualizer on, made 694 of the 737 writes, most of them 2–15 seconds apart.
+- **It stays on the device**, so the visualizer still opens on the last preset shown. Favourite presets and the rotation mode and interval still sync; those are the choices. A value already in the cloud is ignored on pull, because import only applies allow-listed keys.
 
 #### Recording a baseline profile no longer means cooking a phone
 - **`useConnectedDevices = true` was the only option**, so generating a profile meant running the app flat out on a handset for several minutes — five launches, three pages, a scroll and a search each — with the screen on the whole time. That is enough sustained load to heat a phone, which is a poor reason not to have a profile at all.

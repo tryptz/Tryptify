@@ -90,6 +90,9 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
     lateinit var systemAudioEqController: tf.monochrome.android.audio.eq.SystemAudioEqController
 
     @Inject
+    lateinit var outputEqSwitcher: tf.monochrome.android.audio.eq.OutputEqSwitcher
+
+    @Inject
     lateinit var settingsSyncCoordinator: tf.monochrome.android.data.sync.SettingsSyncCoordinator
 
     @Inject
@@ -103,7 +106,7 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
 
     // Providers, not `lateinit var`. Every field above is built by Hilt during
     // Application construction, on the startup path, before onCreate returns —
-    // eleven singletons and their graphs. These three exist only to be warmed
+    // twelve singletons and their graphs. These three exist only to be warmed
     // on a background coroutine, so field-injecting them would move their
     // construction cost onto the very path the warm-up is meant to clear. The
     // Provider is resolved inside the launch below instead.
@@ -115,6 +118,11 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
 
     @Inject
     lateinit var preferencesProvider: javax.inject.Provider<tf.monochrome.android.data.preferences.PreferencesManager>
+
+    // A Provider for the same reason as the three above: it is started on a
+    // background coroutine, so constructing it belongs there too.
+    @Inject
+    lateinit var libraryWatcher: javax.inject.Provider<tf.monochrome.android.data.local.watcher.LibraryWatcher>
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -193,6 +201,9 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
         // effect that applies the AutoEQ correction to all device audio. No-op
         // (and self-releasing) while the toggle is off or the device rejects it.
         systemAudioEqController.start()
+        // Per-device AutoEQ: switch to the preset assigned to an output when it
+        // connects, with the app in the background too.
+        outputEqSwitcher.start()
         // Restore auth on app start, then register this device against whichever
         // user is signed in. The collector re-fires on sign-in / sign-out.
         appScope.launch {
@@ -220,6 +231,12 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
         // start. This carries an existing install's art into filesDir, once.
         appScope.launch {
             runCatching { artworkStoreMigration.migrateIfNeeded() }
+        }
+        // The local library follows the files: songs added, deleted or moved
+        // show up without a rescan, including those that changed while the app
+        // was closed. Quiet, and nothing at all until there is a library.
+        appScope.launch {
+            libraryWatcher.get().start(appScope)
         }
         // Settings whose features are gone — Google and PocketBase sign-in, AI
         // radio, the API instance cache — are dropped from the store, once.

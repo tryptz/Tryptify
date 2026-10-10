@@ -210,13 +210,13 @@ class PlaybackService : MediaSessionService() {
             // setMediaSource paths below build their own sources and are not
             // tapped yet.
             .setMediaSourceFactory(atmosTapFactory)
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(C.USAGE_MEDIA)
-                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                    .build(),
-                /* handleAudioFocus = */ true
-            )
+            // Focus handling off until the preference has been read; the
+            // ignoreAudioFocus collector below turns it on a moment later for
+            // everyone who has not chosen to play alongside other apps. Built
+            // with it on, a cold start from a headset button took focus before
+            // the setting arrived, and the app that had it (a game) lost it
+            // for good: exactly what that setting exists to prevent.
+            .setAudioAttributes(musicAttributes, /* handleAudioFocus = */ false)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .setLoadControl(loadControl)
@@ -492,11 +492,27 @@ class PlaybackService : MediaSessionService() {
             queueManager = queueManager,
             onNext = ::skipToNext,
             onPrev = ::skipToPrevious,
+            // While a DAC is claimed the session's volume is the DAC level, so
+            // the hardware keys reach it with the app in the background too.
+            dacVolume = bypassVolumeController,
+            isExclusive = { bypassVolumeController.steersOutput(libusbDriver.isOpen.value) },
         )
         mediaSession = MediaSession.Builder(this, forwardingPlayer)
             .setSessionActivity(createSessionActivity())
             .setCallback(PlaybackResumptionCallback())
             .build()
+        // The session hears when the DAC is claimed or let go, or a stream
+        // goes to Android's output despite it, and when its level moves, so
+        // the system volume panel follows it. On the main thread, where the
+        // session listens.
+        serviceScope.launch {
+            combine(libusbDriver.isOpen, bypassVolumeController.dacCarriesStream) { open, carries -> open && carries }
+                .distinctUntilChanged()
+                .collect { forwardingPlayer.onExclusiveChanged() }
+        }
+        serviceScope.launch {
+            bypassVolumeController.levelDb.collect { forwardingPlayer.onDeviceVolumeChanged() }
+        }
 
         // Seamlessly apply playback speed when settings change
         serviceScope.launch {
@@ -609,6 +625,19 @@ class PlaybackService : MediaSessionService() {
         serviceScope.launch { preferences.dspEnabled.collect { dspEnabled = it } }
         serviceScope.launch { preferences.hiResHalOutputEnabled.collect { hiResHalEnabled = it } }
 
+        // "Play alongside other apps" (issue #131). With focus handling off the
+        // player never requests audio focus, so there is nothing for a game or
+        // a video to take away: both play at once, and Android 12's forced
+        // fade-out does not apply either, since it only acts on an app that
+        // was granted focus. Applied live — Media3 abandons or requests focus
+        // as the flag changes — and the focus-loss retry in
+        // onPlayWhenReadyChanged has nothing to react to while it is off.
+        serviceScope.launch {
+            preferences.ignoreAudioFocus.collect { ignore ->
+                player.setAudioAttributes(musicAttributes, /* handleAudioFocus = */ !ignore)
+            }
+        }
+
         // Blend length. Any non-zero value takes over from the gapless window,
         // so re-derive that whenever it changes.
         serviceScope.launch {
@@ -718,8 +747,8 @@ class PlaybackService : MediaSessionService() {
                     dspManager.restoreState()
                     hasRestored = true
                 } else if (ready && hasRestored) {
-                    // Re-apply on engine recreation (a track at a different
-                    // format rebuilds it). The manager reapplies from its own
+                    // Re-apply when the engine comes back after a format
+                    // change or a pipeline reset. The manager reapplies from its own
                     // live copy — reading the persisted state here rolled any
                     // edit made in the half second before the track change back
                     // to its previous value, and then saved it that way.
@@ -887,7 +916,11 @@ class PlaybackService : MediaSessionService() {
             override fun getCodecAdapterFactory():
                 androidx.media3.exoplayer.mediacodec.MediaCodecAdapter.Factory {
                 cachedImportanceFactory?.let { return it }
-                val wrapped = ImportanceMediaCodecAdapterFactory(super.getCodecAdapterFactory())
+                // SourceDepthMediaCodecAdapterFactory keeps 16-bit sources
+                // decoding to 16-bit, for the reason given on the class.
+                val wrapped = ImportanceMediaCodecAdapterFactory(
+                    SourceDepthMediaCodecAdapterFactory(super.getCodecAdapterFactory())
+                )
                 cachedImportanceFactory = wrapped
                 return wrapped
             }
@@ -1305,11 +1338,11 @@ class PlaybackService : MediaSessionService() {
                     val dataSourceFactory = DefaultDataSource.Factory(this@PlaybackService)
 
                     val source = if (trackStream.isDash) {
-                        // Create DASH source from MPD XML string
-                        val mpdUri = ("data:application/dash+xml;base64," +
-                            android.util.Base64.encodeToString(streamUrl.toByteArray(), android.util.Base64.NO_WRAP)).toUri()
+                        // The MPD XML inline as a data: URI, or an .mpd link
+                        // as it is: encoded, the link's own text would be read
+                        // as the manifest (see dashManifestUri).
                         DashMediaSource.Factory(dataSourceFactory)
-                            .createMediaSource(MediaItem.fromUri(mpdUri))
+                            .createMediaSource(MediaItem.fromUri(dashManifestUri(streamUrl).toUri()))
                     } else {
                         ProgressiveMediaSource.Factory(dataSourceFactory, tf.monochrome.android.audio.wav.TryptifyExtractors.factory)
                             .createMediaSource(mediaItem)
@@ -1484,8 +1517,17 @@ class PlaybackService : MediaSessionService() {
         bypassVolumeController.setVolume(effective)
     }
 
+    // Whether the stale-volume repair has run in this service (see
+    // PreferencesManager.resetLegacyBypassVolumeOnce): before the first read,
+    // so the first track does not play at the stale level.
+    @Volatile private var legacyVolumeChecked = false
+
     private fun applyVolume() {
         serviceScope.launch {
+            if (!legacyVolumeChecked) {
+                preferences.resetLegacyBypassVolumeOnce()
+                legacyVolumeChecked = true
+            }
             baseVolume = preferences.volume.first().toFloat()
             pushVolume()
         }
@@ -1519,6 +1561,13 @@ class PlaybackService : MediaSessionService() {
     @Volatile private var dspEnabled = false
     // Read by LibusbAudioSink on the playback thread at configure time.
     @Volatile private var hiResHalEnabled = true
+
+    // What the player is: music. Given again whenever the audio-focus
+    // preference changes, since Media3 takes the two together.
+    private val musicAttributes = AudioAttributes.Builder()
+        .setUsage(C.USAGE_MEDIA)
+        .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+        .build()
 
     // Type left inferred, like atmosTapFactory above: spelling CrossfadeController
     // out here is itself an opt-in usage that an @OptIn on the property doesn't

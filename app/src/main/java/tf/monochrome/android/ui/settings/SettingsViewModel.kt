@@ -4,7 +4,6 @@ import tf.monochrome.android.R
 import tf.monochrome.android.ui.components.UiText
 import android.content.Context
 import android.net.Uri
-import android.provider.OpenableColumns
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -30,6 +29,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.data.auth.AuthRepository
+import tf.monochrome.android.data.api.ApiService
+import tf.monochrome.android.data.api.ServiceQuality
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.auth.SupabaseAuthManager
 import tf.monochrome.android.data.sync.BackupManager
@@ -62,8 +63,16 @@ class SettingsViewModel @Inject constructor(
     private val scanCoordinator: tf.monochrome.android.data.local.scanner.ScanCoordinator,
     private val downloadDao: tf.monochrome.android.data.db.dao.DownloadDao,
     private val updateChecker: tf.monochrome.android.data.update.UpdateChecker,
+    private val crashLogger: tf.monochrome.android.debug.CrashLogger,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
+
+    /** Whether crashes are written to Downloads; see [tf.monochrome.android.debug.CrashLogger]. */
+    val saveCrashReports: StateFlow<Boolean> = crashLogger.saveReports
+
+    fun setSaveCrashReports(enabled: Boolean) {
+        crashLogger.setSaveReports(enabled)
+    }
 
     /** True while any library scan is running — lets Settings disable the
      *  "Rescan Library Now" button and show progress. */
@@ -253,10 +262,19 @@ class SettingsViewModel @Inject constructor(
     }
 
     // --- Audio ---
-    val wifiQuality: StateFlow<AudioQuality> = preferences.wifiQuality
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AudioQuality.HI_RES)
-    val cellularQuality: StateFlow<AudioQuality> = preferences.cellularQuality
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AudioQuality.HIGH)
+    /**
+     * Every service's quality, per setting (Wi-Fi, cellular, download). Each
+     * service streams and downloads in its own terms; see ServiceQuality.
+     */
+    val qualities: StateFlow<Map<Pair<ApiService, ServiceQuality.Setting>, AudioQuality>> =
+        combine(
+            ServiceQuality.services.flatMap { service ->
+                ServiceQuality.Setting.entries.map { setting ->
+                    preferences.quality(service, setting).map { (service to setting) to it }
+                }
+            }
+        ) { it.toMap() }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
     val normalizationEnabled: StateFlow<Boolean> = preferences.normalizationEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val systemWideAutoEqEnabled: StateFlow<Boolean> = preferences.systemWideAutoEqEnabled
@@ -273,6 +291,11 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     fun setHiResHalOutputEnabled(enabled: Boolean) { viewModelScope.launch {
         preferences.setHiResHalOutputEnabled(enabled)
+    } }
+    val ignoreAudioFocus: StateFlow<Boolean> = preferences.ignoreAudioFocus
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    fun setIgnoreAudioFocus(enabled: Boolean) { viewModelScope.launch {
+        preferences.setIgnoreAudioFocus(enabled)
     } }
     /** Human-readable name of the attached USB DAC, or null when nothing is plugged in. */
     val usbOutputDeviceName: StateFlow<String?> =
@@ -291,8 +314,6 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     // --- Downloads ---
-    val downloadQuality: StateFlow<AudioQuality> = preferences.downloadQuality
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AudioQuality.HI_RES)
     val downloadLyrics: StateFlow<Boolean> = preferences.downloadLyrics
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val downloadFolderUri: StateFlow<String?> = preferences.downloadFolderUri
@@ -410,28 +431,11 @@ class SettingsViewModel @Inject constructor(
     private val _cacheSize = MutableStateFlow("")
     val cacheSize: StateFlow<String> = _cacheSize.asStateFlow()
 
-    // --- Font Library ---
-    // Imported fonts, from filesDir/custom_fonts. The ten that ship in the APK
-    // are a separate, constant list (BundledFonts.ALL) — they can be selected
-    // but not deleted, so they don't belong in mutable state.
-    private val _availableFonts = MutableStateFlow<List<File>>(emptyList())
-    val availableFonts: StateFlow<List<File>> = _availableFonts.asStateFlow()
-
-    val bundledFonts: List<tf.monochrome.android.ui.theme.BundledFont> =
-        tf.monochrome.android.ui.theme.BundledFonts.ALL
+    // The font library lives in its own screen now (FontBrowserViewModel,
+    // over data/fonts/FontLibrary); this screen only names the active font.
 
     init {
         calculateCacheSize()
-        loadFonts()
-    }
-
-    private fun loadFonts() {
-        val fontsDir = File(appContext.filesDir, "custom_fonts")
-        if (fontsDir.exists()) {
-            _availableFonts.value = fontsDir.listFiles()?.filter { it.extension == "ttf" || it.extension == "otf" }?.toList() ?: emptyList()
-        } else {
-            _availableFonts.value = emptyList()
-        }
     }
 
     // --- Appearance actions ---
@@ -498,73 +502,6 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun importFont(uri: Uri) {
-        viewModelScope.launch {
-            try {
-                val fontsDir = File(appContext.filesDir, "custom_fonts")
-                fontsDir.mkdirs()
-                
-                var fileName = "font_${System.currentTimeMillis()}.ttf"
-                if (uri.scheme == "content") {
-                    appContext.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                        if (cursor.moveToFirst()) {
-                            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                            if (index != -1) {
-                                fileName = cursor.getString(index)
-                            }
-                        }
-                    }
-                }
-                // Ensure it ends with .ttf (or otf)
-                if (!fileName.lowercase().endsWith(".ttf") && !fileName.lowercase().endsWith(".otf")) {
-                    fileName += ".ttf"
-                }
-
-                val destFile = File(fontsDir, fileName)
-                appContext.contentResolver.openInputStream(uri)?.use { input ->
-                    destFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
-                loadFonts()
-                preferences.setCustomFontUri(destFile.absolutePath)
-                _messages.tryEmit(UiText.Res(R.string.settings_font_imported))
-            } catch (_: Exception) {
-                _messages.tryEmit(UiText.Res(R.string.settings_font_import_failed))
-            }
-        }
-    }
-
-    fun selectFont(file: File) {
-        viewModelScope.launch {
-            preferences.setCustomFontUri(file.absolutePath)
-        }
-    }
-
-    /** Select one of the fonts that ships in the APK. */
-    fun selectBundledFont(font: tf.monochrome.android.ui.theme.BundledFont) {
-        viewModelScope.launch {
-            preferences.setCustomFontUri(tf.monochrome.android.ui.theme.BundledFonts.idOf(font))
-        }
-    }
-
-    fun removeFont(file: File) {
-        viewModelScope.launch {
-            val currentActive = preferences.customFontUri.first()
-            if (file.absolutePath == currentActive) {
-                preferences.setCustomFontUri(null)
-            }
-            file.delete()
-            loadFonts()
-        }
-    }
-
-    fun resetDefaultFont() {
-        viewModelScope.launch {
-            preferences.setCustomFontUri(null)
-        }
-    }
-
     // --- Interface actions ---
     fun setGaplessPlayback(enabled: Boolean) { viewModelScope.launch { preferences.setGaplessPlayback(enabled) } }
     fun setShowExplicitBadges(enabled: Boolean) { viewModelScope.launch { preferences.setShowExplicitBadges(enabled) } }
@@ -583,8 +520,34 @@ class SettingsViewModel @Inject constructor(
     fun clearListenBrainzToken() { viewModelScope.launch { preferences.clearListenBrainzToken() } }
 
     // --- Audio actions ---
-    fun setWifiQuality(quality: AudioQuality) { viewModelScope.launch { preferences.setWifiQuality(quality) } }
-    fun setCellularQuality(quality: AudioQuality) { viewModelScope.launch { preferences.setCellularQuality(quality) } }
+    fun setQuality(service: ApiService, setting: ServiceQuality.Setting, quality: AudioQuality) {
+        viewModelScope.launch {
+            preferences.setQuality(service, setting, quality)
+            // A stereo tier picked for TIDAL downloads takes Dolby Atmos's place.
+            if (service == ApiService.TIDAL && setting == ServiceQuality.Setting.DOWNLOAD) {
+                preferences.setTidalDownloadAtmos(false)
+            }
+        }
+    }
+
+    /** TIDAL's download quality is Dolby Atmos (see PreferencesManager.tidalDownloadAtmos). */
+    val tidalDownloadAtmos: StateFlow<Boolean> = preferences.tidalDownloadAtmos
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    /** Dolby Atmos as TIDAL's download quality; tracks without an Atmos mix download as Hi-Res FLAC. */
+    fun pickTidalDownloadAtmos() {
+        viewModelScope.launch {
+            preferences.setQuality(ApiService.TIDAL, ServiceQuality.Setting.DOWNLOAD, AudioQuality.HI_RES)
+            preferences.setTidalDownloadAtmos(true)
+        }
+    }
+
+    /** TIDAL Dolby Atmos: TIDAL tracks with an Atmos mix play it instead of stereo. */
+    val tidalAtmosPreferred: StateFlow<Boolean> = preferences.tidalAtmosPreferred
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    fun setTidalAtmosPreferred(enabled: Boolean) {
+        viewModelScope.launch { preferences.setTidalAtmosPreferred(enabled) }
+    }
     fun setNormalizationEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setNormalizationEnabled(enabled) } }
     fun setSystemWideAutoEq(enabled: Boolean) { viewModelScope.launch { preferences.setSystemWideAutoEqEnabled(enabled) } }
     fun setDspBlockSize(value: Int) { viewModelScope.launch { preferences.setDspBlockSize(value) } }
@@ -611,7 +574,6 @@ class SettingsViewModel @Inject constructor(
     fun setPreservePitch(enabled: Boolean) { viewModelScope.launch { preferences.setPreservePitch(enabled) } }
 
     // --- Downloads actions ---
-    fun setDownloadQuality(quality: AudioQuality) { viewModelScope.launch { preferences.setDownloadQuality(quality) } }
     fun setDownloadLyrics(enabled: Boolean) { viewModelScope.launch { preferences.setDownloadLyrics(enabled) } }
     fun setDownloadFolderUri(uri: String?) { viewModelScope.launch { preferences.setDownloadFolderUri(uri) } }
 
@@ -818,10 +780,27 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferences.setAutoDownloadLikedSongs(enabled) }
     }
 
+    val localTitleFromFileName: StateFlow<Boolean> = preferences.localTitleFromFileName
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    /**
+     * Titles are written by the scanner, so the switch takes effect through a
+     * full scan. The scan is the coordinator's, not this screen's: it re-reads
+     * every file, and leaving Settings must not cut it off halfway.
+     */
+    fun setLocalTitleFromFileName(enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.setLocalTitleFromFileName(enabled)
+            scanCoordinator.requestFullScanAfterCurrent()
+        }
+    }
+
     fun rescanLibrary() {
         // Route through the shared ScanCoordinator (the same guard the Library
-        // tab uses), so the button actually scans instead of no-op'ing.
-        viewModelScope.launch { scanCoordinator.runFullScan() }
+        // tab uses), so the button actually scans instead of no-op'ing, and
+        // keeps scanning after the user leaves Settings. After the current scan
+        // rather than instead of it: a quiet library refresh may be running.
+        scanCoordinator.requestFullScanAfterCurrent()
     }
 
     // The library_tab_order surface that used to live here is gone: the flat page

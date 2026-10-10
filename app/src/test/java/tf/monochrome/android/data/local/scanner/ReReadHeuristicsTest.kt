@@ -1,5 +1,6 @@
 package tf.monochrome.android.data.local.scanner
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -76,5 +77,20 @@ class ReReadHeuristicsTest {
     fun `missing artist with plain title is skipped`() {
         val info = scanInfo(artist = null, title = "Just A Title")
         assertFalse(MediaScanner.needsReRead(info, 1_000L, artExists))
+    }
+
+    @Test
+    fun `file-name titles do not re-read an Artist - Title file name every scan`() {
+        val info = scanInfo(artist = null, title = "Artist - Title")
+        assertFalse(MediaScanner.needsReRead(info, 1_000L, artExists, titleFromFileName = true))
+    }
+
+    @Test
+    fun `title from path drops the folder and the extension only`() {
+        assertEquals(
+            "Vogel im Kafig OpenJoc SharurDM gain",
+            MediaScanner.titleFromPath("/storage/emulated/0/Music/Vogel im Kafig OpenJoc SharurDM gain.flac"),
+        )
+        assertEquals("v1.2 mix", MediaScanner.titleFromPath("/m/v1.2 mix.flac"))
     }
 }

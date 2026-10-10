@@ -69,9 +69,10 @@ fun ParametricEqEditScreen(
     val fftSize by viewModel.fftSize.collectAsStateWithLifecycle()
 
     val analyzer = viewModel.spectrumAnalyzer
-    DisposableEffect(Unit) {
+    // Only while the screen is started: not in the background, not with the phone off.
+    androidx.lifecycle.compose.LifecycleStartEffect(Unit) {
         analyzer.acquire()
-        onDispose { analyzer.release() }
+        onStopOrDispose { analyzer.release() }
     }
 
     var showSaveDialog by remember { mutableStateOf(false) }

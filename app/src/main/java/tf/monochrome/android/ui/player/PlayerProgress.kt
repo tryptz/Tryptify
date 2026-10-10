@@ -131,7 +131,12 @@ internal fun GlassProgressTube(
     onSeek: (Float) -> Unit,
     onSeekFinished: (Float) -> Unit,
     modifier: Modifier = Modifier,
+    /** What a screen reader calls the control; the seek bar's name unless it is something else. */
+    semanticsLabel: String? = null,
+    /** How a screen reader reads a position; a percentage unless given. */
+    stateText: ((Float) -> String)? = null,
 ) {
+    val label = semanticsLabel ?: stringResource(R.string.action_seek)
     var dragging by remember { mutableStateOf(false) }
     // The position the finger is currently over, committed on release. Held in a
     // MutableState so the pointerInput(Unit) closures (created once) read/write
@@ -150,10 +155,10 @@ internal fun GlassProgressTube(
             .fillMaxWidth()
             .height(34.dp)
             .adjustableSemantics(
-                label = stringResource(R.string.action_seek),
+                label = label,
                 value = frac,
                 range = 0f..1f,
-                stateText = { java.text.NumberFormat.getPercentInstance().format(it) },
+                stateText = stateText ?: { java.text.NumberFormat.getPercentInstance().format(it) },
                 onValueChange = { onSeek(it); onSeekFinished(it) },
             )
             .pointerInput(Unit) {
@@ -242,7 +247,7 @@ internal fun GlassProgressTube(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PlainSlider(
+internal fun PlainSlider(
     fraction: Float,
     tint: Color,
     onSeek: (Float) -> Unit,

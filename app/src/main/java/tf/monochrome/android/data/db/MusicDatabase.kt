@@ -74,7 +74,7 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         CollectionTrackArtistCrossRef::class,
         CollectionAlbumArtistCrossRef::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -231,6 +231,18 @@ abstract class MusicDatabase : RoomDatabase() {
                         "`queueJson` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, " +
                         "PRIMARY KEY(`id`))"
                 )
+            }
+        }
+
+        /**
+         * Adds the Dolby Atmos flag to downloaded tracks, so a download of
+         * TIDAL's Atmos mix keeps its badge offline. The same statement shape
+         * as MIGRATION_8_9's THX column: the entity field is a plain
+         * `Boolean = false`, which Room checks as INTEGER NOT NULL.
+         */
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE downloaded_tracks ADD COLUMN isDolbyAtmos INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

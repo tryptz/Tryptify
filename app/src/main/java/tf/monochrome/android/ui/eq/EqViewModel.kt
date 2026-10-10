@@ -54,8 +54,35 @@ internal const val IMPORTED_FILE_LABEL = "\u0000imported"
 class EqViewModel @Inject constructor(
     private val eqRepository: EqRepository,
     private val headphoneRepository: HeadphoneRepository,
-    private val preferences: PreferencesManager
+    private val preferences: PreferencesManager,
+    private val outputEqSwitcher: tf.monochrome.android.audio.eq.OutputEqSwitcher,
 ) : ViewModel() {
+
+    // ===== Per-device AutoEQ =====
+
+    /** Output key -> preset id; see OutputEq. */
+    val outputAssignments: StateFlow<Map<String, String>> = preferences.eqOutputAssignments
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** The named devices seen, for the assign sheet. */
+    val knownOutputs: StateFlow<List<tf.monochrome.android.audio.eq.OutputId>> = preferences.eqKnownOutputs
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** The output playing now, marked in the assign sheet. */
+    val currentOutput: StateFlow<tf.monochrome.android.audio.eq.OutputId?> = outputEqSwitcher.current
+
+    /**
+     * The assign sheet's OK: exactly [outputs] play [presetId] from now on. If
+     * the output playing now is among them, it switches at once.
+     */
+    fun assignPreset(presetId: String, outputs: Set<tf.monochrome.android.audio.eq.OutputId>) {
+        viewModelScope.launch {
+            preferences.updateEqOutputAssignments {
+                tf.monochrome.android.audio.eq.OutputEq.assign(it, presetId, outputs)
+            }
+            outputEqSwitcher.reapply()
+        }
+    }
 
     // ===== Tutorial State =====
 
@@ -281,6 +308,13 @@ class EqViewModel @Inject constructor(
             preferences.eqEnabled.collect { enabled ->
                 _eqEnabled.value = enabled
             }
+        }
+
+        // The output switched presets underneath an open screen: show the one
+        // now playing. Without this the screen kept the old bands, and the
+        // next edit wrote them back over the device's preset.
+        viewModelScope.launch {
+            outputEqSwitcher.applied.collect { presetId -> loadPreset(presetId) }
         }
 
         viewModelScope.launch {
@@ -974,6 +1008,10 @@ class EqViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 eqRepository.deletePreset(presetId)
+                // No output keeps playing a preset that is gone.
+                preferences.updateEqOutputAssignments {
+                    tf.monochrome.android.audio.eq.OutputEq.forget(it, presetId)
+                }
                 if (_activePreset.value?.id == presetId) {
                     _activePreset.value = null
                     _currentBands.value = emptyList()

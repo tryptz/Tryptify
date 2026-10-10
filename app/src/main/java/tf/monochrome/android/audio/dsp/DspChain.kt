@@ -188,7 +188,8 @@ class DspChain private constructor(
             return DspChain(
                 channelDetector = ChannelDetectorProcessor(),
                 downmix = DownmixProcessor(crossfeed, placement),
-                mixBus = MixBusProcessor(inflator, compressor, crossfeed),
+                // Nobody else holds this copy's engine, so reset() may free it.
+                mixBus = MixBusProcessor(inflator, compressor, crossfeed).apply { destroyEngineOnReset = true },
                 autoEq = AutoEqProcessor(),
                 parametricEq = ParametricEqProcessor(),
                 inflator = inflator,

@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.browser.customtabs.CustomTabsIntent
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.annotations.SupabaseExperimental
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.auth.CodeVerifierCache
 import io.github.jan.supabase.auth.FlowType
@@ -53,6 +54,7 @@ data class UserProfile(
 class SupabaseAuthManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    @OptIn(SupabaseExperimental::class)
     val supabase: SupabaseClient = createSupabaseClient(
         supabaseUrl = "https://lvzorvfhhopillzlwgau.supabase.co",
         supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx2em9ydmZoaG9waWxsemx3Z2F1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNTc0NDQsImV4cCI6MjA4OTkzMzQ0NH0.Y_TN9r19WS96HyVZSQeNa0TyOqyBGuqFARaj8-7Ylow"
@@ -62,8 +64,30 @@ class SupabaseAuthManager @Inject constructor(
             scheme = "tf.monotrypt.android"
             host = "login-callback"
             codeVerifierCache = SharedPrefsCodeVerifierCache(context)
+            // The library's Android default parks the session whenever the app
+            // leaves the foreground: it stops the refresh job and sets the
+            // status to Initializing, and while it is Initializing there is no
+            // current session to put on a request. Tryptify keeps working in
+            // the background — every play is recorded there — so with the
+            // default each of those writes went out under the anon key and was
+            // refused by RLS. That was about two in three play uploads.
+            // Off, the session stays signed in and the refresh job keeps
+            // running for as long as the process does. A token that still
+            // expires (the device slept through the refresh) is refreshed by
+            // the library before the next request that carries it.
+            enableLifecycleCallbacks = false
         }
-        install(Postgrest)
+        install(Postgrest) {
+            // Every table the app reads or writes is scoped to the signed-in
+            // user, so a request with no session has nothing it can do — and
+            // without this it is not refused, it is sent under the anon key.
+            // An insert then fails with a 401, but an update or delete matches
+            // no rows and comes back as a success, which settles a pending
+            // delete in SyncOutbox that never happened. With this the call
+            // throws SessionRequiredException before it leaves the device, and
+            // the edit stays queued.
+            requireValidSession = true
+        }
     }
 
     private val auth get() = supabase.auth

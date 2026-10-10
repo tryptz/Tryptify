@@ -136,7 +136,8 @@ fun LocalLibraryTab(
     val songSort by viewModel.songSort.collectAsStateWithLifecycle()
     val albumSort by viewModel.albumSort.collectAsStateWithLifecycle()
     val artistSort by viewModel.artistSort.collectAsStateWithLifecycle()
-    val rootFolders by viewModel.displayRootFolders.collectAsStateWithLifecycle()
+    val rootFolders by viewModel.sortedRootFolders.collectAsStateWithLifecycle()
+    val folderSort by viewModel.folderSort.collectAsStateWithLifecycle()
     val scanProgress by viewModel.scanProgress.collectAsStateWithLifecycle()
     val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
@@ -193,10 +194,10 @@ fun LocalLibraryTab(
             val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
             context.contentResolver.takePersistableUriPermission(uri, flags)
             // Persist the selected folder so it shows up in the Folders tab even
-            // before MediaStore re-indexes and the scanner derives it from tracks.
-            safTreeUriToPath(uri)?.let { viewModel.addUserFolderRoot(it) }
-            // Trigger a full scan after adding a folder (MediaStore will include it)
-            viewModel.startFullScan()
+            // before MediaStore re-indexes and the scanner derives it from tracks,
+            // then scan it in: one call, so the scan cannot read the folder list
+            // before the folder is in it.
+            viewModel.addFolderAndScan(safTreeUriToPath(uri))
         }
     }
 
@@ -327,6 +328,10 @@ fun LocalLibraryTab(
                 val (keys, current, onChange) = sortTriple
                 SortMenu(keys = keys, current = current, onChange = onChange)
             }
+            // The folders' half of the one folder sort every folder screen uses.
+            if (openCategory == LibraryCategory.FOLDERS) {
+                FolderSortButton(sort = folderSort, onChange = viewModel::setFolderSort, showSongs = false)
+            }
             IconButton(onClick = { showSearch = !showSearch; if (!showSearch) viewModel.setSearchQuery("") }) {
                 Icon(Icons.Default.Search, contentDescription = stringResource(R.string.tab_search))
             }
@@ -423,7 +428,12 @@ fun LocalLibraryTab(
             LibraryCategory.FOLDERS -> FolderList(
                 folders = rootFolders,
                 onFolderClick = onFolderClick,
-                onFolderLongClick = { path, name ->
+                onPlayFolder = { path, shuffle ->
+                    viewModel.loadFolderForPlay(path) { tracks ->
+                        if (shuffle) playerViewModel.shufflePlayUnified(tracks) else playerViewModel.playAllUnified(tracks)
+                    }
+                },
+                onRemoveFolder = { path, name ->
                     folderToExclude = FolderToExclude(path = path, displayName = name)
                 },
             )
@@ -815,6 +825,10 @@ private fun SongRow(
                     )
                     Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
                     tf.monochrome.android.ui.components.SourcePill(track.sourceType)
+                    if (track.isDolbyAtmos) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        tf.monochrome.android.ui.components.DolbyAtmosBadgePill()
+                    }
                     track.qualityBadge?.let { badge ->
                         Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
                         Text(
@@ -929,9 +943,13 @@ fun SongList(
 fun FolderList(
     folders: List<FolderRoot>,
     onFolderClick: (String) -> Unit,
-    onFolderLongClick: (String, String) -> Unit = { _, _ -> },
+    /** Plays (false) or shuffles (true) a folder and everything inside it. */
+    onPlayFolder: (String, Boolean) -> Unit = { _, _ -> },
+    onRemoveFolder: (String, String) -> Unit = { _, _ -> },
 ) {
     val state = rememberLazyListState()
+    // The folder whose long-press menu is open, by path.
+    var menuFolder by remember { mutableStateOf<String?>(null) }
     Box {
         LazyColumn(
             state = state,
@@ -944,6 +962,7 @@ fun FolderList(
             items(folders, key = { it.path }) { folder ->
                 val name = folder.displayName
                 val path = folder.path
+                Box {
                 Row(
                     // A pane each, like Home's page list: the gutter padding
                     // and the gap between rows are what make these read as
@@ -960,7 +979,7 @@ fun FolderList(
                         .height(MonoDimens.listRowHeight)
                         .liquidGlass(shape = MonoDimens.shapeMd)
                         .bounceCombinedClick(
-                            onLongClick = { onFolderLongClick(path, name) },
+                            onLongClick = { menuFolder = path },
                             onClick = { onFolderClick(path) },
                         )
                         .padding(horizontal = MonoDimens.listItemPaddingH),
@@ -1000,6 +1019,14 @@ fun FolderList(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                     )
+                }
+                FolderActionsMenu(
+                    expanded = menuFolder == path,
+                    onDismiss = { menuFolder = null },
+                    onPlay = { onPlayFolder(path, false) },
+                    onShuffle = { onPlayFolder(path, true) },
+                    onRemove = { onRemoveFolder(path, name) },
+                )
                 }
             }
         }

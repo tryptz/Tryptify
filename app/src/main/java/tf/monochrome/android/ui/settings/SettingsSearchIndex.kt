@@ -79,7 +79,7 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     ),
     entry("Dynamic colours", R.string.settings_dynamic_colors, "Appearance", listOf("album", "art", "material you", "accent")),
     entry("Font scale", R.string.settings_font_size, "Appearance", listOf("text size", "bigger", "smaller", "accessibility")),
-    entry("Custom font", R.string.settings_font_library, "Appearance", listOf("typeface", "import font")),
+    entry("Custom font", R.string.settings_font_library, "Fonts", listOf("typeface", "import font", "fonts")),
     entry("Now playing view", R.string.settings_view_mode, "Appearance", listOf("player", "layout", "lyrics")),
     entry("Blurred background", R.string.settings_blurred_album_background, "Appearance", listOf("player", "artwork", "blur")),
     entry("Glow behind album art", R.string.settings_glow_behind_album_art, "Appearance", listOf("bloom", "halo", "cover", "kick", "bass", "pump")),
@@ -156,6 +156,10 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     // ── Audio ───────────────────────────────────────────────────────────
     entry("Gapless playback", R.string.settings_gapless_playback, "Audio", listOf("gap", "continuous", "album")),
     entry("Crossfade", R.string.search_crossfade, "Audio", listOf("fade", "transition", "blend")),
+    entry(
+        "Play alongside other apps", R.string.settings_play_alongside_other_apps, "Audio",
+        listOf("audio focus", "focus", "game", "gaming", "mix", "pause", "duck", "interrupt", "video"),
+    ),
     entry("Playback speed", R.string.settings_playback_speed, "Audio", listOf("tempo", "faster", "slower", "pitch")),
     entry("Multichannel downmix", R.string.settings_downmix_multichannel_to_stereo, "Audio", listOf("surround", "5.1", "atmos", "stereo")),
     entry("Spatial renderer", R.string.settings_atmos_renderer_configuration, "Audio", listOf("atmos", "hrtf", "binaural", "spatial"))
@@ -166,7 +170,10 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
         .at(SettingsDestination.Route("crossfeed")),
     entry("Mixer", R.string.status_mixer, "Audio", listOf("dsp", "bus", "plugin", "insert", "channel"))
         .at(SettingsDestination.Route("mixer")),
-    entry("Streaming quality", R.string.settings_streaming_quality, "Audio", listOf("bitrate", "wifi", "cellular", "data")),
+    entry("Streaming quality", R.string.settings_streaming_quality, "Audio", listOf("bitrate", "wifi", "cellular", "data", "tidal", "qobuz", "deezer", "aac", "mp3", "flac", "hi-res", "dolby", "atmos")),
+    // The switch itself, so "atmos" lands on it rather than on the header,
+    // whose text reads "Download quality" while the tab shows downloads.
+    entry("TIDAL Dolby Atmos", R.string.atmos_tidal_dolby_atmos, "Audio", listOf("atmos", "dolby", "spatial", "e-ac-3", "joc", "surround")),
     entry("Preserve Pitch", R.string.settings_preserve_pitch, "Audio", listOf("speed", "tempo", "key", "chipmunk", "semitone")),
     entry("Never Resample Between Tracks", R.string.settings_never_resample_between_tracks, "Audio", listOf("sample rate", "gap", "dac", "bit perfect")),
     entry("USB DAC bit-perfect routing", R.string.settings_usb_dac_bit_perfect_routing, "Audio", listOf("usb", "dac", "exclusive", "bit perfect", "output")),
@@ -202,9 +209,10 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     entry("Hide mini player when the nav bar shows", R.string.settings_mini_player_hide_with_tabs, "Library", listOf("mini player", "nav bar", "tab bar", "scroll", "hide", "bottom bar")),
     entry("Library sections", R.string.settings_library_sections, "Library", listOf("reorder", "order", "hide", "pages", "local", "playlists", "favorites", "downloads")),
     entry("Local folders", R.string.settings_local_media_scanning, "Library", listOf("storage", "saf", "sd card", "path")),
+    entry("Titles from file names", R.string.settings_titles_from_file_names, "Library", listOf("filename", "file name", "title", "tags", "rename", "local")),
 
     // ── Downloads ───────────────────────────────────────────────────────
-    entry("Download quality", R.string.settings_download_quality, "Downloads", listOf("bitrate", "flac", "offline")),
+    entry("Download quality", R.string.settings_download_quality, "Downloads", listOf("bitrate", "flac", "offline", "tidal", "qobuz", "deezer", "aac", "mp3", "hi-res")),
     entry("Download lyrics", R.string.settings_download_lyrics, "Downloads", listOf("offline", "synced")),
     entry("Auto-download liked", R.string.settings_auto_download_liked_songs, "Downloads", listOf("offline", "favourites", "hearted")),
     entry("Download centre", R.string.search_download_centre, "Downloads", listOf("queue", "progress", "offline"))
@@ -224,7 +232,7 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
 
     // ── Radio ───────────────────────────────────────────────────────────
     entry("AI radio", R.string.search_ai_radio, "Radio", listOf("station", "recommend", "queue", "seed")),
-    entry("Radio weights", R.string.search_radio_weights, "Radio", listOf("tuning", "similarity", "novelty", "familiarity")),
+    entry("Radio weights", R.string.search_radio_weights, "Radio", listOf("tuning", "style", "familiar", "adventurous", "new songs", "originals", "similarity", "novelty", "familiarity")),
 
     // ── System ──────────────────────────────────────────────────────────
     entry("Performance", R.string.settings_performance, "System", listOf("battery", "fps", "low power", "glass", "blur")),
@@ -235,6 +243,7 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     ),
     entry("Debug log", R.string.settings_view_debug_log, "System", listOf("logs", "diagnostics", "report", "crash"))
         .at(SettingsDestination.Route("debug_log")),
+    entry("Save crash reports", R.string.settings_save_crash_reports, "System", listOf("crash", "anr", "freeze", "diagnostics", "report", "privacy", "downloads", "log")),
     entry("Backup and restore", R.string.settings_backup_restore, "System", listOf("export", "import", "settings", "transfer")),
     entry("Clear cache", R.string.settings_clear_cache, "System", listOf("storage", "space", "images")),
     entry("Check for updates", R.string.settings_check_for_updates, "System", listOf("update", "version", "github", "release", "newer")),

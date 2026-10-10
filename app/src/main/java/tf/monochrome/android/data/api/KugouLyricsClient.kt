@@ -38,15 +38,9 @@ class KugouLyricsClient @Inject constructor(
     private val httpClient: HttpClient,
     private val json: Json,
 ) {
-    suspend fun lookup(
-        title: String,
-        artist: String,
-        durationSeconds: Int? = null,
-        convertToRomaji: Boolean = false,
-    ): Lyrics? {
-        if (title.isBlank() || artist.isBlank()) return null
-        val durationMs = durationSeconds?.takeIf { it > 0 }?.let { it * 1000L }
-        val candidate = search(title, artist, durationMs) ?: return null
+    suspend fun lookup(query: LyricsQuery, convertToRomaji: Boolean = false): Lyrics? {
+        if (query.title.isBlank() || query.artist.isBlank()) return null
+        val candidate = search(query) ?: return null
         val content = download(candidate.id, candidate.accesskey) ?: return null
         val decrypted = decryptKrc(content) ?: return null
         val lines = parseKrc(decrypted, convertToRomaji)
@@ -54,21 +48,33 @@ class KugouLyricsClient @Inject constructor(
         return Lyrics(lines = lines, isSynced = true)
     }
 
-    private suspend fun search(title: String, artist: String, durationMs: Long?): KugouCandidate? {
-        val keyword = "$artist - $title"
-        val url = buildString {
-            append("$SEARCH_URL?ver=1&man=yes&client=mobi")
-            append("&keyword=").append(keyword.urlEncode())
-            if (durationMs != null) append("&duration=").append(durationMs)
+    /**
+     * The candidate that is this recording. Picking the closest runtime alone
+     * took whatever came nearest — for a 3:33 song with no studio KRC, a 4:01
+     * festival recording, whose lyrics then ran 28 s out of step. Candidates
+     * now have to pass [LyricsMatch]: same title, not another version, runtime
+     * within tolerance.
+     */
+    private suspend fun search(query: LyricsQuery): KugouCandidate? {
+        val artist = LyricsMatch.primaryArtist(query.artist)
+        val variants = LyricsMatch.titleVariants(query.title).let { listOf(it.first(), it.last()) }.distinct()
+        for (title in variants) {
+            val url = buildString {
+                append("$SEARCH_URL?ver=1&man=yes&client=mobi")
+                append("&keyword=").append("$artist - $title".urlEncode())
+                query.durationMs?.takeIf { it > 0 }?.let { append("&duration=").append(it) }
+            }
+            val candidates = fetchJson<KugouSearchEnvelope>(url)?.candidates.orEmpty()
+            val chosen = LyricsMatch.pick(
+                query,
+                candidates,
+                title = { it.song },
+                artist = { it.singer },
+                durationMs = { it.duration },
+            )
+            if (chosen != null) return chosen
         }
-        val envelope = fetchJson<KugouSearchEnvelope>(url) ?: return null
-        val candidates = envelope.candidates.orEmpty()
-        if (candidates.isEmpty()) return null
-        return if (durationMs != null) {
-            candidates.minByOrNull { c -> kotlin.math.abs((c.duration ?: durationMs) - durationMs) }
-        } else {
-            candidates.first()
-        }
+        return null
     }
 
     private suspend fun download(id: String, accesskey: String): String? {
@@ -180,6 +186,8 @@ private data class KugouCandidate(
     val id: String,
     val accesskey: String,
     val duration: Long? = null,
+    val song: String? = null,
+    val singer: String? = null,
 )
 
 @Serializable

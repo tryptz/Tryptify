@@ -35,6 +35,11 @@ internal fun AmbientVisualizerLayer(
     modifier: Modifier = Modifier,
 ) {
     val scrim = backdropScrimTone(dominant)
+    // Its render thread draws every frame while this says playing, and a
+    // TextureView keeps its surface through the app going to the background.
+    // So it is told the music is paused whenever nobody can see it: the app
+    // in the background, the phone off, another screen in front.
+    val shown = isPlaying && tf.monochrome.android.ui.components.rememberOnScreen()
     AndroidView(
         modifier = modifier.fillMaxSize(),
         factory = { context ->
@@ -42,14 +47,14 @@ internal fun AmbientVisualizerLayer(
                 updateSettings(settings)
                 updateAlbum(cover)
                 updateScrimTone(scrim.red, scrim.green, scrim.blue)
-                updatePlayback(isPlaying)
+                updatePlayback(shown)
             }
         },
         update = { view ->
             view.updateSettings(settings)
             view.updateAlbum(cover)
             view.updateScrimTone(scrim.red, scrim.green, scrim.blue)
-            view.updatePlayback(isPlaying)
+            view.updatePlayback(shown)
         },
     )
 }

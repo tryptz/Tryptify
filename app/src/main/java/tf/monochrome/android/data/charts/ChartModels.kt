@@ -124,6 +124,17 @@ data class GenrePool(
 }
 
 /**
+ * Whether [url] is Last.fm's stand-in picture — the grey star it serves for
+ * any track or artist it has no image of, which is now most of them. Shown, it
+ * makes every row of a chart look the same and every planet a grey ball with a
+ * star on it; treated as no picture, each gets its own fallback instead.
+ */
+internal fun isLastFmPlaceholder(url: String?): Boolean =
+    url != null && url.contains(LASTFM_PLACEHOLDER_ID)
+
+private const val LASTFM_PLACEHOLDER_ID = "2a96cbd8b46e442fc41c2b86b821562f"
+
+/**
  * Fold a name down to something two different services can agree on.
  *
  * Chart sources and the catalogue disagree constantly about punctuation, case,
@@ -154,3 +165,10 @@ internal fun normalizeForMatch(raw: String): String {
         }
     }.trim()
 }
+
+/**
+ * What the genre galaxy shows of an artist beside their chart: the opening of
+ * their bio, and how many releases they have — the size of their catalogue,
+ * which is the size of their planet. Either may be unknown.
+ */
+data class ArtistFacts(val bio: String?, val releases: Int?)

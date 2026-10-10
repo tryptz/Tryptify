@@ -1,0 +1,108 @@
+package tf.monochrome.android.domain.model
+
+import kotlinx.serialization.Serializable
+
+/**
+ * How the genre galaxy looks, as the listener tunes it from the map.
+ *
+ * Every default is the galaxy as it shipped, so nothing changes for anyone who
+ * never opens the sheet. These are wishes, not overrides: low-performance mode
+ * still turns the heavy effects off whatever they say, because that switch is
+ * the device asking for less work.
+ *
+ * Stored as JSON and read back through [clamped], so a value from an older or
+ * hand-edited copy can never push the map outside what it can draw.
+ */
+@Serializable
+data class GalaxyVisualSettings(
+    // The sky.
+    val deepSky: Boolean = true,
+    /** Nebulae behind the families, as a share of their usual strength. */
+    val nebulae: Float = 1f,
+    val dust: GalaxyAmount = GalaxyAmount.NORMAL,
+    // The core.
+    val blackHole: Boolean = true,
+    val godRays: Boolean = true,
+    /** The rays' exposure, as a share of the usual. */
+    val rayStrength: Float = 1f,
+    /** How dark the shadows are that planets, dust and stars cast through the rays; 0 for none. */
+    val rayShade: Float = 1f,
+    /**
+     * How many of the other stars shine rays of their own, the biggest on
+     * screen first; 0 for none. They came with this setting, so they ship on.
+     */
+    val starRays: Int = 6,
+    /** How strongly each light's glow blooms in its rays, as a share of the usual; 0 for none. */
+    val bloom: Float = 1f,
+    /** How far the rays run before they fade, as a share of the usual. */
+    val rayLength: Float = 1f,
+    // Motion.
+    /** How fast the galaxy turns, as a share of the usual; 0 holds it still. */
+    val spin: Float = 1f,
+    val twinkle: Boolean = true,
+    val travelBlur: Boolean = true,
+    // Music.
+    val smoke: Boolean = true,
+    /** How thick and bright the gas is, as a share of the usual. */
+    val smokeAmount: Float = 1f,
+    val musicReactive: Boolean = true,
+    /** How hard the gas and the black hole answer the music, as a share of the usual. */
+    val reactivity: Float = 1f,
+    // The stars.
+    /** Star size, as a share of the usual. */
+    val starSize: Float = 1f,
+    val labels: GalaxyAmount = GalaxyAmount.NORMAL,
+    val planets: Boolean = true,
+    /**
+     * Planet and moon size, as a share of the usual. The moons' orbits widen
+     * with them; the planets' orbits and the star stay as they are.
+     */
+    val bodySize: Float = 1f,
+    // The glass over the map.
+    /**
+     * Every pane of glass over the map, the bars included, bends a half-size
+     * copy of what is behind it. Off as shipped: the glass's look is the
+     * app's, and this is for the listener to judge on their own screen.
+     */
+    val lightGlass: Boolean = false,
+) {
+    fun clamped(): GalaxyVisualSettings = copy(
+        nebulae = nebulae.finiteOr(1f).coerceIn(NEBULAE_RANGE),
+        rayStrength = rayStrength.finiteOr(1f).coerceIn(RAY_RANGE),
+        rayShade = rayShade.finiteOr(1f).coerceIn(SHADE_RANGE),
+        starRays = starRays.coerceIn(STAR_RAYS_RANGE),
+        bloom = bloom.finiteOr(1f).coerceIn(BLOOM_RANGE),
+        rayLength = rayLength.finiteOr(1f).coerceIn(RAY_LENGTH_RANGE),
+        spin = spin.finiteOr(1f).coerceIn(SPIN_RANGE),
+        smokeAmount = smokeAmount.finiteOr(1f).coerceIn(SMOKE_RANGE),
+        reactivity = reactivity.finiteOr(1f).coerceIn(REACTIVITY_RANGE),
+        starSize = starSize.finiteOr(1f).coerceIn(STAR_SIZE_RANGE),
+        bodySize = bodySize.finiteOr(1f).coerceIn(BODY_SIZE_RANGE),
+    )
+
+    companion object {
+        val DEFAULT = GalaxyVisualSettings()
+
+        val NEBULAE_RANGE = 0f..2f
+        val RAY_RANGE = 0.3f..1.6f
+        val SHADE_RANGE = 0f..2f
+
+        /** Up to the star rays shader's twelve lights. */
+        val STAR_RAYS_RANGE = 0..12
+        val BLOOM_RANGE = 0f..2f
+        val RAY_LENGTH_RANGE = 0.5f..2f
+        val SPIN_RANGE = 0f..3f
+        val SMOKE_RANGE = 0.3f..2f
+        val REACTIVITY_RANGE = 0.3f..2f
+        val STAR_SIZE_RANGE = 0.6f..1.6f
+
+        /** At the top, a planet is still under a third of its star across. */
+        val BODY_SIZE_RANGE = 0.5f..2.5f
+
+        private fun Float.finiteOr(fallback: Float) = if (isFinite()) this else fallback
+    }
+}
+
+/** Less, the usual, or more: of dust grains, or of names on the map. */
+@Serializable
+enum class GalaxyAmount { LESS, NORMAL, MORE }

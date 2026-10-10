@@ -38,11 +38,11 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -99,6 +99,9 @@ fun EqualizerScreen(
     val selectedTarget by viewModel.selectedTarget.collectAsStateWithLifecycle()
     val activePreset by viewModel.activePreset.collectAsStateWithLifecycle()
     val allPresets by viewModel.allPresets.collectAsStateWithLifecycle()
+    val outputAssignments by viewModel.outputAssignments.collectAsStateWithLifecycle()
+    val knownOutputs by viewModel.knownOutputs.collectAsStateWithLifecycle()
+    val currentOutput by viewModel.currentOutput.collectAsStateWithLifecycle()
     val error = viewModel.error.collectAsStateWithLifecycle().value?.resolve(LocalContext.current)
     val isCalculating by viewModel.isCalculating.collectAsStateWithLifecycle()
     val originalMeasurement by viewModel.originalMeasurement.collectAsStateWithLifecycle()
@@ -144,6 +147,7 @@ fun EqualizerScreen(
     var pendingTargetData by rememberSaveable { mutableStateOf("") }
     var targetName by rememberSaveable { mutableStateOf("") }
     var presetToDelete by remember { mutableStateOf<tf.monochrome.android.domain.model.EqPreset?>(null) }
+    var presetToAssign by remember { mutableStateOf<tf.monochrome.android.domain.model.EqPreset?>(null) }
 
     val context = LocalContext.current
 
@@ -335,15 +339,17 @@ fun EqualizerScreen(
                             modifier = Modifier.padding(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            FilterChip(
+                            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                                label = stringResource(R.string.eq_left_ear),
                                 selected = !editRight,
+                                accent = MaterialTheme.colorScheme.primary,
                                 onClick = { viewModel.setEditChannel(EqChannel.LEFT) },
-                                label = { Text(stringResource(R.string.eq_left_ear)) },
                             )
-                            FilterChip(
+                            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                                label = stringResource(R.string.eq_right_ear),
                                 selected = editRight,
+                                accent = MaterialTheme.colorScheme.primary,
                                 onClick = { viewModel.setEditChannel(EqChannel.RIGHT) },
-                                label = { Text(stringResource(R.string.eq_right_ear)) },
                             )
                         }
                     }
@@ -426,10 +432,11 @@ fun EqualizerScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     tf.monochrome.android.audio.eq.AutoEqAlgorithm.entries.forEach { algo ->
-                        FilterChip(
+                        tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                            label = algo.label,
                             selected = algorithm == algo,
+                            accent = MaterialTheme.colorScheme.primary,
                             onClick = { viewModel.setAlgorithm(algo) },
-                            label = { Text(algo.label) },
                         )
                     }
                 }
@@ -870,6 +877,54 @@ fun EqualizerScreen(
             }
 
             if (showProfilesExpanded) {
+                if (allPresets.isNotEmpty()) {
+                    // "No correction" as an assignable entry, so an output can
+                    // be given the EQ off: the speaker, once headphones with a
+                    // correction of their own are taken off.
+                    item {
+                        val offPreset = rememberEqOffPreset()
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .liquidGlass(shape = RoundedCornerShape(10.dp))
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    offPreset.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                Text(
+                                    offPreset.description,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                AssignedOutputsLine(
+                                    outputs = outputAssignments
+                                        .filterValues { it == offPreset.id }
+                                        .keys
+                                        .mapNotNull(tf.monochrome.android.audio.eq.OutputId::fromKey),
+                                )
+                            }
+                            IconButton(
+                                onClick = { presetToAssign = offPreset },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Devices,
+                                    contentDescription = stringResource(R.string.eq_assign_preset),
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
                 if (allPresets.isEmpty()) {
                     item {
                         Text(
@@ -937,6 +992,23 @@ fun EqualizerScreen(
                                         stringResource(R.string.settings_eq_preset_summary, pluralStringResource(R.plurals.settings_band_count, preset.bands.size, preset.bands.size), preset.targetName),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    AssignedOutputsLine(
+                                        outputs = outputAssignments
+                                            .filterValues { it == preset.id }
+                                            .keys
+                                            .mapNotNull(tf.monochrome.android.audio.eq.OutputId::fromKey),
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { presetToAssign = preset },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Devices,
+                                        contentDescription = stringResource(R.string.eq_assign_preset),
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                                 if (preset.isCustom) {
@@ -1235,6 +1307,22 @@ fun EqualizerScreen(
         )
     }
 
+
+    presetToAssign?.let { preset ->
+        val offPresetName = stringResource(R.string.eq_off_preset)
+        AssignPresetSheet(
+            preset = preset,
+            assignments = outputAssignments,
+            knownDevices = knownOutputs,
+            current = currentOutput,
+            presetName = { id ->
+                if (id == tf.monochrome.android.audio.eq.OutputEq.EQ_OFF) offPresetName
+                else allPresets.firstOrNull { it.id == id }?.name
+            },
+            onConfirm = { outputs -> viewModel.assignPreset(preset.id, outputs) },
+            onDismiss = { presetToAssign = null },
+        )
+    }
 
     presetToDelete?.let { preset ->
         AlertDialog(

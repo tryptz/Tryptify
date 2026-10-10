@@ -60,4 +60,13 @@ class LibraryKeysTest {
         assertEquals(LibraryKeys.track(7L), LibraryKeys.track(7L))
         assertEquals(LibraryKeys.album(7L), LibraryKeys.album(7L))
     }
+
+    @Test
+    fun `a track listed twice gets two keys, and the others keep theirs`() {
+        val keys = LibraryKeys.occurrences(listOf(1L, 2L, 1L, 3L, 1L))
+        assertEquals(keys.size, keys.toSet().size)
+        assertEquals(LibraryKeys.track(2L), keys[1])
+        assertEquals(LibraryKeys.track(1L), keys[0])
+        assertEquals("${LibraryKeys.track(1L)}#2", keys[2])
+    }
 }

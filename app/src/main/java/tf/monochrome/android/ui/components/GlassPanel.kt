@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,11 +24,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
@@ -36,11 +45,15 @@ import dev.chrisbanes.haze.hazeEffect
 import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.performance.LocalLowPerformance
 import tf.monochrome.android.performance.LocalPerformanceProfile
+import tf.monochrome.android.ui.player.LIVE_LENS_GLASS
 import tf.monochrome.android.ui.player.LocalPlayerGlass
+import tf.monochrome.android.ui.player.liveGlassLens
+import tf.monochrome.android.ui.player.liveLensCompiles
 import tf.monochrome.android.ui.player.playerFrostTint
 import tf.monochrome.android.ui.player.playerGlass
 import tf.monochrome.android.ui.player.rememberLiquidGlassAvailable
 import tf.monochrome.android.ui.theme.glassTint
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
 import tf.monochrome.android.ui.theme.MonoDimens
 
 /**
@@ -94,37 +107,22 @@ fun GlassPanel(
      * space for a bar that is nowhere near it.
      */
     avoidNavigationBar: Boolean = true,
+    /**
+     * Whether touches the content did not want stop at the panel. True over a
+     * canvas that would take them — a map selects whatever is nearest. False
+     * for a panel inside a scrolling list: the backstop consumes drags as well
+     * as taps, so a swipe that started on the panel could not scroll the list.
+     */
+    blockTouchesBelow: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    val allowHaze = LocalPerformanceProfile.current.allowHazeBlur
-    val flat = LocalLowPerformance.current.disableLiquidGlass
-    val shaderGlass = !flat && glass.enabled &&
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-    val tint = glassTint(glass.tintColor)
-    val frostBg = MaterialTheme.colorScheme.background
-    val isDark = frostBg.luminance() <= 0.5f
-
     Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(12.dp)
             .then(if (avoidNavigationBar) Modifier.navigationBarsPadding() else Modifier)
             .clip(MonoDimens.shapeLg)
-            .then(
-                when {
-                    shaderGlass -> Modifier
-                    allowHaze && !flat ->
-                        Modifier.liquidGlass(hazeState = hazeState, shape = MonoDimens.shapeLg)
-                    // Last resort: no shader, no blur. It still must not be a
-                    // fully opaque slab when the listener has asked for
-                    // see-through glass, so body opacity governs this path too
-                    // — floored so text stays readable over raw artwork.
-                    else -> Modifier.background(
-                        MaterialTheme.colorScheme.surfaceContainerHigh
-                            .copy(alpha = glass.bodyOpacity.coerceIn(0.55f, 1f)),
-                    )
-                },
-            ),
+            .glassBase(hazeState, glass, MonoDimens.shapeLg),
     ) {
         // The backstop for taps the panel's own children didn't want, and the
         // lowest layer on purpose.
@@ -141,76 +139,244 @@ fun GlassPanel(
         // handles the touch, which is exactly the case it was written for — and
         // being a hit at all is what keeps the event inside this panel, so the
         // full-bleed map underneath never sees it.
+        if (blockTouchesBelow) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                awaitPointerEvent().changes.forEach { it.consume() }
+                            }
+                        }
+                    },
+            )
+        }
+
+        GlassMaterial(hazeState = hazeState, glass = glass, corner = MonoDimens.radiusLg)
+        GlassInkScope(glass) { content() }
+    }
+}
+
+/**
+ * Whether [glass] will be drawn by the shader here: on, not overridden by
+ * low-performance mode, and on Android 13 or later.
+ */
+@Composable
+internal fun shaderGlassFor(glass: PlayerGlassSettings): Boolean =
+    !LocalLowPerformance.current.disableLiquidGlass && glass.enabled &&
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+
+/**
+ * The base a glass pane is laid on, by tier. Nothing under shader glass (its
+ * own layers are the pane); the app's plain glassmorphism where haze is
+ * allowed; and an opaque surface otherwise, which cannot be a no-op — it is
+ * the only thing standing between the pane and no background at all on a
+ * low-tier device.
+ */
+@Composable
+internal fun Modifier.glassBase(hazeState: HazeState?, glass: PlayerGlassSettings, shape: Shape): Modifier {
+    val allowHaze = LocalPerformanceProfile.current.allowHazeBlur
+    val flat = LocalLowPerformance.current.disableLiquidGlass
+    return then(
+        when {
+            shaderGlassFor(glass) -> Modifier
+            allowHaze && !flat -> Modifier.liquidGlass(hazeState = hazeState, shape = shape)
+            // Last resort: no shader, no blur. It still must not be a
+            // fully opaque slab when the listener has asked for
+            // see-through glass, so body opacity governs this path too
+            // — floored so text stays readable over raw artwork.
+            else -> Modifier.background(
+                MaterialTheme.colorScheme.surfaceContainerHigh
+                    .copy(alpha = glass.bodyOpacity.coerceIn(0.55f, 1f)),
+            )
+        },
+    )
+}
+
+/**
+ * The layers that make a pane the app's glass, under its content: the
+ * backdrop pane (the live lens, or the haze frost) and the shader slab.
+ *
+ * One recipe for [GlassPanel] and [GlassPill], so a sheet and a pill on the
+ * same screen are the same material from the same settings — the Studio's
+ * UI panels — and cannot drift apart. [corner] is the pane's corner radius:
+ * the lens rim is as wide as it, and the slab is drawn with it. [press], when
+ * the pane is a button, swells the slab under the finger.
+ */
+@Composable
+internal fun BoxScope.GlassMaterial(
+    hazeState: HazeState?,
+    glass: PlayerGlassSettings,
+    corner: Dp,
+    press: GlassPress? = null,
+    /**
+     * Shapes cut out of the slab, the way the tab bar and the mini player cut
+     * their glyphs: whatever this draws is erased from the slab, so the
+     * shader bevels the hole's edge and the frost shows through it. Only when
+     * the shader is really coming ([glassPunches]); otherwise draw the glyph.
+     */
+    punch: (DrawScope.() -> Unit)? = null,
+) {
+    if (!shaderGlassFor(glass)) return
+    val allowHaze = LocalPerformanceProfile.current.allowHazeBlur
+    val tint = glassTint(glass.tintColor)
+    // What the pane lies over: the page, unless the screen says otherwise
+    // (the galaxy is space under every theme). The frost washes toward it.
+    val frostBg = LocalGlassGround.current ?: MaterialTheme.colorScheme.background
+    val isDark = frostBg.luminance() <= 0.5f
+    val liveLens = LIVE_LENS_GLASS && liveLensCompiles && hazeState != null && allowHaze &&
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+    // Only with a real backdrop. Frosting an unfed state draws the
+    // frost's own base colour as a flat pane, which is the slab this
+    // whole component exists not to be.
+    if (liveLens && hazeState != null) {
+        // The mini player's live lens, for the same reason this pane takes
+        // its frost: one material, usually side by side. See LiveGlassLens.
         Box(
             Modifier
                 .matchParentSize()
-                .pointerInput(Unit) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            awaitPointerEvent().changes.forEach { it.consume() }
-                        }
-                    }
-                },
+                .liveGlassLens(
+                    hazeState = hazeState,
+                    corner = corner,
+                    frost = playerFrostTint(glass, isDark),
+                    glass = glass,
+                ),
         )
-
-        if (shaderGlass) {
-            // Only with a real backdrop. Frosting an unfed state draws the
-            // frost's own base colour as a flat pane, which is the slab this
-            // whole component exists not to be.
-            if (hazeState != null && allowHaze && glass.hazeBlurDp > 0f) {
-                // The mini player's exact frost, from the one shared recipe —
-                // this panel is the same material as that bar and is usually on
-                // screen beside it.
-                val frostTint = playerFrostTint(glass, isDark)
-                Box(
-                    Modifier
-                        .matchParentSize()
-                        .hazeEffect(
-                            state = hazeState,
-                            style = HazeStyle(
-                                backgroundColor = frostBg,
-                                blurRadius = glass.hazeBlurDp.dp,
-                                tints = listOf(HazeTint(frostTint)),
-                                noiseFactor = 0f,
-                            ),
-                        ),
+    } else if (hazeState != null && allowHaze && glass.hazeBlurDp > 0f) {
+        // The mini player's exact frost, from the one shared recipe —
+        // this pane is the same material as that bar and is usually on
+        // screen beside it.
+        val frostTint = playerFrostTint(glass, isDark)
+        Box(
+            Modifier
+                .matchParentSize()
+                .hazeEffect(
+                    state = hazeState,
+                    style = HazeStyle(
+                        backgroundColor = frostBg,
+                        blurRadius = glass.hazeBlurDp.dp,
+                        tints = listOf(HazeTint(frostTint)),
+                        noiseFactor = 0f,
+                    ),
+                ),
+        )
+    }
+    // The shader reads its bevel, refraction, rim and body opacity from
+    // LocalPlayerGlass, so the settings this pane was *handed* have to
+    // be published for it or half of them are quietly ignored — the
+    // pane would frost with one material and relight with another.
+    CompositionLocalProvider(LocalPlayerGlass provides glass) {
+        // Solid when the shader is really coming, faint when it is not.
+        //
+        // The mini player draws this slab at full opacity and lets the AGSL
+        // turn it into glass, and that is the whole reason it looks like
+        // glass: the shader builds its bevel and rim from the alpha
+        // heightfield underneath it. Panels used to draw at a tenth of
+        // that as insurance — on a device where the shader silently no-ops,
+        // a solid fill is left on screen as an opaque rounded rectangle in
+        // the accent colour. The insurance worked and the cost was that
+        // every panel that *did* have the shader had nearly no heightfield
+        // to bevel, so it came out a soft smudge with no edge while the bar
+        // beside it was a crisp pane.
+        //
+        // Asking whether the shader will run replaces the guess, so the good
+        // case gets the mini player's fill and the bad case still cannot
+        // paint a slab.
+        val shaded = rememberLiquidGlassAvailable()
+        val cut = punch?.takeIf { shaded }
+        Canvas(
+            modifier = Modifier
+                .matchParentSize()
+                .then(
+                    if (press != null) {
+                        Modifier.playerGlass(
+                            tint = tint,
+                            bulgeCenter = press.center,
+                            bulgeAmount = { press.amount },
+                            bulgeRadiusFraction = GlassPressDefaults.BULGE,
+                            lensCorner = corner,
+                            liveUnder = liveLens,
+                        )
+                    } else {
+                        Modifier.playerGlass(tint = tint, lensCorner = corner, liveUnder = liveLens)
+                    },
                 )
-            }
-            // The shader reads its bevel, refraction, rim and body opacity from
-            // LocalPlayerGlass, so the settings this panel was *handed* have to
-            // be published for it or half of them are quietly ignored — the
-            // panel would frost with one material and relight with another.
-            CompositionLocalProvider(LocalPlayerGlass provides glass) {
-            // Solid when the shader is really coming, faint when it is not.
-            //
-            // The mini player draws this slab at full opacity and lets the AGSL
-            // turn it into glass, and that is the whole reason it looks like
-            // glass: the shader builds its bevel and rim from the alpha
-            // heightfield underneath it. This panel used to draw at a tenth of
-            // that as insurance — on a device where the shader silently no-ops,
-            // a solid fill is left on screen as an opaque rounded rectangle in
-            // the accent colour. The insurance worked and the cost was that
-            // every panel that *did* have the shader had nearly no heightfield
-            // to bevel, so it came out a soft smudge with no edge while the bar
-            // beside it was a crisp pane.
-            //
-            // Asking whether the shader will run replaces the guess, so the good
-            // case gets the mini player's fill and the bad case still cannot
-            // paint a slab.
-            val shaded = rememberLiquidGlassAvailable()
-            Canvas(
-                modifier = Modifier
-                    .matchParentSize()
-                    .playerGlass(tint = tint),
-            ) {
-                val r = MonoDimens.radiusLg.toPx()
-                drawRoundRect(
-                    color = if (shaded) tint else tint.copy(alpha = 0.14f),
-                    cornerRadius = CornerRadius(r, r),
-                )
-            }
+                // One offscreen layer, so a punch clears only the slab and
+                // never the frost or the page behind the pane.
+                .then(if (cut != null) Modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen } else Modifier),
+        ) {
+            val r = corner.toPx().coerceAtMost(size.minDimension / 2f)
+            drawRoundRect(
+                color = if (shaded) tint else tint.copy(alpha = 0.14f),
+                cornerRadius = CornerRadius(r, r),
+            )
+            if (cut != null) {
+                // Anti-aliased DstOut, as the tab bar and the dock cut theirs.
+                val erase = Paint().apply {
+                    blendMode = BlendMode.DstOut
+                    isAntiAlias = true
+                }
+                drawContext.canvas.saveLayer(Rect(0f, 0f, size.width, size.height), erase)
+                cut()
+                drawContext.canvas.restore()
             }
         }
-        content()
     }
 }
+
+/**
+ * The backdrop a page's pills frost: a haze source the page draws *beside*
+ * its content, never one its content is drawn inside (that paints the
+ * source's flat base colour, the solid-slab failure). Null by default, so a
+ * pill on a page that provides none is the shader glass with no frost under
+ * it rather than a broken blur. Discover provides its page backdrop.
+ */
+val LocalGlassBackdrop = androidx.compose.runtime.compositionLocalOf<HazeState?> { null }
+
+/**
+ * A pill of the app's glass that is itself a button: the same material as
+ * [GlassPanel] — the live lens or the frost, and the solid slab the shader
+ * turns into a bevelled, refracting pane — from the same settings, in a pill,
+ * swelling under the finger.
+ *
+ * [PressableGlass] in a pill, with the corner its lens rim needs. Pass [hazeState] — a source this pill is a sibling of, never
+ * one it is drawn inside — for the frost and the lens to have something real
+ * behind them; [glass] defaults to the UI panels material, the Studio's
+ * universal glass, which every pane and search bar takes.
+ */
+@Composable
+fun GlassPill(
+    onClick: () -> Unit,
+    hazeState: HazeState?,
+    modifier: Modifier = Modifier,
+    height: Dp = 34.dp,
+    glass: PlayerGlassSettings = LocalMiniPlayerGlass.current,
+    enabled: Boolean = true,
+    onClickLabel: String? = null,
+    /** A glyph cut out of the slab, as the tab bar's are; see [GlassMaterial]. */
+    punch: (DrawScope.() -> Unit)? = null,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    PressableGlass(
+        onClick = onClick,
+        modifier = modifier.height(height),
+        shape = MonoDimens.shapePill,
+        enabled = enabled,
+        hazeState = hazeState,
+        onClickLabel = onClickLabel,
+        corner = height / 2,
+        glass = glass,
+        punch = punch,
+        content = content,
+    )
+}
+
+/**
+ * Whether a pane of [glass] cuts its glyphs out of the slab here: only when
+ * the shader is really drawing it. Otherwise there is no slab worth cutting,
+ * and the glyph is drawn as an ordinary icon instead.
+ */
+@Composable
+internal fun glassPunches(glass: PlayerGlassSettings = LocalMiniPlayerGlass.current): Boolean =
+    shaderGlassFor(glass) && rememberLiquidGlassAvailable()

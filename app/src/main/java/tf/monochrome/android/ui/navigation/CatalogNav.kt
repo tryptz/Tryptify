@@ -108,6 +108,31 @@ fun NavController.popBackStackSafe(): Boolean {
     return popBackStack()
 }
 
+/**
+ * Goes up to [path], a folder above the one on screen, from its path crumbs.
+ *
+ * Each folder screen walked down through is still on the back stack, so this
+ * pops back to it, which keeps every level's scroll position. Navigating
+ * instead would stack a second copy of the ancestor above its descendants.
+ * A folder that was never on the stack — opened straight from the Folders
+ * list, below where its crumbs start — replaces the folder on screen, so
+ * Back still leads where it did.
+ */
+fun NavController.openAncestorFolder(path: String) {
+    if (!isSettled()) return
+    while (true) {
+        val previous = previousBackStackEntry
+            ?.takeIf { it.destination.route == Screen.FolderBrowser.route }
+            ?.arguments?.getString("folderPath")
+        if (previous == null || !(previous == path || previous.startsWith("$path/"))) break
+        popBackStack()
+        if (previous == path) return
+    }
+    navigate(Screen.FolderBrowser.createRoute(path)) {
+        popUpTo(Screen.FolderBrowser.route) { inclusive = true }
+    }
+}
+
 private fun NavController.isSettled(): Boolean =
     currentBackStackEntry?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) == true
 

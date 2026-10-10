@@ -10,8 +10,10 @@ import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,10 +21,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformLatest
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import tf.monochrome.android.data.api.ApiService
 import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.data.repository.GenreGraphRepository
@@ -30,6 +37,7 @@ import tf.monochrome.android.data.repository.GenreHistoryRepository
 import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.repository.RecommendationSeed
 import tf.monochrome.android.data.repository.RecommendationSeedsRepository
+import tf.monochrome.android.domain.model.DailyDiscovery
 import tf.monochrome.android.domain.model.DiscoveryAdventure
 import tf.monochrome.android.domain.model.DiscoveryItem
 import tf.monochrome.android.domain.model.DiscoveryShelf
@@ -38,8 +46,11 @@ import tf.monochrome.android.domain.model.GenreGraph
 import tf.monochrome.android.domain.model.GenreHistory
 import tf.monochrome.android.domain.model.GenreNode
 import tf.monochrome.android.domain.model.UnifiedTrack
+import tf.monochrome.android.domain.usecase.DEFAULT_DISCOVERY_SERVICE
+import tf.monochrome.android.domain.usecase.DiscoveryCatalogs
 import tf.monochrome.android.domain.usecase.DiscoveryFeedUseCase
 import tf.monochrome.android.domain.usecase.toUnifiedTrackAuto
+import java.time.LocalDate
 import javax.inject.Inject
 
 /**
@@ -68,6 +79,17 @@ fun rememberDiscoverViewModel(): DiscoverViewModel {
 
 /** One genre on Discover's genre rail, and why it's there. */
 data class GenreRailItem(val node: GenreNode, val hearted: Boolean)
+
+/** One release on the radar, and whether it wears the NEW badge. */
+data class RadarItem(val release: tf.monochrome.android.domain.model.RadarRelease, val isNew: Boolean)
+
+/** How far through today's swipe deck the listener is. */
+data class DeckProgress(val swiped: Int, val size: Int, val kept: Int) {
+    val done: Boolean get() = swiped >= size
+}
+
+/** The genre of the day, with the history its card quotes from. */
+data class GenreSpotlight(val genre: GenreNode, val history: GenreHistory)
 
 /**
  * What the map's panel knows about the selected genre's history.
@@ -128,6 +150,9 @@ class DiscoverViewModel @Inject constructor(
     private val genreHistoryRepo: GenreHistoryRepository,
     private val genreSearch: tf.monochrome.android.domain.usecase.GenreSearchUseCase,
     private val genreCharts: tf.monochrome.android.domain.usecase.GenreChartUseCase,
+    private val catalogs: DiscoveryCatalogs,
+    private val deckStore: tf.monochrome.android.data.discover.SwipeDeckStore,
+    private val radarUseCase: tf.monochrome.android.domain.usecase.ReleaseRadarUseCase,
 ) : ViewModel() {
 
     /**
@@ -246,6 +271,75 @@ class DiscoverViewModel @Inject constructor(
         viewModelScope.launch { preferences.setDiscoverySort(value.id) }
     }
 
+    // ── Which service ───────────────────────────────────────────────────
+
+    /** The streaming service the page finds its music on. */
+    val service: StateFlow<ApiService> = catalogs.selected
+        .stateIn(viewModelScope, SharingStarted.Eagerly, DEFAULT_DISCOVERY_SERVICE)
+
+    private val _availableServices = MutableStateFlow<Set<ApiService>?>(null)
+
+    /**
+     * The services with a server under Settings › Connections, or null until
+     * known. The switch offers the others too, disabled, so it says what
+     * exists rather than looking like a two-way switch on one phone and a
+     * three-way one on another.
+     */
+    val availableServices: StateFlow<Set<ApiService>?> = _availableServices.asStateFlow()
+
+    private fun checkServices() {
+        viewModelScope.launch {
+            _availableServices.value = runCatching { catalogs.available() }.getOrNull()
+        }
+    }
+
+    /**
+     * Point Discover at another service, and rebuild the page on it.
+     *
+     * The page that was on screen stays filed under the old service, so
+     * switching back is instant rather than another round of fetching.
+     */
+    fun setService(value: ApiService) {
+        if (value == service.value) return
+        viewModelScope.launch {
+            catalogs.select(value)
+            rebuild()
+            loadRadar()
+        }
+    }
+
+    // ── Release radar ───────────────────────────────────────────────────
+
+    private val _radar = MutableStateFlow<List<RadarItem>>(emptyList())
+
+    /** New releases from artists the listener plays; empty hides the row. */
+    val radar: StateFlow<List<RadarItem>> = _radar.asStateFlow()
+
+    private var radarJob: Job? = null
+
+    /**
+     * Loads the radar. Badges are worked out here, against what was seen
+     * before this load, so they stay up for as long as this page shows them
+     * even after [markRadarSeen] has moved the marker on.
+     */
+    private fun loadRadar(force: Boolean = false) {
+        radarJob?.cancel()
+        radarJob = viewModelScope.launch {
+            val releases = runCatching { radarUseCase.releases(force) }.getOrDefault(emptyList())
+            val seen = preferences.releaseRadarSeenThrough.first()
+            val today = LocalDate.now()
+            _radar.value = releases.map {
+                RadarItem(it, tf.monochrome.android.domain.model.ReleaseRadar.isNew(it, seen, today))
+            }
+        }
+    }
+
+    /** The radar has been on screen: what it showed is no longer new next time. */
+    fun markRadarSeen() {
+        val newest = _radar.value.maxOfOrNull { it.release.day } ?: return
+        viewModelScope.launch { preferences.setReleaseRadarSeenThrough(newest) }
+    }
+
     /**
      * Lower-cased names of the artists the listener actually plays, for the
      * "For you" ordering.
@@ -313,6 +407,121 @@ class DiscoverViewModel @Inject constructor(
 
     private fun noteGenreVisited(genreId: String) {
         viewModelScope.launch { preferences.noteGenreVisited(genreId) }
+    }
+
+    // ── Today ───────────────────────────────────────────────────────────
+
+    /**
+     * The local day, as an epoch day. Re-read by [onShown] rather than by a
+     * timer: this view model outlives a night easily, and the page is the only
+     * place the day is visible.
+     */
+    private val _day = MutableStateFlow(LocalDate.now().toEpochDay())
+
+    /** Called whenever the page comes on screen, so a new day turns over. */
+    fun onShown() {
+        _day.value = LocalDate.now().toEpochDay()
+        // Coming back from Settings › Connections is the usual way a service
+        // appears or goes, and this is the next time the page is seen.
+        checkServices()
+        viewModelScope.launch { deckStore.load() }
+    }
+
+    /**
+     * Today's swipe deck, for its card in the feed; null before today's stack
+     * is dealt, which is what the card's "Start" means.
+     */
+    val deckProgress: StateFlow<DeckProgress?> =
+        combine(deckStore.state, _day) { stored, day ->
+            stored?.takeIf { it.day == day && it.cards.isNotEmpty() }
+                ?.let { DeckProgress(it.position, it.cards.size, it.kept.size) }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /** The listener's genres, most telling first: hearted, then recently played. */
+    private val anchors: Flow<List<String>> =
+        combine(preferences.discoveryHeartedGenres, preferences.discoveryRecentGenres) { hearted, recent ->
+            (hearted.sorted() + recent).distinct()
+        }
+
+    /** Every genre opened or played from Discover or the map. */
+    val exploredGenres: StateFlow<Set<String>> = preferences.discoveryExploredGenres
+        .map { ids -> ids.filterTo(HashSet()) { genreGraphRepo.graph[it] != null } }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
+    /**
+     * Today's discovery.
+     *
+     * Stored for the day once picked: playing it marks it explored, and a pick
+     * recomputed from the explored set would swap itself out the moment it was
+     * used. The reason line is re-derived each time from the current genres.
+     *
+     * Walks the graph on [Dispatchers.Default]; it is a few milliseconds, but
+     * every one of them would otherwise be a frame of the page opening.
+     */
+    private val todayShared: Flow<DailyDiscovery.Pick?> =
+        combine(anchors, preferences.discoveryExploredGenres, preferences.discoveryTodayPick, _day) {
+                anchors, explored, stored, day ->
+            val graph = genreGraphRepo.graph
+            val kept = stored?.takeIf { it.first == day }?.let { graph[it.second] }
+            if (kept != null) {
+                DailyDiscovery.Pick(kept, DailyDiscovery.explain(graph, kept.id, anchors))
+            } else {
+                // Explained the way a stored pick is, so the reason line reads
+                // the same before and after the pick is saved.
+                DailyDiscovery.todaysGenre(graph, anchors, explored, day, avoid = setOfNotNull(stored?.second))
+                    ?.also { preferences.setDiscoveryTodayPick(day, it.genre.id) }
+                    ?.let { DailyDiscovery.Pick(it.genre, DailyDiscovery.explain(graph, it.genre.id, anchors)) }
+            }
+        }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+            .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5000), replay = 1)
+
+    val today: StateFlow<DailyDiscovery.Pick?> =
+        todayShared.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /**
+     * The genre of the day, with its history.
+     *
+     * The history asset is the better part of a megabyte, so it is read only
+     * once this card is actually being collected — never at startup — and on
+     * the IO dispatcher by the repository. Combined with the shared pick rather
+     * than with [today], whose initial null would put a different genre here
+     * for a moment and then swap it.
+     */
+    val spotlight: StateFlow<GenreSpotlight?> =
+        combine(
+            anchors,
+            todayShared,
+            _day,
+            flow { emit(runCatching { genreHistoryRepo.data().entries }.getOrDefault(emptyMap())) },
+        ) { anchors, today, day, histories ->
+            val graph = genreGraphRepo.graph
+            DailyDiscovery.spotlight(graph, histories.keys, anchors, setOfNotNull(today?.genre?.id), day)
+                ?.let { node -> histories[node.id]?.let { GenreSpotlight(node, it) } }
+        }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /**
+     * The genre whose tracks are being fetched to play, if any.
+     *
+     * Playing a genre waits on its chart, a network round trip, and a button
+     * that does nothing visible for a second reads as a button that did not
+     * work — so it is tapped again, and the second tap queued the genre twice.
+     */
+    private val _startingGenre = MutableStateFlow<String?>(null)
+    val startingGenre: StateFlow<String?> = _startingGenre.asStateFlow()
+
+    /**
+     * Opens the map on [genreId], with its history already expanded when
+     * [withHistory]. The map flies to whatever is selected when it opens.
+     */
+    fun openOnMap(genreId: String, withHistory: Boolean) {
+        selectOnMap(genreId)
+        if (withHistory) _mapExpanded.value = true
     }
 
     // ── Paging ──────────────────────────────────────────────────────────
@@ -429,11 +638,13 @@ class DiscoverViewModel @Inject constructor(
 
     /** What a built page is filed under. Anything that changes the page is in it. */
     private fun pageKey(
+        service: ApiService,
         label: String?,
         moods: List<String>,
         excluded: Set<String>,
         genreId: String?,
     ): String = listOf(
+        service.name,
         label.orEmpty(),
         moods.joinToString(","),
         excluded.sorted().joinToString(","),
@@ -511,7 +722,7 @@ class DiscoverViewModel @Inject constructor(
                 // switching to a chip clears it, rather than the map's
                 // choice silently outliving the label on screen.
                 ?.takeIf { label != null && genreGraphRepo.graph[it]?.name == label }
-            val key = pageKey(label, moods, _excludedGenres.value, genreId)
+            val key = pageKey(catalogs.currentService(), label, moods, _excludedGenres.value, genreId)
 
             // A page we have already built is a page we can put back up now.
             // Note what is *not* here: no spinner, no clearing the list first,
@@ -756,6 +967,26 @@ class DiscoverViewModel @Inject constructor(
         }
     }
 
+    /** "You are here" on the map: the genre last visited, else the first hearted. */
+    val mapHere: StateFlow<GenreNode?> =
+        combine(preferences.discoveryRecentGenres, preferences.discoveryHeartedGenres) { recent, hearted ->
+            tf.monochrome.android.domain.model.GenreGalaxy.here(genreGraphRepo.graph, recent, hearted)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /**
+     * Flies the map somewhere the listener has not been: a well-known genre
+     * they haven't explored. Selecting it is what moves the camera.
+     */
+    fun surpriseMe() {
+        val pick = tf.monochrome.android.domain.model.GenreGalaxy.surprise(
+            graph = genreGraphRepo.graph,
+            explored = exploredGenres.value,
+            random = kotlin.random.Random.Default,
+            current = _mapSelection.value?.id,
+        ) ?: return
+        selectOnMap(pick.id)
+    }
+
     private val _mapExpanded = MutableStateFlow(false)
 
     /** Whether the map's panel is showing the genre's history. */
@@ -831,6 +1062,77 @@ class DiscoverViewModel @Inject constructor(
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GenreChartState.Idle)
 
+    // ── The galaxy's look ──
+
+    /**
+     * The edit in progress, ahead of the save: sliders move the map every
+     * frame they move, and the write waits for the hand to stop.
+     */
+    private val galaxyVisualsEdit = MutableStateFlow<tf.monochrome.android.domain.model.GalaxyVisualSettings?>(null)
+    private var galaxyVisualsSave: kotlinx.coroutines.Job? = null
+
+    /** How the genre galaxy looks, from the map's own settings sheet. */
+    val galaxyVisuals: StateFlow<tf.monochrome.android.domain.model.GalaxyVisualSettings> =
+        combine(preferences.galaxyVisuals, galaxyVisualsEdit) { saved, edit -> edit ?: saved }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.GalaxyVisualSettings.DEFAULT)
+
+    fun setGalaxyVisuals(settings: tf.monochrome.android.domain.model.GalaxyVisualSettings) {
+        val clamped = settings.clamped()
+        galaxyVisualsEdit.value = clamped
+        galaxyVisualsSave?.cancel()
+        galaxyVisualsSave = viewModelScope.launch {
+            kotlinx.coroutines.delay(GALAXY_VISUALS_SAVE_MS)
+            preferences.setGalaxyVisuals(clamped)
+        }
+    }
+
+    /**
+     * The selected genre's planets and moons: its chart's most popular artists
+     * and their charted tracks (see [tf.monochrome.android.ui.discover.galaxy.PlanetSystem]).
+     *
+     * Waits a moment on each genre first, so flying past one on the way
+     * somewhere else — a chip, Surprise, a path step — costs no request. Asks
+     * for the chart without the MusicBrainz cross-check: that only reorders,
+     * and pays a paced page walk to do it, which the Top 100 can wait for and a
+     * glance at a solar system cannot. The repository caches either way.
+     */
+    /**
+     * The selected genre's planets: its chart as a system, each planet sized
+     * by its artist's catalogue as those counts come in ([planetFacts]). The
+     * counts are asked for as soon as the system is built, so the planets
+     * grow to their sizes while you arrive.
+     */
+    val mapSystem: StateFlow<tf.monochrome.android.ui.discover.galaxy.PlanetSystem?> by lazy {
+        combine(mapSystemFromChart, _planetFacts) { system, facts ->
+            system?.sizedBy(facts.mapNotNull { (artist, f) -> f.releases?.let { artist to it } }.toMap())
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    }
+
+    private val mapSystemFromChart: kotlinx.coroutines.flow.Flow<tf.monochrome.android.ui.discover.galaxy.PlanetSystem?> =
+        _mapSelection.map { it?.id }
+            .distinctUntilChanged()
+            .transformLatest { genreId ->
+                emit(null)
+                if (genreId == null) return@transformLatest
+                kotlinx.coroutines.delay(MAP_SYSTEM_DWELL_MS)
+                val chart = runCatching {
+                    genreCharts.chart(
+                        genreId,
+                        tf.monochrome.android.data.charts.ChartWindow.DEFAULT,
+                        crossCheck = false,
+                    )
+                }.getOrNull() ?: return@transformLatest
+                val known = _planetFacts.value.mapNotNull { (artist, f) -> f.releases?.let { artist to it } }.toMap()
+                val system = tf.monochrome.android.ui.discover.galaxy.PlanetSystem.from(
+                    genreId,
+                    chart.entries,
+                    starRadius = genreStarRadius(genreId),
+                    releases = known,
+                )
+                emit(system)
+                system?.let { loadPlanetFacts(it) }
+            }
+
     /**
      * Play one chart row.
      *
@@ -838,6 +1140,40 @@ class DiscoverViewModel @Inject constructor(
      * search backend's first hit — a chart row names a specific record, and a
      * result agreeing on neither artist nor title is not that record.
      */
+    /** The most-reached genre's reach: what the map measures every star's size against. */
+    private val maxGenreReach: Int by lazy {
+        genreGraphRepo.graph.allGenres.maxOfOrNull { it.reach ?: 0 }?.coerceAtLeast(1) ?: 1
+    }
+
+    /** A genre's star, the way the map sizes it ([tf.monochrome.android.ui.discover.galaxy.GalaxyScene.prominence]). */
+    private fun genreStarRadius(genreId: String): Float {
+        val reach = genreGraphRepo.graph[genreId]?.reach ?: 0
+        val prominence = kotlin.math.sqrt(reach.toFloat() / maxGenreReach)
+        return tf.monochrome.android.ui.discover.galaxy.GalaxyScene.starRadius(prominence)
+    }
+
+    /**
+     * What each planet shows of its artist — the opening of their bio, and
+     * their catalogue's size, which is the planet's — by artist name as the
+     * system names them. Filled as they arrive; an artist nothing is known
+     * of (or with no Last.fm key) is simply never in it.
+     */
+    private val _planetFacts = MutableStateFlow<Map<String, tf.monochrome.android.data.charts.ArtistFacts>>(emptyMap())
+    val planetFacts: StateFlow<Map<String, tf.monochrome.android.data.charts.ArtistFacts>> = _planetFacts.asStateFlow()
+    private val factsAsked = mutableSetOf<String>()
+
+    /** Asks for the facts of [system]'s artists not already known or on their way. */
+    private fun loadPlanetFacts(system: tf.monochrome.android.ui.discover.galaxy.PlanetSystem) {
+        for (planet in system.planets) {
+            val artist = planet.artist
+            if (artist in _planetFacts.value || !factsAsked.add(artist)) continue
+            viewModelScope.launch {
+                val facts = runCatching { genreCharts.artistFacts(artist) }.getOrNull()
+                if (facts != null) _planetFacts.update { it + (artist to facts) } else factsAsked.remove(artist)
+            }
+        }
+    }
+
     fun playChartEntry(
         entry: tf.monochrome.android.data.charts.ChartEntry,
         player: tf.monochrome.android.ui.player.PlayerViewModel,
@@ -923,14 +1259,20 @@ class DiscoverViewModel @Inject constructor(
      */
     fun playGenre(genreId: String, player: tf.monochrome.android.ui.player.PlayerViewModel) {
         val node = genreGraphRepo.graph[genreId] ?: return
+        if (_startingGenre.value == genreId) return
         noteGenreVisited(genreId)
+        _startingGenre.value = genreId
         viewModelScope.launch {
-            val tracks = genreQueue(genreId)
-            // Silence rather than a wrong track: if the catalogue has nothing
-            // for this genre there is nothing honest to play.
-            tracks.firstOrNull()?.let { player.playUnifiedTrack(it, tracks) }
-            // The map stays open, so the panel should reflect what's playing.
-            _mapSelection.value = node
+            try {
+                val tracks = genreQueue(genreId)
+                // Silence rather than a wrong track: if the catalogue has nothing
+                // for this genre there is nothing honest to play.
+                tracks.firstOrNull()?.let { player.playUnifiedTrack(it, tracks) }
+                // The map stays open, so the panel should reflect what's playing.
+                _mapSelection.value = node
+            } finally {
+                if (_startingGenre.value == genreId) _startingGenre.value = null
+            }
         }
     }
 
@@ -944,9 +1286,15 @@ class DiscoverViewModel @Inject constructor(
      */
     fun radioGenre(genreId: String, player: tf.monochrome.android.ui.player.PlayerViewModel) {
         val node = genreGraphRepo.graph[genreId] ?: return
+        if (_startingGenre.value == genreId) return
         noteGenreVisited(genreId)
+        _startingGenre.value = genreId
         viewModelScope.launch {
-            val tracks = genreQueue(genreId).take(RADIO_OPENING)
+            val tracks = try {
+                genreQueue(genreId).take(RADIO_OPENING)
+            } finally {
+                if (_startingGenre.value == genreId) _startingGenre.value = null
+            }
             val seed = tracks.firstOrNull() ?: return@launch
             // A short opening run rather than the whole pool. The station is
             // seeded from one track and then follows *that* track's neighbours,
@@ -978,6 +1326,8 @@ class DiscoverViewModel @Inject constructor(
 
     fun refresh() {
         _refreshing.value = true
+        onShown()
+        loadRadar(force = true)
         // The gesture means "go and look again", so the pages built earlier
         // stop counting. Without this the restore path would hand the same
         // page straight back and pull-to-refresh would be a spinner that
@@ -1075,6 +1425,15 @@ class DiscoverViewModel @Inject constructor(
      * once every property above has run. See the note beside [exhaustedShelves].
      */
     init {
+        // After the feed's first page, never alongside it: the radar is two
+        // dozen requests and the first shelf should not wait on any of them.
+        viewModelScope.launch {
+            _loading.first { !it }
+            loadRadar()
+        }
+    }
+
+    init {
         selectChip(null)
     }
 
@@ -1102,5 +1461,11 @@ class DiscoverViewModel @Inject constructor(
 
         /** Seed rotation per page of the personalized feed. */
         const val PAGE_ROTATION = 3
+
+        /** How long the map stays on a genre before its planets are fetched. */
+        const val MAP_SYSTEM_DWELL_MS = 700L
+
+        /** How long after the last change to the galaxy's look it is saved. */
+        const val GALAXY_VISUALS_SAVE_MS = 350L
     }
 }

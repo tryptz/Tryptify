@@ -25,6 +25,11 @@ data class DownloadItem(
     // Deezer identity, captured at enqueue for the same reason as [appleId].
     // Defaulted so a queue persisted before it existed still decodes.
     val deezerId: Long = -1L,
+    // Qobuz identity, captured at enqueue for the same reason. Qobuz ids are
+    // bare numbers too, and the registry that knows them loads from disk
+    // after startup: a queue restored before it has would send them to TIDAL,
+    // where the same number is some other recording.
+    val isQobuz: Boolean = false,
     val title: String,
     val artistName: String,
     val albumTitle: String? = null,
@@ -32,6 +37,9 @@ data class DownloadItem(
     val duration: Int = 0,
     val version: String? = null,
     val isThxSpatialAudio: Boolean = false,
+    // TIDAL lists a Dolby Atmos mix: with TIDAL Dolby Atmos on, that mix is
+    // what downloads, or the download fails rather than save stereo.
+    val isDolbyAtmos: Boolean = false,
     // Written into the file's own tags so strict players (Auxio, Symfonium,
     // MediaStore) can order and group the track offline. All defaulted, so a
     // queue persisted before they existed still decodes.
@@ -42,10 +50,11 @@ data class DownloadItem(
     val genre: String? = null,
 ) {
     companion object {
-        fun from(track: Track): DownloadItem = DownloadItem(
+        fun from(track: Track, isQobuz: Boolean = false): DownloadItem = DownloadItem(
             trackId = track.id,
             appleId = track.appleId ?: -1L,
             deezerId = track.deezerId ?: -1L,
+            isQobuz = isQobuz,
             title = track.title,
             artistName = track.artist?.name
                 ?: track.displayArtist.ifBlank { "Unknown Artist" },
@@ -54,6 +63,7 @@ data class DownloadItem(
             duration = track.duration,
             version = track.version,
             isThxSpatialAudio = track.isThxSpatialAudio,
+            isDolbyAtmos = track.isDolbyAtmos,
             trackNumber = track.trackNumber,
             discNumber = track.volumeNumber,
             albumArtist = track.album?.displayArtist?.ifBlank { null },
@@ -70,6 +80,8 @@ data class QueueEntry(
     val progress: Float = 0f,
     /** Attempts made so far; a track is dropped after [DownloadQueue.MAX_ATTEMPTS]. */
     val attempts: Int = 0,
+    /** Why a FAILED entry failed, when the downloader said. */
+    val error: String? = null,
 )
 
 /**
@@ -171,7 +183,7 @@ class DownloadQueue @Inject constructor() {
      * be retried by hand or dismissed — silently dropping it would leave someone
      * wondering which of fifty tracks never arrived.
      */
-    fun fail(trackId: Long, retryable: Boolean) {
+    fun fail(trackId: Long, retryable: Boolean, reason: String? = null) {
         mutate { current ->
             current.map { entry ->
                 if (entry.item.trackId != trackId) return@map entry
@@ -179,7 +191,7 @@ class DownloadQueue @Inject constructor() {
                 if (retryable && attempts < MAX_ATTEMPTS) {
                     entry.copy(status = DownloadStatus.QUEUED, progress = 0f, attempts = attempts)
                 } else {
-                    entry.copy(status = DownloadStatus.FAILED, progress = 0f, attempts = attempts)
+                    entry.copy(status = DownloadStatus.FAILED, progress = 0f, attempts = attempts, error = reason)
                 }
             }
         }
@@ -190,7 +202,7 @@ class DownloadQueue @Inject constructor() {
         mutate { current ->
             current.map { entry ->
                 if (entry.item.trackId == trackId && entry.status == DownloadStatus.FAILED) {
-                    entry.copy(status = DownloadStatus.QUEUED, progress = 0f, attempts = 0)
+                    entry.copy(status = DownloadStatus.QUEUED, progress = 0f, attempts = 0, error = null)
                 } else entry
             }
         }

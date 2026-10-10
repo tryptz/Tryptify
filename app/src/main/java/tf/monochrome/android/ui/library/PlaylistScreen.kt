@@ -7,6 +7,7 @@ import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -18,7 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -59,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import tf.monochrome.android.data.playlistfix.PlaylistFixState
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.ui.components.AddToPlaylistSheet
 import tf.monochrome.android.ui.components.CreatePlaylistDialog
@@ -89,6 +91,15 @@ fun PlaylistScreen(
     viewModel: PlaylistViewModel = hiltViewModel()
 ) {
     val playlistInfo by viewModel.playlistInfo.collectAsStateWithLifecycle()
+    // A TIDAL playlist opened from search: read-only, and fetched rather than local.
+    val catalogPlaylist by viewModel.catalogPlaylist.collectAsStateWithLifecycle()
+    val catalogLoading by viewModel.catalogLoading.collectAsStateWithLifecycle()
+    val catalogFailed by viewModel.catalogFailed.collectAsStateWithLifecycle()
+    // Renaming, deleting, visibility and removing tracks are for the
+    // listener's own playlists only.
+    val isOwn = playlistInfo != null
+    val title = playlistInfo?.name ?: catalogPlaylist?.title
+    val description = playlistInfo?.description ?: catalogPlaylist?.description
     val tracks by viewModel.tracks.collectAsStateWithLifecycle()
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsStateWithLifecycle()
     val playlists by playerViewModel.playlists.collectAsStateWithLifecycle()
@@ -103,6 +114,14 @@ fun PlaylistScreen(
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
     var showAddToPlaylistForSelection by remember { mutableStateOf(false) }
 
+    // Repair and regenerate: the job lives in PlaylistFixer and outlives this screen.
+    val fixState by viewModel.fixState.collectAsStateWithLifecycle()
+    val fixBusyElsewhere by viewModel.fixBusyElsewhere.collectAsStateWithLifecycle()
+    val fixServices by viewModel.fixServices.collectAsStateWithLifecycle()
+    var showRepairDialog by remember { mutableStateOf(false) }
+    var showRegenerateDialog by remember { mutableStateOf(false) }
+    var unmatchedSongs by remember { mutableStateOf<List<String>?>(null) }
+
     // Search text and order live here, not in the ViewModel: they describe how
     // this screen is being looked at right now, not anything about the playlist.
     var listQuery by rememberSaveable { mutableStateOf("") }
@@ -113,6 +132,9 @@ fun PlaylistScreen(
     val visibleTracks = remember(tracks, listQuery, listSort) {
         tracks.applySearchAndSort(listQuery, listSort)
     }
+    // A TIDAL playlist can hold one track twice, and two rows with one key
+    // crash the list, so the key is the id and which occurrence it is.
+    val rowKeys = remember(visibleTracks) { LibraryKeys.occurrences(visibleTracks.map { it.id }) }
     val selection = rememberTrackSelectionState<Long>()
     BackHandler(enabled = selection.active) { selection.clear() }
 
@@ -125,7 +147,7 @@ fun PlaylistScreen(
             onAddToQueue = { playerViewModel.addToQueue(listOf(track)) },
             onToggleLike = { playerViewModel.toggleFavorite(track) },
             onAddToPlaylist = { showAddToPlaylistForTrack = track },
-            onRemoveFromPlaylist = { viewModel.removeTrack(track.id) },
+            onRemoveFromPlaylist = if (isOwn) ({ viewModel.removeTrack(track.id) }) else null,
             onDownloadTrack = if (playerViewModel.isLocalTrack(track)) null
             else ({ playerViewModel.downloadTrack(track) }),
             onShareFile = { playerViewModel.shareTrack(track) },
@@ -197,6 +219,32 @@ fun PlaylistScreen(
         )
     }
 
+    if (showRepairDialog) {
+        RepairPlaylistDialog(
+            services = fixServices,
+            onDismiss = { showRepairDialog = false },
+            onConfirm = {
+                showRepairDialog = false
+                viewModel.repairPlaylist()
+            },
+        )
+    }
+
+    if (showRegenerateDialog) {
+        RegeneratePlaylistDialog(
+            services = fixServices,
+            onDismiss = { showRegenerateDialog = false },
+            onConfirm = { primary, fallback ->
+                showRegenerateDialog = false
+                viewModel.regeneratePlaylist(primary, fallback)
+            },
+        )
+    }
+
+    unmatchedSongs?.let { songs ->
+        UnmatchedSongsDialog(songs = songs, onDismiss = { unmatchedSongs = null })
+    }
+
     val editInfo = playlistInfo
     if (showEditDialog && editInfo != null) {
         CreatePlaylistDialog(
@@ -216,7 +264,7 @@ fun PlaylistScreen(
         TopAppBar(
             title = {
                 Text(
-                    text = playlistInfo?.name ?: "",
+                    text = title ?: "",
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -234,7 +282,7 @@ fun PlaylistScreen(
                     if (!searchOpen) listQuery = ""
                 })
 
-                IconButton(onClick = { showMenu = true }) {
+                if (isOwn) IconButton(onClick = { showMenu = true }) {
                     Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.action_more))
                 }
                 DropdownMenu(
@@ -281,10 +329,10 @@ fun PlaylistScreen(
                     selection.clear()
                 },
                 onAddToPlaylist = { showAddToPlaylistForSelection = true },
-                onDelete = {
+                onDelete = if (isOwn) ({
                     viewModel.removeTracks(selection.selectedIds)
                     selection.clear()
-                },
+                }) else null,
                 deleteContentDescription = stringResource(R.string.action_remove_from_playlist)
             )
         }
@@ -311,15 +359,15 @@ fun PlaylistScreen(
                         .padding(horizontal = 24.dp, vertical = 24.dp)
                 ) {
                     Text(
-                        text = playlistInfo?.name ?: stringResource(R.string.loading),
+                        text = title ?: stringResource(R.string.loading),
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    if (!playlistInfo?.description.isNullOrEmpty()) {
+                    if (!description.isNullOrEmpty()) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = playlistInfo?.description ?: "",
+                            text = description,
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -375,6 +423,32 @@ fun PlaylistScreen(
                         }
                     }
                     }
+
+                    // Only the listener's own playlists can be rewritten.
+                    if (isOwn) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        tf.monochrome.android.devedit.DevEditable("playlist_fix_row", Modifier.fillMaxWidth()) {
+                            PlaylistFixActions(
+                                enabled = tracks.isNotEmpty() &&
+                                    fixState !is PlaylistFixState.Running && !fixBusyElsewhere,
+                                onRepair = {
+                                    viewModel.refreshFixServices()
+                                    showRepairDialog = true
+                                },
+                                onRegenerate = {
+                                    viewModel.refreshFixServices()
+                                    showRegenerateDialog = true
+                                },
+                            )
+                        }
+                        PlaylistFixStatus(
+                            state = fixState,
+                            busyElsewhere = fixBusyElsewhere,
+                            onStop = { viewModel.stopFix() },
+                            onDismiss = { viewModel.dismissFixResult() },
+                            onShowUnmatched = { unmatchedSongs = it },
+                        )
+                    }
                 }
                 }
             }
@@ -388,7 +462,29 @@ fun PlaylistScreen(
                 }
             }
 
-            if (tracks.isEmpty()) {
+            if (tracks.isEmpty() && catalogLoading) {
+                item {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        androidx.compose.material3.CircularProgressIndicator()
+                    }
+                }
+            } else if (tracks.isEmpty() && catalogFailed) {
+                item {
+                    Column(modifier = Modifier.padding(24.dp)) {
+                        Text(
+                            text = stringResource(R.string.error_load_playlist),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        TextButton(onClick = { viewModel.loadCatalogPlaylist() }) {
+                            Text(stringResource(R.string.action_retry))
+                        }
+                    }
+                }
+            } else if (tracks.isEmpty()) {
                 item {
                     Text(
                         text = stringResource(R.string.playlist_empty),
@@ -407,11 +503,9 @@ fun PlaylistScreen(
                     )
                 }
             } else {
-                items(visibleTracks, key = { it.id }) { track ->
+                itemsIndexed(visibleTracks, key = { index, _ -> rowKeys[index] }) { _, track ->
                     TrackItem(
                         track = track,
-                        isLiked = favoriteTrackIds.contains(track.id),
-                        onLikeClick = { playerViewModel.toggleFavorite(track) },
                         onClick = {
                             if (selection.active) selection.toggle(track.id)
                             else playerViewModel.playTrack(track, visibleTracks)

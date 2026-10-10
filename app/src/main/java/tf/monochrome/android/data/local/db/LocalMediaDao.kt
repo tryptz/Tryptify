@@ -19,6 +19,43 @@ interface LocalMediaDao {
     fun getAllTracks(): Flow<List<LocalTrackEntity>>
 
     /**
+     * Every track whose file is under folder [prefix] (a path ending in "/"),
+     * as a range of the unique filePath index: [prefix] up to [folderRangeEnd]
+     * of it. A comparison rather than LIKE, so a "%" or "_" in a folder name is
+     * just a character; a range rather than substr(), which no index can
+     * serve, so this re-ran as a scan of the whole library on every write.
+     */
+    @Query("SELECT * FROM local_tracks WHERE filePath >= :prefix AND filePath < :prefixEnd")
+    fun observeTracksUnder(prefix: String, prefixEnd: String): Flow<List<LocalTrackEntity>>
+
+    /** [observeTracksUnder], once: every song under a folder, for Play on it. */
+    @Query("SELECT * FROM local_tracks WHERE filePath >= :prefix AND filePath < :prefixEnd")
+    suspend fun getTracksUnder(prefix: String, prefixEnd: String): List<LocalTrackEntity>
+
+    /**
+     * For each folder directly inside folder [prefix] (a path ending in "/"),
+     * the newest file anywhere under it: what a folder's "date modified" means
+     * for sorting. One pass over the folder's range of the filePath index; the
+     * child folder is each path cut at its first "/" past [prefix].
+     */
+    @Query(
+        """
+        SELECT :prefix || substr(filePath, length(:prefix) + 1,
+                   instr(substr(filePath, length(:prefix) + 1), '/') - 1) AS path,
+               MAX(lastModified) AS newest
+        FROM local_tracks
+        WHERE filePath >= :prefix AND filePath < :prefixEnd
+          AND instr(substr(filePath, length(:prefix) + 1), '/') > 0
+        GROUP BY path
+        """
+    )
+    fun observeNewestInSubfolders(prefix: String, prefixEnd: String): Flow<List<FolderNewest>>
+
+    /** The newest file anywhere under folder [prefix], or null for an empty one. */
+    @Query("SELECT MAX(lastModified) FROM local_tracks WHERE filePath >= :prefix AND filePath < :prefixEnd")
+    suspend fun newestUnder(prefix: String, prefixEnd: String): Long?
+
+    /**
      * The songs list, one page at a time.
      *
      * Eight queries rather than one @RawQuery with the ORDER BY pasted in.
@@ -415,3 +452,16 @@ data class TrackScanInfo(
     val artist: String?,
     val title: String?
 )
+
+/**
+ * The first path past every path under folder [prefix] (which ends in "/"):
+ * the same text with that "/" turned into "0", the next character. Nothing
+ * sorts between the two, so `>= prefix AND < this` is exactly the folder.
+ */
+fun folderRangeEnd(prefix: String): String {
+    require(prefix.endsWith('/')) { "a folder prefix ends in /: $prefix" }
+    return prefix.dropLast(1) + '0'
+}
+
+/** A folder and the newest file under it, from [LocalMediaDao.observeNewestInSubfolders]. */
+data class FolderNewest(val path: String, val newest: Long)

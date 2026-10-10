@@ -4,6 +4,7 @@ import android.util.Base64
 import android.util.LruCache
 import io.ktor.client.HttpClient
 import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -13,6 +14,9 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
@@ -21,6 +25,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import tf.monochrome.android.data.api.model.AlbumResponse
+import tf.monochrome.android.data.api.model.hasDolbyAtmos
 import tf.monochrome.android.data.api.model.AlbumTrackItem
 import tf.monochrome.android.data.api.model.ArtistContentResponse
 import tf.monochrome.android.data.api.model.ArtistResponse
@@ -42,7 +47,6 @@ import tf.monochrome.android.data.api.model.QobuzRelease
 import tf.monochrome.android.data.api.model.QobuzSearchEnvelope
 import tf.monochrome.android.data.api.model.QobuzSimilarArtist
 import tf.monochrome.android.data.api.model.QobuzTrackItem
-import tf.monochrome.android.data.api.model.RecommendationsResponse
 import tf.monochrome.android.data.api.model.SearchResponse
 import tf.monochrome.android.data.api.model.TrackInfoResponse
 import tf.monochrome.android.data.api.model.TrackStreamResponse
@@ -95,14 +99,18 @@ class HiFiApiClient @Inject constructor(
         // wait-for-all-children semantics.
         private const val QOBUZ_REQUEST_TIMEOUT_MS = 6_000L
 
-        // Minimum confidence to accept an Apple cross-catalog match. Sits above
-        // a title-only agreement (60) so the artist or the duration must also
-        // line up before a track is bridged to a different catalog's id.
-        private const val APPLE_MATCH_MIN_SCORE = 70
-
         // TrypT HiFi checks the Atmos manifest (one HiFi API round trip plus
         // the manifest fetch) before answering; give it longer than a search.
         private const val TIDAL_ATMOS_TIMEOUT_MS = 10_000L
+
+        // A download can wait for the server to start the Atmos build
+        // (manifest, tags, MPD); nobody is waiting on it to start playing.
+        private const val TIDAL_ATMOS_DOWNLOAD_TIMEOUT_MS = 90_000L
+
+        // Playlist pages: as many tracks per request as the server allows,
+        // and how many of the remaining pages are fetched at once.
+        private const val PLAYLIST_PAGE_LIMIT = 500
+        private const val PLAYLIST_PAGE_CONCURRENCY = 4
     }
 
     private data class CacheEntry(
@@ -210,7 +218,7 @@ class HiFiApiClient @Inject constructor(
         }
 
         val body = fetchWithRetry(pagedQuery("s", query, offset, limit))
-        val response = parseSearchResponse(body)
+        val response = parseSearchResponse(body, HifiPayload.Kind.TRACKS)
         val tracks = response.items.map { it.toTrack() }
         cache.put(cacheKey, CacheEntry(tracks))
         return tracks
@@ -226,7 +234,7 @@ class HiFiApiClient @Inject constructor(
         }
 
         val body = fetchWithRetry(pagedQuery("al", query, offset, limit))
-        val response = parseSearchResponse(body)
+        val response = parseSearchResponse(body, HifiPayload.Kind.ALBUMS)
         val albums = response.items.map { it.toAlbum() }
         cache.put(cacheKey, CacheEntry(albums))
         return albums
@@ -242,7 +250,7 @@ class HiFiApiClient @Inject constructor(
         }
 
         val body = fetchWithRetry(pagedQuery("a", query, offset, limit))
-        val response = parseSearchResponse(body)
+        val response = parseSearchResponse(body, HifiPayload.Kind.ARTISTS)
         val artists = response.items.map { it.toArtist() }
         cache.put(cacheKey, CacheEntry(artists))
         return artists
@@ -250,7 +258,7 @@ class HiFiApiClient @Inject constructor(
 
     suspend fun searchPlaylists(query: String, offset: Int = 0, limit: Int = 50): List<Playlist> {
         val body = fetchWithRetry(pagedQuery("p", query, offset, limit))
-        val response = parseSearchResponse(body)
+        val response = parseSearchResponse(body, HifiPayload.Kind.PLAYLISTS)
         return response.items.map { it.toPlaylist() }
     }
 
@@ -685,107 +693,6 @@ class HiFiApiClient @Inject constructor(
         return absoluteUrl(raw, base)
     }
 
-    /**
-     * Find the Apple Music adamId for a recording the app knows by metadata,
-     * so a Qobuz/TIDAL/local track can be pulled from the Apple wrapper.
-     *
-     * Matching is by title + artist, not ISRC: the instance's Apple layer
-     * indexes text only (an ISRC query returns zero results), so the query is
-     * "<title> <artist>" and candidates are then scored. Duration is the
-     * tie-breaker that separates the original from covers and edits.
-     *
-     * The result (including "no match") is cached in [QobuzIdRegistry] so this
-     * costs one round trip per track, ever. Returns null when Apple isn't
-     * configured, nothing matches confidently, or the request fails.
-     */
-    suspend fun findAppleIdFor(
-        trackId: Long,
-        title: String,
-        artist: String,
-        durationSeconds: Int = 0,
-    ): Long? {
-        qobuzIdRegistry.appleIdFor(trackId)?.let { return it }
-        if (qobuzIdRegistry.hasAppleLookup(trackId)) return null
-        if (title.isBlank()) return null
-
-        val instance = instanceManager.appleInstanceOrNull() ?: return null
-        val base = instance.url.trimEnd('/')
-        // offset is required by /api/apple/get-music — omitting it is a 400.
-        val query = listOf(title, artist).filter { it.isNotBlank() }.joinToString(" ")
-        val envelope = withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
-            runCatching {
-                val res = httpClient.get(
-                    "$base/api/apple/get-music?q=${query.encodeUrl()}&offset=0"
-                )
-                if (!res.status.isSuccess()) return@runCatching null
-                json.decodeFromString<QobuzSearchEnvelope>(res.bodyAsText())
-            }.getOrNull()
-        }
-
-        val items = envelope?.data?.tracks?.items.orEmpty()
-        val best = items
-            .mapNotNull { item ->
-                val id = item.id ?: return@mapNotNull null
-                val score = appleMatchScore(item, title, artist, durationSeconds)
-                if (score < APPLE_MATCH_MIN_SCORE) null else id to score
-            }
-            .maxByOrNull { it.second }
-            ?.first
-
-        if (best == null) {
-            qobuzIdRegistry.markNoAppleMatch(trackId)
-            return null
-        }
-        qobuzIdRegistry.registerAppleIdFor(trackId, best)
-        return best
-    }
-
-    /**
-     * Confidence that [item] is the same recording as the given metadata.
-     * Title carries the most weight, artist next, duration is a bonus — a
-     * title-only agreement is deliberately below [APPLE_MATCH_MIN_SCORE] so a
-     * generic name like "Intro" can't match the wrong song on its own.
-     */
-    private fun appleMatchScore(
-        item: QobuzTrackItem,
-        title: String,
-        artist: String,
-        durationSeconds: Int,
-    ): Int {
-        val wantTitle = normalizeForMatch(title)
-        val gotTitle = normalizeForMatch(item.title)
-        if (wantTitle.isBlank() || gotTitle.isBlank()) return 0
-
-        var score = when {
-            gotTitle == wantTitle -> 60
-            gotTitle.startsWith(wantTitle) || wantTitle.startsWith(gotTitle) -> 40
-            gotTitle.contains(wantTitle) || wantTitle.contains(gotTitle) -> 25
-            else -> return 0
-        }
-
-        val wantArtist = normalizeForMatch(artist)
-        val gotArtist = normalizeForMatch(item.performer?.name ?: item.album?.artist?.name ?: "")
-        if (wantArtist.isNotBlank() && gotArtist.isNotBlank()) {
-            score += when {
-                gotArtist == wantArtist -> 40
-                gotArtist.contains(wantArtist) || wantArtist.contains(gotArtist) -> 28
-                else -> 0
-            }
-        }
-
-        val gotDuration = item.duration ?: 0
-        if (durationSeconds > 0 && gotDuration > 0) {
-            val delta = kotlin.math.abs(gotDuration - durationSeconds)
-            score += when {
-                delta <= 2 -> 20
-                delta <= 5 -> 10
-                delta > 30 -> -30
-                else -> 0
-            }
-        }
-        return score
-    }
-
     /** Lowercase, strip bracketed suffixes and punctuation, collapse whitespace. */
     private fun normalizeForMatch(raw: String): String =
         raw.lowercase()
@@ -919,6 +826,27 @@ class HiFiApiClient @Inject constructor(
     }.getOrNull()
 
     /**
+     * The song TIDAL has under [trackId] — title, artists, length — or null when
+     * it has none or can't be asked. The playlist repair compares this with what
+     * a row says it is: a Qobuz or Deezer id that lost its catalogue plays as
+     * whatever TIDAL recording has the same number.
+     */
+    suspend fun getTidalTrack(trackId: Long): Track? = runCatching {
+        val infoBody = fetchWithRetry("/info/?id=$trackId")
+        val info = json.decodeFromString<TrackInfoResponse>(unwrapResponse(infoBody))
+        info.takeIf { it.title.isNotBlank() }?.let {
+            Track(
+                id = trackId,
+                title = it.title,
+                duration = it.duration,
+                artist = it.artist?.toDomain(),
+                artists = it.artists.map { a -> a.toDomain() },
+                album = it.album?.toDomain(),
+            )
+        }
+    }.getOrNull()
+
+    /**
      * Resolve the Qobuz match for an ISRC. Qobuz indexes tracks by ISRC, so
      * /api/get-music?q=<isrc> returns the exact recording — far more reliable
      * than a title/artist match. Also carries the Qobuz album slug and artist
@@ -990,7 +918,8 @@ class HiFiApiClient @Inject constructor(
             cover = response.cover,
             explicit = response.explicit,
             type = response.type,
-            duration = response.duration
+            duration = response.duration,
+            isDolbyAtmos = hasDolbyAtmos(response.audioModes, response.mediaMetadata) == true,
         )
 
         val trackItems = response.tracks?.items ?: response.items ?: emptyList()
@@ -1027,7 +956,7 @@ class HiFiApiClient @Inject constructor(
 
         // Fetch artist info
         val infoBody = fetchWithRetry("/artist/?id=$artistId")
-        val artistResponse = json.decodeFromString<ArtistResponse>(unwrapResponse(infoBody))
+        val artistResponse = json.decodeFromString<ArtistResponse>(HifiPayload.entity(json, infoBody, "artist"))
         val artist = Artist(
             id = artistResponse.id,
             name = artistResponse.name,
@@ -1057,13 +986,15 @@ class HiFiApiClient @Inject constructor(
         val eps = allAlbums.filter { it.type?.equals("EP", ignoreCase = true) == true }
         val singles = allAlbums.filter { it.type?.equals("SINGLE", ignoreCase = true) == true }
 
-        val topTracks = contentResponse.topTracks?.items?.map { it.toDomain() } ?: emptyList()
+        // hifi-api sends the top tracks as `tracks`, a bare list; older
+        // servers sent `topTracks: {items}`.
+        val topTracks = (contentResponse.topTracks?.items ?: contentResponse.tracks)
+            ?.map { it.toDomain() } ?: emptyList()
 
         // Try fetching similar artists
         val similarArtists = try {
             val similarBody = fetchWithRetry("/artist/similar/?id=$artistId", minVersion = "2.3")
-            val items = json.decodeFromString<SearchResponse>(unwrapResponse(similarBody))
-            items.items.map { it.toArtist() }
+            HifiPayload.search(json, similarBody, HifiPayload.Kind.ARTISTS).items.map { it.toArtist() }
         } catch (_: Exception) {
             emptyList()
         }
@@ -1092,25 +1023,44 @@ class HiFiApiClient @Inject constructor(
 
     // --- Playlist ---
 
-    suspend fun getPlaylist(playlistId: String): Playlist {
-        val body = fetchWithRetry("/playlist/?id=$playlistId")
-        val response = json.decodeFromString<PlaylistResponse>(unwrapResponse(body))
+    /**
+     * Off the caller's thread: playlist pages of up to 500 tracks are decoded
+     * and merged here, and the playlist screen calls this from its view
+     * model, which runs on the main thread.
+     */
+    suspend fun getPlaylist(playlistId: String): Playlist =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { fetchPlaylist(playlistId) }
 
-        val trackItems = response.items ?: response.tracks ?: emptyList()
-        var tracks = trackItems.mapNotNull { it.toDomain() }
+    private suspend fun fetchPlaylist(playlistId: String): Playlist {
+        // The largest page a HiFi API server answers (TrypT HiFi fetches it
+        // from TIDAL as parallel pages of 100). A server that caps lower just
+        // sends fewer, and the page size below follows what it sent.
+        val body = fetchWithRetry("/playlist/?id=$playlistId&limit=$PLAYLIST_PAGE_LIMIT")
+        val response = json.decodeFromString<PlaylistResponse>(HifiPayload.entity(json, body, "playlist"))
 
-        // Handle pagination
-        val total = response.numberOfTracks ?: tracks.size
-        if (tracks.size < total) {
-            var offset = tracks.size
-            while (offset < total) {
-                val pageBody = fetchWithRetry("/playlist/?id=$playlistId&offset=$offset")
-                val pageResponse = json.decodeFromString<PlaylistResponse>(unwrapResponse(pageBody))
-                val pageItems = pageResponse.items ?: pageResponse.tracks ?: emptyList()
-                tracks = tracks + pageItems.mapNotNull { it.toDomain() }
-                offset += pageItems.size
-                if (pageItems.isEmpty()) break
+        val firstPage = response.items ?: response.tracks ?: emptyList()
+        var tracks = firstPage.playlistTracks()
+
+        // The rest of the pages at once, a few at a time, rather than one
+        // round trip after another: a 1,000-track playlist used to be ten
+        // requests in a row through the server and TIDAL.
+        // Items are tracks and videos together, so the pages run over both.
+        val total = response.numberOfTracks?.plus(response.numberOfVideos ?: 0) ?: firstPage.size
+        val pageSize = firstPage.size
+        if (pageSize in 1 until total) {
+            val gate = kotlinx.coroutines.sync.Semaphore(PLAYLIST_PAGE_CONCURRENCY)
+            val pages = kotlinx.coroutines.coroutineScope {
+                (pageSize until total step pageSize).map { offset ->
+                    async {
+                        gate.withPermit {
+                            val pageBody = fetchWithRetry("/playlist/?id=$playlistId&offset=$offset&limit=$pageSize")
+                            val pageResponse = json.decodeFromString<PlaylistResponse>(HifiPayload.entity(json, pageBody, "playlist"))
+                            (pageResponse.items ?: pageResponse.tracks ?: emptyList()).playlistTracks()
+                        }
+                    }
+                }.awaitAll()
             }
+            tracks = tracks + pages.flatten()
         }
 
         return Playlist(
@@ -1127,16 +1077,17 @@ class HiFiApiClient @Inject constructor(
 
     // --- Streaming ---
 
+    /**
+     * [expectAtmos]: TIDAL listed a Dolby Atmos mix for the track when it was
+     * queued (downloads only; it outlives [knownAtmos], which a restart
+     * empties).
+     */
     suspend fun getTrackStream(
         trackId: Long,
         quality: AudioQuality,
-        forDownload: Boolean = false
+        forDownload: Boolean = false,
+        expectAtmos: Boolean = false,
     ): TrackStream {
-        // Downloads route through the project-private trypt-hifi (Qobuz) API
-        // when configured. The frontend's network trace shows the real call
-        // is GET /api/download-music?track_id=<id>&quality=<qobuz_code>, which
-        // returns a JSON envelope containing a short-lived HMAC-signed
-        // /api/file?... URL we then stream the bytes from.
         // A Deezer id means nothing to Qobuz or TIDAL — both would answer with
         // whatever recording happens to have that number. Deezer picks are
         // served by /api/deezer/download (getDeezerDownloadUrl) and never get
@@ -1147,18 +1098,66 @@ class HiFiApiClient @Inject constructor(
             )
         }
 
+        // Each catalogue downloads from its own server and nowhere else: a
+        // Qobuz id from the Qobuz server, any other id (a TIDAL one) from the
+        // TIDAL server. Never the other one — a TIDAL id on Qobuz names some
+        // other recording, which would be saved under this track's tags.
         if (forDownload) {
-            val qobuzUrl = runCatching { resolveQobuzDownloadUrl(trackId, quality) }.getOrNull()
-            if (qobuzUrl != null) {
-                return TrackStream(
-                    track = Track(id = trackId, title = "", duration = 0),
-                    streamUrl = qobuzUrl,
-                    isDash = false,
-                    replayGain = ReplayGainValues()
+            // With TIDAL's download quality on Dolby Atmos, a TIDAL track with
+            // an Atmos mix downloads that mix: the E-AC-3 JOC .m4a, untouched.
+            // A track TIDAL lists as stereo only downloads its stereo tier.
+            val listedAtmos = expectAtmos || knownAtmos[trackId] == true
+            val atmosOn = preferences.tidalDownloadAtmos.first()
+            if (!qobuzIdRegistry.isQobuzTrack(trackId)) {
+                // Said either way, so a debug log shows why a download is stereo.
+                android.util.Log.i(
+                    "HiFiApiClient",
+                    "TIDAL Atmos $trackId (download): " + when {
+                        !atmosOn -> "not asked, TIDAL's download quality is not Dolby Atmos"
+                        !listedAtmos && knownAtmos[trackId] == false -> "not asked, TIDAL lists the track as stereo only"
+                        else -> "asking the TIDAL server (listed as Atmos: $listedAtmos)"
+                    },
                 )
             }
-            // Qobuz unset or upstream returned nothing. Falling through to
-            // TIDAL is only valid for a TIDAL id — see the check below.
+            if (!qobuzIdRegistry.isQobuzTrack(trackId) &&
+                (listedAtmos || knownAtmos[trackId] == null) &&
+                atmosOn
+            ) {
+                when (val atmos = tidalAtmos(trackId, TIDAL_ATMOS_DOWNLOAD_TIMEOUT_MS)) {
+                    is AtmosAnswer.File -> return TrackStream(
+                        track = Track(id = trackId, title = "", duration = 0),
+                        streamUrl = atmos.url,
+                        isDash = false,
+                        replayGain = ReplayGainValues(),
+                        isDolbyAtmos = true,
+                    )
+                    // TIDAL has an Atmos mix and Atmos was asked for: saving the
+                    // stereo FLAC in its place is not what was asked. The
+                    // download fails and says why; a stereo download quality
+                    // is how to get the FLAC. No answer at all is not that
+                    // verdict: an IOException, which the queue tries again.
+                    is AtmosAnswer.Unavailable -> if (listedAtmos) {
+                        if (atmos.noAnswer) throw java.io.IOException("Dolby Atmos: ${atmos.reason}")
+                        throw IllegalStateException("Dolby Atmos unavailable: ${atmos.reason}")
+                    }
+                }
+            }
+            val url = if (qobuzIdRegistry.isQobuzTrack(trackId)) {
+                // Not wrapped in runCatching: an IOException (no answer at
+                // all) has to reach TrackDownloader as itself, which retries
+                // it, and a cancellation has to stay a cancellation. Only a
+                // server that answered without a link is a verdict.
+                resolveQobuzDownloadUrl(trackId, quality)
+                    ?: throw IllegalStateException("Qobuz could not serve track $trackId")
+            } else {
+                resolveTidalDownloadUrl(trackId, quality)
+            }
+            return TrackStream(
+                track = Track(id = trackId, title = "", duration = 0),
+                streamUrl = url,
+                isDash = false,
+                replayGain = ReplayGainValues()
+            )
         }
 
         // Qobuz ids are not TIDAL ids. Querying /track/ with one either 404s or
@@ -1178,11 +1177,14 @@ class HiFiApiClient @Inject constructor(
         // renderer then renders it to binaural or the speaker layout. Falls
         // through to the stereo stream when the track has no Atmos mix or the
         // instance isn't set / can't serve it.
-        if (!forDownload && preferences.tidalAtmosPreferred.first()) {
-            tidalAtmosStreamUrl(trackId)?.let { url ->
+        // A track TIDAL already listed without an Atmos mix goes straight to
+        // stereo instead of costing a round trip to ask.
+        if (!forDownload && knownAtmos[trackId] != false && preferences.tidalAtmosPreferred.first()) {
+            (tidalAtmos(trackId, TIDAL_ATMOS_TIMEOUT_MS) as? AtmosAnswer.File)?.let { atmos ->
+                android.util.Log.i("HiFiApiClient", "TIDAL Atmos $trackId (playback): playing the Atmos mix")
                 return TrackStream(
                     track = Track(id = trackId, title = "", duration = 0),
-                    streamUrl = url,
+                    streamUrl = atmos.url,
                     isDash = false,
                     replayGain = ReplayGainValues()
                 )
@@ -1196,7 +1198,7 @@ class HiFiApiClient @Inject constructor(
         val streamResponse = json.decodeFromString<TrackStreamResponse>(unwrapResponse(body))
 
         val streamUrl = extractStreamUrlFromManifest(streamResponse.manifest)
-        val isDash = streamUrl?.contains("<MPD") == true || streamUrl?.endsWith(".mpd") == true
+        val isDash = streamUrl?.let(::isDashManifest) == true
 
         if (streamUrl == null) {
             // Fallback to lower quality
@@ -1240,29 +1242,87 @@ class HiFiApiClient @Inject constructor(
         )
     }
 
+    /** What the TIDAL server said when asked for a track's Dolby Atmos file. */
+    private sealed interface AtmosAnswer {
+        data class File(val url: String) : AtmosAnswer
+        /**
+         * [noAnswer]: the server never answered (the call failed or timed
+         * out), which says nothing about the track. A download tries again
+         * rather than failing for good.
+         */
+        data class Unavailable(val reason: String, val noAnswer: Boolean = false) : AtmosAnswer
+    }
+
     /**
-     * The TrypT HiFi instance's link to TIDAL track [trackId]'s Dolby Atmos
-     * file (GET /api/tidal/download-music?atmos=true), or null when the
-     * instance is unset, the track has no Atmos mix, or the call fails. The
+     * The TIDAL server's link to TIDAL track [trackId]'s Dolby Atmos file
+     * (GET /api/tidal/download-music?atmos=true), or why there is none: no
+     * TIDAL server is set, it is a plain HiFi API server without that route,
+     * the track has no Atmos mix, the server did not answer within
+     * [timeoutMs], or the call failed. Asked of the TIDAL server, never the
+     * Qobuz one: Atmos is TIDAL's stream, served by whoever serves TIDAL. The
      * link is Range-capable once assembled and streams progressively before.
+     * Every refusal is logged, so a debug log says why a track played or
+     * downloaded in stereo.
      */
-    private suspend fun tidalAtmosStreamUrl(trackId: Long): String? {
-        val instance = instanceManager.qobuzInstanceOrNull() ?: return null
+    private suspend fun tidalAtmos(trackId: Long, timeoutMs: Long): AtmosAnswer {
+        val answer = tidalAtmosAnswer(trackId, timeoutMs)
+        if (answer is AtmosAnswer.Unavailable) {
+            android.util.Log.w("HiFiApiClient", "TIDAL Atmos $trackId: ${answer.reason}")
+        }
+        return answer
+    }
+
+    private suspend fun tidalAtmosAnswer(trackId: Long, timeoutMs: Long): AtmosAnswer {
+        val instance = instanceManager.tidalInstanceOrNull()
+            ?: return AtmosAnswer.Unavailable("no TIDAL server is set")
         val base = instance.url.trimEnd('/')
-        return withTimeoutOrNull(TIDAL_ATMOS_TIMEOUT_MS) {
-            runCatching {
-                val res = httpClient.get("$base/api/tidal/download-music?track_id=$trackId&atmos=true")
-                if (!res.status.isSuccess()) return@runCatching null
-                val data = json.parseToJsonElement(res.bodyAsText()) as? JsonObject ?: return@runCatching null
-                val payload = data["data"] as? JsonObject ?: return@runCatching null
+        return withTimeoutOrNull(timeoutMs) {
+            try {
+                val res = httpClient.get("$base/api/tidal/download-music?track_id=$trackId&atmos=true") {
+                    // The engine's 30 s read timeout would otherwise end the
+                    // wait long before [timeoutMs]: a download allows 90 s for
+                    // the server to start the Atmos build and answer.
+                    timeout {
+                        socketTimeoutMillis = timeoutMs
+                        requestTimeoutMillis = timeoutMs
+                    }
+                }
+                val data = runCatching { json.parseToJsonElement(res.bodyAsText()) as? JsonObject }.getOrNull()
+                if (!res.status.isSuccess()) {
+                    // TrypT HiFi says why in {success: false, error}.
+                    val error = (data?.get("error") as? JsonPrimitive)?.contentOrNull
+                    return@withTimeoutOrNull AtmosAnswer.Unavailable(
+                        error ?: if (res.status.value == 404) {
+                            // A plain HiFi API server has no such route, so no
+                            // track on it downloads in Atmos: say that, rather
+                            // than a bare status every Atmos track repeats.
+                            "this TIDAL server has no Atmos downloads (HTTP 404); " +
+                                "a stereo download quality gets the FLAC"
+                        } else {
+                            "the TIDAL server answered HTTP ${res.status.value}"
+                        }
+                    )
+                }
+                val payload = data?.get("data") as? JsonObject
+                    ?: return@withTimeoutOrNull AtmosAnswer.Unavailable("the TIDAL server sent no Atmos details")
                 // Only accept a stream the instance confirms carries JOC objects.
                 val stream = payload["stream"] as? JsonObject
                 val joc = (stream?.get("extensionType") as? JsonPrimitive)?.contentOrNull
-                if (joc != null && !joc.equals("JOC", ignoreCase = true)) return@runCatching null
+                if (joc != null && !joc.equals("JOC", ignoreCase = true)) {
+                    return@withTimeoutOrNull AtmosAnswer.Unavailable("the stream is E-AC-3 $joc, not Dolby Atmos (JOC)")
+                }
                 (payload["url"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
-                    ?.let { absoluteUrl(it, base) }
-            }.getOrNull()
-        }
+                    ?.let { AtmosAnswer.File(absoluteUrl(it, base)) }
+                    ?: AtmosAnswer.Unavailable("the TIDAL server sent no link")
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // The timeout below, or the caller cancelling: never swallowed.
+                throw e
+            } catch (e: java.io.IOException) {
+                AtmosAnswer.Unavailable(e.message ?: e.javaClass.simpleName, noAnswer = true)
+            } catch (e: Exception) {
+                AtmosAnswer.Unavailable(e.message ?: e.javaClass.simpleName)
+            }
+        } ?: AtmosAnswer.Unavailable("the TIDAL server did not answer within ${timeoutMs / 1000} s", noAnswer = true)
     }
 
     // --- Recommendations ---
@@ -1272,8 +1332,8 @@ class HiFiApiClient @Inject constructor(
         // the radio from some other song entirely.
         if (qobuzIdRegistry.isDeezerTrack(trackId) && !qobuzIdRegistry.isQobuzTrack(trackId)) return emptyList()
         val body = fetchWithRetry("/recommendations/?id=$trackId", minVersion = "2.4")
-        val response = json.decodeFromString<RecommendationsResponse>(unwrapResponse(body))
-        return response.items.map { apiTrack ->
+        // TIDAL lists each recommendation as {track: {...}, sources}.
+        return HifiPayload.tracks(json, body).map { apiTrack ->
             // Recommendations may return incomplete metadata, so fetch full info
             if (apiTrack.title.isBlank() && apiTrack.id != 0L) {
                 try {
@@ -1311,7 +1371,8 @@ class HiFiApiClient @Inject constructor(
         if (qobuzIdRegistry.isQobuzTrack(trackId) || qobuzIdRegistry.isDeezerTrack(trackId)) return null
         return try {
             val body = fetchWithRetry("/lyrics/?id=$trackId")
-            val response = json.decodeFromString<LyricsResponse>(unwrapResponse(body))
+            // hifi-api sends {version, lyrics: {lyrics, subtitles, ...}}.
+            val response = json.decodeFromString<LyricsResponse>(HifiPayload.entity(json, body, "lyrics"))
             parseLyrics(response, convertToRomaji)
         } catch (_: Exception) {
             null
@@ -1374,20 +1435,10 @@ class HiFiApiClient @Inject constructor(
         }
     }
 
-    private fun parseSearchResponse(body: String): SearchResponse {
-        val unwrapped = unwrapResponse(body)
-        return try {
-            json.decodeFromString<SearchResponse>(unwrapped)
-        } catch (_: Exception) {
-            // Try parsing as array
-            try {
-                val items = json.decodeFromString<List<tf.monochrome.android.data.api.model.SearchItem>>(unwrapped)
-                SearchResponse(items = items)
-            } catch (_: Exception) {
-                SearchResponse()
-            }
-        }
-    }
+    // Track search is one flat page; artist, album and playlist search are
+    // TIDAL top-hits answers, a page per type. See HifiPayload.
+    private fun parseSearchResponse(body: String, kind: HifiPayload.Kind): SearchResponse =
+        HifiPayload.search(json, body, kind)
 
     private fun parseLyrics(response: LyricsResponse, convertToRomaji: Boolean): Lyrics? {
         val subtitles = response.subtitles ?: return response.lyrics?.let { raw ->
@@ -1488,6 +1539,58 @@ class HiFiApiClient @Inject constructor(
                 resolveQobuzDownloadUrl(trackId, AudioQuality.LOSSLESS)
             } else null
     }
+
+    /**
+     * A TIDAL track as one whole file to download, from the TIDAL server only.
+     *
+     * A TrypT HiFi server answers GET /api/tidal/download-music (the same
+     * quality codes as Qobuz's route) with a link to a single file, and
+     * assembles it server-side when TIDAL delivers the track as DASH segments
+     * — which, logged in with an account's own credentials, it does for every
+     * quality. A plain HiFi API server has no such route (404), so its /track/
+     * manifest is used instead: fine when it names one file, but a DASH
+     * manifest is not a file, and is reported rather than passed on as a URL.
+     */
+    private suspend fun resolveTidalDownloadUrl(trackId: Long, quality: AudioQuality): String {
+        val instance = instanceManager.tidalInstanceOrNull() ?: throw NoInstancesConfiguredException()
+        val base = instance.url.trimEnd('/')
+        val res = httpClient.get("$base/api/tidal/download-music?track_id=$trackId&quality=${quality.qobuzCode()}")
+        val body = res.bodyAsText()
+        if (res.status.isSuccess()) {
+            extractQobuzFileUrlFromEnvelope(body, base)?.let { return it }
+        }
+        if (res.status.value != 404) {
+            throw Exception("TIDAL could not serve track $trackId: ${envelopeError(body) ?: "HTTP ${res.status.value}"}")
+        }
+        return tidalManifestFileUrl(trackId, quality)
+    }
+
+    /** The one file a HiFi API /track/ manifest names, for [resolveTidalDownloadUrl]. */
+    private suspend fun tidalManifestFileUrl(trackId: Long, quality: AudioQuality): String {
+        val body = fetchWithRetry("/track/?id=$trackId&quality=${quality.apiValue}", instanceType = InstanceType.STREAMING)
+        val manifest = json.decodeFromString<TrackStreamResponse>(unwrapResponse(body)).manifest
+        val url = extractStreamUrlFromManifest(manifest)
+        return when {
+            url == null && quality == AudioQuality.HI_RES -> tidalManifestFileUrl(trackId, AudioQuality.LOSSLESS)
+            url == null -> throw Exception("TIDAL sent no stream for track $trackId")
+            // TIDAL sends its hi-res tier as DASH segments, which only a TrypT
+            // HiFi server can join into a file. Its CD tier is one FLAC, so a
+            // hi-res download falls back to that, as it does with no stream.
+            // A link to an .mpd is the same thing at one remove: saved, it is
+            // the manifest's XML under an audio name.
+            isDashManifest(url) && quality == AudioQuality.HI_RES ->
+                tidalManifestFileUrl(trackId, AudioQuality.LOSSLESS)
+            isDashManifest(url) -> throw Exception(
+                "TIDAL sent track $trackId as DASH segments; only a TrypT HiFi server can download those as a file"
+            )
+            else -> url
+        }
+    }
+
+    /** The `error` a TrypT HiFi {success:false, error} body carries, if it is a string. */
+    private fun envelopeError(body: String): String? = runCatching {
+        (json.parseToJsonElement(body) as? JsonObject)?.get("error")?.jsonPrimitive?.contentOrNull
+    }.getOrNull()?.takeIf { it.isNotBlank() }
 
     private fun extractQobuzFileUrlFromEnvelope(body: String, base: String): String? {
         val parsed = runCatching { json.decodeFromString<QobuzDownloadEnvelope>(body) }.getOrNull()
@@ -1834,8 +1937,23 @@ private fun tf.monochrome.android.data.api.model.ApiAlbum.toDomain() = Album(
     cover = cover,
     explicit = explicit,
     type = type,
-    duration = duration
+    duration = duration,
+    isDolbyAtmos = hasDolbyAtmos(audioModes, mediaMetadata) == true,
 )
+
+/**
+ * TIDAL track id -> whether TIDAL lists a Dolby Atmos mix for it, for every
+ * track seen with its audio modes. Lets getTrackStream skip the Atmos request
+ * for a track TIDAL has already said has none. Track ids only: album ids live
+ * in another namespace.
+ */
+private val knownAtmos = java.util.concurrent.ConcurrentHashMap<Long, Boolean>()
+
+/** Records [atmos] for TIDAL track [id] when TIDAL said either way; true only for an Atmos mix. */
+private fun noteAtmos(id: Long, atmos: Boolean?): Boolean {
+    if (atmos != null && id != 0L) knownAtmos[id] = atmos
+    return atmos == true
+}
 
 private fun tf.monochrome.android.data.api.model.ApiTrack.toDomain() = Track(
     id = id,
@@ -1851,7 +1969,8 @@ private fun tf.monochrome.android.data.api.model.ApiTrack.toDomain() = Track(
     popularity = popularity,
     type = type ?: "track",
     isUnavailable = unavailable,
-    streamStartDate = streamStartDate
+    streamStartDate = streamStartDate,
+    isDolbyAtmos = noteAtmos(id, hasDolbyAtmos(audioModes, mediaMetadata)),
 )
 
 private fun tf.monochrome.android.data.api.model.SearchItem.toTrack() = Track(
@@ -1867,7 +1986,8 @@ private fun tf.monochrome.android.data.api.model.SearchItem.toTrack() = Track(
     volumeNumber = volumeNumber,
     popularity = popularity,
     type = type ?: "track",
-    streamStartDate = streamStartDate
+    streamStartDate = streamStartDate,
+    isDolbyAtmos = noteAtmos(id, hasDolbyAtmos(audioModes, mediaMetadata)),
 )
 
 private fun tf.monochrome.android.data.api.model.SearchItem.toAlbum() = Album(
@@ -1879,7 +1999,8 @@ private fun tf.monochrome.android.data.api.model.SearchItem.toAlbum() = Album(
     releaseDate = releaseDate,
     cover = cover ?: picture,
     explicit = explicit,
-    type = type
+    type = type,
+    isDolbyAtmos = hasDolbyAtmos(audioModes, mediaMetadata) == true,
 )
 
 private fun tf.monochrome.android.data.api.model.SearchItem.toArtist() = Artist(
@@ -1909,8 +2030,16 @@ private fun tf.monochrome.android.data.api.model.AlbumTrackItem.toTrack(album: A
     explicit = item?.explicit ?: explicit,
     trackNumber = item?.trackNumber ?: trackNumber,
     volumeNumber = item?.volumeNumber ?: volumeNumber,
-    popularity = item?.popularity ?: popularity
+    popularity = item?.popularity ?: popularity,
+    isDolbyAtmos = noteAtmos(
+        item?.id ?: id,
+        hasDolbyAtmos(item?.audioModes ?: audioModes, item?.mediaMetadata ?: mediaMetadata),
+    ),
 )
+
+/** A playlist page's tracks. TIDAL playlists can hold music videos, which the app cannot play. */
+private fun List<tf.monochrome.android.data.api.model.PlaylistTrackItem>.playlistTracks(): List<Track> =
+    filterNot { it.type.equals("video", ignoreCase = true) }.mapNotNull { it.toDomain() }
 
 private fun tf.monochrome.android.data.api.model.PlaylistTrackItem.toDomain(): Track? {
     if (item != null) return item.toDomain()
@@ -1924,6 +2053,17 @@ private fun tf.monochrome.android.data.api.model.PlaylistTrackItem.toDomain(): T
         album = album?.toDomain(),
         trackNumber = trackNumber,
         audioQuality = audioQuality,
-        explicit = explicit ?: false
+        explicit = explicit ?: false,
+        isDolbyAtmos = noteAtmos(trackId, hasDolbyAtmos(audioModes, mediaMetadata)),
     )
 }
+
+/**
+ * Whether a manifest's stream is DASH rather than one file: the MPD XML itself,
+ * or a link to it. A link is judged by its path, so a signed one
+ * (`…/manifest.mpd?token=…`) counts too. Playback hands DASH to the DASH
+ * source; a download cannot save it as a file.
+ */
+internal fun isDashManifest(stream: String): Boolean =
+    stream.contains("<MPD") ||
+        stream.substringBefore('#').substringBefore('?').endsWith(".mpd", ignoreCase = true)

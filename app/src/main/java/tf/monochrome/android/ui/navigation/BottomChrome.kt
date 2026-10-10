@@ -32,6 +32,18 @@ import androidx.compose.ui.unit.dp
 val LocalBottomChromeInset = compositionLocalOf<Dp> { 0.dp }
 
 /**
+ * The same room as [LocalBottomChromeInset], but for the bar as it stands
+ * *now*: folded to one row (the pill's glyph, the mini player and Search side
+ * by side) it is about a tab bar shorter than open.
+ *
+ * For what floats over a screen that does not scroll — the genre galaxy's
+ * panels — and can follow the fold. A panel that sat on the open bar's height
+ * hung a tab bar's height of dead space over the folded one. Lists keep
+ * [LocalBottomChromeInset]: following the fold would jolt them mid-scroll.
+ */
+val LocalBottomChromeNow = compositionLocalOf<Dp> { 0.dp }
+
+/**
  * A scrolling list's bottom padding: its last row clear of the floating chrome,
  * with a little air under it. What a page's list should use instead of a
  * hand-picked number — the old 80dp fell short of the system bar plus the mini
@@ -90,5 +102,5 @@ val LocalNowPlayingTrackId = compositionLocalOf<Long?> { null }
  * nav host provided it, it fell back to defaults that no one chose.
  */
 val LocalMiniPlayerGlass = compositionLocalOf {
-    tf.monochrome.android.domain.model.PlayerGlassSettings()
+    tf.monochrome.android.domain.model.PlayerGlassSettings.INITIAL
 }

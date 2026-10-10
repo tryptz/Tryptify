@@ -791,7 +791,9 @@ val LocalDynamicColorPalette = compositionLocalOf<State<DynamicPalette?>?> { nul
 @Composable
 fun glassTint(explicitArgb: Int): Color {
     if (explicitArgb != 0) return Color(explicitArgb)
-    return MaterialTheme.colorScheme.primary
+    // Inside a pane, the accent its text was moved to is not the glass's
+    // colour: a chip on a sheet is tinted as the sheet is.
+    return tf.monochrome.android.ui.components.LocalGlassAccent.current ?: MaterialTheme.colorScheme.primary
 }
 
 /**

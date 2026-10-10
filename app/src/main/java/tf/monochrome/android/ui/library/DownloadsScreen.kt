@@ -67,7 +67,9 @@ fun DownloadsScreen(
     viewModel: DownloadsViewModel = hiltViewModel(),
     playerViewModel: PlayerViewModel = hiltViewModel(),
 ) {
-    val downloadedTracks by viewModel.downloadedTracks.collectAsStateWithLifecycle()
+    // Null until the list has loaded (see DownloadsViewModel.downloadedTracks).
+    val loadedTracks by viewModel.downloadedTracks.collectAsStateWithLifecycle()
+    val downloadedTracks = loadedTracks.orEmpty()
     val albumGroups by viewModel.albumGroups.collectAsStateWithLifecycle()
     val playlists by playerViewModel.playlists.collectAsStateWithLifecycle()
 
@@ -152,6 +154,9 @@ fun DownloadsScreen(
     }
 
     if (downloadedTracks.isEmpty()) {
+        // Still loading: an empty screen for the moment it takes, rather than
+        // "No downloaded tracks found." over a list that is about to appear.
+        if (loadedTracks == null) return
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
@@ -331,13 +336,21 @@ private fun DownloadedTrackRow(
         )
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = track.title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = track.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                // TIDAL's Atmos mix is what was downloaded.
+                if (track.isDolbyAtmos) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    tf.monochrome.android.ui.components.DolbyAtmosBadgePill()
+                }
+            }
             val sizeText = android.text.format.Formatter.formatShortFileSize(LocalContext.current, track.sizeBytes)
             Text(
                 text = "${track.artistName} • $sizeText",

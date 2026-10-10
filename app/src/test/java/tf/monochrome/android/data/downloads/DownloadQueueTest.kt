@@ -131,6 +131,17 @@ class DownloadQueueTest {
     }
 
     @Test
+    fun `a permanent failure keeps its reason until it is retried`() {
+        val q = queue()
+        q.enqueue(listOf(item(1)))
+        q.takeNext(1)
+        q.fail(1, retryable = false, reason = "Dolby Atmos unavailable: no TIDAL server is set")
+        assertEquals("Dolby Atmos unavailable: no TIDAL server is set", q.entries.value.single().error)
+        q.retry(1)
+        assertEquals(null, q.entries.value.single().error)
+    }
+
+    @Test
     fun `re-requesting a track already queued does not duplicate it`() {
         val q = queue()
         q.enqueue(listOf(item(1), item(2)))
@@ -213,6 +224,28 @@ class DownloadQueueTest {
         )
         // Everything comes back waiting: an interrupted transfer restarts.
         assertTrue(restored.entries.value.all { it.status == DownloadStatus.QUEUED })
+    }
+
+    @Test
+    fun `a Qobuz track is still Qobuz's after the queue is restored`() {
+        // The id alone is a bare number TIDAL also uses, and the registry that
+        // tells them apart may not be loaded yet when the queue comes back.
+        val q = queue()
+        var saved: String? = null
+        q.onChanged = { saved = it }
+        q.enqueue(listOf(item(1).copy(isQobuz = true), item(2)))
+
+        val restored = queue()
+        restored.restore(saved)
+        assertEquals(listOf(true, false), restored.entries.value.map { it.item.isQobuz })
+    }
+
+    @Test
+    fun `a queue saved before the Qobuz flag existed still restores`() {
+        val q = queue()
+        q.restore("""[{"trackId":7,"title":"Old","artistName":"Artist"}]""")
+        assertEquals(listOf(7L), q.entries.value.map { it.item.trackId })
+        assertFalse(q.entries.value.single().item.isQobuz)
     }
 
     @Test

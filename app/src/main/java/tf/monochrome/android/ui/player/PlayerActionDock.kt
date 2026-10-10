@@ -194,6 +194,7 @@ fun PlayerActionDock(
         PlayerGlassHaze(
             modifier = Modifier.matchParentSize(),
             shape = RoundedCornerShape(PlayerDesignTokens.GlassCornerLarge),
+            lensCorner = PlayerDesignTokens.GlassCornerLarge,
         )
 
         // The glass slab with the four icons carved out of it. Drawn in one
@@ -202,7 +203,13 @@ fun PlayerActionDock(
         Canvas(
             modifier = Modifier
                 .matchParentSize()
-                .playerGlass(tint = glassTint, bulgeCenter = bulgeCenter, bulgeAmount = { bulgeAmt })
+                .playerGlass(
+                    tint = glassTint,
+                    bulgeCenter = bulgeCenter,
+                    bulgeAmount = { bulgeAmt },
+                    lensCorner = PlayerDesignTokens.GlassCornerLarge,
+                    liveUnder = rememberPlayerLiveLens(),
+                )
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
         ) {
             val cornerPx = PlayerDesignTokens.GlassCornerLarge.toPx()

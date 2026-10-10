@@ -57,6 +57,8 @@ data class Track(
     val version: String? = null,
     // THX Spatial Audio release — Qobuz marks it only via version/title text.
     val isThxSpatialAudio: Boolean = false,
+    // TIDAL lists a Dolby Atmos mix for it (audioModes / mediaMetadata tags).
+    val isDolbyAtmos: Boolean = false,
     // Apple Music identity, kept SEPARATE from [id]. Non-null means this track
     // came from the Apple catalog and this is its true adamId. Apple and Qobuz
     // ids share no namespace — inferring the source from [id] alone (the old
@@ -86,6 +88,21 @@ data class Track(
 
     val coverUrl: String?
         get() = album?.coverUrl
+
+    /**
+     * The quality text a track row shows, in [UnifiedTrack.qualityBadge]'s
+     * words: a catalogue tier ("HI_RES_LOSSLESS" -> "Hi-Res"), or a local
+     * file's codec ("FLAC") as it is.
+     */
+    val qualityBadge: String?
+        get() = when (val quality = audioQuality?.takeIf { it.isNotBlank() }) {
+            null -> null
+            "HI_RES_LOSSLESS", "HI_RES" -> "Hi-Res"
+            "LOSSLESS" -> "Lossless"
+            "HIGH" -> "High"
+            "LOW" -> "Low"
+            else -> quality
+        }
 }
 
 @Serializable
@@ -104,6 +121,8 @@ data class Album(
     val version: String? = null,
     // THX Spatial Audio release — marks every track on it.
     val isThxSpatialAudio: Boolean = false,
+    // TIDAL lists a Dolby Atmos mix for the release.
+    val isDolbyAtmos: Boolean = false,
     // Qobuz returns this on every album and the app used to drop it on the
     // floor. `genreSlug` is the catalogue's own taxonomy key, which is a more
     // stable join than the display name.
@@ -178,7 +197,9 @@ data class TrackStream(
     val track: Track,
     val streamUrl: String,
     val isDash: Boolean = false,
-    val replayGain: ReplayGainValues? = null
+    val replayGain: ReplayGainValues? = null,
+    /** The track's Dolby Atmos mix (E-AC-3 JOC), not its stereo stream. */
+    val isDolbyAtmos: Boolean = false,
 )
 
 data class ReplayGainValues(
@@ -499,6 +520,8 @@ data class UnifiedTrack(
     val version: String? = null,
     // THX Spatial Audio release — Qobuz marks it only via version/title text.
     val isThxSpatialAudio: Boolean = false,
+    // TIDAL lists a Dolby Atmos mix for it; shown as the Dolby Atmos badge.
+    val isDolbyAtmos: Boolean = false,
 
     // Replay gain
     val replayGainTrack: Float? = null,
@@ -520,6 +543,10 @@ data class UnifiedTrack(
     // File date (epoch millis) for local tracks — used for "sort by date".
     // Null for streaming sources.
     val dateModified: Long? = null,
+
+    // File size on disk for local tracks — used for the folder screen's File
+    // size sort. Null for streaming sources, and in a queue saved before it.
+    val fileSizeBytes: Long? = null,
 
     // Genre, and how much we trust it. Before this existed every streaming
     // result in the app was genre-less, so search could not score on genre and
@@ -623,6 +650,7 @@ data class UnifiedTrack(
             channelCount = channelCount,
             version = version,
             isThxSpatialAudio = isThxSpatialAudio,
+            isDolbyAtmos = isDolbyAtmos,
             appleId = (source as? PlaybackSource.AppleCached)?.appleId,
             deezerId = (source as? PlaybackSource.DeezerPreview)?.deezerId,
         )
