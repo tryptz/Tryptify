@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+
+#### The mixer crashed on smaller screens
+- **Opening the mixer crashed on a Galaxy A35** with "ending radius must be > 0". A knob is drawn for 64 dp, but a row of them in an effect card squeezes each one narrower on a smaller screen, and the knob's body was its size minus fixed margins. At 30 dp or less that left a body of zero, and Android refuses to draw a round gradient of radius zero. Now the whole knob shrinks with the space it gets, margins, ticks and pointer included, so a small knob is a smaller knob, and the gradient is skipped if there's no body to draw. The send knob on the channel strips had the same pattern and the same guard now.
+- **Samsung's per-frame frame-rate lines are left out of the debug log.** One UI logs them one or two a frame. They were 820 of the 946 lines in the A35's log, and they push everything else out of the buffer.
+
 ### Removed
 
 #### The pane behind the Player tab's preview
