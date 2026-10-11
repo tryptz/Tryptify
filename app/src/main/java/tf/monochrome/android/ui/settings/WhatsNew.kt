@@ -95,6 +95,12 @@ object WhatsNew {
     /** TIDAL's own pages, playlists, lyrics and playback, from a HiFi API server. */
     private const val TIDAL = "TIDAL"
 
+    /** Your own playlists and the songs they point at. */
+    private const val PLAYLISTS = "Playlists"
+
+    /** How a radio station picks what plays next. */
+    private const val RADIO = "Radio"
+
     /** The DSP mixer, its buses and the presets that ship with it. */
     private const val MIXER = "Mixer"
 
@@ -145,6 +151,12 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
+                    section = LOOK,
+                    title = "A font browser",
+                    body = "Settings › Fonts draws every font in its own letters and previews it on your own text before you use it. Imports are checked first, named after the font, and never overwrite another.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = PLAYER,
                     title = "Glass play button and dock",
                     body = "The play button and the action dock bend the album art behind them too.",
@@ -172,6 +184,66 @@ object WhatsNew {
                     section = PLAYER,
                     title = "A Lyrics button on the legacy player",
                     body = "The legacy player has a Lyrics button beside Timer, Mixer/FX and Playlist, lit while the lyrics show. It used to be in the Audio tools panel only.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "More karaoke lyrics",
+                    body = "Every lyrics source is asked at once, with lrc.red, LyricsPlus and the AMLL library added, and word-by-word timing wins over line timing. NetEase finds lyrics again.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "Bigger lyrics",
+                    body = "Lyric text goes up to 64 sp in Player Visuals Studio › Lyrics. Long words stay whole instead of breaking between two letters.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = DISCOVER,
+                    title = "Today's discovery",
+                    body = "One genre a day, next to the ones you play and new to you, with Play, Radio and Keep. Beside it, the genre of the day with the start of its history.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = DISCOVER,
+                    title = "Choose TIDAL, Qobuz or Deezer",
+                    body = "A switch at the top of Discover picks the service every shelf, chart and pick comes from.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = DISCOVER,
+                    title = "Swipe to discover",
+                    body = "15 songs a day, one card at a time, each playing as it comes up. Right keeps it in Liked songs, left skips it. While the deck is open the mini player holds skip, undo and keep.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = DISCOVER,
+                    title = "Release radar",
+                    body = "New releases from the artists you play most, from the last 60 days, with a NEW badge on what came out since your last visit.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = DISCOVER,
+                    title = "The genre map is a galaxy",
+                    body = "All 771 genres are stars you can fly through in 3D, around a black hole, with god rays and gas that moves with the music. Lay it out by family, or as a timeline spiral with the oldest music at the core.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = DISCOVER,
+                    title = "Planets and moons",
+                    body = "Stop on a genre and its top artists orbit as planets, their tracks as moons. Tap a moon to play it, long-press a star to play it and list its system, and turn the phone sideways for full screen.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = DISCOVER,
+                    title = "Tune the galaxy",
+                    body = "A button on the map opens its look: sky, core, rays, motion, music and stars, each change showing as you make it. Reset puts it back as it ships.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYLISTS,
+                    title = "Repair and regenerate playlists",
+                    body = "Repair relinks songs whose id plays a different song. Regenerate finds every song again on TIDAL, Qobuz or Deezer. Downloaded songs, and songs with no sure match, are left alone.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
@@ -253,6 +325,24 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
+                    section = LOOK,
+                    title = "Every pill and button is real glass",
+                    body = "Chips, filters, presets and Discover's pills were faint flat slabs. They are the UI panels glass from Player Visuals Studio now, and follow its sliders.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LOOK,
+                    title = "Text that reads on the glass",
+                    body = "Light text on dark glass and dark text on light glass, worked out from the glass itself rather than from the theme.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LOOK,
+                    title = "Glass buttons spring back",
+                    body = "A tapped pill or button could stay half swollen. Every press settles back now.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
                     section = PLAYER,
                     title = "A soft shadow under the lyrics",
                     body = "The lyrics' shadow falls on the background under each line, soft and away from the light, instead of a dark copy stuck to every letter. Shadow depth sets how dark and how soft.",
@@ -268,6 +358,36 @@ object WhatsNew {
                     section = PLAYER,
                     title = "The legacy player fills the screen",
                     body = "With Legacy player on in Settings › System › Performance, the controls sit at the bottom of the screen and the album art is as big as it fits, instead of a small cover over a band of empty space. Lyrics get the full width.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYER,
+                    title = "Lyrics keep time at any speed",
+                    body = "Away from 1x, lyrics drifted ahead or behind and the karaoke highlight skipped syllables. They stay with the song now, Bluetooth delay included.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYER,
+                    title = "The lyrics sheet follows your settings",
+                    body = "It uses your lyric font, size and Bluetooth delay instead of the defaults.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYER,
+                    title = "A shorter Studio",
+                    body = "Each slider in Player Visuals Studio is one compact row, with its explanation a tap away, so the Lyrics tab is far shorter.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = DISCOVER,
+                    title = "Less pinned above the feed",
+                    body = "Sort scrolls with the feed, and Genre map and World radio are cards between the shelves, so the first shelf starts higher.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = RADIO,
+                    title = "Radio settings that make sense",
+                    body = "Pick Familiar, Balanced or Adventurous, then fine-tune three dials and three switches, instead of eleven numbered sliders. Stations you never tuned play exactly as before.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
@@ -310,6 +430,12 @@ object WhatsNew {
                     section = USB_DAC,
                     title = "DAC volume stays with the DAC",
                     body = "The volume keys on a DAC no longer turn down the app's own volume, which left everything quiet afterwards with no way back up. That volume is set back to full once.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "The mixer opens on smaller phones",
+                    body = "On some smaller screens, like a Galaxy A35, opening the mixer closed the app. Its knobs shrink to fit now.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
@@ -364,6 +490,12 @@ object WhatsNew {
                     section = APP,
                     title = "Album and artist pages stop crashing",
                     body = "Opening an album or an artist, especially one opened before, could close the app.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = APP,
+                    title = "Less battery in the background",
+                    body = "Visualizers, music analysis and the glass's tilt sensor stop while the app is hidden or the screen is off.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
