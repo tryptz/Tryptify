@@ -340,7 +340,7 @@ class GlyphComposeTest {
     fun `each lane is reachable and named`() {
         val pressed = mutableListOf<GlyphLane>()
         compose.setContent {
-            GlyphLaneInput(onPress = { pressed += it }, onRelease = {})
+            GlyphLaneInput(onPress = { lane, _ -> pressed += lane }, onRelease = { _, _ -> })
         }
         // The lanes are unlabelled touch zones over artwork; without these
         // names there is no way to tell them apart without sight.
@@ -364,12 +364,12 @@ class GlyphComposeTest {
                 androidx.compose.foundation.layout.Box(
                     modifier = androidx.compose.ui.Modifier.size(400.dp, 100.dp),
                 ) {
-                    GlyphLaneInput(onPress = {}, onRelease = {}, hitboxScale = 0.55f)
+                    GlyphLaneInput(onPress = { _, _ -> }, onRelease = { _, _ -> }, hitboxScale = 0.55f)
                 }
                 androidx.compose.foundation.layout.Box(
                     modifier = androidx.compose.ui.Modifier.size(400.dp, 100.dp),
                 ) {
-                    GlyphLaneInput(onPress = {}, onRelease = {}, hitboxScale = 1f)
+                    GlyphLaneInput(onPress = { _, _ -> }, onRelease = { _, _ -> }, hitboxScale = 1f)
                 }
             }
         }

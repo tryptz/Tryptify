@@ -41,6 +41,7 @@ import tf.monochrome.android.glyph.data.GlyphGhost
 import tf.monochrome.android.glyph.chart.GlyphTiming
 import tf.monochrome.android.glyph.engine.GlyphGameplayEngine
 import tf.monochrome.android.glyph.engine.GlyphScrollMode
+import tf.monochrome.android.glyph.engine.GlyphVisibleFrame
 
 /**
  * The four-lane playfield.
@@ -125,6 +126,10 @@ fun GlyphPlayfield(
         // frame of animation and never a judgement.
         val frameTick = rememberFrameTick(enabled = engine != null)
 
+        // Filled by the engine every frame and kept between frames, so drawing
+        // allocates nothing per note.
+        val frame = remember { GlyphVisibleFrame() }
+
         val laneNames = remember {
             GlyphLane.entries.joinToString(", ") { it.label }
         }
@@ -155,28 +160,34 @@ fun GlyphPlayfield(
             val lookahead = scrollMode
                 .visibleSeconds(timing.bpmRange.start)
                 .coerceIn(MIN_LOOKAHEAD_SECONDS, MAX_LOOKAHEAD_SECONDS)
-            val visible = running.visibleNotes(position - PAST_WINDOW_SECONDS, position + lookahead)
+            running.fillVisible(
+                fromSeconds = position - PAST_WINDOW_SECONDS,
+                toSeconds = position + lookahead,
+                positionSeconds = position,
+                scrollMode = scrollMode,
+                frame = frame,
+            )
+            val notes = running.chart.notes
 
             // One unit is a beat's worth of gap at 1×; the mode decides how many
             // units lie between two moments, and this turns units into pixels.
             val pixelsPerUnit = receptorYPx / GlyphScrollMode.UNITS_ON_SCREEN
 
-            // Pass one: hold and roll bodies, underneath everything.
-            for (entry in visible) {
-                val note = entry.note
+            // Pass one: hold and roll bodies, underneath everything. Their
+            // ends arrive already placed by the engine.
+            var holdingMask = 0
+            for (i in 0 until frame.count) {
+                val note = notes[frame.noteIndex(i)]
                 if (!note.type.isHoldLike) continue
+                if (frame.isHeld(i)) holdingMask = holdingMask or (1 shl note.lane.ordinal)
                 drawHoldBody(
                     assets = assets,
                     note = note,
                     isRoll = note.type == GlyphNoteType.ROLL,
-                    position = position,
-                    scrollMode = scrollMode,
-                    timing = timing,
-                    pixelsPerUnit = pixelsPerUnit,
-                    receptorYPx = receptorYPx,
+                    headY = receptorYPx - frame.bodyHeadUnits(i) * pixelsPerUnit,
+                    tailY = receptorYPx - frame.tailUnits(i) * pixelsPerUnit,
                     laneWidthPx = laneWidthPx,
                     noteSizePx = noteSizePx,
-                    isHeld = entry.isHeld,
                 )
             }
 
@@ -184,8 +195,8 @@ fun GlyphPlayfield(
             // gets a sustained mark, which is the only feedback distinguishing
             // "holding correctly" from "the head was hit and then nothing".
             if (!reducedMotion) {
-                val holding = visible.filter { it.isHeld }.map { it.note.lane }.toSet()
-                for (lane in holding) {
+                for (lane in GlyphLane.entries) {
+                    if (holdingMask and (1 shl lane.ordinal) == 0) continue
                     val glow = assets.image(
                         GlyphAssetCatalog.effect(GlyphEffectArt.HOLD_GLOW),
                         noteSizePx * 2, noteSizePx * 2,
@@ -292,12 +303,11 @@ fun GlyphPlayfield(
             }
 
             // Pass three: heads and taps, above the receptors.
-            for (entry in visible) {
-                val note = entry.note
-                if (entry.isHeadJudged && note.type.isHoldLike) continue
+            for (i in 0 until frame.count) {
+                val note = notes[frame.noteIndex(i)]
+                if (frame.isHeadJudged(i) && note.type.isHoldLike) continue
 
-                val y = receptorYPx -
-                    scrollMode.scrollUnits(timing, position, note.timeSeconds) * pixelsPerUnit
+                val y = receptorYPx - frame.headUnits(i) * pixelsPerUnit
                 if (y < -noteSizePx || y > size.height + noteSizePx) continue
 
                 val id = noteAssetFor(note.type, note.lane, note.division)
@@ -469,24 +479,18 @@ private fun DrawScope.drawHoldBody(
     assets: GlyphAssetRepository,
     note: tf.monochrome.android.glyph.chart.GlyphNote,
     isRoll: Boolean,
-    position: Float,
-    scrollMode: GlyphScrollMode,
-    timing: GlyphTiming,
-    pixelsPerUnit: Float,
-    receptorYPx: Float,
+    /** Top of the body: the head, or the receptor line while it is held. */
+    headY: Float,
+    tailY: Float,
     laneWidthPx: Int,
     noteSizePx: Int,
-    isHeld: Boolean,
 ) {
     val body = assets.image(GlyphAssetCatalog.holdBody(isRoll), noteSizePx, noteSizePx) ?: return
     val tail = assets.image(GlyphAssetCatalog.holdTail(isRoll), noteSizePx, noteSizePx)
 
     // A held note's head stops at the receptor: the tail keeps travelling while
-    // the head stays put, which is what makes holding legible.
-    val headSeconds = if (isHeld) minOf(note.timeSeconds, position) else note.timeSeconds
-    val headY = receptorYPx - scrollMode.scrollUnits(timing, position, headSeconds) * pixelsPerUnit
-    val tailY = receptorYPx -
-        scrollMode.scrollUnits(timing, position, note.endTimeSeconds) * pixelsPerUnit
+    // the head stays put, which is what makes holding legible. The engine
+    // pins it (GlyphVisibleFrame.bodyHeadUnits).
     if (headY < tailY) return
 
     val x = note.lane.ordinal * laneWidthPx + (laneWidthPx - noteSizePx) / 2f

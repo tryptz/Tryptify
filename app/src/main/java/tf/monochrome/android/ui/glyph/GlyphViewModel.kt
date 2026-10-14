@@ -94,6 +94,48 @@ class GlyphViewModel @Inject constructor(
     var engine: GlyphGameplayEngine? = null
         private set
 
+    /**
+     * The loop the engine's scoring window was last set for, so a loop picked
+     * or cleared mid-run is noticed on the next tick (see [armEngineWindow]).
+     */
+    private var armedLoop: GlyphLoopSegment? = null
+    private var engineArmed = false
+
+    /**
+     * Swap in a new engine and free the old one. The native engine holds
+     * memory outside the heap, so dropping the reference is not enough; a
+     * closed engine is inert, so a playfield that still holds it for one more
+     * frame draws nothing rather than reading freed memory.
+     */
+    private fun replaceEngine(next: GlyphGameplayEngine?) {
+        val previous = engine
+        engine = next
+        engineArmed = false
+        armedLoop = null
+        previous?.close()
+    }
+
+    /**
+     * Point the engine's scoring window at the loop being practised.
+     *
+     * Notes outside a loop are set aside rather than timed out: without this
+     * the first advance of every pass marked each note before the loop as a
+     * missed one. With no loop the window opens at [fromSeconds], so a loop
+     * cleared mid-song does not suddenly owe every note behind the playhead.
+     */
+    private fun armEngineWindow(fromSeconds: Float) {
+        val running = engine ?: return
+        val loop = transport.loop
+        if (engineArmed && loop == armedLoop) return
+        if (loop != null) {
+            running.reset(loop.startSeconds, loop.endSeconds)
+        } else if (engineArmed) {
+            running.reset(fromSeconds = fromSeconds)
+        }
+        armedLoop = loop
+        engineArmed = true
+    }
+
     val transport = GlyphAudioTransport(context)
 
     private val ghostRecorder = GlyphGhostRecorder()
@@ -176,8 +218,8 @@ class GlyphViewModel @Inject constructor(
             GlyphEvent.Restart -> restart()
             GlyphEvent.Quit -> quit()
 
-            is GlyphEvent.LanePressed -> pressLane(event.lane)
-            is GlyphEvent.LaneReleased -> releaseLane(event.lane)
+            is GlyphEvent.LanePressed -> pressLane(event.lane, event.atUptimeMillis)
+            is GlyphEvent.LaneReleased -> releaseLane(event.lane, event.atUptimeMillis)
 
             is GlyphEvent.SetSpeed -> setSpeed(event.speed)
             is GlyphEvent.SetPitchLinked -> {
@@ -440,7 +482,7 @@ class GlyphViewModel @Inject constructor(
         lastPublishNanos = 0L
         comboBurstNanos = 0L
         lastComboMilestone = 0
-        engine = buildEngine(chart)
+        replaceEngine(buildEngine(chart))
         runStartedAtMs = System.currentTimeMillis()
 
         transport.prepare(Uri.fromFile(File(song.filePath)))
@@ -450,6 +492,7 @@ class GlyphViewModel @Inject constructor(
         )
         transport.loop = if (training) _ui.value.training.loop else null
         val from = transport.loop?.startSeconds ?: 0f
+        armEngineWindow(from)
         transport.seekTo(from)
         armCountIn(training, from)
         transport.play()
@@ -490,6 +533,7 @@ class GlyphViewModel @Inject constructor(
         return GlyphGameplayEngine(
             chart = transformed,
             windows = GlyphTimingWindows.STANDARD.scaled(modifiers.timingWindowScale),
+            timing = _ui.value.simfile?.timing ?: GlyphTiming.constant(GlyphTiming.DEFAULT_BPM),
         )
     }
 
@@ -515,7 +559,7 @@ class GlyphViewModel @Inject constructor(
     private fun rebuildEngine() {
         val chart = _ui.value.chart ?: return
         if (engine == null) return
-        engine = buildEngine(chart)
+        replaceEngine(buildEngine(chart))
         // A modifier change invalidates the run in progress, so it restarts
         // rather than continuing with a score half-earned under other rules.
         restart()
@@ -546,7 +590,10 @@ class GlyphViewModel @Inject constructor(
                 // segment again. Without this the notes stay marked resolved
                 // from the first pass and the player taps into silence.
                 if (transport.didWrap && running != null) {
-                    running.reset()
+                    // Re-armed for the loop as it is now, not as it was
+                    // when the run started.
+                    engineArmed = false
+                    armEngineWindow(position)
                     metronome.reset()
                     ghostRecorder.clear()
                     laneFlashes.clear()
@@ -558,6 +605,7 @@ class GlyphViewModel @Inject constructor(
                 tickMetronome(position)
 
                 if (running != null) {
+                    armEngineWindow(position)
                     running.advanceTo(position)
                     // Drained exactly once. Draining again inside publish would
                     // find an empty list and the judgement wordmark would never
@@ -580,7 +628,9 @@ class GlyphViewModel @Inject constructor(
                         )
                     }
 
-                    val combo = running.scoreSnapshot.combo
+                    // The combo alone: a full snapshot here would be built
+                    // 125 times a second to read one number.
+                    val combo = running.combo
                     val milestone = combo / COMBO_MILESTONE
                     if (milestone > lastComboMilestone) {
                         comboBurstNanos = System.nanoTime()
@@ -691,14 +741,31 @@ class GlyphViewModel @Inject constructor(
         )
     }
 
-    private fun pressLane(lane: GlyphLane) {
+    private fun pressLane(lane: GlyphLane, atUptimeMillis: Long) {
         val running = engine ?: return
-        running.press(lane, transport.positionNow())
+        running.press(lane, transport.positionAt(touchNanos(atUptimeMillis)))
     }
 
-    private fun releaseLane(lane: GlyphLane) {
+    private fun releaseLane(lane: GlyphLane, atUptimeMillis: Long) {
         val running = engine ?: return
-        running.release(lane, transport.positionNow())
+        running.release(lane, transport.positionAt(touchNanos(atUptimeMillis)))
+    }
+
+    /**
+     * When the finger actually moved, on the audio clock's timebase.
+     *
+     * Compose stamps each pointer change with SystemClock.uptimeMillis, which
+     * is CLOCK_MONOTONIC — the clock System.nanoTime reads on Android — so the
+     * two compare directly. Reading "now" instead judged a touch at the moment
+     * input was dispatched, up to a frame after it happened. A stamp that is
+     * missing, in the future or implausibly old falls back to now.
+     */
+    private fun touchNanos(atUptimeMillis: Long): Long {
+        val now = System.nanoTime()
+        if (atUptimeMillis <= 0L) return now
+        val at = atUptimeMillis * 1_000_000L
+        val age = now - at
+        return if (age < 0L || age > MAX_TOUCH_AGE_NANOS) now else at
     }
 
     private fun togglePause() {
@@ -721,9 +788,10 @@ class GlyphViewModel @Inject constructor(
         laneFlashes.clear()
         comboBurstNanos = 0L
         lastComboMilestone = 0
-        engine = buildEngine(chart)
+        replaceEngine(buildEngine(chart))
         runStartedAtMs = System.currentTimeMillis()
         val from = transport.loop?.startSeconds ?: 0f
+        armEngineWindow(from)
         transport.seekTo(from)
         armCountIn(_ui.value.screen == GlyphScreen.TRAINING, from)
         transport.play()
@@ -1018,6 +1086,7 @@ class GlyphViewModel @Inject constructor(
 
     override fun onCleared() {
         stopTick()
+        replaceEngine(null)
         metronome.release()
         transport.release()
         super.onCleared()
@@ -1025,6 +1094,9 @@ class GlyphViewModel @Inject constructor(
 
     private companion object {
         const val TAG = "GlyphViewModel"
+
+        /** Older than this, a touch stamp is not trusted (see touchNanos). */
+        const val MAX_TOUCH_AGE_NANOS = 250_000_000L
 
         /**
          * The tick is not the frame clock. It polls the audio position often

@@ -89,8 +89,8 @@ fun GlyphGameplayScreen(
         // buttons: the whole lane is the target, which is what makes the mode
         // playable with thumbs.
         GlyphLaneInput(
-            onPress = { onEvent(GlyphEvent.LanePressed(it)) },
-            onRelease = { onEvent(GlyphEvent.LaneReleased(it)) },
+            onPress = { lane, at -> onEvent(GlyphEvent.LanePressed(lane, at)) },
+            onRelease = { lane, at -> onEvent(GlyphEvent.LaneReleased(lane, at)) },
             hitboxScale = gameplay.modifiers.hitboxScale,
             modifier = Modifier.fillMaxSize(),
         )

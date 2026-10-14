@@ -21,8 +21,17 @@ import kotlin.math.sqrt
  */
 class GlyphScore(
     /** Judgements the chart can award. A hold counts twice: head and tail. */
-    private val totalJudgements: Int,
+    totalJudgements: Int,
 ) {
+
+    /**
+     * What a run is scored over. Narrowed by [reset] when a practice loop
+     * covers only part of the chart, so a perfect pass of the loop reads as
+     * perfect rather than as the loop's share of the song.
+     */
+    var totalJudgements: Int = totalJudgements
+        private set
+
     private val counts = IntArray(GlyphJudgement.entries.size)
 
     private var weightSum = 0f
@@ -142,7 +151,8 @@ class GlyphScore(
     }
 
     /** Back to zero, for a fresh loop pass or a restart. */
-    fun reset() {
+    fun reset(totalJudgements: Int = this.totalJudgements) {
+        this.totalJudgements = totalJudgements
         java.util.Arrays.fill(counts, 0)
         weightSum = 0f
         offsetSum = 0.0

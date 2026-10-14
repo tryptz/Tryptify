@@ -55,6 +55,27 @@ class GlyphTiming(
         }
     }
 
+    /**
+     * stopPrefix[k] is the total length of the first k stops, added up in
+     * order — the same sum the walk it replaces produced, so lookups return
+     * exactly what they used to, only without the walk.
+     */
+    private val stopPrefix: FloatArray = FloatArray(this.stops.size + 1).also { prefix ->
+        var total = 0f
+        for (index in this.stops.indices) {
+            total += this.stops[index].seconds
+            prefix[index + 1] = total
+        }
+    }
+
+    /**
+     * Where each segment begins in the audio, stops included: what
+     * [secondsToBeat] searches to find its segment. Computed with
+     * [beatToSeconds] itself, so the search agrees with the old walk exactly.
+     */
+    private val segmentBoundarySeconds: FloatArray =
+        FloatArray(this.segments.size) { index -> beatToSeconds(this.segments[index].beat) }
+
     val startBpm: Float get() = segments.first().bpm
 
     val isConstantTempo: Boolean get() = segments.size == 1
@@ -78,27 +99,36 @@ class GlyphTiming(
      * arrows freeze and the music keeps its place.
      */
     fun secondsToBeat(seconds: Float): Float {
-        var index = 0
-        while (index + 1 < segments.size && beatToSeconds(segments[index + 1].beat) <= seconds) {
-            index += 1
+        // The last segment whose start has been reached, found by binary search
+        // over the precomputed boundaries. Segment 0 is used before the first
+        // boundary too.
+        var low = 1
+        var high = segments.size
+        while (low < high) {
+            val middle = (low + high) ushr 1
+            if (segmentBoundarySeconds[middle] <= seconds) low = middle + 1 else high = middle
         }
+        val index = low - 1
         val segment = segments[index]
         val elapsed = seconds - segmentStartSeconds[index] - stoppedSecondsBefore(segment.beat)
         val raw = segment.beat + elapsed * segment.bpm / 60f
 
         if (stops.isEmpty()) return raw
-        // Walk the stops inside this segment, subtracting each one the position
-        // has already passed. There are only ever a handful.
+        // Walk the stops from this segment on, subtracting each one the
+        // position has already passed. Those before the segment were already
+        // taken out of `elapsed`.
         var beat = segment.beat
         var remaining = elapsed
-        for (stop in stops) {
-            if (stop.beat < segment.beat) continue
+        var stopIndex = firstStopAtOrAfter(segment.beat)
+        while (stopIndex < stops.size) {
+            val stop = stops[stopIndex]
             val toStop = (stop.beat - beat) * 60f / segment.bpm
             if (remaining < toStop) break
             remaining -= toStop
             beat = stop.beat
             if (remaining < stop.seconds) return beat
             remaining -= stop.seconds
+            stopIndex += 1
         }
         return beat + remaining * segment.bpm / 60f
     }
@@ -106,12 +136,18 @@ class GlyphTiming(
     /** Total seconds of stops strictly before [beat]. */
     private fun stoppedSecondsBefore(beat: Float): Float {
         if (stops.isEmpty()) return 0f
-        var total = 0f
-        for (stop in stops) {
-            if (stop.beat >= beat) break
-            total += stop.seconds
+        return stopPrefix[firstStopAtOrAfter(beat)]
+    }
+
+    /** Index of the first stop on or after [beat]; stops.size if there is none. */
+    private fun firstStopAtOrAfter(beat: Float): Int {
+        var low = 0
+        var high = stops.size
+        while (low < high) {
+            val middle = (low + high) ushr 1
+            if (stops[middle].beat < beat) low = middle + 1 else high = middle
         }
-        return total
+        return low
     }
 
     private fun segmentIndexFor(beat: Float): Int {
@@ -131,8 +167,8 @@ class GlyphTiming(
     }
 
     /** The range of tempos in the song, for a "150–170" style readout. */
-    val bpmRange: ClosedFloatingPointRange<Float>
-        get() = segments.minOf { it.bpm }..segments.maxOf { it.bpm }
+    val bpmRange: ClosedFloatingPointRange<Float> =
+        this.segments.minOf { it.bpm }..this.segments.maxOf { it.bpm }
 
     companion object {
         /**

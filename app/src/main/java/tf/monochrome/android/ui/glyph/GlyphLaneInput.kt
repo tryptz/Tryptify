@@ -34,8 +34,9 @@ import tf.monochrome.android.glyph.asset.GlyphLane
  */
 @Composable
 fun GlyphLaneInput(
-    onPress: (GlyphLane) -> Unit,
-    onRelease: (GlyphLane) -> Unit,
+    /** The lane, and the touch's own SystemClock.uptimeMillis stamp. */
+    onPress: (GlyphLane, Long) -> Unit,
+    onRelease: (GlyphLane, Long) -> Unit,
     modifier: Modifier = Modifier,
     hitboxScale: Float = 1f,
 ) {
@@ -60,10 +61,10 @@ fun GlyphLaneInput(
                                     val event = awaitPointerEvent()
                                     for (change in event.changes) {
                                         if (change.pressed && !change.previousPressed) {
-                                            onPress(lane)
+                                            onPress(lane, change.uptimeMillis)
                                             change.consume()
                                         } else if (!change.pressed && change.previousPressed) {
-                                            onRelease(lane)
+                                            onRelease(lane, change.uptimeMillis)
                                             change.consume()
                                         }
                                     }

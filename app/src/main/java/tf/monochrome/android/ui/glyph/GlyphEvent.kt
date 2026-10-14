@@ -39,8 +39,13 @@ sealed interface GlyphEvent {
     data object Quit : GlyphEvent
 
     // ── input ───────────────────────────────────────────────────────────
-    data class LanePressed(val lane: GlyphLane) : GlyphEvent
-    data class LaneReleased(val lane: GlyphLane) : GlyphEvent
+    /**
+     * [atUptimeMillis] is when the finger moved (the pointer change's own
+     * SystemClock.uptimeMillis stamp), so the press is judged at the touch
+     * rather than at whenever input was dispatched. Zero means "now".
+     */
+    data class LanePressed(val lane: GlyphLane, val atUptimeMillis: Long = 0L) : GlyphEvent
+    data class LaneReleased(val lane: GlyphLane, val atUptimeMillis: Long = 0L) : GlyphEvent
 
     // ── modifiers ───────────────────────────────────────────────────────
     data class SetSpeed(val speed: Float) : GlyphEvent

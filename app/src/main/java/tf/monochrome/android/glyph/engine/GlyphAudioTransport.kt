@@ -132,6 +132,9 @@ class GlyphAudioTransport(context: Context) {
     /** The interpolated position, for a frame that is not pumping. */
     fun positionNow(): Float = clock.positionAt(System.nanoTime())
 
+    /** The song position at [realtimeNanos] on the System.nanoTime timebase. */
+    fun positionAt(realtimeNanos: Long): Float = clock.positionAt(realtimeNanos)
+
     fun release() {
         player.release()
         isPrepared = false
