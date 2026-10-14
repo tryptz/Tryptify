@@ -355,13 +355,15 @@ private fun NoteOptions(state: GlyphUiState, onEvent: (GlyphEvent) -> Unit) {
         valueLabel = { "${(it * 100).roundToInt()}%" },
         onSelect = { onEvent(GlyphEvent.SetMini(it)) },
     )
+    // StepMania's Dark, named for what it does: "Dark" read as a colour
+    // theme, and turning it on took the receptors away without saying so.
     OptionRow(
-        label = "Dark",
+        label = "Receptors",
         options = listOf(false, true),
         selected = modifiers.dark,
-        valueLabel = { if (it) "On" else "Off" },
+        valueLabel = { if (it) "Hidden" else "Shown" },
         onSelect = { onEvent(GlyphEvent.SetDark(it)) },
-        note = if (modifiers.dark) "No receptors: the notes are read against nothing." else null,
+        note = if (modifiers.dark) "StepMania's Dark: no targets, the notes are read against nothing." else null,
     )
     OptionRow(
         label = "Noteskin",
@@ -432,7 +434,7 @@ private fun GraphicsOptions(state: GlyphUiState, onEvent: (GlyphEvent) -> Unit) 
         label = "Hit god rays",
         on = graphics.hitRays,
         onChange = { set(graphics.copy(hitRays = it)) },
-        note = "Shafts of light from each hit, coloured by the combo. Android 13 and later.",
+        note = "Shafts of light from each hit, coloured by the combo, and red from each miss. Android 13 and later.",
     )
     if (graphics.hitRays) {
         OptionRow(

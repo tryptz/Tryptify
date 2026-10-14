@@ -319,6 +319,9 @@ fun GlyphPlayfield(
                 for ((lane, flash) in explosionProvider()) {
                     val age = (now - flash.atNanos) / 1_000_000_000f
                     if (age < 0f || age > EXPLOSION_SECONDS) continue
+                    // A miss streams red rays where there are rays to give
+                    // (GlyphHitRays), and the crack is only their stand-in.
+                    if (!flash.isHit && raysOn) continue
                     val art = if (flash.isHit) {
                         GlyphEffectArt.TAP_EXPLOSION
                     } else {

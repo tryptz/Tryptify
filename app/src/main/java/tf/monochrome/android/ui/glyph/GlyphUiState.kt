@@ -189,7 +189,7 @@ data class GlyphModifiers(
         GlyphAppearance.VISIBLE,
     /** Receptors at the top and notes rising, as StepMania's default scroll is. */
     val reverse: Boolean = false,
-    /** No receptors: the notes are read against nothing. */
+    /** StepMania's Dark: no receptors, the notes are read against nothing. Shown as "Receptors: Hidden". */
     val dark: Boolean = false,
     /** StepMania's Mini, 0 to 0.5: notes drawn this much smaller, halved. */
     val mini: Float = 0f,

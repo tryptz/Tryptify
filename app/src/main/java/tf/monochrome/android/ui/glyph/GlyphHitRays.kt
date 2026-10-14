@@ -38,7 +38,8 @@ import tf.monochrome.android.ui.player.rememberGodRaysShader
 import tf.monochrome.android.ui.player.setGodRayUniforms
 
 /**
- * A brief flash of god rays from each note that is hit.
+ * A brief flash of god rays from each note that is hit, and red ones from each
+ * note that is missed.
  *
  * The note flashes white-hot at its receptor for a moment and the lyrics' own
  * god-ray shader turns that flash into shafts of light — the same volumetric
@@ -150,7 +151,6 @@ private fun HitRaysLayer(
                 var box: Rect? = null
                 var strongest = 0f
                 for ((lane, flash) in explosionProvider()) {
-                    if (!flash.isHit) continue
                     val life = flashLife(now, flash.atNanos)
                     if (life <= 0f) continue
                     strongest = maxOf(strongest, life)
@@ -184,14 +184,16 @@ private fun HitRaysLayer(
             @Suppress("UNUSED_EXPRESSION") frameTick.value
             val now = System.nanoTime()
             for ((lane, flash) in explosionProvider()) {
-                if (!flash.isHit) continue
                 val life = flashLife(now, flash.atNanos)
                 if (life <= 0f) continue
                 val image = assets.image(
                     GlyphAssetCatalog.tap(lane, GlyphBeatDivision.QUARTER), noteSizePx, noteSizePx,
                 ) ?: continue
                 // The struck arrow, white-hot or in the combo's colour, held
-                // still at its own size: a flash, not a swell.
+                // still at its own size: a flash, not a swell. A missed one
+                // flashes red. The shafts take each arrow's own colour (the
+                // shader marches the layer's pixels), so a miss beside a hit
+                // streams red while the hit keeps the combo's.
                 val size = noteSizePx
                 val x = lane.ordinal * laneWidthPx + (laneWidthPx - size) / 2f
                 drawImage(
@@ -199,12 +201,19 @@ private fun HitRaysLayer(
                     dstOffset = IntOffset(x.roundToInt(), (localReceptorY - size / 2f).roundToInt()),
                     dstSize = IntSize(size, size),
                     alpha = life,
-                    colorFilter = ColorFilter.tint(tint[0], BlendMode.SrcIn),
+                    colorFilter = if (flash.isHit) {
+                        ColorFilter.tint(tint[0], BlendMode.SrcIn)
+                    } else {
+                        MISS_FILTER
+                    },
                 )
             }
         }
     }
 }
+
+/** A missed arrow's flash: the colour its rays stream in. */
+private val MISS_FILTER = ColorFilter.tint(GlyphComboRays.MISS, BlendMode.SrcIn)
 
 /** 1 at the hit, falling to 0 over [FLASH_SECONDS]; 0 outside it. */
 private fun flashLife(nowNanos: Long, atNanos: Long): Float {
@@ -283,6 +292,9 @@ internal class GlyphHitLight {
         count = 0
         reach = (RAY_REACH_NOTES * noteSizePx).coerceAtLeast(1f)
         for ((lane, flash) in flashes) {
+            // Hits only: the light is the combo's colour, and a miss's red
+            // rays lighting the notes around it the combo's would contradict
+            // them.
             if (!flash.isHit) continue
             val l = flashLife(nowNanos, flash.atNanos)
             if (l <= 0f) continue
@@ -336,6 +348,9 @@ internal object GlyphComboRays {
             Color.hsv(seconds / RAINBOW_PERIOD_SECONDS * 360f, 0.8f, 1f)
         }
     }
+
+    /** A miss's rays, whatever the combo was. */
+    val MISS = Color(0xFFFF2020)
 
     const val RAINBOW_TIER = 4
     private const val RAINBOW_PERIOD_SECONDS = 2.4f

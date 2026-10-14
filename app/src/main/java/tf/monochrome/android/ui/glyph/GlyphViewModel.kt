@@ -1203,6 +1203,7 @@ class GlyphViewModel @Inject constructor(
     // ── player options, kept between sessions ───────────────────────────
 
     private fun loadOptions() {
+        if (prefs.contains(LEGACY_PREF_DARK)) prefs.edit().remove(LEGACY_PREF_DARK).apply()
         val mode = when (prefs.getString(PREF_SCROLL_FAMILY, null)) {
             GlyphScrollFamily.X.name -> GlyphScrollMode.XMod(prefs.getFloat(PREF_SCROLL_VALUE, 2f))
             GlyphScrollFamily.M.name -> GlyphScrollMode.MMod(prefs.getFloat(PREF_SCROLL_VALUE, 400f), 0f)
@@ -1214,7 +1215,7 @@ class GlyphViewModel @Inject constructor(
             turn = GlyphTurn.fromId(prefs.getString(PREF_TURN, null)),
             appearance = GlyphAppearance.fromId(prefs.getString(PREF_APPEARANCE, null)),
             reverse = prefs.getBoolean(PREF_REVERSE, false),
-            dark = prefs.getBoolean(PREF_DARK, false),
+            dark = prefs.getBoolean(PREF_HIDE_RECEPTORS, false),
             mini = prefs.getFloat(PREF_MINI, 0f).coerceIn(0f, MAX_MINI),
             failType = GlyphFailType.fromId(prefs.getString(PREF_FAIL, null)),
             metronome = prefs.getBoolean(PREF_METRONOME, false),
@@ -1257,7 +1258,7 @@ class GlyphViewModel @Inject constructor(
             .putString(PREF_TURN, modifiers.turn.id)
             .putString(PREF_APPEARANCE, modifiers.appearance.id)
             .putBoolean(PREF_REVERSE, modifiers.reverse)
-            .putBoolean(PREF_DARK, modifiers.dark)
+            .putBoolean(PREF_HIDE_RECEPTORS, modifiers.dark)
             .putFloat(PREF_MINI, modifiers.mini)
             .putString(PREF_FAIL, modifiers.failType.id)
             .putBoolean(PREF_METRONOME, modifiers.metronome)
@@ -1519,7 +1520,14 @@ class GlyphViewModel @Inject constructor(
         const val PREF_TURN = "turn"
         const val PREF_APPEARANCE = "appearance"
         const val PREF_REVERSE = "reverse"
-        const val PREF_DARK = "dark"
+        /**
+         * StepMania's Dark. Its old key, [LEGACY_PREF_DARK], is dropped
+         * rather than read: the option was labelled "Dark", which reads as a
+         * colour theme, so a saved "on" was far more often a surprise than a
+         * choice, and the receptors come back once.
+         */
+        const val PREF_HIDE_RECEPTORS = "hide_receptors"
+        const val LEGACY_PREF_DARK = "dark"
         const val PREF_MINI = "mini"
         const val PREF_FAIL = "fail"
         const val PREF_METRONOME = "metronome"

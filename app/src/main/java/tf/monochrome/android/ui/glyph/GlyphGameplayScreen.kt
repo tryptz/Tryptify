@@ -260,6 +260,8 @@ private fun modifierSummary(modifiers: GlyphModifiers): String = buildList {
     if (modifiers.speed != 1f) add("%.1fx rate".format(modifiers.speed))
     if (modifiers.turn != GlyphTurn.OFF) add(modifiers.turn.label)
     if (modifiers.appearance != GlyphAppearance.VISIBLE) add(modifiers.appearance.label)
+    // Said while it is played: an empty receptor row otherwise looks broken.
+    if (modifiers.dark) add("No receptors")
     if (modifiers.timingWindowScale != 1f) {
         add(GlyphJudge.forScale(modifiers.timingWindowScale).label)
     }
