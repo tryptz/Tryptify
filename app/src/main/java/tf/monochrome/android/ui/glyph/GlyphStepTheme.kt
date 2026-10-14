@@ -156,3 +156,10 @@ fun stepJudgementName(judgement: GlyphJudgement): String = when (judgement) {
 }
 
 private const val FONTS = "stepmania/theme/fonts"
+
+/**
+ * StepMania 5 default theme's Player 1 colour, for the life bar on the
+ * playfield. The playfield is the mode's own, so it may carry StepMania's
+ * colours; the menus take the app's theme.
+ */
+val StepPlayerColour = Color(0xFF4B82DC)

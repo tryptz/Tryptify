@@ -23,10 +23,14 @@ import kotlin.math.abs
  *
  * Each bar is the loudest sample in its stretch, either channel, 0 to 1: the
  * picker draws a symmetric bar, so it needs a magnitude, not a min and a max.
+ * [loudness] is the other measure, the RMS over each stretch: a loud modern
+ * master peaks near full scale almost everywhere, and only its average level
+ * says where it builds and where it drops.
  */
 class GlyphWaveformBuilder(expectedFrames: Long = 0L) {
 
     private val fine = FloatArray(CAPACITY)
+    private val energy = DoubleArray(CAPACITY)
     private var span: Long =
         if (expectedFrames > 0L) maxOf(1L, (expectedFrames + CAPACITY - 1) / CAPACITY) else INITIAL_SPAN
     private var current = 0
@@ -48,6 +52,8 @@ class GlyphWaveformBuilder(expectedFrames: Long = 0L) {
                 if (current == CAPACITY) compact()
             }
             if (magnitude > fine[current]) fine[current] = magnitude
+            val mid = if (right != null) (left[i] + right[i]) * 0.5f else left[i]
+            energy[current] += (mid * mid).toDouble()
             inBucket += 1
         }
         frames += count
@@ -66,11 +72,35 @@ class GlyphWaveformBuilder(expectedFrames: Long = 0L) {
         }
     }
 
+    /**
+     * [bars] RMS levels, evenly over the song, of the mono mix; empty when
+     * nothing was decoded. What a drop is found from.
+     */
+    fun loudness(bars: Int): List<Float> {
+        if (frames == 0L || bars <= 0) return emptyList()
+        val used = current + if (inBucket > 0L) 1 else 0
+        return List(bars) { bar ->
+            val from = (used.toLong() * bar / bars).toInt()
+            val to = maxOf(from + 1, (used.toLong() * (bar + 1) / bars).toInt()).coerceAtMost(used)
+            var sum = 0.0
+            var count = 0L
+            for (k in from until to) {
+                sum += energy[k]
+                count += if (k == current) inBucket else span
+            }
+            if (count <= 0L) 0f else kotlin.math.sqrt(sum / count).toFloat()
+        }
+    }
+
     /** Pairs merged, span doubled: room for as much again. */
     private fun compact() {
         val half = CAPACITY / 2
-        for (k in 0 until half) fine[k] = maxOf(fine[2 * k], fine[2 * k + 1])
+        for (k in 0 until half) {
+            fine[k] = maxOf(fine[2 * k], fine[2 * k + 1])
+            energy[k] = energy[2 * k] + energy[2 * k + 1]
+        }
         fine.fill(0f, half, CAPACITY)
+        energy.fill(0.0, half, CAPACITY)
         span *= 2
         current = half
     }

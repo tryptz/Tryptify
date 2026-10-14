@@ -20,6 +20,10 @@ sealed interface GlyphEvent {
 
     // ── song selection ──────────────────────────────────────────────────
     data class Search(val query: String) : GlyphEvent
+    /** Sort by [key]; the key already chosen turns round. */
+    data class SortSongs(val key: tf.monochrome.android.glyph.data.GlyphSortKey) : GlyphEvent
+    data object OpenLeaderboard : GlyphEvent
+    data object CloseLeaderboard : GlyphEvent
     data class SelectSong(val trackId: String) : GlyphEvent
     data class SelectDifficulty(val difficulty: StepManiaDifficulty) : GlyphEvent
 
@@ -49,6 +53,8 @@ sealed interface GlyphEvent {
     data class SetMini(val mini: Float) : GlyphEvent
     data class SetFailType(val failType: tf.monochrome.android.glyph.engine.GlyphFailType) : GlyphEvent
     data class SetPlayerName(val name: String) : GlyphEvent
+    data class SetPreviews(val on: Boolean) : GlyphEvent
+    data class SetGraphics(val graphics: tf.monochrome.android.glyph.engine.GlyphGraphics) : GlyphEvent
 
     // ── transport ───────────────────────────────────────────────────────
     data object StartPlay : GlyphEvent

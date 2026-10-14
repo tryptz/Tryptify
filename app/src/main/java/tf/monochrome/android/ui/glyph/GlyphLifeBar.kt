@@ -82,7 +82,7 @@ fun GlyphLifeBar(life: Float, modifier: Modifier = Modifier) {
                         tileMode = TileMode.Repeated,
                     )
                 }
-                else -> Brush.horizontalGradient(listOf(PlayerColour.copy(alpha = 0.75f), PlayerColour))
+                else -> Brush.horizontalGradient(listOf(StepPlayerColour.copy(alpha = 0.75f), StepPlayerColour))
             }
             drawRoundRect(brush = brush, size = Size(width, size.height), cornerRadius = corner)
         }

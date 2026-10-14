@@ -93,6 +93,32 @@ class GlyphAttemptStore @Inject constructor(
         }
 
     /**
+     * Every chart's high score tables, for the leaderboard page: chart id to
+     * difficulty to the ten best full runs. Charts with no full run are left
+     * out. One small file per chart, read in turn.
+     */
+    suspend fun allHighScores(): Map<String, Map<StepManiaDifficulty, List<GlyphAttempt>>> =
+        withContext(Dispatchers.IO) {
+            val files = root.listFiles { file -> file.isFile && file.name.endsWith(".json") }.orEmpty()
+            buildMap {
+                for (file in files) {
+                    val runs = runCatching {
+                        json.decodeFromString<List<JsonObject>>(file.readText()).mapNotNull(::migrate)
+                    }.onFailure {
+                        Log.w(TAG, "high scores in ${file.name} are unreadable: ${it.message}")
+                    }.getOrDefault(emptyList())
+                    val chartId = runs.firstOrNull()?.chartId ?: continue
+                    val tables = runs.groupBy { it.difficulty }
+                        .mapValues { (_, inDifficulty) ->
+                            rankHighScores(inDifficulty).take(HIGH_SCORES_PER_CHART)
+                        }
+                        .filterValues { it.isNotEmpty() }
+                    if (tables.isNotEmpty()) put(chartId, tables)
+                }
+            }
+        }
+
+    /**
      * Append [attempt], keeping at most [MAX_ATTEMPTS_PER_CHART].
      *
      * Trimming keeps the highest score regardless of age alongside the most

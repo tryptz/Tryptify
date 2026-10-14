@@ -103,6 +103,10 @@ data class GlyphSimfile(
     val credit: String,
     val timing: GlyphTiming,
     val charts: List<GlyphChart>,
+    /** #SAMPLESTART: where the song is previewed from, or null when unset. */
+    val sampleStartSeconds: Float? = null,
+    /** #SAMPLELENGTH: how long the preview runs. */
+    val sampleLengthSeconds: Float? = null,
 ) {
     fun chart(difficulty: StepManiaDifficulty): GlyphChart? =
         charts.firstOrNull { it.difficulty == difficulty }

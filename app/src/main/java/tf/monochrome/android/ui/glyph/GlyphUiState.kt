@@ -8,9 +8,11 @@ import tf.monochrome.android.glyph.chart.GlyphChart
 import tf.monochrome.android.glyph.chart.GlyphSimfile
 import tf.monochrome.android.glyph.data.GlyphAttempt
 import tf.monochrome.android.glyph.data.GlyphSong
+import tf.monochrome.android.glyph.data.GlyphSongSort
 import tf.monochrome.android.glyph.engine.GlyphAppearance
 import tf.monochrome.android.glyph.engine.GlyphFailType
 import tf.monochrome.android.glyph.engine.GlyphFullCombo
+import tf.monochrome.android.glyph.engine.GlyphGraphics
 import tf.monochrome.android.glyph.engine.GlyphJudgement
 import tf.monochrome.android.glyph.engine.GlyphScoreSnapshot
 import tf.monochrome.android.glyph.engine.GlyphScrollMode
@@ -38,6 +40,9 @@ data class GlyphUiState(
     val songs: List<GlyphSong> = emptyList(),
     val isLoadingSongs: Boolean = true,
     val songQuery: String = "",
+    /** How the song list and the leaderboard are ordered; kept between sessions. */
+    val songSort: GlyphSongSort = GlyphSongSort(),
+    val leaderboard: GlyphLeaderboardUi = GlyphLeaderboardUi(),
     val selectedSong: GlyphSong? = null,
     val simfile: GlyphSimfile? = null,
     val selectedDifficulty: StepManiaDifficulty? = null,
@@ -45,6 +50,8 @@ data class GlyphUiState(
     val model: GlyphModelUi = GlyphModelUi(),
     /** The name on the high score tables. */
     val playerName: String = "",
+    /** Tapping a song plays it from its drop; kept between sessions. */
+    val previews: Boolean = true,
     /** Best StepMania grade per difficulty of the selected song, for the menu. */
     val bestGrades: Map<StepManiaDifficulty, GlyphAttempt> = emptyMap(),
     val gameplay: GlyphGameplayUi = GlyphGameplayUi(),
@@ -56,13 +63,38 @@ data class GlyphUiState(
     val chart: GlyphChart? get() = selectedDifficulty?.let { simfile?.chart(it) }
 
     val filteredSongs: List<GlyphSong>
-        get() = if (songQuery.isBlank()) songs else songs.filter { song ->
-            song.title.contains(songQuery, ignoreCase = true) ||
-                song.artist.contains(songQuery, ignoreCase = true)
-        }
+        get() = songSort.apply(
+            if (songQuery.isBlank()) songs else songs.filter { song ->
+                song.title.contains(songQuery, ignoreCase = true) ||
+                    song.artist.contains(songQuery, ignoreCase = true)
+            },
+        )
 }
 
-enum class GlyphScreen { HOME, OPTIONS, GAMEPLAY, TRAINING, RESULTS }
+enum class GlyphScreen { HOME, OPTIONS, LEADERBOARD, GAMEPLAY, TRAINING, RESULTS }
+
+/** The leaderboard page: every chart this phone has a high score on. */
+data class GlyphLeaderboardUi(
+    val loading: Boolean = false,
+    val boards: List<GlyphBoard> = emptyList(),
+) {
+    /** The boards in [sort]'s order; charts whose song has left the library go last. */
+    fun sorted(sort: GlyphSongSort): List<GlyphBoard> {
+        val (inLibrary, gone) = boards.partition { it.song != null }
+        val songOrder = sort.comparator()
+        return inLibrary.sortedWith { a, b -> songOrder.compare(a.song!!, b.song!!) } +
+            gone.sortedBy { it.title.lowercase() }
+    }
+}
+
+/** One chart's high score tables, by difficulty. */
+data class GlyphBoard(
+    val chartId: String,
+    val title: String,
+    /** The library's song, or null when it is no longer there. */
+    val song: GlyphSong?,
+    val tables: Map<StepManiaDifficulty, List<GlyphAttempt>>,
+)
 
 /**
  * Conversion progress, mirroring the service's own stages.
@@ -167,6 +199,8 @@ data class GlyphModifiers(
     val timingWindowScale: Float = 1f,
     val hitboxScale: Float = 1f,
     val reducedMotion: Boolean = false,
+    /** Which effects the playfield draws. Looks only. */
+    val graphics: GlyphGraphics = GlyphGraphics(),
     /** The playfield's artwork. Looks only, so not in [altersScoring]. */
     val skin: tf.monochrome.android.glyph.asset.GlyphSkin = tf.monochrome.android.glyph.asset.GlyphSkin.DEFAULT,
 ) {
@@ -186,6 +220,8 @@ data class GlyphTrainingUi(
     val hasGhost: Boolean = false,
     val passCount: Int = 0,
     val waveform: List<Float> = emptyList(),
+    /** RMS levels evenly over the song, which the preview finds the drop in. */
+    val loudness: List<Float> = emptyList(),
     val isWaveformLoading: Boolean = false,
     val gauntlet: GlyphGauntlet? = null,
     val liveOffsetMs: Float = 0f,

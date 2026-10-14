@@ -49,9 +49,10 @@ import tf.monochrome.android.ui.player.setGodRayUniforms
  * Kept cheap because it runs during play: the shader is only attached while a
  * flash is alive, which is a fifth of a second after a hit; the layer covers
  * the receptor strip rather than the screen; and the march runs at the lowest
- * of the lyrics' qualities. Nothing at all is drawn under reduced motion, with
- * the low-performance glass switch on, or before Android 13, which is where
- * the lyrics' rays turn off too.
+ * of the lyrics' qualities unless the graphics settings ask for more. Nothing
+ * at all is drawn when those settings turn the rays off, under reduced motion,
+ * with the low-performance glass switch on, or before Android 13, which is
+ * where the lyrics' rays turn off too.
  */
 @Composable
 internal fun GlyphHitRays(
@@ -66,11 +67,13 @@ internal fun GlyphHitRays(
     /** The live combo, which picks the rays' colour (see [GlyphComboRays]). */
     comboProvider: () -> Int,
     modifier: Modifier = Modifier,
+    /** Samples per shaft, 1 to 4: the graphics settings' ray quality. */
+    quality: Int = 1,
 ) {
     if (!enabled) return
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
     if (LocalLowPerformance.current.disableLiquidGlass) return
-    HitRaysLayer(assets, laneWidthPx, noteSizePx, receptorYPx, explosionProvider, frameTick, comboProvider, modifier)
+    HitRaysLayer(assets, laneWidthPx, noteSizePx, receptorYPx, explosionProvider, frameTick, comboProvider, quality, modifier)
 }
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -83,6 +86,7 @@ private fun HitRaysLayer(
     explosionProvider: () -> Map<GlyphLane, LaneFlash>,
     frameTick: State<Long>,
     comboProvider: () -> Int,
+    quality: Int,
     modifier: Modifier,
 ) {
     val shader = rememberGodRaysShader() ?: return
@@ -90,7 +94,7 @@ private fun HitRaysLayer(
     // The lyrics' rays, pointed at the hit: letters as the light, all of the
     // layer shining, the light head-on so the shafts burst outward, and none
     // of the slow orbit, sway or tilt a lyric line drifts with.
-    val fx = remember(base) {
+    val fx = remember(base, quality) {
         base.copy(
             godRays = true,
             godRaySource = LyricsFxSettings.GOD_RAYS_LETTERS,
@@ -100,7 +104,7 @@ private fun HitRaysLayer(
             godRaySpinDps = 0f,
             godRaySway = 0f,
             godRayTilt = 0f,
-            godRayQuality = min(base.godRayQuality, 1),
+            godRayQuality = quality.coerceIn(1, 4),
             // Short shafts: a flash, not a beam, and they have to fade out
             // inside the strip this layer covers rather than end at its edge.
             godRayDensity = min(base.godRayDensity, 0.5f),

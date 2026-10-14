@@ -1049,6 +1049,17 @@ and passes `avoidNavigationBar = false`: the nav host already stops a pushed
 screen above the system bar, and the panel counting it again floated a bar's
 height above the tab bar.
 
+**Player options, the leaderboard and the results are menus, so they are the
+app's.** StepMania's options and scoring, never StepMania's page: a top bar with
+Back, `GlyphPanel` cards, every choice a `GlassChoiceChip` row (`GlyphChipRow`),
+and Start a primary `GlassPill` on `LocalBottomChromeNow`. The first options
+screen was a fixed dark StepMania page with white text and underlined choices;
+in a light theme it was the one dark screen, and its Start button sat under the
+mini player and the tab bar where nothing could press it. StepMania's own art —
+the grade, the judgement and FULL COMBO sprites — is fine on a card; its
+colours as text go through `menuAccent`. Its typefaces belong to the playfield
+(the HUD, the judgement and the combo), not the menus.
+
 **Back in a run pauses it; Back from the pause leaves.** The pause panel is
 where "Quit to songs" is, so Back walks the same two steps. Quitting on the
 first Back threw a run away to a stray edge swipe. On the home screen Back

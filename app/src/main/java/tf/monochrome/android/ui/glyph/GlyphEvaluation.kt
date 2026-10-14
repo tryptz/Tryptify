@@ -17,19 +17,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -48,16 +44,20 @@ import tf.monochrome.android.glyph.engine.GlyphGrade
 import tf.monochrome.android.glyph.engine.GlyphJudgement
 import tf.monochrome.android.glyph.engine.GlyphStepGrade
 import tf.monochrome.android.glyph.engine.StepManiaScoreKeeper
+import tf.monochrome.android.ui.theme.MonoDimens
 
 /**
- * StepMania's evaluation, top half: the grade, the percent, the full combo
- * banner and the judgement counts, in the default theme's art and colours.
+ * The results' top card: StepMania's grade, percent, full combo banner and
+ * judgement counts, on the app's glass.
+ *
+ * A menu card like any other — the theme's ink and type, a card of the app's
+ * glass — with StepMania's own art where StepMania has art: the grade and the
+ * FULL COMBO banner. The judgement colours are StepMania's, moved by
+ * [menuAccent] only as far as they must to read on the page.
  *
  * It arrives in StepMania's order: the grade stamps down, the percent counts
- * up to the score, the counts count up beside it, and the full combo banner
- * sweeps in last. All of it flat — sizes, fades and slides, nothing turned in
- * depth — and all of it skipped under reduced motion, which shows the final
- * numbers at once.
+ * up, the counts count up with it, and the banner sweeps in last. Flat — size,
+ * fade and slide, nothing turned in depth — and skipped under reduced motion.
  */
 @Composable
 fun GlyphEvaluationPanel(
@@ -66,12 +66,11 @@ fun GlyphEvaluationPanel(
     modifier: Modifier = Modifier,
 ) {
     val attempt = results.attempt
-    val fonts = rememberStepFonts()
+    val scheme = MaterialTheme.colorScheme
     val grade = GlyphStepGrade.fromName(attempt.stepGrade)
     val fullCombo = attempt.fullCombo?.let { name -> GlyphFullCombo.entries.firstOrNull { it.name == name } }
     val percent = if (attempt.hasStepScore) attempt.percent else attempt.accuracy
 
-    // The grade stamps: from large and clear to its size, with a little give.
     val stamp = remember { Animatable(if (reducedMotion) 1f else 0f) }
     val count = remember { Animatable(if (reducedMotion) 1f else 0f) }
     val banner = remember { Animatable(if (reducedMotion) 1f else 0f) }
@@ -84,23 +83,19 @@ fun GlyphEvaluationPanel(
             banner.animateTo(1f, tween(380, easing = FastOutSlowInEasing))
         }
     }
+    val shown = count.value.coerceIn(0f, 1f)
 
     // Top of this phone's table, and above whatever was there before.
     val isRecord = attempt.isFullRun && results.machineScores.firstOrNull()?.id == attempt.id &&
         results.machineScores.size > 1
 
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(Brush.verticalGradient(listOf(HeaderColour.copy(alpha = 0.9f), Color(0xFF14182A))))
-            .padding(16.dp),
-    ) {
+    GlyphPanel(modifier = modifier) {
         Text(
-            text = "${attempt.difficulty.sscName.uppercase()}  ·  ${attempt.playerName.ifBlank { "PLAYER" }}",
-            style = fonts.rowTitle,
-            color = GlyphTheme.Paper.copy(alpha = 0.85f),
+            text = "${attempt.difficulty.sscName} · ${attempt.playerName.ifBlank { "PLAYER" }}",
+            style = MaterialTheme.typography.labelLarge,
+            color = scheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(MonoDimens.spacingSm))
         Row(verticalAlignment = Alignment.CenterVertically) {
             GradeSprite(
                 grade = grade,
@@ -114,29 +109,33 @@ fun GlyphEvaluationPanel(
                         alpha = stamp.value.coerceIn(0f, 1f)
                     },
             )
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(MonoDimens.spacingMd))
             Column {
                 Text(
-                    text = StepManiaScoreKeeper.formatPercent(percent * count.value.coerceIn(0f, 1f)),
-                    style = fonts.bigScore,
-                    color = GlyphTheme.Paper,
+                    text = StepManiaScoreKeeper.formatPercent(percent * shown),
+                    style = MaterialTheme.typography.displaySmall,
+                    color = scheme.onSurface,
                     modifier = Modifier.semantics {
                         contentDescription = "Score ${StepManiaScoreKeeper.formatPercent(percent)}"
                     },
                 )
                 Text(
-                    text = "%,d points".format((attempt.score * count.value.coerceIn(0f, 1f)).roundToInt()),
-                    style = fonts.value,
-                    color = GlyphTheme.Paper.copy(alpha = 0.75f),
+                    text = "%,d points".format((attempt.score * shown).roundToInt()),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onSurfaceVariant,
                 )
                 if (isRecord) {
-                    Text(text = "NEW RECORD!", style = fonts.rowTitle, color = StepMaxComboColour)
+                    Text(
+                        text = "New record",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = menuAccent(StepMaxComboColour),
+                    )
                 }
                 results.previousBest?.let { best ->
                     Text(
                         text = bestLine(attempt, best),
-                        style = fonts.label,
-                        color = GlyphTheme.Paper.copy(alpha = 0.8f),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = scheme.onSurfaceVariant,
                     )
                 }
             }
@@ -147,7 +146,7 @@ fun GlyphEvaluationPanel(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp)
+                    .padding(top = MonoDimens.spacingSm)
                     .graphicsLayer {
                         translationX = (1f - banner.value) * -size.width * 0.3f
                         alpha = banner.value
@@ -156,26 +155,39 @@ fun GlyphEvaluationPanel(
                 contentAlignment = Alignment.CenterStart,
             ) {
                 if (sprite != null) {
-                    Image(bitmap = sprite, contentDescription = null, modifier = Modifier.height(48.dp), contentScale = ContentScale.Fit)
+                    Image(
+                        bitmap = sprite,
+                        contentDescription = null,
+                        modifier = Modifier.height(44.dp),
+                        contentScale = ContentScale.Fit,
+                    )
                 } else {
-                    Text("FULL COMBO!", style = fonts.screenTitle, color = comboColour(fullCombo))
+                    Text(
+                        text = fullCombo.label,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = menuAccent(comboColour(fullCombo)),
+                    )
                 }
             }
         }
 
         if (attempt.failed) {
-            Text(text = "FAILED", style = fonts.screenTitle, color = Color(0xFFF97E7E))
+            Text(
+                text = "Failed",
+                style = MaterialTheme.typography.titleLarge,
+                color = menuAccent(stepJudgementColour(GlyphJudgement.MISS)),
+            )
         }
 
-        Spacer(Modifier.height(12.dp))
-        JudgementCounts(attempt = attempt, progress = count.value, fonts = fonts)
+        Spacer(Modifier.height(MonoDimens.spacingMd))
+        JudgementCounts(attempt = attempt, progress = shown)
 
         if (!attempt.isFullRun) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(MonoDimens.spacingSm))
             Text(
                 text = "Training segment — not filed as a full run.",
-                style = fonts.label,
-                color = GlyphTheme.Warning,
+                style = MaterialTheme.typography.labelMedium,
+                color = menuAccent(GlyphTheme.Warning),
             )
         }
     }
@@ -210,36 +222,45 @@ private fun GradeSprite(grade: GlyphStepGrade?, fallback: String?, modifier: Mod
         contentAlignment = Alignment.Center,
     ) {
         if (sprite != null) {
-            Image(bitmap = sprite, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth())
+            Image(
+                bitmap = sprite,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxWidth(),
+            )
         } else {
-            Text(text = grade?.label ?: fallback.orEmpty(), style = rememberStepFonts().banner, color = GlyphTheme.Paper)
+            Text(
+                text = grade?.label ?: fallback.orEmpty(),
+                style = MaterialTheme.typography.displayMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
         }
     }
 }
 
 /** StepMania's judgement lines, counting up with the percent. */
 @Composable
-private fun JudgementCounts(attempt: GlyphAttempt, progress: Float, fonts: GlyphStepFonts) {
-    val shown = progress.coerceIn(0f, 1f)
+private fun JudgementCounts(attempt: GlyphAttempt, progress: Float) {
     val rows = GlyphJudgement.entries.map { judgement ->
         Triple(stepJudgementName(judgement), attempt.judgementCount(judgement), stepJudgementColour(judgement))
     } + listOf(
-        Triple("OK", attempt.holdsHeld, StepHeldColour),
+        Triple("OK", attempt.holdsHeld, MaterialTheme.colorScheme.onSurface),
         Triple("Max Combo", attempt.maxCombo, StepMaxComboColour),
     )
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         for ((label, value, colour) in rows) {
+            val ink = menuAccent(colour)
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = label.uppercase(),
-                    style = fonts.rowTitle,
-                    color = colour,
+                    text = label,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = ink,
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    text = (value * shown).roundToInt().toString().padStart(4, '0'),
-                    style = fonts.count,
-                    color = colour,
+                    text = (value * progress).roundToInt().toString(),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = ink,
                     modifier = Modifier.semantics { contentDescription = "$label: $value" },
                 )
             }
@@ -257,43 +278,45 @@ fun GlyphHighScoresPanel(
     results: GlyphResultsUi,
     modifier: Modifier = Modifier,
 ) {
-    val fonts = rememberStepFonts()
     val attempt = results.attempt
-
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF14182A))
-            .padding(vertical = 12.dp),
-    ) {
+    GlyphPanel(modifier = modifier) {
         Text(
-            text = "HIGH SCORES",
-            style = fonts.screenTitle,
-            color = GlyphTheme.Paper,
-            modifier = Modifier.padding(horizontal = 16.dp).semantics { heading() },
+            text = "High scores",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.semantics { heading() },
         )
         Text(
             text = "${attempt.difficulty.sscName} · this phone",
-            style = fonts.label,
-            color = GlyphTheme.Muted,
-            modifier = Modifier.padding(horizontal = 16.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(8.dp))
-        if (results.machineScores.isEmpty()) {
-            EmptyLine("No full runs of this chart yet.", fonts)
-        }
-        results.machineScores.forEachIndexed { index, run ->
-            val date = DateFormat.getDateInstance(DateFormat.SHORT).format(Date(run.playedAtEpochMs))
-            ScoreLine(
-                rank = index + 1,
-                name = run.playerName.ifBlank { "PLAYER" },
-                grade = GlyphStepGrade.fromName(run.stepGrade),
-                percent = if (run.hasStepScore) run.percent else run.accuracy,
-                detail = listOf(run.modsLabel, date).filter { it.isNotEmpty() }.joinToString(" · "),
-                mine = run.id == attempt.id,
-                fonts = fonts,
-            )
-        }
+        Spacer(Modifier.height(MonoDimens.spacingSm))
+        GlyphScoreTable(runs = results.machineScores, highlightId = attempt.id)
+    }
+}
+
+/** Ranked runs, best first, with [highlightId]'s row lit. */
+@Composable
+fun GlyphScoreTable(runs: List<GlyphAttempt>, highlightId: String? = null) {
+    if (runs.isEmpty()) {
+        Text(
+            text = "No full runs of this chart yet.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
+    runs.forEachIndexed { index, run ->
+        val date = DateFormat.getDateInstance(DateFormat.SHORT).format(Date(run.playedAtEpochMs))
+        ScoreLine(
+            rank = index + 1,
+            name = run.playerName.ifBlank { "PLAYER" },
+            grade = GlyphStepGrade.fromName(run.stepGrade),
+            percent = if (run.hasStepScore) run.percent else run.accuracy,
+            detail = listOf(run.modsLabel, date).filter { it.isNotEmpty() }.joinToString(" · "),
+            mine = run.id == highlightId,
+        )
     }
 }
 
@@ -305,48 +328,53 @@ private fun ScoreLine(
     percent: Float,
     detail: String,
     mine: Boolean,
-    fonts: GlyphStepFonts,
 ) {
+    val scheme = MaterialTheme.colorScheme
     val gradeArt = rememberStepArt(grade?.asset)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (mine) PlayerColour.copy(alpha = 0.22f) else Color.Transparent)
-            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clip(MonoDimens.shapeSm)
+            .background(if (mine) scheme.primary.copy(alpha = 0.14f) else Color.Transparent)
+            .padding(horizontal = MonoDimens.spacingSm, vertical = 6.dp)
             .semantics(mergeDescendants = true) {},
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text = "$rank", style = fonts.count, color = GlyphTheme.Paper.copy(alpha = 0.7f), modifier = Modifier.width(32.dp))
+        Text(
+            text = "$rank",
+            style = MaterialTheme.typography.titleSmall,
+            color = scheme.onSurfaceVariant,
+            modifier = Modifier.width(28.dp),
+        )
         Box(modifier = Modifier.width(52.dp), contentAlignment = Alignment.CenterStart) {
             if (gradeArt != null) {
-                Image(bitmap = gradeArt, contentDescription = grade?.label, modifier = Modifier.height(22.dp), contentScale = ContentScale.Fit)
+                Image(
+                    bitmap = gradeArt,
+                    contentDescription = grade?.label,
+                    modifier = Modifier.height(22.dp),
+                    contentScale = ContentScale.Fit,
+                )
             } else if (grade != null) {
-                Text(grade.label, style = fonts.rowTitle, color = GlyphTheme.Paper)
+                Text(grade.label, style = MaterialTheme.typography.titleSmall, color = scheme.onSurface)
             }
         }
         Text(
             text = name,
-            style = fonts.rowTitle,
-            color = if (mine) GlyphTheme.Paper else GlyphTheme.Paper.copy(alpha = 0.85f),
+            style = MaterialTheme.typography.titleSmall,
+            color = scheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         Column(horizontalAlignment = Alignment.End) {
-            Text(text = StepManiaScoreKeeper.formatPercent(percent), style = fonts.count, color = GlyphTheme.Paper)
-            Text(text = detail, style = fonts.label, color = GlyphTheme.Muted)
+            Text(
+                text = StepManiaScoreKeeper.formatPercent(percent),
+                style = MaterialTheme.typography.titleSmall,
+                color = scheme.onSurface,
+            )
+            Text(text = detail, style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
         }
     }
-}
-
-@Composable
-private fun EmptyLine(text: String, fonts: GlyphStepFonts, warn: Boolean = false) {
-    Text(
-        text = text,
-        style = fonts.value,
-        color = if (warn) GlyphTheme.Warning else GlyphTheme.Muted,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-    )
 }
 
 private val GRADE_WIDTH = 120.dp

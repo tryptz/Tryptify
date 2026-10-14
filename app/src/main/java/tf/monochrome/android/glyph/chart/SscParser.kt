@@ -48,6 +48,8 @@ object SscParser {
             artist = tags.header["ARTIST"].orEmpty().trim(),
             musicFileName = tags.header["MUSIC"].orEmpty().trim(),
             credit = tags.header["CREDIT"].orEmpty().trim(),
+            sampleStartSeconds = tags.header["SAMPLESTART"]?.trim()?.toFloatOrNull()?.takeIf { it >= 0f },
+            sampleLengthSeconds = tags.header["SAMPLELENGTH"]?.trim()?.toFloatOrNull()?.takeIf { it > 0f },
             timing = timing,
             charts = charts.sortedBy { it.difficulty.ordinal },
         )

@@ -44,6 +44,7 @@ import tf.monochrome.android.glyph.chart.GlyphTiming
 import tf.monochrome.android.glyph.data.GlyphGhost
 import tf.monochrome.android.glyph.engine.GlyphAppearance
 import tf.monochrome.android.glyph.engine.GlyphGameplayEngine
+import tf.monochrome.android.glyph.engine.GlyphGraphics
 import tf.monochrome.android.glyph.engine.GlyphScrollMode
 import tf.monochrome.android.glyph.engine.GlyphVisibleFrame
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
@@ -158,7 +159,7 @@ fun GlyphPlayfield(
 
         // Hit flashes: the god-ray burst over the receptors, and the light it
         // throws on every glyph around it.
-        val raysOn = rememberHitRaysAvailable(reducedMotion)
+        val raysOn = rememberHitRaysAvailable(reducedMotion) && look.graphics.hitRays
         val hitLight = remember { GlyphHitLight() }
 
         val laneNames = remember {
@@ -188,7 +189,7 @@ fun GlyphPlayfield(
             if (!warmed) return@Canvas
 
             val position = positionProvider()
-            if (raysOn) {
+            if (raysOn && look.graphics.noteLighting) {
                 val now = System.nanoTime()
                 hitLight.tint(GlyphComboRays.colour(comboProvider(), now))
                 hitLight.update(now, explosionProvider(), laneWidthPx, noteSizePx, receptorYPx)
@@ -269,7 +270,7 @@ fun GlyphPlayfield(
             // They flash on each beat, as StepMania's receptors do: the same
             // glyph added over itself, brightest on the beat and gone by the
             // next. A flash, not a pulse in size.
-            val beatFlash = if (reducedMotion) 0f else {
+            val beatFlash = if (reducedMotion || !look.graphics.beatFlash) 0f else {
                 val beat = timing.secondsToBeat(position)
                 val fade = 1f - (beat - kotlin.math.floor(beat))
                 BEAT_FLASH * fade * fade * fade
@@ -312,8 +313,8 @@ fun GlyphPlayfield(
             // Explosions, above the receptors: feedback must never be hidden
             // by the thing that produced it. Skipped entirely under reduced
             // motion, which is also the most expensive drawing on screen
-            // during a dense chart.
-            if (!reducedMotion) {
+            // during a dense chart, and when the graphics settings say so.
+            if (!reducedMotion && look.graphics.explosions) {
                 val now = System.nanoTime()
                 for ((lane, flash) in explosionProvider()) {
                     val age = (now - flash.atNanos) / 1_000_000_000f
@@ -340,7 +341,7 @@ fun GlyphPlayfield(
             // Combo burst: one mark across the playfield at a milestone, not
             // one per note. A burst on every hit would be constant during a
             // stream and would stop reading as an event at all.
-            if (!reducedMotion) {
+            if (!reducedMotion && look.graphics.comboBurst) {
                 val burstAt = comboBurstProvider()
                 if (burstAt > 0L) {
                     val age = (System.nanoTime() - burstAt) / 1_000_000_000f
@@ -408,6 +409,7 @@ fun GlyphPlayfield(
             frameTick = frameTick,
             enabled = raysOn && engine != null && warmed,
             comboProvider = comboProvider,
+            quality = look.graphics.rayQuality,
         )
     }
 }
@@ -715,6 +717,8 @@ data class GlyphFieldLook(
     val dark: Boolean = false,
     /** 0 to 0.5. */
     val mini: Float = 0f,
+    /** Which effects are drawn. */
+    val graphics: GlyphGraphics = GlyphGraphics(),
 ) {
     companion object {
         fun of(modifiers: GlyphModifiers) = GlyphFieldLook(
@@ -722,6 +726,7 @@ data class GlyphFieldLook(
             appearance = modifiers.appearance,
             dark = modifiers.dark,
             mini = modifiers.mini,
+            graphics = modifiers.graphics,
         )
     }
 }

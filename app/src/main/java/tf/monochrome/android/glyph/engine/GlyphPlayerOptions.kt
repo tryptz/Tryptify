@@ -117,3 +117,34 @@ enum class GlyphJudge(val level: Int, val scale: Float) {
             entries.minBy { kotlin.math.abs(it.scale - scale) }
     }
 }
+
+/**
+ * Trypt Mania's graphics: which of the playfield's effects are drawn, for
+ * taste or for a phone that struggles. None of them touches a judgement.
+ * Reduced motion and the app's low-performance glass switch still turn the
+ * effects off whatever is set here.
+ */
+data class GlyphGraphics(
+    /** The god-ray burst on each hit. */
+    val hitRays: Boolean = true,
+    /** Samples per shaft for the rays, 1 to 4; the lyrics' quality scale. */
+    val rayQuality: Int = 1,
+    /** The flash's light caught by the notes and receptors around a hit. */
+    val noteLighting: Boolean = true,
+    /** The receptor explosion on each hit. */
+    val explosions: Boolean = true,
+    /** Receptors flashing on the beat. */
+    val beatFlash: Boolean = true,
+    /** The burst across the field every fifty combo. */
+    val comboBurst: Boolean = true,
+) {
+    companion object {
+        val RAY_QUALITIES = listOf(1, 2, 3)
+
+        fun rayQualityLabel(quality: Int): String = when (quality) {
+            1 -> "Low"
+            2 -> "Medium"
+            else -> "High"
+        }
+    }
+}

@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -29,6 +30,7 @@ import tf.monochrome.android.audio.sampler.stems.InstallResult
 import tf.monochrome.android.audio.sampler.stems.StemBackendRegistry
 import tf.monochrome.android.audio.sampler.stems.StemModelManager
 import tf.monochrome.android.audio.stepmania.StepManiaConversionService
+import tf.monochrome.android.audio.stepmania.DropFinder
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.audio.stepmania.StepManiaRequest
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
@@ -41,10 +43,14 @@ import tf.monochrome.android.glyph.data.GlyphAttemptStore
 import tf.monochrome.android.glyph.data.GlyphGhost
 import tf.monochrome.android.glyph.data.GlyphGhostRecorder
 import tf.monochrome.android.glyph.data.GlyphSong
+import tf.monochrome.android.glyph.data.GlyphSongSort
+import tf.monochrome.android.glyph.data.GlyphSortKey
 import tf.monochrome.android.glyph.data.GlyphSongRepository
 import tf.monochrome.android.glyph.engine.GlyphAppearance
 import tf.monochrome.android.glyph.engine.GlyphAudioTransport
 import tf.monochrome.android.glyph.engine.GlyphFailType
+import tf.monochrome.android.glyph.engine.GlyphGraphics
+import tf.monochrome.android.glyph.engine.GlyphPreviewPlayer
 import tf.monochrome.android.glyph.engine.GlyphGameplayEngine
 import tf.monochrome.android.glyph.engine.GlyphJudgement
 import tf.monochrome.android.glyph.engine.GlyphJudgementEvent
@@ -192,6 +198,10 @@ class GlyphViewModel @Inject constructor(
     private var stepScore: StepManiaScoreKeeper? = null
     private var introJob: Job? = null
 
+    /** The song list's preview from the drop; built on first use. */
+    private val preview by lazy { GlyphPreviewPlayer(context, viewModelScope) }
+    private var previewJob: Job? = null
+
     private var tickJob: Job? = null
     private var waveformJob: Job? = null
     private var selectionJob: Job? = null
@@ -225,6 +235,21 @@ class GlyphViewModel @Inject constructor(
     fun onEvent(event: GlyphEvent) {
         when (event) {
             is GlyphEvent.Search -> _ui.value = _ui.value.copy(songQuery = event.query)
+            is GlyphEvent.SortSongs -> {
+                val sort = _ui.value.songSort.pick(event.key)
+                prefs.edit().putString(PREF_SORT_KEY, sort.key.id).putBoolean(PREF_SORT_ASCENDING, sort.ascending).apply()
+                _ui.value = _ui.value.copy(songSort = sort)
+            }
+            GlyphEvent.OpenLeaderboard -> {
+                stopPreview()
+                openLeaderboard()
+            }
+            is GlyphEvent.SetPreviews -> {
+                prefs.edit().putBoolean(PREF_PREVIEWS, event.on).apply()
+                _ui.value = _ui.value.copy(previews = event.on)
+                if (!event.on) stopPreview()
+            }
+            GlyphEvent.CloseLeaderboard -> _ui.value = _ui.value.copy(screen = GlyphScreen.HOME)
             is GlyphEvent.SelectSong -> selectSong(event.trackId)
             is GlyphEvent.SelectDifficulty ->
                 _ui.value = _ui.value.copy(selectedDifficulty = event.difficulty)
@@ -253,6 +278,7 @@ class GlyphViewModel @Inject constructor(
             is GlyphEvent.SetMini -> updateModifiers { it.copy(mini = event.mini.coerceIn(0f, MAX_MINI)) }
             is GlyphEvent.SetFailType -> updateModifiers { it.copy(failType = event.failType) }
             is GlyphEvent.SetPlayerName -> setPlayerName(event.name)
+            is GlyphEvent.SetGraphics -> updateModifiers { it.copy(graphics = event.graphics) }
 
             GlyphEvent.StartPlay -> start(training = false)
             GlyphEvent.StartTraining -> start(training = true)
@@ -332,7 +358,56 @@ class GlyphViewModel @Inject constructor(
             selectedDifficulty = null,
         )
         loadSelection(song)
+        previewSong(song)
     }
+
+    // ── previews ────────────────────────────────────────────────────────
+
+    /**
+     * Play [song] from its drop, as StepMania's wheel plays a song's sample.
+     *
+     * Where the drop is, quickest first: the chart's own #SAMPLESTART; the
+     * drop found on an earlier visit, remembered; or found now from the
+     * loudness bars the page decodes for the selection anyway, and remembered
+     * for next time. A song with none of these waits for its bars rather than
+     * starting somewhere arbitrary.
+     */
+    private fun previewSong(song: GlyphSong) {
+        previewJob?.cancel()
+        if (!_ui.value.previews || song.filePath.isBlank()) {
+            preview.stop()
+            return
+        }
+        previewJob = viewModelScope.launch {
+            val simfile = if (song.hasChart) songs.simfile(song.trackId) else null
+            val length = simfile?.sampleLengthSeconds ?: GlyphPreviewPlayer.DEFAULT_LENGTH_SECONDS
+            val start = simfile?.sampleStartSeconds
+                ?: prefs.getFloat(PREF_DROP_PREFIX + song.trackId, -1f).takeIf { it >= 0f }
+                ?: dropFromWaveform(song)?.also { prefs.edit().putFloat(PREF_DROP_PREFIX + song.trackId, it).apply() }
+                ?: return@launch
+            if (_ui.value.selectedSong?.trackId != song.trackId || _ui.value.screen != GlyphScreen.HOME) return@launch
+            preview.play(Uri.fromFile(File(song.filePath)), start, length)
+        }
+    }
+
+    /** The drop from the selection's loudness bars, once they have decoded. */
+    private suspend fun dropFromWaveform(song: GlyphSong): Float? {
+        val bars = kotlinx.coroutines.withTimeoutOrNull(WAVEFORM_WAIT_MILLIS) {
+            _ui.first { state ->
+                state.selectedSong?.trackId != song.trackId ||
+                    (!state.training.isWaveformLoading && state.training.loudness.isNotEmpty())
+            }
+        }?.takeIf { it.selectedSong?.trackId == song.trackId }?.training?.loudness ?: return null
+        return DropFinder.find(bars, song.durationSeconds.toFloat())
+    }
+
+    private fun stopPreview() {
+        previewJob?.cancel()
+        preview.stop()
+    }
+
+    /** The app left the foreground: a preview must not play on behind it. */
+    fun onBackground() = stopPreview()
 
     /** Fill in what has to be read from disk, and refresh the chart state. */
     private fun loadSelection(song: GlyphSong) {
@@ -381,10 +456,10 @@ class GlyphViewModel @Inject constructor(
 
         waveformJob = viewModelScope.launch {
             _ui.value = _ui.value.copy(
-                training = _ui.value.training.copy(isWaveformLoading = true, waveform = emptyList()),
+                training = _ui.value.training.copy(isWaveformLoading = true, waveform = emptyList(), loudness = emptyList()),
             )
             val job = coroutineContext[Job]
-            val bars = withContext(Dispatchers.Default) {
+            val (bars, loudness) = withContext(Dispatchers.Default) {
                 runCatching {
                     var builder = GlyphWaveformBuilder()
                     PcmDecoder.stream(
@@ -393,13 +468,17 @@ class GlyphViewModel @Inject constructor(
                         isActive = { job?.isActive != false },
                         onFormat = { format -> builder = GlyphWaveformBuilder(format.estimatedFrames) },
                     ) { left, right, frames -> builder.add(left, right, frames) }
-                    builder.bars(WAVEFORM_BARS)
+                    builder.bars(WAVEFORM_BARS) to builder.loudness(LOUDNESS_BARS)
                 }.onFailure {
                     Log.w(TAG, "waveform for ${song.title} failed: ${it.message}")
-                }.getOrDefault(emptyList())
+                }.getOrDefault(emptyList<Float>() to emptyList())
             }
             _ui.value = _ui.value.copy(
-                training = _ui.value.training.copy(waveform = bars, isWaveformLoading = false),
+                training = _ui.value.training.copy(
+                    waveform = bars,
+                    loudness = loudness,
+                    isWaveformLoading = false,
+                ),
             )
         }
     }
@@ -560,6 +639,7 @@ class GlyphViewModel @Inject constructor(
      */
     private fun generate(source: Uri, displayName: String, song: GlyphSong?) {
         generationJob?.cancel()
+        stopPreview()
         val trackId = song?.trackId ?: displayName
         val destination = songs.simfileFile(trackId)
 
@@ -624,6 +704,7 @@ class GlyphViewModel @Inject constructor(
     private fun start(training: Boolean) {
         val song = _ui.value.selectedSong ?: return
         val chart = _ui.value.chart ?: return
+        stopPreview()
         if (song.filePath.isBlank()) {
             _ui.value = _ui.value.copy(error = "That song's file could not be located.")
             return
@@ -1139,10 +1220,23 @@ class GlyphViewModel @Inject constructor(
             metronome = prefs.getBoolean(PREF_METRONOME, false),
             timingWindowScale = prefs.getFloat(PREF_JUDGE, 1f),
             skin = GlyphSkin.fromId(prefs.getString(PREF_SKIN, null)),
+            graphics = GlyphGraphics(
+                hitRays = prefs.getBoolean(PREF_GFX_RAYS, true),
+                rayQuality = prefs.getInt(PREF_GFX_RAY_QUALITY, 1).coerceIn(1, 4),
+                noteLighting = prefs.getBoolean(PREF_GFX_LIGHTING, true),
+                explosions = prefs.getBoolean(PREF_GFX_EXPLOSIONS, true),
+                beatFlash = prefs.getBoolean(PREF_GFX_BEAT_FLASH, true),
+                comboBurst = prefs.getBoolean(PREF_GFX_COMBO_BURST, true),
+            ),
         )
         _ui.value = _ui.value.copy(
             gameplay = _ui.value.gameplay.copy(modifiers = stored),
             playerName = prefs.getString(PREF_NAME, null).orEmpty(),
+            previews = prefs.getBoolean(PREF_PREVIEWS, true),
+            songSort = GlyphSongSort(
+                key = GlyphSortKey.fromId(prefs.getString(PREF_SORT_KEY, null)),
+                ascending = prefs.getBoolean(PREF_SORT_ASCENDING, true),
+            ),
         )
     }
 
@@ -1169,6 +1263,12 @@ class GlyphViewModel @Inject constructor(
             .putBoolean(PREF_METRONOME, modifiers.metronome)
             .putFloat(PREF_JUDGE, modifiers.timingWindowScale)
             .putString(PREF_SKIN, modifiers.skin.id)
+            .putBoolean(PREF_GFX_RAYS, modifiers.graphics.hitRays)
+            .putInt(PREF_GFX_RAY_QUALITY, modifiers.graphics.rayQuality)
+            .putBoolean(PREF_GFX_LIGHTING, modifiers.graphics.noteLighting)
+            .putBoolean(PREF_GFX_EXPLOSIONS, modifiers.graphics.explosions)
+            .putBoolean(PREF_GFX_BEAT_FLASH, modifiers.graphics.beatFlash)
+            .putBoolean(PREF_GFX_COMBO_BURST, modifiers.graphics.comboBurst)
             .apply()
     }
 
@@ -1186,6 +1286,31 @@ class GlyphViewModel @Inject constructor(
 
     /** The name a run is saved under: the chosen one, or PLAYER. */
     private fun effectiveName(): String = _ui.value.playerName.ifBlank { DEFAULT_NAME }
+
+    /**
+     * The leaderboard page: every chart with a full run on this phone, each
+     * with its tables by difficulty, matched back to the library's song so it
+     * can be sorted like the list.
+     */
+    private fun openLeaderboard() {
+        _ui.value = _ui.value.copy(
+            screen = GlyphScreen.LEADERBOARD,
+            leaderboard = _ui.value.leaderboard.copy(loading = true),
+        )
+        viewModelScope.launch {
+            val byChart = _ui.value.songs.associateBy { it.chartId }
+            val boards = attempts.allHighScores().map { (chartId, tables) ->
+                val song = byChart[chartId]
+                GlyphBoard(
+                    chartId = chartId,
+                    title = song?.title ?: tables.values.first().first().songTitle,
+                    song = song,
+                    tables = tables,
+                )
+            }
+            _ui.value = _ui.value.copy(leaderboard = GlyphLeaderboardUi(loading = false, boards = boards))
+        }
+    }
 
     private suspend fun bestGradesFor(song: GlyphSong): Map<StepManiaDifficulty, GlyphAttempt> =
         StepManiaDifficulty.entries.mapNotNull { difficulty ->
@@ -1375,6 +1500,8 @@ class GlyphViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        previewJob?.cancel()
+        preview.release()
         stopTick()
         replaceEngine(null)
         metronome.release()
@@ -1398,6 +1525,21 @@ class GlyphViewModel @Inject constructor(
         const val PREF_METRONOME = "metronome"
         const val PREF_JUDGE = "judge"
         const val PREF_NAME = "player_name"
+        const val PREF_SORT_KEY = "song_sort"
+        const val PREF_PREVIEWS = "previews"
+
+        /** Per track: the drop found from its loudness, so the next preview starts at once. */
+        const val PREF_DROP_PREFIX = "drop_"
+
+        /** How long a preview waits for the selection's loudness bars. */
+        const val WAVEFORM_WAIT_MILLIS = 20_000L
+        const val PREF_SORT_ASCENDING = "song_sort_ascending"
+        const val PREF_GFX_RAYS = "gfx_hit_rays"
+        const val PREF_GFX_RAY_QUALITY = "gfx_ray_quality"
+        const val PREF_GFX_LIGHTING = "gfx_note_lighting"
+        const val PREF_GFX_EXPLOSIONS = "gfx_explosions"
+        const val PREF_GFX_BEAT_FLASH = "gfx_beat_flash"
+        const val PREF_GFX_COMBO_BURST = "gfx_combo_burst"
 
         const val MAX_MINI = 0.5f
         const val MAX_NAME_LENGTH = 12
@@ -1437,5 +1579,8 @@ class GlyphViewModel @Inject constructor(
 
         /** Enough bars to find a passage by eye; more would be wasted work. */
         const val WAVEFORM_BARS = 220
+
+        /** About a second a level on a four-minute song: fine enough to land on a drop. */
+        const val LOUDNESS_BARS = 240
     }
 }

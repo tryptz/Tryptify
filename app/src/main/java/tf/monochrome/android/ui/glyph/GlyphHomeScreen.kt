@@ -23,9 +23,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -183,19 +187,40 @@ fun GlyphHomeScreen(
                     open = searchOpen,
                     onToggle = { if (searchOpen) closeSearch() else searchOpen = true },
                 )
-                IconButton(onClick = { modelOpen = !modelOpen }) {
+                // The leaderboard on top, as StepMania puts its rankings on
+                // the music wheel's own screen.
+                IconButton(onClick = { onEvent(GlyphEvent.OpenLeaderboard) }) {
                     Icon(
-                        Icons.Default.Memory,
-                        contentDescription = "Drum separation model",
+                        Icons.Default.Leaderboard,
+                        contentDescription = "Leaderboard",
                     )
                 }
-                IconButton(
-                    onClick = { picker.launch(arrayOf("audio/mpeg", "audio/flac", "audio/x-flac")) },
-                ) {
-                    Icon(
-                        Icons.Default.UploadFile,
-                        contentDescription = "Generate a chart from a file",
-                    )
+                GlyphSortButton(sort = state.songSort, onPick = { onEvent(GlyphEvent.SortSongs(it)) })
+                // The two actions taken now and then, under one menu, so the
+                // title keeps its room.
+                Box {
+                    var more by remember { mutableStateOf(false) }
+                    IconButton(onClick = { more = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "More")
+                    }
+                    DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Generate a chart from a file") },
+                            leadingIcon = { Icon(Icons.Default.UploadFile, contentDescription = null) },
+                            onClick = {
+                                more = false
+                                picker.launch(arrayOf("audio/mpeg", "audio/flac", "audio/x-flac"))
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Drum separation model") },
+                            leadingIcon = { Icon(Icons.Default.Memory, contentDescription = null) },
+                            onClick = {
+                                more = false
+                                modelOpen = true
+                            },
+                        )
+                    }
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(

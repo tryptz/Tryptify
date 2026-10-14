@@ -79,8 +79,9 @@ fun GlyphRoute(
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_PAUSE && state.gameplay.isPlaying) {
-                viewModel.onEvent(GlyphEvent.TogglePause)
+            if (event == Lifecycle.Event.ON_PAUSE) {
+                viewModel.onBackground()
+                if (state.gameplay.isPlaying) viewModel.onEvent(GlyphEvent.TogglePause)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -101,6 +102,7 @@ fun GlyphRoute(
                 }
             GlyphScreen.RESULTS -> viewModel.onEvent(GlyphEvent.BackToHome)
             GlyphScreen.OPTIONS -> viewModel.onEvent(GlyphEvent.CloseOptions)
+            GlyphScreen.LEADERBOARD -> viewModel.onEvent(GlyphEvent.CloseLeaderboard)
             GlyphScreen.HOME -> Unit
         }
     }
@@ -144,6 +146,12 @@ fun GlyphRoute(
             )
 
             GlyphScreen.OPTIONS -> GlyphOptionsScreen(
+                state = state,
+                onEvent = viewModel::onEvent,
+                modifier = Modifier.fillMaxSize(),
+            )
+
+            GlyphScreen.LEADERBOARD -> GlyphLeaderboardScreen(
                 state = state,
                 onEvent = viewModel::onEvent,
                 modifier = Modifier.fillMaxSize(),

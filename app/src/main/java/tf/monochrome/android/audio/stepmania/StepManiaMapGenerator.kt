@@ -129,6 +129,18 @@ class StepManiaMapGenerator(
 /** Minimal, deterministic StepMania 5 SSC serializer. */
 internal object SscWriter {
 
+    /** StepMania's own default preview length. */
+    const val SAMPLE_LENGTH_SECONDS = 12f
+
+    /** The drop, in song seconds, from the sixteenth-note strengths. */
+    fun previewStart(analysis: RhythmAnalysis): Float? {
+        val grid = analysis.gridStrengths
+        if (grid.isEmpty()) return null
+        val span = grid.size * analysis.subdivisionSeconds
+        val drop = DropFinder.find(grid.asList(), span) ?: return null
+        return (analysis.offsetSeconds + drop).coerceAtLeast(0f)
+    }
+
     fun write(
         request: StepManiaRequest,
         analysis: RhythmAnalysis,
@@ -142,6 +154,12 @@ internal object SscWriter {
         appendLine("#OFFSET:${decimal(-analysis.offsetSeconds)};")
         appendLine("#BPMS:0.000=${decimal(analysis.bpm)};")
         appendLine("#DISPLAYBPM:${decimal(analysis.bpm)};")
+        // Where the song is previewed from: its drop, found in the drum
+        // envelope, as an author would set it by ear.
+        previewStart(analysis)?.let { start ->
+            appendLine("#SAMPLESTART:${decimal(start)};")
+            appendLine("#SAMPLELENGTH:${decimal(SAMPLE_LENGTH_SECONDS)};")
+        }
         appendLine()
 
         for (chart in charts) {
