@@ -428,8 +428,8 @@ class GlyphViewModel @Inject constructor(
 
     /**
      * Copy a model file off the player's storage into the app, through the
-     * same installer the Sampler uses, so the two screens always agree on what
-     * is installed. The installer identifies the file by its hash and refuses
+     * same installer Settings reads, so the two always agree on what is
+     * installed. The installer identifies the file by its hash and refuses
      * one it does not know how to run, since a model whose outputs are read in
      * the wrong order separates the wrong instrument without any error.
      */

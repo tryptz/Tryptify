@@ -47,7 +47,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.SettingsBackupRestore
@@ -269,31 +268,6 @@ fun MixerScreen(
         if (heightPx > 0f) progress = (progress + delta / heightPx).coerceIn(0f, 1f)
     }
 
-    // ── Mixer → Patterns horizontal page slide ──────────────────────────
-    // The console sits to the left of the pattern looper, so dragging left
-    // pulls Patterns in from the right — the same direction the app's main
-    // tab pager uses.
-    //
-    // Two things decide where the detector goes, and both are easy to get
-    // wrong.
-    //
-    // It only accepts drags that START on the header. Underneath the header
-    // the channel strips scroll horizontally, and the faders and pan knobs use
-    // vertical-only detectors *specifically* so their horizontal drags reach
-    // that scroll (see VerticalFader) — so a swipe anywhere else on the page
-    // would steal the scrolling those detectors were written to allow. The
-    // header already owns the screen's other navigation gesture, drag down for
-    // the DSP canvas, so both now live in one place on different axes. They
-    // coexist because each claims its own axis's touch slop.
-    //
-    // And it is attached to the ROOT box, which never moves, rather than to
-    // the header, which does. Pointer positions are reported in the node's own
-    // space, so a detector living inside the layer it is translating sees the
-    // node slide out from under the finger and reads a drag of roughly zero.
-    // The player's track-skip swipe is built the same way for the same reason.
-    var widthPx by remember { mutableFloatStateOf(0f) }
-    var headerHeightPx by remember { mutableFloatStateOf(0f) }
-    val pageOffsetX = remember { Animatable(0f) }
     val onDragStarted: suspend CoroutineScope.(Offset) -> Unit = {
         settleJob?.cancel()
         dragging = true
@@ -366,64 +340,6 @@ fun MixerScreen(
             .fillMaxSize()
             .onSizeChanged {
                 heightPx = it.height.toFloat()
-                widthPx = it.width.toFloat()
-            }
-            .pointerInput(Unit) {
-                // Drag left on the header to hand over to the pattern looper.
-                var fromHeader = false
-                detectHorizontalDragGestures(
-                    onDragStart = { start ->
-                        // The console is only the page on screen while the DSP
-                        // canvas is fully away, and only the header may start
-                        // this — everything below it belongs to the strips.
-                        fromHeader = progress <= 0.01f &&
-                            headerHeightPx > 0f &&
-                            start.y <= headerHeightPx
-                    },
-                    onDragEnd = {
-                        if (!fromHeader) return@detectHorizontalDragGestures
-                        fromHeader = false
-                        val width = widthPx.coerceAtLeast(1f)
-                        scope.launch {
-                            // Commit distance as a share of the screen rather
-                            // than a pixel count, so the gesture asks for the
-                            // same proportion of a swipe at any density —
-                            // matching the track-skip swipe on the player.
-                            if (pageOffsetX.value < -width * 0.22f) {
-                                // Carry the console the rest of the way off
-                                // before switching, so the direction of travel
-                                // matches the direction of the swipe.
-                                pageOffsetX.animateTo(-width, tween(150))
-                                navController.navigateTool(Screen.Patterns)
-                                // The mixer stays on the back stack, so its
-                                // offset has to come home or it would still be
-                                // off-screen on the way back. Invisible here:
-                                // the nav transition already covers this frame.
-                                pageOffsetX.snapTo(0f)
-                            } else {
-                                pageOffsetX.animateTo(0f, spring())
-                            }
-                        }
-                    },
-                    onDragCancel = {
-                        fromHeader = false
-                        scope.launch { pageOffsetX.animateTo(0f, spring()) }
-                    },
-                    onHorizontalDrag = { change, amount ->
-                        if (!fromHeader) return@detectHorizontalDragGestures
-                        change.consume()
-                        val width = widthPx.coerceAtLeast(1f)
-                        scope.launch {
-                            // Clamped to the left: there is nothing on the
-                            // mixer's other side, and a page that follows the
-                            // finger into empty space promises a screen that
-                            // is not there.
-                            pageOffsetX.snapTo(
-                                (pageOffsetX.value + amount).coerceIn(-width, 0f)
-                            )
-                        }
-                    },
-                )
             }
     ) {
         // The whole backdrop — wash, artwork and glow — as one haze source, so a
@@ -516,10 +432,6 @@ fun MixerScreen(
                     .fillMaxSize()
                     .graphicsLayer {
                         translationY = progress * heightPx
-                        // Read inside the layer block, like `progress` above,
-                        // so following the finger is a redraw and never a
-                        // recomposition of the strips.
-                        translationX = pageOffsetX.value
                     }
             ) {
             Column(modifier = Modifier.fillMaxSize()) {
@@ -545,10 +457,6 @@ fun MixerScreen(
                             onDragStarted = onDragStarted,
                             onDragStopped = onDragStopped
                         )
-                        // Reported so the page-level swipe below can tell a
-                        // drag that started on the header from one that started
-                        // on the channel strips.
-                        .onSizeChanged { headerHeightPx = it.height.toFloat() }
                 ) {
                     Row(
                         modifier = Modifier
@@ -599,14 +507,6 @@ fun MixerScreen(
                             icon = Icons.Default.AccountTree,
                             contentDescription = stringResource(R.string.mixer_fx_chain),
                             onClick = { animateProgressTo(1f, 0f) }
-                        )
-                        // The swipe's visible twin. A gesture nobody can see is
-                        // not an affordance, and this is also where someone who
-                        // has discovered the swipe will look for it.
-                        NavIconButton(
-                            icon = Icons.Default.GridView,
-                            contentDescription = "Patterns",
-                            onClick = { navController.navigateTool(Screen.Patterns) }
                         )
                         NavIconButton(
                             icon = Icons.Default.SettingsBackupRestore,

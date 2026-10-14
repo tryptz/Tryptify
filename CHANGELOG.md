@@ -5,10 +5,14 @@
 ### Added
 
 #### Trypt Mania
-- **Trypt Mania has its own tile** in Library › Local, under Library galaxy. It is the rhythm mode that was reached as "Glyph" from the sampler.
+- **Trypt Mania has its own tile** in Library › Local, under Library galaxy. It is the rhythm mode that used to be reached as "Glyph" from the sampler.
 - **StepMania's retro arrows** — the "retro" dance noteskin from StepMania, MIT licensed, with its notice in the app. Taps are coloured by beat (red 4ths, blue 8ths, green 12ths, yellow 16ths…), holds and rolls brighten while they are held, and the mine, receptors and explosions are the skin's own. The art is pixel art and is enlarged by whole pixels, so it stays sharp at any lane width.
 - **Retro glass** — the same arrows in the app's glass: tinted see-through bodies in each note's colour, a lit rim and a highlight. It is made from your UI panel glass settings, so the notes change with the sliders that change the mini player and the panels, and with glass removed it is the plain retro skin. Pick the notes under Notes in the pause panel or Training Ground; the choice is kept.
+- **Import the drum separation model on the Trypt Mania page** — the chip button in the top bar opens it. The app ships without a model, and charts still generate without one, from the built-in separator; import an HTDemucs `.onnx` from your phone for cleaner drum stems and better charts. It shows how far the copy has got, can be cancelled, and the model can be replaced or removed there.
 - **Hit notes flash with god rays** — a brief white-hot flash of the struck arrow, streaming shafts of light through the lyrics' own god-ray effect, and every glyph near it catches the light. Off with reduced motion or with glass removed for performance, and on Android 13 and later.
+
+### Removed
+- **The pattern looper and the sampler**, with their capture taps in the audio chain, the stem studio, the wave editor and the sample library. Their database tables are dropped on upgrade (database v20). Trypt Mania keeps everything it uses: the decoder, the drum separators and the model.
 
 ### Changed
 
@@ -20,44 +24,8 @@
 ### Fixed
 
 #### Trypt Mania
+- **Picking songs no longer runs the app out of memory.** Each pick decoded the whole song into memory for the Training Ground's waveform — up to 230 MB for a long one — and a second pick started another while the first was still going. The waveform is now drawn as the song decodes, the decode stops when you move on, and generating a chart works through the song 30 seconds at a time instead of holding it and its drum stem whole.
 - **A practice loop no longer opens with a run of misses.** Every pass used to time out each note before the loop as a miss, which spoiled the pass's score, its ghost and the lane flashes. A loop is now scored on the notes inside it, so a clean pass reads as 100 %.
-
-#### Pattern looper and sampler
-- **A pattern looper lives in the app now** — Settings › Audio Processing › Patterns, or from the Sampler screen. It is an FL Studio-shaped workflow rather than a timeline: a pattern is a short loop of trigs across a handful of sample channels, patterns live in a bank, and you switch between them while the loop is running. Listen, capture, save, assign, tap steps, press play.
-- **A real audio clock, not a UI timer** — the sequencer runs in C++ with a sample-accurate step clock, a fixed voice pool and a lock-free command queue. Tapping a trig while the loop plays never touches the audio thread's work, and nothing on the audio path allocates, locks or waits on Kotlin. The same pattern lands on the same samples whether the output hands it 64-frame or 4096-frame buffers, which is the property a UI-driven timer cannot have.
-- **Patterns go through your DSP, not around it** — the looper sums into the Media3 chain ahead of the mix bus, so a loop inherits the mixer, AutoEQ, the parametric EQ and the whole Oxford post-chain exactly as a track does. With nothing playing there is no chain to sum into, so it falls back to its own low-latency output — a sequencer that only worked while music was playing would not be a sequencer.
-- **Trig keys, not checkboxes** — recessed wells with caps that light from inside, velocity scaling the brightness, the playhead as a hard white rim that wins against any accent colour, and beats sitting in lighter wells so the 4/4 grid reads without labels. Two rows of eight on a phone: sixteen keys in one row gives each about 22 dp, which is half a usable touch target and the reason most mobile sequencers are unpleasant.
-- **Drag across the grid to paint a run of steps** — the value is decided by the key you start on, so starting on a lit step erases and starting on a dark one fills. Long-press a step for its editor. Both are enhancements: everything remains reachable by tapping.
-- **4, 8, 12, 16, 32 and 64-step patterns** — and shortening one hides its trigs rather than deleting them, so going back brings the second half with it.
-- **Queued pattern switching** — tap another pattern in the bank and it shows NEXT until the current loop comes round, then takes over on the boundary. There is a "Now" mode for immediate switching, but sync is the default because it is what makes switching usable while something is playing.
-- **Live recording** — REC arms and starts in one press, and hits you tap on the pads are written into the pattern quantized to 1/16, 1/8, 1/4 or not at all. The quantization is decided on the audio thread, which is the only thing that knows where the playhead was when your finger landed.
-- **Tempo can be typed, nudged, dragged or tapped in** — tap the readout for a field that takes a number directly, with ±1 and ÷2/×2 beside it (a tempo read off a loop is very often out by exactly a factor of two) and tap tempo for when the number is not known at all. Dragging the readout still nudges it by feel while the loop runs. Swing moves offbeats only, and a swung bar is still exactly as long as an unswung one.
-- **Per-channel sound controls** — volume, pan, pitch, sample start and end, reverse, attack, release, filter, mute and exclusive solo. Every one writes straight through to the engine, so a fader moved mid-loop is audible on the next hit without a database write in the way.
-- **Three layouts, chosen by width rather than by device** — one channel at a time on a phone, channels and grid side by side on a tablet, and a workstation with the sound controls permanently open on a wide window. None of them is the phone layout stretched.
-- **A sampler that taps Tryptify's own pipeline** — capture CLEAN (decoded, before processing) or PROCESSED (after the full DSP chain), then trim, normalize, fade, reverse, name and file it. Trim handles snap to the first transient, and every saved sample gets a short edge fade so a cut that lands mid-cycle does not click on every step.
-- **Capture is limited to audio that is yours to keep** — on-device files and your own downloads. The check defaults closed, so anything whose origin cannot be established is not capturable, and it is re-checked at the moment a file would be written. This is a tap on the app's own decoder output: there is no system playback capture, no microphone path, and no way to point it at another app.
-#### Stem studio
-- **Split a sample into vocals, drums, bass and other** — on device, offline, with no model to download and nothing sent anywhere. Pick a quality, watch the progress, then mix the four stems, audition them together or alone, edit any one of them, and save the ones worth keeping.
-- **It is DSP, not a neural separator, and the screen says so** — a harmonic/percussive split (median filtering on the spectrogram) combined with centre extraction for the vocal. On a two-bar loop, which is what a sampler is usually pointed at, it is genuinely useful; on a dense mix it will not match a trained model, and nothing here pretends otherwise. Vocals need a stereo source, because centre extraction has nothing to compare on mono — so mono sources offer three stems rather than four.
-- **The stems add back up to the source.** The masks sum to one at every frequency, so saving all four gives you exactly what you started with. Nothing is quietly lost in the split.
-- **Stems become ordinary samples** — filed under the matching category, tagged with which stem they are and which sample they came from, and usable on a pattern channel like anything else. They stay in memory until saved, so a split you did not like leaves nothing behind.
-- **It runs in the background and can be cancelled** — the rest of the app stays live throughout.
-
-#### Wave editor
-- **A real waveform editor** — pinch to zoom, drag to select, drag the handles to adjust. Every operation acts on the selection, or on the whole sample when there is none, so the same few buttons cover "tidy up this hit" and "cut this one syllable out" without a mode switch. Crop, cut, silence, normalize, fades, reverse, mono, trim-silence and gain, with undo behind all of them.
-- **Play what you selected** — audition with a playhead that tracks the audio, and a loop toggle for auditioning a cut you are still adjusting. It runs on its own output rather than through the sequencer: the editor needs to hear an arbitrary range of a buffer that has not been saved yet, which is not something a step sequencer is shaped to do.
-- **Edit points snap to zero crossings** — on by default, and switchable. A cut that lands mid-waveform is a step discontinuity, and a sample looped on one clicks once per repeat; snapping removes the click at source rather than hiding it under a fade.
-- **Import any audio file** — anything the platform can decode opens straight in the editor, so a sample can start life as a file on the device rather than as a capture. It is re-encoded into the library's own format on save, so the sample does not break when the original is moved or deleted.
-- **Re-open a saved sample to fix it** — tap it in the library. Saving updates that sample rather than leaving a second copy behind, and its provenance and category are carried across.
-- **Zoomed drawing costs the same as zoomed-out** — the waveform is rendered from peaks computed for exactly the window on screen, and a selection drag redraws without recomputing them.
-
-#### Capture
-- **Capture works for everything Tryptify plays** — on-device files, downloads and streams alike. What was a gate is now a label: the source is shown before you record and stored with the sample, so every capture stays attributable.
-
-- **A sample library with categories** — kicks, snares, hats, percussion, vocals, bass, FX, loops and user. Metadata in Room, audio on disk, and a cached peak file per sample so a browser of several hundred draws every waveform thumbnail without opening a single audio file. Samples are reusable across every pattern, and deleting one empties the channels that used it rather than deleting them.
-
-### Changed
-- The database moves to v17 with four new tables for samples, patterns, channels and steps. Nothing existing is touched — the library, playlists, downloads and presets all survive the upgrade in place.
 
 ### Fixed
 

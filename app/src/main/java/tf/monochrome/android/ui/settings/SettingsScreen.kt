@@ -1762,29 +1762,12 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        SettingsGroupHeader("Pattern Looper")
-        Row(
+        SettingsGroupHeader("Trypt Mania")
+        OutlinedButton(
+            onClick = { navController.navigateTool(Screen.Glyph) },
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            OutlinedButton(
-                onClick = { navController.navigateTool(Screen.Patterns) },
-                modifier = Modifier.weight(1f),
-            ) {
-                Text("Patterns")
-            }
-            OutlinedButton(
-                onClick = { navController.navigateTool(Screen.Sampler) },
-                modifier = Modifier.weight(1f),
-            ) {
-                Text("Sampler")
-            }
-            OutlinedButton(
-                onClick = { navController.navigateTool(Screen.Glyph) },
-                modifier = Modifier.weight(1f),
-            ) {
-                Text("Glyph")
-            }
+            Text("Trypt Mania")
         }
 
         // One group, not two. "Spatial Audio" held nothing but the Atmos row,
@@ -1890,9 +1873,9 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
 
 /**
  * Stem separation's model and backend, and the two actions that belong here
- * rather than in the Stem Studio.
+ * rather than on the Trypt Mania page.
  *
- * The studio's panel is for choosing and installing; this is for the questions
+ * That page's model panel is for importing; this is for the questions
  * you ask when something is wrong — what is actually installed, how much space
  * it is using, and is the file still intact. Verification in particular has no
  * home in a creative screen: it is slow, it is diagnostic, and nobody reaches
@@ -1945,8 +1928,8 @@ private fun AudioAiSettings(viewModel: SettingsViewModel) {
     } else {
         SettingItem(
             title = "No AI model installed",
-            subtitle = "Install one from the Sampler's Stem Studio, or import a " +
-                "model file you already have.",
+            subtitle = "Import a model file from the Trypt Mania page, under " +
+                "Drum separation model.",
         )
     }
 

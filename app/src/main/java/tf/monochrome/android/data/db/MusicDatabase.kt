@@ -11,14 +11,8 @@ import tf.monochrome.android.data.db.dao.HistoryDao
 import tf.monochrome.android.data.db.dao.MixPresetDao
 import tf.monochrome.android.data.db.dao.PlayEventDao
 import tf.monochrome.android.data.db.dao.PlaybackStateDao
-import tf.monochrome.android.data.db.dao.PatternDao
 import tf.monochrome.android.data.db.dao.PlaylistDao
-import tf.monochrome.android.data.db.dao.SampleDao
 import tf.monochrome.android.data.db.entity.CachedLyricsEntity
-import tf.monochrome.android.data.db.entity.PatternChannelEntity
-import tf.monochrome.android.data.db.entity.PatternEntity
-import tf.monochrome.android.data.db.entity.PatternStepEntity
-import tf.monochrome.android.data.db.entity.SampleEntity
 import tf.monochrome.android.data.db.entity.DownloadedTrackEntity
 import tf.monochrome.android.data.db.entity.EqPresetEntity
 import tf.monochrome.android.data.db.entity.MixPresetEntity
@@ -78,14 +72,9 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         CollectionTrackEntity::class,
         CollectionDirectLinkEntity::class,
         CollectionTrackArtistCrossRef::class,
-        CollectionAlbumArtistCrossRef::class,
-        // Sampler / pattern looper
-        SampleEntity::class,
-        PatternEntity::class,
-        PatternChannelEntity::class,
-        PatternStepEntity::class
+        CollectionAlbumArtistCrossRef::class
     ],
-    version = 19,
+    version = 20,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -99,8 +88,6 @@ abstract class MusicDatabase : RoomDatabase() {
     abstract fun collectionDao(): CollectionDao
     abstract fun mixPresetDao(): MixPresetDao
     abstract fun playbackStateDao(): PlaybackStateDao
-    abstract fun sampleDao(): SampleDao
-    abstract fun patternDao(): PatternDao
 
     companion object {
         /**
@@ -438,6 +425,22 @@ abstract class MusicDatabase : RoomDatabase() {
                     "ALTER TABLE `sampler_pattern_steps` " +
                         "ADD COLUMN `speedCode` INTEGER NOT NULL DEFAULT 0",
                 )
+            }
+        }
+
+        /**
+         * v19 → v20: the sampler and the pattern looper are gone, and their
+         * four tables with them. Children first, so no foreign key is left
+         * pointing at a dropped table even with foreign keys enforced. The
+         * migrations that built them stay above: an install still on v16 has
+         * to walk through them to get here.
+         */
+        val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS `sampler_pattern_steps`")
+                db.execSQL("DROP TABLE IF EXISTS `sampler_pattern_channels`")
+                db.execSQL("DROP TABLE IF EXISTS `sampler_patterns`")
+                db.execSQL("DROP TABLE IF EXISTS `sampler_samples`")
             }
         }
     }

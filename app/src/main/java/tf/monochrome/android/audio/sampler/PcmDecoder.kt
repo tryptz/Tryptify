@@ -12,18 +12,13 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Decodes an arbitrary audio file to float PCM, for importing samples the user
- * already has.
+ * Decodes an audio file to float PCM a block at a time, for Trypt Mania's
+ * waveform and chart generation.
  *
- * Captures never come through here — they are already PCM by the time the tap
- * sees them — so this exists purely so "add a sample from a file" accepts an
- * MP3 or an M4A rather than only WAV. It is a plain MediaExtractor +
- * MediaCodec loop rather than anything from Media3: the app's ExoPlayer
- * instance is busy playing music, and borrowing it to decode a file in the
- * background would mean either a second player or interfering with the first.
- *
- * Bounded on purpose. [maxFrames] stops a two-hour podcast from being pulled
- * into a float array; the sampler's job is one-shots and short loops.
+ * A plain MediaExtractor + MediaCodec loop rather than anything from Media3:
+ * the app's ExoPlayer instance is busy playing music, and borrowing it to
+ * decode a file in the background would mean either a second player or
+ * interfering with the first.
  */
 object PcmDecoder {
 
@@ -46,61 +41,10 @@ object PcmDecoder {
      *
      * The arrays are reused for the next block: whatever is kept has to be
      * copied out. [right] is null for a mono file. Channels beyond the front
-     * pair are dropped, as in [WavCodec].
+     * pair are dropped.
      */
     fun interface BlockSink {
         fun onBlock(left: FloatArray, right: FloatArray?, frames: Int)
-    }
-
-    /**
-     * Reads [uri] to at most [maxFrames] frames of float PCM.
-     *
-     * @throws IOException when the file has no audio track or the platform
-     *   decoder refuses it — the caller surfaces that as "couldn't read this
-     *   file" rather than crashing the import.
-     */
-    fun decode(
-        context: Context,
-        uri: Uri,
-        maxFrames: Int = 48_000 * 60,
-    ): WavCodec.Audio {
-        // Filled straight from the blocks. This used to keep every decoded
-        // block, interleaved, and only then split them into left and right —
-        // two whole copies of the file alive at once, which for a long song is
-        // most of the heap.
-        var left = FloatArray(0)
-        var right: FloatArray? = null
-        var frames = 0
-        var sampleRate = 48_000
-        stream(
-            context = context,
-            uri = uri,
-            maxFrames = maxFrames.toLong(),
-            onFormat = { format ->
-                sampleRate = format.sampleRate
-                // Sized from the declared length where there is one, so a
-                // well-formed file is never copied to grow.
-                val expected = format.estimatedFrames.coerceIn(0L, maxFrames.toLong()).toInt()
-                left = FloatArray(expected)
-                right = if (format.channels >= 2) FloatArray(expected) else null
-            },
-        ) { blockLeft, blockRight, count ->
-            if (frames + count > left.size) {
-                val grown = maxOf(frames + count, left.size + left.size / 2, 4096).coerceAtMost(maxFrames)
-                left = left.copyOf(grown)
-                right = right?.copyOf(grown)
-            }
-            System.arraycopy(blockLeft, 0, left, frames, count)
-            val r = right
-            if (r != null && blockRight != null) System.arraycopy(blockRight, 0, r, frames, count)
-            frames += count
-        }
-        if (frames <= 0) throw IOException("decoder produced no audio")
-        if (frames < left.size) {
-            left = left.copyOf(frames)
-            right = right?.copyOf(frames)
-        }
-        return WavCodec.Audio(left, right, sampleRate)
     }
 
     /**
@@ -109,13 +53,13 @@ object PcmDecoder {
      *
      * For anything that only needs to look at the audio once — a waveform, a
      * rhythm envelope — this is the way to read a whole song: memory stays the
-     * size of a block whatever the song's length, where [decode] needs the
-     * whole song at once. Stops after [maxFrames], and as soon as [isActive]
-     * says the caller has gone, between blocks: a decode the user has moved on
-     * from is not left running to the end in the background.
+     * size of a block whatever the song's length. Stops after [maxFrames], and
+     * as soon as [isActive] says the caller has gone, between blocks: a decode
+     * the user has moved on from is not left running to the end.
      *
      * @return the number of frames delivered.
-     * @throws IOException as [decode] does.
+     * @throws IOException when the file has no audio track or the platform
+     *   decoder refuses it.
      */
     fun stream(
         context: Context,

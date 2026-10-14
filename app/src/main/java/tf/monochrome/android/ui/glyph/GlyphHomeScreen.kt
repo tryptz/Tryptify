@@ -606,7 +606,7 @@ private fun GenerationPanel(
  * Charts generate without one, from the built-in separator. The model makes
  * cleaner drum stems and so better charts, but it is a hundred and more
  * megabytes, so it is the player's to bring: a file from their own storage,
- * copied in once. The same install the Sampler's Stem AI panel shows.
+ * copied in once. Settings › Audio AI shows the same install.
  */
 @Composable
 private fun ModelPanel(

@@ -93,41 +93,10 @@ target_link_libraries(monochrome_dsp
     log
 )
 
-# ── Pattern looper / sampler engine ──────────────────────────────────────
-# Voice pool, sample bank and sample-accurate step clock behind the Patterns
-# screen. Kept in its own .so rather than folded into monochrome_dsp: the DSP
-# engine is loaded on every launch because the mix bus is always in the audio
-# path, while this one is only pulled in the first time the user opens the
-# sampler. It processes no music of its own — the patterns it renders are
-# summed into the Media3 chain ahead of the mix bus, so they go through the
-# same DSP the tracks do.
-add_library(monochrome_sampler SHARED
-    sampler/pattern_engine.cpp
-    sampler/sampler_jni.cpp
-)
-
-target_include_directories(monochrome_sampler PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/sampler
-)
-
-target_compile_features(monochrome_sampler PRIVATE cxx_std_17)
-
-target_compile_options(monochrome_sampler PRIVATE
-    -O3 -fno-exceptions -fno-rtti
-    $<$<STREQUAL:${ANDROID_ABI},arm64-v8a>:-march=armv8-a+simd>
-)
-
-set_target_properties(monochrome_sampler PROPERTIES DEBUG_POSTFIX "")
-
-target_link_libraries(monochrome_sampler
-    android
-    log
-)
-
 # ── Trypt Mania (Glyph) game engine ──────────────────────────────────────
 # Judgement, scoring, the beat map and the playfield's per-frame note query.
-# Its own .so for the sampler's reason: it is loaded the first time someone
-# opens Trypt Mania, never at launch. The engine sources carry no Android
+# Its own .so, rather than part of monochrome_dsp which every launch loads: it
+# is loaded the first time someone opens Trypt Mania, never at launch. The engine sources carry no Android
 # headers so glyph/tests builds them on a desktop; only glyph_jni.cpp does.
 add_library(monochrome_glyph SHARED
     glyph/glyph_timing.cpp
