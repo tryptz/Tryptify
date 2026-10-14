@@ -2132,7 +2132,7 @@
     <string name="library_galaxy_search_hint">Find an artist in your galaxy</string>
     <string name="library_galaxy_search_none">No artist by that name</string>
     <!-- Trypt Mania: the Glyph rhythm mode, as a tile under the library galaxy.
-         A name, like the app's own, so it reads the same in every language. -->
+         A name, like the name of the app, so it reads the same in every language. -->
     <string name="trypt_mania" translatable="false">Trypt Mania</string>
     <string name="galaxy_legend_hearted_ring">Dashed ring: a genre kept in your genres</string>
     <string name="galaxy_switch_to_library">Your library galaxy</string>
