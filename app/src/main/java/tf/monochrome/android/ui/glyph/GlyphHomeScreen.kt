@@ -2,70 +2,94 @@
 
 package tf.monochrome.android.ui.glyph
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
-import tf.monochrome.android.domain.model.PlayerGlassSettings
-import tf.monochrome.android.ui.components.SearchOverlay
-import tf.monochrome.android.ui.components.GlassPanel
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
+import tf.monochrome.android.R
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
-import tf.monochrome.android.glyph.asset.GlyphAssetCatalog
+import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
-import tf.monochrome.android.glyph.asset.GlyphIcon
 import tf.monochrome.android.glyph.data.GlyphChartState
 import tf.monochrome.android.glyph.data.GlyphSong
+import tf.monochrome.android.ui.components.CoverImage
+import tf.monochrome.android.ui.components.GlassPanel
+import tf.monochrome.android.ui.components.LocalGlassBackdrop
+import tf.monochrome.android.ui.components.SearchAction
+import tf.monochrome.android.ui.components.SearchOverlay
+import tf.monochrome.android.ui.components.bounceClick
+import tf.monochrome.android.ui.components.liquidGlass
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeNow
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
+import tf.monochrome.android.ui.navigation.bottomChromePadding
+import tf.monochrome.android.ui.theme.MonoDimens
 
 /**
- * Glyph's front door: pick a song, pick a difficulty, play or practise.
+ * Trypt Mania's front door: pick a song, pick a difficulty, play or practise.
  *
  * One screen rather than a menu tree. Everything the mode needs to start —
  * which song, whether it has a chart, which difficulty, and which of the two
  * ways to play — fits on a list and a panel, and burying any of it a level down
  * would only add taps.
+ *
+ * It is an ordinary pushed screen of the app, built the way the others are: a
+ * top bar with Back, Search and the screen's one other action, the floating
+ * search bar, song rows that are the app's song rows, and the tab bar and mini
+ * player still there underneath. Only playing and practising take the whole
+ * window (see [GlyphRoute]).
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GlyphHomeScreen(
     state: GlyphUiState,
@@ -74,9 +98,6 @@ fun GlyphHomeScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val fontFamily = rememberStepTechFontFamily()
-    val typography = GlyphTypography(fontFamily)
-
     // MP3 and FLAC only, matching what the mode offers in the list. A picker
     // that accepted anything would hand the converter a file the flow does not
     // claim to support.
@@ -87,118 +108,129 @@ fun GlyphHomeScreen(
     }
 
     var searchOpen by rememberSaveable { mutableStateOf(false) }
+    // Closing clears the filter. A stale query left behind means reopening the
+    // bar shows a filtered list with no visible reason for it.
+    val closeSearch = {
+        searchOpen = false
+        onEvent(GlyphEvent.Search(""))
+    }
+    // Back closes the search before it leaves the mode, as on the maps: a Back
+    // that throws away the whole screen to dismiss a search bar is a surprise.
+    BackHandler(enabled = searchOpen) { closeSearch() }
+
     val glass = LocalMiniPlayerGlass.current
     val density = LocalDensity.current
 
-    // The panels' backdrop is the song list. They are its SIBLINGS, never its
-    // descendants: a haze effect cannot sample a layer it is drawn inside, and
-    // doing so paints the source's flat base colour — the solid slab these were
-    // before. SearchOverlay owns a separate source for the bar, for the same
-    // reason at a different level.
+    // The panels' backdrop is the page under them, whatever the page is
+    // showing — the song list, or the loading and empty messages. They are its
+    // SIBLINGS, never its descendants: a haze effect cannot sample a layer it
+    // is drawn inside, and doing so paints the source's flat base colour. The
+    // source used to be the list alone, so while the library loaded there was
+    // no source drawn at all and the generation panel came out a solid slab.
+    // SearchOverlay owns a separate source for the bar, for the same reason at
+    // a different level.
     val panelHaze = rememberHazeState()
 
     var generationInset by remember { mutableStateOf(0.dp) }
     var selectionInset by remember { mutableStateOf(0.dp) }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(GlyphTheme.Ink)
-            .systemBarsPadding(),
-    ) {
-        // Fixed chrome, above the bar rather than under it. Back is the way out
-        // of the mode and the picker is how audio gets in; a search bar that
-        // covered either would strand someone who opened it by accident.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = GlyphTheme.Grid, vertical = GlyphTheme.Grid),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(GlyphTheme.Grid),
-        ) {
-            GlyphIconButton(
-                icon = GlyphIcon.ARROW_BACK,
-                label = "Back",
-                assets = assets,
-                onClick = onBack,
-            )
-            Text(
-                text = "GLYPH",
-                style = typography.title,
-                color = GlyphTheme.Paper,
-                modifier = Modifier
-                    .weight(1f)
-                    .semantics { heading() },
-            )
-            GlyphIconButton(
-                // The pack ships no magnifier; filter is the honest one of what
-                // it does have, and the label says what it is for.
-                icon = GlyphIcon.FILTER,
-                label = if (searchOpen) "Close search" else "Search songs",
-                assets = assets,
-                active = searchOpen,
-                onClick = {
-                    searchOpen = !searchOpen
-                    if (!searchOpen) onEvent(GlyphEvent.Search(""))
-                },
-            )
-            GlyphIconButton(
-                icon = GlyphIcon.AUDIO_STEM,
-                label = "Generate a chart from a file",
-                assets = assets,
-                onClick = { picker.launch(arrayOf("audio/mpeg", "audio/flac", "audio/x-flac")) },
-            )
-        }
+    // The selection panel sits on the bar as it stands now, following its fold,
+    // as the map panels do. The list pads by the bar open, as lists do.
+    val chromeNow by animateDpAsState(
+        targetValue = LocalBottomChromeNow.current,
+        label = "glyphChromeNow",
+    )
+    val chromeInset = LocalBottomChromeInset.current
+    val listBottom = bottomChromePadding
+
+    Column(modifier = modifier.fillMaxSize()) {
+        TopAppBar(
+            title = {
+                Text(
+                    text = stringResource(R.string.trypt_mania),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { heading() },
+                )
+            },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.action_back),
+                    )
+                }
+            },
+            actions = {
+                SearchAction(
+                    open = searchOpen,
+                    onToggle = { if (searchOpen) closeSearch() else searchOpen = true },
+                )
+                IconButton(
+                    onClick = { picker.launch(arrayOf("audio/mpeg", "audio/flac", "audio/x-flac")) },
+                ) {
+                    Icon(
+                        Icons.Default.UploadFile,
+                        contentDescription = "Generate a chart from a file",
+                    )
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background,
+            ),
+        )
 
         SearchOverlay(
             open = searchOpen,
             query = state.songQuery,
             onQueryChange = { onEvent(GlyphEvent.Search(it)) },
             placeholder = "Search songs",
-            onClose = {
-                searchOpen = false
-                onEvent(GlyphEvent.Search(""))
-            },
+            onClose = closeSearch,
             modifier = Modifier.weight(1f),
         ) { searchInset ->
             Box(modifier = Modifier.fillMaxSize()) {
-                when {
-                    state.isLoadingSongs -> CentredMessage("Reading the library…", typography)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .hazeSource(panelHaze),
+                ) {
+                    val messageTop = searchInset + generationInset
+                    when {
+                        state.isLoadingSongs -> CentredMessage("Reading the library…", messageTop)
 
-                    state.songs.isEmpty() -> CentredMessage(
-                        "No MP3 or FLAC files in your library yet. " +
-                            "Import one, or generate a chart from a file.",
-                        typography,
-                    )
+                        state.songs.isEmpty() -> CentredMessage(
+                            "No MP3 or FLAC files in your library yet. " +
+                                "Import one, or generate a chart from a file.",
+                            messageTop,
+                        )
 
-                    state.filteredSongs.isEmpty() -> CentredMessage(
-                        "Nothing matches \"${state.songQuery}\".",
-                        typography,
-                    )
+                        state.filteredSongs.isEmpty() -> CentredMessage(
+                            "Nothing matches \"${state.songQuery}\".",
+                            messageTop,
+                        )
 
-                    else -> LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .hazeSource(panelHaze),
-                        // Content padding, not padding on the container: it
-                        // starts the rows below the glass while leaving them
-                        // free to travel up behind it. Padding the container
-                        // moves its top edge and the list clips there instead.
-                        contentPadding = PaddingValues(
-                            start = GlyphTheme.Grid * 2,
-                            end = GlyphTheme.Grid * 2,
-                            top = searchInset + generationInset + GlyphTheme.Grid,
-                            bottom = selectionInset + GlyphTheme.Grid,
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(GlyphTheme.Grid),
-                    ) {
-                        items(state.filteredSongs, key = { it.trackId }) { song ->
-                            SongRow(
-                                song = song,
-                                selected = song.trackId == state.selectedSong?.trackId,
-                                typography = typography,
-                                onClick = { onEvent(GlyphEvent.SelectSong(song.trackId)) },
-                            )
+                        else -> LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            // Content padding, not padding on the container: it
+                            // starts the rows below the glass while leaving them
+                            // free to travel up behind it. Padding the container
+                            // moves its top edge and the list clips there instead.
+                            contentPadding = PaddingValues(
+                                top = searchInset + generationInset + MonoDimens.spacingXs,
+                                bottom = if (state.selectedSong != null) {
+                                    chromeInset + selectionInset + MonoDimens.spacingSm
+                                } else {
+                                    listBottom
+                                },
+                            ),
+                        ) {
+                            items(state.filteredSongs, key = { it.trackId }) { song ->
+                                SongRow(
+                                    song = song,
+                                    selected = song.trackId == state.selectedSong?.trackId,
+                                    onClick = { onEvent(GlyphEvent.SelectSong(song.trackId)) },
+                                )
+                            }
                         }
                     }
                 }
@@ -218,7 +250,6 @@ fun GlyphHomeScreen(
                     if (generation != null) {
                         GenerationPanel(
                             generation = generation,
-                            typography = typography,
                             haze = panelHaze,
                             glass = glass,
                             onCancel = { onEvent(GlyphEvent.CancelGeneration) },
@@ -226,17 +257,11 @@ fun GlyphHomeScreen(
                     }
 
                     state.error?.let { message ->
-                        Text(
-                            text = message,
-                            style = typography.body,
-                            color = GlyphTheme.Negative,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onEvent(GlyphEvent.DismissError) }
-                                .padding(
-                                    horizontal = GlyphTheme.Grid * 2,
-                                    vertical = GlyphTheme.Grid,
-                                ),
+                        ErrorPanel(
+                            message = message,
+                            haze = panelHaze,
+                            glass = glass,
+                            onDismiss = { onEvent(GlyphEvent.DismissError) },
                         )
                     }
                 }
@@ -246,13 +271,16 @@ fun GlyphHomeScreen(
                     SelectionPanel(
                         song = selected,
                         state = state,
-                        assets = assets,
-                        typography = typography,
                         haze = panelHaze,
                         glass = glass,
                         onEvent = onEvent,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
+                            // Clear of the tab bar and the mini player, which
+                            // are drawn over this screen. The navigation bar
+                            // is already clear: the nav host stops pushed
+                            // screens above it.
+                            .padding(bottom = chromeNow)
                             .onSizeChanged {
                                 selectionInset = with(density) { it.height.toDp() }
                             },
@@ -265,11 +293,15 @@ fun GlyphHomeScreen(
     }
 }
 
+/**
+ * A song, as the app's song rows are: one shared row height, the cover, the
+ * title over one line of detail, and the chart's state where a track row keeps
+ * its quality badge.
+ */
 @Composable
 private fun SongRow(
     song: GlyphSong,
     selected: Boolean,
-    typography: GlyphTypography,
     onClick: () -> Unit,
 ) {
     val description = buildString {
@@ -283,64 +315,78 @@ private fun SongRow(
         } else {
             append(", ").append(song.chartState.label)
         }
-        if (selected) append(", selected")
     }
+    val scheme = MaterialTheme.colorScheme
 
-    Row(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(GlyphTheme.PanelCorner))
-            .background(if (selected) GlyphTheme.InkRaised else GlyphTheme.InkPanel)
-            .clickable(onClick = onClick)
-            .padding(GlyphTheme.Grid + 4.dp)
-            .semantics(mergeDescendants = true) { contentDescription = description },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(GlyphTheme.Grid + 4.dp),
+            .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingXs)
+            .bounceClick(onClick = onClick)
+            .semantics(mergeDescendants = true) {
+                contentDescription = description
+                // Spoken by the framework, never left to the tint.
+                this.selected = selected
+            }
+            .liquidGlass(shape = MonoDimens.shapeMd),
+        shape = MonoDimens.shapeMd,
+        color = if (selected) scheme.primary.copy(alpha = 0.18f) else Color.Transparent,
     ) {
-        AsyncImage(
-            model = song.artworkUri,
-            contentDescription = null,
+        Row(
             modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(GlyphTheme.Grid))
-                .background(GlyphTheme.InkRaised),
-        )
+                .fillMaxWidth()
+                .height(MonoDimens.listRowHeight)
+                .padding(horizontal = MonoDimens.listItemPaddingH),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CoverImage(
+                url = song.artworkUri,
+                contentDescription = null,
+                size = MonoDimens.coverList,
+                cornerRadius = MonoDimens.radiusSm,
+            )
+            Spacer(Modifier.width(MonoDimens.spacingMd))
 
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = song.title,
-                style = typography.body,
-                color = GlyphTheme.Paper,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = "${song.artist} · ${song.formattedDuration} · ${song.codec.name}",
-                style = typography.label,
-                color = GlyphTheme.Muted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-
-        Column(horizontalAlignment = Alignment.End) {
-            Text(
-                text = if (song.hasChart) song.bpmLabel else song.chartState.label,
-                style = typography.label,
-                color = when (song.chartState) {
-                    GlyphChartState.READY -> GlyphTheme.Positive
-                    GlyphChartState.UNREADABLE -> GlyphTheme.Warning
-                    GlyphChartState.NOT_GENERATED -> GlyphTheme.Muted
-                },
-                maxLines = 1,
-            )
-            if (song.hasChart) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center,
+            ) {
                 Text(
-                    text = song.difficulties.joinToString(" ") { it.sscName.take(1) },
-                    style = typography.label,
-                    color = GlyphTheme.Muted,
+                    text = song.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (selected) scheme.primary else scheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = "${song.artist} · ${song.formattedDuration} · ${song.codec.name}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            Spacer(Modifier.width(MonoDimens.spacingSm))
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = if (song.hasChart) song.bpmLabel else song.chartState.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = when (song.chartState) {
+                        GlyphChartState.READY -> scheme.primary
+                        GlyphChartState.UNREADABLE -> scheme.error
+                        GlyphChartState.NOT_GENERATED -> scheme.onSurfaceVariant
+                    },
                     maxLines = 1,
                 )
+                if (song.hasChart) {
+                    Text(
+                        text = song.difficulties.joinToString(" ") { it.sscName.take(1) },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
             }
         }
     }
@@ -357,8 +403,6 @@ private fun SongRow(
 private fun SelectionPanel(
     song: GlyphSong,
     state: GlyphUiState,
-    assets: GlyphAssetRepository,
-    typography: GlyphTypography,
     haze: HazeState,
     glass: PlayerGlassSettings,
     onEvent: (GlyphEvent) -> Unit,
@@ -367,83 +411,85 @@ private fun SelectionPanel(
     GlassPanel(
         hazeState = haze,
         glass = glass,
-        // GlassPanel's own 12dp is an outer margin; the rows below sit 16dp
-        // from the screen edge, so 4 more lines the panel up with them.
+        // The nav host already stops this screen above the navigation bar;
+        // holding clear of it here as well counted it twice.
+        avoidNavigationBar = false,
         modifier = modifier.padding(horizontal = 4.dp),
     ) {
-      Column(modifier = Modifier.padding(GlyphTheme.Grid * 2)) {
-        Text(
-            text = song.title,
-            style = typography.title,
-            color = GlyphTheme.Paper,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Spacer(Modifier.height(GlyphTheme.Grid))
+        // The chips and buttons are glass on glass, frosting the same page.
+        CompositionLocalProvider(LocalGlassBackdrop provides haze) {
+            Column(modifier = Modifier.padding(MonoDimens.spacingLg)) {
+                Text(
+                    text = song.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(MonoDimens.spacingSm))
 
-        if (!song.hasChart) {
-            Text(
-                text = when (song.chartState) {
-                    GlyphChartState.UNREADABLE ->
-                        "The chart on disk could not be read. Generating again will replace it."
-                    else ->
-                        "This song has no chart yet. Generating one separates the drums " +
-                            "and reads the rhythm off them; it runs offline and takes a while."
-                },
-                style = typography.body,
-                color = GlyphTheme.Paper,
-            )
-            Spacer(Modifier.height(GlyphTheme.Grid + 4.dp))
-            GlyphPrimaryButton(
-                text = "Generate chart",
-                typography = typography,
-                enabled = state.generation == null,
-                onClick = { onEvent(GlyphEvent.GenerateChart) },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            return@Column
+                if (!song.hasChart) {
+                    Text(
+                        text = when (song.chartState) {
+                            GlyphChartState.UNREADABLE ->
+                                "The chart on disk could not be read. Generating again will replace it."
+                            else ->
+                                "This song has no chart yet. Generating one separates the drums " +
+                                    "and reads the rhythm off them; it runs offline and takes a while."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(MonoDimens.spacingMd))
+                    GlyphButton(
+                        text = "Generate chart",
+                        primary = true,
+                        enabled = state.generation == null,
+                        onClick = { onEvent(GlyphEvent.GenerateChart) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    return@Column
+                }
+
+                GlyphSectionLabel("Difficulty")
+                Spacer(Modifier.height(MonoDimens.spacingSm))
+                GlyphChipRow(
+                    options = song.difficulties,
+                    selected = state.selectedDifficulty,
+                    label = { difficulty -> "${difficulty.sscName} ${meterOf(state, difficulty)}" },
+                    onSelect = { onEvent(GlyphEvent.SelectDifficulty(it)) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                Spacer(Modifier.height(MonoDimens.spacingMd))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm)) {
+                    GlyphButton(
+                        text = "Play",
+                        icon = Icons.Default.PlayArrow,
+                        primary = true,
+                        enabled = state.chart != null,
+                        onClick = { onEvent(GlyphEvent.StartPlay) },
+                        modifier = Modifier.weight(1f),
+                    )
+                    GlyphButton(
+                        text = "Training Ground",
+                        enabled = state.chart != null,
+                        onClick = { onEvent(GlyphEvent.StartTraining) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+
+                val chart = state.chart
+                if (chart != null) {
+                    Spacer(Modifier.height(MonoDimens.spacingSm))
+                    Text(
+                        text = "${chart.notes.size} notes · ${song.bpmLabel} · meter ${chart.meter}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
-
-        Text("DIFFICULTY", style = typography.label, color = GlyphTheme.Muted)
-        Spacer(Modifier.height(GlyphTheme.Grid))
-        GlyphChipRow(
-            options = song.difficulties,
-            selected = state.selectedDifficulty,
-            label = { difficulty -> "${difficulty.sscName} ${meterOf(state, difficulty)}" },
-            onSelect = { onEvent(GlyphEvent.SelectDifficulty(it)) },
-            typography = typography,
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Spacer(Modifier.height(GlyphTheme.Grid + 4.dp))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(GlyphTheme.Grid)) {
-            GlyphPrimaryButton(
-                text = "Play",
-                typography = typography,
-                enabled = state.chart != null,
-                onClick = { onEvent(GlyphEvent.StartPlay) },
-                modifier = Modifier.weight(1f),
-            )
-            GlyphSecondaryButton(
-                text = "Training Ground",
-                typography = typography,
-                enabled = state.chart != null,
-                onClick = { onEvent(GlyphEvent.StartTraining) },
-                modifier = Modifier.weight(1f),
-            )
-        }
-
-        val chart = state.chart
-        if (chart != null) {
-            Spacer(Modifier.height(GlyphTheme.Grid))
-            Text(
-                text = "${chart.notes.size} notes · ${song.bpmLabel} · meter ${chart.meter}",
-                style = typography.label,
-                color = GlyphTheme.Muted,
-            )
-        }
-      }
     }
 }
 
@@ -454,12 +500,12 @@ private fun meterOf(state: GlyphUiState, difficulty: StepManiaDifficulty): Int =
 @Composable
 private fun GenerationPanel(
     generation: GlyphGenerationState,
-    typography: GlyphTypography,
     haze: HazeState,
     glass: PlayerGlassSettings,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val percent = (generation.fraction * 100).toInt()
     // Anchored under the search bar rather than at the bottom of the screen, so
     // it holds no space clear of a navigation bar that is nowhere near it.
     GlassPanel(
@@ -468,106 +514,108 @@ private fun GenerationPanel(
         avoidNavigationBar = false,
         modifier = modifier.fillMaxWidth().padding(horizontal = 4.dp),
     ) {
-      Column(modifier = Modifier.padding(GlyphTheme.Grid * 2)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = generation.failure ?: generation.stage,
-                style = typography.body,
-                color = if (generation.failure != null) GlyphTheme.Negative else GlyphTheme.Paper,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = "${(generation.fraction * 100).toInt()}%",
-                style = typography.mono,
-                color = GlyphTheme.Muted,
-            )
+        CompositionLocalProvider(LocalGlassBackdrop provides haze) {
+            Column(modifier = Modifier.padding(MonoDimens.spacingLg)) {
+                val scheme = MaterialTheme.colorScheme
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // In the glass's ink either way: the theme's error red is
+                    // chosen for the page, not for this pane. The meter below
+                    // turns red, and the words say what failed.
+                    Text(
+                        text = generation.failure ?: generation.stage,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    // A readout that changes while it is read: monospaced, so
+                    // the digits do not shuffle as they count.
+                    Text(
+                        text = "$percent%",
+                        style = GlyphTypography(rememberStepTechFontFamily()).mono,
+                        color = scheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.height(MonoDimens.spacingSm))
+                GlyphMeter(
+                    fraction = generation.fraction,
+                    color = if (generation.failure != null) scheme.error else scheme.primary,
+                    description = "${generation.stage}, $percent percent",
+                )
+                // Which separator actually ran, verbatim from the service — a fallback
+                // to the CPU should never pass itself off as the model.
+                generation.backendName?.let { backend ->
+                    Spacer(Modifier.height(MonoDimens.spacingSm))
+                    Text(
+                        text = "Separated by $backend",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = scheme.onSurfaceVariant,
+                    )
+                }
+                if (!generation.isFinished) {
+                    Spacer(Modifier.height(MonoDimens.spacingMd))
+                    GlyphButton(
+                        text = "Cancel",
+                        onClick = onCancel,
+                        onClickLabel = "Cancel chart generation",
+                        height = 40.dp,
+                    )
+                }
+            }
         }
-        Spacer(Modifier.height(GlyphTheme.Grid))
-        GlyphMeter(
-            fraction = generation.fraction,
-            color = if (generation.failure != null) GlyphTheme.Negative else GlyphTheme.Positive,
-            description = "${generation.stage}, ${(generation.fraction * 100).toInt()} percent",
-        )
-        // Which separator actually ran, verbatim from the service — a fallback
-        // to the CPU should never pass itself off as the model.
-        generation.backendName?.let { backend ->
-            Spacer(Modifier.height(GlyphTheme.Grid))
-            Text("Separated by $backend", style = typography.label, color = GlyphTheme.Muted)
-        }
-        if (!generation.isFinished) {
-            Spacer(Modifier.height(GlyphTheme.Grid))
+    }
+}
+
+/**
+ * What went wrong, on glass under the search bar. A bare line of text floating
+ * there had the rows scrolling through it.
+ */
+@Composable
+private fun ErrorPanel(
+    message: String,
+    haze: HazeState,
+    glass: PlayerGlassSettings,
+    onDismiss: () -> Unit,
+) {
+    GlassPanel(
+        hazeState = haze,
+        glass = glass,
+        avoidNavigationBar = false,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(start = MonoDimens.spacingLg),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // The glass's own ink, not the theme's error red: that is chosen
+            // for the page, and on dark glass in a light theme it would not
+            // read. The panel says it is an error by being here.
             Text(
-                text = "Cancel",
-                style = typography.mono,
-                color = GlyphTheme.Paper,
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier
-                    .clickable(onClickLabel = "Cancel chart generation", onClick = onCancel)
-                    .padding(vertical = 8.dp),
+                    .weight(1f)
+                    .padding(vertical = MonoDimens.spacingMd),
             )
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Default.Close, contentDescription = "Dismiss")
+            }
         }
-      }
     }
 }
 
 @Composable
-private fun CentredMessage(text: String, typography: GlyphTypography) {
+private fun CentredMessage(text: String, top: androidx.compose.ui.unit.Dp) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(GlyphTheme.Grid * 4),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(text = text, style = typography.body, color = GlyphTheme.Muted)
-    }
-}
-
-@Composable
-fun GlyphPrimaryButton(
-    text: String,
-    typography: GlyphTypography,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-) {
-    Box(
-        modifier = modifier
-            .height(48.dp)
-            .clip(RoundedCornerShape(GlyphTheme.Grid))
-            .background(if (enabled) GlyphTheme.Paper else GlyphTheme.InkRaised)
-            .clickable(enabled = enabled, onClick = onClick),
+            .padding(top = top)
+            .padding(MonoDimens.spacingXl),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = text,
-            style = typography.mono,
-            color = if (enabled) GlyphTheme.Ink else GlyphTheme.Muted,
-            maxLines = 1,
-        )
-    }
-}
-
-@Composable
-fun GlyphSecondaryButton(
-    text: String,
-    typography: GlyphTypography,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    accent: Color = GlyphTheme.Paper,
-) {
-    Box(
-        modifier = modifier
-            .height(48.dp)
-            .clip(RoundedCornerShape(GlyphTheme.Grid))
-            .background(GlyphTheme.InkRaised)
-            .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = text,
-            style = typography.mono,
-            color = if (enabled) accent else GlyphTheme.Muted,
-            maxLines = 1,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
         )
     }
 }

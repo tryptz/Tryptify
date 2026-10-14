@@ -5,6 +5,7 @@ package tf.monochrome.android.glyph
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -19,6 +20,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import tf.monochrome.android.R
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.domain.model.AudioCodec
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
@@ -33,7 +35,6 @@ import tf.monochrome.android.ui.glyph.GlyphJudgementFx
 import tf.monochrome.android.ui.glyph.GlyphLaneInput
 import tf.monochrome.android.ui.glyph.GlyphResultsScreen
 import tf.monochrome.android.ui.glyph.GlyphResultsUi
-import tf.monochrome.android.ui.glyph.GlyphTypography
 import tf.monochrome.android.ui.glyph.GlyphSectionResult
 import tf.monochrome.android.ui.glyph.GlyphUiState
 import tf.monochrome.android.glyph.data.GlyphAttempt
@@ -46,10 +47,10 @@ import tf.monochrome.android.glyph.data.GlyphAttempt
  * on most changes, and navigation and accessibility labels are exactly the
  * things that rot silently.
  *
- * The assertions are about *labels*, not layout. Every control in this mode is
- * an unlabelled pictogram from the pack, so a missing content description is
- * not a cosmetic problem — it makes the control unusable, and nothing about the
- * rendered pixels would show it.
+ * The assertions are about *labels*, not layout. The top bars' actions, the
+ * lanes and the graphs are icons, touch zones and drawings, so a missing
+ * content description is not a cosmetic problem — it makes the control
+ * unusable, and nothing about the rendered pixels would show it.
  */
 @RunWith(RobolectricTestRunner::class)
 // A plain Application, not the app's. The real one is a Hilt entry point that
@@ -213,11 +214,17 @@ class GlyphComposeTest {
         assertEquals(listOf(GlyphEvent.SelectSong("local_1")), events)
     }
 
+    private fun string(id: Int): String =
+        androidx.test.core.app.ApplicationProvider
+            .getApplicationContext<android.content.Context>()
+            .getString(id)
+
     @Test
     fun `the search bar is closed until it is asked for`() {
         // A bar that is part of the screen holds a permanent gap and throws the
         // keyboard up on arrival. This one is summoned, so at rest there is
-        // nothing but the toggle — labelled, because it is a bare pack glyph.
+        // nothing but the app's search action in the top bar — labelled, as
+        // every icon in a top bar has to be.
         setFlatContent {
             GlyphHomeScreen(
                 state = GlyphUiState(songs = listOf(song()), isLoadingSongs = false),
@@ -226,7 +233,7 @@ class GlyphComposeTest {
                 onBack = {},
             )
         }
-        compose.onNodeWithContentDescription("Search songs").assertIsDisplayed()
+        compose.onNodeWithContentDescription(string(R.string.tab_search)).assertIsDisplayed()
         // The song under it is not covered while the bar is shut.
         compose.onNodeWithContentDescription(
             "Test Song, Tryptify, 3:34, FLAC, 148 BPM, 3 difficulties",
@@ -246,9 +253,47 @@ class GlyphComposeTest {
                 onBack = {},
             )
         }
-        compose.onNodeWithContentDescription("Search songs").performClick()
-        compose.onNodeWithContentDescription("Close search").performClick()
+        compose.onNodeWithContentDescription(string(R.string.tab_search)).performClick()
+        // Both the top bar's action and the bar's own button close it; either
+        // must clear the query.
+        compose.onAllNodesWithContentDescription(string(R.string.action_close_search))
+            .onFirst()
+            .performClick()
         assertTrue(events.contains(GlyphEvent.Search("")))
+    }
+
+    @Test
+    fun `back closes the search before it leaves the mode`() {
+        // Back while searching used to leave Trypt Mania altogether, throwing
+        // away the screen to dismiss a search bar.
+        val events = mutableListOf<GlyphEvent>()
+        var backs = 0
+        lateinit var dispatcher: androidx.activity.OnBackPressedDispatcher
+        compose.setContent {
+            dispatcher = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current!!
+                .onBackPressedDispatcher
+            androidx.compose.runtime.CompositionLocalProvider(
+                tf.monochrome.android.performance.LocalLowPerformance provides
+                    tf.monochrome.android.performance.LowPerformanceSettings(
+                        disableLiquidGlass = true,
+                    ),
+            ) {
+                GlyphHomeScreen(
+                    state = GlyphUiState(songs = listOf(song()), isLoadingSongs = false),
+                    assets = assets,
+                    onEvent = { events += it },
+                    onBack = { backs += 1 },
+                )
+            }
+        }
+        compose.onNodeWithContentDescription(string(R.string.tab_search)).performClick()
+        compose.runOnIdle { dispatcher.onBackPressed() }
+        compose.waitForIdle()
+
+        assertTrue(events.contains(GlyphEvent.Search("")))
+        assertEquals(0, backs)
+        // Closed: the action is back to opening the search.
+        compose.onNodeWithContentDescription(string(R.string.tab_search)).assertIsDisplayed()
     }
 
     // ── navigation ──────────────────────────────────────────────────────
@@ -307,9 +352,9 @@ class GlyphComposeTest {
                 onBack = { backs += 1 },
             )
         }
-        // The back control is an unlabelled pack glyph; without this
-        // description there is no way to reach it without sight.
-        compose.onNodeWithContentDescription("Back").performClick()
+        // The top bar's Back is an icon; without its description there is no
+        // way to reach it without sight.
+        compose.onNodeWithContentDescription(string(R.string.action_back)).performClick()
         assertEquals(1, backs)
     }
 
@@ -403,7 +448,6 @@ class GlyphComposeTest {
                     selected = StepManiaDifficulty.MEDIUM,
                     label = { "${it.sscName} ${it.meter}" },
                     onSelect = { picked += it },
-                    typography = GlyphTypography(androidx.compose.ui.text.font.FontFamily.Monospace),
                 )
             }
         }

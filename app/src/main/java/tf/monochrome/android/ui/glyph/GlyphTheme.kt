@@ -2,6 +2,7 @@
 
 package tf.monochrome.android.ui.glyph
 
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
@@ -16,6 +17,7 @@ import androidx.compose.ui.unit.sp
 import tf.monochrome.android.glyph.asset.GlyphBeatDivision
 import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.glyph.asset.GlyphPalette
+import tf.monochrome.android.ui.components.glassInk
 
 /**
  * StepTech: the mode's own surface language.
@@ -27,9 +29,13 @@ import tf.monochrome.android.glyph.asset.GlyphPalette
  * So: near-black grounds, flat panels, one accent per meaning, and the pack's
  * own colours doing the talking.
  *
- * Glass is not banned — menus and overlays may use it, and where they do they
- * take the app's existing material and every invariant that comes with it. The
- * rule is that the *playfield* does not.
+ * That surface language is the playfield's and nothing else's: the lanes, the
+ * HUD over them, the beat and lane colours, and the judgement accents. The
+ * menus around it — the song list, the selection and pause panels, Training
+ * Ground's controls, the results — are the app's own screens and follow the
+ * app's theme and glass, light themes included. A fixed near-black menu in a
+ * light theme reads as a different app bolted on, and text on the app's glass
+ * has to take the glass's ink (`GlassInkScope`), which a hardcoded white cannot.
  */
 object GlyphTheme {
 
@@ -91,6 +97,20 @@ object GlyphTheme {
 }
 
 /**
+ * One of the playfield's accents, made readable as text on the menu's page.
+ *
+ * The accents are tuned for near-black. On a light theme the pale green and
+ * yellow vanish into the page, so the hue is kept and moved toward the page's
+ * ink only as far as it must to read, the same rule glass text follows. On a
+ * dark theme they come back unchanged. For text; a bar or a fill drawn in the
+ * accent stays the accent.
+ */
+@Composable
+@ReadOnlyComposable
+fun menuAccent(accent: Color): Color =
+    glassInk(MaterialTheme.colorScheme.background, accent).accent
+
+/**
  * JetBrains Mono, the mode's provisional interface face.
  *
  * Monospaced on purpose rather than for looks: a score, a combo and a
@@ -120,7 +140,13 @@ fun rememberStepTechFontFamily(): FontFamily {
 
 private const val FONT_ASSET = "fonts/jetbrains_mono.ttf"
 
-/** The mode's text styles. Tight, technical, and few. */
+/**
+ * The playfield's text styles. Tight, technical, and few.
+ *
+ * Monospaced throughout, so they belong to what is read while it changes: the
+ * HUD, the count-in, and the live timing readouts in Training Ground. Menu
+ * text takes the app's own typography.
+ */
 class GlyphTypography(family: FontFamily) {
     val readout = TextStyle(
         fontFamily = family, fontWeight = FontWeight.Bold,

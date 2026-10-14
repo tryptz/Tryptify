@@ -8,36 +8,46 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.coroutineScope
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
-import tf.monochrome.android.glyph.asset.GlyphIcon
 import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.glyph.asset.GlyphPalette
 import tf.monochrome.android.glyph.chart.GlyphTiming
 import tf.monochrome.android.glyph.engine.GlyphGameplayEngine
 import tf.monochrome.android.glyph.engine.GlyphJudgement
+import tf.monochrome.android.ui.components.GlassPanel
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
+import tf.monochrome.android.ui.theme.MonoDimens
 
 /**
  * The play screen: a HUD, the playfield, and the lane input over it.
@@ -111,16 +121,21 @@ fun GlyphGameplayScreen(
             modifier = Modifier.align(Alignment.Center),
         )
 
+        // Clear of the status bar and the cutout when they are there, and only
+        // of those: the route runs full-bleed while playing and the system
+        // bars are usually hidden, and the HUD is pinned to the top, so a
+        // bottom inset here would only pad a column nobody sees the end of.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
-                .systemBarsPadding(),
+                .windowInsetsPadding(
+                    WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
+                ),
         ) {
             GameplayHud(
                 state = state,
                 typography = typography,
-                assets = assets,
                 onEvent = onEvent,
             )
         }
@@ -128,7 +143,6 @@ fun GlyphGameplayScreen(
         if (gameplay.isPaused) {
             PauseOverlay(
                 state = state,
-                typography = typography,
                 onEvent = onEvent,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -147,7 +161,6 @@ fun GlyphGameplayScreen(
 private fun GameplayHud(
     state: GlyphUiState,
     typography: GlyphTypography,
-    assets: GlyphAssetRepository,
     onEvent: (GlyphEvent) -> Unit,
 ) {
     val gameplay = state.gameplay
@@ -159,29 +172,43 @@ private fun GameplayHud(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(GlyphTheme.Grid * 2),
         ) {
+            // The HUD is part of the playfield, so it keeps the playfield's ink
+            // in every theme, and the monospaced readouts.
             GlyphStat(
                 label = "Score",
                 value = "%,d".format(score.score),
-                typography = typography,
+                valueColor = GlyphTheme.Paper,
+                labelColor = GlyphTheme.Muted,
+                valueStyle = typography.title,
+                labelStyle = typography.label,
+                upperCaseLabel = true,
             )
             GlyphStat(
                 label = "Combo",
                 value = score.combo.toString(),
                 valueColor = if (score.combo > 0) GlyphTheme.Positive else GlyphTheme.Muted,
-                typography = typography,
+                labelColor = GlyphTheme.Muted,
+                valueStyle = typography.title,
+                labelStyle = typography.label,
+                upperCaseLabel = true,
             )
             GlyphStat(
                 label = "Accuracy",
                 value = "%.1f%%".format(score.accuracy * 100),
-                typography = typography,
+                valueColor = GlyphTheme.Paper,
+                labelColor = GlyphTheme.Muted,
+                valueStyle = typography.title,
+                labelStyle = typography.label,
+                upperCaseLabel = true,
             )
             Spacer(Modifier.weight(1f))
-            GlyphIconButton(
-                icon = if (gameplay.isPaused) GlyphIcon.PLAY else GlyphIcon.PAUSE,
-                label = if (gameplay.isPaused) "Resume" else "Pause",
-                assets = assets,
-                onClick = { onEvent(GlyphEvent.TogglePause) },
-            )
+            IconButton(onClick = { onEvent(GlyphEvent.TogglePause) }) {
+                Icon(
+                    imageVector = if (gameplay.isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                    contentDescription = if (gameplay.isPaused) "Resume" else "Pause",
+                    tint = GlyphTheme.Paper,
+                )
+            }
         }
 
         Spacer(Modifier.height(GlyphTheme.Grid))
@@ -225,6 +252,7 @@ private fun GameplayHud(
             fraction = gameplay.progress,
             color = GlyphTheme.Paper.copy(alpha = 0.6f),
             description = "Song progress, ${(gameplay.progress * 100).toInt()} percent",
+            trackColor = GlyphTheme.InkRaised,
         )
     }
 }
@@ -305,62 +333,101 @@ private fun CountIn(
     }
 }
 
-/** Pause: the practice controls, and the two ways out. */
+/**
+ * Pause: the practice controls, and the two ways out.
+ *
+ * A menu, so it is the app's: the theme's page colour drawn over the stopped
+ * playfield and a pane of the app's glass on it. The veil is the page colour
+ * rather than black because the glass works out its ink against the page
+ * ([GlassPanel] via `GlassInkScope`), and over a black veil in a light theme
+ * it would pick dark text for a dark pane. It is nearly opaque, as the old one
+ * was: the notes stopped mid-lane under it are noise, not information.
+ *
+ * The veil takes every touch the panel does not. The lanes are under it, and a
+ * thumb resting on the screen while paused must not press one. It is the
+ * panel's bottom sibling rather than its ancestor, for the reason `GlassPanel`
+ * gives: an ancestor consuming every event broke the scrolls inside it.
+ */
 @Composable
 private fun PauseOverlay(
     state: GlyphUiState,
-    typography: GlyphTypography,
     onEvent: (GlyphEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(
-        modifier = modifier.background(GlyphTheme.Ink.copy(alpha = 0.94f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        GlyphPanel(modifier = Modifier.padding(GlyphTheme.Grid * 3)) {
-            Text("PAUSED", style = typography.title, color = GlyphTheme.Paper)
-            Spacer(Modifier.height(GlyphTheme.Grid * 2))
-
-            GlyphScrollControl(
-                mode = state.gameplay.modifiers.scrollMode,
-                typography = typography,
-                onFamily = { onEvent(GlyphEvent.SetScrollFamily(it)) },
-                onValue = { onEvent(GlyphEvent.SetScrollValue(it)) },
-            )
-
-            Spacer(Modifier.height(GlyphTheme.Grid * 2))
-
-            GlyphSpeedControl(
-                speed = state.gameplay.modifiers.speed,
-                pitchLinked = state.gameplay.modifiers.pitchLinkedToSpeed,
-                typography = typography,
-                onSpeedChange = { onEvent(GlyphEvent.SetSpeed(it)) },
-                onPitchLinkChange = { onEvent(GlyphEvent.SetPitchLinked(it)) },
-            )
-
-            Spacer(Modifier.height(GlyphTheme.Grid * 2))
-            Row(horizontalArrangement = Arrangement.spacedBy(GlyphTheme.Grid)) {
-                GlyphPrimaryButton(
-                    text = "Resume",
-                    typography = typography,
-                    onClick = { onEvent(GlyphEvent.TogglePause) },
-                    modifier = Modifier.weight(1f),
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.94f))
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            awaitPointerEvent().changes.forEach { it.consume() }
+                        }
+                    }
+                },
+        )
+        GlassPanel(
+            // Nothing behind it worth frosting: the playfield is not a haze
+            // source (recording it into a layer every frame of play would cost
+            // more than the pause is worth), and the veil is plain colour.
+            hazeState = null,
+            glass = LocalMiniPlayerGlass.current,
+            avoidNavigationBar = false,
+            modifier = Modifier
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .widthIn(max = 480.dp),
+        ) {
+            Column(
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(MonoDimens.spacingLg),
+            ) {
+                Text(
+                    text = "Paused",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.semantics { heading() },
                 )
-                GlyphSecondaryButton(
-                    text = "Restart",
-                    typography = typography,
-                    onClick = { onEvent(GlyphEvent.Restart) },
-                    modifier = Modifier.weight(1f),
+                Spacer(Modifier.height(MonoDimens.spacingLg))
+
+                GlyphScrollControl(
+                    mode = state.gameplay.modifiers.scrollMode,
+                    onFamily = { onEvent(GlyphEvent.SetScrollFamily(it)) },
+                    onValue = { onEvent(GlyphEvent.SetScrollValue(it)) },
+                )
+
+                Spacer(Modifier.height(MonoDimens.spacingLg))
+
+                GlyphSpeedControl(
+                    speed = state.gameplay.modifiers.speed,
+                    pitchLinked = state.gameplay.modifiers.pitchLinkedToSpeed,
+                    onSpeedChange = { onEvent(GlyphEvent.SetSpeed(it)) },
+                    onPitchLinkChange = { onEvent(GlyphEvent.SetPitchLinked(it)) },
+                )
+
+                Spacer(Modifier.height(MonoDimens.spacingLg))
+                Row(horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm)) {
+                    GlyphButton(
+                        text = "Resume",
+                        icon = Icons.Default.PlayArrow,
+                        primary = true,
+                        onClick = { onEvent(GlyphEvent.TogglePause) },
+                        modifier = Modifier.weight(1f),
+                    )
+                    GlyphButton(
+                        text = "Restart",
+                        icon = Icons.Default.Replay,
+                        onClick = { onEvent(GlyphEvent.Restart) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Spacer(Modifier.height(MonoDimens.spacingSm))
+                GlyphButton(
+                    text = "Quit to songs",
+                    onClick = { onEvent(GlyphEvent.Quit) },
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
-            Spacer(Modifier.height(GlyphTheme.Grid))
-            GlyphSecondaryButton(
-                text = "Quit to songs",
-                typography = typography,
-                accent = GlyphTheme.Muted,
-                onClick = { onEvent(GlyphEvent.Quit) },
-                modifier = Modifier.fillMaxWidth(),
-            )
         }
     }
 }

@@ -5,6 +5,7 @@ package tf.monochrome.android.ui.glyph
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,13 +14,29 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Flip
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -30,17 +47,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 import tf.monochrome.android.glyph.asset.GlyphAssetCatalog
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
 import tf.monochrome.android.glyph.asset.GlyphDecor
-import tf.monochrome.android.glyph.asset.GlyphIcon
 import tf.monochrome.android.glyph.asset.GlyphPalette
 import tf.monochrome.android.glyph.chart.GlyphTiming
 import tf.monochrome.android.glyph.engine.GlyphGameplayEngine
@@ -48,6 +64,9 @@ import tf.monochrome.android.glyph.engine.GlyphScrollFamily
 import tf.monochrome.android.glyph.engine.GlyphScrollMode
 import tf.monochrome.android.glyph.training.GlyphCountIn
 import tf.monochrome.android.glyph.training.GlyphGauntlets
+import tf.monochrome.android.ui.components.liquidGlass
+import tf.monochrome.android.ui.mixer.GlassChoiceChip
+import tf.monochrome.android.ui.theme.MonoDimens
 
 /**
  * Training Ground: the same playfield, plus the tools to work on one passage.
@@ -58,6 +77,7 @@ import tf.monochrome.android.glyph.training.GlyphGauntlets
  * progress rather than a separate mode — the engine, the clock and the scoring
  * are the ones the play screen uses.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GlyphTrainingScreen(
     state: GlyphUiState,
@@ -78,47 +98,55 @@ fun GlyphTrainingScreen(
     val gameplay = state.gameplay
     val duration = state.selectedSong?.durationSeconds?.toFloat() ?: 0f
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(GlyphTheme.Ink)
-            .systemBarsPadding(),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = GlyphTheme.Grid),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            GlyphIconButton(
-                icon = GlyphIcon.ARROW_BACK,
-                label = "Leave Training Ground",
-                assets = assets,
-                onClick = { onEvent(GlyphEvent.Quit) },
-            )
-            Text(
-                text = "TRAINING GROUND",
-                style = typography.title,
-                color = GlyphTheme.Paper,
-                modifier = Modifier
-                    .weight(1f)
-                    .semantics { heading() },
-            )
-            GlyphIconButton(
-                icon = if (gameplay.isPaused) GlyphIcon.PLAY else GlyphIcon.PAUSE,
-                label = if (gameplay.isPaused) "Resume" else "Pause",
-                assets = assets,
-                onClick = { onEvent(GlyphEvent.TogglePause) },
-            )
-            GlyphIconButton(
-                icon = GlyphIcon.RESTART,
-                label = "Restart the segment",
-                assets = assets,
-                onClick = { onEvent(GlyphEvent.Restart) },
-            )
-        }
+    // The route runs full-bleed here (the tab bar and mini player step aside),
+    // so the top bar takes the status bar and the controls take the navigation
+    // bar, each once.
+    Column(modifier = modifier.fillMaxSize()) {
+        TopAppBar(
+            title = {
+                Text(
+                    text = "Training Ground",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { heading() },
+                )
+            },
+            navigationIcon = {
+                // Leaves at once, unlike system Back, which pauses first: this
+                // is a labelled button pressed on purpose, not an edge swipe.
+                IconButton(onClick = { onEvent(GlyphEvent.Quit) }) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Leave Training Ground",
+                    )
+                }
+            },
+            actions = {
+                IconButton(onClick = { onEvent(GlyphEvent.TogglePause) }) {
+                    Icon(
+                        imageVector = if (gameplay.isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                        contentDescription = if (gameplay.isPaused) "Resume" else "Pause",
+                    )
+                }
+                IconButton(onClick = { onEvent(GlyphEvent.Restart) }) {
+                    Icon(Icons.Default.Replay, contentDescription = "Restart the segment")
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background,
+            ),
+        )
 
-        Box(modifier = Modifier.weight(1f)) {
+        // The playfield and the controls share the height. The controls used
+        // to be an unweighted scrolling column under a weighted playfield,
+        // which a Column measures first and lets take everything: with the
+        // full set of controls the lanes were left no height at all.
+        Box(
+            modifier = Modifier
+                .weight(PLAYFIELD_SHARE)
+                .fillMaxWidth()
+                .background(GlyphTheme.Ink),
+        ) {
             GlyphPlayfield(
                 engine = engine,
                 assets = assets,
@@ -143,10 +171,14 @@ fun GlyphTrainingScreen(
 
         Column(
             modifier = Modifier
+                .weight(1f - PLAYFIELD_SHARE)
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(GlyphTheme.Grid * 2),
-            verticalArrangement = Arrangement.spacedBy(GlyphTheme.Grid + 4.dp),
+                .padding(MonoDimens.spacingLg)
+                // Inside the scroll, so the last control scrolls clear of the
+                // navigation bar rather than the column stopping short of it.
+                .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(MonoDimens.spacingMd),
         ) {
             LiveTimingRow(state = state, typography = typography)
 
@@ -157,14 +189,12 @@ fun GlyphTrainingScreen(
                 loopEnd = training.loop?.endSeconds,
                 positionSeconds = gameplay.positionSeconds,
                 onLoopChange = { start, end -> onEvent(GlyphEvent.SetLoop(start, end)) },
-                typography = typography,
                 assets = assets,
                 isLoading = training.isWaveformLoading,
             )
 
             GlyphScrollControl(
                 mode = gameplay.modifiers.scrollMode,
-                typography = typography,
                 onFamily = { onEvent(GlyphEvent.SetScrollFamily(it)) },
                 onValue = { onEvent(GlyphEvent.SetScrollValue(it)) },
             )
@@ -172,34 +202,32 @@ fun GlyphTrainingScreen(
             GlyphSpeedControl(
                 speed = gameplay.modifiers.speed,
                 pitchLinked = gameplay.modifiers.pitchLinkedToSpeed,
-                typography = typography,
                 onSpeedChange = { onEvent(GlyphEvent.SetSpeed(it)) },
                 onPitchLinkChange = { onEvent(GlyphEvent.SetPitchLinked(it)) },
             )
 
             PractiseToggles(
                 state = state,
-                assets = assets,
-                typography = typography,
                 onEvent = onEvent,
             )
 
             WindowSliders(
                 timingWindowScale = gameplay.modifiers.timingWindowScale,
                 hitboxScale = gameplay.modifiers.hitboxScale,
-                typography = typography,
                 onTimingWindowChange = { onEvent(GlyphEvent.SetTimingWindowScale(it)) },
                 onHitboxChange = { onEvent(GlyphEvent.SetHitboxScale(it)) },
             )
 
             GauntletRow(
                 selected = training.gauntlet?.id,
-                typography = typography,
                 onSelect = { onEvent(GlyphEvent.StartGauntlet(it)) },
             )
         }
     }
 }
+
+/** How much of the height under the top bar the lanes get; the controls scroll in the rest. */
+private const val PLAYFIELD_SHARE = 0.58f
 
 /**
  * Early/late, mean offset, accuracy, combo and consistency.
@@ -213,6 +241,9 @@ private fun LiveTimingRow(state: GlyphUiState, typography: GlyphTypography) {
     val score = state.gameplay.score
     val training = state.training
 
+    // Live readouts, so the values are monospaced; everything around them is
+    // the menu's.
+    val readout = typography.title
     GlyphPanel(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -221,35 +252,45 @@ private fun LiveTimingRow(state: GlyphUiState, typography: GlyphTypography) {
             GlyphStat(
                 label = "Offset",
                 value = score.offsetLabel,
-                valueColor = when {
-                    abs(training.liveOffsetMs) < 8f -> GlyphTheme.Positive
-                    training.liveOffsetMs < 0f -> GlyphTheme.Early
-                    else -> GlyphTheme.Late
-                },
-                typography = typography,
+                valueColor = menuAccent(
+                    when {
+                        abs(training.liveOffsetMs) < 8f -> GlyphTheme.Positive
+                        training.liveOffsetMs < 0f -> GlyphTheme.Early
+                        else -> GlyphTheme.Late
+                    },
+                ),
+                valueStyle = readout,
             )
             GlyphStat(
                 label = "Spread",
                 value = "±%.0f ms".format(training.consistencyMs),
-                typography = typography,
+                valueStyle = readout,
             )
             GlyphStat(
                 label = "Accuracy",
                 value = "%.1f%%".format(score.accuracy * 100),
-                typography = typography,
+                valueStyle = readout,
             )
-            GlyphStat(label = "Combo", value = score.combo.toString(), typography = typography)
-            GlyphStat(label = "Pass", value = training.passCount.toString(), typography = typography)
+            GlyphStat(label = "Combo", value = score.combo.toString(), valueStyle = readout)
+            GlyphStat(label = "Pass", value = training.passCount.toString(), valueStyle = readout)
         }
 
-        Spacer(Modifier.height(GlyphTheme.Grid))
+        Spacer(Modifier.height(MonoDimens.spacingSm))
 
         // Early/late as a balance, with both counts in the label so the bar is
         // never the only way to read it.
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("EARLY ${score.early}", style = typography.label, color = GlyphTheme.Early)
+            Text(
+                text = "Early ${score.early}",
+                style = MaterialTheme.typography.labelSmall,
+                color = menuAccent(GlyphTheme.Early),
+            )
             Spacer(Modifier.weight(1f))
-            Text("${score.late} LATE", style = typography.label, color = GlyphTheme.Late)
+            Text(
+                text = "${score.late} late",
+                style = MaterialTheme.typography.labelSmall,
+                color = menuAccent(GlyphTheme.Late),
+            )
         }
         Spacer(Modifier.height(4.dp))
         EarlyLateBar(lateShare = score.lateShare, early = score.early, late = score.late)
@@ -258,6 +299,7 @@ private fun LiveTimingRow(state: GlyphUiState, typography: GlyphTypography) {
 
 @Composable
 private fun EarlyLateBar(lateShare: Float, early: Int, late: Int) {
+    val centre = MaterialTheme.colorScheme.onSurface
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
@@ -276,7 +318,7 @@ private fun EarlyLateBar(lateShare: Float, early: Int, late: Int) {
         // The centre mark is the target; without it a balanced bar and a
         // slightly-off one look the same.
         drawRect(
-            color = GlyphTheme.Paper,
+            color = centre,
             topLeft = Offset(size.width / 2f - 1f, 0f),
             size = Size(2f, size.height),
         )
@@ -298,7 +340,6 @@ private fun SegmentPicker(
     loopEnd: Float?,
     positionSeconds: Float,
     onLoopChange: (Float, Float) -> Unit,
-    typography: GlyphTypography,
     assets: GlyphAssetRepository,
     isLoading: Boolean,
 ) {
@@ -307,21 +348,26 @@ private fun SegmentPicker(
     var start by remember(loopStart) { mutableFloatStateOf(loopStart ?: 0f) }
     var end by remember(loopEnd) { mutableFloatStateOf(loopEnd ?: durationSeconds) }
 
+    val scheme = MaterialTheme.colorScheme
+    val muted = scheme.onSurfaceVariant
+    val loopColour = scheme.primary
+    val playhead = scheme.onSurface
+
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("SEGMENT", style = typography.label, color = GlyphTheme.Muted)
+            GlyphSectionLabel("Segment")
             if (isLoading) {
-                Spacer(Modifier.width(GlyphTheme.Grid))
-                Text("reading…", style = typography.label, color = GlyphTheme.Muted)
+                Spacer(Modifier.width(MonoDimens.spacingSm))
+                Text("reading…", style = MaterialTheme.typography.labelSmall, color = muted)
             }
             Spacer(Modifier.weight(1f))
             Text(
                 text = "${timeLabel(start)} – ${timeLabel(end)}",
-                style = typography.mono,
-                color = GlyphTheme.Paper,
+                style = MaterialTheme.typography.labelLarge,
+                color = scheme.onSurface,
             )
         }
-        Spacer(Modifier.height(GlyphTheme.Grid))
+        Spacer(Modifier.height(MonoDimens.spacingSm))
 
         // The pack ships a timeline ruler; using it beats hand-rolling ticks
         // that would drift out of step with the rest of the artwork.
@@ -329,7 +375,7 @@ private fun SegmentPicker(
             id = GlyphAssetCatalog.decor(GlyphDecor.TIMELINE_TICKS),
             assets = assets,
             aspect = 320f / 32f,
-            tint = GlyphTheme.Muted,
+            tint = muted,
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(4.dp))
@@ -338,8 +384,7 @@ private fun SegmentPicker(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(72.dp)
-                .clip(RoundedCornerShape(GlyphTheme.Grid))
-                .background(GlyphTheme.InkPanel)
+                .liquidGlass(shape = MonoDimens.shapeMd)
                 .semantics {
                     contentDescription =
                         "Practice segment from ${timeLabel(start)} to ${timeLabel(end)}. " +
@@ -367,7 +412,7 @@ private fun SegmentPicker(
                     for (index in 0 until bars) {
                         val height = (waveform[index].coerceIn(0f, 1f) * size.height)
                         drawRect(
-                            color = GlyphTheme.Muted.copy(alpha = 0.5f),
+                            color = muted.copy(alpha = 0.5f),
                             topLeft = Offset(index * barWidth, (size.height - height) / 2f),
                             size = Size(barWidth * 0.7f, height),
                         )
@@ -377,13 +422,13 @@ private fun SegmentPicker(
                 val startX = (start / durationSeconds) * size.width
                 val endX = (end / durationSeconds) * size.width
                 drawRect(
-                    color = GlyphTheme.Positive.copy(alpha = 0.14f),
+                    color = loopColour.copy(alpha = 0.16f),
                     topLeft = Offset(startX, 0f),
                     size = Size((endX - startX).coerceAtLeast(0f), size.height),
                 )
                 for (x in listOf(startX, endX)) {
                     drawRect(
-                        color = GlyphTheme.Positive,
+                        color = loopColour,
                         topLeft = Offset(x - 1.5f, 0f),
                         size = Size(3f, size.height),
                     )
@@ -391,7 +436,7 @@ private fun SegmentPicker(
 
                 val playX = (positionSeconds / durationSeconds).coerceIn(0f, 1f) * size.width
                 drawRect(
-                    color = GlyphTheme.Paper,
+                    color = playhead,
                     topLeft = Offset(playX - 1f, 0f),
                     size = Size(2f, size.height),
                 )
@@ -415,38 +460,43 @@ private fun timeLabel(seconds: Float): String =
 fun GlyphSpeedControl(
     speed: Float,
     pitchLinked: Boolean,
-    typography: GlyphTypography,
     onSpeedChange: (Float) -> Unit,
     onPitchLinkChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("SPEED", style = typography.label, color = GlyphTheme.Muted)
-            Spacer(Modifier.weight(1f))
-            Text("%.2f×".format(speed), style = typography.mono, color = GlyphTheme.Paper)
-        }
-        Spacer(Modifier.height(GlyphTheme.Grid))
+        ControlHeader(label = "Speed", value = "%.2f×".format(speed))
+        Spacer(Modifier.height(MonoDimens.spacingSm))
         GlyphChipRow(
             options = SPEED_STEPS,
             selected = SPEED_STEPS.minByOrNull { abs(it - speed) },
             label = { "%.2f×".format(it) },
             onSelect = onSpeedChange,
-            typography = typography,
         )
-        Spacer(Modifier.height(GlyphTheme.Grid))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            GlyphSecondaryButton(
-                text = if (pitchLinked) "Pitch follows speed" else "Pitch held",
-                typography = typography,
-                accent = if (pitchLinked) GlyphTheme.Paper else GlyphTheme.Positive,
-                onClick = { onPitchLinkChange(!pitchLinked) },
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+        Spacer(Modifier.height(MonoDimens.spacingSm))
+        // Both ways named, the chosen one marked, rather than one button whose
+        // label flips: a label that changes on tap reads as either the state or
+        // the action, and nobody can tell which.
+        GlyphChipRow(
+            options = listOf(true, false),
+            selected = pitchLinked,
+            label = { linked -> if (linked) "Pitch follows speed" else "Pitch held" },
+            onSelect = onPitchLinkChange,
+        )
+    }
+}
+
+/** A control's caption, with its current value at the other end of the line. */
+@Composable
+private fun ControlHeader(label: String, value: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        GlyphSectionLabel(label)
+        Spacer(Modifier.weight(1f))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 
@@ -466,7 +516,6 @@ private val SPEED_STEPS = listOf(0.6f, 0.7f, 0.8f, 0.9f, 1.0f, 1.1f, 1.25f)
 @Composable
 fun GlyphScrollControl(
     mode: GlyphScrollMode,
-    typography: GlyphTypography,
     onFamily: (GlyphScrollFamily) -> Unit,
     onValue: (Float) -> Unit,
     modifier: Modifier = Modifier,
@@ -488,20 +537,15 @@ fun GlyphScrollControl(
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("SCROLL", style = typography.label, color = GlyphTheme.Muted)
-            Spacer(Modifier.weight(1f))
-            Text(mode.label, style = typography.mono, color = GlyphTheme.Paper)
-        }
-        Spacer(Modifier.height(GlyphTheme.Grid))
+        ControlHeader(label = "Scroll", value = mode.label)
+        Spacer(Modifier.height(MonoDimens.spacingSm))
         GlyphChipRow(
             options = GlyphScrollFamily.entries.toList(),
             selected = family,
             label = { it.label },
             onSelect = onFamily,
-            typography = typography,
         )
-        Spacer(Modifier.height(GlyphTheme.Grid))
+        Spacer(Modifier.height(MonoDimens.spacingSm))
         GlyphChipRow(
             options = steps,
             selected = steps.minByOrNull { abs(it - value) },
@@ -509,71 +553,86 @@ fun GlyphScrollControl(
                 if (family == GlyphScrollFamily.X) "%.1fx".format(step) else step.toInt().toString()
             },
             onSelect = onValue,
-            typography = typography,
         )
         Spacer(Modifier.height(4.dp))
         // Says what the family does, not what it is called. "CMod" alone tells
         // someone who does not already know exactly nothing.
-        Text(mode.summary, style = typography.label, color = GlyphTheme.Muted)
+        Text(
+            text = mode.summary,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
 @Composable
 private fun PractiseToggles(
     state: GlyphUiState,
-    assets: GlyphAssetRepository,
-    typography: GlyphTypography,
     onEvent: (GlyphEvent) -> Unit,
 ) {
     val modifiers = state.gameplay.modifiers
     val training = state.training
+    val accent = MaterialTheme.colorScheme.primary
 
     Column {
-        Text("PRACTICE", style = typography.label, color = GlyphTheme.Muted)
-        Spacer(Modifier.height(GlyphTheme.Grid))
-        Row(horizontalArrangement = Arrangement.spacedBy(GlyphTheme.Grid)) {
-            GlyphIconButton(
-                icon = GlyphIcon.METRONOME,
+        GlyphSectionLabel("Practice")
+        Spacer(Modifier.height(MonoDimens.spacingSm))
+        // Named chips, each with its icon, rather than a row of bare
+        // pictograms: on or off is the selected rim and spoken as selected,
+        // and what each one is is written on it.
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm),
+        ) {
+            GlassChoiceChip(
                 label = "Metronome",
-                assets = assets,
-                active = modifiers.metronome,
+                leadingIcon = Icons.Default.Timer,
+                selected = modifiers.metronome,
+                accent = accent,
+                height = 40.dp,
                 onClick = { onEvent(GlyphEvent.ToggleMetronome) },
             )
-            GlyphIconButton(
-                icon = GlyphIcon.MIRROR,
+            GlassChoiceChip(
                 label = "Mirror",
-                assets = assets,
-                active = modifiers.mirror,
+                leadingIcon = Icons.Default.Flip,
+                selected = modifiers.mirror,
+                accent = accent,
+                height = 40.dp,
                 onClick = { onEvent(GlyphEvent.ToggleMirror) },
             )
-            GlyphIconButton(
-                icon = GlyphIcon.SHUFFLE,
+            GlassChoiceChip(
                 label = "Shuffle",
-                assets = assets,
-                active = modifiers.shuffle,
+                leadingIcon = Icons.Default.Shuffle,
+                selected = modifiers.shuffle,
+                accent = accent,
+                height = 40.dp,
                 onClick = { onEvent(GlyphEvent.ToggleShuffle) },
             )
-            GlyphIconButton(
-                icon = GlyphIcon.GHOST,
-                label = if (training.hasGhost) "Ghost of your last run" else "No ghost recorded yet",
-                assets = assets,
+            GlassChoiceChip(
+                label = "Ghost",
+                description = if (training.hasGhost) "Ghost of your last run" else "No ghost recorded yet",
+                leadingIcon = Icons.Default.History,
+                selected = training.ghostEnabled,
                 enabled = training.hasGhost,
-                active = training.ghostEnabled,
+                accent = accent,
+                height = 40.dp,
                 onClick = { onEvent(GlyphEvent.SetGhostEnabled(!training.ghostEnabled)) },
             )
-            GlyphIconButton(
-                icon = GlyphIcon.LOOP_SEGMENT,
-                label = if (training.loop != null) "Clear the loop" else "No loop set",
-                assets = assets,
+            GlassChoiceChip(
+                label = "Loop",
+                description = if (training.loop != null) "Clear the loop" else "No loop set",
+                leadingIcon = Icons.Default.Repeat,
+                selected = training.loop != null,
                 enabled = training.loop != null,
-                active = training.loop != null,
+                accent = accent,
+                height = 40.dp,
                 onClick = { onEvent(GlyphEvent.ClearLoop) },
             )
         }
 
-        Spacer(Modifier.height(GlyphTheme.Grid))
-        Text("COUNT-IN", style = typography.label, color = GlyphTheme.Muted)
-        Spacer(Modifier.height(GlyphTheme.Grid))
+        Spacer(Modifier.height(MonoDimens.spacingMd))
+        GlyphSectionLabel("Count-in")
+        Spacer(Modifier.height(MonoDimens.spacingSm))
         GlyphChipRow(
             options = listOf(GlyphCountIn.NONE, GlyphCountIn.ONE_BAR, GlyphCountIn.TWO_BARS),
             selected = training.countIn,
@@ -584,7 +643,6 @@ private fun PractiseToggles(
                 }
             },
             onSelect = { onEvent(GlyphEvent.SetCountIn(it)) },
-            typography = typography,
         )
     }
 }
@@ -600,13 +658,12 @@ private fun PractiseToggles(
 private fun WindowSliders(
     timingWindowScale: Float,
     hitboxScale: Float,
-    typography: GlyphTypography,
     onTimingWindowChange: (Float) -> Unit,
     onHitboxChange: (Float) -> Unit,
 ) {
     Column {
-        Text("TIMING WINDOWS", style = typography.label, color = GlyphTheme.Muted)
-        Spacer(Modifier.height(GlyphTheme.Grid))
+        GlyphSectionLabel("Timing windows")
+        Spacer(Modifier.height(MonoDimens.spacingSm))
         GlyphChipRow(
             options = WINDOW_STEPS,
             selected = WINDOW_STEPS.minByOrNull { abs(it - timingWindowScale) },
@@ -618,12 +675,11 @@ private fun WindowSliders(
                 }
             },
             onSelect = onTimingWindowChange,
-            typography = typography,
         )
 
-        Spacer(Modifier.height(GlyphTheme.Grid))
-        Text("LANE HITBOX", style = typography.label, color = GlyphTheme.Muted)
-        Spacer(Modifier.height(GlyphTheme.Grid))
+        Spacer(Modifier.height(MonoDimens.spacingMd))
+        GlyphSectionLabel("Lane hitbox")
+        Spacer(Modifier.height(MonoDimens.spacingSm))
         GlyphChipRow(
             options = HITBOX_STEPS,
             selected = HITBOX_STEPS.minByOrNull { abs(it - hitboxScale) },
@@ -631,7 +687,6 @@ private fun WindowSliders(
                 if (scale >= 1f) "Full lane" else "%.0f%% lane".format(scale * 100)
             },
             onSelect = onHitboxChange,
-            typography = typography,
         )
         Spacer(Modifier.height(4.dp))
         Text(
@@ -639,8 +694,8 @@ private fun WindowSliders(
             // direction available and a bare multiplier suggests otherwise.
             text = "Narrowing leaves dead gutters between lanes, so a thumb " +
                 "landing between two no longer counts as either.",
-            style = typography.label,
-            color = GlyphTheme.Muted,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -653,27 +708,29 @@ private val HITBOX_STEPS = listOf(0.55f, 0.7f, 0.85f, 1.0f)
 @Composable
 private fun GauntletRow(
     selected: String?,
-    typography: GlyphTypography,
     onSelect: (String) -> Unit,
 ) {
     Column {
-        Text("CHALLENGE GAUNTLETS", style = typography.label, color = GlyphTheme.Muted)
-        Spacer(Modifier.height(GlyphTheme.Grid))
+        GlyphSectionLabel("Challenge gauntlets")
+        Spacer(Modifier.height(MonoDimens.spacingSm))
         GlyphChipRow(
             options = GlyphGauntlets.ALL.map { it.id },
             selected = selected,
             label = { id -> GlyphGauntlets.byId(id)?.name ?: id },
             onSelect = onSelect,
-            typography = typography,
         )
         val active = selected?.let(GlyphGauntlets::byId)
         if (active != null) {
-            Spacer(Modifier.height(GlyphTheme.Grid))
-            Text(active.description, style = typography.body, color = GlyphTheme.Muted)
+            Spacer(Modifier.height(MonoDimens.spacingSm))
+            Text(
+                text = active.description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Text(
                 text = "Target ${(active.targetAccuracy * 100).toInt()}% · ${active.focus}",
-                style = typography.label,
-                color = GlyphTheme.Positive,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
             )
         }
     }

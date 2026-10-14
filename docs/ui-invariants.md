@@ -570,7 +570,15 @@ start pages folded: tab switching would become two taps.
 
 **The bar is on every screen but four**: the player, the mixer, Oxford and car
 mode, whose own controls run to the bottom edge (`chromeHiddenRoutes`). The
-download pill follows the same list.
+download pill follows the same list. A screen that needs the window for only
+part of its life asks for it with `HideAppChrome` instead of joining the list:
+the genre galaxy in full screen, and Trypt Mania only while a chart is being
+played or practised. Its song list, panels and results are menus and keep the
+bar like any other pushed screen; putting the whole route on the list hid the
+tab bar and the mini player from the menus too. While a screen holds
+`HideAppChrome` the nav host runs it full-bleed, so it pads the system bar
+itself; stopped above the bar, the black playfield had a strip of theme
+background under it, white on a light theme.
 
 **Bottom padding comes from `LocalBottomChromeInset`, never a number.** It is
 measured from where the reading screen ends: pager pages and full-bleed routes
@@ -1017,6 +1025,34 @@ that keeps its rims with glass off is out of step with every pane next to it.
 Stats and Achievements are **two pages under one glass pill**, not two tabs of
 a Material `TabRow`; the pill is a pair of `GlassChoiceChip`s, as on the chart
 page's view and compare switches.
+
+### Trypt Mania
+
+**The playfield is the mode's own; the menus are the app's.** `GlyphTheme`'s
+near-black palette and the monospaced `GlyphTypography` belong to the lanes,
+the HUD over them, the beat and lane colours and the judgement accents, and to
+readouts that change while they are read. The song list, the selection,
+generation and pause panels, Training Ground's controls and the results follow
+the theme: a top bar with Back and `SearchAction`, `SearchOverlay`, song rows at
+`MonoDimens.listRowHeight` with `bounceClick`, `GlassPanel`s, and buttons and
+chips from `GlassPill` and `GlassChoiceChip`. Text on a pane takes the glass's
+ink from `MaterialTheme`, never `GlyphTheme.Paper`: a fixed dark menu was the
+only dark screen in a light theme, and fixed white text on the app's glass is
+the wrong ink wherever the glass is light. An accent written as text on the
+page goes through `menuAccent`, which keeps its hue and moves it until it reads.
+
+**The home panels' haze source is the page in every state**, the loading and
+empty messages included, not the list alone. While the list was the source,
+the generation panel over a library still loading had nothing drawn to frost
+and came out a solid slab. The selection panel sits on `LocalBottomChromeNow`
+and passes `avoidNavigationBar = false`: the nav host already stops a pushed
+screen above the system bar, and the panel counting it again floated a bar's
+height above the tab bar.
+
+**Back in a run pauses it; Back from the pause leaves.** The pause panel is
+where "Quit to songs" is, so Back walks the same two steps. Quitting on the
+first Back threw a run away to a stray edge swipe. On the home screen Back
+closes the search before it leaves the mode.
 
 ### Discord presence
 

@@ -4,8 +4,6 @@ package tf.monochrome.android.ui.glyph
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,11 +15,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,13 +43,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import tf.monochrome.android.R
 import tf.monochrome.android.glyph.asset.GlyphAssetCatalog
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
 import tf.monochrome.android.glyph.engine.GlyphJudgement
+import tf.monochrome.android.ui.navigation.bottomChromePadding
+import tf.monochrome.android.ui.theme.MonoDimens
 
 /**
  * How the run went, and what to do about it.
@@ -53,7 +64,11 @@ import tf.monochrome.android.glyph.engine.GlyphJudgement
  * weak section opens exactly that range as a practice loop. Making them find the
  * passage again by hand is the difference between a results screen and a
  * practice tool.
+ *
+ * A menu page of the app's, so it follows the theme: a top bar with Back, cards
+ * of the app's glass, and the tab bar and mini player back underneath.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GlyphResultsScreen(
     results: GlyphResultsUi,
@@ -61,130 +76,141 @@ fun GlyphResultsScreen(
     onEvent: (GlyphEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val fontFamily = rememberStepTechFontFamily()
-    val typography = GlyphTypography(fontFamily)
     val attempt = results.attempt
     val grade = tf.monochrome.android.glyph.engine.GlyphGrade.forAccuracy(attempt.accuracy)
+    val scheme = MaterialTheme.colorScheme
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(GlyphTheme.Ink)
-            .systemBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(GlyphTheme.Grid * 2),
-        verticalArrangement = Arrangement.spacedBy(GlyphTheme.Grid * 2),
-    ) {
-        Text(
-            text = attempt.songTitle,
-            style = typography.title,
-            color = GlyphTheme.Paper,
-            modifier = Modifier.semantics { heading() },
+    Column(modifier = modifier.fillMaxSize()) {
+        TopAppBar(
+            title = {
+                Text(
+                    text = attempt.songTitle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { heading() },
+                )
+            },
+            navigationIcon = {
+                IconButton(onClick = { onEvent(GlyphEvent.BackToHome) }) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.action_back),
+                    )
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = scheme.background),
         )
 
-        GlyphPanel(modifier = Modifier.fillMaxWidth()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                GradeBadge(grade = grade, assets = assets, typography = typography)
-                Spacer(Modifier.size(GlyphTheme.Grid * 2))
-                Column {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(start = MonoDimens.spacingLg, end = MonoDimens.spacingLg, top = MonoDimens.spacingSm),
+            verticalArrangement = Arrangement.spacedBy(MonoDimens.spacingLg),
+        ) {
+            GlyphPanel(modifier = Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    GradeBadge(grade = grade, assets = assets)
+                    Spacer(Modifier.size(MonoDimens.spacingLg))
+                    Column {
+                        Text(
+                            text = "%.2f%%".format(attempt.accuracy * 100),
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = scheme.onSurface,
+                        )
+                        Text(
+                            text = "%,d points · ${attempt.difficulty.sscName}".format(attempt.score),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(MonoDimens.spacingLg))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    GlyphStat("Max combo", attempt.maxCombo.toString())
+                    GlyphStat("Mean", "%.0f ms".format(attempt.meanOffsetMs))
+                    GlyphStat("Spread", "±%.0f ms".format(attempt.deviationMs))
+                }
+
+                results.previousBest?.let { best ->
+                    Spacer(Modifier.height(MonoDimens.spacingSm))
+                    val delta = attempt.score - best.score
                     Text(
-                        text = "%.2f%%".format(attempt.accuracy * 100),
-                        style = typography.readout,
-                        color = GlyphTheme.Paper,
+                        text = when {
+                            delta > 0 -> "New best, up %,d points".format(delta)
+                            delta == 0 -> "Matched your best"
+                            else -> "Best stands: %,d points".format(best.score)
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (delta > 0) menuAccent(GlyphTheme.Positive) else scheme.onSurfaceVariant,
                     )
+                }
+
+                if (!attempt.isFullRun) {
+                    Spacer(Modifier.height(MonoDimens.spacingSm))
                     Text(
-                        text = "%,d points · ${attempt.difficulty.sscName}".format(attempt.score),
-                        style = typography.label,
-                        color = GlyphTheme.Muted,
+                        text = "Training segment — not filed as a full run.",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = menuAccent(GlyphTheme.Warning),
                     )
                 }
             }
 
-            Spacer(Modifier.height(GlyphTheme.Grid * 2))
+            JudgementBreakdown(results = results)
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                GlyphStat("Max combo", attempt.maxCombo.toString(), typography = typography)
-                GlyphStat("Mean", "%.0f ms".format(attempt.meanOffsetMs), typography = typography)
-                GlyphStat("Spread", "±%.0f ms".format(attempt.deviationMs), typography = typography)
-            }
+            EarlyLateSummary(early = attempt.early, late = attempt.late)
 
-            results.previousBest?.let { best ->
-                Spacer(Modifier.height(GlyphTheme.Grid))
-                val delta = attempt.score - best.score
-                Text(
-                    text = when {
-                        delta > 0 -> "New best, up %,d points".format(delta)
-                        delta == 0 -> "Matched your best"
-                        else -> "Best stands: %,d points".format(best.score)
-                    },
-                    style = typography.label,
-                    color = if (delta > 0) GlyphTheme.Positive else GlyphTheme.Muted,
+            if (results.sections.isNotEmpty()) {
+                AccuracyGraph(
+                    results = results,
+                    onSelect = { onEvent(GlyphEvent.SelectSection(it)) },
                 )
-            }
 
-            if (!attempt.isFullRun) {
-                Spacer(Modifier.height(GlyphTheme.Grid))
-                Text(
-                    text = "Training segment — not filed as a full run.",
-                    style = typography.label,
-                    color = GlyphTheme.Warning,
-                )
-            }
-        }
-
-        JudgementBreakdown(results = results, typography = typography)
-
-        EarlyLateSummary(
-            early = attempt.early,
-            late = attempt.late,
-            typography = typography,
-        )
-
-        if (results.sections.isNotEmpty()) {
-            AccuracyGraph(
-                results = results,
-                typography = typography,
-                onSelect = { onEvent(GlyphEvent.SelectSection(it)) },
-            )
-
-            val selected = results.selectedSection?.let { results.sections.getOrNull(it) }
-            if (selected != null) {
-                GlyphPrimaryButton(
-                    text = "Practise ${selected.label} in Training Ground",
-                    typography = typography,
-                    onClick = { onEvent(GlyphEvent.PractiseSection(selected.index)) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            } else {
-                val weakest = results.sections.minByOrNull { it.accuracy }
-                if (weakest != null && weakest.isWeak) {
-                    GlyphSecondaryButton(
-                        text = "Practise your weakest section (${weakest.label})",
-                        typography = typography,
-                        accent = GlyphTheme.Positive,
-                        onClick = { onEvent(GlyphEvent.PractiseSection(weakest.index)) },
+                val selected = results.selectedSection?.let { results.sections.getOrNull(it) }
+                if (selected != null) {
+                    GlyphButton(
+                        text = "Practise ${selected.label} in Training Ground",
+                        primary = true,
+                        onClick = { onEvent(GlyphEvent.PractiseSection(selected.index)) },
                         modifier = Modifier.fillMaxWidth(),
                     )
+                } else {
+                    val weakest = results.sections.minByOrNull { it.accuracy }
+                    if (weakest != null && weakest.isWeak) {
+                        GlyphButton(
+                            text = "Practise your weakest section (${weakest.label})",
+                            primary = true,
+                            onClick = { onEvent(GlyphEvent.PractiseSection(weakest.index)) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
             }
-        }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(GlyphTheme.Grid)) {
-            GlyphSecondaryButton(
-                text = "Play again",
-                typography = typography,
-                onClick = { onEvent(GlyphEvent.StartPlay) },
-                modifier = Modifier.weight(1f),
-            )
-            GlyphSecondaryButton(
-                text = "Songs",
-                typography = typography,
-                onClick = { onEvent(GlyphEvent.BackToHome) },
-                modifier = Modifier.weight(1f),
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm)) {
+                GlyphButton(
+                    text = "Play again",
+                    icon = Icons.Default.Replay,
+                    onClick = { onEvent(GlyphEvent.StartPlay) },
+                    modifier = Modifier.weight(1f),
+                )
+                GlyphButton(
+                    text = "Songs",
+                    onClick = { onEvent(GlyphEvent.BackToHome) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            // Trailing space inside the scroll, so the last buttons come clear
+            // of the tab bar and the mini player while the page still runs
+            // under their glass.
+            Spacer(Modifier.height(bottomChromePadding))
         }
     }
 }
@@ -193,7 +219,6 @@ fun GlyphResultsScreen(
 private fun GradeBadge(
     grade: tf.monochrome.android.glyph.engine.GlyphGrade,
     assets: GlyphAssetRepository,
-    typography: GlyphTypography,
 ) {
     val density = LocalDensity.current
     val sizePx = with(density) { GRADE_SIZE.roundToPx() }
@@ -213,7 +238,11 @@ private fun GradeBadge(
             Image(bitmap = current, contentDescription = null, modifier = Modifier.size(GRADE_SIZE))
         } else {
             // The letter is the grade; the badge is decoration around it.
-            Text(text = grade.label, style = typography.readout, color = GlyphTheme.Paper)
+            Text(
+                text = grade.label,
+                style = MaterialTheme.typography.displaySmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
         }
     }
 }
@@ -222,13 +251,13 @@ private val GRADE_SIZE = 88.dp
 
 /** Counts per judgement, with a bar that is never the only reading. */
 @Composable
-private fun JudgementBreakdown(results: GlyphResultsUi, typography: GlyphTypography) {
+private fun JudgementBreakdown(results: GlyphResultsUi) {
     val attempt = results.attempt
     val total = GlyphJudgement.entries.sumOf { attempt.judgementCount(it) }.coerceAtLeast(1)
 
     GlyphPanel(modifier = Modifier.fillMaxWidth()) {
-        Text("JUDGEMENTS", style = typography.label, color = GlyphTheme.Muted)
-        Spacer(Modifier.height(GlyphTheme.Grid))
+        GlyphSectionLabel("Judgements")
+        Spacer(Modifier.height(MonoDimens.spacingSm))
         for (judgement in GlyphJudgement.entries) {
             val count = attempt.judgementCount(judgement)
             Row(
@@ -242,8 +271,8 @@ private fun JudgementBreakdown(results: GlyphResultsUi, typography: GlyphTypogra
             ) {
                 Text(
                     text = judgement.label,
-                    style = typography.mono,
-                    color = judgementColor(judgement),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = menuAccent(judgementColor(judgement)),
                     modifier = Modifier.weight(0.4f),
                 )
                 GlyphMeter(
@@ -253,11 +282,11 @@ private fun JudgementBreakdown(results: GlyphResultsUi, typography: GlyphTypogra
                 )
                 Text(
                     text = count.toString(),
-                    style = typography.mono,
-                    color = GlyphTheme.Paper,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
                         .weight(0.2f)
-                        .padding(start = GlyphTheme.Grid),
+                        .padding(start = MonoDimens.spacingSm),
                 )
             }
         }
@@ -274,17 +303,25 @@ private fun judgementColor(judgement: GlyphJudgement): Color = when (judgement) 
 }
 
 @Composable
-private fun EarlyLateSummary(early: Int, late: Int, typography: GlyphTypography) {
+private fun EarlyLateSummary(early: Int, late: Int) {
     val total = (early + late).coerceAtLeast(1)
     GlyphPanel(modifier = Modifier.fillMaxWidth()) {
-        Text("EARLY / LATE", style = typography.label, color = GlyphTheme.Muted)
-        Spacer(Modifier.height(GlyphTheme.Grid))
+        GlyphSectionLabel("Early / late")
+        Spacer(Modifier.height(MonoDimens.spacingSm))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("$early early", style = typography.mono, color = GlyphTheme.Early)
+            Text(
+                text = "$early early",
+                style = MaterialTheme.typography.bodyMedium,
+                color = menuAccent(GlyphTheme.Early),
+            )
             Spacer(Modifier.weight(1f))
-            Text("$late late", style = typography.mono, color = GlyphTheme.Late)
+            Text(
+                text = "$late late",
+                style = MaterialTheme.typography.bodyMedium,
+                color = menuAccent(GlyphTheme.Late),
+            )
         }
-        Spacer(Modifier.height(GlyphTheme.Grid))
+        Spacer(Modifier.height(MonoDimens.spacingSm))
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
@@ -316,28 +353,30 @@ private fun EarlyLateSummary(early: Int, late: Int, typography: GlyphTypography)
 @Composable
 private fun AccuracyGraph(
     results: GlyphResultsUi,
-    typography: GlyphTypography,
     onSelect: (Int) -> Unit,
 ) {
     val sections = results.sections
     val weakest = sections.minByOrNull { it.accuracy }
+    val scheme = MaterialTheme.colorScheme
+    val hairline = scheme.onSurface.copy(alpha = 0.12f)
+    val outline = scheme.onSurface
 
     GlyphPanel(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("ACCURACY OVER TIME", style = typography.label, color = GlyphTheme.Muted)
+            GlyphSectionLabel("Accuracy over time")
             Spacer(Modifier.weight(1f))
             val selected = results.selectedSection?.let { sections.getOrNull(it) }
             if (selected != null) {
                 Text(
                     text = "${selected.label} · %.0f%% · ${selected.missCount} missed"
                         .format(selected.accuracy * 100),
-                    style = typography.label,
-                    color = GlyphTheme.Paper,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = scheme.onSurface,
                 )
             }
         }
 
-        Spacer(Modifier.height(GlyphTheme.Grid))
+        Spacer(Modifier.height(MonoDimens.spacingSm))
 
         Canvas(
             modifier = Modifier
@@ -371,7 +410,7 @@ private fun AccuracyGraph(
             for (reference in listOf(0.9f, 0.7f)) {
                 val y = size.height * (1f - reference)
                 drawRect(
-                    color = GlyphTheme.Hairline,
+                    color = hairline,
                     topLeft = Offset(0f, y),
                     size = Size(size.width, 1f),
                 )
@@ -395,7 +434,7 @@ private fun AccuracyGraph(
 
                 if (isSelected) {
                     drawRect(
-                        color = GlyphTheme.Paper,
+                        color = outline,
                         topLeft = Offset(left + barWidth * 0.15f, 0f),
                         size = Size(barWidth * 0.7f, size.height),
                         style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f),
@@ -404,18 +443,18 @@ private fun AccuracyGraph(
             }
         }
 
-        Spacer(Modifier.height(GlyphTheme.Grid))
+        Spacer(Modifier.height(MonoDimens.spacingSm))
         Row(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = sections.firstOrNull()?.label.orEmpty(),
-                style = typography.label,
-                color = GlyphTheme.Muted,
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSurfaceVariant,
             )
             Spacer(Modifier.weight(1f))
             Text(
                 text = sections.lastOrNull()?.label.orEmpty(),
-                style = typography.label,
-                color = GlyphTheme.Muted,
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSurfaceVariant,
             )
         }
     }
