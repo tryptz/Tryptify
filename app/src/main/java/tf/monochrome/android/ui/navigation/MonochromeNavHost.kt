@@ -228,17 +228,18 @@ private val pagerRoutes =
 // mini player would sit on top of them. The player and the mixer are the
 // transport itself; Oxford puts CLIP / BAND SPLIT / EFFECT IN under the
 // compressor and inflator faders; car mode is a full-screen driving surface
-// with its own transport. Glyph owns the whole screen: a mini player over the
-// receptor row would cover the one part of it the player is looking at, and its
-// transport is not the one driving the chart. Everywhere else the chrome stays —
-// on pushed screens too, the way Apple Music keeps its tab bar — and this list
-// is the whole exception.
+// with its own transport. Everywhere else the chrome stays — on pushed screens
+// too, the way Apple Music keeps its tab bar — and this list is the whole
+// exception for whole routes. A screen that needs the window for only part of
+// its life asks for it through HideAppChrome instead: the genre galaxy in full
+// screen, and Trypt Mania while a chart is played or practised (a mini player
+// over the receptor row would cover the one part of it the player is looking
+// at), though its song list, panels and results keep the bar like any menu.
 internal val chromeHiddenRoutes = setOf(
     Screen.NowPlaying.route,
     Screen.Mixer.route,
     Screen.Oxford.route,
     Screen.CarMode.route,
-    Screen.Glyph.route,
 )
 
 @Composable
@@ -551,9 +552,16 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         // 3-button navigation, which the height-bound artwork paid for.
         // World radio used to be here. It is a pager page now, and the pager
         // is already full-bleed — this list is only about NavHost destinations.
+        //
+        // And whatever screen has asked for the whole window (HideAppChrome)
+        // has it down to the bottom edge while it holds it: Trypt Mania's
+        // playfield is black in every theme, and stopped above the system bar
+        // it left a strip of theme background under the lanes — a white one
+        // on a light theme. Such a screen pads the system bar itself.
         val fullBleedRoute = currentDestination?.route == Screen.GenreMap.route ||
             currentDestination?.route == Screen.LibraryGalaxy.route ||
-            currentDestination?.route == Screen.NowPlaying.route
+            currentDestination?.route == Screen.NowPlaying.route ||
+            appChrome.hidden
 
         // Every screen runs *under* the mini player. Reserving the bar's height
         // out here letterboxed them: the strip behind the bar was flat theme
