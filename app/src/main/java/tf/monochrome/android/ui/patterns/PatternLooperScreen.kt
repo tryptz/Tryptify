@@ -37,7 +37,7 @@ import tf.monochrome.android.domain.patterns.Pattern
 import tf.monochrome.android.domain.patterns.PatternLimits
 import tf.monochrome.android.domain.patterns.SampleRef
 import tf.monochrome.android.domain.patterns.TransportState
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import tf.monochrome.android.ui.sampler.SamplePickerSheet
 
 /**
@@ -231,7 +231,7 @@ private fun CompactLayout(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(bottom = LocalMiniPlayerInset.current)
+            .padding(bottom = LocalBottomChromeInset.current)
             .padding(horizontal = 12.dp),
     ) {
         ScreenTopBar(onBack, onOpenSampler, accent)
@@ -396,7 +396,7 @@ private fun TwoPaneLayout(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(bottom = LocalMiniPlayerInset.current)
+            .padding(bottom = LocalBottomChromeInset.current)
             .padding(horizontal = 12.dp),
     ) {
         ScreenTopBar(onBack, onOpenSampler, accent)
@@ -471,7 +471,7 @@ private fun WorkstationLayout(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(bottom = LocalMiniPlayerInset.current)
+            .padding(bottom = LocalBottomChromeInset.current)
             .padding(horizontal = 12.dp),
     ) {
         ScreenTopBar(onBack, onOpenSampler, accent)

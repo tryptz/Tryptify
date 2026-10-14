@@ -41,7 +41,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tf.monochrome.android.domain.patterns.CaptureSource
 import tf.monochrome.android.domain.patterns.SampleRef
-import tf.monochrome.android.ui.navigation.LocalMiniPlayerInset
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import tf.monochrome.android.ui.patterns.PanelLabel
 import tf.monochrome.android.ui.patterns.PatternFader
 import tf.monochrome.android.ui.patterns.PatternPanel
@@ -114,7 +114,7 @@ fun SamplerScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(bottom = LocalMiniPlayerInset.current)
+            .padding(bottom = LocalBottomChromeInset.current)
             .padding(horizontal = 12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
