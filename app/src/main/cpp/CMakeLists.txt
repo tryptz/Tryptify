@@ -124,6 +124,37 @@ target_link_libraries(monochrome_sampler
     log
 )
 
+# ── Trypt Mania (Glyph) game engine ──────────────────────────────────────
+# Judgement, scoring, the beat map and the playfield's per-frame note query.
+# Its own .so for the sampler's reason: it is loaded the first time someone
+# opens Trypt Mania, never at launch. The engine sources carry no Android
+# headers so glyph/tests builds them on a desktop; only glyph_jni.cpp does.
+add_library(monochrome_glyph SHARED
+    glyph/glyph_timing.cpp
+    glyph/glyph_engine.cpp
+    glyph/glyph_jni.cpp
+)
+
+target_include_directories(monochrome_glyph PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/glyph
+)
+
+target_compile_features(monochrome_glyph PRIVATE cxx_std_17)
+
+# No -ffast-math: the engine compares against window edges exactly and keeps
+# NaN as "no offset", both of which fast-math is free to break.
+target_compile_options(monochrome_glyph PRIVATE
+    -O3 -fno-exceptions -fno-rtti
+    $<$<STREQUAL:${ANDROID_ABI},arm64-v8a>:-march=armv8-a+simd>
+)
+
+set_target_properties(monochrome_glyph PROPERTIES DEBUG_POSTFIX "")
+
+target_link_libraries(monochrome_glyph
+    android
+    log
+)
+
 # ── libusb (USB Audio Class direct output) ────────────────────────────────
 # Vendored at third_party/libusb. Upstream uses autotools + Android.mk;
 # we list the platform source files directly here so the existing CMake
