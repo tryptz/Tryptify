@@ -102,6 +102,7 @@ import tf.monochrome.android.ui.components.liquidGlass
 import tf.monochrome.android.ui.navigation.openAlbum
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.navigateSafe
+import tf.monochrome.android.ui.navigation.navigateTool
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.player.PlayerViewModel
 import androidx.compose.material3.Surface
@@ -380,6 +381,8 @@ fun LocalLibraryTab(
                 onSelect = { openCategoryId = it.id },
                 // The library as a galaxy: every artist a star, beside their genre.
                 onGalaxy = { navController.navigateSafe(Screen.LibraryGalaxy.route) },
+                // Trypt Mania: charts generated from the library's own songs.
+                onTryptMania = { navController.navigateTool(Screen.Glyph) },
             )
 
             LibraryCategory.SONGS -> SongList(

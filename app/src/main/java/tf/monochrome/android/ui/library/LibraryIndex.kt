@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -96,6 +97,11 @@ fun LibraryIndexList(
      * category: those open in place, and this opens a screen of its own.
      */
     onGalaxy: (() -> Unit)? = null,
+    /**
+     * Trypt Mania, the Glyph rhythm mode, as the tile under the galaxy. Like
+     * the galaxy it opens a screen of its own rather than a category.
+     */
+    onTryptMania: (() -> Unit)? = null,
 ) {
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
@@ -111,6 +117,11 @@ fun LibraryIndexList(
         if (onGalaxy != null) {
             item(key = "galaxy", contentType = "category") {
                 CategoryTile(tf.monochrome.android.ui.discover.galaxy.SystemGlyph, stringResource(R.string.library_galaxy), onGalaxy)
+            }
+        }
+        if (onTryptMania != null) {
+            item(key = "trypt_mania", contentType = "category") {
+                CategoryTile(Icons.Default.SportsEsports, stringResource(R.string.trypt_mania), onTryptMania)
             }
         }
     }
