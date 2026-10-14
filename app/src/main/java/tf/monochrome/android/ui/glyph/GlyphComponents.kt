@@ -247,8 +247,10 @@ fun GlyphMeter(
 
 /**
  * A row of chips where exactly one is selected, as the app's glass
- * ([GlassChoiceChip]): the selected one carries the accent rim and label, and
+ * ([GlassChoiceChip]): the selected one carries the rim and the full ink, and
  * says it is selected to a screen reader rather than leaving it to the fill.
+ * The ink, not the theme's accent: a grey accent made the chosen chip the
+ * dimmest of the row, and it read as the disabled one.
  *
  * Scrolls horizontally rather than clipping. Five difficulty chips with their
  * meters ("Challenge 14") need about 450 dp, and a phone lane gives them ~358 —
@@ -262,7 +264,7 @@ fun <T> GlyphChipRow(
     label: (T) -> String,
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
-    accent: Color = MaterialTheme.colorScheme.primary,
+    accent: Color = MaterialTheme.colorScheme.onSurface,
 ) {
     Row(
         modifier = modifier.horizontalScroll(rememberScrollState()),
@@ -300,6 +302,12 @@ fun GlyphButton(
     height: Dp = 48.dp,
     onClickLabel: String? = null,
     hazeState: HazeState? = LocalGlassBackdrop.current,
+    /**
+     * The screen's one action, filled: a solid pill in the theme's ink inside
+     * the glass, its label knocked out. For Start, which an accent label left
+     * reading as disabled wherever the theme's accent is grey.
+     */
+    filled: Boolean = false,
 ) {
     GlassPill(
         onClick = onClick,
@@ -310,8 +318,17 @@ fun GlyphButton(
         onClickLabel = onClickLabel,
     ) {
         val scheme = MaterialTheme.colorScheme
+        if (filled && enabled) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .padding(FILL_INSET)
+                    .background(scheme.onSurface.copy(alpha = 0.92f), MonoDimens.shapePill),
+            )
+        }
         val ink = when {
             !enabled -> scheme.onSurface.copy(alpha = 0.38f)
+            filled -> scheme.surface
             primary -> scheme.primary
             else -> scheme.onSurface
         }
@@ -336,6 +353,9 @@ fun GlyphButton(
         }
     }
 }
+
+/** How far inside the glass a filled button's fill sits, leaving the rim. */
+private val FILL_INSET = 4.dp
 
 /** A small caption over a group of controls, in the menu's quieter ink. */
 @Composable

@@ -6,9 +6,14 @@ import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.glyph.chart.GlyphChart
 import tf.monochrome.android.glyph.chart.GlyphSimfile
+import tf.monochrome.android.glyph.chart.GlyphTiming
 import tf.monochrome.android.glyph.data.GlyphAttempt
 import tf.monochrome.android.glyph.data.GlyphSong
 import tf.monochrome.android.glyph.data.GlyphSongSort
+import tf.monochrome.android.glyph.editor.DraftNote
+import tf.monochrome.android.glyph.editor.GlyphChartDraft
+import tf.monochrome.android.glyph.editor.GlyphEditTool
+import tf.monochrome.android.glyph.editor.GlyphSnap
 import tf.monochrome.android.glyph.engine.GlyphAppearance
 import tf.monochrome.android.glyph.engine.GlyphFailType
 import tf.monochrome.android.glyph.engine.GlyphFullCombo
@@ -18,6 +23,7 @@ import tf.monochrome.android.glyph.engine.GlyphScoreSnapshot
 import tf.monochrome.android.glyph.engine.GlyphScrollMode
 import tf.monochrome.android.glyph.engine.GlyphTurn
 import tf.monochrome.android.glyph.engine.StepManiaScoreKeeper
+import tf.monochrome.android.glyph.input.GlyphKeyBindings
 import tf.monochrome.android.glyph.training.GlyphCountIn
 import tf.monochrome.android.glyph.training.GlyphLoopSegment
 
@@ -36,7 +42,9 @@ import tf.monochrome.android.glyph.training.GlyphLoopSegment
  * a second is the difference between a mode that runs and one that stutters.
  */
 data class GlyphUiState(
-    val screen: GlyphScreen = GlyphScreen.HOME,
+    val screen: GlyphScreen = GlyphScreen.MENU,
+    /** What the song list is picking a song for. */
+    val songListMode: GlyphSongListMode = GlyphSongListMode.PLAY,
     val songs: List<GlyphSong> = emptyList(),
     val isLoadingSongs: Boolean = true,
     val songQuery: String = "",
@@ -59,6 +67,13 @@ data class GlyphUiState(
     val results: GlyphResultsUi? = null,
     val assetWarning: String? = null,
     val error: String? = null,
+    /** The keyboard's lanes; kept between sessions. */
+    val keys: GlyphKeyBindings = GlyphKeyBindings.DEFAULT,
+    /** How late the sound reaches the player, in ms; every judgement and the field allow for it. */
+    val audioOffsetMs: Int = 0,
+    /** How late the recent runs were hit, for the Sync settings; null when too few say. */
+    val recentLateMs: Int? = null,
+    val editor: GlyphEditorUi? = null,
 ) {
     val chart: GlyphChart? get() = selectedDifficulty?.let { simfile?.chart(it) }
 
@@ -71,7 +86,44 @@ data class GlyphUiState(
         )
 }
 
-enum class GlyphScreen { HOME, OPTIONS, LEADERBOARD, GAMEPLAY, TRAINING, RESULTS }
+/**
+ * Where the mode is. [MENU] is the front door; [HOME] is the song list, which
+ * Play and the map editor both pick a song from.
+ */
+enum class GlyphScreen { MENU, HOME, OPTIONS, LEADERBOARD, SETTINGS, EDITOR, GAMEPLAY, TRAINING, RESULTS }
+
+/** Whether the song list is choosing a song to play or a chart to edit. */
+enum class GlyphSongListMode { PLAY, EDIT }
+
+/**
+ * The map editor: one chart of one song, as a draft on the beat grid.
+ *
+ * [timing] is the song's tempo map. A song with one tempo can have it set
+ * here ([tempoEditable]); one with tempo changes keeps its own, untouched.
+ */
+data class GlyphEditorUi(
+    val song: GlyphSong,
+    val difficulty: StepManiaDifficulty,
+    val meter: Int,
+    val draft: GlyphChartDraft,
+    val timing: GlyphTiming,
+    val tempoEditable: Boolean,
+    /** No chart for this difficulty on disk yet. */
+    val isNew: Boolean,
+    val snap: GlyphSnap = GlyphSnap.SIXTEENTH,
+    val tool: GlyphEditTool = GlyphEditTool.TAP,
+    /** A hold's first tap, waiting for the second that sets its end. */
+    val pendingHold: DraftNote? = null,
+    val canUndo: Boolean = false,
+    /** Changed since the last save. */
+    val dirty: Boolean = false,
+    val playing: Boolean = false,
+    /** The song's length, the grid's end. */
+    val durationSeconds: Float = 0f,
+    val message: String? = null,
+    /** A test play is running from the editor and comes back to it. */
+    val testing: Boolean = false,
+)
 
 /** The leaderboard page: every chart this phone has a high score on. */
 data class GlyphLeaderboardUi(

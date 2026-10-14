@@ -3,6 +3,7 @@
 package tf.monochrome.android.glyph.engine
 
 import tf.monochrome.android.glyph.asset.GlyphLane
+import tf.monochrome.android.glyph.chart.GlyphChart
 
 /**
  * StepMania's "Turn" options: one lane permutation for the whole chart.
@@ -57,6 +58,17 @@ enum class GlyphTurn(val id: String, val label: String) {
             return order
         }
     }
+}
+
+/**
+ * [this] chart with [turn] applied to every note, once, as a chart transform:
+ * a note that moved lane between scoring and drawing would be a note nobody
+ * could hit. Shuffle is seeded by the chart's name, so it is learnable.
+ */
+fun GlyphChart.withTurn(turn: GlyphTurn): GlyphChart {
+    if (turn == GlyphTurn.OFF) return this
+    val seed = chartName.hashCode().toLong()
+    return copy(notes = notes.map { it.copy(lane = turn.map(it.lane, seed)) })
 }
 
 /**

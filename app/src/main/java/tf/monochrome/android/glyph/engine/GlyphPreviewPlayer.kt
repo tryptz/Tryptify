@@ -31,6 +31,22 @@ class GlyphPreviewPlayer(
 ) {
     private var player: ExoPlayer? = null
     private var envelope: Job? = null
+    private var clipStartSeconds = 0f
+    private var clipLengthSeconds = DEFAULT_LENGTH_SECONDS
+
+    /**
+     * Where in the song the preview is now, or null when it is not playing:
+     * what the options screen's playfield follows, so its arrows move with the
+     * music. Main thread, as the player is.
+     */
+    fun songPositionSeconds(): Float? {
+        val p = player ?: return null
+        if (!p.isPlaying) return null
+        return clipStartSeconds + p.currentPosition.coerceAtLeast(0L) / 1000f
+    }
+
+    /** The stretch being previewed, start and length in song seconds; null before any. */
+    val clip: Pair<Float, Float>? get() = if (player == null) null else clipStartSeconds to clipLengthSeconds
 
     /** Play [uri] from [startSeconds] for [lengthSeconds], looping, until [stop]. */
     fun play(uri: Uri, startSeconds: Float, lengthSeconds: Float) {
@@ -38,6 +54,8 @@ class GlyphPreviewPlayer(
         val p = player ?: build().also { player = it }
         val startMs = (startSeconds.coerceAtLeast(0f) * 1000f).toLong()
         val lengthMs = (lengthSeconds.coerceIn(MIN_LENGTH_SECONDS, MAX_LENGTH_SECONDS) * 1000f).toLong()
+        clipStartSeconds = startMs / 1000f
+        clipLengthSeconds = lengthMs / 1000f
         p.setMediaItem(
             MediaItem.Builder()
                 .setUri(uri)

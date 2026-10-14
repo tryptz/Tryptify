@@ -94,11 +94,20 @@ fun GlyphGameplayScreen(
     // A chart that failed to load still has to draw something rather than
     // crash; a steady map is the harmless stand-in.
     val timing = state.simfile?.timing ?: remember { GlyphTiming.constant(120f) }
+    val keyboard = rememberGlyphKeyboardFocus()
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(GlyphTheme.Ink),
+            .background(GlyphTheme.Ink)
+            .glyphKeyboard(
+                keys = state.keys,
+                lanes = !gameplay.isPaused,
+                onPress = { lane, at -> onEvent(GlyphEvent.LanePressed(lane, at)) },
+                onRelease = { lane, at -> onEvent(GlyphEvent.LaneReleased(lane, at)) },
+                onPause = { onEvent(GlyphEvent.TogglePause) },
+                focus = keyboard,
+            ),
     ) {
         GlyphPlayfield(
             engine = engine,

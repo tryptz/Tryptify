@@ -37,15 +37,22 @@ import tf.monochrome.android.glyph.asset.GlyphAssetRepository
 import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.glyph.asset.GlyphSkin
 import tf.monochrome.android.glyph.chart.GlyphChart
+import tf.monochrome.android.glyph.chart.GlyphNoteType
+import tf.monochrome.android.glyph.chart.SscChartWriter
+import tf.monochrome.android.glyph.chart.SscParser
 import tf.monochrome.android.glyph.chart.GlyphTiming
 import tf.monochrome.android.glyph.data.GlyphAttempt
 import tf.monochrome.android.glyph.data.GlyphAttemptStore
+import tf.monochrome.android.glyph.data.GlyphCalibration
 import tf.monochrome.android.glyph.data.GlyphGhost
 import tf.monochrome.android.glyph.data.GlyphGhostRecorder
 import tf.monochrome.android.glyph.data.GlyphSong
 import tf.monochrome.android.glyph.data.GlyphSongSort
 import tf.monochrome.android.glyph.data.GlyphSortKey
 import tf.monochrome.android.glyph.data.GlyphSongRepository
+import tf.monochrome.android.glyph.editor.DraftNote
+import tf.monochrome.android.glyph.editor.GlyphChartDraft
+import tf.monochrome.android.glyph.editor.GlyphEditTool
 import tf.monochrome.android.glyph.engine.GlyphAppearance
 import tf.monochrome.android.glyph.engine.GlyphAudioTransport
 import tf.monochrome.android.glyph.engine.GlyphFailType
@@ -60,6 +67,8 @@ import tf.monochrome.android.glyph.engine.GlyphStepGrade
 import tf.monochrome.android.glyph.engine.GlyphTimingWindows
 import tf.monochrome.android.glyph.engine.GlyphTurn
 import tf.monochrome.android.glyph.engine.StepManiaScoreKeeper
+import tf.monochrome.android.glyph.engine.withTurn
+import tf.monochrome.android.glyph.input.GlyphKeyBindings
 import tf.monochrome.android.glyph.training.GlyphGauntletFinder
 import tf.monochrome.android.glyph.training.GlyphGauntlets
 import tf.monochrome.android.glyph.training.GlyphLoopSegment
@@ -234,6 +243,37 @@ class GlyphViewModel @Inject constructor(
 
     fun onEvent(event: GlyphEvent) {
         when (event) {
+            is GlyphEvent.OpenSongs ->
+                _ui.value = _ui.value.copy(screen = GlyphScreen.HOME, songListMode = event.mode)
+            GlyphEvent.BackToMenu -> {
+                stopPreview()
+                _ui.value = _ui.value.copy(screen = GlyphScreen.MENU)
+            }
+            GlyphEvent.OpenSettings -> openSettings()
+            GlyphEvent.CloseSettings -> _ui.value = _ui.value.copy(screen = GlyphScreen.MENU)
+            is GlyphEvent.SetKey -> setKey(event.lane, event.slot, event.code)
+            GlyphEvent.ResetKeys -> saveKeys(GlyphKeyBindings.DEFAULT)
+            is GlyphEvent.SetAudioOffset -> setAudioOffset(event.ms)
+            GlyphEvent.ApplyRecentTiming -> {
+                val late = _ui.value.recentLateMs ?: return
+                setAudioOffset(GlyphCalibration.corrected(_ui.value.audioOffsetMs, late))
+                // What the runs said is now in the offset; the next runs
+                // measure whatever is left.
+                _ui.value = _ui.value.copy(recentLateMs = null)
+            }
+
+            is GlyphEvent.OpenEditor -> openEditor(event.difficulty)
+            GlyphEvent.CloseEditor -> closeEditor()
+            is GlyphEvent.EditorTap -> editorTap(event.beat, event.lane)
+            is GlyphEvent.SetSnap -> updateEditor { it.copy(snap = event.snap) }
+            is GlyphEvent.SetTool -> updateEditor { it.copy(tool = event.tool, pendingHold = null) }
+            GlyphEvent.EditorUndo -> editorUndo()
+            GlyphEvent.EditorSave -> viewModelScope.launch { saveEditor() }
+            is GlyphEvent.EditorTogglePlay -> editorTogglePlay(event.fromBeat)
+            is GlyphEvent.EditorTestPlay -> editorTestPlay(event.fromBeat)
+            is GlyphEvent.SetEditorTempo -> setEditorTempo(event.bpm, event.beatZeroSeconds)
+            GlyphEvent.DismissEditorMessage -> updateEditor { it.copy(message = null) }
+
             is GlyphEvent.Search -> _ui.value = _ui.value.copy(songQuery = event.query)
             is GlyphEvent.SortSongs -> {
                 val sort = _ui.value.songSort.pick(event.key)
@@ -242,6 +282,7 @@ class GlyphViewModel @Inject constructor(
             }
             GlyphEvent.OpenLeaderboard -> {
                 stopPreview()
+                leaderboardFrom = _ui.value.screen
                 openLeaderboard()
             }
             is GlyphEvent.SetPreviews -> {
@@ -249,7 +290,8 @@ class GlyphViewModel @Inject constructor(
                 _ui.value = _ui.value.copy(previews = event.on)
                 if (!event.on) stopPreview()
             }
-            GlyphEvent.CloseLeaderboard -> _ui.value = _ui.value.copy(screen = GlyphScreen.HOME)
+            // Back to wherever it was opened from: the menu or the song list.
+            GlyphEvent.CloseLeaderboard -> _ui.value = _ui.value.copy(screen = leaderboardFrom)
             is GlyphEvent.SelectSong -> selectSong(event.trackId)
             is GlyphEvent.SelectDifficulty ->
                 _ui.value = _ui.value.copy(selectedDifficulty = event.difficulty)
@@ -406,8 +448,11 @@ class GlyphViewModel @Inject constructor(
         preview.stop()
     }
 
-    /** The app left the foreground: a preview must not play on behind it. */
-    fun onBackground() = stopPreview()
+    /** The app left the foreground: a preview, or the editor's song, must not play on behind it. */
+    fun onBackground() {
+        stopPreview()
+        if (_ui.value.editor?.playing == true) stopEditorPlayback()
+    }
 
     /** Fill in what has to be read from disk, and refresh the chart state. */
     private fun loadSelection(song: GlyphSong) {
@@ -701,7 +746,7 @@ class GlyphViewModel @Inject constructor(
 
     // ── running a chart ─────────────────────────────────────────────────
 
-    private fun start(training: Boolean) {
+    private fun start(training: Boolean, fromSeconds: Float? = null) {
         val song = _ui.value.selectedSong ?: return
         val chart = _ui.value.chart ?: return
         stopPreview()
@@ -729,8 +774,11 @@ class GlyphViewModel @Inject constructor(
             _ui.value.gameplay.modifiers.pitchLinkedToSpeed,
         )
         transport.loop = if (training) _ui.value.training.loop else null
-        val from = transport.loop?.startSeconds ?: 0f
+        val from = transport.loop?.startSeconds ?: fromSeconds ?: 0f
         armEngineWindow(from)
+        // A test play from the middle of a chart is judged from there: what
+        // is behind it is set aside rather than owed as misses.
+        if (fromSeconds != null) engine?.reset(fromSeconds = fromSeconds)
         resetStepScore()
         transport.seekTo(from)
         armCountIn(training, from)
@@ -793,16 +841,8 @@ class GlyphViewModel @Inject constructor(
      */
     private fun buildEngine(chart: GlyphChart): GlyphGameplayEngine {
         val modifiers = _ui.value.gameplay.modifiers
-        // The shuffle is seeded by the chart, so a chart shuffles the same
-        // way every time and can be learned.
-        val seed = chart.chartName.hashCode().toLong()
-        val transformed = if (modifiers.turn == GlyphTurn.OFF) {
-            chart
-        } else {
-            chart.copy(notes = chart.notes.map { it.copy(lane = modifiers.turn.map(it.lane, seed)) })
-        }
         return GlyphGameplayEngine(
-            chart = transformed,
+            chart = chart.withTurn(modifiers.turn),
             windows = GlyphTimingWindows.STANDARD.scaled(modifiers.timingWindowScale),
             timing = _ui.value.simfile?.timing ?: GlyphTiming.constant(GlyphTiming.DEFAULT_BPM),
         )
@@ -860,7 +900,9 @@ class GlyphViewModel @Inject constructor(
 
                 if (running != null) {
                     armEngineWindow(position)
-                    running.advanceTo(position)
+                    // Judged at what the player hears, the offset behind
+                    // what the player is putting out.
+                    running.advanceTo(position - audioOffsetSeconds)
                     // Drained exactly once. Draining again inside publish would
                     // find an empty list and the judgement wordmark would never
                     // appear, so the events are passed along instead.
@@ -1013,13 +1055,30 @@ class GlyphViewModel @Inject constructor(
 
     private fun pressLane(lane: GlyphLane, atUptimeMillis: Long) {
         val running = engine ?: return
-        running.press(lane, transport.positionAt(touchNanos(atUptimeMillis)))
+        if (!_ui.value.gameplay.isPlaying || _ui.value.gameplay.isPaused) return
+        running.press(lane, transport.positionAt(touchNanos(atUptimeMillis)) - audioOffsetSeconds)
     }
 
     private fun releaseLane(lane: GlyphLane, atUptimeMillis: Long) {
         val running = engine ?: return
-        running.release(lane, transport.positionAt(touchNanos(atUptimeMillis)))
+        running.release(lane, transport.positionAt(touchNanos(atUptimeMillis)) - audioOffsetSeconds)
     }
+
+    /** The audio offset the player set, in seconds. */
+    private val audioOffsetSeconds: Float get() = _ui.value.audioOffsetMs / 1000f
+
+    /**
+     * The song position the playfield draws at: the transport's, less the
+     * audio offset, so the arrows meet the receptors when the sound reaches
+     * the player rather than when the phone sends it.
+     */
+    fun fieldPosition(): Float = transport.positionNow() - audioOffsetSeconds
+
+    /** Where the song preview is, in song seconds, or null when it is quiet. */
+    fun previewPosition(): Float? = preview.songPositionSeconds()
+
+    /** The stretch the song preview plays: start and length, in song seconds. */
+    fun previewClip(): Pair<Float, Float>? = preview.clip
 
     /**
      * When the finger actually moved, on the audio clock's timebase.
@@ -1068,9 +1127,11 @@ class GlyphViewModel @Inject constructor(
         lastComboMilestone = 0
         replaceEngine(buildEngine(chart))
         runStartedAtMs = System.currentTimeMillis()
-        val from = transport.loop?.startSeconds ?: 0f
+        val testFrom = testFromSeconds.takeIf { _ui.value.editor?.testing == true }
+        val from = transport.loop?.startSeconds ?: testFrom ?: 0f
         introJob?.cancel()
         armEngineWindow(from)
+        if (testFrom != null) engine?.reset(fromSeconds = testFrom)
         resetStepScore()
         transport.seekTo(from)
         armCountIn(_ui.value.screen == GlyphScreen.TRAINING, from)
@@ -1118,6 +1179,10 @@ class GlyphViewModel @Inject constructor(
         stopTick()
         introJob?.cancel()
         transport.pause()
+        if (_ui.value.editor?.testing == true) {
+            backToEditor(null)
+            return
+        }
         _ui.value = _ui.value.copy(
             screen = GlyphScreen.HOME,
             gameplay = _ui.value.gameplay.copy(isPlaying = false, isPaused = false, introStartedAtMs = 0L),
@@ -1233,6 +1298,9 @@ class GlyphViewModel @Inject constructor(
         _ui.value = _ui.value.copy(
             gameplay = _ui.value.gameplay.copy(modifiers = stored),
             playerName = prefs.getString(PREF_NAME, null).orEmpty(),
+            keys = GlyphKeyBindings.decode(prefs.getString(PREF_KEYS, null)),
+            audioOffsetMs = prefs.getInt(PREF_AUDIO_OFFSET, 0)
+                .coerceIn(-GlyphCalibration.MAX_OFFSET_MS, GlyphCalibration.MAX_OFFSET_MS),
             previews = prefs.getBoolean(PREF_PREVIEWS, true),
             songSort = GlyphSongSort(
                 key = GlyphSortKey.fromId(prefs.getString(PREF_SORT_KEY, null)),
@@ -1318,6 +1386,298 @@ class GlyphViewModel @Inject constructor(
             attempts.bestAttempt(song.chartId, difficulty)?.let { difficulty to it }
         }.toMap()
 
+    // ── settings ────────────────────────────────────────────────────────
+
+    private fun openSettings() {
+        stopPreview()
+        _ui.value = _ui.value.copy(screen = GlyphScreen.SETTINGS)
+        viewModelScope.launch {
+            val late = GlyphCalibration.lateByMs(attempts.recentRuns())
+            _ui.value = _ui.value.copy(recentLateMs = late?.takeIf { it != 0 })
+        }
+    }
+
+    private fun setKey(lane: GlyphLane, slot: Int, code: Int) {
+        if (GlyphKeyBindings.isReserved(code) || slot !in 0 until GlyphKeyBindings.SLOTS) return
+        saveKeys(_ui.value.keys.bind(lane, slot, code).bindings)
+    }
+
+    private fun saveKeys(keys: GlyphKeyBindings) {
+        prefs.edit().putString(PREF_KEYS, keys.encode()).apply()
+        _ui.value = _ui.value.copy(keys = keys)
+    }
+
+    private fun setAudioOffset(ms: Int) {
+        val clamped = ms.coerceIn(-GlyphCalibration.MAX_OFFSET_MS, GlyphCalibration.MAX_OFFSET_MS)
+        prefs.edit().putInt(PREF_AUDIO_OFFSET, clamped).apply()
+        _ui.value = _ui.value.copy(audioOffsetMs = clamped)
+    }
+
+    // ── map editor ──────────────────────────────────────────────────────
+
+    /** Earlier drafts, newest last, for undo. Not state: only its size is shown. */
+    private val editorHistory = ArrayDeque<GlyphChartDraft>()
+    private var editorJob: Job? = null
+
+    private inline fun updateEditor(change: (GlyphEditorUi) -> GlyphEditorUi) {
+        val editor = _ui.value.editor ?: return
+        _ui.value = _ui.value.copy(editor = change(editor))
+    }
+
+    /**
+     * Open [difficulty] of the selected song: its chart read onto the grid,
+     * or an empty one when the song has no such chart yet. A song with no
+     * simfile at all starts at its library BPM, or 120, with beat zero at the
+     * top of the audio; the tempo can be set in the editor.
+     */
+    private fun openEditor(difficulty: StepManiaDifficulty) {
+        val song = _ui.value.selectedSong ?: return
+        if (song.filePath.isBlank()) {
+            _ui.value = _ui.value.copy(error = "That song's file could not be located.")
+            return
+        }
+        stopPreview()
+        viewModelScope.launch {
+            val simfile = if (song.hasChart) songs.simfile(song.trackId) else null
+            val timing = simfile?.timing ?: GlyphTiming.constant(song.bpm ?: GlyphTiming.DEFAULT_BPM)
+            val chart = simfile?.chart(difficulty)
+            editorHistory.clear()
+            transport.loop = null
+            transport.prepare(Uri.fromFile(File(song.filePath)))
+            transport.setSpeed(1f, true)
+            _ui.value = _ui.value.copy(
+                screen = GlyphScreen.EDITOR,
+                editor = GlyphEditorUi(
+                    song = song,
+                    difficulty = difficulty,
+                    meter = chart?.meter ?: difficulty.meter,
+                    draft = chart?.let { GlyphChartDraft.of(it, timing) } ?: GlyphChartDraft(),
+                    timing = timing,
+                    tempoEditable = timing.isConstantTempo && timing.stops.isEmpty(),
+                    isNew = chart == null,
+                    durationSeconds = song.durationSeconds.toFloat(),
+                ),
+            )
+        }
+    }
+
+    private fun closeEditor() {
+        stopEditorPlayback()
+        editorHistory.clear()
+        _ui.value = _ui.value.copy(screen = GlyphScreen.HOME, editor = null)
+        _ui.value.selectedSong?.let { loadSelection(it) }
+    }
+
+    /**
+     * A tap on the grid, snapped. Tap and Mine toggle a note, Erase takes one
+     * away, and Hold takes two taps: the head, then the end further down the
+     * same lane. A first tap on a hold already there removes it.
+     */
+    private fun editorTap(beat: Float, lane: Int) {
+        val editor = _ui.value.editor ?: return
+        if (lane !in 0 until GlyphChartDraft.LANES || beat < 0f) return
+        val tick = editor.snap.snap(GlyphChartDraft.tickOf(beat))
+        val draft = editor.draft
+        val pending = editor.pendingHold
+        var nextPending: DraftNote? = null
+        val next = when (editor.tool) {
+            GlyphEditTool.TAP -> draft.place(tick, lane, GlyphNoteType.TAP)
+            GlyphEditTool.MINE -> draft.place(tick, lane, GlyphNoteType.MINE)
+            GlyphEditTool.ERASE -> draft.erase(tick, lane)
+            GlyphEditTool.HOLD -> when {
+                pending == null -> {
+                    val existing = draft.noteAt(tick, lane)
+                    if (existing != null && existing.type.isHoldLike) {
+                        draft.erase(tick, lane)
+                    } else {
+                        nextPending = DraftNote(tick, lane, GlyphNoteType.HOLD)
+                        draft
+                    }
+                }
+                pending.lane == lane && tick > pending.tick -> draft.hold(pending.tick, tick, lane)
+                pending.lane == lane && tick == pending.tick -> draft
+                else -> {
+                    nextPending = DraftNote(tick, lane, GlyphNoteType.HOLD)
+                    draft
+                }
+            }
+        }
+        if (next != draft) {
+            editorHistory.addLast(draft)
+            while (editorHistory.size > MAX_UNDO) editorHistory.removeFirst()
+        }
+        _ui.value = _ui.value.copy(
+            editor = editor.copy(
+                draft = next,
+                pendingHold = nextPending,
+                canUndo = editorHistory.isNotEmpty(),
+                dirty = editor.dirty || next != draft,
+            ),
+        )
+    }
+
+    private fun editorUndo() {
+        val previous = editorHistory.removeLastOrNull() ?: return
+        updateEditor {
+            it.copy(draft = previous, pendingHold = null, canUndo = editorHistory.isNotEmpty(), dirty = true)
+        }
+    }
+
+    private fun setEditorTempo(bpm: Float, beatZeroSeconds: Float) {
+        updateEditor {
+            if (!it.tempoEditable) return@updateEditor it
+            it.copy(
+                timing = GlyphTiming.constant(bpm.coerceIn(MIN_EDITOR_BPM, MAX_EDITOR_BPM), beatZeroSeconds),
+                dirty = true,
+            )
+        }
+    }
+
+    /**
+     * Write the draft into the song's simfile, around everything else in it,
+     * and read it back: a file this cannot parse again is not written, so a
+     * save never leaves a song without its charts. True when it saved.
+     */
+    private suspend fun saveEditor(): Boolean {
+        val editor = _ui.value.editor ?: return false
+        if (editor.draft.notes.none { it.type.isScorable }) {
+            updateEditor { it.copy(message = "Place a step first: a chart with nothing to hit is not saved.") }
+            return false
+        }
+        val song = editor.song
+        val file = songs.simfileFile(song.trackId)
+        val written = withContext(Dispatchers.IO) {
+            runCatching {
+                val noteData = editor.draft.toNoteData()
+                val existing = if (file.exists()) file.readText() else null
+                val timing = editor.timing
+                var text = if (existing != null) {
+                    SscChartWriter.withChart(existing, editor.difficulty, editor.meter, noteData)
+                } else {
+                    SscChartWriter.newSimfile(
+                        title = song.title,
+                        artist = song.artist,
+                        musicFileName = File(song.filePath).name,
+                        bpm = timing.startBpm,
+                        beatZeroSeconds = timing.offsetSeconds,
+                        difficulty = editor.difficulty,
+                        meter = editor.meter,
+                        noteData = noteData,
+                    )
+                }
+                if (existing != null && editor.tempoEditable) {
+                    text = SscChartWriter.withTempo(text, timing.startBpm, timing.offsetSeconds)
+                }
+                val parsed = SscParser.parse(text)?.takeIf { it.chart(editor.difficulty) != null }
+                    ?: error("the chart did not read back")
+                // Written beside the old file and moved over it, so a save cut
+                // short leaves the old charts, never half a file.
+                val temp = File(file.parentFile, file.name + ".tmp")
+                temp.writeText(text)
+                if (!temp.renameTo(file)) {
+                    file.writeText(text)
+                    temp.delete()
+                }
+                parsed
+            }.onFailure { Log.w(TAG, "saving the chart failed: ${it.message}") }.getOrNull()
+        }
+        if (written == null) {
+            updateEditor { it.copy(message = "The chart could not be saved.") }
+            return false
+        }
+        val (refreshed, _) = songs.withCurrentChart(song)
+        _ui.value = _ui.value.copy(
+            selectedSong = if (_ui.value.selectedSong?.trackId == song.trackId) refreshed else _ui.value.selectedSong,
+            songs = _ui.value.songs.map { if (it.trackId == song.trackId) refreshed else it },
+            simfile = if (_ui.value.selectedSong?.trackId == song.trackId) written else _ui.value.simfile,
+            selectedDifficulty = editor.difficulty,
+            editor = _ui.value.editor?.copy(song = refreshed, isNew = false, dirty = false, message = "Saved."),
+        )
+        return true
+    }
+
+    /** Play the song from [fromBeat] under the grid, or stop it. */
+    private fun editorTogglePlay(fromBeat: Float) {
+        val editor = _ui.value.editor ?: return
+        if (editor.playing) {
+            stopEditorPlayback()
+            return
+        }
+        transport.seekTo(editor.timing.beatToSeconds(fromBeat).coerceAtLeast(0f))
+        transport.play()
+        updateEditor { it.copy(playing = true) }
+        editorJob?.cancel()
+        editorJob = viewModelScope.launch {
+            // The clock is fed real readings as in a run; the grid reads it.
+            while (isActive) {
+                val position = transport.pump()
+                val end = _ui.value.editor?.durationSeconds ?: 0f
+                if (end > 0f && position >= end) {
+                    stopEditorPlayback()
+                    break
+                }
+                delay(EDITOR_TICK_MILLIS)
+            }
+        }
+    }
+
+    private fun stopEditorPlayback() {
+        editorJob?.cancel()
+        editorJob = null
+        transport.pause()
+        updateEditor { it.copy(playing = false) }
+    }
+
+    /** Where the editor's song is, in beats, while it plays. Read while drawing. */
+    fun editorBeat(): Float? {
+        val editor = _ui.value.editor ?: return null
+        if (!editor.playing) return null
+        return editor.timing.secondsToBeat(transport.positionNow())
+    }
+
+    /** Save, then play the chart from [fromBeat]; quitting or finishing comes back here. */
+    private fun editorTestPlay(fromBeat: Float) {
+        val editor = _ui.value.editor ?: return
+        stopEditorPlayback()
+        viewModelScope.launch {
+            if (editor.dirty || editor.isNew) {
+                if (!saveEditor()) return@launch
+            }
+            val saved = _ui.value.editor ?: return@launch
+            val from = saved.timing.beatToSeconds(fromBeat).coerceAtLeast(0f)
+            _ui.value = _ui.value.copy(
+                selectedSong = saved.song,
+                selectedDifficulty = saved.difficulty,
+                editor = saved.copy(testing = true, message = null),
+            )
+            if (_ui.value.chart == null) {
+                updateEditor { it.copy(testing = false, message = "The chart could not be loaded to play.") }
+                return@launch
+            }
+            testFromSeconds = from
+            start(training = false, fromSeconds = from)
+        }
+    }
+
+    /** The screen the leaderboard was opened from, which Back returns to. */
+    private var leaderboardFrom = GlyphScreen.HOME
+
+    /** Where a test play started, so Restart starts it there again. */
+    private var testFromSeconds: Float? = null
+
+    /** From a test play back to the grid, with how it went. */
+    private fun backToEditor(message: String?) {
+        stopTick()
+        introJob?.cancel()
+        transport.pause()
+        replaceEngine(null)
+        _ui.value = _ui.value.copy(
+            screen = GlyphScreen.EDITOR,
+            gameplay = _ui.value.gameplay.copy(isPlaying = false, isPaused = false, introStartedAtMs = 0L),
+            editor = _ui.value.editor?.copy(testing = false, playing = false, message = message),
+        )
+    }
+
     // ── training ────────────────────────────────────────────────────────
 
     private fun setLoop(startSeconds: Float, endSeconds: Float) {
@@ -1397,6 +1757,18 @@ class GlyphViewModel @Inject constructor(
         transport.pause()
 
         val running = engine ?: return@launch
+        // A test play from the editor is not a run: nothing is saved, and the
+        // editor says how it went.
+        if (_ui.value.editor?.testing == true) {
+            val keeper = stepScore
+            backToEditor(
+                keeper?.let {
+                    "Test play: ${StepManiaScoreKeeper.formatPercent(it.percent)} " +
+                        "(${it.grade.label}), max combo ${running.scoreSnapshot.maxCombo}."
+                },
+            )
+            return@launch
+        }
         val song = _ui.value.selectedSong ?: return@launch
         val difficulty = _ui.value.selectedDifficulty ?: return@launch
         val snapshot = running.scoreSnapshot
@@ -1535,6 +1907,14 @@ class GlyphViewModel @Inject constructor(
         const val PREF_NAME = "player_name"
         const val PREF_SORT_KEY = "song_sort"
         const val PREF_PREVIEWS = "previews"
+        const val PREF_KEYS = "keys"
+        const val PREF_AUDIO_OFFSET = "audio_offset_ms"
+
+        /** Drafts kept for undo. */
+        const val MAX_UNDO = 100
+        const val EDITOR_TICK_MILLIS = 16L
+        const val MIN_EDITOR_BPM = 30f
+        const val MAX_EDITOR_BPM = 400f
 
         /** Per track: the drop found from its loudness, so the next preview starts at once. */
         const val PREF_DROP_PREFIX = "drop_"

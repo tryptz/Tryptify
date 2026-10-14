@@ -119,6 +119,19 @@ class GlyphAttemptStore @Inject constructor(
         }
 
     /**
+     * The newest [limit] runs across every chart, newest first: what the
+     * Sync settings read the player's timing from.
+     */
+    suspend fun recentRuns(limit: Int = RECENT_RUNS): List<GlyphAttempt> = withContext(Dispatchers.IO) {
+        val files = root.listFiles { file -> file.isFile && file.name.endsWith(".json") }.orEmpty()
+        files.flatMap { file ->
+            runCatching {
+                json.decodeFromString<List<JsonObject>>(file.readText()).mapNotNull(::migrate)
+            }.getOrDefault(emptyList())
+        }.sortedByDescending { it.playedAtEpochMs }.take(limit)
+    }
+
+    /**
      * Append [attempt], keeping at most [MAX_ATTEMPTS_PER_CHART].
      *
      * Trimming keeps the highest score regardless of age alongside the most
@@ -205,6 +218,9 @@ class GlyphAttemptStore @Inject constructor(
 
         /** StepMania keeps ten per chart on a machine. */
         const val HIGH_SCORES_PER_CHART = 10
+
+        /** How many recent runs the Sync settings read the player's timing from. */
+        const val RECENT_RUNS = 10
     }
 }
 

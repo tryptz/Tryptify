@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -96,6 +97,16 @@ fun GlyphPlayfield(
     comboProvider: () -> Int = { 0 },
     /** StepMania's look options: reverse, appearance, dark, mini. */
     look: GlyphFieldLook = GlyphFieldLook(),
+    /**
+     * A field that is not the game: the options preview, the menu's
+     * backdrop. It warms its own size without dropping the game's, and
+     * draws nothing for a note whose art is not warm rather than a square.
+     */
+    preview: Boolean = false,
+    /** Where the receptor row sits from its edge, when not the game's own. */
+    receptorInset: Dp? = null,
+    /** Notes this much of their usual size, for a small field. */
+    noteScale: Float = 1f,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val density = LocalDensity.current
@@ -107,13 +118,13 @@ fun GlyphPlayfield(
         // different sub-pixel phase and the arrows would shimmer as they moved.
         val laneWidthPx = (widthPx / GlyphLane.entries.size).toInt().coerceAtLeast(1)
         // Mini shrinks the notes, as StepMania's does: 100% would be half size.
-        val noteSizePx = (laneWidthPx * NOTE_SCALE * (1f - look.mini / 2f)).toInt().coerceAtLeast(1)
+        val noteSizePx = (laneWidthPx * NOTE_SCALE * noteScale * (1f - look.mini / 2f)).toInt().coerceAtLeast(1)
         // Reverse puts the receptors at the top, clear of the HUD, and the
         // notes rise to them: StepMania's own default way round.
         val receptorYPx = if (look.reverse) {
-            with(density) { RECEPTOR_TOP_INSET.toPx() } + noteSizePx / 2f
+            with(density) { (receptorInset ?: RECEPTOR_TOP_INSET).toPx() } + noteSizePx / 2f
         } else {
-            heightPx - with(density) { RECEPTOR_INSET.toPx() } - noteSizePx / 2f
+            heightPx - with(density) { (receptorInset ?: RECEPTOR_INSET).toPx() } - noteSizePx / 2f
         }
         // How far a note travels on screen, for the appearance mods.
         val fieldLengthPx = (if (look.reverse) heightPx - receptorYPx else receptorYPx).coerceAtLeast(1f)
@@ -130,7 +141,9 @@ fun GlyphPlayfield(
             warmed = false
             if (engine == null || noteSizePx <= 1) return@LaunchedEffect
             assets.configure(skin, panelGlass)
-            assets.releaseImages()
+            // A preview leaves the game's rasters alone: it can be on screen
+            // beside the game for the length of a cross-fade.
+            if (!preview) assets.releaseImages()
             assets.prewarm(
                 ids = GlyphAssetCatalog.playfieldAssets(engine.chart.divisionsUsed),
                 widthPx = noteSizePx,
@@ -140,11 +153,13 @@ fun GlyphPlayfield(
             // are 128-unit artwork with deliberate padding — so it needs its
             // own warm size. Warming it at the note size and scaling up would
             // throw away the resolution the pack exists to provide.
-            assets.prewarm(
-                ids = GlyphAssetCatalog.playfieldEffects(),
-                widthPx = noteSizePx * 2,
-                heightPx = noteSizePx * 2,
-            )
+            if (!preview || look.graphics.explosions || look.graphics.comboBurst) {
+                assets.prewarm(
+                    ids = GlyphAssetCatalog.playfieldEffects(),
+                    widthPx = noteSizePx * 2,
+                    heightPx = noteSizePx * 2,
+                )
+            }
             warmed = true
         }
 
@@ -389,7 +404,7 @@ fun GlyphPlayfield(
 
                 if (image != null) {
                     drawSnapped(image, x, y - noteSizePx / 2f, noteSizePx, hitLight, shown)
-                } else {
+                } else if (!preview) {
                     // A missing asset costs its artwork, never the note: a
                     // filled square still tells the player where and when.
                     drawFallbackNote(

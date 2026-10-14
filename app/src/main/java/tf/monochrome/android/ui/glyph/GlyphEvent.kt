@@ -18,6 +18,39 @@ import tf.monochrome.android.glyph.training.GlyphCountIn
  */
 sealed interface GlyphEvent {
 
+    // ── the start menu ──────────────────────────────────────────────────
+    /** From the menu to the song list, to play or to pick a chart to edit. */
+    data class OpenSongs(val mode: GlyphSongListMode) : GlyphEvent
+    /** From the song list back to the menu. */
+    data object BackToMenu : GlyphEvent
+    data object OpenSettings : GlyphEvent
+    data object CloseSettings : GlyphEvent
+
+    // ── settings ────────────────────────────────────────────────────────
+    /** [code] (an Android key code) on [lane]'s [slot]; wherever else it was, it goes. */
+    data class SetKey(val lane: GlyphLane, val slot: Int, val code: Int) : GlyphEvent
+    data object ResetKeys : GlyphEvent
+    data class SetAudioOffset(val ms: Int) : GlyphEvent
+    /** Move the offset by how late the recent runs were hit. */
+    data object ApplyRecentTiming : GlyphEvent
+
+    // ── map editor ──────────────────────────────────────────────────────
+    /** Open the selected song's [difficulty] in the editor, a new chart if it has none. */
+    data class OpenEditor(val difficulty: StepManiaDifficulty) : GlyphEvent
+    data object CloseEditor : GlyphEvent
+    /** A tap on the grid at [beat] (unsnapped) in lane [lane]. */
+    data class EditorTap(val beat: Float, val lane: Int) : GlyphEvent
+    data class SetSnap(val snap: tf.monochrome.android.glyph.editor.GlyphSnap) : GlyphEvent
+    data class SetTool(val tool: tf.monochrome.android.glyph.editor.GlyphEditTool) : GlyphEvent
+    data object EditorUndo : GlyphEvent
+    data object EditorSave : GlyphEvent
+    /** Play or stop the song from [fromBeat], the grid scrolling with it. */
+    data class EditorTogglePlay(val fromBeat: Float) : GlyphEvent
+    /** Save, then play the chart from [fromBeat], coming back here after. */
+    data class EditorTestPlay(val fromBeat: Float) : GlyphEvent
+    data class SetEditorTempo(val bpm: Float, val beatZeroSeconds: Float) : GlyphEvent
+    data object DismissEditorMessage : GlyphEvent
+
     // ── song selection ──────────────────────────────────────────────────
     data class Search(val query: String) : GlyphEvent
     /** Sort by [key]; the key already chosen turns round. */

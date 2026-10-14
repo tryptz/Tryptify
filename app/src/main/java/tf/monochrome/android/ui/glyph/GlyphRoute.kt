@@ -32,11 +32,12 @@ import tf.monochrome.android.ui.theme.reduceMotion
 /**
  * The mode's single destination.
  *
- * Four screens behind one route rather than four routes: they share a running
+ * Every screen behind one route rather than a route each: they share a running
  * engine, a transport and an audio clock, and putting them on the navigation
  * back stack would mean tearing that down and rebuilding it on every
  * transition. Results-to-training in particular has to keep the same chart
- * loaded, which is what makes "practise this section" one tap.
+ * loaded, which is what makes "practise this section" one tap, and the map
+ * editor's test play comes back to the grid it left. It opens on the menu.
  */
 @Composable
 fun GlyphRoute(
@@ -57,7 +58,10 @@ fun GlyphRoute(
     // of the screen the player is looking at, and its transport is not the one
     // driving the chart. While they are aside the nav host runs this route to
     // the bottom edge, so the playfield's black reaches it.
-    val playing = state.screen == GlyphScreen.GAMEPLAY || state.screen == GlyphScreen.TRAINING
+    // The map editor is a work surface like the playfield: a mini player over
+    // the grid's lower half would cover the measures being edited.
+    val playing = state.screen == GlyphScreen.GAMEPLAY || state.screen == GlyphScreen.TRAINING ||
+        state.screen == GlyphScreen.EDITOR
     HideAppChrome(playing)
     // A scored run takes the status and navigation bars too; an edge swipe
     // brings them back for a moment. Training Ground keeps them: it is as much
@@ -92,7 +96,7 @@ fun GlyphRoute(
     // panel is where "Quit to songs" lives, so Back walks the same two steps.
     // Quitting on the first press threw away a run to a stray edge swipe, which
     // on a phone held in both thumbs is most of the screen's border.
-    BackHandler(enabled = state.screen != GlyphScreen.HOME) {
+    BackHandler(enabled = state.screen != GlyphScreen.MENU) {
         when (state.screen) {
             GlyphScreen.GAMEPLAY, GlyphScreen.TRAINING ->
                 if (state.gameplay.isPlaying && !state.gameplay.isPaused) {
@@ -103,17 +107,22 @@ fun GlyphRoute(
             GlyphScreen.RESULTS -> viewModel.onEvent(GlyphEvent.BackToHome)
             GlyphScreen.OPTIONS -> viewModel.onEvent(GlyphEvent.CloseOptions)
             GlyphScreen.LEADERBOARD -> viewModel.onEvent(GlyphEvent.CloseLeaderboard)
-            GlyphScreen.HOME -> Unit
+            GlyphScreen.HOME -> viewModel.onEvent(GlyphEvent.BackToMenu)
+            GlyphScreen.SETTINGS -> viewModel.onEvent(GlyphEvent.CloseSettings)
+            GlyphScreen.EDITOR -> viewModel.onEvent(GlyphEvent.CloseEditor)
+            GlyphScreen.MENU -> Unit
         }
     }
 
     // Read straight from the transport's clock rather than from the state: this
     // is called inside the playfield's draw scope, and routing it through
     // recomposition would put the note positions a frame behind the music.
-    val positionProvider = remember(viewModel) { { viewModel.transport.positionNow() } }
+    val positionProvider = remember(viewModel) { { viewModel.fieldPosition() } }
     val explosionProvider = remember(viewModel) { { viewModel.flashes() } }
     val comboBurstProvider = remember(viewModel) { { viewModel.comboBurstNanos() } }
     val comboProvider = remember(viewModel) { { viewModel.liveCombo() } }
+    val previewPositionProvider = remember(viewModel) { { viewModel.previewPosition() } }
+    val editorBeatProvider = remember(viewModel) { { viewModel.editorBeat() } }
 
     // The results stay on screen while they fade out. Going home clears them
     // in the same step, and the outgoing screen must not read that as an
@@ -137,16 +146,43 @@ fun GlyphRoute(
         label = "glyphScreen",
     ) { screen ->
         when (screen) {
-            GlyphScreen.HOME -> GlyphHomeScreen(
+            GlyphScreen.MENU -> GlyphMenuScreen(
                 state = state,
                 assets = assets,
+                palette = palette,
                 onEvent = viewModel::onEvent,
                 onBack = onBack,
                 modifier = Modifier.fillMaxSize(),
             )
 
+            GlyphScreen.HOME -> GlyphHomeScreen(
+                state = state,
+                assets = assets,
+                onEvent = viewModel::onEvent,
+                onBack = { viewModel.onEvent(GlyphEvent.BackToMenu) },
+                modifier = Modifier.fillMaxSize(),
+            )
+
             GlyphScreen.OPTIONS -> GlyphOptionsScreen(
                 state = state,
+                assets = assets,
+                palette = palette,
+                previewPosition = previewPositionProvider,
+                previewClip = viewModel.previewClip(),
+                onEvent = viewModel::onEvent,
+                modifier = Modifier.fillMaxSize(),
+            )
+
+            GlyphScreen.SETTINGS -> GlyphSettingsScreen(
+                state = state,
+                onEvent = viewModel::onEvent,
+                modifier = Modifier.fillMaxSize(),
+            )
+
+            GlyphScreen.EDITOR -> GlyphEditorScreen(
+                state = state,
+                palette = palette,
+                playingBeat = editorBeatProvider,
                 onEvent = viewModel::onEvent,
                 modifier = Modifier.fillMaxSize(),
             )

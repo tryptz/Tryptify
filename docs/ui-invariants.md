@@ -1049,16 +1049,45 @@ and passes `avoidNavigationBar = false`: the nav host already stops a pushed
 screen above the system bar, and the panel counting it again floated a bar's
 height above the tab bar.
 
-**Player options, the leaderboard and the results are menus, so they are the
-app's.** StepMania's options and scoring, never StepMania's page: a top bar with
-Back, `GlyphPanel` cards, every choice a `GlassChoiceChip` row (`GlyphChipRow`),
-and Start a primary `GlassPill` on `LocalBottomChromeNow`. The first options
-screen was a fixed dark StepMania page with white text and underlined choices;
-in a light theme it was the one dark screen, and its Start button sat under the
-mini player and the tab bar where nothing could press it. StepMania's own art —
-the grade, the judgement and FULL COMBO sprites — is fine on a card; its
-colours as text go through `menuAccent`. Its typefaces belong to the playfield
-(the HUD, the judgement and the combo), not the menus.
+**The mode opens on its menu.** `GlyphScreen.MENU`: Play and the map editor
+both lead to the song list, Settings to its own page, and Back from the song
+list returns to the menu rather than leaving the mode. The leaderboard returns
+to whichever of the two opened it.
+
+**Player options, Settings, the leaderboard and the results are menus, so they
+are the app's.** StepMania's options and scoring, never StepMania's page: a top
+bar with Back, the theme's page and ink, and Start on `LocalBottomChromeNow`.
+The first options screen was a fixed dark StepMania page with white text and
+underlined choices; in a light theme it was the one dark screen, and its Start
+button sat under the mini player and the tab bar where nothing could press it.
+StepMania's own art — the grade, the judgement and FULL COMBO sprites — is fine
+on a card; its colours as text go through `menuAccent`. Its typefaces belong to
+the playfield (the HUD, the judgement and the combo), not the menus.
+
+**A choice of a few is `GlyphSegmented`, and the chosen one is filled.** A
+`liquidGlass` pill track with a solid thumb in `onSurface` and the chosen label
+knocked out in `surface`; the options' and Settings' tabs are the same control.
+Start (`GlyphButton(filled = true)`) and the one action of a panel that must
+read as the action are filled the same way, and switches pass `onSurface` as
+their accent. Never a selection told apart by an accent-coloured label: where a
+theme's accent is grey, the chosen chip's label was the dimmest thing in the row
+and every selection, Start included, read as disabled.
+
+**The options' preview is the game's playfield, not a picture of one.**
+`GlyphPreviewField` draws a real engine played by `GlyphAutoplay` with the
+player's modifiers, following the song preview's own clock when it plays, and
+`GlyphPlayfield(preview = true)`: a preview never releases the game's rasters
+(it can share the screen with the game for a cross-fade), draws nothing rather
+than a fallback square for art that is not warm, and closes its engine on
+dispose. The menu's backdrop is the same field on `GlyphDemoChart`, whose loop
+is seamless, faded out before the buttons.
+
+**Keyboards play through `glyphKeyboard`.** The play and training screens hold
+focus themselves so a hardware keyboard needs nothing to tab to; a key is
+judged at its event's own time, its repeats are ignored, Escape pauses, and
+Back is never bindable. In the map editor the arrows only move the playhead,
+even where they play the lanes in a run. The editor is a work surface: like
+the playfield it runs without the tab bar and the mini player.
 
 **Back in a run pauses it; Back from the pause leaves.** The pause panel is
 where "Quit to songs" is, so Back walks the same two steps. Quitting on the

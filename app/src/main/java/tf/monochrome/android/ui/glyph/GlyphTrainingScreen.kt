@@ -100,11 +100,23 @@ fun GlyphTrainingScreen(
     val training = state.training
     val gameplay = state.gameplay
     val duration = state.selectedSong?.durationSeconds?.toFloat() ?: 0f
+    val keyboard = rememberGlyphKeyboardFocus()
 
     // The route runs full-bleed here (the tab bar and mini player step aside),
     // so the top bar takes the status bar and the controls take the navigation
     // bar, each once.
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .glyphKeyboard(
+                keys = state.keys,
+                lanes = !gameplay.isPaused,
+                onPress = { lane, at -> onEvent(GlyphEvent.LanePressed(lane, at)) },
+                onRelease = { lane, at -> onEvent(GlyphEvent.LaneReleased(lane, at)) },
+                onPause = { onEvent(GlyphEvent.TogglePause) },
+                focus = keyboard,
+            ),
+    ) {
         TopAppBar(
             title = {
                 Text(
