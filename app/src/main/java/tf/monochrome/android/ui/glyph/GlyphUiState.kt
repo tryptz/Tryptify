@@ -37,6 +37,7 @@ data class GlyphUiState(
     val simfile: GlyphSimfile? = null,
     val selectedDifficulty: StepManiaDifficulty? = null,
     val generation: GlyphGenerationState? = null,
+    val model: GlyphModelUi = GlyphModelUi(),
     val gameplay: GlyphGameplayUi = GlyphGameplayUi(),
     val training: GlyphTrainingUi = GlyphTrainingUi(),
     val results: GlyphResultsUi? = null,
@@ -70,6 +71,25 @@ data class GlyphGenerationState(
 ) {
     val isFinished: Boolean get() = fraction >= 1f || failure != null
 }
+
+/**
+ * The drum separation model the chart generator can use.
+ *
+ * The app does not ship one: it is hundreds of megabytes, and charts still
+ * generate without it, from the built-in separator. A player who wants the
+ * better charts imports the model file from their own storage, here.
+ */
+data class GlyphModelUi(
+    /** The installed model's name, or null when charts use the built-in separator. */
+    val installedName: String? = null,
+    val sizeBytes: Long = 0L,
+    val importing: Boolean = false,
+    /** How far the copy is, 0 to 1, or null when the file's size is unknown. */
+    val progress: Float? = null,
+    val stage: String? = null,
+    /** The outcome of the last import or removal, until the panel is closed. */
+    val message: String? = null,
+)
 
 /** Live gameplay readouts. Updated at a rate the eye can follow, not per frame. */
 data class GlyphGameplayUi(

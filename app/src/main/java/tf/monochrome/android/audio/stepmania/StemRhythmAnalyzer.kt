@@ -3,10 +3,10 @@
 package tf.monochrome.android.audio.stepmania
 
 import kotlin.math.ceil
-import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
+import kotlin.math.ln
 import tf.monochrome.android.audio.sampler.SampleEdits
 
 /**
@@ -29,19 +29,30 @@ class StemRhythmAnalyzer(
             it.sampleRate == mix.sampleRate && it.frames == mix.frames
         } ?: mix
         require(source.sampleRate > 0) { "sample rate must be positive" }
-        require(source.frames >= source.sampleRate * MINIMUM_SECONDS) {
+        val envelope = TransientEnvelopeBuilder(source.sampleRate)
+        envelope.add(source.left, source.right, 0, source.frames)
+        return analyze(envelope)
+    }
+
+    /**
+     * The same analysis from an envelope built as the audio streamed past,
+     * for a song that is never in memory whole (see
+     * [StepManiaConversionService]).
+     */
+    fun analyze(envelope: TransientEnvelopeBuilder): RhythmAnalysis {
+        val sampleRate = envelope.sampleRate
+        require(envelope.frames >= sampleRate.toLong() * MINIMUM_SECONDS) {
             "at least $MINIMUM_SECONDS seconds of audio are required"
         }
 
-        val hop = (source.sampleRate / ENVELOPE_HZ).coerceAtLeast(1)
-        val envelope = transientEnvelope(source, hop)
-        val lag = strongestLag(envelope)
-        val phase = strongestPhase(envelope, lag)
+        val shaped = shape(envelope.raw())
+        val lag = strongestLag(shaped)
+        val phase = strongestPhase(shaped, lag)
         val bpm = 60f * ENVELOPE_HZ / lag
         val offsetSeconds = phase.toFloat() / ENVELOPE_HZ
-        val durationSeconds = source.frames.toFloat() / source.sampleRate
+        val durationSeconds = envelope.frames.toFloat() / sampleRate
         val grid = sampleSixteenthGrid(
-            envelope = envelope,
+            envelope = shaped,
             offsetSeconds = offsetSeconds,
             bpm = bpm,
             durationSeconds = durationSeconds,
@@ -50,34 +61,13 @@ class StemRhythmAnalyzer(
         return RhythmAnalysis(
             bpm = bpm,
             offsetSeconds = offsetSeconds,
-            confidence = lagConfidence(envelope, lag),
+            confidence = lagConfidence(shaped, lag),
             durationSeconds = durationSeconds,
             gridStrengths = grid,
         )
     }
 
-    private fun transientEnvelope(source: SampleEdits.Buffer, hop: Int): FloatArray {
-        val frames = ceil(source.frames.toDouble() / hop).toInt()
-        val raw = FloatArray(frames)
-        var previous = monoAt(source, 0)
-
-        for (frame in 0 until frames) {
-            val start = frame * hop
-            val end = (start + hop).coerceAtMost(source.frames)
-            var differenceEnergy = 0.0
-            var peak = 0f
-            for (index in start until end) {
-                val sample = monoAt(source, index)
-                val difference = sample - previous
-                differenceEnergy += difference * difference
-                peak = max(peak, kotlin.math.abs(sample))
-                previous = sample
-            }
-            val count = (end - start).coerceAtLeast(1)
-            val highPassedRms = sqrt(differenceEnergy / count).toFloat()
-            raw[frame] = ln(1.0 + 40.0 * (highPassedRms + peak * 0.08f)).toFloat()
-        }
-
+    private fun shape(raw: FloatArray): FloatArray {
         // A three-frame maximum keeps narrow drum attacks visible after the
         // file is reduced to a 100 Hz envelope.
         val widened = FloatArray(raw.size) { index ->
@@ -190,14 +180,77 @@ class StemRhythmAnalyzer(
         return peak
     }
 
-    private fun monoAt(source: SampleEdits.Buffer, index: Int): Float {
-        val left = source.left[index]
-        return source.right?.let { (left + it[index]) * 0.5f } ?: left
-    }
-
-    private companion object {
+    internal companion object {
         const val ENVELOPE_HZ = 100
         const val MINIMUM_SECONDS = 4
         const val DEFAULT_BPM = 120f
+    }
+}
+
+/**
+ * The analyzer's transient envelope, built a block at a time.
+ *
+ * One value per hop (a hundredth of a second): how sharply the mono signal
+ * moves within it, a cheap high-pass, plus a little of its peak, on a log
+ * scale. A block boundary changes nothing — the difference across it is taken
+ * from the last sample of the block before — so streaming a song through this
+ * gives exactly the values the whole song in one buffer does.
+ */
+class TransientEnvelopeBuilder(val sampleRate: Int) {
+
+    init {
+        require(sampleRate > 0) { "sample rate must be positive" }
+    }
+
+    private val hop = (sampleRate / StemRhythmAnalyzer.ENVELOPE_HZ).coerceAtLeast(1)
+    private var values = FloatArray(1024)
+    private var count = 0
+    private var previous = 0f
+    private var started = false
+    private var differenceEnergy = 0.0
+    private var peak = 0f
+    private var inHop = 0
+
+    /** Frames taken so far. */
+    var frames = 0L
+        private set
+
+    /** Frames [from] until [until] of [left] and [right] (null for mono). */
+    fun add(left: FloatArray, right: FloatArray?, from: Int, until: Int) {
+        for (index in from until until) {
+            val sample = if (right != null) (left[index] + right[index]) * 0.5f else left[index]
+            if (!started) {
+                previous = sample
+                started = true
+            }
+            val difference = sample - previous
+            differenceEnergy += difference * difference
+            peak = max(peak, kotlin.math.abs(sample))
+            previous = sample
+            inHop += 1
+            if (inHop == hop) close()
+        }
+        frames += (until - from).coerceAtLeast(0)
+    }
+
+    /** One value per hop, the last one partial; the builder can keep going after. */
+    fun raw(): FloatArray {
+        val out = values.copyOf(count + if (inHop > 0) 1 else 0)
+        if (inHop > 0) out[count] = valueOf(differenceEnergy, peak, inHop)
+        return out
+    }
+
+    private fun close() {
+        if (count == values.size) values = values.copyOf(values.size * 2)
+        values[count] = valueOf(differenceEnergy, peak, inHop)
+        count += 1
+        differenceEnergy = 0.0
+        peak = 0f
+        inHop = 0
+    }
+
+    private fun valueOf(energy: Double, peak: Float, samples: Int): Float {
+        val highPassedRms = sqrt(energy / samples.coerceAtLeast(1)).toFloat()
+        return ln(1.0 + 40.0 * (highPassedRms + peak * 0.08f)).toFloat()
     }
 }

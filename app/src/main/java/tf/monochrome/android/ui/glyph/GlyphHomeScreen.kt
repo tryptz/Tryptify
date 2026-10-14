@@ -22,6 +22,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -57,6 +59,8 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import tf.monochrome.android.R
+import tf.monochrome.android.audio.sampler.stems.KnownModels
+import tf.monochrome.android.audio.sampler.stems.StemModelManager
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
@@ -106,6 +110,16 @@ fun GlyphHomeScreen(
     ) { uri ->
         if (uri != null) onEvent(GlyphEvent.GenerateChartFrom(uri))
     }
+
+    // A model file has no MIME type Android knows (.onnx), so the picker takes
+    // anything; the installer identifies the file by its hash and refuses what
+    // it cannot run.
+    val modelPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) onEvent(GlyphEvent.ImportModel(uri))
+    }
+    var modelOpen by rememberSaveable { mutableStateOf(false) }
 
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     // Closing clears the filter. A stale query left behind means reopening the
@@ -166,6 +180,12 @@ fun GlyphHomeScreen(
                     open = searchOpen,
                     onToggle = { if (searchOpen) closeSearch() else searchOpen = true },
                 )
+                IconButton(onClick = { modelOpen = !modelOpen }) {
+                    Icon(
+                        Icons.Default.Memory,
+                        contentDescription = "Drum separation model",
+                    )
+                }
                 IconButton(
                     onClick = { picker.launch(arrayOf("audio/mpeg", "audio/flac", "audio/x-flac")) },
                 ) {
@@ -246,6 +266,22 @@ fun GlyphHomeScreen(
                             generationInset = with(density) { it.height.toDp() }
                         },
                 ) {
+                    // Stays up while a copy runs, so the progress has somewhere
+                    // to be even if the player closed it.
+                    if (modelOpen || state.model.importing) {
+                        ModelPanel(
+                            model = state.model,
+                            haze = panelHaze,
+                            glass = glass,
+                            onImport = { modelPicker.launch(arrayOf("*/*")) },
+                            onEvent = onEvent,
+                            onClose = {
+                                modelOpen = false
+                                onEvent(GlyphEvent.DismissModelMessage)
+                            },
+                        )
+                    }
+
                     val generation = state.generation
                     if (generation != null) {
                         GenerationPanel(
@@ -559,6 +595,130 @@ private fun GenerationPanel(
                         height = 40.dp,
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * The drum separation model, which the app does not ship.
+ *
+ * Charts generate without one, from the built-in separator. The model makes
+ * cleaner drum stems and so better charts, but it is a hundred and more
+ * megabytes, so it is the player's to bring: a file from their own storage,
+ * copied in once. The same install the Sampler's Stem AI panel shows.
+ */
+@Composable
+private fun ModelPanel(
+    model: GlyphModelUi,
+    haze: HazeState,
+    glass: PlayerGlassSettings,
+    onImport: () -> Unit,
+    onEvent: (GlyphEvent) -> Unit,
+    onClose: () -> Unit,
+) {
+    GlassPanel(
+        hazeState = haze,
+        glass = glass,
+        avoidNavigationBar = false,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+    ) {
+        CompositionLocalProvider(LocalGlassBackdrop provides haze) {
+            Column(
+                modifier = Modifier.padding(
+                    start = MonoDimens.spacingLg,
+                    end = MonoDimens.spacingLg,
+                    bottom = MonoDimens.spacingLg,
+                ),
+            ) {
+                val scheme = MaterialTheme.colorScheme
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Drum separation model",
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.weight(1f).semantics { heading() },
+                    )
+                    IconButton(onClick = onClose, enabled = !model.importing) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                }
+
+                val installed = model.installedName
+                Text(
+                    text = if (installed != null) {
+                        "$installed · ${StemModelManager.formatBytes(model.sizeBytes)}. " +
+                            "New charts read the rhythm off its drum stem."
+                    } else {
+                        "None installed. Charts use the built-in separator, which hears drums " +
+                            "less cleanly. Import a model file from your phone to use it instead."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onSurfaceVariant,
+                )
+
+                if (model.importing) {
+                    Spacer(Modifier.height(MonoDimens.spacingMd))
+                    val percent = model.progress?.let { (it * 100).toInt() }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = model.stage ?: "Importing",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (percent != null) {
+                            Text(
+                                text = "$percent%",
+                                style = GlyphTypography(rememberStepTechFontFamily()).mono,
+                                color = scheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(MonoDimens.spacingSm))
+                    GlyphMeter(
+                        fraction = model.progress ?: 0f,
+                        color = scheme.primary,
+                        description = listOfNotNull(model.stage, percent?.let { "$it percent" })
+                            .joinToString(", "),
+                    )
+                    Spacer(Modifier.height(MonoDimens.spacingMd))
+                    GlyphButton(
+                        text = "Cancel",
+                        onClick = { onEvent(GlyphEvent.CancelModelImport) },
+                        onClickLabel = "Cancel the model import",
+                        height = 40.dp,
+                    )
+                    return@Column
+                }
+
+                model.message?.let { message ->
+                    Spacer(Modifier.height(MonoDimens.spacingSm))
+                    Text(text = message, style = MaterialTheme.typography.bodyMedium)
+                }
+
+                Spacer(Modifier.height(MonoDimens.spacingMd))
+                Row(horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm)) {
+                    GlyphButton(
+                        text = if (installed != null) "Replace…" else "Import model…",
+                        icon = Icons.Default.FolderOpen,
+                        primary = installed == null,
+                        onClick = onImport,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (installed != null) {
+                        GlyphButton(
+                            text = "Remove",
+                            onClick = { onEvent(GlyphEvent.RemoveModel) },
+                            onClickLabel = "Remove $installed",
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                Spacer(Modifier.height(MonoDimens.spacingSm))
+                Text(
+                    text = "Accepts " + KnownModels.supportedFileNames().joinToString(", "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurfaceVariant,
+                )
             }
         }
     }

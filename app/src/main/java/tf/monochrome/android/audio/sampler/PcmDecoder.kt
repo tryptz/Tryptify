@@ -29,6 +29,29 @@ object PcmDecoder {
 
     private const val TIMEOUT_US = 10_000L
 
+    /** What [stream] found before the first block: the output's shape and the file's length. */
+    class StreamFormat(
+        val sampleRate: Int,
+        val channels: Int,
+        /** The track's declared length, or 0 when the container does not say. */
+        val durationUs: Long,
+    ) {
+        /** [durationUs] in frames at [sampleRate]; 0 when unknown. */
+        val estimatedFrames: Long
+            get() = if (durationUs <= 0L) 0L else durationUs * sampleRate / 1_000_000L
+    }
+
+    /**
+     * Where [stream] hands each decoded block, its channels already split.
+     *
+     * The arrays are reused for the next block: whatever is kept has to be
+     * copied out. [right] is null for a mono file. Channels beyond the front
+     * pair are dropped, as in [WavCodec].
+     */
+    fun interface BlockSink {
+        fun onBlock(left: FloatArray, right: FloatArray?, frames: Int)
+    }
+
     /**
      * Reads [uri] to at most [maxFrames] frames of float PCM.
      *
@@ -41,6 +64,67 @@ object PcmDecoder {
         uri: Uri,
         maxFrames: Int = 48_000 * 60,
     ): WavCodec.Audio {
+        // Filled straight from the blocks. This used to keep every decoded
+        // block, interleaved, and only then split them into left and right —
+        // two whole copies of the file alive at once, which for a long song is
+        // most of the heap.
+        var left = FloatArray(0)
+        var right: FloatArray? = null
+        var frames = 0
+        var sampleRate = 48_000
+        stream(
+            context = context,
+            uri = uri,
+            maxFrames = maxFrames.toLong(),
+            onFormat = { format ->
+                sampleRate = format.sampleRate
+                // Sized from the declared length where there is one, so a
+                // well-formed file is never copied to grow.
+                val expected = format.estimatedFrames.coerceIn(0L, maxFrames.toLong()).toInt()
+                left = FloatArray(expected)
+                right = if (format.channels >= 2) FloatArray(expected) else null
+            },
+        ) { blockLeft, blockRight, count ->
+            if (frames + count > left.size) {
+                val grown = maxOf(frames + count, left.size + left.size / 2, 4096).coerceAtMost(maxFrames)
+                left = left.copyOf(grown)
+                right = right?.copyOf(grown)
+            }
+            System.arraycopy(blockLeft, 0, left, frames, count)
+            val r = right
+            if (r != null && blockRight != null) System.arraycopy(blockRight, 0, r, frames, count)
+            frames += count
+        }
+        if (frames <= 0) throw IOException("decoder produced no audio")
+        if (frames < left.size) {
+            left = left.copyOf(frames)
+            right = right?.copyOf(frames)
+        }
+        return WavCodec.Audio(left, right, sampleRate)
+    }
+
+    /**
+     * Decodes [uri] a block at a time into [sink], holding no more of the file
+     * than one block.
+     *
+     * For anything that only needs to look at the audio once — a waveform, a
+     * rhythm envelope — this is the way to read a whole song: memory stays the
+     * size of a block whatever the song's length, where [decode] needs the
+     * whole song at once. Stops after [maxFrames], and as soon as [isActive]
+     * says the caller has gone, between blocks: a decode the user has moved on
+     * from is not left running to the end in the background.
+     *
+     * @return the number of frames delivered.
+     * @throws IOException as [decode] does.
+     */
+    fun stream(
+        context: Context,
+        uri: Uri,
+        maxFrames: Long = Long.MAX_VALUE,
+        isActive: () -> Boolean = { true },
+        onFormat: (StreamFormat) -> Unit = {},
+        sink: BlockSink,
+    ): Long {
         val extractor = MediaExtractor()
         try {
             extractor.setDataSource(context, uri, null)
@@ -54,12 +138,17 @@ object PcmDecoder {
             val format = extractor.getTrackFormat(trackIndex)
             val mime = format.getString(MediaFormat.KEY_MIME)
                 ?: throw IOException("track has no MIME type")
+            val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) {
+                format.getLong(MediaFormat.KEY_DURATION)
+            } else {
+                0L
+            }
 
             val codec = MediaCodec.createDecoderByType(mime)
             try {
                 codec.configure(format, null, null, 0)
                 codec.start()
-                return drain(extractor, codec, maxFrames)
+                return drain(extractor, codec, durationUs, maxFrames, isActive, onFormat, sink)
             } finally {
                 runCatching { codec.stop() }
                 runCatching { codec.release() }
@@ -72,23 +161,21 @@ object PcmDecoder {
     private fun drain(
         extractor: MediaExtractor,
         codec: MediaCodec,
-        maxFrames: Int,
-    ): WavCodec.Audio {
+        durationUs: Long,
+        maxFrames: Long,
+        isActive: () -> Boolean,
+        onFormat: (StreamFormat) -> Unit,
+        sink: BlockSink,
+    ): Long {
         val info = MediaCodec.BufferInfo()
-        var sampleRate = 48000
-        var channels = 1
-        var sawOutputFormat = false
-
-        // Accumulate into growable lists of chunks rather than one array we
-        // keep reallocating: the final length is not known until the decoder
-        // is done, and repeatedly copying a multi-megabyte array is the
-        // difference between an import that feels instant and one that does
-        // not.
-        val chunks = ArrayList<FloatArray>()
-        var totalSamples = 0
+        var announced = false
+        var delivered = 0L
         var inputDone = false
+        // One block's worth, reused for every block.
+        var left = FloatArray(0)
+        var right = FloatArray(0)
 
-        while (true) {
+        while (isActive()) {
             if (!inputDone) {
                 val inputIndex = codec.dequeueInputBuffer(TIMEOUT_US)
                 if (inputIndex >= 0) {
@@ -108,106 +195,72 @@ object PcmDecoder {
 
             val outputIndex = codec.dequeueOutputBuffer(info, TIMEOUT_US)
             when {
-                outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                    val output = codec.outputFormat
-                    sampleRate = output.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-                    channels = output.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-                    sawOutputFormat = true
-                }
-
                 outputIndex >= 0 -> {
                     val buffer = codec.getOutputBuffer(outputIndex)
+                    var ended = info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
                     if (buffer != null && info.size > 0) {
+                        val output = codec.outputFormat
+                        val sampleRate = output.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                        val channels = output.getInteger(MediaFormat.KEY_CHANNEL_COUNT).coerceAtLeast(1)
+                        if (!announced) {
+                            onFormat(StreamFormat(sampleRate, channels, durationUs))
+                            announced = true
+                        }
                         buffer.position(info.offset)
                         buffer.limit(info.offset + info.size)
-                        chunks.add(toFloats(buffer, codec.outputFormat))
-                        totalSamples += chunks.last().size
+                        val isFloat = output.containsKey(MediaFormat.KEY_PCM_ENCODING) &&
+                            output.getInteger(MediaFormat.KEY_PCM_ENCODING) ==
+                            android.media.AudioFormat.ENCODING_PCM_FLOAT
+                        buffer.order(ByteOrder.nativeOrder())
+                        val bytesPerSample = if (isFloat) 4 else 2
+                        var frames = buffer.remaining() / (bytesPerSample * channels)
+                        if (delivered + frames > maxFrames) frames = (maxFrames - delivered).toInt()
+                        if (frames > left.size) {
+                            left = FloatArray(frames)
+                            right = FloatArray(frames)
+                        }
+                        split(buffer, isFloat, channels, frames, left, right)
+                        if (frames > 0) sink.onBlock(left, if (channels >= 2) right else null, frames)
+                        delivered += frames
+                        if (delivered >= maxFrames) ended = true
                     }
                     codec.releaseOutputBuffer(outputIndex, false)
-                    val ended = info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
-                    if (ended || totalSamples >= maxFrames * channels) break
+                    if (ended) break
                 }
 
                 // TRY_AGAIN_LATER with input already finished means the decoder
                 // has nothing more coming; without this the loop would spin.
                 outputIndex == MediaCodec.INFO_TRY_AGAIN_LATER && inputDone -> {
-                    if (chunks.isNotEmpty()) break
+                    if (delivered > 0) break
                 }
             }
         }
-
-        if (!sawOutputFormat) {
-            runCatching {
-                sampleRate = codec.outputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-                channels = codec.outputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-            }
-        }
-
-        return deinterleave(chunks, totalSamples, channels.coerceAtLeast(1), sampleRate, maxFrames)
+        return delivered
     }
 
     /**
+     * One output buffer's samples into [left] and [right], read in place.
+     *
      * Platform decoders emit 16-bit PCM by default and float only when asked
-     * and supported, so both have to be handled.
+     * and supported, so both have to be handled. Channels past the front pair
+     * are skipped.
      */
-    private fun toFloats(buffer: ByteBuffer, format: MediaFormat): FloatArray {
-        val encoding = if (format.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
-            format.getInteger(MediaFormat.KEY_PCM_ENCODING)
-        } else {
-            android.media.AudioFormat.ENCODING_PCM_16BIT
-        }
-        buffer.order(ByteOrder.nativeOrder())
-
-        return when (encoding) {
-            android.media.AudioFormat.ENCODING_PCM_FLOAT -> {
-                val out = FloatArray(buffer.remaining() / 4)
-                for (i in out.indices) out[i] = buffer.float
-                out
-            }
-
-            else -> {
-                val out = FloatArray(buffer.remaining() / 2)
-                for (i in out.indices) out[i] = buffer.short / 32768f
-                out
-            }
-        }
-    }
-
-    private fun deinterleave(
-        chunks: List<FloatArray>,
-        totalSamples: Int,
+    private fun split(
+        buffer: ByteBuffer,
+        isFloat: Boolean,
         channels: Int,
-        sampleRate: Int,
-        maxFrames: Int,
-    ): WavCodec.Audio {
-        val frames = (totalSamples / channels).coerceAtMost(maxFrames)
-        if (frames <= 0) throw IOException("decoder produced no audio")
-
-        val left = FloatArray(frames)
-        val right = if (channels >= 2) FloatArray(frames) else null
-
-        var frame = 0
-        var withinFrame = 0
-        outer@ for (chunk in chunks) {
-            var i = 0
-            while (i < chunk.size) {
-                if (frame >= frames) break@outer
-                when (withinFrame) {
-                    0 -> left[frame] = chunk[i]
-                    1 -> right?.set(frame, chunk[i])
-                    // Channels beyond the front pair are dropped; see WavCodec
-                    // for why folding a surround file is not worth doing here.
-                    else -> Unit
+        frames: Int,
+        left: FloatArray,
+        right: FloatArray,
+    ) {
+        for (frame in 0 until frames) {
+            for (channel in 0 until channels) {
+                val sample = if (isFloat) buffer.float else buffer.short / 32768f
+                when (channel) {
+                    0 -> left[frame] = sample
+                    1 -> right[frame] = sample
                 }
-                withinFrame += 1
-                if (withinFrame >= channels) {
-                    withinFrame = 0
-                    frame += 1
-                }
-                i += 1
             }
         }
-
-        return WavCodec.Audio(left, right, sampleRate)
     }
 }

@@ -25,6 +25,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tf.monochrome.android.audio.sampler.PcmDecoder
 import tf.monochrome.android.audio.sampler.SampleEdits
+import tf.monochrome.android.audio.sampler.stems.BackendKind
+import tf.monochrome.android.audio.sampler.stems.InstallResult
+import tf.monochrome.android.audio.sampler.stems.StemBackendRegistry
+import tf.monochrome.android.audio.sampler.stems.StemModelManager
 import tf.monochrome.android.audio.stepmania.StepManiaConversionService
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.audio.stepmania.StepManiaRequest
@@ -51,6 +55,7 @@ import tf.monochrome.android.glyph.training.GlyphCountIn
 import tf.monochrome.android.glyph.training.GlyphGauntletFinder
 import tf.monochrome.android.glyph.training.GlyphGauntlets
 import tf.monochrome.android.glyph.training.GlyphMetronome
+import tf.monochrome.android.glyph.training.GlyphWaveformBuilder
 import tf.monochrome.android.glyph.training.GlyphLoopSegment
 
 /**
@@ -73,6 +78,8 @@ class GlyphViewModel @Inject constructor(
     private val songs: GlyphSongRepository,
     private val attempts: GlyphAttemptStore,
     private val conversion: StepManiaConversionService,
+    private val stemModels: StemModelManager,
+    private val stemBackends: StemBackendRegistry,
     /**
      * Exposed rather than plumbed through navigation: the pack is a singleton
      * whose rasters are scoped to a run, and handing it down the composable
@@ -180,6 +187,7 @@ class GlyphViewModel @Inject constructor(
     private var lastPublishNanos = 0L
     private var countInEndsAtSeconds: Float? = null
     private var generationJob: Job? = null
+    private var modelJob: Job? = null
     private var runStartedAtMs = 0L
 
     /** Trypt Mania's own small preferences; the skin is the only one so far. */
@@ -187,6 +195,7 @@ class GlyphViewModel @Inject constructor(
 
     init {
         updateModifiers { it.copy(skin = GlyphSkin.fromId(prefs.getString(PREF_SKIN, null))) }
+        refreshModel()
         viewModelScope.launch {
             songs.songs()
                 .catch { failure ->
@@ -216,6 +225,11 @@ class GlyphViewModel @Inject constructor(
                 _ui.value = _ui.value.copy(generation = null)
             }
             GlyphEvent.DismissError -> _ui.value = _ui.value.copy(error = null)
+
+            is GlyphEvent.ImportModel -> importModel(event.uri)
+            GlyphEvent.CancelModelImport -> modelJob?.cancel()
+            GlyphEvent.RemoveModel -> removeModel()
+            GlyphEvent.DismissModelMessage -> updateModel { it.copy(message = null) }
 
             GlyphEvent.StartPlay -> start(training = false)
             GlyphEvent.StartTraining -> start(training = true)
@@ -334,10 +348,11 @@ class GlyphViewModel @Inject constructor(
     /**
      * Decode a coarse envelope for the segment picker.
      *
-     * Deliberately coarse and deliberately capped: the picker exists so a
-     * passage can be found by eye, and two hundred bars does that as well as
-     * ten thousand. The decode is the expensive part, so it runs once per song
-     * and is cancelled if the player moves on before it finishes.
+     * Deliberately coarse: the picker exists so a passage can be found by eye,
+     * and two hundred bars does that as well as ten thousand. The song is
+     * streamed into the bars block by block and never held whole (see
+     * [GlyphWaveformBuilder]), and the decode stops between blocks once the
+     * player moves on, so picking song after song no longer stacks up decodes.
      */
     private fun loadWaveform(song: GlyphSong) {
         waveformJob?.cancel()
@@ -347,23 +362,17 @@ class GlyphViewModel @Inject constructor(
             _ui.value = _ui.value.copy(
                 training = _ui.value.training.copy(isWaveformLoading = true, waveform = emptyList()),
             )
+            val job = coroutineContext[Job]
             val bars = withContext(Dispatchers.Default) {
                 runCatching {
-                    val decoded = PcmDecoder.decode(
+                    var builder = GlyphWaveformBuilder()
+                    PcmDecoder.stream(
                         context = context,
                         uri = Uri.fromFile(File(song.filePath)),
-                        maxFrames = WAVEFORM_MAX_FRAMES,
-                    )
-                    val buffer = SampleEdits.Buffer(decoded.left, decoded.right, decoded.sampleRate)
-                    // peaks() alternates min and max per bucket; the picker
-                    // draws a symmetric bar, so the two are folded into one
-                    // magnitude here rather than at draw time.
-                    val peaks = SampleEdits.peaks(buffer, WAVEFORM_BARS)
-                    List(peaks.size / 2) { index ->
-                        val low = peaks[index * 2]
-                        val high = peaks[index * 2 + 1]
-                        maxOf(kotlin.math.abs(low), kotlin.math.abs(high)).coerceIn(0f, 1f)
-                    }
+                        isActive = { job?.isActive != false },
+                        onFormat = { format -> builder = GlyphWaveformBuilder(format.estimatedFrames) },
+                    ) { left, right, frames -> builder.add(left, right, frames) }
+                    builder.bars(WAVEFORM_BARS)
                 }.onFailure {
                     Log.w(TAG, "waveform for ${song.title} failed: ${it.message}")
                 }.getOrDefault(emptyList())
@@ -397,6 +406,119 @@ class GlyphViewModel @Inject constructor(
             ?: uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
             ?: "audio"
     }
+
+    // ── separation model ────────────────────────────────────────────────
+
+    private inline fun updateModel(change: (GlyphModelUi) -> GlyphModelUi) {
+        _ui.value = _ui.value.copy(model = change(_ui.value.model))
+    }
+
+    /** Reads what is installed. Disk only, and one small file. */
+    private fun refreshModel() {
+        viewModelScope.launch {
+            val (installed, bytes) = withContext(Dispatchers.IO) {
+                stemModels.installed() to stemModels.installedBytes()
+            }
+            updateModel { it.copy(installedName = installed?.name, sizeBytes = bytes) }
+        }
+    }
+
+    private val isGenerating: Boolean
+        get() = _ui.value.generation?.isFinished == false
+
+    /**
+     * Copy a model file off the player's storage into the app, through the
+     * same installer the Sampler uses, so the two screens always agree on what
+     * is installed. The installer identifies the file by its hash and refuses
+     * one it does not know how to run, since a model whose outputs are read in
+     * the wrong order separates the wrong instrument without any error.
+     */
+    private fun importModel(uri: Uri) {
+        if (_ui.value.model.importing) return
+        // The generator holds the current model open while it separates.
+        if (isGenerating) {
+            updateModel { it.copy(message = "Wait for the chart to finish, then import.") }
+            return
+        }
+        val total = sizeOf(uri)
+        modelJob = viewModelScope.launch {
+            updateModel {
+                it.copy(importing = true, progress = if (total > 0) 0f else null, stage = "Reading file", message = null)
+            }
+            var shownBytes = 0L
+            val result = try {
+                withContext(Dispatchers.IO) {
+                    stemModels.importLocal(
+                        open = {
+                            context.contentResolver.openInputStream(uri)
+                                ?: throw java.io.IOException("That file could not be opened.")
+                        },
+                    ) { progress ->
+                        // A copy reports every 64 kB; the panel needs a
+                        // megabyte at a time, or a stage change.
+                        val bytes = progress.bytesDownloaded
+                        if (bytes - shownBytes < PROGRESS_STEP_BYTES && progress.stage == _ui.value.model.stage) {
+                            return@importLocal
+                        }
+                        shownBytes = bytes
+                        updateModel {
+                            it.copy(
+                                progress = if (total > 0) (bytes.toFloat() / total).coerceIn(0f, 1f) else null,
+                                stage = progress.stage,
+                            )
+                        }
+                    }
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                updateModel { it.copy(importing = false, progress = null, stage = null, message = "Import cancelled.") }
+                throw cancelled
+            }
+            val installed = withContext(Dispatchers.IO) { stemModels.installed() to stemModels.installedBytes() }
+            updateModel {
+                it.copy(
+                    importing = false,
+                    progress = null,
+                    stage = null,
+                    installedName = installed.first?.name,
+                    sizeBytes = installed.second,
+                    message = when (result) {
+                        is InstallResult.Installed -> "${result.model.name} is ready. New charts will use it."
+                        is InstallResult.Failed -> result.reason
+                    },
+                )
+            }
+        }
+    }
+
+    private fun removeModel() {
+        if (_ui.value.model.importing) return
+        if (isGenerating) {
+            updateModel { it.copy(message = "Wait for the chart to finish, then remove the model.") }
+            return
+        }
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                // Free the loaded session too: it holds the whole model in
+                // native memory, and nothing would use it again.
+                stemBackends.of(BackendKind.CPU)?.release()
+                stemModels.uninstall()
+            }
+            updateModel {
+                it.copy(
+                    installedName = null,
+                    sizeBytes = 0L,
+                    message = "Model removed. Charts use the built-in separator.",
+                )
+            }
+        }
+    }
+
+    /** The picked file's size, for a progress meter; 0 when the provider does not say. */
+    private fun sizeOf(uri: Uri): Long = runCatching {
+        context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)
+            ?.use { cursor -> if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getLong(0) else 0L }
+            ?: 0L
+    }.getOrDefault(0L)
 
     private fun generateForSelected() {
         val song = _ui.value.selectedSong ?: return
@@ -1107,6 +1229,8 @@ class GlyphViewModel @Inject constructor(
         const val PREFS_NAME = "trypt_mania"
         const val PREF_SKIN = "skin"
 
+        const val PROGRESS_STEP_BYTES = 1L shl 20
+
         /** Older than this, a touch stamp is not trusted (see touchNanos). */
         const val MAX_TOUCH_AGE_NANOS = 250_000_000L
 
@@ -1135,8 +1259,5 @@ class GlyphViewModel @Inject constructor(
 
         /** Enough bars to find a passage by eye; more would be wasted work. */
         const val WAVEFORM_BARS = 220
-
-        /** Ten minutes at 48 kHz — the same guard the conversion service uses. */
-        const val WAVEFORM_MAX_FRAMES = 48_000 * 60 * 10
     }
 }

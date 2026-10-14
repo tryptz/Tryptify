@@ -31,6 +31,13 @@ sealed interface GlyphEvent {
     data object CancelGeneration : GlyphEvent
     data object DismissError : GlyphEvent
 
+    // ── separation model ────────────────────────────────────────────────
+    /** Install a model file the player picked from their own storage. */
+    data class ImportModel(val uri: Uri) : GlyphEvent
+    data object CancelModelImport : GlyphEvent
+    data object RemoveModel : GlyphEvent
+    data object DismissModelMessage : GlyphEvent
+
     // ── transport ───────────────────────────────────────────────────────
     data object StartPlay : GlyphEvent
     data object StartTraining : GlyphEvent

@@ -33,7 +33,18 @@ class StepManiaMapGenerator(
         require(request.musicFileName.isNotBlank()) { "music file name must not be blank" }
         require(request.difficulties.isNotEmpty()) { "at least one difficulty is required" }
 
-        val analysis = rhythmAnalyzer.analyze(mix, drumStem)
+        return generate(rhythmAnalyzer.analyze(mix, drumStem), request)
+    }
+
+    /** Charts from an analysis already made, for audio that was streamed rather than held. */
+    fun generate(
+        analysis: RhythmAnalysis,
+        request: StepManiaRequest,
+    ): GeneratedSimfile {
+        require(request.title.isNotBlank()) { "title must not be blank" }
+        require(request.musicFileName.isNotBlank()) { "music file name must not be blank" }
+        require(request.difficulties.isNotEmpty()) { "at least one difficulty is required" }
+
         val charts = request.difficulties
             .sortedBy { it.ordinal }
             .map { difficulty -> buildChart(analysis, difficulty, request.title.hashCode()) }
