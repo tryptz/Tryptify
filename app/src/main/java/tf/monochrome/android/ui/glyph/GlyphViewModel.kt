@@ -30,6 +30,7 @@ import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.audio.stepmania.StepManiaRequest
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
 import tf.monochrome.android.glyph.asset.GlyphLane
+import tf.monochrome.android.glyph.asset.GlyphSkin
 import tf.monochrome.android.glyph.chart.GlyphChart
 import tf.monochrome.android.glyph.chart.GlyphNote
 import tf.monochrome.android.glyph.chart.GlyphTiming
@@ -181,7 +182,11 @@ class GlyphViewModel @Inject constructor(
     private var generationJob: Job? = null
     private var runStartedAtMs = 0L
 
+    /** Trypt Mania's own small preferences; the skin is the only one so far. */
+    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
     init {
+        updateModifiers { it.copy(skin = GlyphSkin.fromId(prefs.getString(PREF_SKIN, null))) }
         viewModelScope.launch {
             songs.songs()
                 .catch { failure ->
@@ -240,6 +245,10 @@ class GlyphViewModel @Inject constructor(
             is GlyphEvent.SetTimingWindowScale -> {
                 updateModifiers { it.copy(timingWindowScale = event.scale) }
                 rebuildEngine()
+            }
+            is GlyphEvent.SetSkin -> {
+                updateModifiers { it.copy(skin = event.skin) }
+                prefs.edit().putString(PREF_SKIN, event.skin.id).apply()
             }
             is GlyphEvent.SetHitboxScale ->
                 updateModifiers { it.copy(hitboxScale = event.scale.coerceIn(MIN_HITBOX, MAX_HITBOX)) }
@@ -1094,6 +1103,9 @@ class GlyphViewModel @Inject constructor(
 
     private companion object {
         const val TAG = "GlyphViewModel"
+
+        const val PREFS_NAME = "trypt_mania"
+        const val PREF_SKIN = "skin"
 
         /** Older than this, a touch stamp is not trusted (see touchNanos). */
         const val MAX_TOUCH_AGE_NANOS = 250_000_000L

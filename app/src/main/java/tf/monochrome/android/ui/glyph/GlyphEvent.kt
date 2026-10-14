@@ -44,6 +44,9 @@ sealed interface GlyphEvent {
      * SystemClock.uptimeMillis stamp), so the press is judged at the touch
      * rather than at whenever input was dispatched. Zero means "now".
      */
+    /** The playfield's artwork; kept between sessions. */
+    data class SetSkin(val skin: tf.monochrome.android.glyph.asset.GlyphSkin) : GlyphEvent
+
     data class LanePressed(val lane: GlyphLane, val atUptimeMillis: Long = 0L) : GlyphEvent
     data class LaneReleased(val lane: GlyphLane, val atUptimeMillis: Long = 0L) : GlyphEvent
 

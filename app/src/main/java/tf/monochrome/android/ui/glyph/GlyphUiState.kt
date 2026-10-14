@@ -114,6 +114,8 @@ data class GlyphModifiers(
     val timingWindowScale: Float = 1f,
     val hitboxScale: Float = 1f,
     val reducedMotion: Boolean = false,
+    /** The playfield's artwork. Looks only, so not in [altersScoring]. */
+    val skin: tf.monochrome.android.glyph.asset.GlyphSkin = tf.monochrome.android.glyph.asset.GlyphSkin.DEFAULT,
 ) {
     /** True when the run is not comparable with a clean one. */
     val altersScoring: Boolean

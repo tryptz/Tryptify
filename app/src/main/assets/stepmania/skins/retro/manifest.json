@@ -1,0 +1,354 @@
+{
+  "name": "StepMania retro",
+  "version": 1,
+  "pixelArt": true,
+  "source": "https://github.com/stepmania/stepmania/tree/825467bcd81c812b33ad684dc04dd151b2d5dec3/NoteSkins/dance/retro",
+  "license": "LICENSE.txt",
+  "assets": [
+    {
+      "category": "noteskin/holds",
+      "name": "hold_body",
+      "path": "hold_body.png"
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "hold_body_active",
+      "path": "hold_body_active.png"
+    },
+    {
+      "category": "feedback/effects",
+      "name": "hold_glow_down",
+      "path": "hold_glow_down.png"
+    },
+    {
+      "category": "feedback/effects",
+      "name": "hold_glow_left",
+      "path": "hold_glow_left.png"
+    },
+    {
+      "category": "feedback/effects",
+      "name": "hold_glow_right",
+      "path": "hold_glow_right.png"
+    },
+    {
+      "category": "feedback/effects",
+      "name": "hold_glow_up",
+      "path": "hold_glow_up.png"
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "hold_head_down",
+      "path": "hold_head_down.png"
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "hold_head_left",
+      "path": "hold_head_left.png"
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "hold_head_right",
+      "path": "hold_head_right.png"
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "hold_head_up",
+      "path": "hold_head_up.png"
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "hold_tail",
+      "path": "hold_tail.png"
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "hold_tail_active",
+      "path": "hold_tail_active.png"
+    },
+    {
+      "category": "noteskin/special",
+      "name": "mine",
+      "path": "mine.png"
+    },
+    {
+      "category": "noteskin/receptors",
+      "name": "receptor_down",
+      "path": "receptor_down.png"
+    },
+    {
+      "category": "noteskin/receptors",
+      "name": "receptor_down_active",
+      "path": "receptor_down_active.png"
+    },
+    {
+      "category": "noteskin/receptors",
+      "name": "receptor_left",
+      "path": "receptor_left.png"
+    },
+    {
+      "category": "noteskin/receptors",
+      "name": "receptor_left_active",
+      "path": "receptor_left_active.png"
+    },
+    {
+      "category": "noteskin/receptors",
+      "name": "receptor_right",
+      "path": "receptor_right.png"
+    },
+    {
+      "category": "noteskin/receptors",
+      "name": "receptor_right_active",
+      "path": "receptor_right_active.png"
+    },
+    {
+      "category": "noteskin/receptors",
+      "name": "receptor_up",
+      "path": "receptor_up.png"
+    },
+    {
+      "category": "noteskin/receptors",
+      "name": "receptor_up_active",
+      "path": "receptor_up_active.png"
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "roll_body",
+      "path": "roll_body.png"
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "roll_body_active",
+      "path": "roll_body_active.png"
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "roll_head_down",
+      "path": "roll_head_down.png"
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "roll_head_left",
+      "path": "roll_head_left.png"
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "roll_head_right",
+      "path": "roll_head_right.png"
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "roll_head_up",
+      "path": "roll_head_up.png"
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "roll_tail",
+      "path": "roll_tail.png"
+    },
+    {
+      "category": "noteskin/holds",
+      "name": "roll_tail_active",
+      "path": "roll_tail_active.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_down",
+      "path": "tap_down.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_down_12th",
+      "path": "tap_down_12th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_down_16th",
+      "path": "tap_down_16th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_down_24th",
+      "path": "tap_down_24th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_down_32nd",
+      "path": "tap_down_32nd.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_down_48th",
+      "path": "tap_down_48th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_down_4th",
+      "path": "tap_down_4th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_down_64th",
+      "path": "tap_down_64th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_down_8th",
+      "path": "tap_down_8th.png"
+    },
+    {
+      "category": "feedback/effects",
+      "name": "tap_explosion_down",
+      "path": "tap_explosion_down.png"
+    },
+    {
+      "category": "feedback/effects",
+      "name": "tap_explosion_left",
+      "path": "tap_explosion_left.png"
+    },
+    {
+      "category": "feedback/effects",
+      "name": "tap_explosion_right",
+      "path": "tap_explosion_right.png"
+    },
+    {
+      "category": "feedback/effects",
+      "name": "tap_explosion_up",
+      "path": "tap_explosion_up.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_left",
+      "path": "tap_left.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_left_12th",
+      "path": "tap_left_12th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_left_16th",
+      "path": "tap_left_16th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_left_24th",
+      "path": "tap_left_24th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_left_32nd",
+      "path": "tap_left_32nd.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_left_48th",
+      "path": "tap_left_48th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_left_4th",
+      "path": "tap_left_4th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_left_64th",
+      "path": "tap_left_64th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_left_8th",
+      "path": "tap_left_8th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_right",
+      "path": "tap_right.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_right_12th",
+      "path": "tap_right_12th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_right_16th",
+      "path": "tap_right_16th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_right_24th",
+      "path": "tap_right_24th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_right_32nd",
+      "path": "tap_right_32nd.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_right_48th",
+      "path": "tap_right_48th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_right_4th",
+      "path": "tap_right_4th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_right_64th",
+      "path": "tap_right_64th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_right_8th",
+      "path": "tap_right_8th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_up",
+      "path": "tap_up.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_up_12th",
+      "path": "tap_up_12th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_up_16th",
+      "path": "tap_up_16th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_up_24th",
+      "path": "tap_up_24th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_up_32nd",
+      "path": "tap_up_32nd.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_up_48th",
+      "path": "tap_up_48th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_up_4th",
+      "path": "tap_up_4th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_up_64th",
+      "path": "tap_up_64th.png"
+    },
+    {
+      "category": "noteskin/taps",
+      "name": "tap_up_8th",
+      "path": "tap_up_8th.png"
+    }
+  ]
+}

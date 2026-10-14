@@ -4,6 +4,24 @@
 
 ### Added
 
+#### Trypt Mania
+- **Trypt Mania has its own tile** in Library › Local, under Library galaxy. It is the rhythm mode that was reached as "Glyph" from the sampler.
+- **StepMania's retro arrows** — the "retro" dance noteskin from StepMania, MIT licensed, with its notice in the app. Taps are coloured by beat (red 4ths, blue 8ths, green 12ths, yellow 16ths…), holds and rolls brighten while they are held, and the mine, receptors and explosions are the skin's own. The art is pixel art and is enlarged by whole pixels, so it stays sharp at any lane width.
+- **Retro glass** — the same arrows in the app's glass: tinted see-through bodies in each note's colour, a lit rim and a highlight. It is made from your UI panel glass settings, so the notes change with the sliders that change the mini player and the panels, and with glass removed it is the plain retro skin. Pick the notes under Notes in the pause panel or Training Ground; the choice is kept.
+- **Hit notes flash with god rays** — a brief white-hot flash of the struck arrow, streaming shafts of light through the lyrics' own god-ray effect, and every glyph near it catches the light. Off with reduced motion or with glass removed for performance, and on Android 13 and later.
+
+### Changed
+
+#### Trypt Mania
+- **The rules run in C++.** Judgement, scoring, the beat map and the notes the playfield draws each frame are worked out natively, and identically to before: the native tests check the numbers the Kotlin tests always have. A frame no longer builds a list of notes, and the scan starts where the settled notes end instead of at the first one.
+- **A tap is judged when your finger lands**, not when the app next handled input, which could be most of a frame later.
+- **The menus are the app's own.** The tab bar and mini player stay on the song list and results and step aside only during play; the top bar, search, rows, buttons and chips are the ones every other screen uses, and follow the theme. Back pauses a run before it leaves it, and closes the search before it leaves the list.
+
+### Fixed
+
+#### Trypt Mania
+- **A practice loop no longer opens with a run of misses.** Every pass used to time out each note before the loop as a miss, which spoiled the pass's score, its ghost and the lane flashes. A loop is now scored on the notes inside it, so a clean pass reads as 100 %.
+
 #### Pattern looper and sampler
 - **A pattern looper lives in the app now** — Settings › Audio Processing › Patterns, or from the Sampler screen. It is an FL Studio-shaped workflow rather than a timeline: a pattern is a short loop of trigs across a handful of sample channels, patterns live in a bank, and you switch between them while the loop is running. Listen, capture, save, assign, tap steps, press play.
 - **A real audio clock, not a UI timer** — the sequencer runs in C++ with a sample-accurate step clock, a fixed voice pool and a lock-free command queue. Tapping a trig while the loop plays never touches the audio thread's work, and nothing on the audio path allocates, locks or waits on Kotlin. The same pattern lands on the same samples whether the output hands it 64-frame or 4096-frame buffers, which is the property a UI-driven timer cannot have.

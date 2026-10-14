@@ -3,9 +3,12 @@
 package tf.monochrome.android.glyph.asset
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.util.Log
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
@@ -18,6 +21,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import tf.monochrome.android.domain.model.PlayerGlassSettings
 
 /**
  * Loads the Glyph pack and hands gameplay ready-made bitmaps.
@@ -132,8 +136,30 @@ class GlyphAssetRepository @Inject constructor(
     ): ImageBitmap? {
         val key = ImageKey(id.name, widthPx, heightPx, tint.argbKey())
         images[key]?.let { return it }
-        if (id.name in failed) return null
+        val generation = skinGeneration
 
+        // The skin's own image, then the vector pack's, then the same two for
+        // whatever the catalog says stands in for this name.
+        val drawn = render(id, widthPx, heightPx, tint)
+            ?: GlyphAssetCatalog.fallback(id)?.let { render(it, widthPx, heightPx, tint) }
+            ?: return null
+        // A skin change while this was being drawn makes it stale; it is
+        // returned for this call but not kept.
+        if (generation == skinGeneration) images[key] = drawn
+        return drawn
+    }
+
+    private suspend fun render(
+        id: GlyphAssetId,
+        widthPx: Int,
+        heightPx: Int,
+        tint: Color?,
+    ): ImageBitmap? {
+        skinImage(id, widthPx, heightPx)?.let { return it }
+        if (id.name in failed) return null
+        // Asked before vector(), which treats a missing name as a broken pack:
+        // a name only some skins provide is expected to be missing here.
+        if (manifest()?.asset(id.name) == null) return null
         val vector = vector(id) ?: return null
         return runCatching {
             GlyphRasterizer.rasterize(vector, widthPx, heightPx, tint)
@@ -141,8 +167,128 @@ class GlyphAssetRepository @Inject constructor(
             if (failed.add(id.name)) {
                 Log.w(TAG, "Glyph '${id.name}' could not be rasterized: ${failure.message}")
             }
-        }.getOrNull()?.also { images[key] = it }
+        }.getOrNull()
     }
+
+    // ── skins ───────────────────────────────────────────────────────────
+
+    @Volatile
+    var skin: GlyphSkin = GlyphSkin.DEFAULT
+        private set
+
+    @Volatile
+    private var glassLook: GlyphGlassLook? = null
+
+    @Volatile
+    private var skinGeneration = 0
+
+    private val skinManifests = ConcurrentHashMap<String, GlyphSkinManifest>()
+    private val skinSources = ConcurrentHashMap<String, Bitmap>()
+    private val missingSkins = ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * Draw with [skin], its glass taken from [glassSettings] (the UI-panel
+     * glass). Returns true when that changes what is drawn, so the caller warms
+     * the playfield again; the old rasters are dropped here.
+     */
+    fun configure(skin: GlyphSkin, glassSettings: PlayerGlassSettings): Boolean {
+        val look = if (skin.isGlass) GlyphGlassLook.from(glassSettings) else null
+        if (skin == this.skin && look == glassLook) return false
+        this.skin = skin
+        glassLook = look
+        skinGeneration += 1
+        images.clear()
+        return true
+    }
+
+    private suspend fun skinManifest(root: String): GlyphSkinManifest? {
+        skinManifests[root]?.let { return it }
+        if (root in missingSkins) return null
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                context.assets.open("$root/manifest.json").use { stream ->
+                    json.decodeFromString<GlyphSkinManifest>(stream.readBytes().decodeToString())
+                }
+            }.onFailure {
+                if (missingSkins.add(root)) Log.w(TAG, "Skin '$root' could not be read: ${it.message}")
+            }.getOrNull()?.also { skinManifests[root] = it }
+        }
+    }
+
+    private suspend fun skinImage(id: GlyphAssetId, widthPx: Int, heightPx: Int): ImageBitmap? {
+        val root = skin.root ?: return null
+        val manifest = skinManifest(root) ?: return null
+        val entry = manifest.asset(id.name) ?: return null
+        val source = skinSource(root, entry) ?: return null
+        val look = glassLook
+        return withContext(Dispatchers.Default) {
+            // Effects are light, not a surface; they are drawn as they come.
+            val prepared = if (look != null && !entry.category.startsWith("feedback/")) {
+                glassed(source, look, tile = isTiledBody(entry.name), openBottom = isEndCap(entry.name))
+            } else {
+                source
+            }
+            scaled(prepared, widthPx, heightPx, manifest.pixelArt).asImageBitmap()
+        }
+    }
+
+    private suspend fun skinSource(root: String, entry: GlyphSkinAsset): Bitmap? {
+        val path = "$root/${entry.path}"
+        skinSources[path]?.let { return it }
+        if (path in failed) return null
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                context.assets.open(path).use { stream ->
+                    BitmapFactory.decodeStream(stream, null, BitmapFactory.Options().apply {
+                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                        inScaled = false
+                    }) ?: error("not a decodable image")
+                }
+            }.onFailure {
+                if (failed.add(path)) Log.w(TAG, "Skin image '$path' is unusable: ${it.message}")
+            }.getOrNull()?.also { skinSources[path] = it }
+        }
+    }
+
+    private fun glassed(source: Bitmap, look: GlyphGlassLook, tile: Boolean, openBottom: Boolean): Bitmap {
+        val w = source.width
+        val h = source.height
+        val pixels = IntArray(w * h)
+        source.getPixels(pixels, 0, w, 0, 0, w, h)
+        val glass = GlyphGlass.apply(pixels, w, h, look, tileVertically = tile, openBottom = openBottom)
+        return Bitmap.createBitmap(glass, w, h, Bitmap.Config.ARGB_8888)
+    }
+
+    /**
+     * Pixel art is enlarged by whole pixels first, then smoothed the last
+     * fraction of the way, so a 64-pixel arrow at 210 pixels keeps square
+     * pixels without the uneven ones a straight nearest-neighbour stretch to
+     * a non-multiple leaves.
+     */
+    private fun scaled(source: Bitmap, widthPx: Int, heightPx: Int, pixelArt: Boolean): Bitmap {
+        if (source.width == widthPx && source.height == heightPx) return source
+        if (!pixelArt) return Bitmap.createScaledBitmap(source, widthPx, heightPx, true)
+        val factor = maxOf(
+            1,
+            minOf(widthPx / source.width, heightPx / source.height),
+        )
+        val crisp = if (factor > 1) {
+            Bitmap.createScaledBitmap(source, source.width * factor, source.height * factor, false)
+        } else {
+            source
+        }
+        return if (crisp.width == widthPx && crisp.height == heightPx) {
+            crisp
+        } else {
+            Bitmap.createScaledBitmap(crisp, widthPx, heightPx, true)
+        }
+    }
+
+    private fun isTiledBody(name: String): Boolean =
+        name.startsWith("hold_body") || name.startsWith("roll_body")
+
+    private fun isEndCap(name: String): Boolean =
+        name.startsWith("hold_tail") || name.startsWith("roll_tail")
 
     /** The parsed vector, cached for the process. Null when the pack is broken. */
     suspend fun vector(id: GlyphAssetId): GlyphVector? {

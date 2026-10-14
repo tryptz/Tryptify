@@ -194,9 +194,16 @@ object GlyphAssetCatalog {
     fun holdHead(lane: GlyphLane, roll: Boolean): GlyphAssetId =
         GlyphAssetId(if (roll) "roll_head_${lane.assetSuffix}" else "hold_head_${lane.assetSuffix}")
 
-    fun holdBody(roll: Boolean): GlyphAssetId = GlyphAssetId(if (roll) "roll_body" else "hold_body")
+    /**
+     * [active] is the body while it is being held, which a skin may draw
+     * brighter (StepMania's do). A pack without one falls back to the resting
+     * body; see [fallback].
+     */
+    fun holdBody(roll: Boolean, active: Boolean = false): GlyphAssetId =
+        GlyphAssetId((if (roll) "roll_body" else "hold_body") + if (active) ACTIVE else "")
 
-    fun holdTail(roll: Boolean): GlyphAssetId = GlyphAssetId(if (roll) "roll_tail" else "hold_tail")
+    fun holdTail(roll: Boolean, active: Boolean = false): GlyphAssetId =
+        GlyphAssetId((if (roll) "roll_tail" else "hold_tail") + if (active) ACTIVE else "")
 
     fun special(note: GlyphSpecialNote): GlyphAssetId = GlyphAssetId(note.assetName)
 
@@ -205,6 +212,43 @@ object GlyphAssetCatalog {
     fun grade(art: GlyphGradeArt): GlyphAssetId = GlyphAssetId(art.assetName)
 
     fun effect(art: GlyphEffectArt): GlyphAssetId = GlyphAssetId(art.assetName)
+
+    /**
+     * An effect drawn in a lane. A skin whose explosion is arrow-shaped turns
+     * it per lane; the vector pack's are round and have one for all four,
+     * which [fallback] finds.
+     */
+    fun effect(art: GlyphEffectArt, lane: GlyphLane): GlyphAssetId =
+        if (art in LANE_EFFECTS) GlyphAssetId("${art.assetName}_${lane.assetSuffix}") else effect(art)
+
+    /**
+     * What to draw when a pack has no [id]: the resting body for an active
+     * one, the lane-less effect for a lane's. Null when there is nothing to
+     * fall back to.
+     */
+    fun fallback(id: GlyphAssetId): GlyphAssetId? {
+        val name = id.name
+        if (name.endsWith(ACTIVE) && (name.startsWith("hold_") || name.startsWith("roll_"))) {
+            return GlyphAssetId(name.removeSuffix(ACTIVE))
+        }
+        for (art in LANE_EFFECTS) {
+            for (lane in GlyphLane.entries) {
+                if (name == "${art.assetName}_${lane.assetSuffix}") return effect(art)
+            }
+        }
+        return null
+    }
+
+    /** Effects drawn larger than a note — twice its size — lane variants included. */
+    fun playfieldEffects(): List<GlyphAssetId> = buildList {
+        for (art in GlyphEffectArt.entries) {
+            add(effect(art))
+            if (art in LANE_EFFECTS) for (lane in GlyphLane.entries) add(effect(art, lane))
+        }
+    }
+
+    private const val ACTIVE = "_active"
+    private val LANE_EFFECTS = setOf(GlyphEffectArt.TAP_EXPLOSION, GlyphEffectArt.HOLD_GLOW)
 
     fun icon(icon: GlyphIcon): GlyphAssetId = GlyphAssetId(icon.assetName)
 
@@ -231,6 +275,10 @@ object GlyphAssetCatalog {
         add(holdTail(roll = false))
         add(holdBody(roll = true))
         add(holdTail(roll = true))
+        for (roll in listOf(false, true)) {
+            add(holdBody(roll, active = true))
+            add(holdTail(roll, active = true))
+        }
         for (note in GlyphSpecialNote.entries) add(special(note))
         for (art in GlyphJudgementArt.entries) add(judgement(art))
         for (art in GlyphEffectArt.entries) add(effect(art))

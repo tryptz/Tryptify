@@ -1,0 +1,192 @@
+The artwork in this folder is derived from the "retro" dance noteskin of
+StepMania (https://github.com/stepmania/stepmania, revision 825467bcd81c812b33ad684dc04dd151b2d5dec3),
+cut, rotated and flipped by tools/stepmania_skin/build_retro_skin.py.
+StepMania's licence follows, as its notice requires.
+
+The following license applies to most of the sm-ssc additions:
+
+sm-ssc is copyright © AJ Kelly, Midiman, shakesoda (referred to as
+"the spinal shark collective" hereafter), and other contributors.
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, and/or sell copies of the Software, and to permit persons to
+whom the Software is furnished to do so, provided that the above
+copyright notice(s) and this permission notice appear in all copies of
+the Software and that both the above copyright notice(s) and this
+permission notice appear in supporting documentation.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF
+THIRD PARTY RIGHTS. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS
+INCLUDED IN THIS NOTICE BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT
+OR CONSEQUENTIAL DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+
+The rest of the codebase is then licensed as follows:
+******************************************************************************
+
+StepMania is (c) Chris Danford, the StepMania development team, et al.
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, and/or sell copies of the Software, and to permit persons to
+whom the Software is furnished to do so, provided that the above
+copyright notice(s) and this permission notice appear in all copies of
+the Software and that both the above copyright notice(s) and this
+permission notice appear in supporting documentation.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF
+THIRD PARTY RIGHTS. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS
+INCLUDED IN THIS NOTICE BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT
+OR CONSEQUENTIAL DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+
+******************************************************************************
+
+Some code from ITGmania (while it was MIT licensed) has been merged back
+into the StepMania codebase. The relevant code spans from the beginning
+of ITGmania (https://github.com/itgmania/itgmania/tree/v0.5.1) to
+9737482f7c50dccd52ea36aecad7127fbbf942f4 (September 2024).
+
+These following people made this possible:
+https://github.com/natano
+https://github.com/jenxness
+https://github.com/teejusb
+https://github.com/dinsfire64
+https://github.com/JeffreyATW
+https://github.com/zachwalton
+https://github.com/telperion
+https://github.com/tertu-m
+https://github.com/quietly-turning
+https://github.com/jsirex
+https://github.com/bphlipot
+https://github.com/Alhetus
+https://github.com/geefr
+https://github.com/SheepyChris
+https://github.com/CrashCringle12
+https://github.com/bkirz
+https://github.com/ScottBrenner
+https://github.com/sergioperez
+https://github.com/mjvotaw
+https://github.com/SugoiFactory
+https://github.com/aeubanks
+https://github.com/x0rbl
+https://github.com/48productions
+https://github.com/glitchybear
+https://github.com/phantom10111
+https://github.com/florczakraf
+https://github.com/Pete-Lawrence
+https://github.com/sukibaby
+
+******************************************************************************
+
+RageSurface_Load_GIF contains code from Xpaint under the following license:
+
+ Copyright 1990, 1991, 1993 David Koblas.
+ Copyright 1996 Torsten Martinsen.
+   Permission to use, copy, modify, and distribute this software
+   and its documentation for any purpose and without fee is hereby
+   granted, provided that the above copyright notice appear in all
+   copies and that both that copyright notice and this permission
+   notice appear in supporting documentation.  This software is
+   provided "as is" without express or implied warranty.
+
+******************************************************************************
+
+Code in src/crypto/ is under the following permissive license:
+
+PuTTY is copyright 1997-2001 Simon Tatham.
+
+Portions copyright Robert de Bath, Joris van Rantwijk, Delian
+Delchev, Andreas Schultz, Jeroen Massar, Wez Furlong, Nicolas Barry,
+Justin Bradford, and CORE SDI S.A.
+
+Permission is hereby granted, free of charge, to any person
+obtaining a copy of this software and associated documentation files
+(the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of the Software,
+and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT.  IN NO EVENT SHALL THE COPYRIGHT HOLDERS BE LIABLE
+FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+******************************************************************************
+
+Code in RageSurfaceUtilsPalettize.cpp is under the following permissive
+license:
+
+Copyright (C) 1989, 1991 by Jef Poskanzer.
+Copyright (C) 1997, 2000, 2002 by Greg Roelofs; based on an idea by
+                               Stefan Schneider.
+
+Permission to use, copy, modify, and distribute this software and its
+documentation for any purpose and without fee is hereby granted, provided
+that the above copyright notice appear in all copies and that both that
+copyright notice and this permission notice appear in supporting
+documentation.  This software is provided "as is" without express or
+implied warranty.
+
+******************************************************************************
+
+PCRE is distributed under the 3-clause BSD license:
+
+Written by: Philip Hazel <ph10@cam.ac.uk>
+
+Copyright (c) 1997-2003 University of Cambridge
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+
+    * Neither the name of the University of Cambridge nor the names of its
+      contributors may be used to endorse or promote products derived from
+      this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+
+******************************************************************************
+
+The MAD library (included with most Windows binary distributions), and
+interface code in RageSoundReader_MP3, is under the GPL, available in
+Copying.MAD.  Support for this library can be disabled at compile-time.

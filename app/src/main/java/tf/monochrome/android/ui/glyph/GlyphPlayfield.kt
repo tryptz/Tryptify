@@ -16,6 +16,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -35,13 +36,15 @@ import tf.monochrome.android.glyph.asset.GlyphBeatDivision
 import tf.monochrome.android.glyph.asset.GlyphEffectArt
 import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.glyph.asset.GlyphPalette
+import tf.monochrome.android.glyph.asset.GlyphSkin
 import tf.monochrome.android.glyph.asset.GlyphSpecialNote
 import tf.monochrome.android.glyph.chart.GlyphNoteType
-import tf.monochrome.android.glyph.data.GlyphGhost
 import tf.monochrome.android.glyph.chart.GlyphTiming
+import tf.monochrome.android.glyph.data.GlyphGhost
 import tf.monochrome.android.glyph.engine.GlyphGameplayEngine
 import tf.monochrome.android.glyph.engine.GlyphScrollMode
 import tf.monochrome.android.glyph.engine.GlyphVisibleFrame
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
 
 /**
  * The four-lane playfield.
@@ -75,6 +78,8 @@ fun GlyphPlayfield(
     timing: GlyphTiming,
     reducedMotion: Boolean,
     modifier: Modifier = Modifier,
+    /** Which artwork to draw; glass skins take the UI-panel glass. */
+    skin: GlyphSkin = GlyphSkin.DEFAULT,
     /** A previous run's timing, drawn as markers beside the receptors. */
     ghost: GlyphGhost? = null,
     /**
@@ -100,9 +105,13 @@ fun GlyphPlayfield(
         // Warm the exact pixel size this layout needs. Re-runs on rotation or a
         // window resize, and drops the old rasters so stale sizes cannot pile up.
         var warmed by remember { mutableStateOf(false) }
-        LaunchedEffect(engine, noteSizePx) {
+        // The UI-panel glass, which the glass skin is baked from: moving those
+        // sliders re-warms the notes in the new glass.
+        val panelGlass = LocalMiniPlayerGlass.current
+        LaunchedEffect(engine, noteSizePx, skin, panelGlass) {
             warmed = false
             if (engine == null || noteSizePx <= 1) return@LaunchedEffect
+            assets.configure(skin, panelGlass)
             assets.releaseImages()
             assets.prewarm(
                 ids = GlyphAssetCatalog.playfieldAssets(engine.chart.divisionsUsed),
@@ -114,7 +123,7 @@ fun GlyphPlayfield(
             // own warm size. Warming it at the note size and scaling up would
             // throw away the resolution the pack exists to provide.
             assets.prewarm(
-                ids = GlyphEffectArt.entries.map(GlyphAssetCatalog::effect),
+                ids = GlyphAssetCatalog.playfieldEffects(),
                 widthPx = noteSizePx * 2,
                 heightPx = noteSizePx * 2,
             )
@@ -129,6 +138,11 @@ fun GlyphPlayfield(
         // Filled by the engine every frame and kept between frames, so drawing
         // allocates nothing per note.
         val frame = remember { GlyphVisibleFrame() }
+
+        // Hit flashes: the god-ray burst over the receptors, and the light it
+        // throws on every glyph around it.
+        val raysOn = rememberHitRaysAvailable(reducedMotion)
+        val hitLight = remember { GlyphHitLight() }
 
         val laneNames = remember {
             GlyphLane.entries.joinToString(", ") { it.label }
@@ -153,6 +167,11 @@ fun GlyphPlayfield(
             if (!warmed) return@Canvas
 
             val position = positionProvider()
+            if (raysOn) {
+                hitLight.update(System.nanoTime(), explosionProvider(), laneWidthPx, noteSizePx, receptorYPx)
+            } else {
+                hitLight.clear()
+            }
 
             // Culling window. Taken at the chart's slowest tempo so it never
             // under-covers: a tempo change inside the window would otherwise
@@ -188,6 +207,8 @@ fun GlyphPlayfield(
                     tailY = receptorYPx - frame.tailUnits(i) * pixelsPerUnit,
                     laneWidthPx = laneWidthPx,
                     noteSizePx = noteSizePx,
+                    active = frame.isHeld(i),
+                    light = hitLight,
                 )
             }
 
@@ -198,7 +219,7 @@ fun GlyphPlayfield(
                 for (lane in GlyphLane.entries) {
                     if (holdingMask and (1 shl lane.ordinal) == 0) continue
                     val glow = assets.image(
-                        GlyphAssetCatalog.effect(GlyphEffectArt.HOLD_GLOW),
+                        GlyphAssetCatalog.effect(GlyphEffectArt.HOLD_GLOW, lane),
                         noteSizePx * 2, noteSizePx * 2,
                     ) ?: continue
                     drawImage(
@@ -224,6 +245,7 @@ fun GlyphPlayfield(
                     x = lane.ordinal * laneWidthPx + (laneWidthPx - noteSizePx) / 2f,
                     y = receptorYPx - noteSizePx / 2f,
                     size = noteSizePx,
+                    light = hitLight,
                 )
             }
 
@@ -260,7 +282,7 @@ fun GlyphPlayfield(
                         GlyphEffectArt.MISS_CRACK
                     }
                     val image = assets.image(
-                        GlyphAssetCatalog.effect(art), noteSizePx * 2, noteSizePx * 2,
+                        GlyphAssetCatalog.effect(art, lane), noteSizePx * 2, noteSizePx * 2,
                     ) ?: continue
                     drawExplosion(
                         image = image,
@@ -315,7 +337,7 @@ fun GlyphPlayfield(
                 val x = note.lane.ordinal * laneWidthPx + (laneWidthPx - noteSizePx) / 2f
 
                 if (image != null) {
-                    drawSnapped(image, x, y - noteSizePx / 2f, noteSizePx)
+                    drawSnapped(image, x, y - noteSizePx / 2f, noteSizePx, hitLight)
                 } else {
                     // A missing asset costs its artwork, never the note: a
                     // filled square still tells the player where and when.
@@ -328,6 +350,17 @@ fun GlyphPlayfield(
                 }
             }
         }
+
+        // The god-ray burst over the receptors, on top of everything it lights.
+        GlyphHitRays(
+            assets = assets,
+            laneWidthPx = laneWidthPx,
+            noteSizePx = noteSizePx,
+            receptorYPx = receptorYPx,
+            explosionProvider = explosionProvider,
+            frameTick = frameTick,
+            enabled = raysOn && engine != null && warmed,
+        )
     }
 }
 
@@ -459,13 +492,42 @@ private fun noteAssetFor(
  * fractional placement would need, which is both faster and sharper — a
  * 64-pixel arrow at a 64-pixel size lands exactly on the grid it was drawn on.
  */
-private fun DrawScope.drawSnapped(image: ImageBitmap, x: Float, y: Float, size: Int) {
+private fun DrawScope.drawSnapped(
+    image: ImageBitmap,
+    x: Float,
+    y: Float,
+    size: Int,
+    light: GlyphHitLight? = null,
+) {
+    drawWithLight(image, IntOffset(x.roundToInt(), y.roundToInt()), IntSize(size, size), light)
+}
+
+/**
+ * [image] at [offset], and — when a hit flash nearby lights it — the same
+ * glyph again over itself, in the flash's colour, added.
+ */
+private fun DrawScope.drawWithLight(
+    image: ImageBitmap,
+    offset: IntOffset,
+    extent: IntSize,
+    light: GlyphHitLight?,
+) {
+    drawImage(image = image, dstOffset = offset, dstSize = extent)
+    if (light == null || !light.isLit) return
+    val amount = light.at(offset.x + extent.width / 2f, offset.y + extent.height / 2f)
+    if (amount <= LIT_THRESHOLD) return
     drawImage(
         image = image,
-        dstOffset = IntOffset(x.roundToInt(), y.roundToInt()),
-        dstSize = IntSize(size, size),
+        dstOffset = offset,
+        dstSize = extent,
+        alpha = amount,
+        colorFilter = light.filter,
+        blendMode = BlendMode.Plus,
     )
 }
+
+/** Below this a flash's light is not worth a second draw. */
+private const val LIT_THRESHOLD = 0.02f
 
 /**
  * Tile a hold body between its head and its tail.
@@ -484,9 +546,13 @@ private fun DrawScope.drawHoldBody(
     tailY: Float,
     laneWidthPx: Int,
     noteSizePx: Int,
+    /** Being held: a skin may draw the body brighter then. */
+    active: Boolean,
+    /** Hit flashes nearby, which light the body as they light everything. */
+    light: GlyphHitLight?,
 ) {
-    val body = assets.image(GlyphAssetCatalog.holdBody(isRoll), noteSizePx, noteSizePx) ?: return
-    val tail = assets.image(GlyphAssetCatalog.holdTail(isRoll), noteSizePx, noteSizePx)
+    val body = assets.image(GlyphAssetCatalog.holdBody(isRoll, active), noteSizePx, noteSizePx) ?: return
+    val tail = assets.image(GlyphAssetCatalog.holdTail(isRoll, active), noteSizePx, noteSizePx)
 
     // A held note's head stops at the receptor: the tail keeps travelling while
     // the head stays put, which is what makes holding legible. The engine
@@ -502,19 +568,21 @@ private fun DrawScope.drawHoldBody(
     while (y < headY) {
         val remaining = (headY - y).roundToInt()
         if (remaining <= 0) break
-        drawImage(
+        drawWithLight(
             image = body,
-            dstOffset = IntOffset(left, y.roundToInt()),
-            dstSize = IntSize(noteSizePx, minOf(noteSizePx, remaining)),
+            offset = IntOffset(left, y.roundToInt()),
+            extent = IntSize(noteSizePx, minOf(noteSizePx, remaining)),
+            light = light,
         )
         y += noteSizePx
     }
 
     if (tail != null) {
-        drawImage(
+        drawWithLight(
             image = tail,
-            dstOffset = IntOffset(left, (tailY - noteSizePx).roundToInt()),
-            dstSize = IntSize(noteSizePx, noteSizePx),
+            offset = IntOffset(left, (tailY - noteSizePx).roundToInt()),
+            extent = IntSize(noteSizePx, noteSizePx),
+            light = light,
         )
     }
 }

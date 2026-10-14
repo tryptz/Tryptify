@@ -90,6 +90,7 @@ fun GlyphGameplayScreen(
             scrollMode = gameplay.modifiers.scrollMode,
             timing = timing,
             reducedMotion = gameplay.modifiers.reducedMotion,
+            skin = gameplay.modifiers.skin,
             explosionProvider = explosionProvider,
             comboBurstProvider = comboBurstProvider,
             modifier = Modifier.fillMaxSize(),
@@ -394,6 +395,13 @@ private fun PauseOverlay(
                     mode = state.gameplay.modifiers.scrollMode,
                     onFamily = { onEvent(GlyphEvent.SetScrollFamily(it)) },
                     onValue = { onEvent(GlyphEvent.SetScrollValue(it)) },
+                )
+
+                Spacer(Modifier.height(MonoDimens.spacingLg))
+
+                GlyphSkinControl(
+                    skin = state.gameplay.modifiers.skin,
+                    onSelect = { onEvent(GlyphEvent.SetSkin(it)) },
                 )
 
                 Spacer(Modifier.height(MonoDimens.spacingLg))

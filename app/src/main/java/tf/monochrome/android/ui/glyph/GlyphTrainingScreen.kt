@@ -58,6 +58,7 @@ import tf.monochrome.android.glyph.asset.GlyphAssetCatalog
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
 import tf.monochrome.android.glyph.asset.GlyphDecor
 import tf.monochrome.android.glyph.asset.GlyphPalette
+import tf.monochrome.android.glyph.asset.GlyphSkin
 import tf.monochrome.android.glyph.chart.GlyphTiming
 import tf.monochrome.android.glyph.engine.GlyphGameplayEngine
 import tf.monochrome.android.glyph.engine.GlyphScrollFamily
@@ -156,6 +157,7 @@ fun GlyphTrainingScreen(
                 scrollMode = gameplay.modifiers.scrollMode,
                 timing = state.simfile?.timing ?: GlyphTiming.constant(120f),
                 reducedMotion = gameplay.modifiers.reducedMotion,
+                skin = gameplay.modifiers.skin,
                 ghost = if (state.training.ghostEnabled) ghost else null,
                 explosionProvider = explosionProvider,
                 comboBurstProvider = comboBurstProvider,
@@ -197,6 +199,11 @@ fun GlyphTrainingScreen(
                 mode = gameplay.modifiers.scrollMode,
                 onFamily = { onEvent(GlyphEvent.SetScrollFamily(it)) },
                 onValue = { onEvent(GlyphEvent.SetScrollValue(it)) },
+            )
+
+            GlyphSkinControl(
+                skin = gameplay.modifiers.skin,
+                onSelect = { onEvent(GlyphEvent.SetSkin(it)) },
             )
 
             GlyphSpeedControl(
@@ -559,6 +566,39 @@ fun GlyphScrollControl(
         // someone who does not already know exactly nothing.
         Text(
             text = mode.summary,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * Which note art the playfield draws. Looks only: it changes nothing about
+ * the run, so it can be switched mid-song from the pause panel.
+ */
+@Composable
+fun GlyphSkinControl(
+    skin: GlyphSkin,
+    onSelect: (GlyphSkin) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        ControlHeader(label = "Notes", value = skin.label)
+        Spacer(Modifier.height(MonoDimens.spacingSm))
+        GlyphChipRow(
+            options = GlyphSkin.entries.toList(),
+            selected = skin,
+            label = { it.label },
+            onSelect = onSelect,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = when (skin) {
+                GlyphSkin.RETRO_GLASS ->
+                    "StepMania's retro arrows in the app's glass, from your UI panel glass settings."
+                GlyphSkin.RETRO -> "StepMania's retro arrows, as StepMania draws them."
+                GlyphSkin.CLASSIC -> "Trypt Mania's own vector arrows."
+            },
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
