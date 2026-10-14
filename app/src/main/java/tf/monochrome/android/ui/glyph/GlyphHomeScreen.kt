@@ -64,8 +64,11 @@ import tf.monochrome.android.audio.sampler.stems.StemModelManager
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
+import tf.monochrome.android.glyph.data.GlyphAttempt
 import tf.monochrome.android.glyph.data.GlyphChartState
 import tf.monochrome.android.glyph.data.GlyphSong
+import tf.monochrome.android.glyph.engine.GlyphStepGrade
+import tf.monochrome.android.glyph.engine.StepManiaScoreKeeper
 import tf.monochrome.android.ui.components.CoverImage
 import tf.monochrome.android.ui.components.GlassPanel
 import tf.monochrome.android.ui.components.LocalGlassBackdrop
@@ -504,7 +507,7 @@ private fun SelectionPanel(
                         icon = Icons.Default.PlayArrow,
                         primary = true,
                         enabled = state.chart != null,
-                        onClick = { onEvent(GlyphEvent.StartPlay) },
+                        onClick = { onEvent(GlyphEvent.OpenOptions) },
                         modifier = Modifier.weight(1f),
                     )
                     GlyphButton(
@@ -524,8 +527,41 @@ private fun SelectionPanel(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                // This phone's best on the chosen difficulty, as StepMania's
+                // music wheel shows the grade beside each chart.
+                state.selectedDifficulty?.let { state.bestGrades[it] }?.let { best ->
+                    Spacer(Modifier.height(MonoDimens.spacingSm))
+                    PersonalBest(best)
+                }
             }
         }
+    }
+}
+
+/** The grade sprite and percent of this phone's best run, and whose it is. */
+@Composable
+private fun PersonalBest(best: GlyphAttempt) {
+    val grade = GlyphStepGrade.fromName(best.stepGrade)
+    val art = rememberStepArt(grade?.asset)
+    val percent = if (best.hasStepScore) best.percent else best.accuracy
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.semantics(mergeDescendants = true) {},
+    ) {
+        if (art != null) {
+            androidx.compose.foundation.Image(
+                bitmap = art,
+                contentDescription = grade?.label,
+                modifier = Modifier.height(24.dp),
+            )
+            Spacer(Modifier.width(MonoDimens.spacingSm))
+        }
+        Text(
+            text = "Best ${StepManiaScoreKeeper.formatPercent(percent)}" +
+                (best.playerName.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 

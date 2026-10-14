@@ -8,9 +8,14 @@ import tf.monochrome.android.glyph.chart.GlyphChart
 import tf.monochrome.android.glyph.chart.GlyphSimfile
 import tf.monochrome.android.glyph.data.GlyphAttempt
 import tf.monochrome.android.glyph.data.GlyphSong
+import tf.monochrome.android.glyph.engine.GlyphAppearance
+import tf.monochrome.android.glyph.engine.GlyphFailType
+import tf.monochrome.android.glyph.engine.GlyphFullCombo
 import tf.monochrome.android.glyph.engine.GlyphJudgement
 import tf.monochrome.android.glyph.engine.GlyphScoreSnapshot
 import tf.monochrome.android.glyph.engine.GlyphScrollMode
+import tf.monochrome.android.glyph.engine.GlyphTurn
+import tf.monochrome.android.glyph.engine.StepManiaScoreKeeper
 import tf.monochrome.android.glyph.training.GlyphCountIn
 import tf.monochrome.android.glyph.training.GlyphLoopSegment
 
@@ -38,6 +43,10 @@ data class GlyphUiState(
     val selectedDifficulty: StepManiaDifficulty? = null,
     val generation: GlyphGenerationState? = null,
     val model: GlyphModelUi = GlyphModelUi(),
+    /** The name on the high score tables. */
+    val playerName: String = "",
+    /** Best StepMania grade per difficulty of the selected song, for the menu. */
+    val bestGrades: Map<StepManiaDifficulty, GlyphAttempt> = emptyMap(),
     val gameplay: GlyphGameplayUi = GlyphGameplayUi(),
     val training: GlyphTrainingUi = GlyphTrainingUi(),
     val results: GlyphResultsUi? = null,
@@ -53,7 +62,7 @@ data class GlyphUiState(
         }
 }
 
-enum class GlyphScreen { HOME, GAMEPLAY, TRAINING, RESULTS }
+enum class GlyphScreen { HOME, OPTIONS, GAMEPLAY, TRAINING, RESULTS }
 
 /**
  * Conversion progress, mirroring the service's own stages.
@@ -107,17 +116,32 @@ data class GlyphGameplayUi(
     val heldLanes: Set<GlyphLane> = emptySet(),
     val modifiers: GlyphModifiers = GlyphModifiers(),
     val countInBeatsRemaining: Int = 0,
+    /** Whether the last judgement was early, for StepMania's early/late sprite. */
+    val lastJudgementEarly: Boolean = true,
+    /** StepMania's life bar, 0 to 1. */
+    val life: Float = StepManiaScoreKeeper.INITIAL_LIFE,
+    /** StepMania's dance-point percent so far, 0 to 1. */
+    val percent: Float = 0f,
+    /** The run's full combo so far, for the combo's colour. */
+    val fullCombo: GlyphFullCombo? = null,
+    /**
+     * When READY was shown, wall-clock ms; 0 when there is no intro. The
+     * music waits for it, so READY and GO never sit over the first notes.
+     */
+    val introStartedAtMs: Long = 0L,
 ) {
     val progress: Float
         get() = if (durationSeconds <= 0f) 0f else (positionSeconds / durationSeconds).coerceIn(0f, 1f)
 }
 
 /**
- * Play modifiers.
+ * Play modifiers: StepMania's player options.
  *
- * [mirror] and [shuffle] are chart transforms and are recorded on the attempt,
- * because a run under them is not comparable with one without. [metronome] and
- * [reducedMotion] change nothing about scoring and are not recorded.
+ * [turn] is a chart transform and is recorded on the attempt. [speed] (the
+ * music rate) and [timingWindowScale] (the Judge) change what a run is worth,
+ * so a run under either is marked as such on the high score table. The rest — scroll speed,
+ * appearance, reverse, dark, mini, the skin — change how the chart looks and
+ * nothing about how it is judged.
  */
 data class GlyphModifiers(
     val speed: Float = 1f,
@@ -128,8 +152,17 @@ data class GlyphModifiers(
      */
     val scrollMode: GlyphScrollMode = GlyphScrollMode.DEFAULT,
     val pitchLinkedToSpeed: Boolean = true,
-    val mirror: Boolean = false,
-    val shuffle: Boolean = false,
+    val turn: GlyphTurn = GlyphTurn.OFF,
+    val appearance: GlyphAppearance =
+        GlyphAppearance.VISIBLE,
+    /** Receptors at the top and notes rising, as StepMania's default scroll is. */
+    val reverse: Boolean = false,
+    /** No receptors: the notes are read against nothing. */
+    val dark: Boolean = false,
+    /** StepMania's Mini, 0 to 0.5: notes drawn this much smaller, halved. */
+    val mini: Float = 0f,
+    val failType: GlyphFailType =
+        GlyphFailType.IMMEDIATE,
     val metronome: Boolean = false,
     val timingWindowScale: Float = 1f,
     val hitboxScale: Float = 1f,
@@ -137,9 +170,12 @@ data class GlyphModifiers(
     /** The playfield's artwork. Looks only, so not in [altersScoring]. */
     val skin: tf.monochrome.android.glyph.asset.GlyphSkin = tf.monochrome.android.glyph.asset.GlyphSkin.DEFAULT,
 ) {
-    /** True when the run is not comparable with a clean one. */
+    val mirror: Boolean get() = turn == GlyphTurn.MIRROR
+    val shuffle: Boolean get() = turn == GlyphTurn.SHUFFLE
+
+    /** True when the run is not comparable with a clean one: marked on the high score table. */
     val altersScoring: Boolean
-        get() = speed != 1f || mirror || shuffle || timingWindowScale != 1f
+        get() = speed != 1f || timingWindowScale != 1f
 }
 
 /** Training Ground's own state. */
@@ -169,6 +205,8 @@ data class GlyphGauntlet(
 data class GlyphResultsUi(
     val attempt: GlyphAttempt,
     val previousBest: GlyphAttempt?,
+    /** This phone's top ten for the chart and difficulty, this run among them if it made it. */
+    val machineScores: List<GlyphAttempt> = emptyList(),
     /** Accuracy per song section, in order, for the graph. */
     val sections: List<GlyphSectionResult> = emptyList(),
     val selectedSection: Int? = null,

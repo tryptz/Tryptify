@@ -60,6 +60,7 @@ import tf.monochrome.android.glyph.asset.GlyphDecor
 import tf.monochrome.android.glyph.asset.GlyphPalette
 import tf.monochrome.android.glyph.asset.GlyphSkin
 import tf.monochrome.android.glyph.chart.GlyphTiming
+import tf.monochrome.android.glyph.data.GlyphGhost
 import tf.monochrome.android.glyph.engine.GlyphGameplayEngine
 import tf.monochrome.android.glyph.engine.GlyphScrollFamily
 import tf.monochrome.android.glyph.engine.GlyphScrollMode
@@ -88,10 +89,11 @@ fun GlyphTrainingScreen(
     positionProvider: () -> Float,
     onEvent: (GlyphEvent) -> Unit,
     modifier: Modifier = Modifier,
-    ghost: tf.monochrome.android.glyph.data.GlyphGhost? = null,
+    ghost: GlyphGhost? = null,
     explosionProvider: () -> Map<tf.monochrome.android.glyph.asset.GlyphLane, LaneFlash> =
         { emptyMap() },
     comboBurstProvider: () -> Long = { 0L },
+    comboProvider: () -> Int = { 0 },
 ) {
     val fontFamily = rememberStepTechFontFamily()
     val typography = GlyphTypography(fontFamily)
@@ -161,6 +163,8 @@ fun GlyphTrainingScreen(
                 ghost = if (state.training.ghostEnabled) ghost else null,
                 explosionProvider = explosionProvider,
                 comboBurstProvider = comboBurstProvider,
+                comboProvider = comboProvider,
+                look = GlyphFieldLook.of(gameplay.modifiers),
                 modifier = Modifier.fillMaxSize(),
             )
             GlyphLaneInput(

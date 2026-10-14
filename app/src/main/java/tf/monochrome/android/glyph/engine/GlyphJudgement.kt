@@ -25,7 +25,9 @@ enum class GlyphJudgement(
     MARVELOUS("Marvelous", GlyphJudgementArt.MARVELOUS, 1.00f, true),
     PERFECT("Perfect", GlyphJudgementArt.PERFECT, 0.95f, true),
     GREAT("Great", GlyphJudgementArt.GREAT, 0.70f, true),
-    GOOD("Good", GlyphJudgementArt.GOOD, 0.40f, true),
+    // A Good breaks the combo, as it does in StepMania's dance mode, where
+    // only a Great or better continues one.
+    GOOD("Good", GlyphJudgementArt.GOOD, 0.40f, false),
     BOO("Boo", GlyphJudgementArt.BOO, 0.10f, false),
     MISS("Miss", GlyphJudgementArt.MISS, 0.00f, false),
     ;
@@ -94,7 +96,8 @@ data class GlyphTimingWindows(
     }
 
     companion object {
-        const val MIN_SCALE = 0.5f
+        // StepMania's Justice (Judge 8) is a third of the standard windows.
+        const val MIN_SCALE = 0.33f
         const val MAX_SCALE = 2.0f
 
         /** The default set, at the sizes the mode is balanced around. */

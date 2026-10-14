@@ -44,8 +44,39 @@ data class GlyphAttempt(
     @SerialName("segmentStart") val segmentStartSeconds: Float? = null,
     @SerialName("segmentEnd") val segmentEndSeconds: Float? = null,
     @SerialName("ghost") val ghost: GlyphGhost? = null,
+    // ── StepMania's scoring, added after the first release ───────────────
+    // Defaults all mean "not recorded", so a run saved before these existed
+    // still reads, and simply has no StepMania grade to show.
+    /** Dance points over the possible, 0 to 1; negative when not recorded. */
+    @SerialName("percent") val percent: Float = -1f,
+    /** A [tf.monochrome.android.glyph.engine.GlyphStepGrade] name. */
+    @SerialName("grade") val stepGrade: String? = null,
+    /** A [tf.monochrome.android.glyph.engine.GlyphFullCombo] name. */
+    @SerialName("fullCombo") val fullCombo: String? = null,
+    @SerialName("failed") val failed: Boolean = false,
+    @SerialName("holdsHeld") val holdsHeld: Int = 0,
+    @SerialName("holdsLetGo") val holdsLetGo: Int = 0,
+    @SerialName("minesHit") val minesHit: Int = 0,
+    /** The name on the high score table. */
+    @SerialName("name") val playerName: String = "",
+    /** Timing window scale; 1 is StepMania's Judge 4. */
+    @SerialName("judgeScale") val judgeScale: Float = 1f,
+    @SerialName("turn") val turn: String = "off",
 ) {
     val isFullRun: Boolean get() = segmentStartSeconds == null
+
+    val hasStepScore: Boolean get() = percent >= 0f
+
+    /**
+     * What sets this run apart from a standard one on the high score table:
+     * the music rate and the judge, as StepMania's machine scores note them.
+     * Empty for a run at the song's own rate under Judge 4.
+     */
+    val modsLabel: String
+        get() = buildList {
+            if (speed != 1f) add("%.1fx".format(speed))
+            if (judgeScale != 1f) add(tf.monochrome.android.glyph.engine.GlyphJudge.forScale(judgeScale).label)
+        }.joinToString(" ")
 
     fun judgementCount(judgement: GlyphJudgement): Int =
         judgementCounts[judgement.name] ?: 0

@@ -207,9 +207,10 @@ void releasedHoldDropsAfterGrace() {
     e.advanceTo(0.9f);
     e.press(L, 1.0f, nullptr);
     e.release(L, 1.2f, nullptr);
-    e.advanceTo(1.25f);
+    // StepMania's hold window: a quarter of a second to come back.
+    e.advanceTo(1.4f);
     CHECK_EQ(e.score().judged, 1);
-    e.advanceTo(1.45f);
+    e.advanceTo(1.5f);
     CHECK_EQ(e.score().judged, 2);
     CHECK_EQ(e.score().holdsDropped, 1);
     CHECK_EQ(e.score().counts[kMiss], 1);
@@ -228,9 +229,10 @@ void rollDropsWhenTapsStop() {
     e.press(L, 1.0f, nullptr);
     e.press(L, 1.2f, nullptr);  // refreshes the roll, judges nothing new
     CHECK_EQ(e.score().judged, 1);
-    e.advanceTo(1.45f);
+    // StepMania's roll window: half a second between taps.
+    e.advanceTo(1.65f);
     CHECK_EQ(e.score().judged, 1);
-    e.advanceTo(1.49f);
+    e.advanceTo(1.71f);
     CHECK_EQ(e.score().holdsDropped, 1);
 }
 

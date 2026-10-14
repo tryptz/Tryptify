@@ -29,22 +29,35 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
 import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.glyph.asset.GlyphPalette
 import tf.monochrome.android.glyph.chart.GlyphTiming
+import tf.monochrome.android.glyph.engine.GlyphAppearance
+import tf.monochrome.android.glyph.engine.GlyphFullCombo
 import tf.monochrome.android.glyph.engine.GlyphGameplayEngine
+import tf.monochrome.android.glyph.engine.GlyphJudge
 import tf.monochrome.android.glyph.engine.GlyphJudgement
+import tf.monochrome.android.glyph.engine.GlyphTurn
+import tf.monochrome.android.glyph.engine.StepManiaScoreKeeper
 import tf.monochrome.android.ui.components.GlassPanel
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
 import tf.monochrome.android.ui.theme.MonoDimens
@@ -68,9 +81,15 @@ fun GlyphGameplayScreen(
     modifier: Modifier = Modifier,
     explosionProvider: () -> Map<GlyphLane, LaneFlash> = { emptyMap() },
     comboBurstProvider: () -> Long = { 0L },
+    comboProvider: () -> Int = { 0 },
 ) {
     val fontFamily = rememberStepTechFontFamily()
     val typography = GlyphTypography(fontFamily)
+    val fonts = rememberStepFonts()
+    val context = LocalContext.current
+    // Every judgement sprite decoded before the first step, so the first
+    // FLAWLESS is never drawn a frame late.
+    LaunchedEffect(Unit) { GlyphStepArt.preloadJudgements(context) }
     val gameplay = state.gameplay
     // A chart that failed to load still has to draw something rather than
     // crash; a steady map is the harmless stand-in.
@@ -93,6 +112,8 @@ fun GlyphGameplayScreen(
             skin = gameplay.modifiers.skin,
             explosionProvider = explosionProvider,
             comboBurstProvider = comboBurstProvider,
+            comboProvider = comboProvider,
+            look = GlyphFieldLook.of(gameplay.modifiers),
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -116,11 +137,21 @@ fun GlyphGameplayScreen(
 
         JudgementOverlay(
             judgement = gameplay.lastJudgement,
+            early = gameplay.lastJudgementEarly,
             shownAtMs = gameplay.lastJudgementAtMs,
             combo = gameplay.score.combo,
-            reducedMotion = gameplay.modifiers.reducedMotion,
+            fullCombo = gameplay.fullCombo,
+            fonts = fonts,
             modifier = Modifier.align(Alignment.Center),
         )
+
+        if (gameplay.introStartedAtMs > 0L) {
+            ReadyGo(
+                startedAtMs = gameplay.introStartedAtMs,
+                fonts = fonts,
+                modifier = Modifier.align(Alignment.Center),
+            )
+        }
 
         // Clear of the status bar and the cutout when they are there, and only
         // of those: the route runs full-bleed while playing and the system
@@ -137,6 +168,7 @@ fun GlyphGameplayScreen(
             GameplayHud(
                 state = state,
                 typography = typography,
+                fonts = fonts,
                 onEvent = onEvent,
             )
         }
@@ -162,47 +194,30 @@ fun GlyphGameplayScreen(
 private fun GameplayHud(
     state: GlyphUiState,
     typography: GlyphTypography,
+    fonts: GlyphStepFonts,
     onEvent: (GlyphEvent) -> Unit,
 ) {
     val gameplay = state.gameplay
-    val score = gameplay.score
 
     Column(modifier = Modifier.padding(horizontal = GlyphTheme.Grid * 2)) {
+        // StepMania's top row: the life bar, the percent, and the way out.
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(GlyphTheme.Grid * 2),
         ) {
-            // The HUD is part of the playfield, so it keeps the playfield's ink
-            // in every theme, and the monospaced readouts.
-            GlyphStat(
-                label = "Score",
-                value = "%,d".format(score.score),
-                valueColor = GlyphTheme.Paper,
-                labelColor = GlyphTheme.Muted,
-                valueStyle = typography.title,
-                labelStyle = typography.label,
-                upperCaseLabel = true,
+            GlyphLifeBar(
+                life = gameplay.life,
+                modifier = Modifier.weight(1f),
             )
-            GlyphStat(
-                label = "Combo",
-                value = score.combo.toString(),
-                valueColor = if (score.combo > 0) GlyphTheme.Positive else GlyphTheme.Muted,
-                labelColor = GlyphTheme.Muted,
-                valueStyle = typography.title,
-                labelStyle = typography.label,
-                upperCaseLabel = true,
+            Text(
+                text = StepManiaScoreKeeper.formatPercent(gameplay.percent),
+                style = fonts.score,
+                color = GlyphTheme.Paper,
+                modifier = Modifier.semantics {
+                    contentDescription = "Score ${StepManiaScoreKeeper.formatPercent(gameplay.percent)}"
+                },
             )
-            GlyphStat(
-                label = "Accuracy",
-                value = "%.1f%%".format(score.accuracy * 100),
-                valueColor = GlyphTheme.Paper,
-                labelColor = GlyphTheme.Muted,
-                valueStyle = typography.title,
-                labelStyle = typography.label,
-                upperCaseLabel = true,
-            )
-            Spacer(Modifier.weight(1f))
             IconButton(onClick = { onEvent(GlyphEvent.TogglePause) }) {
                 Icon(
                     imageVector = if (gameplay.isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
@@ -212,43 +227,26 @@ private fun GameplayHud(
             }
         }
 
-        Spacer(Modifier.height(GlyphTheme.Grid))
-
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(GlyphTheme.Grid),
         ) {
-            Text(
-                text = "${gameplay.bpm.toInt()} BPM",
-                style = typography.label,
-                color = GlyphTheme.Muted,
-            )
-            Text(
-                text = gameplay.sectionLabel,
-                style = typography.label,
-                color = GlyphTheme.Muted,
-            )
+            Text(text = "${gameplay.bpm.toInt()} BPM", style = fonts.label, color = GlyphTheme.Muted)
+            Text(text = gameplay.sectionLabel, style = fonts.label, color = GlyphTheme.Muted)
             // The scroll mode is the first thing a player checks when a chart
-            // reads wrong, so it stays on screen rather than living two taps
-            // away in the pause panel.
-            Text(
-                text = gameplay.modifiers.scrollMode.label,
-                style = typography.label,
-                color = GlyphTheme.Muted,
-            )
-            if (gameplay.modifiers.altersScoring) {
-                // A modified run is not comparable with a clean one, and the
-                // player should be able to see that while playing rather than
-                // discover it on the results screen.
+            // reads wrong, so it stays on screen rather than two taps away.
+            Text(text = gameplay.modifiers.scrollMode.label, style = fonts.label, color = GlyphTheme.Muted)
+            modifierSummary(gameplay.modifiers).takeIf { it.isNotEmpty() }?.let { summary ->
+                // A run at another rate or judge says so while it is played.
                 Text(
-                    text = modifierSummary(gameplay.modifiers),
-                    style = typography.label,
-                    color = GlyphTheme.Warning,
+                    text = summary,
+                    style = fonts.label,
+                    color = if (gameplay.modifiers.altersScoring) GlyphTheme.Warning else GlyphTheme.Muted,
                 )
             }
         }
 
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
         GlyphMeter(
             fraction = gameplay.progress,
             color = GlyphTheme.Paper.copy(alpha = 0.6f),
@@ -259,29 +257,26 @@ private fun GameplayHud(
 }
 
 private fun modifierSummary(modifiers: GlyphModifiers): String = buildList {
-    if (modifiers.speed != 1f) add("%.2f×".format(modifiers.speed))
-    if (modifiers.mirror) add("Mirror")
-    if (modifiers.shuffle) add("Shuffle")
-    if (modifiers.timingWindowScale != 1f) add("Windows %.2f×".format(modifiers.timingWindowScale))
+    if (modifiers.speed != 1f) add("%.1fx rate".format(modifiers.speed))
+    if (modifiers.turn != GlyphTurn.OFF) add(modifiers.turn.label)
+    if (modifiers.appearance != GlyphAppearance.VISIBLE) add(modifiers.appearance.label)
+    if (modifiers.timingWindowScale != 1f) {
+        add(GlyphJudge.forScale(modifiers.timingWindowScale).label)
+    }
 }.joinToString(" · ")
 
 /**
- * The judgement, drawn through the lyrics FX pipeline.
- *
- * This replaced the pack's flat wordmark image. The 5x7 wordmarks are still in
- * the pack and still the right artwork for a results sheet or a still, but on
- * a live playfield a per-letter 3D letterform lit by the glass shader reads as
- * an event in a way a flat sprite does not.
- *
- * It announces itself either way: the letterforms are graphics as far as a
- * screen reader is concerned, so without a live region a judgement is silent.
+ * The judgement and combo, announced: the sprite is a picture to a screen
+ * reader, so without a live region a judgement would land silently.
  */
 @Composable
 private fun JudgementOverlay(
     judgement: GlyphJudgement?,
+    early: Boolean,
     shownAtMs: Long,
     combo: Int,
-    reducedMotion: Boolean,
+    fullCombo: GlyphFullCombo?,
+    fonts: GlyphStepFonts,
     modifier: Modifier = Modifier,
 ) {
     if (judgement == null) return
@@ -289,22 +284,65 @@ private fun JudgementOverlay(
         modifier = modifier.semantics {
             liveRegion = LiveRegionMode.Polite
             contentDescription = if (combo > 1) {
-                "${judgement.label}, combo $combo"
+                "${stepJudgementName(judgement)}, combo $combo"
             } else {
-                judgement.label
+                stepJudgementName(judgement)
             }
         },
         contentAlignment = Alignment.Center,
     ) {
         GlyphJudgementFx(
             judgement = judgement,
+            early = early,
             shownAtMs = shownAtMs,
             combo = combo,
-            reducedMotion = reducedMotion,
+            fullCombo = fullCombo,
+            fonts = fonts,
         )
     }
 }
 
+/**
+ * READY, then GO!, while the music waits: StepMania's own way into a song.
+ * Flat: READY fades in and out, GO! lands from a little larger. Nothing tilts.
+ */
+@Composable
+private fun ReadyGo(startedAtMs: Long, fonts: GlyphStepFonts, modifier: Modifier = Modifier) {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(startedAtMs) {
+        while (true) withFrameMillis { now = System.currentTimeMillis() }
+    }
+    val elapsed = (now - startedAtMs).coerceAtLeast(0L)
+    val ready = elapsed < READY_MILLIS
+    val local = if (ready) elapsed / READY_MILLIS.toFloat() else (elapsed - READY_MILLIS) / GO_MILLIS.toFloat()
+    val fade = when {
+        local < 0.15f -> local / 0.15f
+        local > 0.8f -> ((1f - local) / 0.2f).coerceAtLeast(0f)
+        else -> 1f
+    }
+    val zoom = if (ready) 1f else 1f + 0.35f * (1f - (local / 0.25f).coerceIn(0f, 1f))
+    Box(
+        modifier = modifier.semantics {
+            liveRegion = LiveRegionMode.Assertive
+            contentDescription = if (ready) "Ready" else "Go"
+        },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = if (ready) "READY" else "GO!",
+            style = fonts.banner,
+            color = if (ready) GlyphTheme.Paper else Color(0xFFFFD43B),
+            modifier = Modifier.graphicsLayer {
+                alpha = fade
+                scaleX = zoom
+                scaleY = zoom
+            },
+        )
+    }
+}
+
+private const val READY_MILLIS = 1_000L
+private const val GO_MILLIS = 800L
 
 /**
  * The count-in.

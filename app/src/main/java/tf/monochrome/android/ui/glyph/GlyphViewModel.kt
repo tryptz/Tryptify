@@ -12,6 +12,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.util.UUID
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,11 +21,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tf.monochrome.android.audio.sampler.PcmDecoder
-import tf.monochrome.android.audio.sampler.SampleEdits
 import tf.monochrome.android.audio.sampler.stems.BackendKind
 import tf.monochrome.android.audio.sampler.stems.InstallResult
 import tf.monochrome.android.audio.sampler.stems.StemBackendRegistry
@@ -36,7 +35,6 @@ import tf.monochrome.android.glyph.asset.GlyphAssetRepository
 import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.glyph.asset.GlyphSkin
 import tf.monochrome.android.glyph.chart.GlyphChart
-import tf.monochrome.android.glyph.chart.GlyphNote
 import tf.monochrome.android.glyph.chart.GlyphTiming
 import tf.monochrome.android.glyph.data.GlyphAttempt
 import tf.monochrome.android.glyph.data.GlyphAttemptStore
@@ -44,19 +42,23 @@ import tf.monochrome.android.glyph.data.GlyphGhost
 import tf.monochrome.android.glyph.data.GlyphGhostRecorder
 import tf.monochrome.android.glyph.data.GlyphSong
 import tf.monochrome.android.glyph.data.GlyphSongRepository
+import tf.monochrome.android.glyph.engine.GlyphAppearance
 import tf.monochrome.android.glyph.engine.GlyphAudioTransport
+import tf.monochrome.android.glyph.engine.GlyphFailType
 import tf.monochrome.android.glyph.engine.GlyphGameplayEngine
 import tf.monochrome.android.glyph.engine.GlyphJudgement
 import tf.monochrome.android.glyph.engine.GlyphJudgementEvent
 import tf.monochrome.android.glyph.engine.GlyphScrollFamily
 import tf.monochrome.android.glyph.engine.GlyphScrollMode
+import tf.monochrome.android.glyph.engine.GlyphStepGrade
 import tf.monochrome.android.glyph.engine.GlyphTimingWindows
-import tf.monochrome.android.glyph.training.GlyphCountIn
+import tf.monochrome.android.glyph.engine.GlyphTurn
+import tf.monochrome.android.glyph.engine.StepManiaScoreKeeper
 import tf.monochrome.android.glyph.training.GlyphGauntletFinder
 import tf.monochrome.android.glyph.training.GlyphGauntlets
+import tf.monochrome.android.glyph.training.GlyphLoopSegment
 import tf.monochrome.android.glyph.training.GlyphMetronome
 import tf.monochrome.android.glyph.training.GlyphWaveformBuilder
-import tf.monochrome.android.glyph.training.GlyphLoopSegment
 
 /**
  * The mode's single source of truth.
@@ -181,6 +183,15 @@ class GlyphViewModel @Inject constructor(
 
     fun comboBurstNanos(): Long = comboBurstNanos
 
+    /** The combo as of the last tick, for the hit rays' colour. Read while drawing. */
+    @Volatile private var liveCombo = 0
+
+    fun liveCombo(): Int = liveCombo
+
+    /** The run scored StepMania's way, fed the same events as the ghost. */
+    private var stepScore: StepManiaScoreKeeper? = null
+    private var introJob: Job? = null
+
     private var tickJob: Job? = null
     private var waveformJob: Job? = null
     private var selectionJob: Job? = null
@@ -190,11 +201,11 @@ class GlyphViewModel @Inject constructor(
     private var modelJob: Job? = null
     private var runStartedAtMs = 0L
 
-    /** Trypt Mania's own small preferences; the skin is the only one so far. */
+    /** Trypt Mania's own preferences: the player options and the high score name. */
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     init {
-        updateModifiers { it.copy(skin = GlyphSkin.fromId(prefs.getString(PREF_SKIN, null))) }
+        loadOptions()
         refreshModel()
         viewModelScope.launch {
             songs.songs()
@@ -231,6 +242,18 @@ class GlyphViewModel @Inject constructor(
             GlyphEvent.RemoveModel -> removeModel()
             GlyphEvent.DismissModelMessage -> updateModel { it.copy(message = null) }
 
+            GlyphEvent.OpenOptions -> if (_ui.value.chart != null) {
+                _ui.value = _ui.value.copy(screen = GlyphScreen.OPTIONS)
+            }
+            GlyphEvent.CloseOptions -> _ui.value = _ui.value.copy(screen = GlyphScreen.HOME)
+            is GlyphEvent.SetTurn -> updateModifiers { it.copy(turn = event.turn) }
+            is GlyphEvent.SetAppearance -> updateModifiers { it.copy(appearance = event.appearance) }
+            is GlyphEvent.SetReverse -> updateModifiers { it.copy(reverse = event.reverse) }
+            is GlyphEvent.SetDark -> updateModifiers { it.copy(dark = event.dark) }
+            is GlyphEvent.SetMini -> updateModifiers { it.copy(mini = event.mini.coerceIn(0f, MAX_MINI)) }
+            is GlyphEvent.SetFailType -> updateModifiers { it.copy(failType = event.failType) }
+            is GlyphEvent.SetPlayerName -> setPlayerName(event.name)
+
             GlyphEvent.StartPlay -> start(training = false)
             GlyphEvent.StartTraining -> start(training = true)
             GlyphEvent.TogglePause -> togglePause()
@@ -246,11 +269,11 @@ class GlyphViewModel @Inject constructor(
                 transport.setSpeed(_ui.value.gameplay.modifiers.speed, event.linked)
             }
             GlyphEvent.ToggleMirror -> {
-                updateModifiers { it.copy(mirror = !it.mirror) }
+                updateModifiers { it.copy(turn = if (it.mirror) GlyphTurn.OFF else GlyphTurn.MIRROR) }
                 rebuildEngine()
             }
             GlyphEvent.ToggleShuffle -> {
-                updateModifiers { it.copy(shuffle = !it.shuffle) }
+                updateModifiers { it.copy(turn = if (it.shuffle) GlyphTurn.OFF else GlyphTurn.SHUFFLE) }
                 rebuildEngine()
             }
             GlyphEvent.ToggleMetronome -> updateModifiers { it.copy(metronome = !it.metronome) }
@@ -260,10 +283,7 @@ class GlyphViewModel @Inject constructor(
                 updateModifiers { it.copy(timingWindowScale = event.scale) }
                 rebuildEngine()
             }
-            is GlyphEvent.SetSkin -> {
-                updateModifiers { it.copy(skin = event.skin) }
-                prefs.edit().putString(PREF_SKIN, event.skin.id).apply()
-            }
+            is GlyphEvent.SetSkin -> updateModifiers { it.copy(skin = event.skin) }
             is GlyphEvent.SetHitboxScale ->
                 updateModifiers { it.copy(hitboxScale = event.scale.coerceIn(MIN_HITBOX, MAX_HITBOX)) }
 
@@ -340,6 +360,7 @@ class GlyphViewModel @Inject constructor(
                 training = _ui.value.training.copy(
                     hasGhost = attempts.latestGhost(refreshed.chartId) != null,
                 ),
+                bestGrades = bestGradesFor(refreshed),
             )
             loadWaveform(refreshed)
         }
@@ -613,6 +634,11 @@ class GlyphViewModel @Inject constructor(
         lastPublishNanos = 0L
         comboBurstNanos = 0L
         lastComboMilestone = 0
+        // An MMod read back from the preferences does not know this chart's
+        // fastest tempo yet, which is what its multiplier is solved from.
+        (_ui.value.gameplay.modifiers.scrollMode as? GlyphScrollMode.MMod)?.let { mmod ->
+            updateModifiers { it.copy(scrollMode = GlyphScrollMode.MMod(mmod.targetBpm, chartMaxBpm())) }
+        }
         replaceEngine(buildEngine(chart))
         runStartedAtMs = System.currentTimeMillis()
 
@@ -624,10 +650,14 @@ class GlyphViewModel @Inject constructor(
         transport.loop = if (training) _ui.value.training.loop else null
         val from = transport.loop?.startSeconds ?: 0f
         armEngineWindow(from)
+        resetStepScore()
         transport.seekTo(from)
         armCountIn(training, from)
-        transport.play()
 
+        // A scored run opens on StepMania's READY, GO!, with the music held
+        // until it is over, so the two words never sit over the first notes.
+        // Training Ground has its own count-in and starts at once.
+        val intro = !training && !_ui.value.gameplay.modifiers.reducedMotion
         _ui.value = _ui.value.copy(
             screen = if (training) GlyphScreen.TRAINING else GlyphScreen.GAMEPLAY,
             gameplay = _ui.value.gameplay.copy(
@@ -639,10 +669,38 @@ class GlyphViewModel @Inject constructor(
                 bpm = _ui.value.simfile?.timing?.startBpm ?: 0f,
                 score = engine!!.scoreSnapshot,
                 lastJudgement = null,
+                life = StepManiaScoreKeeper.INITIAL_LIFE,
+                percent = 0f,
+                fullCombo = null,
+                introStartedAtMs = if (intro) System.currentTimeMillis() else 0L,
             ),
             results = null,
         )
-        startTick()
+        introJob?.cancel()
+        if (intro) {
+            introJob = viewModelScope.launch {
+                delay(INTRO_MILLIS)
+                transport.play()
+                startTick()
+                _ui.value = _ui.value.copy(gameplay = _ui.value.gameplay.copy(introStartedAtMs = 0L))
+            }
+        } else {
+            transport.play()
+            startTick()
+        }
+    }
+
+    /**
+     * A fresh StepMania scorekeeper for the run, sized to what the engine is
+     * scoring now: the whole chart, or the loop being practised.
+     */
+    private fun resetStepScore() {
+        val running = engine ?: return
+        stepScore = StepManiaScoreKeeper(
+            possibleJudgements = running.scoreSnapshot.totalJudgements,
+            failType = _ui.value.gameplay.modifiers.failType,
+        )
+        liveCombo = 0
     }
 
     /**
@@ -654,36 +712,19 @@ class GlyphViewModel @Inject constructor(
      */
     private fun buildEngine(chart: GlyphChart): GlyphGameplayEngine {
         val modifiers = _ui.value.gameplay.modifiers
-        val transformed = when {
-            modifiers.shuffle -> chart.copy(notes = shuffleLanes(chart))
-            modifiers.mirror -> chart.copy(
-                notes = chart.notes.map { it.copy(lane = GlyphLane.mirrorOf(it.lane)) },
-            )
-            else -> chart
+        // The shuffle is seeded by the chart, so a chart shuffles the same
+        // way every time and can be learned.
+        val seed = chart.chartName.hashCode().toLong()
+        val transformed = if (modifiers.turn == GlyphTurn.OFF) {
+            chart
+        } else {
+            chart.copy(notes = chart.notes.map { it.copy(lane = modifiers.turn.map(it.lane, seed)) })
         }
         return GlyphGameplayEngine(
             chart = transformed,
             windows = GlyphTimingWindows.STANDARD.scaled(modifiers.timingWindowScale),
             timing = _ui.value.simfile?.timing ?: GlyphTiming.constant(GlyphTiming.DEFAULT_BPM),
         )
-    }
-
-    /**
-     * Shuffle: one lane permutation for the whole chart, seeded by the chart.
-     *
-     * Per-note randomness would produce patterns no hand can play. A single
-     * permutation keeps every jump and stream shaped as written while changing
-     * which fingers play it, and seeding it by the chart means the same song
-     * shuffles the same way twice — so a player can actually practise it.
-     */
-    private fun shuffleLanes(chart: GlyphChart): List<GlyphNote> {
-        val order = GlyphLane.entries.toMutableList()
-        val random = java.util.Random(chart.chartName.hashCode().toLong())
-        for (index in order.indices.reversed()) {
-            val swap = random.nextInt(index + 1)
-            order[index] = order[swap].also { order[swap] = order[index] }
-        }
-        return chart.notes.map { it.copy(lane = order[it.lane.ordinal]) }
     }
 
     /** Rebuild mid-run when a modifier changes the chart or the windows. */
@@ -725,6 +766,7 @@ class GlyphViewModel @Inject constructor(
                     // when the run started.
                     engineArmed = false
                     armEngineWindow(position)
+                    resetStepScore()
                     metronome.reset()
                     ghostRecorder.clear()
                     laneFlashes.clear()
@@ -757,11 +799,13 @@ class GlyphViewModel @Inject constructor(
                             offsetSeconds = event.offsetSeconds,
                             judgement = event.judgement,
                         )
+                        stepScore?.record(event)
                     }
 
                     // The combo alone: a full snapshot here would be built
                     // 125 times a second to read one number.
                     val combo = running.combo
+                    liveCombo = combo
                     val milestone = combo / COMBO_MILESTONE
                     if (milestone > lastComboMilestone) {
                         comboBurstNanos = System.nanoTime()
@@ -783,6 +827,13 @@ class GlyphViewModel @Inject constructor(
                         publish(position, running, judged)
                     }
                     if (running.isFinished && transport.loop == null) {
+                        finish()
+                        return@launch
+                    }
+                    // StepMania's Immediate fail: the bar empties, the run ends.
+                    // Never in Training Ground, which is for getting it wrong.
+                    if (stepScore?.stopsRun == true && _ui.value.screen == GlyphScreen.GAMEPLAY) {
+                        publish(position, running, judged)
                         finish()
                         return@launch
                     }
@@ -844,9 +895,16 @@ class GlyphViewModel @Inject constructor(
         val snapshot = running.scoreSnapshot
         val previous = _ui.value.gameplay
         val latest = judged.lastOrNull()
+        // The sprite for the last step, not for a hold tail completing.
+        val lastStep = judged.lastOrNull { !it.isTail && !it.isMine }
+        val keeper = stepScore
 
         _ui.value = _ui.value.copy(
             gameplay = previous.copy(
+                life = keeper?.life ?: previous.life,
+                percent = keeper?.percent ?: previous.percent,
+                fullCombo = keeper?.fullCombo,
+                lastJudgementEarly = lastStep?.offsetSeconds?.let { it < 0f } ?: previous.lastJudgementEarly,
                 positionSeconds = position,
                 bpm = timing?.bpmAt(beat) ?: previous.bpm,
                 measure = measure,
@@ -900,6 +958,14 @@ class GlyphViewModel @Inject constructor(
     }
 
     private fun togglePause() {
+        // Paused during READY/GO: the intro is dropped, and Resume starts the
+        // music straight away.
+        if (introJob?.isActive == true) {
+            introJob?.cancel()
+            _ui.value = _ui.value.copy(
+                gameplay = _ui.value.gameplay.copy(introStartedAtMs = 0L),
+            )
+        }
         val paused = !_ui.value.gameplay.isPaused
         if (paused) {
             transport.pause()
@@ -922,7 +988,9 @@ class GlyphViewModel @Inject constructor(
         replaceEngine(buildEngine(chart))
         runStartedAtMs = System.currentTimeMillis()
         val from = transport.loop?.startSeconds ?: 0f
+        introJob?.cancel()
         armEngineWindow(from)
+        resetStepScore()
         transport.seekTo(from)
         armCountIn(_ui.value.screen == GlyphScreen.TRAINING, from)
         transport.play()
@@ -933,6 +1001,10 @@ class GlyphViewModel @Inject constructor(
                 isFinished = false,
                 score = engine!!.scoreSnapshot,
                 lastJudgement = null,
+                life = StepManiaScoreKeeper.INITIAL_LIFE,
+                percent = 0f,
+                fullCombo = null,
+                introStartedAtMs = 0L,
             ),
         )
         startTick()
@@ -963,10 +1035,11 @@ class GlyphViewModel @Inject constructor(
 
     private fun quit() {
         stopTick()
+        introJob?.cancel()
         transport.pause()
         _ui.value = _ui.value.copy(
             screen = GlyphScreen.HOME,
-            gameplay = _ui.value.gameplay.copy(isPlaying = false, isPaused = false),
+            gameplay = _ui.value.gameplay.copy(isPlaying = false, isPaused = false, introStartedAtMs = 0L),
         )
     }
 
@@ -1004,16 +1077,15 @@ class GlyphViewModel @Inject constructor(
             is GlyphScrollMode.MMod -> current.targetBpm
         }
 
+        // Rounded to the steps the options screen offers: 50 BPM for CMod
+        // and MMod, a quarter for XMod.
         val next = when (family) {
             GlyphScrollFamily.C ->
-                GlyphScrollMode.CMod(nearest(GlyphScrollMode.C_STEPS, effectiveBpm))
+                GlyphScrollMode.CMod(roundTo(effectiveBpm, 50f).coerceIn(100f, 1000f))
             GlyphScrollFamily.M ->
-                GlyphScrollMode.MMod(nearest(GlyphScrollMode.M_STEPS, effectiveBpm), maxBpm)
+                GlyphScrollMode.MMod(roundTo(effectiveBpm, 50f).coerceIn(200f, 1000f), maxBpm)
             GlyphScrollFamily.X -> GlyphScrollMode.XMod(
-                nearest(
-                    GlyphScrollMode.X_STEPS,
-                    if (referenceBpm > 0f) effectiveBpm / referenceBpm else 1f,
-                ),
+                roundTo(if (referenceBpm > 0f) effectiveBpm / referenceBpm else 1f, 0.25f).coerceIn(0.25f, 8f),
             )
         }
         updateModifiers { it.copy(scrollMode = next) }
@@ -1038,14 +1110,87 @@ class GlyphViewModel @Inject constructor(
     private fun chartMaxBpm(): Float =
         _ui.value.simfile?.timing?.bpmRange?.endInclusive ?: GlyphTiming.DEFAULT_BPM
 
-    private fun nearest(steps: List<Float>, value: Float): Float =
-        steps.minByOrNull { kotlin.math.abs(it - value) } ?: value
+    private fun roundTo(value: Float, step: Float): Float = kotlin.math.round(value / step) * step
+
 
     private fun updateModifiers(block: (GlyphModifiers) -> GlyphModifiers) {
+        val next = block(_ui.value.gameplay.modifiers)
+        _ui.value = _ui.value.copy(gameplay = _ui.value.gameplay.copy(modifiers = next))
+        saveOptions(next)
+    }
+
+    // ── player options, kept between sessions ───────────────────────────
+
+    private fun loadOptions() {
+        val mode = when (prefs.getString(PREF_SCROLL_FAMILY, null)) {
+            GlyphScrollFamily.X.name -> GlyphScrollMode.XMod(prefs.getFloat(PREF_SCROLL_VALUE, 2f))
+            GlyphScrollFamily.M.name -> GlyphScrollMode.MMod(prefs.getFloat(PREF_SCROLL_VALUE, 400f), 0f)
+            GlyphScrollFamily.C.name -> GlyphScrollMode.CMod(prefs.getFloat(PREF_SCROLL_VALUE, 400f))
+            else -> GlyphScrollMode.DEFAULT
+        }
+        val stored = GlyphModifiers(
+            scrollMode = mode,
+            turn = GlyphTurn.fromId(prefs.getString(PREF_TURN, null)),
+            appearance = GlyphAppearance.fromId(prefs.getString(PREF_APPEARANCE, null)),
+            reverse = prefs.getBoolean(PREF_REVERSE, false),
+            dark = prefs.getBoolean(PREF_DARK, false),
+            mini = prefs.getFloat(PREF_MINI, 0f).coerceIn(0f, MAX_MINI),
+            failType = GlyphFailType.fromId(prefs.getString(PREF_FAIL, null)),
+            metronome = prefs.getBoolean(PREF_METRONOME, false),
+            timingWindowScale = prefs.getFloat(PREF_JUDGE, 1f),
+            skin = GlyphSkin.fromId(prefs.getString(PREF_SKIN, null)),
+        )
         _ui.value = _ui.value.copy(
-            gameplay = _ui.value.gameplay.copy(modifiers = block(_ui.value.gameplay.modifiers)),
+            gameplay = _ui.value.gameplay.copy(modifiers = stored),
+            playerName = prefs.getString(PREF_NAME, null).orEmpty(),
         )
     }
+
+    /**
+     * Everything a player sets on the options screen, as StepMania keeps a
+     * profile's modifiers. Not the music rate, which StepMania resets for each
+     * song: a slowed song left on by accident would mark every run after it.
+     */
+    private fun saveOptions(modifiers: GlyphModifiers) {
+        val (family, value) = when (val mode = modifiers.scrollMode) {
+            is GlyphScrollMode.XMod -> GlyphScrollFamily.X to mode.multiplier
+            is GlyphScrollMode.CMod -> GlyphScrollFamily.C to mode.targetBpm
+            is GlyphScrollMode.MMod -> GlyphScrollFamily.M to mode.targetBpm
+        }
+        prefs.edit()
+            .putString(PREF_SCROLL_FAMILY, family.name)
+            .putFloat(PREF_SCROLL_VALUE, value)
+            .putString(PREF_TURN, modifiers.turn.id)
+            .putString(PREF_APPEARANCE, modifiers.appearance.id)
+            .putBoolean(PREF_REVERSE, modifiers.reverse)
+            .putBoolean(PREF_DARK, modifiers.dark)
+            .putFloat(PREF_MINI, modifiers.mini)
+            .putString(PREF_FAIL, modifiers.failType.id)
+            .putBoolean(PREF_METRONOME, modifiers.metronome)
+            .putFloat(PREF_JUDGE, modifiers.timingWindowScale)
+            .putString(PREF_SKIN, modifiers.skin.id)
+            .apply()
+    }
+
+    /**
+     * The name on the high score tables: letters, digits and a few marks, at
+     * most [MAX_NAME_LENGTH], as StepMania's name entry allows.
+     */
+    private fun setPlayerName(raw: String) {
+        val name = raw.filter { it.isLetterOrDigit() || it in NAME_MARKS }
+            .trim()
+            .take(MAX_NAME_LENGTH)
+        prefs.edit().putString(PREF_NAME, name).apply()
+        _ui.value = _ui.value.copy(playerName = name)
+    }
+
+    /** The name a run is saved under: the chosen one, or PLAYER. */
+    private fun effectiveName(): String = _ui.value.playerName.ifBlank { DEFAULT_NAME }
+
+    private suspend fun bestGradesFor(song: GlyphSong): Map<StepManiaDifficulty, GlyphAttempt> =
+        StepManiaDifficulty.entries.mapNotNull { difficulty ->
+            attempts.bestAttempt(song.chartId, difficulty)?.let { difficulty to it }
+        }.toMap()
 
     // ── training ────────────────────────────────────────────────────────
 
@@ -1131,8 +1276,9 @@ class GlyphViewModel @Inject constructor(
         val snapshot = running.scoreSnapshot
         val modifiers = _ui.value.gameplay.modifiers
         val loop = transport.loop
+        val keeper = stepScore
 
-        val previousBest = attempts.bestAttempt(song.chartId)
+        val previousBest = attempts.bestAttempt(song.chartId, difficulty)
         val attempt = GlyphAttempt(
             id = UUID.randomUUID().toString(),
             chartId = song.chartId,
@@ -1152,8 +1298,19 @@ class GlyphViewModel @Inject constructor(
             segmentStartSeconds = loop?.startSeconds,
             segmentEndSeconds = loop?.endSeconds,
             ghost = ghostRecorder.build(),
+            percent = keeper?.percent ?: -1f,
+            stepGrade = keeper?.grade?.name,
+            fullCombo = keeper?.fullCombo?.name,
+            failed = keeper?.grade == GlyphStepGrade.FAILED,
+            holdsHeld = keeper?.holdsHeld ?: 0,
+            holdsLetGo = keeper?.holdsLetGo ?: 0,
+            minesHit = keeper?.minesHit ?: 0,
+            playerName = effectiveName(),
+            judgeScale = modifiers.timingWindowScale,
+            turn = modifiers.turn.id,
         )
         attempts.save(attempt)
+        val machine = attempts.highScores(song.chartId, difficulty)
 
         _ui.value = _ui.value.copy(
             screen = GlyphScreen.RESULTS,
@@ -1162,8 +1319,10 @@ class GlyphViewModel @Inject constructor(
                 attempt = attempt,
                 previousBest = previousBest,
                 sections = buildSections(running),
+                machineScores = machine,
             ),
             training = _ui.value.training.copy(hasGhost = true),
+            bestGrades = bestGradesFor(song),
         )
     }
 
@@ -1228,6 +1387,25 @@ class GlyphViewModel @Inject constructor(
 
         const val PREFS_NAME = "trypt_mania"
         const val PREF_SKIN = "skin"
+        const val PREF_SCROLL_FAMILY = "scroll_family"
+        const val PREF_SCROLL_VALUE = "scroll_value"
+        const val PREF_TURN = "turn"
+        const val PREF_APPEARANCE = "appearance"
+        const val PREF_REVERSE = "reverse"
+        const val PREF_DARK = "dark"
+        const val PREF_MINI = "mini"
+        const val PREF_FAIL = "fail"
+        const val PREF_METRONOME = "metronome"
+        const val PREF_JUDGE = "judge"
+        const val PREF_NAME = "player_name"
+
+        const val MAX_MINI = 0.5f
+        const val MAX_NAME_LENGTH = 12
+        const val NAME_MARKS = " .-_"
+        const val DEFAULT_NAME = "PLAYER"
+
+        /** READY, then GO!, before the music: StepMania's own intro, shortened for a phone. */
+        const val INTRO_MILLIS = 1_800L
 
         const val PROGRESS_STEP_BYTES = 1L shl 20
 

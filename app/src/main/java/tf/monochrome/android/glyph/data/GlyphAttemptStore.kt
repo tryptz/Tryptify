@@ -16,6 +16,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonPrimitive
+import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 
 /**
  * Attempts and ghosts on disk, one JSON file per chart.
@@ -60,9 +61,25 @@ class GlyphAttemptStore @Inject constructor(
             .sortedByDescending { it.playedAtEpochMs }
     }
 
-    /** The best full run for [chartId], for the "beat your ghost" target. */
-    suspend fun bestAttempt(chartId: String): GlyphAttempt? =
-        attempts(chartId).filter { it.isFullRun }.maxByOrNull { it.score }
+    /**
+     * The best full run of [difficulty] on [chartId], for the "beat your
+     * ghost" target. One difficulty only: a Beginner run is not a best for
+     * Challenge, which is what it was when every difficulty shared a list.
+     */
+    suspend fun bestAttempt(chartId: String, difficulty: StepManiaDifficulty): GlyphAttempt? =
+        highScores(chartId, difficulty, limit = 1).firstOrNull()
+
+    /**
+     * The machine's high score table for one chart and difficulty: full runs,
+     * best first by StepMania's percent and then by points, as StepMania ranks
+     * them. Runs saved before the percent was recorded rank by accuracy.
+     */
+    suspend fun highScores(
+        chartId: String,
+        difficulty: StepManiaDifficulty,
+        limit: Int = HIGH_SCORES_PER_CHART,
+    ): List<GlyphAttempt> =
+        rankHighScores(attempts(chartId).filter { it.difficulty == difficulty }).take(limit)
 
     /**
      * The most recent attempt carrying a usable ghost.
@@ -84,13 +101,17 @@ class GlyphAttemptStore @Inject constructor(
     suspend fun save(attempt: GlyphAttempt): Unit = writeLock.withLock {
         withContext(Dispatchers.IO) {
             val existing = attempts(attempt.chartId)
-            val best = existing.filter { it.isFullRun }.maxByOrNull { it.score }
             val combined = (listOf(attempt) + existing)
                 .sortedByDescending { it.playedAtEpochMs }
 
+            // Every difficulty's high score table survives, whatever else is
+            // trimmed: a record is never aged out by a run of bad ones.
             val kept = LinkedHashSet<GlyphAttempt>()
             kept += attempt
-            if (best != null) kept += best
+            for (difficulty in combined.map { it.difficulty }.distinct()) {
+                kept += rankHighScores(combined.filter { it.difficulty == difficulty })
+                    .take(HIGH_SCORES_PER_CHART)
+            }
             for (candidate in combined) {
                 if (kept.size >= MAX_ATTEMPTS_PER_CHART) break
                 kept += candidate
@@ -153,7 +174,18 @@ class GlyphAttemptStore @Inject constructor(
         const val TAG = "GlyphAttempts"
         const val DIRECTORY = "glyph/attempts"
 
-        /** Enough for a personal best plus a season of recent runs. */
-        const val MAX_ATTEMPTS_PER_CHART = 25
+        /** Enough for the high score tables plus a season of recent runs. */
+        const val MAX_ATTEMPTS_PER_CHART = 60
+
+        /** StepMania keeps ten per chart on a machine. */
+        const val HIGH_SCORES_PER_CHART = 10
     }
 }
+
+/** Full runs, best first: StepMania's percent, then points, then the earlier run. */
+internal fun rankHighScores(runs: List<GlyphAttempt>): List<GlyphAttempt> =
+    runs.filter { it.isFullRun }.sortedWith(
+        compareByDescending<GlyphAttempt> { if (it.hasStepScore) it.percent else it.accuracy }
+            .thenByDescending { it.score }
+            .thenBy { it.playedAtEpochMs },
+    )

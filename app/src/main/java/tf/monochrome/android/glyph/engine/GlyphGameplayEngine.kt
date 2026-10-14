@@ -39,13 +39,14 @@ class GlyphGameplayEngine(
      *   touchscreen, where a finger that stays put still reports the odd
      *   release.
      * @param rollIntervalSeconds the longest gap between taps a roll tolerates.
+     *   Both are StepMania's own (TimingWindowSecondsHold, ...Roll).
      * @param audioOffsetSeconds the player's own calibration. Added to every
      *   incoming press time, so a device that reports touches late can be
      *   corrected without touching the chart.
      */
     data class Config(
-        val holdGraceSeconds: Float = 0.10f,
-        val rollIntervalSeconds: Float = 0.28f,
+        val holdGraceSeconds: Float = 0.25f,
+        val rollIntervalSeconds: Float = 0.50f,
         val audioOffsetSeconds: Float = 0f,
     )
 

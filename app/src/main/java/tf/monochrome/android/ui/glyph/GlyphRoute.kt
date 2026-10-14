@@ -100,6 +100,7 @@ fun GlyphRoute(
                     viewModel.onEvent(GlyphEvent.Quit)
                 }
             GlyphScreen.RESULTS -> viewModel.onEvent(GlyphEvent.BackToHome)
+            GlyphScreen.OPTIONS -> viewModel.onEvent(GlyphEvent.CloseOptions)
             GlyphScreen.HOME -> Unit
         }
     }
@@ -110,6 +111,7 @@ fun GlyphRoute(
     val positionProvider = remember(viewModel) { { viewModel.transport.positionNow() } }
     val explosionProvider = remember(viewModel) { { viewModel.flashes() } }
     val comboBurstProvider = remember(viewModel) { { viewModel.comboBurstNanos() } }
+    val comboProvider = remember(viewModel) { { viewModel.liveCombo() } }
 
     // The results stay on screen while they fade out. Going home clears them
     // in the same step, and the outgoing screen must not read that as an
@@ -141,6 +143,12 @@ fun GlyphRoute(
                 modifier = Modifier.fillMaxSize(),
             )
 
+            GlyphScreen.OPTIONS -> GlyphOptionsScreen(
+                state = state,
+                onEvent = viewModel::onEvent,
+                modifier = Modifier.fillMaxSize(),
+            )
+
             GlyphScreen.GAMEPLAY -> GlyphGameplayScreen(
                 state = state,
                 engine = viewModel.engine,
@@ -150,6 +158,7 @@ fun GlyphRoute(
                 onEvent = viewModel::onEvent,
                 explosionProvider = explosionProvider,
                 comboBurstProvider = comboBurstProvider,
+                comboProvider = comboProvider,
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -163,6 +172,7 @@ fun GlyphRoute(
                 ghost = viewModel.activeGhost,
                 explosionProvider = explosionProvider,
                 comboBurstProvider = comboBurstProvider,
+                comboProvider = comboProvider,
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -183,6 +193,7 @@ fun GlyphRoute(
                         assets = assets,
                         onEvent = viewModel::onEvent,
                         modifier = Modifier.fillMaxSize(),
+                        reducedMotion = reduceMotion,
                     )
                 }
             }

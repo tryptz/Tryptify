@@ -38,6 +38,18 @@ sealed interface GlyphEvent {
     data object RemoveModel : GlyphEvent
     data object DismissModelMessage : GlyphEvent
 
+    // ── player options ──────────────────────────────────────────────────
+    /** From the song menu to StepMania's Player Options, before the song starts. */
+    data object OpenOptions : GlyphEvent
+    data object CloseOptions : GlyphEvent
+    data class SetTurn(val turn: tf.monochrome.android.glyph.engine.GlyphTurn) : GlyphEvent
+    data class SetAppearance(val appearance: tf.monochrome.android.glyph.engine.GlyphAppearance) : GlyphEvent
+    data class SetReverse(val reverse: Boolean) : GlyphEvent
+    data class SetDark(val dark: Boolean) : GlyphEvent
+    data class SetMini(val mini: Float) : GlyphEvent
+    data class SetFailType(val failType: tf.monochrome.android.glyph.engine.GlyphFailType) : GlyphEvent
+    data class SetPlayerName(val name: String) : GlyphEvent
+
     // ── transport ───────────────────────────────────────────────────────
     data object StartPlay : GlyphEvent
     data object StartTraining : GlyphEvent
@@ -45,15 +57,15 @@ sealed interface GlyphEvent {
     data object Restart : GlyphEvent
     data object Quit : GlyphEvent
 
+    /** The playfield's artwork; kept between sessions. */
+    data class SetSkin(val skin: tf.monochrome.android.glyph.asset.GlyphSkin) : GlyphEvent
+
     // ── input ───────────────────────────────────────────────────────────
     /**
      * [atUptimeMillis] is when the finger moved (the pointer change's own
      * SystemClock.uptimeMillis stamp), so the press is judged at the touch
      * rather than at whenever input was dispatched. Zero means "now".
      */
-    /** The playfield's artwork; kept between sessions. */
-    data class SetSkin(val skin: tf.monochrome.android.glyph.asset.GlyphSkin) : GlyphEvent
-
     data class LanePressed(val lane: GlyphLane, val atUptimeMillis: Long = 0L) : GlyphEvent
     data class LaneReleased(val lane: GlyphLane, val atUptimeMillis: Long = 0L) : GlyphEvent
 

@@ -3,10 +3,8 @@
 package tf.monochrome.android.ui.glyph
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,20 +27,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -50,9 +41,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.R
-import tf.monochrome.android.glyph.asset.GlyphAssetCatalog
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
-import tf.monochrome.android.glyph.engine.GlyphJudgement
 import tf.monochrome.android.ui.navigation.bottomChromePadding
 import tf.monochrome.android.ui.theme.MonoDimens
 
@@ -75,9 +64,9 @@ fun GlyphResultsScreen(
     assets: GlyphAssetRepository,
     onEvent: (GlyphEvent) -> Unit,
     modifier: Modifier = Modifier,
+    reducedMotion: Boolean = false,
 ) {
     val attempt = results.attempt
-    val grade = tf.monochrome.android.glyph.engine.GlyphGrade.forAccuracy(attempt.accuracy)
     val scheme = MaterialTheme.colorScheme
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -109,60 +98,27 @@ fun GlyphResultsScreen(
                 .padding(start = MonoDimens.spacingLg, end = MonoDimens.spacingLg, top = MonoDimens.spacingSm),
             verticalArrangement = Arrangement.spacedBy(MonoDimens.spacingLg),
         ) {
+            GlyphEvaluationPanel(
+                results = results,
+                reducedMotion = reducedMotion,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            GlyphHighScoresPanel(
+                results = results,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
             GlyphPanel(modifier = Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    GradeBadge(grade = grade, assets = assets)
-                    Spacer(Modifier.size(MonoDimens.spacingLg))
-                    Column {
-                        Text(
-                            text = "%.2f%%".format(attempt.accuracy * 100),
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = scheme.onSurface,
-                        )
-                        Text(
-                            text = "%,d points · ${attempt.difficulty.sscName}".format(attempt.score),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = scheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(MonoDimens.spacingLg))
-
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    GlyphStat("Max combo", attempt.maxCombo.toString())
                     GlyphStat("Mean", "%.0f ms".format(attempt.meanOffsetMs))
                     GlyphStat("Spread", "±%.0f ms".format(attempt.deviationMs))
-                }
-
-                results.previousBest?.let { best ->
-                    Spacer(Modifier.height(MonoDimens.spacingSm))
-                    val delta = attempt.score - best.score
-                    Text(
-                        text = when {
-                            delta > 0 -> "New best, up %,d points".format(delta)
-                            delta == 0 -> "Matched your best"
-                            else -> "Best stands: %,d points".format(best.score)
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (delta > 0) menuAccent(GlyphTheme.Positive) else scheme.onSurfaceVariant,
-                    )
-                }
-
-                if (!attempt.isFullRun) {
-                    Spacer(Modifier.height(MonoDimens.spacingSm))
-                    Text(
-                        text = "Training segment — not filed as a full run.",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = menuAccent(GlyphTheme.Warning),
-                    )
+                    GlyphStat("Mines", attempt.minesHit.toString())
                 }
             }
-
-            JudgementBreakdown(results = results)
 
             EarlyLateSummary(early = attempt.early, late = attempt.late)
 
@@ -213,93 +169,6 @@ fun GlyphResultsScreen(
             Spacer(Modifier.height(bottomChromePadding))
         }
     }
-}
-
-@Composable
-private fun GradeBadge(
-    grade: tf.monochrome.android.glyph.engine.GlyphGrade,
-    assets: GlyphAssetRepository,
-) {
-    val density = LocalDensity.current
-    val sizePx = with(density) { GRADE_SIZE.roundToPx() }
-    var image by remember(grade) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(grade, sizePx) {
-        image = assets.load(GlyphAssetCatalog.grade(grade.art), sizePx, sizePx)
-    }
-
-    Box(
-        modifier = Modifier
-            .size(GRADE_SIZE)
-            .semantics { contentDescription = "Grade ${grade.label}" },
-        contentAlignment = Alignment.Center,
-    ) {
-        val current = image
-        if (current != null) {
-            Image(bitmap = current, contentDescription = null, modifier = Modifier.size(GRADE_SIZE))
-        } else {
-            // The letter is the grade; the badge is decoration around it.
-            Text(
-                text = grade.label,
-                style = MaterialTheme.typography.displaySmall,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-    }
-}
-
-private val GRADE_SIZE = 88.dp
-
-/** Counts per judgement, with a bar that is never the only reading. */
-@Composable
-private fun JudgementBreakdown(results: GlyphResultsUi) {
-    val attempt = results.attempt
-    val total = GlyphJudgement.entries.sumOf { attempt.judgementCount(it) }.coerceAtLeast(1)
-
-    GlyphPanel(modifier = Modifier.fillMaxWidth()) {
-        GlyphSectionLabel("Judgements")
-        Spacer(Modifier.height(MonoDimens.spacingSm))
-        for (judgement in GlyphJudgement.entries) {
-            val count = attempt.judgementCount(judgement)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 3.dp)
-                    .semantics(mergeDescendants = true) {
-                        contentDescription = "${judgement.label}: $count"
-                    },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = judgement.label,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = menuAccent(judgementColor(judgement)),
-                    modifier = Modifier.weight(0.4f),
-                )
-                GlyphMeter(
-                    fraction = count.toFloat() / total,
-                    color = judgementColor(judgement),
-                    modifier = Modifier.weight(0.4f),
-                )
-                Text(
-                    text = count.toString(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier
-                        .weight(0.2f)
-                        .padding(start = MonoDimens.spacingSm),
-                )
-            }
-        }
-    }
-}
-
-private fun judgementColor(judgement: GlyphJudgement): Color = when (judgement) {
-    GlyphJudgement.MARVELOUS -> Color(0xFF63F2A2)
-    GlyphJudgement.PERFECT -> Color(0xFF52E6D8)
-    GlyphJudgement.GREAT -> Color(0xFF58D9FF)
-    GlyphJudgement.GOOD -> Color(0xFFFFD95A)
-    GlyphJudgement.BOO -> Color(0xFFFF9659)
-    GlyphJudgement.MISS -> Color(0xFFFF5F6D)
 }
 
 @Composable

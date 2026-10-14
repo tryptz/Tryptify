@@ -89,32 +89,36 @@ class GlyphEngineTest {
         assertTrue(tight.perfectSeconds <= tight.greatSeconds)
         assertTrue(loose.greatSeconds <= loose.goodSeconds)
         assertTrue(loose.goodSeconds <= loose.booSeconds)
-        // Out-of-range scales clamp rather than throw.
-        assertEquals(tight, GlyphTimingWindows.STANDARD.scaled(0.01f))
+        // Out-of-range scales clamp rather than throw, at StepMania's Justice.
+        assertEquals(
+            GlyphTimingWindows.STANDARD.scaled(GlyphTimingWindows.MIN_SCALE),
+            GlyphTimingWindows.STANDARD.scaled(0.01f),
+        )
     }
 
     // ── combo and scoring ───────────────────────────────────────────────
 
     @Test
-    fun comboSurvivesGoodAndBreaksOnBooAndMiss() {
-        val score = GlyphScore(totalJudgements = 6)
+    fun comboSurvivesGreatAndBreaksOnGoodAsInStepMania() {
+        val score = GlyphScore(totalJudgements = 7)
 
         score.record(GlyphJudgement.MARVELOUS, 0f)
         score.record(GlyphJudgement.PERFECT, 0.03f)
         score.record(GlyphJudgement.GREAT, 0.06f)
-        score.record(GlyphJudgement.GOOD, 0.1f)
-        assertEquals("Good keeps a combo alive", 4, score.combo)
+        assertEquals("Great keeps a combo alive", 3, score.combo)
 
-        score.record(GlyphJudgement.BOO, 0.15f)
-        assertEquals("Boo breaks it", 0, score.combo)
+        // StepMania's dance mode continues a combo on Great or better only.
+        score.record(GlyphJudgement.GOOD, 0.1f)
+        assertEquals("Good breaks it", 0, score.combo)
 
         score.record(GlyphJudgement.MARVELOUS, 0f)
-        assertEquals(1, score.combo)
-        assertEquals("the peak is remembered after a break", 4, score.maxCombo)
+        score.record(GlyphJudgement.BOO, 0.15f)
+        assertEquals("Boo breaks it", 0, score.combo)
+        assertEquals("the peak is remembered after a break", 3, score.maxCombo)
 
         score.record(GlyphJudgement.MISS, null)
         assertEquals(0, score.combo)
-        assertEquals(4, score.maxCombo)
+        assertEquals(3, score.maxCombo)
     }
 
     @Test
@@ -258,10 +262,11 @@ class GlyphEngineTest {
         engine.press(GlyphLane.LEFT, 1f)
         engine.release(GlyphLane.LEFT, 1.2f)
 
-        engine.advanceTo(1.25f)
+        // StepMania's hold window: a quarter of a second to come back.
+        engine.advanceTo(1.4f)
         assertEquals("the grace period has not expired", 1, engine.scoreSnapshot.judged)
 
-        engine.advanceTo(1.45f)
+        engine.advanceTo(1.5f)
         assertEquals(2, engine.scoreSnapshot.judged)
         assertEquals(1, engine.scoreSnapshot.holdsDropped)
         assertEquals(1, engine.scoreSnapshot.counts[GlyphJudgement.MISS])

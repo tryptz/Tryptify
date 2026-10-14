@@ -73,6 +73,15 @@ which needs the `third_party/libusb` submodule and is skipped without it:
 app/src/main/cpp/dsp/tests/run_host_tests.sh
 ```
 
+## Trypt Mania's StepMania art
+
+The retro noteskin (`assets/stepmania/skins/retro`) and the default theme's
+judgement, grade and full-combo art with its typefaces
+(`assets/stepmania/theme`) are cut from a StepMania checkout by
+`tools/stepmania_skin/build_retro_skin.py` and `build_theme.py`. Regenerate
+them with those scripts rather than editing the PNGs; each writes the licence
+StepMania's notice requires next to the art.
+
 ## projectM is patched, and its presets are scanned
 
 `app/src/main/cpp/projectm_patches/` holds fixed copies of projectM source

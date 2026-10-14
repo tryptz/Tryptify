@@ -2,6 +2,7 @@
 
 package tf.monochrome.android.glyph
 
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -9,9 +10,8 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.foundation.layout.size
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.unit.dp
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -25,11 +25,12 @@ import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.domain.model.AudioCodec
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
 import tf.monochrome.android.glyph.asset.GlyphLane
+import tf.monochrome.android.glyph.data.GlyphAttempt
 import tf.monochrome.android.glyph.data.GlyphChartState
-import tf.monochrome.android.glyph.engine.GlyphJudgement
 import tf.monochrome.android.glyph.data.GlyphSong
-import tf.monochrome.android.ui.glyph.GlyphEvent
+import tf.monochrome.android.glyph.engine.GlyphJudgement
 import tf.monochrome.android.ui.glyph.GlyphChipRow
+import tf.monochrome.android.ui.glyph.GlyphEvent
 import tf.monochrome.android.ui.glyph.GlyphHomeScreen
 import tf.monochrome.android.ui.glyph.GlyphJudgementFx
 import tf.monochrome.android.ui.glyph.GlyphLaneInput
@@ -37,7 +38,7 @@ import tf.monochrome.android.ui.glyph.GlyphResultsScreen
 import tf.monochrome.android.ui.glyph.GlyphResultsUi
 import tf.monochrome.android.ui.glyph.GlyphSectionResult
 import tf.monochrome.android.ui.glyph.GlyphUiState
-import tf.monochrome.android.glyph.data.GlyphAttempt
+import tf.monochrome.android.ui.glyph.rememberStepFonts
 
 /**
  * The mode's screens, driven as a user would.
@@ -464,35 +465,37 @@ class GlyphComposeTest {
     }
 
     @Test
-    fun `a judgement announces itself with its combo`() {
-        // The letterforms are graphics to a screen reader, so without a live
-        // region a judgement lands silently. The old flat wordmark had the
-        // same problem and the same fix; the FX path must not lose it.
+    fun `a judgement says what was hit and shows its combo`() {
+        // StepMania's judgement is a sprite, so it is named for a screen
+        // reader; the combo beside it is plain text.
         compose.setContent {
             GlyphJudgementFx(
                 judgement = GlyphJudgement.MARVELOUS,
+                early = true,
                 shownAtMs = 1L,
                 combo = 48,
-                reducedMotion = true,
+                fullCombo = null,
+                fonts = rememberStepFonts(),
             )
         }
-        compose.onNodeWithText("MARVELOUS").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Flawless").assertIsDisplayed()
         compose.onNodeWithText("48").assertIsDisplayed()
     }
 
     @Test
-    fun `reduced motion still says what was hit`() {
-        // The flat path drops the wave, the glass and the frame clock. What it
-        // must not drop is the word.
+    fun `a miss is named and shows no combo`() {
         compose.setContent {
             GlyphJudgementFx(
                 judgement = GlyphJudgement.MISS,
+                early = false,
                 shownAtMs = 1L,
                 combo = 0,
-                reducedMotion = true,
+                fullCombo = null,
+                fonts = rememberStepFonts(),
             )
         }
-        compose.onNodeWithText("MISS").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Miss").assertIsDisplayed()
+        compose.onNodeWithText("0").assertDoesNotExist()
     }
 
     // ── results ─────────────────────────────────────────────────────────
@@ -542,7 +545,8 @@ class GlyphComposeTest {
         // Scrolled to rather than merely asserted to exist: the results screen
         // scrolls, and a label that can never be brought on screen is no more
         // reachable than a missing one.
-        compose.onNodeWithContentDescription("Marvelous: 200").performScrollTo().assertIsDisplayed()
+        // StepMania's names for the windows: W1 is Flawless.
+        compose.onNodeWithContentDescription("Flawless: 200").performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Miss: 4").performScrollTo().assertIsDisplayed()
     }
 

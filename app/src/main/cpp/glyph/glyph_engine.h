@@ -43,7 +43,8 @@ constexpr int kJudgementCount = 6;
 
 inline bool isScorable(int32_t type) { return type == kTap || type == kHold || type == kRoll || type == kLift; }
 inline bool hasTail(int32_t type) { return type == kHold || type == kRoll; }
-inline bool continuesCombo(int32_t j) { return j >= kMarvelous && j <= kGood; }
+// StepMania's dance combo (ComboContinue/ComboMaintain): Great or better.
+inline bool continuesCombo(int32_t j) { return j >= kMarvelous && j <= kGreat; }
 inline bool isHit(int32_t j) { return j != kMiss; }
 float judgementWeight(int32_t judgement);
 
@@ -59,8 +60,9 @@ struct Windows {
 };
 
 struct Config {
-    float holdGraceSeconds = 0.10f;
-    float rollIntervalSeconds = 0.28f;
+    // StepMania's TimingWindowSecondsHold and TimingWindowSecondsRoll.
+    float holdGraceSeconds = 0.25f;
+    float rollIntervalSeconds = 0.50f;
     float audioOffsetSeconds = 0.0f;
 };
 

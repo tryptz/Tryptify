@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -41,6 +42,7 @@ import tf.monochrome.android.glyph.asset.GlyphSpecialNote
 import tf.monochrome.android.glyph.chart.GlyphNoteType
 import tf.monochrome.android.glyph.chart.GlyphTiming
 import tf.monochrome.android.glyph.data.GlyphGhost
+import tf.monochrome.android.glyph.engine.GlyphAppearance
 import tf.monochrome.android.glyph.engine.GlyphGameplayEngine
 import tf.monochrome.android.glyph.engine.GlyphScrollMode
 import tf.monochrome.android.glyph.engine.GlyphVisibleFrame
@@ -89,6 +91,10 @@ fun GlyphPlayfield(
     explosionProvider: () -> Map<GlyphLane, LaneFlash> = { emptyMap() },
     /** When the last combo milestone was reached, for the burst. */
     comboBurstProvider: () -> Long = { 0L },
+    /** The live combo, which colours the hit rays. */
+    comboProvider: () -> Int = { 0 },
+    /** StepMania's look options: reverse, appearance, dark, mini. */
+    look: GlyphFieldLook = GlyphFieldLook(),
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val density = LocalDensity.current
@@ -99,8 +105,19 @@ fun GlyphPlayfield(
         // exact size. A fractional lane width would put each lane on a
         // different sub-pixel phase and the arrows would shimmer as they moved.
         val laneWidthPx = (widthPx / GlyphLane.entries.size).toInt().coerceAtLeast(1)
-        val noteSizePx = (laneWidthPx * NOTE_SCALE).toInt().coerceAtLeast(1)
-        val receptorYPx = heightPx - with(density) { RECEPTOR_INSET.toPx() } - noteSizePx / 2f
+        // Mini shrinks the notes, as StepMania's does: 100% would be half size.
+        val noteSizePx = (laneWidthPx * NOTE_SCALE * (1f - look.mini / 2f)).toInt().coerceAtLeast(1)
+        // Reverse puts the receptors at the top, clear of the HUD, and the
+        // notes rise to them: StepMania's own default way round.
+        val receptorYPx = if (look.reverse) {
+            with(density) { RECEPTOR_TOP_INSET.toPx() } + noteSizePx / 2f
+        } else {
+            heightPx - with(density) { RECEPTOR_INSET.toPx() } - noteSizePx / 2f
+        }
+        // How far a note travels on screen, for the appearance mods.
+        val fieldLengthPx = (if (look.reverse) heightPx - receptorYPx else receptorYPx).coerceAtLeast(1f)
+        // Upward distance on screen is subtracted; reversed, it is added.
+        val direction = if (look.reverse) -1f else 1f
 
         // Warm the exact pixel size this layout needs. Re-runs on rotation or a
         // window resize, and drops the old rasters so stale sizes cannot pile up.
@@ -154,21 +171,27 @@ fun GlyphPlayfield(
                 .semantics {
                     contentDescription =
                         "Playfield with four lanes: $laneNames. " +
-                            "Notes fall toward the receptors at the bottom."
+                            if (look.reverse) {
+                                "Notes rise toward the receptors at the top."
+                            } else {
+                                "Notes fall toward the receptors at the bottom."
+                            }
                 },
         ) {
             // Reading the tick inside the draw scope is what schedules the next
             // frame without recomposing anything.
             @Suppress("UNUSED_EXPRESSION") frameTick.value
 
-            drawLaneChrome(laneWidthPx.toFloat(), receptorYPx, noteSizePx.toFloat())
+            drawLaneChrome(laneWidthPx.toFloat(), receptorYPx, noteSizePx.toFloat(), drawLine = !look.dark)
 
             val running = engine ?: return@Canvas
             if (!warmed) return@Canvas
 
             val position = positionProvider()
             if (raysOn) {
-                hitLight.update(System.nanoTime(), explosionProvider(), laneWidthPx, noteSizePx, receptorYPx)
+                val now = System.nanoTime()
+                hitLight.tint(GlyphComboRays.colour(comboProvider(), now))
+                hitLight.update(now, explosionProvider(), laneWidthPx, noteSizePx, receptorYPx)
             } else {
                 hitLight.clear()
             }
@@ -190,7 +213,7 @@ fun GlyphPlayfield(
 
             // One unit is a beat's worth of gap at 1×; the mode decides how many
             // units lie between two moments, and this turns units into pixels.
-            val pixelsPerUnit = receptorYPx / GlyphScrollMode.UNITS_ON_SCREEN
+            val pixelsPerUnit = fieldLengthPx / GlyphScrollMode.UNITS_ON_SCREEN
 
             // Pass one: hold and roll bodies, underneath everything. Their
             // ends arrive already placed by the engine.
@@ -199,17 +222,23 @@ fun GlyphPlayfield(
                 val note = notes[frame.noteIndex(i)]
                 if (!note.type.isHoldLike) continue
                 if (frame.isHeld(i)) holdingMask = holdingMask or (1 shl note.lane.ordinal)
-                drawHoldBody(
-                    assets = assets,
-                    note = note,
-                    isRoll = note.type == GlyphNoteType.ROLL,
-                    headY = receptorYPx - frame.bodyHeadUnits(i) * pixelsPerUnit,
-                    tailY = receptorYPx - frame.tailUnits(i) * pixelsPerUnit,
-                    laneWidthPx = laneWidthPx,
-                    noteSizePx = noteSizePx,
-                    active = frame.isHeld(i),
-                    light = hitLight,
-                )
+                // Laid out as if falling and, reversed, flipped about the
+                // receptor line: the body and its end cap then hang the
+                // right way round, as StepMania's do in reverse.
+                withTransform({ if (look.reverse) scale(1f, -1f, Offset(0f, receptorYPx)) }) {
+                    drawHoldBody(
+                        assets = assets,
+                        note = note,
+                        isRoll = note.type == GlyphNoteType.ROLL,
+                        headY = receptorYPx - frame.bodyHeadUnits(i) * pixelsPerUnit,
+                        tailY = receptorYPx - frame.tailUnits(i) * pixelsPerUnit,
+                        laneWidthPx = laneWidthPx,
+                        noteSizePx = noteSizePx,
+                        active = frame.isHeld(i),
+                        light = hitLight,
+                        alphaAt = { y -> look.appearance.alphaAt((receptorYPx - y) / fieldLengthPx) },
+                    )
+                }
             }
 
             // Hold glow, under the receptors: a lane that is actively holding
@@ -236,17 +265,30 @@ fun GlyphPlayfield(
             }
 
             // Pass two: receptors, above the bodies so a hold reads as passing
-            // through the target rather than over it.
-            for (lane in GlyphLane.entries) {
+            // through the target rather than over it. Dark takes them away.
+            // They flash on each beat, as StepMania's receptors do: the same
+            // glyph added over itself, brightest on the beat and gone by the
+            // next. A flash, not a pulse in size.
+            val beatFlash = if (reducedMotion) 0f else {
+                val beat = timing.secondsToBeat(position)
+                val fade = 1f - (beat - kotlin.math.floor(beat))
+                BEAT_FLASH * fade * fade * fade
+            }
+            if (!look.dark) for (lane in GlyphLane.entries) {
                 val id = GlyphAssetCatalog.receptor(lane, active = lane in heldLanes)
                 val image = assets.image(id, noteSizePx, noteSizePx) ?: continue
-                drawSnapped(
-                    image = image,
-                    x = lane.ordinal * laneWidthPx + (laneWidthPx - noteSizePx) / 2f,
-                    y = receptorYPx - noteSizePx / 2f,
-                    size = noteSizePx,
-                    light = hitLight,
-                )
+                val x = lane.ordinal * laneWidthPx + (laneWidthPx - noteSizePx) / 2f
+                val y = receptorYPx - noteSizePx / 2f
+                drawSnapped(image = image, x = x, y = y, size = noteSizePx, light = hitLight)
+                if (beatFlash > LIT_THRESHOLD) {
+                    drawImage(
+                        image = image,
+                        dstOffset = IntOffset(x.roundToInt(), y.roundToInt()),
+                        dstSize = IntSize(noteSizePx, noteSizePx),
+                        alpha = beatFlash,
+                        blendMode = BlendMode.Plus,
+                    )
+                }
             }
 
             // Ghost markers, between the receptors and the notes. Drawn as a
@@ -261,7 +303,7 @@ fun GlyphPlayfield(
                     lookahead = lookahead,
                     scrollMode = scrollMode,
                     timing = timing,
-                    pixelsPerUnit = pixelsPerUnit,
+                    pixelsPerUnit = pixelsPerUnit * direction,
                     receptorYPx = receptorYPx,
                     laneWidthPx = laneWidthPx,
                 )
@@ -329,15 +371,20 @@ fun GlyphPlayfield(
                 val note = notes[frame.noteIndex(i)]
                 if (frame.isHeadJudged(i) && note.type.isHoldLike) continue
 
-                val y = receptorYPx - frame.headUnits(i) * pixelsPerUnit
+                val travelled = frame.headUnits(i) * pixelsPerUnit
+                val y = receptorYPx - travelled * direction
                 if (y < -noteSizePx || y > size.height + noteSizePx) continue
+                // Hidden, Sudden and Stealth: how much of the note shows at
+                // this distance from the receptors. It is judged either way.
+                val shown = look.appearance.alphaAt(travelled / fieldLengthPx)
+                if (shown <= 0f) continue
 
                 val id = noteAssetFor(note.type, note.lane, note.division)
                 val image = assets.image(id, noteSizePx, noteSizePx)
                 val x = note.lane.ordinal * laneWidthPx + (laneWidthPx - noteSizePx) / 2f
 
                 if (image != null) {
-                    drawSnapped(image, x, y - noteSizePx / 2f, noteSizePx, hitLight)
+                    drawSnapped(image, x, y - noteSizePx / 2f, noteSizePx, hitLight, shown)
                 } else {
                     // A missing asset costs its artwork, never the note: a
                     // filled square still tells the player where and when.
@@ -360,6 +407,7 @@ fun GlyphPlayfield(
             explosionProvider = explosionProvider,
             frameTick = frameTick,
             enabled = raysOn && engine != null && warmed,
+            comboProvider = comboProvider,
         )
     }
 }
@@ -498,8 +546,9 @@ private fun DrawScope.drawSnapped(
     y: Float,
     size: Int,
     light: GlyphHitLight? = null,
+    alpha: Float = 1f,
 ) {
-    drawWithLight(image, IntOffset(x.roundToInt(), y.roundToInt()), IntSize(size, size), light)
+    drawWithLight(image, IntOffset(x.roundToInt(), y.roundToInt()), IntSize(size, size), light, alpha)
 }
 
 /**
@@ -511,10 +560,11 @@ private fun DrawScope.drawWithLight(
     offset: IntOffset,
     extent: IntSize,
     light: GlyphHitLight?,
+    alpha: Float = 1f,
 ) {
-    drawImage(image = image, dstOffset = offset, dstSize = extent)
+    drawImage(image = image, dstOffset = offset, dstSize = extent, alpha = alpha)
     if (light == null || !light.isLit) return
-    val amount = light.at(offset.x + extent.width / 2f, offset.y + extent.height / 2f)
+    val amount = light.at(offset.x + extent.width / 2f, offset.y + extent.height / 2f) * alpha
     if (amount <= LIT_THRESHOLD) return
     drawImage(
         image = image,
@@ -550,6 +600,8 @@ private fun DrawScope.drawHoldBody(
     active: Boolean,
     /** Hit flashes nearby, which light the body as they light everything. */
     light: GlyphHitLight?,
+    /** The appearance mods' opacity at a height on screen. */
+    alphaAt: (Float) -> Float = { 1f },
 ) {
     val body = assets.image(GlyphAssetCatalog.holdBody(isRoll, active), noteSizePx, noteSizePx) ?: return
     val tail = assets.image(GlyphAssetCatalog.holdTail(isRoll, active), noteSizePx, noteSizePx)
@@ -568,27 +620,38 @@ private fun DrawScope.drawHoldBody(
     while (y < headY) {
         val remaining = (headY - y).roundToInt()
         if (remaining <= 0) break
-        drawWithLight(
-            image = body,
-            offset = IntOffset(left, y.roundToInt()),
-            extent = IntSize(noteSizePx, minOf(noteSizePx, remaining)),
-            light = light,
-        )
+        val shown = alphaAt(y + noteSizePx / 2f)
+        if (shown > 0f) {
+            drawWithLight(
+                image = body,
+                offset = IntOffset(left, y.roundToInt()),
+                extent = IntSize(noteSizePx, minOf(noteSizePx, remaining)),
+                light = light,
+                alpha = shown,
+            )
+        }
         y += noteSizePx
     }
 
-    if (tail != null) {
+    val tailShown = alphaAt(tailY - noteSizePx / 2f)
+    if (tail != null && tailShown > 0f) {
         drawWithLight(
             image = tail,
             offset = IntOffset(left, (tailY - noteSizePx).roundToInt()),
             extent = IntSize(noteSizePx, noteSizePx),
             light = light,
+            alpha = tailShown,
         )
     }
 }
 
 /** Lane separators and the receptor line. Deliberately quiet. */
-private fun DrawScope.drawLaneChrome(laneWidthPx: Float, receptorYPx: Float, noteSizePx: Float) {
+private fun DrawScope.drawLaneChrome(
+    laneWidthPx: Float,
+    receptorYPx: Float,
+    noteSizePx: Float,
+    drawLine: Boolean = true,
+) {
     for (lane in GlyphLane.entries) {
         val left = lane.ordinal * laneWidthPx
         // Alternating lane grounds give the eye a boundary without a line for
@@ -601,6 +664,7 @@ private fun DrawScope.drawLaneChrome(laneWidthPx: Float, receptorYPx: Float, not
             )
         }
     }
+    if (!drawLine) return
     drawLine(
         color = GlyphTheme.Hairline,
         start = Offset(0f, receptorYPx),
@@ -634,6 +698,33 @@ private const val PAST_WINDOW_SECONDS = 0.35f
 private const val NOTE_SCALE = 0.82f
 
 private val RECEPTOR_INSET = 96.dp
+
+/** Reversed, the receptors sit under the HUD rather than behind it. */
+private val RECEPTOR_TOP_INSET = 112.dp
+
+/** How bright the receptors flash on the beat, as a share of a full copy. */
+private const val BEAT_FLASH = 0.45f
+
+/**
+ * StepMania's options that change only how the playfield is drawn. None of
+ * them changes a judgement: a hidden note is hit exactly as a visible one.
+ */
+data class GlyphFieldLook(
+    val reverse: Boolean = false,
+    val appearance: GlyphAppearance = GlyphAppearance.VISIBLE,
+    val dark: Boolean = false,
+    /** 0 to 0.5. */
+    val mini: Float = 0f,
+) {
+    companion object {
+        fun of(modifiers: GlyphModifiers) = GlyphFieldLook(
+            reverse = modifiers.reverse,
+            appearance = modifiers.appearance,
+            dark = modifiers.dark,
+            mini = modifiers.mini,
+        )
+    }
+}
 
 /** Culling bounds. Generous either way; culling only has to be conservative. */
 private const val MIN_LOOKAHEAD_SECONDS = 0.3f

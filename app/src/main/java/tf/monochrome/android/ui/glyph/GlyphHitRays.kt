@@ -63,12 +63,14 @@ internal fun GlyphHitRays(
     explosionProvider: () -> Map<GlyphLane, LaneFlash>,
     frameTick: State<Long>,
     enabled: Boolean,
+    /** The live combo, which picks the rays' colour (see [GlyphComboRays]). */
+    comboProvider: () -> Int,
     modifier: Modifier = Modifier,
 ) {
     if (!enabled) return
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
     if (LocalLowPerformance.current.disableLiquidGlass) return
-    HitRaysLayer(assets, laneWidthPx, noteSizePx, receptorYPx, explosionProvider, frameTick, modifier)
+    HitRaysLayer(assets, laneWidthPx, noteSizePx, receptorYPx, explosionProvider, frameTick, comboProvider, modifier)
 }
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -80,6 +82,7 @@ private fun HitRaysLayer(
     receptorYPx: Float,
     explosionProvider: () -> Map<GlyphLane, LaneFlash>,
     frameTick: State<Long>,
+    comboProvider: () -> Int,
     modifier: Modifier,
 ) {
     val shader = rememberGodRaysShader() ?: return
@@ -121,7 +124,9 @@ private fun HitRaysLayer(
             scale = scale,
         )
     }
-    val white = remember { ColorFilter.tint(Color.White, BlendMode.SrcIn) }
+    // The flash's colour this frame, written by the layer and read by the
+    // sprites below it in the same pass.
+    val tint = remember { arrayOf(Color.White) }
 
     // Only the strip around the receptors, not the playfield: the shader runs
     // over every pixel of its layer, and the shafts never reach further.
@@ -159,6 +164,12 @@ private fun HitRaysLayer(
                 } else {
                     // Brightest at the hit, gone a fifth of a second later.
                     setGodRayUniforms(shader, light, frame.copy(exposure = frame.exposure * strongest), RayOutput.LETTERS_AND_LIGHT)
+                    // In the combo's colour rather than the light's own: the
+                    // shafts climb white, yellow, orange, red, rainbow as the
+                    // combo passes each fifty.
+                    val colour = GlyphComboRays.colour(comboProvider(), now)
+                    tint[0] = colour
+                    shader.setFloatUniform("uSunColor", colour.red, colour.green, colour.blue)
                     android.graphics.RenderEffect
                         .createRuntimeShaderEffect(shader, "content")
                         .asComposeRenderEffect()
@@ -175,15 +186,16 @@ private fun HitRaysLayer(
                 val image = assets.image(
                     GlyphAssetCatalog.tap(lane, GlyphBeatDivision.QUARTER), noteSizePx, noteSizePx,
                 ) ?: continue
-                // The struck arrow, white-hot, swelling a touch as it fades.
-                val size = (noteSizePx * (1f + 0.12f * (1f - life))).roundToInt()
+                // The struck arrow, white-hot or in the combo's colour, held
+                // still at its own size: a flash, not a swell.
+                val size = noteSizePx
                 val x = lane.ordinal * laneWidthPx + (laneWidthPx - size) / 2f
                 drawImage(
                     image = image,
                     dstOffset = IntOffset(x.roundToInt(), (localReceptorY - size / 2f).roundToInt()),
                     dstSize = IntSize(size, size),
                     alpha = life,
-                    colorFilter = white,
+                    colorFilter = ColorFilter.tint(tint[0], BlendMode.SrcIn),
                 )
             }
         }
@@ -204,7 +216,10 @@ private const val FLASH_SECONDS = 0.22f
 /** How far above the receptors, in notes, the shafts are given room to fade. */
 private const val RAY_REACH_NOTES = 5f
 
-/** The cyan the sung word's rays shine in. */
+/**
+ * The light's base colour. The shader is handed the combo's colour each frame
+ * instead (see [GlyphComboRays]); this only seeds [LyricRayLight].
+ */
 private val BURST_ACCENT = Color(0xFF3FC8FF)
 
 /**
@@ -240,8 +255,19 @@ internal class GlyphHitLight {
 
     val isLit: Boolean get() = count > 0
 
+    private var filterColour = Color.Unspecified
+    private var cachedFilter: ColorFilter? = null
+
     /** The flash's colour, multiplied into a copy of the glyph that is then added. */
-    val filter: ColorFilter by lazy { ColorFilter.tint(BURST_ACCENT, BlendMode.Modulate) }
+    val filter: ColorFilter
+        get() = cachedFilter ?: ColorFilter.tint(Color.White, BlendMode.Modulate).also { cachedFilter = it }
+
+    /** Light in [colour] from now on; the filter is remade only when it changes. */
+    fun tint(colour: Color) {
+        if (colour == filterColour) return
+        filterColour = colour
+        cachedFilter = ColorFilter.tint(colour, BlendMode.Modulate)
+    }
 
     fun update(
         nowNanos: Long,
@@ -284,3 +310,33 @@ internal class GlyphHitLight {
 
 /** How bright a glyph gets right beside a hit, as a share of a full-strength copy. */
 private const val LIGHT_STRENGTH = 0.85f
+
+/**
+ * The hit rays' colour by combo: white to start, then yellow, orange and red
+ * as the combo passes each fifty, and from two hundred a rainbow that keeps
+ * turning. A broken combo drops straight back to white.
+ */
+internal object GlyphComboRays {
+    const val STEP = 50
+
+    /** 0 white, 1 yellow, 2 orange, 3 red, 4 rainbow. */
+    fun tier(combo: Int): Int = (combo.coerceAtLeast(0) / STEP).coerceAtMost(RAINBOW_TIER)
+
+    fun colour(combo: Int, nowNanos: Long): Color = when (tier(combo)) {
+        0 -> Color.White
+        1 -> YELLOW
+        2 -> ORANGE
+        3 -> RED
+        else -> {
+            val seconds = (nowNanos % RAINBOW_PERIOD_NANOS) / 1_000_000_000f
+            Color.hsv(seconds / RAINBOW_PERIOD_SECONDS * 360f, 0.8f, 1f)
+        }
+    }
+
+    const val RAINBOW_TIER = 4
+    private const val RAINBOW_PERIOD_SECONDS = 2.4f
+    private const val RAINBOW_PERIOD_NANOS = 2_400_000_000L
+    private val YELLOW = Color(0xFFFFE24A)
+    private val ORANGE = Color(0xFFFF9A2E)
+    private val RED = Color(0xFFFF3B3B)
+}
