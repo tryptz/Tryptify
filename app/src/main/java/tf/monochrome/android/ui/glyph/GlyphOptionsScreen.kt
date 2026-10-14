@@ -214,12 +214,14 @@ fun GlyphOptionsScreen(
                 verticalArrangement = Arrangement.spacedBy(MonoDimens.spacingLg),
             ) {
                 Spacer(Modifier.height(MonoDimens.spacingXs))
-                CompositionLocalProvider(LocalGlassBackdrop provides pageHaze) {
-                    when (tab) {
-                        OptionsTab.SPEED -> SpeedOptions(state, onEvent)
-                        OptionsTab.NOTES -> NoteOptions(state, onEvent)
-                        OptionsTab.JUDGE -> JudgeOptions(state, onEvent)
-                    }
+                // No backdrop for the controls: they are inside the page that
+                // is the haze source, and glass frosting the layer it is drawn
+                // in draws itself without end. On device that was a stack
+                // overflow in the render thread the moment the page opened.
+                when (tab) {
+                    OptionsTab.SPEED -> SpeedOptions(state, onEvent)
+                    OptionsTab.NOTES -> NoteOptions(state, onEvent)
+                    OptionsTab.JUDGE -> JudgeOptions(state, onEvent)
                 }
                 // The last control scrolls clear of Start, the mini player
                 // and the tab bar, while the page still runs under their glass.

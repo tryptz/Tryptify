@@ -27,6 +27,9 @@
 - **A miss streams red rays** from the arrow it missed, in place of the cracked-glass mark, which is kept for when the rays are off.
 - **Hit notes flash with god rays** — a brief white-hot flash of the struck arrow, streaming shafts of light through the lyrics' own god-ray effect, and every glyph near it catches the light. Off with reduced motion or with glass removed for performance, and on Android 13 and later.
 
+### Fixed
+- **Opening Player options crashed the app** in the build that added the live preview. The speed buttons were glass frosting the page they sat inside, and the renderer drew that page into itself until it ran out of stack. They no longer do, and a test now reads the source for that shape on every screen.
+
 ### Removed
 - **The pattern looper and the sampler**, with their capture taps in the audio chain, the stem studio, the wave editor and the sample library. Their database tables are dropped on upgrade (database v20). Trypt Mania keeps everything it uses: the decoder, the drum separators and the model.
 
