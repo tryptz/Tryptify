@@ -686,15 +686,16 @@ private fun GenerationPanel(
                         color = scheme.onSurfaceVariant,
                     )
                 }
-                if (!generation.isFinished) {
-                    Spacer(Modifier.height(MonoDimens.spacingMd))
-                    GlyphButton(
-                        text = "Cancel",
-                        onClick = onCancel,
-                        onClickLabel = "Cancel chart generation",
-                        height = 40.dp,
-                    )
-                }
+                // Cancel while it runs; Close once it has finished, since the
+                // job now outlives the screen and its result would otherwise
+                // sit here, holding the Generate buttons off.
+                Spacer(Modifier.height(MonoDimens.spacingMd))
+                GlyphButton(
+                    text = if (generation.isFinished) "Close" else "Cancel",
+                    onClick = onCancel,
+                    onClickLabel = if (generation.isFinished) "Close" else "Cancel chart generation",
+                    height = 40.dp,
+                )
             }
         }
     }

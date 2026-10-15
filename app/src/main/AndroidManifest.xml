@@ -9,6 +9,8 @@
          match pipeline survives leaving the screen (one catalog search per
          track; big playlists take minutes). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Trypt Mania's chart generation runs as mediaProcessing on Android 15+. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -207,10 +209,11 @@
              library manifest declares with no foregroundServiceType — so calling
              startForeground with dataSync throws "0x1 is not a subset of
              0x0" and takes the whole process down. Merging the type in here is
-             the supported way to grant it. -->
+             the supported way to grant it. StepManiaGenerationWorker does the
+             same with mediaProcessing on Android 15+, so it is merged in too. -->
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
-            android:foregroundServiceType="dataSync"
+            android:foregroundServiceType="dataSync|mediaProcessing"
             tools:node="merge" />
     </application>
 </manifest>

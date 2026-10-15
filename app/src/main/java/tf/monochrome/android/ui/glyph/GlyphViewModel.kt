@@ -29,7 +29,9 @@ import tf.monochrome.android.audio.sampler.stems.BackendKind
 import tf.monochrome.android.audio.sampler.stems.InstallResult
 import tf.monochrome.android.audio.sampler.stems.StemBackendRegistry
 import tf.monochrome.android.audio.sampler.stems.StemModelManager
-import tf.monochrome.android.audio.stepmania.StepManiaConversionService
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import tf.monochrome.android.audio.stepmania.StepManiaGenerationWorker
 import tf.monochrome.android.audio.stepmania.DropFinder
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.audio.stepmania.StepManiaRequest
@@ -94,7 +96,6 @@ class GlyphViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val songs: GlyphSongRepository,
     private val attempts: GlyphAttemptStore,
-    private val conversion: StepManiaConversionService,
     private val stemModels: StemModelManager,
     private val stemBackends: StemBackendRegistry,
     /**
@@ -216,7 +217,13 @@ class GlyphViewModel @Inject constructor(
     private var selectionJob: Job? = null
     private var lastPublishNanos = 0L
     private var countInEndsAtSeconds: Float? = null
-    private var generationJob: Job? = null
+    /**
+     * The background jobs this screen has seen queued or running. A finished
+     * job is only shown if it is one of these: WorkManager keeps finished jobs
+     * for a day, and one that ended long before the screen opened is not news.
+     */
+    private val watchedGenerations = HashSet<java.util.UUID>()
+    private val handledGenerations = HashSet<java.util.UUID>()
     private var modelJob: Job? = null
     private var runStartedAtMs = 0L
 
@@ -226,6 +233,7 @@ class GlyphViewModel @Inject constructor(
     init {
         loadOptions()
         refreshModel()
+        watchGeneration()
         viewModelScope.launch {
             songs.songs()
                 .catch { failure ->
@@ -298,8 +306,9 @@ class GlyphViewModel @Inject constructor(
 
             GlyphEvent.GenerateChart -> generateForSelected()
             is GlyphEvent.GenerateChartFrom -> generate(event.uri, displayNameOf(event.uri), null)
+            // Cancels a job still running; closes the panel of one that finished.
             GlyphEvent.CancelGeneration -> {
-                generationJob?.cancel()
+                if (isGenerating) StepManiaGenerationWorker.cancel(context)
                 _ui.value = _ui.value.copy(generation = null)
             }
             GlyphEvent.DismissError -> _ui.value = _ui.value.copy(error = null)
@@ -675,72 +684,109 @@ class GlyphViewModel @Inject constructor(
     }
 
     /**
-     * Run the existing conversion service.
+     * Hand the song to the background chart job ([StepManiaGenerationWorker]).
      *
      * Nothing about decoding, separation or chart generation is reimplemented
-     * here — this only chooses the destination and relays progress. The service
-     * reports its own stage text, including which backend actually ran, and
-     * that is passed through unchanged.
+     * here — this only chooses the destination. The job runs the conversion
+     * service and outlives this screen; [watchGeneration] relays its progress,
+     * including which backend actually ran, unchanged.
      */
     private fun generate(source: Uri, displayName: String, song: GlyphSong?) {
-        generationJob?.cancel()
         stopPreview()
         val trackId = song?.trackId ?: displayName
         val destination = songs.simfileFile(trackId)
-
-        generationJob = viewModelScope.launch {
-            _ui.value = _ui.value.copy(
-                generation = GlyphGenerationState(trackId, 0f, "Preparing"),
-                error = null,
-            )
-
-            val request = StepManiaRequest(
+        // A picked file is only readable while the picker's grant lasts; the
+        // job may outlive this process, so it keeps the grant until it is done.
+        if (source.scheme == "content") {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    source,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+        }
+        _ui.value = _ui.value.copy(
+            generation = GlyphGenerationState(trackId, 0f, "Preparing"),
+            error = null,
+        )
+        StepManiaGenerationWorker.enqueue(
+            context = context,
+            trackId = trackId,
+            source = source,
+            destination = destination,
+            request = StepManiaRequest(
                 title = song?.title ?: displayName.substringBeforeLast('.'),
                 artist = song?.artist.orEmpty(),
                 musicFileName = displayName,
                 difficulties = StepManiaDifficulty.entries.toSet(),
-            )
+            ),
+        )
+    }
 
-            val result = conversion.convert(
-                source = source,
-                destination = Uri.fromFile(destination),
-                request = request,
-            ) { progress ->
+    /** Mirror the background chart job into [GlyphUiState.generation], for as long as the screen lives. */
+    private fun watchGeneration() {
+        viewModelScope.launch {
+            WorkManager.getInstance(context)
+                .getWorkInfosForUniqueWorkFlow(StepManiaGenerationWorker.WORK_NAME)
+                // A replaced job and its replacement can both be listed for a
+                // moment; the one still going is the one to show.
+                .collect { infos ->
+                    (infos.firstOrNull { !it.state.isFinished } ?: infos.lastOrNull())?.let(::showGeneration)
+                }
+        }
+    }
+
+    private fun showGeneration(info: WorkInfo) {
+        val trackId = info.tags
+            .firstOrNull { it.startsWith(StepManiaGenerationWorker.TRACK_TAG) }
+            ?.removePrefix(StepManiaGenerationWorker.TRACK_TAG)
+            ?: return
+        when (info.state) {
+            WorkInfo.State.ENQUEUED, WorkInfo.State.RUNNING, WorkInfo.State.BLOCKED -> {
+                watchedGenerations += info.id
+                val progress = info.progress
                 _ui.value = _ui.value.copy(
                     generation = GlyphGenerationState(
                         trackId = trackId,
-                        fraction = progress.fraction,
-                        stage = progress.stage,
+                        fraction = progress.getFloat(StepManiaGenerationWorker.KEY_FRACTION, 0f),
+                        stage = progress.getString(StepManiaGenerationWorker.KEY_STAGE) ?: "Preparing",
                     ),
                 )
             }
-
-            result.fold(
-                onSuccess = { success ->
+            WorkInfo.State.SUCCEEDED -> {
+                if (!handledGenerations.add(info.id)) return
+                if (info.id in watchedGenerations) {
                     _ui.value = _ui.value.copy(
                         generation = GlyphGenerationState(
                             trackId = trackId,
                             fraction = 1f,
                             stage = "Complete",
-                            backendName = success.backendName,
+                            backendName = info.outputData.getString(StepManiaGenerationWorker.KEY_BACKEND),
                         ),
                     )
-                    // Re-read from disk rather than waiting for the library
-                    // flow, which never fires for a file written into app storage.
-                    if (song != null) loadSelection(song)
-                },
-                onFailure = { failure ->
-                    Log.w(TAG, "chart generation failed: ${failure.message}")
-                    _ui.value = _ui.value.copy(
-                        generation = GlyphGenerationState(
-                            trackId = trackId,
-                            fraction = 0f,
-                            stage = "Failed",
-                            failure = failure.message ?: "Chart generation failed.",
-                        ),
-                    )
-                },
-            )
+                }
+                // Re-read from disk rather than waiting for the library flow,
+                // which never fires for a file written into app storage.
+                _ui.value.selectedSong?.takeIf { it.trackId == trackId }?.let(::loadSelection)
+            }
+            WorkInfo.State.FAILED -> {
+                if (!handledGenerations.add(info.id) || info.id !in watchedGenerations) return
+                val failure = info.outputData.getString(StepManiaGenerationWorker.KEY_FAILURE)
+                    ?: "Chart generation failed."
+                Log.w(TAG, "chart generation failed: $failure")
+                _ui.value = _ui.value.copy(
+                    generation = GlyphGenerationState(
+                        trackId = trackId,
+                        fraction = 0f,
+                        stage = "Failed",
+                        failure = failure,
+                    ),
+                )
+            }
+            WorkInfo.State.CANCELLED -> {
+                if (!handledGenerations.add(info.id) || info.id !in watchedGenerations) return
+                if (_ui.value.generation?.trackId == trackId) _ui.value = _ui.value.copy(generation = null)
+            }
         }
     }
 
