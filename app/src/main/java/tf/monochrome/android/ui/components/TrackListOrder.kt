@@ -23,6 +23,13 @@ enum class TrackOrder(@androidx.annotation.StringRes val label: Int) {
     ARTIST(R.string.sort_artist),
     ALBUM(R.string.sort_album),
     DURATION(R.string.sort_duration),
+
+    /**
+     * Only for a list of files on this device — Downloads. A streamed track has
+     * no size, so this is left out of [DEFAULT_TRACK_ORDERS] and the sorts
+     * below treat it as no order at all.
+     */
+    FILE_SIZE(R.string.sort_file_size),
 }
 
 /** A chosen order and its direction. */
@@ -38,7 +45,13 @@ data class TrackSort(
  * artist variation should pass its own subset rather than show a key that can
  * only produce one grouping.
  */
-val DEFAULT_TRACK_ORDERS: List<TrackOrder> = TrackOrder.entries
+val DEFAULT_TRACK_ORDERS: List<TrackOrder> = listOf(
+    TrackOrder.ORIGINAL,
+    TrackOrder.TITLE,
+    TrackOrder.ARTIST,
+    TrackOrder.ALBUM,
+    TrackOrder.DURATION,
+)
 
 fun List<Track>.applySort(sort: TrackSort): List<Track> {
     if (sort.order == TrackOrder.ORIGINAL) {
@@ -51,7 +64,7 @@ fun List<Track>.applySort(sort: TrackSort): List<Track> {
         TrackOrder.ARTIST -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.displayArtist }
         TrackOrder.ALBUM -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.album?.title.orEmpty() }
         TrackOrder.DURATION -> compareBy { it.duration }
-        TrackOrder.ORIGINAL -> return this
+        TrackOrder.ORIGINAL, TrackOrder.FILE_SIZE -> return this
     }
     // Title breaks every tie, so an album sort inside one album stays stable and
     // readable rather than falling back to whatever order the list arrived in.
@@ -102,7 +115,7 @@ fun List<UnifiedTrack>.applyUnifiedSort(sort: TrackSort): List<UnifiedTrack> {
         TrackOrder.ARTIST -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.artistName }
         TrackOrder.ALBUM -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.albumTitle.orEmpty() }
         TrackOrder.DURATION -> compareBy { it.durationSeconds }
-        TrackOrder.ORIGINAL -> return this
+        TrackOrder.ORIGINAL, TrackOrder.FILE_SIZE -> return this
     }
     val full = comparator.thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
     return if (sort.ascending) sortedWith(full) else sortedWith(full.reversed())

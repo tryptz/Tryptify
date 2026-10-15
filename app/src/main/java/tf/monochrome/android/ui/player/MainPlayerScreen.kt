@@ -24,6 +24,7 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -74,6 +75,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
@@ -243,13 +245,6 @@ fun MainPlayerScreen(
      * Drawn last, above the audio-tools sheet and its scrim.
      */
     overlay: @Composable BoxScope.() -> Unit = {},
-    /**
-     * The USB DAC's volume bar, while one plays in exclusive mode; null
-     * otherwise, and then nothing is drawn. A slot rather than a level on
-     * [state] for the play head's reason: a drag moves it many times a second,
-     * and only the bar should recompose for that.
-     */
-    dacVolume: (@Composable () -> Unit)? = null,
 ) {
     val accent = state.albumColors.vibrant
 
@@ -468,11 +463,6 @@ fun MainPlayerScreen(
                     onNext = onNext,
                     isBuffering = state.isBuffering,
                 )
-            }
-
-            if (dacVolume != null) {
-                Spacer(Modifier.height(if (horizontal) 4.dp else 12.dp))
-                DevEditable("dacVolume", Modifier.fillMaxWidth()) { dacVolume() }
             }
 
             Spacer(Modifier.height(if (horizontal) 8.dp else 20.dp))
@@ -977,19 +967,26 @@ private fun StatusOverlayPanel(
             )
         }
         if (useGlass) {
-            // The mini player's slab: a tint rectangle relit by the playerGlass
-            // shader (bevel, refraction, rim — all from the Studio's mini
-            // player settings). Offscreen so the shader only sees the slab.
+            // The mini player's slab, relit by the playerGlass shader (bevel,
+            // refraction, rim — all from the Studio's mini player settings).
+            // Offscreen so the shader only sees the slab.
+            //
+            // Rounded at the sheet's own corner, and the shader told that
+            // corner. It used to be a square drawRect with no lensCorner: the
+            // shader lit the rectangle's square edges, the sheet's clip cut the
+            // corners off, and the rim stopped short of every corner while the
+            // pills beside it ran theirs all the way round.
             androidx.compose.foundation.Canvas(
                 modifier = Modifier
                     .matchParentSize()
-                    .playerGlass(tint = glassTint)
+                    .playerGlass(tint = glassTint, lensCorner = tf.monochrome.android.ui.theme.MonoDimens.radiusLg)
                     .graphicsLayer {
                         compositingStrategy =
                             androidx.compose.ui.graphics.CompositingStrategy.Offscreen
                     },
             ) {
-                drawRect(color = glassTint)
+                val r = tf.monochrome.android.ui.theme.MonoDimens.radiusLg.toPx()
+                drawRoundRect(color = glassTint, cornerRadius = CornerRadius(r, r))
             }
         }
         Column(
@@ -1102,33 +1099,48 @@ private fun RowScope.OverlayAction(
     onClick: () -> Unit,
 ) {
     val tint = if (active) accent else Color.White.copy(alpha = 0.85f)
-    Column(
-        modifier = Modifier
-            .weight(1f)
-            .clip(RoundedCornerShape(PlayerDesignTokens.GlassCornerSmall))
-            .clickable(onClick = onClick)
-            .liquidGlass(
-                shape = RoundedCornerShape(PlayerDesignTokens.GlassCornerSmall),
-                tintAlpha = if (active) PlayerDesignTokens.GlassTintStrong else PlayerDesignTokens.GlassTintSoft,
-                borderAlpha = PlayerDesignTokens.GlassTintSoft,
-            )
-            .padding(vertical = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+    val shape = RoundedCornerShape(PlayerDesignTokens.GlassCornerMedium)
+    // The same glass button as the status cards above it — real backdrop,
+    // the dome under a finger, the squeeze on press. It was a flat
+    // liquidGlass tint, which read as a dark outlined tile next to them. On
+    // is the accent and a ring, as a selected pill in the dock is: glass has
+    // no stronger tint to switch to.
+    tf.monochrome.android.ui.components.PressableGlass(
+        onClick = onClick,
+        modifier = Modifier.weight(1f),
+        shape = shape,
+        onClickLabel = label,
+        corner = PlayerDesignTokens.GlassCornerMedium,
+        glass = LocalPlayerGlass.current,
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            modifier = Modifier.size(PlayerDesignTokens.ActionIconSize),
-            tint = tint,
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = tint,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        if (active) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .border(1.5.dp, accent.copy(alpha = 0.85f), shape),
+            )
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(PlayerDesignTokens.ActionIconSize),
+                tint = tint,
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = tint,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -1186,9 +1198,9 @@ private fun ToggleRow(
             Switch(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.Black,
-                    checkedTrackColor = accent,
+                colors = tf.monochrome.android.ui.components.glassSwitchColors(
+                    accent = accent,
+                    checkedThumb = Color.Black,
                 ),
             )
         }
@@ -1219,12 +1231,13 @@ private fun PlayerTrackInfo(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
+            // A title too long for the line shows the rest of itself and
+            // comes back, rather than ending in "…".
+            tf.monochrome.android.ui.components.BackAndForthText(
                 text = track?.title ?: stringResource(R.string.no_track_playing),
                 style = MaterialTheme.typography.titleLarge,
                 color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
             )
             if (track != null) {
                 // Prefer the UnifiedTrack credits (carry per-artist ids incl. local

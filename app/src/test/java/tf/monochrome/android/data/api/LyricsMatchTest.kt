@@ -97,4 +97,12 @@ class LyricsMatchTest {
         assertFalse(LyricsMatch.titleMatches("Love", "Lovely"))
         assertTrue(LyricsMatch.titleMatches("Motion Sickness", "Motion Sickness (Remastered)"))
     }
+
+    @Test
+    fun `a file-name title loses its track and disc numbering`() {
+        assertEquals("Jolene", LyricsMatch.titleVariants("2-05 Jolene").last())
+        assertEquals("Song", LyricsMatch.titleVariants("CD1 - 05 - Song").last())
+        assertEquals("2-05 Jolene", LyricsMatch.titleVariants("2-05 Jolene").first())
+        assertEquals(listOf("99 Luftballons"), LyricsMatch.titleVariants("99 Luftballons"))
+    }
 }

@@ -247,7 +247,6 @@ fun MainPlayerRoute(
     val lyricsFx by playerViewModel.lyricsFx.collectAsStateWithLifecycle()
     val liveSpeed by playerViewModel.liveSpeed.collectAsStateWithLifecycle()
     val playerGlass by playerViewModel.playerGlass.collectAsStateWithLifecycle()
-    val dacExclusive by playerViewModel.dacExclusive.collectAsStateWithLifecycle()
     val playerDynamicColor by playerViewModel.playerDynamicColor.collectAsStateWithLifecycle()
     val dynamicColors by playerViewModel.dynamicColors.collectAsStateWithLifecycle()
 
@@ -633,31 +632,14 @@ fun MainPlayerRoute(
         ),
         // The transport buttons' refractive glass parameters (Studio › Player Glass).
         LocalPlayerGlass provides playerGlass,
+        // What the player's glass stands over: its own dark background, not the
+        // theme's. Every pane works its text colour out from this.
+        tf.monochrome.android.ui.components.LocalGlassGround provides playerGlassGround(blendedColors.dominant),
     ) {
     // topBar and hero are content, not chrome — the artwork, lyrics, queue and
     // visualizer are the same whichever layout is drawing around them. Hoisted
     // into slots so both the current and the legacy screen are handed one copy
     // instead of the hero being forked along with the chrome.
-    // The DAC's volume, only while one is claimed for exclusive output: Android's
-    // own volume never reaches it then. The level is collected inside the slot,
-    // so a drag recomposes the bar and not the player around it.
-    val dacVolumeSlot: (@Composable () -> Unit)? = if (dacExclusive) {
-        {
-            val level by playerViewModel.dacLevelDb.collectAsStateWithLifecycle()
-            val glass = LocalPlayerGlass.current
-            DacVolumeBar(
-                levelDb = level,
-                onLevelDb = playerViewModel::setDacLevelDb,
-                onMute = playerViewModel::setDacMuted,
-                // The seek bar's tint, so the two tubes are one material.
-                tint = if (glass.tintColor != 0) Color(glass.tintColor) else state.albumColors.vibrant,
-                contentColor = Color.White,
-                glassTube = !legacyPlayer,
-            )
-        }
-    } else {
-        null
-    }
     val topBarSlot: @Composable () -> Unit = {
         PlayerTopBar(
             speedLabel = state.speedLabel,
@@ -1075,7 +1057,6 @@ fun MainPlayerRoute(
                 },
                 topBar = topBarSlot,
                 hero = heroSlot,
-                dacVolume = dacVolumeSlot,
                 lyricsMode = lyricsSlotWide,
             )
         } else {
@@ -1168,7 +1149,6 @@ fun MainPlayerRoute(
                     null
                 },
                 overlay = playerPanels,
-                dacVolume = dacVolumeSlot,
             )
         }
     }
@@ -1578,6 +1558,7 @@ private fun BoxScope.SpeedPanel(
                 Switch(
                     checked = preservePitch,
                     onCheckedChange = onPreservePitchChange,
+                    colors = tf.monochrome.android.ui.components.glassSwitchColors(),
                 )
             }
 

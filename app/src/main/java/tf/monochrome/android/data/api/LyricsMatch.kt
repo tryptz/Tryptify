@@ -64,11 +64,14 @@ object LyricsMatch {
      */
     fun titleVariants(title: String): List<String> {
         val raw = title.trim()
-        val noEmDash = raw.substringBefore(" — ").trim()
+        // A local file's title can be its file name, numbered by its place on
+        // the release ("2-05 Jolene", "01 - Song"); no source knows it so.
+        val noNumber = tf.monochrome.android.data.local.tags.TrackNames.withoutNumberPrefix(raw)
+        val noEmDash = noNumber.substringBefore(" — ").trim()
         val noDash = VERSION_DASH.replace(noEmDash, "").trim()
         val noFeat = FEAT_TAIL.replace(FEAT_PAREN.replace(noDash, ""), "").trim()
         val noTag = TRAILING_TAG.replace(noFeat, "").trim()
-        return linkedSetOf(raw, noEmDash, noDash, noFeat, noTag).filter { it.isNotBlank() }
+        return linkedSetOf(raw, noNumber, noEmDash, noDash, noFeat, noTag).filter { it.isNotBlank() }
     }
 
     /** The title with every version decoration removed — what two spellings of one song share. */

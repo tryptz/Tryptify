@@ -277,6 +277,11 @@ class CrossfadeController(
      * vinyl-style speed would run through Sonic's linear interpolation and a
      * transposition would not happen at all, so the outgoing track would
      * change sound at the instant the blend began.
+     *
+     * Its decoders are configured as the main player's are
+     * ([TailRenderersFactory]): a tail decoded without
+     * [SourceDepthMediaCodecAdapterFactory] met Samsung's float-misdeclaring
+     * FLAC decoder, and its samples reached the DAC as full-scale noise.
      */
     private fun buildTailPlayer(chain: DspChain, playback: Playback): ExoPlayer {
         fun transposer() = tf.monochrome.android.audio.stretch.StretchAudioProcessor().apply {
@@ -288,7 +293,7 @@ class CrossfadeController(
         if (mix != null) {
             return ExoPlayer.Builder(
                 context,
-                object : NextRenderersFactory(context) {
+                object : TailRenderersFactory(context) {
                     override fun buildAudioSink(
                         context: android.content.Context,
                         enableFloatOutput: Boolean,
@@ -313,7 +318,7 @@ class CrossfadeController(
         )
         return ExoPlayer.Builder(
             context,
-            object : NextRenderersFactory(context) {
+            object : TailRenderersFactory(context) {
                 override fun buildAudioSink(
                     context: android.content.Context,
                     enableFloatOutput: Boolean,
@@ -331,6 +336,21 @@ class CrossfadeController(
             // request its own and risk being refused mid-blend.
             .setHandleAudioBecomingNoisy(false)
             .build()
+    }
+
+    /**
+     * The tail's renderers, with the main player's decoder configuration
+     * (PlaybackService's getCodecAdapterFactory): 16-bit sources decoded to
+     * 16-bit, and the codec marked important so it is not reclaimed mid-blend
+     * while two are alive.
+     */
+    private abstract class TailRenderersFactory(context: Context) : NextRenderersFactory(context) {
+        private var codecAdapterFactory: androidx.media3.exoplayer.mediacodec.MediaCodecAdapter.Factory? = null
+
+        override fun getCodecAdapterFactory(): androidx.media3.exoplayer.mediacodec.MediaCodecAdapter.Factory =
+            codecAdapterFactory ?: ImportanceMediaCodecAdapterFactory(
+                SourceDepthMediaCodecAdapterFactory(super.getCodecAdapterFactory()),
+            ).also { codecAdapterFactory = it }
     }
 
     private companion object {

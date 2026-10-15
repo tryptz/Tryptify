@@ -190,6 +190,7 @@ class LyricsFxStudioViewModel @Inject constructor(
     queueManager: tf.monochrome.android.player.QueueManager,
     /** The player's own beat analyzer, so the preview of the playing song pulses with it. */
     val spectrumAnalyzer: tf.monochrome.android.audio.eq.SpectrumAnalyzerTap,
+    private val achievements: tf.monochrome.android.data.achievements.AchievementStore,
 ) : ViewModel() {
     /** The currently-playing lyrics + position, so the preview can show them live. */
     val currentLyrics: StateFlow<tf.monochrome.android.domain.model.Lyrics?> = nowPlayingLyrics.lyrics
@@ -399,8 +400,10 @@ class LyricsFxStudioViewModel @Inject constructor(
         update { it.withGlassOpticsFrom(_playerGlass.value) }
     }
 
-    fun applyPreset(preset: LyricsFxSettings) {
+    /** [name] is the preset's, for Lyric Stylist; null for a reset, which tries nothing new. */
+    fun applyPreset(preset: LyricsFxSettings, name: String? = null) {
         userTouched = true
+        name?.let(achievements::lyricsPresetApplied)
         // A theme changes only the look — keep the user's font, Bluetooth delay,
         // and glass sample count (personal/device settings) across the switch.
         val next = preset.withPersonalFrom(_fx.value).clamped()
@@ -774,7 +777,7 @@ fun LyricsFxStudioScreen(
                         label = name,
                         selected = fx.matchesPreset(preset),
                         accent = MaterialTheme.colorScheme.primary,
-                        onClick = { viewModel.applyPreset(preset) },
+                        onClick = { viewModel.applyPreset(preset, name) },
                     )
                 }
                 // The user's own saved presets. Tapping applies; the trailing
@@ -784,7 +787,7 @@ fun LyricsFxStudioScreen(
                         label = saved.name,
                         selected = fx.matchesPreset(saved.settings),
                         accent = MaterialTheme.colorScheme.primary,
-                        onClick = { viewModel.applyPreset(saved.settings) },
+                        onClick = { viewModel.applyPreset(saved.settings, saved.name) },
                         trailingContent = {
                             Icon(
                                 Icons.Default.Share,

@@ -103,6 +103,20 @@ private fun NavController.leavePlayerFor(targetRoute: String): Boolean {
  * its transition settles, so [isSettled] drops the second tap; and this never
  * pops the last entry, whatever the lifecycle says.
  */
+/**
+ * Swaps the screen on top for [route]: the genre galaxy for the library
+ * galaxy and back. The one being left comes off the stack, so switching back
+ * and forth never piles maps up behind Back.
+ */
+fun NavController.switchSafe(route: String) {
+    if (!isSettled()) return
+    val leaving = currentDestination?.route
+    navigate(route) {
+        if (leaving != null) popUpTo(leaving) { inclusive = true }
+        launchSingleTop = true
+    }
+}
+
 fun NavController.popBackStackSafe(): Boolean {
     if (!isSettled() || previousBackStackEntry == null) return false
     return popBackStack()

@@ -175,6 +175,8 @@ class MainActivity : ComponentActivity() {
             // System › Performance.
             val showExplicitBadges by preferences.showExplicitBadges
                 .collectAsStateWithLifecycle(initialValue = true)
+            val rowBadges by preferences.rowBadges
+                .collectAsStateWithLifecycle(initialValue = tf.monochrome.android.data.preferences.RowBadges())
             val lowPerformance by preferences.lowPerformanceSettings
                 .collectAsStateWithLifecycle(
                     initialValue = tf.monochrome.android.performance.LowPerformanceSettings()
@@ -224,6 +226,7 @@ class MainActivity : ComponentActivity() {
                 LocalPerformanceProfile provides effectiveProfile,
                 tf.monochrome.android.performance.LocalLowPerformance provides lowPerformance,
                 tf.monochrome.android.ui.theme.LocalShowExplicitBadges provides showExplicitBadges,
+                tf.monochrome.android.ui.theme.LocalRowBadges provides rowBadges,
                 LocalImmersiveFullScreen provides immersiveFullScreen,
                 // Every list row's source tag reads its catalog from here.
                 tf.monochrome.android.ui.components.LocalTrackSource provides trackSourceResolver::of,

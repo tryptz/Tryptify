@@ -503,7 +503,8 @@ private fun QueueTrackItem(
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // Where each queued song plays from, so a mixed queue reads at a glance.
-                tf.monochrome.android.ui.components.LocalTrackSource.current(track)?.let {
+                tf.monochrome.android.ui.components.LocalTrackSource.current(track)
+                    ?.takeIf { tf.monochrome.android.ui.theme.rowBadges().source }?.let {
                     tf.monochrome.android.ui.components.SourcePill(it)
                     Spacer(modifier = Modifier.width(6.dp))
                 }
@@ -517,11 +518,13 @@ private fun QueueTrackItem(
             }
         }
 
-        Text(
-            text = track.formattedDuration,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        if (tf.monochrome.android.ui.theme.rowBadges().duration) {
+            Text(
+                text = track.formattedDuration,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
 
         Icon(
             imageVector = Icons.Default.DragHandle,

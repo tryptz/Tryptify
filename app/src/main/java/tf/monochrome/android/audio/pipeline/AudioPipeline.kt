@@ -103,9 +103,6 @@ enum class OutputPath(val api: String) {
     /** The ordinary path: Android's mixer, then the HAL. */
     AUDIO_TRACK("AudioTrack"),
 
-    /** Framework routing pinned to a USB DAC, still through AudioTrack. */
-    USB_FRAMEWORK("AudioTrack (USB pinned)"),
-
     /** The iso pump: libusb talks to the DAC and Android's mixer is bypassed. */
     USB_EXCLUSIVE("libusb (UAC exclusive)"),
 }
@@ -370,7 +367,6 @@ fun buildAudioPipelineSnapshot(input: AudioPipelineInputs): AudioPipelineSnapsho
         outRate == inRate -> "None — the output takes the source rate"
         else -> when (input.outputPath) {
             OutputPath.USB_EXCLUSIVE -> "USB DAC (exclusive)"
-            OutputPath.USB_FRAMEWORK -> "Android HAL, into a USB DAC"
             OutputPath.AUDIO_TRACK -> "Android HAL"
         }
     }

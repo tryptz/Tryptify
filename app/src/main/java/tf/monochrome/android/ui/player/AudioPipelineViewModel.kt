@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.delay
-import tf.monochrome.android.audio.UsbAudioRouter
 import tf.monochrome.android.audio.atmos.AtmosAudioProcessor
 import tf.monochrome.android.audio.dsp.DspEngineManager
 import tf.monochrome.android.audio.dsp.ChannelDetectorProcessor
@@ -53,7 +52,6 @@ class AudioPipelineViewModel @Inject constructor(
     private val spectrumTap: SpectrumAnalyzerTap,
     private val outputProbe: OutputDeviceProbe,
     private val atmosProcessor: AtmosAudioProcessor,
-    usbRouter: UsbAudioRouter,
     usbExclusive: UsbExclusiveController,
     dspEngine: DspEngineManager,
     preferences: PreferencesManager,
@@ -143,15 +141,9 @@ class AudioPipelineViewModel @Inject constructor(
     private val usbState: Flow<Pair<OutputPath, UsbStream?>> = combine(
         usbExclusive.status,
         usbExclusive.diagnostics,
-        usbRouter.usbOutputDevice,
-        preferences.usbBitPerfectEnabled,
-    ) { status, diagnostics, usbDevice, framework ->
+    ) { status, diagnostics ->
         val streaming = status == UsbExclusiveController.Status.Streaming
-        val path = when {
-            streaming -> OutputPath.USB_EXCLUSIVE
-            framework && usbDevice != null -> OutputPath.USB_FRAMEWORK
-            else -> OutputPath.AUDIO_TRACK
-        }
+        val path = if (streaming) OutputPath.USB_EXCLUSIVE else OutputPath.AUDIO_TRACK
         val stream = diagnostics?.takeIf { streaming }?.let {
             UsbStream(
                 sampleRateHz = it.sampleRateHz,
@@ -162,6 +154,7 @@ class AudioPipelineViewModel @Inject constructor(
                     append(" · ")
                     append(it.speedLabel())
                     if (it.hasFeedbackEndpoint) append(" · async feedback")
+                    it.hardwareVolumeLabel()?.let { hw -> append(" · "); append(hw) }
                 },
             )
         }

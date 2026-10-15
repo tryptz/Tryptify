@@ -188,11 +188,13 @@ Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativeSupportedRates(
 //   [5] endpointAddress
 //   [6] maxPacketSize
 //   [7] bInterval
-//   [8] uacVersion (0x0100 = UAC1, 0x0200 = UAC2)
+//   [8] uacVersion (0x0100 = UAC1, 0x0200 = UAC2, 0x0300 = UAC3 BADD)
 //   [9] clockSourceId (0 if UAC1 / no resolved clock)
 //   [10] feedbackEndpointAddress (0 if absent)
 //   [11] isHighSpeed (1/0)
 //   [12] bytesPerSample (subslot size)
+//   [13] hwVolumeDb256 (DAC's own volume in 1/256 dB, 0 = full scale;
+//        kHwVolumeNone when it has no settable volume)
 // Returns null when the driver isn't streaming — caller should hide
 // the diagnostics block.
 JNIEXPORT jlongArray JNICALL
@@ -200,7 +202,7 @@ Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativeActiveStream(
     JNIEnv* env, jobject) {
     if (!driver().isStreaming()) return nullptr;
     const auto& f = driver().currentFormat();
-    jlong packed[13] = {
+    jlong packed[14] = {
         static_cast<jlong>(f.sampleRateHz),
         static_cast<jlong>(f.bitsPerSample),
         static_cast<jlong>(f.channels),
@@ -214,10 +216,11 @@ Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativeActiveStream(
         static_cast<jlong>(f.feedbackEndpointAddress),
         f.isHighSpeed ? jlong{1} : jlong{0},
         static_cast<jlong>(f.bytesPerSample),
+        static_cast<jlong>(f.hwVolumeDb256),
     };
-    jlongArray arr = env->NewLongArray(13);
+    jlongArray arr = env->NewLongArray(14);
     if (!arr) return nullptr;
-    env->SetLongArrayRegion(arr, 0, 13, packed);
+    env->SetLongArrayRegion(arr, 0, 14, packed);
     return arr;
 }
 

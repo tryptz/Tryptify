@@ -295,6 +295,15 @@ class ProjectMOverlayView(
                             wake.await()
                         }
                         renderRequested = false
+                        // Vsync off: the swap no longer waits for the display,
+                        // so wait out the Target FPS interval here. Drawing
+                        // whenever possible and letting the cap drop frames
+                        // spun this thread flat out and presented the dropped
+                        // ones. A stop or a requested frame still wakes it.
+                        if (running && playing) {
+                            val wait = repository.nanosUntilNextFrame(System.nanoTime())
+                            if (wait > 0L) wake.awaitNanos(wait)
+                        }
                         !running
                     }
                     if (stop) break
@@ -329,7 +338,10 @@ class ProjectMOverlayView(
             // afterwards from the pixels it produced.
             GLES30.glClearColor(0f, 0f, 0f, 1f)
             GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
-            repository.renderFrame(System.nanoTime())
+            // False when projectM drew nothing new; the composite then reuses
+            // its last capture rather than the cleared frame, which would show
+            // the cover alone for a frame.
+            val drew = repository.renderFrame(System.nanoTime())
 
             val current = settings
             val composited = pass.composite(
@@ -337,6 +349,7 @@ class ProjectMOverlayView(
                 blackPoint = current.blackPoint,
                 blend = current.blend,
                 scrim = scrimTone,
+                freshFrame = drew,
             )
             if (!composited) {
                 // No cover decoded yet, or the program failed to build. The

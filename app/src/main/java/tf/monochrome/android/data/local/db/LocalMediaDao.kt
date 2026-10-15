@@ -281,6 +281,14 @@ interface LocalMediaDao {
     @Update
     suspend fun updateTracks(tracks: List<LocalTrackEntity>)
 
+    /**
+     * Points track [id] at its album, artist and art, and writes nothing
+     * else: a scan regrouping the library from rows it read earlier must not
+     * put back their other columns as they were then.
+     */
+    @Query("UPDATE local_tracks SET albumId = :albumId, artistId = :artistId, artworkCacheKey = :artworkCacheKey WHERE id = :id")
+    suspend fun updateTrackGrouping(id: Long, albumId: Long?, artistId: Long?, artworkCacheKey: String?)
+
     @Query("SELECT * FROM local_tracks")
     suspend fun getAllTracksSnapshot(): List<LocalTrackEntity>
 
@@ -306,8 +314,59 @@ interface LocalMediaDao {
     @Query("SELECT filePath FROM local_tracks")
     suspend fun getAllTrackPaths(): List<String>
 
-    @Query("SELECT filePath, lastModified, artworkCacheKey, hasEmbeddedArt, artist, title FROM local_tracks")
+    @Query("SELECT filePath, lastModified, artworkCacheKey, hasEmbeddedArt, artist, title, dynamicRange FROM local_tracks")
     suspend fun getAllTrackScanInfo(): List<TrackScanInfo>
+
+    /** [getAllTrackScanInfo] for just [paths]: at most a few hundred, under SQLite's bound-variable limit. */
+    @Query("SELECT filePath, lastModified, artworkCacheKey, hasEmbeddedArt, artist, title, dynamicRange FROM local_tracks WHERE filePath IN (:paths)")
+    suspend fun scanInfoFor(paths: List<String>): List<TrackScanInfo>
+
+    /** What the player needs to measure track [id]'s dynamic range: its file, its length, and whether it has one. */
+    @Query("SELECT filePath, durationSeconds, dynamicRange FROM local_tracks WHERE id = :id")
+    suspend fun dynamicRangeTarget(id: Long): DynamicRangeTarget?
+
+    /** Track [id]'s tempo from its tag, or null without one. */
+    @Query("SELECT bpm FROM local_tracks WHERE id = :id")
+    suspend fun bpmOf(id: Long): Float?
+
+    /** A dynamic range the player measured, written to that file's row alone. */
+    @Query("UPDATE local_tracks SET dynamicRange = :dynamicRange WHERE filePath = :filePath")
+    suspend fun updateDynamicRange(filePath: String, dynamicRange: Float)
+
+    /** Every track's row id, and nothing else: Stats knows a local play by it. */
+    @Query("SELECT id FROM local_tracks")
+    suspend fun allTrackIds(): List<Long>
+
+    /** Tracks [ids]' files; ids no longer in the library are simply absent. Keep [ids] under SQLite's 999. */
+    @Query("SELECT id, filePath FROM local_tracks WHERE id IN (:ids)")
+    suspend fun trackPathsOf(ids: List<Long>): List<TrackPath>
+
+    /** The next [limit] tracks after id [afterId], in id order: a walk over the table that can stop and resume. */
+    @Query("SELECT id, filePath FROM local_tracks WHERE id > :afterId ORDER BY id LIMIT :limit")
+    suspend fun trackPathsAfter(afterId: Long, limit: Int): List<TrackPath>
+
+    /**
+     * Writes the tempo, key and gain tags of the track at [filePath] and
+     * nothing else: not a row rewrite, so its id, its groupings and its
+     * dynamic range stay as they are.
+     */
+    @Query(
+        """
+        UPDATE local_tracks SET bpm = :bpm, camelotKey = :camelotKey,
+            rgTrackGain = :rgTrackGain, rgAlbumGain = :rgAlbumGain,
+            r128TrackGain = :r128TrackGain, r128AlbumGain = :r128AlbumGain
+        WHERE filePath = :filePath
+        """
+    )
+    suspend fun updateMusicalTags(
+        filePath: String,
+        bpm: Float?,
+        camelotKey: Int?,
+        rgTrackGain: Float?,
+        rgAlbumGain: Float?,
+        r128TrackGain: Int?,
+        r128AlbumGain: Int?,
+    )
 
     // ── Albums ──────────────────────────────────────────────────────
 
@@ -369,6 +428,53 @@ interface LocalMediaDao {
 
     @Query("DELETE FROM local_folders")
     suspend fun clearFolders()
+
+    // ── Galaxy ──────────────────────────────────────────────────────
+    //
+    // The library galaxy reads the library as a few grouped summaries, never
+    // the whole track table: a star needs its artist's size, first year,
+    // genre tags and collaborators, not their tracks.
+
+    @Query("SELECT * FROM local_artists")
+    suspend fun getArtistsOnce(): List<LocalArtistEntity>
+
+    /** Each artist's earliest tagged year: how far out their star sits on the timeline. */
+    @Query("SELECT artistId AS artistId, MIN(year) AS year FROM local_tracks WHERE artistId IS NOT NULL AND year > 0 GROUP BY artistId")
+    suspend fun galaxyFirstYears(): List<GalaxyArtistYear>
+
+    /** Each artist's genre tags, as written, and how many of their tracks carry each. */
+    @Query(
+        "SELECT artistId AS artistId, genre AS tag, COUNT(*) AS tracks FROM local_tracks " +
+            "WHERE artistId IS NOT NULL AND genre IS NOT NULL AND genre != '' GROUP BY artistId, genre"
+    )
+    suspend fun galaxyGenreTags(): List<GalaxyArtistTag>
+
+    /**
+     * Tracks whose own artist is not the album's: a feature or a
+     * collaboration, linking the album artist's star to the track artist's.
+     */
+    @Query(
+        "SELECT artistId AS artistId, artist AS other, COUNT(*) AS tracks FROM local_tracks " +
+            "WHERE artistId IS NOT NULL AND artist IS NOT NULL AND albumArtist IS NOT NULL AND artist != albumArtist " +
+            "GROUP BY artistId, artist"
+    )
+    suspend fun galaxyCollabs(): List<GalaxyArtistCollab>
+
+    @Query("SELECT * FROM local_tracks WHERE artistId = :artistId")
+    suspend fun getTracksByArtistOnce(artistId: Long): List<LocalTrackEntity>
+
+    @Query("SELECT * FROM local_albums WHERE id IN (:ids)")
+    suspend fun getAlbumsByIds(ids: List<Long>): List<LocalAlbumEntity>
+
+    /**
+     * Something that changes whenever a scan writes the library: what the
+     * galaxy rebuilds on. Room re-runs it when either table changes.
+     */
+    @Query(
+        "SELECT COUNT(*) AS tracks, (SELECT COUNT(*) FROM local_artists) AS artists, " +
+            "COALESCE(MAX(lastScannedAt), 0) AS lastScan FROM local_tracks"
+    )
+    fun observeGalaxyStamp(): Flow<GalaxyStamp>
 
     // ── Scan State ──────────────────────────────────────────────────
 
@@ -439,6 +545,12 @@ interface LocalMediaDao {
     }
 }
 
+/** A track's row id and file. */
+data class TrackPath(val id: Long, val filePath: String)
+
+/** A track the player may measure: its file, its length, and the dynamic range it has, if any. */
+data class DynamicRangeTarget(val filePath: String, val durationSeconds: Int, val dynamicRange: Float?)
+
 /**
  * Lightweight projection of the columns the scanner's re-read heuristics
  * need, so a full scan can prefetch the whole table in one query instead
@@ -450,7 +562,9 @@ data class TrackScanInfo(
     val artworkCacheKey: String?,
     val hasEmbeddedArt: Boolean,
     val artist: String?,
-    val title: String?
+    val title: String?,
+    /** Measured by the player, not read from the file: carried over when the file is read again unchanged. */
+    val dynamicRange: Float? = null,
 )
 
 /**
@@ -465,3 +579,15 @@ fun folderRangeEnd(prefix: String): String {
 
 /** A folder and the newest file under it, from [LocalMediaDao.observeNewestInSubfolders]. */
 data class FolderNewest(val path: String, val newest: Long)
+
+/** An artist's earliest tagged year. */
+data class GalaxyArtistYear(val artistId: Long, val year: Int)
+
+/** One of an artist's genre tags, and on how many of their tracks. */
+data class GalaxyArtistTag(val artistId: Long, val tag: String, val tracks: Int)
+
+/** An album artist and a track artist on the same tracks. */
+data class GalaxyArtistCollab(val artistId: Long, val other: String, val tracks: Int)
+
+/** What the library galaxy watches to know the library changed. */
+data class GalaxyStamp(val tracks: Int, val artists: Int, val lastScan: Long)

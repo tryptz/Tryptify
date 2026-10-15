@@ -18,7 +18,9 @@ import tf.monochrome.android.data.local.db.LocalGenreEntity
 import tf.monochrome.android.data.local.db.LocalMediaDao
 import tf.monochrome.android.data.local.db.LocalTrackEntity
 import tf.monochrome.android.data.local.db.ScanStateEntity
+import tf.monochrome.android.data.local.db.TrackPath
 import tf.monochrome.android.data.local.db.TrackScanInfo
+import tf.monochrome.android.data.local.tags.MusicalTags
 import tf.monochrome.android.data.local.tags.TagReader
 import tf.monochrome.android.data.preferences.PreferencesManager
 import java.io.File
@@ -49,7 +51,6 @@ class MediaScanner @Inject constructor(
 ) {
 
     fun fullScan(
-        minDurationMs: Long = 30_000,
         excludedPaths: Set<String> = emptySet()
     ): Flow<ScanProgress> = flow {
         try {
@@ -81,7 +82,7 @@ class MediaScanner @Inject constructor(
                 folderIndexer.index(unindexed)
             }
             val mediaStoreFiles =
-                mediaStoreSource.queryAllAudio(minDurationMs, excluded, folderRoots)
+                mediaStoreSource.queryAllAudio(excluded, folderRoots)
             emit(ScanProgress.Started(totalFiles = mediaStoreFiles.size))
 
             // One projection query up front instead of a findByPath() SELECT
@@ -93,12 +94,19 @@ class MediaScanner @Inject constructor(
             // about the files changed, so the usual heuristics would skip them.
             val titleFromFileName = preferences.localTitleFromFileName.first()
             val titleModeChanged = titleFromFileName != preferences.localTitleModeScanned.first()
+            // Rows an older scan gave a number for an artist are healed by one
+            // full scan, not by every one: see needsReRead.
+            val healNumbering = preferences.localNumberingHealScanned.first() < NUMBERING_HEAL_VERSION
 
             val addedCount = processFiles(
                 files = mediaStoreFiles,
                 shouldRead = {
                     titleModeChanged ||
-                        needsReRead(scanInfoByPath[it.absolutePath], it.dateModified, titleFromFileName = titleFromFileName)
+                        needsReRead(
+                            scanInfoByPath[it.absolutePath], it.dateModified,
+                            titleFromFileName = titleFromFileName,
+                            healNumbering = healNumbering,
+                        )
                 },
                 progressChunkSize = 50,
                 titleFromFileName = titleFromFileName,
@@ -119,6 +127,7 @@ class MediaScanner @Inject constructor(
             // Update scan state
             updateScanState(full = true)
             preferences.setLocalTitleModeScanned(titleFromFileName)
+            if (healNumbering) preferences.setLocalNumberingHealScanned(NUMBERING_HEAL_VERSION)
 
             // App data now, not a cache the OS bounds for us, and a scan is
             // the one moment we know which covers are still spoken for. Best
@@ -156,9 +165,7 @@ class MediaScanner @Inject constructor(
      * before storage is mounted, would otherwise empty the library. And when
      * nothing changed, nothing is rebuilt or announced.
      */
-    fun incrementalScan(
-        minDurationMs: Long = 30_000
-    ): Flow<ScanProgress> = flow {
+    fun incrementalScan(): Flow<ScanProgress> = flow {
         try {
             val folderRoots = preferences.userFolderRoots.first()
             // Exclusions apply here too. They used to be read only by fullScan,
@@ -167,7 +174,7 @@ class MediaScanner @Inject constructor(
             // until the next song landed in that folder.
             val excluded = preferences.excludedPaths.first()
             val audio = mediaStoreSource.queryAllAudio(
-                minDurationMs, excluded, folderRoots, includeAtmosVideos = false,
+                excluded, folderRoots, includeAtmosVideos = false,
             )
             val known = localMediaDao.getAllTrackScanInfo().associateBy { it.filePath }
             val changed = audio.filter { needsIncrementalRead(known[it.absolutePath], it.dateModified) }
@@ -185,7 +192,7 @@ class MediaScanner @Inject constructor(
             // Same roots filter as fullScan so the prune diff never deletes
             // tracks a full scan would keep; videos by path, for the reason above.
             val present = audio.mapTo(HashSet()) { it.absolutePath }
-            present += mediaStoreSource.queryAtmosVideoCandidatePaths(minDurationMs, excluded)
+            present += mediaStoreSource.queryAtmosVideoCandidatePaths(excluded)
             val removedCount = pruneDeleted(present, cautious = true)
 
             if (changed.isEmpty() && removedCount == 0) {
@@ -263,7 +270,7 @@ class MediaScanner @Inject constructor(
             pending += entities
             added += entities.size
             if (pending.size >= INSERT_BATCH_SIZE) {
-                localMediaDao.insertTracks(pending.toList())
+                insertKeepingDynamicRange(pending.toList())
                 pending.clear()
             }
 
@@ -275,9 +282,26 @@ class MediaScanner @Inject constructor(
             ))
         }
         if (pending.isNotEmpty()) {
-            localMediaDao.insertTracks(pending)
+            insertKeepingDynamicRange(pending)
         }
         return added
+    }
+
+    /**
+     * Writes [tracks] (a re-read replaces its row whole), each keeping the
+     * dynamic range its row holds now while its file is the same one
+     * ([keptDynamicRange]): the player measures it, so a read cannot give it
+     * back. The rows are read and written in one transaction, so a value the
+     * player saves while the scan runs is kept too, where a copy read when the
+     * scan began would have put back an empty one.
+     */
+    private suspend fun insertKeepingDynamicRange(tracks: List<LocalTrackEntity>) {
+        musicDatabase.withTransaction {
+            val now = localMediaDao.scanInfoFor(tracks.map { it.filePath }).associateBy { it.filePath }
+            localMediaDao.insertTracks(
+                tracks.map { t -> keptDynamicRange(now[t.filePath], t.lastModified)?.let { t.copy(dynamicRange = it) } ?: t },
+            )
+        }
     }
 
     /**
@@ -345,8 +369,12 @@ class MediaScanner @Inject constructor(
             bitRate = tags.bitRate,
             channels = tags.channels,
             durationSeconds = tags.durationSeconds,
-            rgTrackGain = tags.replayGainTrack,
-            rgAlbumGain = tags.replayGainAlbum,
+            rgTrackGain = tags.musical.rgTrackGain,
+            rgAlbumGain = tags.musical.rgAlbumGain,
+            r128TrackGain = tags.musical.r128TrackGain,
+            r128AlbumGain = tags.musical.r128AlbumGain,
+            bpm = tags.musical.bpm,
+            camelotKey = tags.musical.camelotKey,
             hasEmbeddedArt = tags.hasEmbeddedArt,
             artworkCacheKey = tags.artworkCacheKey,
             isThxSpatialAudio = tags.isThxSpatialAudio,
@@ -466,23 +494,26 @@ class MediaScanner @Inject constructor(
                 for (track in artistTracks) artistIdByTrackPath[track.filePath] = artistId
             }
 
-            // Bulk-update every track in one statement (was: N updateTrack calls).
-            // Trust hasEmbeddedArt (set by TagReader; covers both an embedded
-            // picture atom and a folder sidecar) to decide ownership. Tracks
-            // with their own art keep its path. Tracks without get the
-            // album-propagated path — or null if the album is synthetic
-            // (Unknown Album bucket). Always-overwriting on rebuild ensures
-            // stale propagation from a previous scan gets cleaned up.
-            val updatedTracks = tracks.map { t ->
-                t.copy(
-                    albumId = albumIdByTrackPath[t.filePath],
-                    artistId = artistIdByTrackPath[t.filePath],
-                    artworkCacheKey = if (t.hasEmbeddedArt) t.artworkCacheKey
-                        else albumArtByTrackPath[t.filePath],
-                )
-            }
-            if (updatedTracks.isNotEmpty()) {
-                localMediaDao.updateTracks(updatedTracks)
+            // Point every track at its album, artist and art, in this one
+            // transaction. Trust hasEmbeddedArt (set by TagReader; covers both
+            // an embedded picture atom and a folder sidecar) to decide
+            // ownership. Tracks with their own art keep its path. Tracks
+            // without get the album-propagated path — or null if the album is
+            // synthetic (Unknown Album bucket). Recomputing every row on
+            // rebuild ensures stale propagation from a previous scan gets
+            // cleaned up.
+            //
+            // Those three columns only, and only where they changed. The rows
+            // were read before this transaction, so writing them back whole
+            // put back whatever they held then: tags the backfill wrote
+            // meanwhile, a dynamic range the player measured, gone.
+            for (t in tracks) {
+                val albumId = albumIdByTrackPath[t.filePath]
+                val artistId = artistIdByTrackPath[t.filePath]
+                val art = if (t.hasEmbeddedArt) t.artworkCacheKey else albumArtByTrackPath[t.filePath]
+                if (albumId != t.albumId || artistId != t.artistId || art != t.artworkCacheKey) {
+                    localMediaDao.updateTrackGrouping(t.id, albumId, artistId, art)
+                }
             }
 
             for ((genre, count) in genreSet) {
@@ -517,6 +548,93 @@ class MediaScanner @Inject constructor(
         rebuildFolders()
         localLibraryRevision.bump()
     }
+
+    /**
+     * Reads the tempo, key and gain tags of every track after id [afterId] and
+     * writes those columns alone, [BACKFILL_BATCH] tracks at a time, calling
+     * [onBatch] with the last id done so a run cut short can resume there.
+     *
+     * Tags only: no retriever, no artwork, no audio, and no row rewrite, so
+     * ids, groupings and a measured dynamic range stay as they are. Two
+     * readers at a time, so it stays in the background.
+     *
+     * [onBatch] also gets the tracks whose file was not there (on a card not
+     * mounted just then). The walk goes on past them and finishes; they are
+     * read later by [retryMusicalTags].
+     */
+    suspend fun backfillMusicalTags(
+        afterId: Long,
+        onBatch: suspend (resumeAfter: Long, missing: Set<Long>) -> Unit,
+    ) {
+        var cursor = afterId
+        var wrote = false
+        while (true) {
+            val batch = localMediaDao.trackPathsAfter(cursor, BACKFILL_BATCH)
+            if (batch.isEmpty()) break
+            val (batchWrote, missing) = readMusicalTagsOf(batch)
+            wrote = wrote || batchWrote
+            cursor = batch.last().id
+            // Past a missing file too. Held there instead, the walk restarted
+            // from it at every launch while an SD card was out, read every
+            // track after it again, wrote the same values and rebuilt the
+            // galaxy, and never finished. The missing ones are tried again on
+            // their own ([retryMusicalTags]).
+            onBatch(cursor, missing)
+        }
+        if (wrote) localLibraryRevision.bump()
+    }
+
+    /**
+     * Reads the tags of tracks [ids], which the backfill found no file for:
+     * those whose file is back are filled in. Returns the ones still missing;
+     * a track no longer in the library is dropped.
+     */
+    suspend fun retryMusicalTags(ids: Set<Long>): Set<Long> {
+        val stillMissing = HashSet<Long>()
+        var wrote = false
+        for (chunk in ids.chunked(BACKFILL_BATCH)) {
+            val rows = localMediaDao.trackPathsOf(chunk)
+            // Checked before reading: a card that is still out costs a stat
+            // per file, not a parse.
+            val (present, absent) = rows.partition { File(it.filePath).exists() }
+            absent.mapTo(stillMissing) { it.id }
+            if (present.isEmpty()) continue
+            val (batchWrote, missing) = readMusicalTagsOf(present)
+            wrote = wrote || batchWrote
+            stillMissing += missing
+        }
+        if (wrote) localLibraryRevision.bump()
+        return stillMissing
+    }
+
+    /**
+     * Reads and writes the musical tags of [rows]. Returns whether anything
+     * was written, and the ids whose file was not there.
+     */
+    private suspend fun readMusicalTagsOf(rows: List<TrackPath>): Pair<Boolean, Set<Long>> {
+        val dispatcher = Dispatchers.IO.limitedParallelism(BACKFILL_PARALLELISM)
+        val read = coroutineScope {
+            rows.map { row -> async(dispatcher) { row to tagReader.readMusicalTags(row.filePath) } }
+                .awaitAll()
+        }
+        val missing = read.filter { (row, tags) -> tags == null && !File(row.filePath).exists() }
+            .mapTo(HashSet()) { it.first.id }
+        // A file that could not be read, or says nothing, is left as it is.
+        val found = read.mapNotNull { (row, tags) -> tags?.takeIf { it != MusicalTags() }?.let { row.filePath to it } }
+        if (found.isNotEmpty()) {
+            musicDatabase.withTransaction {
+                for ((path, t) in found) {
+                    localMediaDao.updateMusicalTags(
+                        path, t.bpm, t.camelotKey, t.rgTrackGain, t.rgAlbumGain, t.r128TrackGain, t.r128AlbumGain,
+                    )
+                }
+            }
+        }
+        return found.isNotEmpty() to missing
+    }
+
+    /** Whether the library has no tracks at all. */
+    suspend fun isLibraryEmpty(): Boolean = localMediaDao.getTrackCount() == 0
 
     suspend fun rebuildFolders() {
         val folders = buildFolderTree(localMediaDao.getAllTrackPaths())
@@ -573,11 +691,34 @@ class MediaScanner @Inject constructor(
     }
 
     companion object {
+        /**
+         * The numbering heal a full scan applies once (needsReRead). Raise it
+         * when the numbering rule changes, so the next full scan heals again.
+         */
+        const val NUMBERING_HEAL_VERSION = 1
+
         /** Rows per insertTracks() call — one Room transaction per batch. */
         private const val INSERT_BATCH_SIZE = 500
 
         /** Paths per DELETE ... IN (...) — under SQLite's 999-variable limit. */
         private const val DELETE_CHUNK_SIZE = 500
+
+        /** Tracks per backfill transaction, and per saved resume point. */
+        private const val BACKFILL_BATCH = 200
+
+        /** Files read at once by the tag backfill: background work, not a scan. */
+        private const val BACKFILL_PARALLELISM = 2
+
+        /**
+         * The dynamic range to keep for a file read again: what the player
+         * measured, if the file is unchanged since ([existing]'s modified time
+         * is [mediaStoreDateModified]). A file rewritten is new audio, so it
+         * starts without one. A re-read happens for other reasons too (missing
+         * art, a title setting), and a rescan replaces the row, so without this
+         * every measurement went with it.
+         */
+        fun keptDynamicRange(existing: TrackScanInfo?, mediaStoreDateModified: Long): Float? =
+            existing?.takeIf { it.lastModified == mediaStoreDateModified }?.dynamicRange
 
         /**
          * Decide whether a MediaStore file needs its tags (re-)read or the
@@ -589,6 +730,7 @@ class MediaScanner @Inject constructor(
             mediaStoreDateModified: Long,
             artworkFileExists: (String) -> Boolean = { File(it).exists() },
             titleFromFileName: Boolean = false,
+            healNumbering: Boolean = false,
         ): Boolean {
             if (existing == null) return true
             if (existing.lastModified < mediaStoreDateModified) return true
@@ -623,6 +765,16 @@ class MediaScanner @Inject constructor(
             // would re-read those files on every scan.
             if (!titleFromFileName && existing.artist == null &&
                 existing.title?.let { tf.monochrome.android.data.local.tags.splitArtistTitle(it) } != null
+            ) return true
+            // Re-read rows an older scan gave a track or disc number for an
+            // artist ("01 - Song" split at its dash into "01" and "Song"). The
+            // split now takes the numbering off first, so the re-read heals the
+            // row. Once, behind [healNumbering]: a tagged artist really named
+            // "311" or "112" reads back the same, so as a per-scan rule it was
+            // re-read on every full scan, and each re-read replaced its row
+            // under a new id, losing it from the queue.
+            if (healNumbering &&
+                tf.monochrome.android.data.local.tags.TrackNames.looksLikeNumbering(existing.artist)
             ) return true
             return false
         }

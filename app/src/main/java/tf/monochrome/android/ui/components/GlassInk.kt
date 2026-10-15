@@ -144,3 +144,31 @@ private const val BODY_MIX = 0.6f
 
 private const val ACCENT_CONTRAST = 3.0
 private const val TEXT_CONTRAST = 4.5
+
+/**
+ * A switch on glass, in the glass's own ink. Material's switch takes its "off"
+ * track and thumb from the theme's surface and outline, which a pane's ink
+ * does not move, so in a light theme an off switch was a white pill on dark
+ * glass. Inside [GlassInkScope] `onSurface` is the glass's ink, and "off" is
+ * drawn from it: dark on light glass, light on dark.
+ */
+@Composable
+internal fun glassSwitchColors(
+    accent: Color = MaterialTheme.colorScheme.primary,
+    checkedThumb: Color = if (accent.luminance() > 0.5f) DARK_INK else LIGHT_INK,
+): androidx.compose.material3.SwitchColors {
+    val ink = MaterialTheme.colorScheme.onSurface
+    return androidx.compose.material3.SwitchDefaults.colors(
+        checkedTrackColor = accent,
+        checkedThumbColor = checkedThumb,
+        checkedBorderColor = accent,
+        uncheckedTrackColor = ink.copy(alpha = SWITCH_OFF_TRACK),
+        uncheckedThumbColor = ink.copy(alpha = SWITCH_OFF_THUMB),
+        uncheckedBorderColor = ink.copy(alpha = SWITCH_OFF_BORDER),
+    )
+}
+
+/** An off switch on glass: a faint track, a quieter thumb, and a rim between them. */
+private const val SWITCH_OFF_TRACK = 0.12f
+private const val SWITCH_OFF_THUMB = 0.6f
+private const val SWITCH_OFF_BORDER = 0.35f

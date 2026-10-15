@@ -1165,7 +1165,7 @@ class DiscoverViewModel @Inject constructor(
     /** Asks for the facts of [system]'s artists not already known or on their way. */
     private fun loadPlanetFacts(system: tf.monochrome.android.ui.discover.galaxy.PlanetSystem) {
         for (planet in system.planets) {
-            val artist = planet.artist
+            val artist = planet.label
             if (artist in _planetFacts.value || !factsAsked.add(artist)) continue
             viewModelScope.launch {
                 val facts = runCatching { genreCharts.artistFacts(artist) }.getOrNull()

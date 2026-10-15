@@ -114,6 +114,14 @@ fun GlassPanel(
      * as taps, so a swipe that started on the panel could not scroll the list.
      */
     blockTouchesBelow: Boolean = true,
+    /**
+     * The least opacity of the low-performance fallback (no shader, no blur),
+     * where the pane is plain surface colour at the glass's body opacity. The
+     * default keeps a see-through setting see-through; a pane floating over a
+     * page of text (a menu, a pop-up) asks for more, or the rows behind it
+     * read through its own.
+     */
+    fallbackMinAlpha: Float = FALLBACK_MIN_ALPHA,
     content: @Composable BoxScope.() -> Unit,
 ) {
     Box(
@@ -122,7 +130,7 @@ fun GlassPanel(
             .padding(12.dp)
             .then(if (avoidNavigationBar) Modifier.navigationBarsPadding() else Modifier)
             .clip(MonoDimens.shapeLg)
-            .glassBase(hazeState, glass, MonoDimens.shapeLg),
+            .glassBase(hazeState, glass, MonoDimens.shapeLg, fallbackMinAlpha),
     ) {
         // The backstop for taps the panel's own children didn't want, and the
         // lowest layer on purpose.
@@ -175,7 +183,12 @@ internal fun shaderGlassFor(glass: PlayerGlassSettings): Boolean =
  * low-tier device.
  */
 @Composable
-internal fun Modifier.glassBase(hazeState: HazeState?, glass: PlayerGlassSettings, shape: Shape): Modifier {
+internal fun Modifier.glassBase(
+    hazeState: HazeState?,
+    glass: PlayerGlassSettings,
+    shape: Shape,
+    fallbackMinAlpha: Float = FALLBACK_MIN_ALPHA,
+): Modifier {
     val allowHaze = LocalPerformanceProfile.current.allowHazeBlur
     val flat = LocalLowPerformance.current.disableLiquidGlass
     return then(
@@ -188,11 +201,21 @@ internal fun Modifier.glassBase(hazeState: HazeState?, glass: PlayerGlassSetting
             // — floored so text stays readable over raw artwork.
             else -> Modifier.background(
                 MaterialTheme.colorScheme.surfaceContainerHigh
-                    .copy(alpha = glass.bodyOpacity.coerceIn(0.55f, 1f)),
+                    .copy(alpha = glass.bodyOpacity.coerceIn(fallbackMinAlpha.coerceIn(0f, 1f), 1f)),
             )
         },
     )
 }
+
+/** The low-performance fallback's least opacity: text stays readable over artwork. */
+internal const val FALLBACK_MIN_ALPHA = 0.55f
+
+/**
+ * The fallback's least opacity for a pane floating over a page of text — the
+ * song menu, a dialog, the DAC pop-up — nearly solid, so the rows behind do
+ * not read through its own.
+ */
+internal const val FLOATING_FALLBACK_MIN_ALPHA = 0.94f
 
 /**
  * The layers that make a pane the app's glass, under its content: the

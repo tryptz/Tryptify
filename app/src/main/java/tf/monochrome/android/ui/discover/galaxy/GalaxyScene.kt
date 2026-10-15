@@ -12,30 +12,37 @@ import kotlin.math.sqrt
 import kotlin.random.Random
 
 /**
- * The genre galaxy as points in 3D: every genre a star, in two layouts the
- * view morphs between, plus the dust, the core and the far sky around them.
+ * A galaxy as points in 3D: a [StarField]'s stars, in two layouts the view
+ * morphs between, plus the dust, the core and the far sky around them.
  *
- * - **Sound** (morph 0): the genre map's own baked layout — the twelve
- *   family clusters where the map has always put them — laid flat as a disc
- *   a few dozen units thick.
+ * - **Sound** (morph 0): a disc — for genres, the genre map's own baked
+ *   layout; for the library, each artist beside their genre.
  * - **Time** (morph 1): a spiral galaxy. Distance from the core is when a
- *   genre began — the oldest music at the centre, the newest at the rim — and
- *   each family is an arm, starting in the direction its cluster sits in the
- *   sound layout so the morph turns the map rather than shuffling it. The
- *   timeline itself is a spiral too: a track wound at the arms' own pitch,
- *   through the widest gap between them, with the years marked along it
- *   ([trackPoint]), so time reads outwards along any arm.
+ *   star began — the oldest music at the centre, the newest at the rim — and
+ *   each family is an arm. The timeline itself is a spiral too: a track wound
+ *   at the arms' own pitch, through the widest gap between them, with the
+ *   years marked along it ([trackPoint]), so time reads outwards along any arm.
  *
- * Pure and seeded: the same graph gives the same galaxy every launch, and
- * the tests can check it without a device.
+ * Where the stars go is the field's ([StarLayout]); everything round them is
+ * the scene's, the same for every field. Pure and seeded: the same field gives
+ * the same galaxy every launch, and the tests can check it without a device.
  */
 class GalaxyScene(
-    graph: GenreGraph,
+    val starField: StarField,
     dustCount: Int = DEFAULT_DUST,
     coreCount: Int = DEFAULT_CORE,
     skyCount: Int = DEFAULT_SKY,
     seed: Int = 977,
 ) {
+    /** The genre galaxy: every genre in [graph] a star. */
+    constructor(
+        graph: GenreGraph,
+        dustCount: Int = DEFAULT_DUST,
+        coreCount: Int = DEFAULT_CORE,
+        skyCount: Int = DEFAULT_SKY,
+        seed: Int = 977,
+    ) : this(GenreStarField.from(graph), dustCount, coreCount, skyCount, seed)
+
     private val random = Random(seed)
     private fun gauss(): Float {
         var u = 0.0
@@ -43,57 +50,44 @@ class GalaxyScene(
         return (sqrt(-2.0 * ln(u)) * cos(2.0 * PI * random.nextDouble())).toFloat()
     }
 
-    val genres = graph.allGenres
-    val size: Int = genres.size
-    val index: Map<String, Int> = genres.withIndex().associate { (i, g) -> g.id to i }
+    val ids: List<String> get() = starField.ids
+    val names: List<String> get() = starField.names
+    val size: Int = starField.size
+    val index: Map<String, Int> = starField.ids.withIndex().associate { (i, id) -> id to i }
 
     /** Family ids, in a fixed order; [family] indexes into this. */
-    val families: List<String> = genres.map { it.family }.distinct().sorted()
-    val family = IntArray(size) { families.indexOf(genres[it].family) }
+    val families: List<String> get() = starField.families
+    val family: IntArray get() = starField.family
 
-    /** How well known each genre is, 0..1 (square root of reach, so the head doesn't swamp the tail). */
-    val prominence = run {
-        val max = genres.maxOfOrNull { it.reach ?: 0 }?.coerceAtLeast(1) ?: 1
-        FloatArray(size) { sqrt((genres[it].reach ?: 0).toFloat() / max) }
+    /** How big each star is, 0..1. */
+    val prominence: FloatArray get() = starField.prominence
+
+    /**
+     * Whether each star is always drawn as its sprite. Every one is, up to
+     * [STAR_SPRITE_BUDGET] — the size the genre galaxy was tuned at; past it
+     * (a big library), only the most prominent that many, and the rest are
+     * points until the camera comes near (see `drawStars`).
+     */
+    val spriteAlways: BooleanArray = if (size <= STAR_SPRITE_BUDGET) {
+        BooleanArray(size) { true }
+    } else {
+        BooleanArray(size).also { mask ->
+            (0 until size).sortedWith(compareByDescending<Int> { starField.prominence[it] }.thenBy { starField.ids[it] })
+                .take(STAR_SPRITE_BUDGET)
+                .forEach { mask[it] = true }
+        }
     }
 
-    /** Twinkle phase per genre. */
-    val phase = FloatArray(size) { random.nextFloat() * 6.2832f }
+    /** Twinkle phase per star. */
+    val phase = starField.phase ?: FloatArray(size) { random.nextFloat() * 6.2832f }
 
     val sound = FloatArray(size * 3)
     val time = FloatArray(size * 3)
 
     /** Where the time track leaves the core: the middle of the widest gap between arms. */
-    val trackAngle: Float
+    val trackAngle: Float = starField.layout.place(starField, ::gauss, sound, time)
 
-    init {
-        val sumX = FloatArray(families.size)
-        val sumZ = FloatArray(families.size)
-        val count = IntArray(families.size)
-        for (i in 0 until size) {
-            val g = genres[i]
-            val x = g.x / LAYOUT_EXTENT * RADIUS
-            val z = g.y / LAYOUT_EXTENT * RADIUS
-            sound[i * 3] = x
-            sound[i * 3 + 1] = gauss() * DISC_THICKNESS
-            sound[i * 3 + 2] = z
-            sumX[family[i]] += x; sumZ[family[i]] += z; count[family[i]]++
-        }
-        val clusterAngle = FloatArray(families.size) { f ->
-            atan2(sumZ[f] / count[f].coerceAtLeast(1), sumX[f] / count[f].coerceAtLeast(1))
-        }
-        val armAngle = bundleArms(clusterAngle)
-        trackAngle = widestGap(armAngle)
-        for (i in 0 until size) {
-            val r = timeDistance(timeRadius(startYear(i))) + gauss() * 12f
-            val a = armAngle[family[i]] + ARM_TWIST * (r / RADIUS) + gauss() * 0.09f
-            time[i * 3] = cos(a) * r
-            time[i * 3 + 1] = gauss() * 34f * (1.15f - r / RADIUS)
-            time[i * 3 + 2] = sin(a) * r
-        }
-    }
-
-    fun startYear(i: Int): Int = genres[i].era.getOrNull(0) ?: 2000
+    fun startYear(i: Int): Int = starField.startYear[i]
 
     /** The point on the time track at [year], on the disc, written to [out] at [at]. */
     fun trackPoint(year: Int, out: FloatArray, at: Int = 0) = trackPointAt(timeRadius(year), out, at)
@@ -196,18 +190,8 @@ class GalaxyScene(
 
     // ── Family structure ──
 
-    /** Parent links as (child, parent) index pairs. */
-    // `size` inside buildList is the list being built, so the genre count is
-    // taken outside it.
-    val links: IntArray = run {
-        val n = size
-        buildList {
-            for (i in 0 until n) {
-                val parent = genres[i].parents.firstNotNullOfOrNull { index[it] } ?: continue
-                add(i); add(parent)
-            }
-        }.toIntArray()
-    }
+    /** Links as (a, b) index pairs: a genre and its parent, or two artists who work together. */
+    val links: IntArray get() = starField.links
 
     /**
      * The same links as (older, newer) pairs: the way energy flows along them,
@@ -260,15 +244,15 @@ class GalaxyScene(
         fun starRadius(prominence: Float): Float =
             STAR_RADIUS_MIN + (STAR_RADIUS_MAX - STAR_RADIUS_MIN) * prominence.coerceIn(0f, 1f).pow(1.2f)
 
+        /** The most stars drawn as sprites wherever the camera is: about the genre galaxy's 771. */
+        const val STAR_SPRITE_BUDGET = 800
+
         const val STAR_RADIUS_MIN = 1.4f
         const val STAR_RADIUS_MAX = 6f
 
         /** Radius of the galaxy, in scene units. */
         const val RADIUS = 1000f
 
-        /** The baked layout's extent, so the sound layout fills [RADIUS]. */
-        private const val LAYOUT_EXTENT = 1250f
-        private const val DISC_THICKNESS = 26f
         /** How far an arm winds from core to rim, radians: a little over half a turn. */
         const val ARM_TWIST = 5.6f
 

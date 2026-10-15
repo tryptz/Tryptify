@@ -14,6 +14,28 @@ import kotlin.math.abs
  */
 class CrossfadeRampTest {
 
+    @Test
+    fun `a blend needs gapless on and a length set`() {
+        assertTrue(CrossfadeRamp.blends(gapless = true, blendMs = 4_000L))
+        // Gapless off: one player only, whatever the blend length says.
+        assertFalse(CrossfadeRamp.blends(gapless = false, blendMs = 4_000L))
+        assertFalse(CrossfadeRamp.blends(gapless = true, blendMs = 0L))
+        assertFalse(CrossfadeRamp.blends(gapless = false, blendMs = 0L))
+    }
+
+    @Test
+    fun `the exclusive USB DAC turns the blend off, whatever the slider says`() {
+        // Bit-perfect means one song at a time: no blend applies, so no second
+        // player is made and the gapless hand-off carries the songs instead.
+        val applied = CrossfadeRamp.blendMs(settingMs = 6_000L, exclusiveUsb = true)
+        assertEquals(0L, applied)
+        assertFalse(CrossfadeRamp.blends(gapless = true, blendMs = applied))
+        assertFalse(CrossfadeRamp.shouldPrepare(170_000L, 180_000L, applied, 1f, 1_500L))
+        // The value set is kept for when exclusive mode is turned off.
+        assertEquals(6_000L, CrossfadeRamp.blendMs(settingMs = 6_000L, exclusiveUsb = false))
+        assertEquals(0L, CrossfadeRamp.blendMs(settingMs = 0L, exclusiveUsb = false))
+    }
+
     private val tolerance = 0.001f
 
     @Test

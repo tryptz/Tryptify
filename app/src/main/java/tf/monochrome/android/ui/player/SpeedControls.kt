@@ -43,6 +43,33 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.ui.components.bounceClick
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+import tf.monochrome.android.ui.components.GlassMaterial
+import tf.monochrome.android.ui.components.GlassPressDefaults
+import tf.monochrome.android.ui.components.glassBase
+import tf.monochrome.android.ui.components.rememberGlassPress
+import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
+import tf.monochrome.android.ui.theme.reduceMotion
 
 // The speed panel's one button family. The panel used to mix four kinds of
 // control — Material's segmented row (grey when selected, whatever the
@@ -74,9 +101,19 @@ private fun onAccent(accent: Color): Color =
     if (accent.luminance() > 0.5f) Color.Black else Color.White
 
 /**
- * A two-or-more-way choice as one capsule; the selected segment fills with
- * the accent. Replaces Material's SegmentedButton row in this panel, whose
- * selected colour is the theme's secondary container — grey on most themes.
+ * A two-or-more-way choice as one capsule, its choice marked by a pill of
+ * glass that moves between the segments: it slides to a tapped one, and it can
+ * be taken and dragged freely along the capsule, settling on the nearest
+ * segment when let go. Replaces a solid accent fill, which was the one control
+ * in the panel that was not glass.
+ *
+ * The thumb is the app's pill recipe ([glassBase] and [GlassMaterial]), in the
+ * panel's own material, with the accent rim a selected glass chip has. It
+ * swells under the finger while held. It frosts nothing: it sits inside a
+ * glass panel, not beside a backdrop of its own, and shader glass without a
+ * frost is still glass (docs/ui-invariants.md). Without the shader the rim is
+ * what marks it. With "Disable animations" it jumps rather than slides; a drag
+ * still follows the finger.
  */
 @Composable
 internal fun SpeedSegmented(
@@ -86,46 +123,158 @@ internal fun SpeedSegmented(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
+    val count = options.size
+    if (count == 0) return
+    val still = reduceMotion()
+    val glass = LocalMiniPlayerGlass.current
+    val press = rememberGlassPress()
+    val scope = rememberCoroutineScope()
+    val select by rememberUpdatedState(onSelect)
+    val selectedNow by rememberUpdatedState(selectedIndex)
+    // Where the thumb is, in segments: 0 over the first, count - 1 over the last.
+    val position = remember { Animatable(selectedIndex.toFloat()) }
+    var dragging by remember { mutableStateOf(false) }
+
+    // A choice made elsewhere (a tap, or the setting changing under it) moves
+    // the thumb; a drag in progress owns it.
+    LaunchedEffect(selectedIndex, still) {
+        if (dragging) return@LaunchedEffect
+        if (still) position.snapTo(selectedIndex.toFloat())
+        else position.animateTo(selectedIndex.toFloat(), ThumbSpring)
+    }
+
+    BoxWithConstraints(
         modifier = modifier
             .height(SpeedControlHeight)
             .clip(Capsule)
             .background(tonalFill())
             .border(1.dp, tonalBorder(), Capsule)
             .padding(3.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        options.forEachIndexed { index, label ->
-            val selected = index == selectedIndex
-            val fill by animateColorAsState(if (selected) accent else Color.Transparent, label = "segFill")
-            val content by animateColorAsState(
-                if (selected) onAccent(accent) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
-                label = "segContent",
-            )
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .clip(Capsule)
-                    .background(fill)
-                    .bounceClick(scaleDown = 0.97f) { onSelect(index) }
-                    .semantics {
-                        role = Role.Tab
-                        this.selected = selected
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                    color = content,
-                    maxLines = 1,
+        val density = LocalDensity.current
+        val gapPx = with(density) { SegmentGap.toPx() }
+        val segmentPx = segmentWidth(constraints.maxWidth.toFloat(), gapPx, count)
+        val stepPx = segmentPx + gapPx
+        val segmentDp = with(density) { segmentPx.toDp() }
+
+        fun follow(x: Float, y: Float) {
+            val at = thumbAt(x, segmentPx, stepPx, count)
+            // Where the finger is on the thumb, for the swell.
+            press.pressPoint = Offset(x - at * stepPx, y)
+            scope.launch { position.snapTo(at) }
+        }
+        fun settle() {
+            val target = nearestSegment(position.value, count)
+            press.held = false
+            scope.launch {
+                if (still) position.snapTo(target.toFloat())
+                else position.animateTo(target.toFloat(), ThumbSpring)
+                dragging = false
+            }
+            if (target != selectedNow) select(target)
+        }
+
+        // The thumb, under the labels.
+        Box(
+            modifier = Modifier
+                .offset { IntOffset((position.value * stepPx).roundToInt(), 0) }
+                .width(segmentDp)
+                .fillMaxHeight()
+                .onSizeChanged { press.boxSize = it }
+                .graphicsLayer {
+                    if (!still) {
+                        val squeeze = 1f - (1f - GlassPressDefaults.SQUEEZE) * press.amount
+                        scaleX = squeeze
+                        scaleY = squeeze
+                    }
+                }
+                .clip(Capsule)
+                .glassBase(hazeState = null, glass = glass, shape = Capsule),
+        ) {
+            GlassMaterial(hazeState = null, glass = glass, corner = Dp.Infinity, press = press)
+            Box(Modifier.matchParentSize().border(1.5.dp, accent.copy(alpha = 0.85f), Capsule))
+        }
+
+        // The labels, each a tap target; a horizontal drag anywhere takes the
+        // thumb along under the finger. The panel's own drag is vertical, so
+        // whichever way the finger goes first has the gesture.
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(count, segmentPx, stepPx) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { at ->
+                            dragging = true
+                            press.held = true
+                            follow(at.x, at.y)
+                        },
+                        onHorizontalDrag = { change, _ ->
+                            change.consume()
+                            follow(change.position.x, change.position.y)
+                        },
+                        onDragEnd = { settle() },
+                        onDragCancel = { settle() },
+                    )
+                },
+            horizontalArrangement = Arrangement.spacedBy(SegmentGap),
+        ) {
+            // The label over the thumb is the chosen one's, even mid-drag.
+            val over = nearestSegment(position.value, count)
+            options.forEachIndexed { index, label ->
+                val lit = index == over
+                val content by animateColorAsState(
+                    if (lit) accent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
+                    label = "segContent",
                 )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            // The thumb's slide is the answer to a tap.
+                            indication = null,
+                        ) { select(index) }
+                        .semantics {
+                            role = Role.Tab
+                            this.selected = index == selectedIndex
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (lit) FontWeight.Bold else FontWeight.Medium,
+                        color = content,
+                        maxLines = 1,
+                    )
+                }
             }
         }
     }
 }
+
+/** Space between segments, and so between the thumb's resting places. */
+private val SegmentGap: Dp = 3.dp
+
+/** The thumb's slide: settles quickly, with the slightest give. */
+private val ThumbSpring = spring<Float>(dampingRatio = 0.8f, stiffness = 500f)
+
+/** One segment's width in a capsule [widthPx] wide, [count] segments [gapPx] apart. */
+internal fun segmentWidth(widthPx: Float, gapPx: Float, count: Int): Float =
+    if (count <= 0) 0f else ((widthPx - gapPx * (count - 1)) / count).coerceAtLeast(0f)
+
+/**
+ * The thumb's position, in segments, centred under a finger at [x]: free
+ * between the first and the last, and no further.
+ */
+internal fun thumbAt(x: Float, segmentPx: Float, stepPx: Float, count: Int): Float =
+    if (count <= 1 || stepPx <= 0f) 0f
+    else ((x - segmentPx / 2f) / stepPx).coerceIn(0f, (count - 1).toFloat())
+
+/** The segment a thumb at [position] settles on. */
+internal fun nearestSegment(position: Float, count: Int): Int =
+    if (count <= 0) 0 else position.roundToInt().coerceIn(0, count - 1)
 
 /**
  * `[ − ]  value  [ + ]` in one capsule: the number sits between the two

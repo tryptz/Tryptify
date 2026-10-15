@@ -101,6 +101,7 @@ import tf.monochrome.android.ui.library.FolderBrowserScreen
 import tf.monochrome.android.ui.profile.ProfileScreen
 import tf.monochrome.android.ui.stats.ListeningStatsScreen
 import tf.monochrome.android.ui.stats.StatsScreen
+import tf.monochrome.android.ui.stats.StatsChartScreen
 import tf.monochrome.android.ui.search.SearchScreen
 import tf.monochrome.android.ui.theme.motionMillis
 import tf.monochrome.android.ui.settings.SettingsScreen
@@ -118,6 +119,8 @@ sealed class Screen(val route: String) {
     data object Search : Screen("search")
     data object Discover : Screen("discover")
     data object GenreMap : Screen("discover/map")
+    /** The library galaxy: the music on this phone as a sky, artists as stars. */
+    data object LibraryGalaxy : Screen("library/galaxy")
     data object DiscoverDeck : Screen("discover/deck")
     data object DiscoverShelf : Screen("discover/shelf/{shelfId}") {
         fun createRoute(shelfId: String) = "discover/shelf/${android.net.Uri.encode(shelfId)}"
@@ -154,6 +157,8 @@ sealed class Screen(val route: String) {
     data object ParametricEqEdit : Screen("parametric_eq_edit")
     data object Profile : Screen("profile")
     data object Stats : Screen("stats")
+    /** One Stats chart, opened to be looked at closely; see statsChartRoute. */
+    data object StatsChart : Screen("stats_chart/{chart}?range={range}")
     data object ListeningStats : Screen("listening_stats")
     data object FolderBrowser : Screen("folder/{folderPath}") {
         // Uri.encode (not URLEncoder) so spaces become %20 not '+', and every
@@ -378,6 +383,12 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     // Set by a tap on Search and spent by the Search page's first composition,
     // so the keyboard comes up for a tap and not for coming back to results.
     var focusSearch by remember { mutableStateOf(false) }
+    val openMainPage: (String) -> Unit = { id ->
+        if (!isOnMainTab && !navController.popBackStack(Screen.Home.route, inclusive = false)) {
+            navController.navigate(Screen.Home.route)
+        }
+        selectPageWith(id, false)
+    }
     val onTab: (AppTab) -> Unit = { tab ->
         // A tab tapped from a pushed screen closes it, as in Apple Music: the
         // pager is only drawn while the NavHost is on "home".
@@ -525,6 +536,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         // World radio used to be here. It is a pager page now, and the pager
         // is already full-bleed — this list is only about NavHost destinations.
         val fullBleedRoute = currentDestination?.route == Screen.GenreMap.route ||
+            currentDestination?.route == Screen.LibraryGalaxy.route ||
             currentDestination?.route == Screen.NowPlaying.route
 
         // Every screen runs *under* the mini player. Reserving the bar's height
@@ -664,6 +676,14 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 composable(Screen.GenreMap.route) {
                     tf.monochrome.android.devedit.DevEditScreen("genre_map") {
                         GenreMapScreen(
+                            navController = navController,
+                            playerViewModel = playerViewModel,
+                        )
+                    }
+                }
+                composable(Screen.LibraryGalaxy.route) {
+                    tf.monochrome.android.devedit.DevEditScreen("library_galaxy") {
+                        tf.monochrome.android.ui.library.galaxy.LibraryMapScreen(
                             navController = navController,
                             playerViewModel = playerViewModel,
                         )
@@ -843,7 +863,21 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 }
                 composable(Screen.Stats.route) {
                     tf.monochrome.android.devedit.DevEditScreen("stats") {
-                        StatsScreen(navController = navController)
+                        StatsScreen(navController = navController, onOpenPage = openMainPage)
+                    }
+                }
+                composable(
+                    route = Screen.StatsChart.route,
+                    arguments = listOf(
+                        navArgument("chart") { type = NavType.StringType },
+                        navArgument("range") { type = NavType.StringType; defaultValue = "Month" },
+                    ),
+                ) { backStackEntry ->
+                    val chart = backStackEntry.arguments?.getString("chart")
+                        ?.let { name -> tf.monochrome.android.ui.stats.StatsChart.entries.firstOrNull { it.name == name } }
+                        ?: tf.monochrome.android.ui.stats.StatsChart.MINUTES
+                    tf.monochrome.android.devedit.DevEditScreen("stats_chart") {
+                        StatsChartScreen(navController = navController, chart = chart)
                     }
                 }
                 composable(Screen.ListeningStats.route) {
@@ -1095,6 +1129,8 @@ fun MonochromeNavHost(initialRoute: String? = null) {
             host = glassOverlayHost,
             hazeState = hazeState,
             glass = miniPlayerGlass,
+            // The song menu sits above the bar rather than over its buttons.
+            bottomClearance = chromeHeightNow,
         )
 
         // The USB DAC's volume, shown by the volume keys while one plays in
@@ -1109,8 +1145,6 @@ fun MonochromeNavHost(initialRoute: String? = null) {
             onMute = playerViewModel::setDacMuted,
             hazeState = hazeState,
             glass = miniPlayerGlass,
-            // The full player carries the bar itself.
-            suppressed = currentDestination?.route == Screen.NowPlaying.route,
             modifier = Modifier.align(Alignment.TopCenter),
         )
     }

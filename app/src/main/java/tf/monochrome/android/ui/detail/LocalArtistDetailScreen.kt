@@ -430,10 +430,13 @@ private fun ArtistTrackRow(
                 }
             }
             // Where it plays from — on this screen, the device.
-            tf.monochrome.android.ui.components.SourcePill(track.sourceType)
-            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(6.dp))
+            val badges = tf.monochrome.android.ui.theme.rowBadges()
+            if (badges.source) {
+                tf.monochrome.android.ui.components.SourcePill(track.sourceType)
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(6.dp))
+            }
             val badge = track.qualityBadge
-            if (badge != null) {
+            if (badges.quality && badge != null) {
                 Surface(
                     shape = RoundedCornerShape(999.dp),
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
@@ -447,11 +450,13 @@ private fun ArtistTrackRow(
                 }
                 Spacer(modifier = Modifier.width(8.dp))
             }
-            Text(
-                text = track.formattedDuration,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (badges.duration) {
+                Text(
+                    text = track.formattedDuration,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             IconButton(onClick = onAddToQueue, modifier = Modifier.size(32.dp)) {
                 Icon(
                     Icons.AutoMirrored.Filled.PlaylistAdd,

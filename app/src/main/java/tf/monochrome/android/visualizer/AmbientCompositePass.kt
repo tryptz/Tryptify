@@ -44,6 +44,8 @@ internal class AmbientCompositePass {
     private var width = 0
     private var height = 0
     private var ready = false
+    // Whether captureTexture holds a frame projectM drew, since it was made.
+    private var captured = false
 
     private var uFx = -1
     private var uAlbum = -1
@@ -149,6 +151,7 @@ internal class AmbientCompositePass {
         width = newWidth
         height = newHeight
         releaseCaptureTarget()
+        captured = false
 
         val ids = IntArray(1)
         GLES30.glGenTextures(1, ids, 0)
@@ -199,19 +202,30 @@ internal class AmbientCompositePass {
         blackPoint: Float,
         blend: VisualizerBlendMode,
         scrim: FloatArray,
+        /**
+         * Whether projectM drew a new frame into the framebuffer. When it did
+         * not (a frame the Target FPS cap dropped, a frozen frame while paused)
+         * the framebuffer holds only the clear, and capturing it would show the
+         * cover with no visualizer for a frame: the flash. The last capture is
+         * composited again instead.
+         */
+        freshFrame: Boolean = true,
     ): Boolean {
         if (!ready || captureFbo == 0 || width <= 0 || height <= 0) return false
         uploadPendingAlbum()
         if (!albumUploaded) return false
 
-        GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, 0)
-        GLES30.glBindFramebuffer(GLES30.GL_DRAW_FRAMEBUFFER, captureFbo)
-        GLES30.glBlitFramebuffer(
-            0, 0, width, height,
-            0, 0, width, height,
-            GLES30.GL_COLOR_BUFFER_BIT, GLES30.GL_NEAREST,
-        )
-        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
+        if (freshFrame || !captured) {
+            GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, 0)
+            GLES30.glBindFramebuffer(GLES30.GL_DRAW_FRAMEBUFFER, captureFbo)
+            GLES30.glBlitFramebuffer(
+                0, 0, width, height,
+                0, 0, width, height,
+                GLES30.GL_COLOR_BUFFER_BIT, GLES30.GL_NEAREST,
+            )
+            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
+            if (freshFrame) captured = true
+        }
 
         // projectM leaves whatever state its last preset wanted, so everything
         // this pass depends on is set rather than assumed.

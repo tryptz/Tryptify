@@ -1,29 +1,17 @@
 package tf.monochrome.android.ui.stats
 
-import tf.monochrome.android.ui.navigation.popBackStackSafe
-import androidx.compose.animation.AnimatedContent
+import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -40,12 +28,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.LocalFireDepartment
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.NorthEast
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -53,8 +48,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,181 +59,211 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import coil3.compose.AsyncImage
-import tf.monochrome.android.data.db.dao.DayAggregate
-import tf.monochrome.android.data.db.dao.HourAggregate
-import tf.monochrome.android.data.db.dao.QualityAggregate
-import tf.monochrome.android.data.db.dao.SourceAggregate
-import tf.monochrome.android.data.db.dao.TopAlbumAggregate
-import tf.monochrome.android.data.db.dao.TopArtistAggregate
-import tf.monochrome.android.data.db.dao.TopTrackAggregate
-import tf.monochrome.android.data.db.dao.WeekdayAggregate
-import kotlin.math.roundToInt
-import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.res.pluralStringResource
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.TextStyle
+import java.util.Locale
 import tf.monochrome.android.R
+import tf.monochrome.android.ui.components.LocalGlassBackdrop
+import tf.monochrome.android.ui.mixer.GlassChoiceChip
+import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
+import tf.monochrome.android.ui.navigation.RADIO_PAGE_ID
+import tf.monochrome.android.ui.navigation.Screen
+import tf.monochrome.android.ui.navigation.navigateSafe
+import tf.monochrome.android.ui.navigation.navigateTool
+import tf.monochrome.android.ui.navigation.popBackStackSafe
+import tf.monochrome.android.ui.settings.settingsTabIndex
 
+/**
+ * Stats: two pages under one glass pill. Stats is the listening, as glass
+ * cards whose charts open their own page to be looked at closely;
+ * Achievements is what has been tried, with each goal saying where to go to
+ * reach it.
+ *
+ * [onOpenPage] switches the app's main pager (Discover, World radio) from
+ * here, the way a tab tap does: the nav host closes this screen first.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatsScreen(
     navController: NavController,
-    viewModel: StatsViewModel = hiltViewModel()
+    onOpenPage: (String) -> Unit = {},
+    viewModel: StatsViewModel = hiltViewModel(),
 ) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val report by viewModel.report.collectAsStateWithLifecycle()
+    val achievements by viewModel.achievements.collectAsStateWithLifecycle()
+    val range by viewModel.range.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val lastSyncedAt by viewModel.lastSyncedAt.collectAsStateWithLifecycle()
+    var page by rememberSaveable { mutableStateOf(0) }
+    val locale = statsLocale()
+    val context = LocalContext.current
 
-    val statsMsgContext = androidx.compose.ui.platform.LocalContext.current
-    androidx.compose.runtime.LaunchedEffect(Unit) {
+    LaunchedEffect(Unit) {
         viewModel.messages.collect { msg ->
-            android.widget.Toast.makeText(statsMsgContext, msg.resolve(statsMsgContext), android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(context, msg.resolve(context), android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { Text(stringResource(R.string.listening_stats)) },
-            navigationIcon = {
-                IconButton(onClick = { navController.popBackStackSafe() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-        )
+    val openChart: (StatsChart) -> Unit = { navController.navigateSafe(statsChartRoute(it, range)) }
+    val openTarget: (AchievementTarget, AchievementState) -> Unit = { target, state ->
+        when (target) {
+            AchievementTarget.DISCOVER -> onOpenPage(Screen.Discover.route)
+            AchievementTarget.RADIO -> onOpenPage(RADIO_PAGE_ID)
+            AchievementTarget.SETTINGS_MISSING_TAB -> navController.navigateTool(
+                Screen.Settings,
+                Screen.Settings.createRoute(state.remaining.firstOrNull()?.let { runCatching { settingsTabIndex(it) }.getOrNull() } ?: 0),
+            )
+            AchievementTarget.SETTINGS_AUDIO -> navController.navigateTool(Screen.Settings, Screen.Settings.createRoute(settingsTabIndex("Audio")))
+            AchievementTarget.MIXER -> navController.navigateTool(Screen.Mixer)
+            AchievementTarget.LYRICS_STUDIO -> navController.navigateTool(Screen.LyricsFxStudio)
+            AchievementTarget.EQUALIZER -> navController.navigateTool(Screen.Equalizer)
+        }
+    }
 
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = viewModel::refresh,
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            AnimatedContent(
-                targetState = state,
-                contentKey = { it.range },
-                transitionSpec = {
-                    (fadeIn(tween(220)) + slideInVertically(tween(260)) { it / 8 })
-                        .togetherWith(fadeOut(tween(140)))
-                },
-                label = "range-crossfade"
-            ) { snapshot ->
-                StatsContent(
-                    state = snapshot,
-                    lastSyncedAt = lastSyncedAt,
-                    onPickRange = viewModel::setRange,
+    // The page's own backdrop for its glass, a sibling of everything drawn
+    // over it — never the app-wide source this screen is itself inside.
+    val haze = rememberHazeState()
+    Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).hazeSource(haze))
+        CompositionLocalProvider(LocalGlassBackdrop provides haze) {
+            Column(Modifier.fillMaxSize()) {
+                val shareText = report?.let { shareTextFor(it) }
+                TopAppBar(
+                    title = {
+                        Column {
+                            Kicker(if (page == 0) rangeSubtitle(range) else stringResource(R.string.chart_window_all))
+                            Text(
+                                stringResource(if (page == 0) titleFor(range) else R.string.stats_title_trophies).uppercase(locale),
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Black,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { navController.popBackStackSafe() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
+                        }
+                    },
+                    actions = {
+                        if (page == 0 && shareText != null) {
+                            IconButton(onClick = { share(context, shareText) }) {
+                                Icon(Icons.Default.Share, contentDescription = stringResource(R.string.stats_share))
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 )
+                val unlocked = achievements.count { it.unlocked }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GlassChoiceChip(
+                        label = stringResource(R.string.stats_tab_stats),
+                        selected = page == 0,
+                        accent = MaterialTheme.colorScheme.primary,
+                        onClick = { page = 0 },
+                        modifier = Modifier.weight(1f),
+                        height = 44.dp,
+                    )
+                    GlassChoiceChip(
+                        label = stringResource(R.string.stats_tab_achievements) +
+                            if (achievements.isNotEmpty()) "  " + stringResource(R.string.stats_achievements_count, unlocked, achievements.size) else "",
+                        selected = page == 1,
+                        accent = MaterialTheme.colorScheme.primary,
+                        onClick = { page = 1 },
+                        modifier = Modifier.weight(1f),
+                        height = 44.dp,
+                    )
+                }
+                PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = viewModel::refresh, modifier = Modifier.fillMaxSize()) {
+                    if (page == 0) {
+                        StatsPage(report, range, lastSyncedAt, haze, viewModel::setRange, openChart, shareText)
+                    } else {
+                        AchievementsPage(achievements, haze, openTarget)
+                    }
+                }
             }
         }
     }
 }
 
+// ─── Stats ──────────────────────────────────────────────────────────────────
+
 @Composable
-private fun StatsContent(
-    state: StatsUiState,
+private fun StatsPage(
+    report: StatsReport?,
+    range: StatsRange,
     lastSyncedAt: Long?,
+    haze: HazeState,
     onPickRange: (StatsRange) -> Unit,
+    openChart: (StatsChart) -> Unit,
+    shareText: String?,
 ) {
+    val context = LocalContext.current
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp + LocalBottomChromeInset.current),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 16.dp + LocalBottomChromeInset.current),
     ) {
-        item { tf.monochrome.android.devedit.DevEditable("range_picker", Modifier.fillMaxWidth()) { RangePicker(state.range, onPick = onPickRange) } }
-        if (lastSyncedAt != null) {
-            item { tf.monochrome.android.devedit.DevEditable("last_synced_label") { LastSyncedLabel(lastSyncedAt) } }
-        }
-        item { tf.monochrome.android.devedit.DevEditable("hero_minutes_card", Modifier.fillMaxWidth()) { StaggerEntry(0) { HeroMinutesCard(state) } } }
-        item { tf.monochrome.android.devedit.DevEditable("highlight_row", Modifier.fillMaxWidth()) { StaggerEntry(1) { HighlightRow(state) } } }
         item {
-            tf.monochrome.android.devedit.DevEditable("section_plays_over_time", Modifier.fillMaxWidth()) {
-                StaggerEntry(2) {
-                    SectionCard(stringResource(R.string.plays_over_time)) {
-                        if (state.playsByDay.isNotEmpty()) DayLineChart(state.playsByDay)
-                        else EmptyHint()
-                    }
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                StatsRange.entries.forEach { r ->
+                    GlassChoiceChip(
+                        label = stringResource(r.labelRes()),
+                        selected = r == range,
+                        accent = MaterialTheme.colorScheme.primary,
+                        onClick = { onPickRange(r) },
+                        height = 40.dp,
+                    )
                 }
             }
         }
-        item {
-            tf.monochrome.android.devedit.DevEditable("section_time_of_day", Modifier.fillMaxWidth()) {
-                StaggerEntry(3) {
-                    SectionCard(stringResource(R.string.time_of_day)) {
-                        if (state.playsByHour.isNotEmpty()) HourBarChart(state.playsByHour, state.peakHour)
-                        else EmptyHint()
-                    }
-                }
+        if (lastSyncedAt != null) item { LastSyncedLabel(lastSyncedAt) }
+        when {
+            report == null -> item {
+                Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             }
-        }
-        item {
-            tf.monochrome.android.devedit.DevEditable("section_day_of_week", Modifier.fillMaxWidth()) {
-                StaggerEntry(4) {
-                    SectionCard(stringResource(R.string.day_of_week)) {
-                        if (state.playsByWeekday.isNotEmpty()) WeekdayBarChart(state.playsByWeekday)
-                        else EmptyHint()
-                    }
-                }
+            report.isEmpty -> item {
+                StatsCard(haze) { Muted(stringResource(R.string.no_plays_for_range)) }
             }
-        }
-        item {
-            tf.monochrome.android.devedit.DevEditable("section_top_tracks", Modifier.fillMaxWidth()) {
-                StaggerEntry(5) {
-                    SectionCard(stringResource(R.string.top_tracks)) {
-                        if (state.topTracks.isEmpty()) EmptyHint()
-                        else TopTracksList(state.topTracks.take(10))
-                    }
-                }
-            }
-        }
-        item {
-            tf.monochrome.android.devedit.DevEditable("section_top_artists", Modifier.fillMaxWidth()) {
-                StaggerEntry(6) {
-                    SectionCard(stringResource(R.string.top_artists)) {
-                        if (state.topArtists.isEmpty()) EmptyHint()
-                        else TopArtistsList(state.topArtists.take(10))
-                    }
-                }
-            }
-        }
-        item {
-            tf.monochrome.android.devedit.DevEditable("section_top_albums", Modifier.fillMaxWidth()) {
-                StaggerEntry(7) {
-                    SectionCard(stringResource(R.string.top_albums)) {
-                        if (state.topAlbums.isEmpty()) EmptyHint()
-                        else TopAlbumsList(state.topAlbums.take(10))
-                    }
-                }
-            }
-        }
-        item {
-            tf.monochrome.android.devedit.DevEditable("section_audio_quality", Modifier.fillMaxWidth()) {
-                StaggerEntry(8) {
-                    SectionCard(stringResource(R.string.audio_quality)) {
-                        if (state.playsByQuality.isEmpty()) EmptyHint()
-                        else QualityBars(state.playsByQuality)
-                    }
-                }
-            }
-        }
-        if (state.playsBySource.isNotEmpty()) {
-            item {
-                tf.monochrome.android.devedit.DevEditable("section_source", Modifier.fillMaxWidth()) {
-                    StaggerEntry(9) {
-                        SectionCard(stringResource(R.string.source)) { SourceBars(state.playsBySource) }
+            else -> {
+                item { HeroCard(report, haze) { openChart(StatsChart.MINUTES) } }
+                report.heat?.let { heat -> item { ListeningTypeCard(heat, haze) { openChart(StatsChart.CLOCK) } } }
+                if (report.topArtists.isNotEmpty()) item { TopArtistCard(report, haze) { openChart(StatsChart.ARTISTS) } }
+                if (report.topTracks.isNotEmpty()) item { OnRepeatCard(report, haze) { openChart(StatsChart.TRACKS) } }
+                item { DiscoveryCard(report, haze) { openChart(StatsChart.DISCOVERY) } }
+                item { StreakCard(report, haze) { openChart(StatsChart.STREAK) } }
+                if (report.quality.isNotEmpty()) item { QualityCard(report, haze) { openChart(StatsChart.QUALITY) } }
+                item { DigDeeperCard(report, haze, openChart) }
+                if (shareText != null) item {
+                    Button(
+                        onClick = { share(context, shareText) },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp).height(52.dp),
+                        shape = RoundedCornerShape(26.dp),
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.stats_share_stats), fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -245,644 +271,498 @@ private fun StatsContent(
     }
 }
 
-// ─── Stagger helper ─────────────────────────────────────────────────────────
-
 @Composable
-private fun StaggerEntry(index: Int, content: @Composable () -> Unit) {
-    // rememberSaveable + a guard so the entrance plays ONCE. LazyColumn retains
-    // saveable item state across scroll, so a section scrolling off and back no
-    // longer resets to invisible, replaying the animation and flashing a blank
-    // gap during the stagger delay.
-    var visible by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffectOnce {
-        if (!visible) {
-            kotlinx.coroutines.delay(60L * index + 40L)
-            visible = true
+private fun HeroCard(report: StatsReport, haze: HazeState, onAnalyze: () -> Unit) {
+    val locale = statsLocale()
+    StatsCard(haze) {
+        CardHeader(stringResource(R.string.stats_time_listened), onAnalyze)
+        val inHours = report.seconds >= 2 * 3600
+        val big = (if (inHours) report.seconds / 3600 else report.seconds / 60).toInt()
+        Row(verticalAlignment = Alignment.Bottom) {
+            BigWords(big.toString(), scale = 1.9f)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.padding(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    pluralStringResource(if (inHours) R.plurals.stats_hours_unit else R.plurals.stats_minutes_unit, big).uppercase(locale),
+                    style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black,
+                )
+                report.changePercent?.let { ChangeChip(it) }
+            }
+        }
+        val prev = report.prevSeconds
+        val busiest = report.timeline.maxByOrNull { it.seconds }
+        val parts = buildList {
+            if (prev != null && prev > 0) {
+                val diff = report.seconds - prev
+                add(stringResource(if (diff >= 0) R.string.stats_hero_more else R.string.stats_hero_less, durationText(kotlin.math.abs(diff))))
+            }
+            if (busiest != null && busiest.seconds > 0) {
+                add(stringResource(R.string.stats_hero_busiest, bucketLabel(busiest, report.timelineUnit, locale), durationText(busiest.seconds)))
+            }
+        }
+        if (parts.isNotEmpty()) Muted(parts.joinToString(" "))
+        TimelineChart(report.timeline, showPrevious = prev != null, description = stringResource(R.string.stats_time_listened))
+        val tl = report.timeline
+        if (tl.size >= 2) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                listOf(tl.first(), tl[tl.size / 2], tl.last()).forEach {
+                    Text(bucketAxisLabel(it, report.timelineUnit, locale), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        if (prev != null) {
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                LegendDot(stringResource(R.string.stats_legend_this_period), MaterialTheme.colorScheme.primary)
+                LegendDot(stringResource(R.string.stats_legend_previous), Color.Transparent, dashed = true)
+            }
         }
     }
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(tween(300)) +
-            slideInVertically(
-                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                initialOffsetY = { it / 6 }
-            ),
-    ) { content() }
 }
 
 @Composable
-private fun LaunchedEffectOnce(block: suspend () -> Unit) {
-    androidx.compose.runtime.LaunchedEffect(Unit) { block() }
-}
-
-// ─── Range picker ───────────────────────────────────────────────────────────
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun RangePicker(current: StatsRange, onPick: (StatsRange) -> Unit) {
+private fun ChangeChip(percent: Int) {
+    val up = percent >= 0
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        Modifier.clip(RoundedCornerShape(13.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)).padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        StatsRange.values().forEach { r ->
-            tf.monochrome.android.ui.mixer.GlassChoiceChip(
-                label = stringResource(r.labelRes()),
-                selected = current == r,
-                accent = MaterialTheme.colorScheme.primary,
-                onClick = { onPick(r) },
+        Icon(
+            if (up) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward, contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp),
+        )
+        Text(signedPercentText(percent), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+    }
+}
+
+@Composable
+private fun ListeningTypeCard(heat: HeatStat, haze: HazeState, onAnalyze: () -> Unit) {
+    val locale = statsLocale()
+    StatsCard(haze) {
+        CardHeader(stringResource(R.string.stats_listening_type), onAnalyze)
+        BigWords(stringResource(personaRes(heat.persona)), scale = 1.1f)
+        Headline(stringResource(R.string.stats_peak_headline, weekdayName(heat.peakDay, locale), hourText(heat.peakHour, locale)))
+        Muted(stringResource(R.string.stats_night_share, percentText(heat.nightShare, locale)))
+        Spacer(Modifier.height(4.dp))
+        HeatGrid(heat, description = stringResource(R.string.stats_peak_headline, weekdayName(heat.peakDay, locale), hourText(heat.peakHour, locale)))
+    }
+}
+
+@Composable
+private fun TopArtistCard(report: StatsReport, haze: HazeState, onAnalyze: () -> Unit) {
+    val locale = statsLocale()
+    val top = report.topArtists.first()
+    val five = report.topArtists.take(5)
+    val share = five.sumOf { it.plays }.toFloat() / report.plays
+    StatsCard(haze) {
+        CardHeader(stringResource(R.string.stats_number_one_artist), onAnalyze)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(84.dp).clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.secondary),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(initials(top.name), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSecondary)
+            }
+            Spacer(Modifier.width(16.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                BigWords(top.name, scale = 0.75f)
+                Muted(stringResource(R.string.stats_artist_line, pluralStringResource(R.plurals.plays_count, top.plays, top.plays.toString()), percentText(top.plays.toFloat() / report.plays, locale)))
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Headline(stringResource(R.string.stats_top5_share, percentText(share, locale)))
+        val tint = MaterialTheme.colorScheme.primary
+        val rest = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
+        val shades = listOf(1f, 0.8f, 0.62f, 0.46f, 0.32f)
+        ShareBar(
+            five.mapIndexed { i, a -> a.plays.toFloat() to tint.copy(alpha = shades[i]) } + ((report.plays - five.sumOf { it.plays }).toFloat() to rest),
+            description = five.joinToString { it.name + " " + percentText(it.plays.toFloat() / report.plays, locale) },
+        )
+        five.forEachIndexed { i, a ->
+            Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "${i + 1}", modifier = Modifier.width(28.dp), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black,
+                    color = if (i == 0) tint else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(a.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(pluralStringResource(R.plurals.plays_count, a.plays, a.plays.toString()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(percentText(a.plays.toFloat() / report.plays, locale), modifier = Modifier.width(52.dp), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.End)
+            }
+        }
+    }
+}
+
+@Composable
+private fun OnRepeatCard(report: StatsReport, haze: HazeState, onAnalyze: () -> Unit) {
+    StatsCard(haze) {
+        CardHeader(stringResource(R.string.stats_on_repeat), onAnalyze)
+        report.topTracks.take(5).forEachIndexed { i, t ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                BigWords("${i + 1}", modifier = Modifier.width(52.dp), scale = 0.9f)
+                Column(Modifier.weight(1f)) {
+                    Text(t.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Muted(t.artist + " · " + pluralStringResource(R.plurals.plays_count, t.plays, t.plays.toString()))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DiscoveryCard(report: StatsReport, haze: HazeState, onAnalyze: () -> Unit) {
+    val locale = statsLocale()
+    StatsCard(haze) {
+        CardHeader(stringResource(R.string.stats_discovery), onAnalyze)
+        Headline(
+            pluralStringResource(R.plurals.stats_artists_count, report.uniqueArtists, report.uniqueArtists) + " " +
+                stringResource(R.string.stats_new_count, report.newArtists.size),
+        )
+        Muted(
+            if (report.newArtistPlays > 0) stringResource(R.string.stats_discovery_one_in, Math.round(report.plays.toFloat() / report.newArtistPlays))
+            else stringResource(R.string.stats_discovery_none),
+        )
+        DiscoveryBars(
+            report.discovery,
+            report.discovery.map { bucketAxisLabel(TimeBucket(it.start, it.days, 0, 0, null), report.discoveryUnit, locale) },
+            description = stringResource(R.string.stats_discovery),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            LegendDot(stringResource(R.string.stats_new_to_you), MaterialTheme.colorScheme.primary.copy(alpha = 0.82f))
+            LegendDot(stringResource(R.string.stats_already_knew), MaterialTheme.colorScheme.secondary.copy(alpha = 0.82f))
+        }
+    }
+}
+
+@Composable
+private fun StreakCard(report: StatsReport, haze: HazeState, onAnalyze: () -> Unit) {
+    val s = report.streak
+    val locale = statsLocale()
+    StatsCard(haze) {
+        CardHeader(stringResource(R.string.stats_on_a_roll), onAnalyze)
+        Row(verticalAlignment = Alignment.Bottom) {
+            BigWords(s.current.toString(), scale = 1.4f)
+            Spacer(Modifier.width(10.dp))
+            Text(
+                pluralStringResource(R.plurals.stats_days_straight, s.current).uppercase(locale),
+                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, modifier = Modifier.padding(bottom = 8.dp),
             )
         }
+        Muted(stringResource(R.string.stats_streak_sub, s.daysListened, s.windowDays, pluralStringResource(R.plurals.days_count, s.longestInWindow, s.longestInWindow)))
+        StreakCalendar(s.calendar, report.window.today, description = pluralStringResource(R.plurals.day_streak, s.current, s.current))
     }
 }
 
-// ─── Hero card — minutes counter + gradient pulse ───────────────────────────
+@Composable
+private fun QualityCard(report: StatsReport, haze: HazeState, onAnalyze: () -> Unit) {
+    val locale = statsLocale()
+    val total = report.quality.sumOf { it.seconds }.coerceAtLeast(1)
+    val good = report.quality.filter { it.tier == QualityTier.HI_RES || it.tier == QualityTier.LOSSLESS }.sumOf { it.seconds }
+    StatsCard(haze) {
+        CardHeader(stringResource(R.string.audio_quality), onAnalyze)
+        Headline(stringResource(R.string.stats_lossless_or_better, percentText(good.toFloat() / total, locale)))
+        Muted(stringResource(R.string.stats_quality_sub))
+        val colors = tierColors()
+        ShareBar(report.quality.map { it.seconds.toFloat() to colors.getValue(it.tier) }, description = stringResource(R.string.audio_quality))
+        FlowRowOf(report.quality.map { it.tier }) { tier ->
+            val share = report.quality.first { it.tier == tier }.seconds.toFloat() / total
+            LegendDot(stringResource(tierRes(tier)) + " " + percentText(share, locale), colors.getValue(tier).copy(alpha = 0.82f))
+        }
+    }
+}
 
 @Composable
-private fun HeroMinutesCard(state: StatsUiState) {
-    val primary = MaterialTheme.colorScheme.primary
-    val tertiary = MaterialTheme.colorScheme.tertiary
-    // Keep the animated value as State (no `by`) and read it inside drawBehind,
-    // so the pulse animates in the draw phase instead of recomposing the whole
-    // hero card 60×/second. Rests mid-sweep with animations off, so the card
-    // keeps its gradient rather than pinning to one end of it.
-    val t = tf.monochrome.android.ui.theme.rememberMotionFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        durationMillis = 4000,
-        label = "pulse-t",
-        still = 0.5f,
-    )
+private fun DigDeeperCard(report: StatsReport, haze: HazeState, openChart: (StatsChart) -> Unit) {
+    val locale = statsLocale()
+    StatsCard(haze) {
+        Kicker(stringResource(R.string.stats_more_stats))
+        BigWords(stringResource(R.string.stats_dig_deeper), scale = 0.8f)
+        Muted(stringResource(R.string.stats_dig_deeper_hint))
+        Spacer(Modifier.height(4.dp))
+        val month = report.months.last()
+        val streamed = report.sources.firstOrNull { it.source == PlaySource.STREAMED }?.seconds ?: 0L
+        val bestDay = report.weekdays.maxByOrNull { it.averageSeconds }
+        val tiles = buildList {
+            add(Tile(StatsChart.SESSIONS, stringResource(R.string.stats_sessions), report.sessions.count.toString(), stringResource(R.string.stats_avg_each, durationText(report.sessions.averageSeconds))))
+            add(Tile(StatsChart.MONTHS, stringResource(R.string.stats_months_trend), durationText(month.seconds), month.paceSeconds?.let { stringResource(R.string.stats_on_pace, durationText(it)) } ?: ""))
+            add(Tile(StatsChart.VARIETY, stringResource(R.string.stats_repeat_plays), percentText(report.variety.repeatPlays.toFloat() / report.plays.coerceAtLeast(1), locale), pluralStringResource(R.plurals.track_count, report.variety.uniqueTracks, report.variety.uniqueTracks)))
+            add(Tile(StatsChart.LENGTH, stringResource(R.string.stats_avg_length), mmss(report.lengths.averageSeconds), stringResource(R.string.stats_per_play)))
+            add(Tile(StatsChart.SOURCES, stringResource(R.string.source), percentText(streamed.toFloat() / report.seconds.coerceAtLeast(1), locale), stringResource(R.string.stats_source_streamed)))
+            if (bestDay != null) add(Tile(StatsChart.WEEKDAY, stringResource(R.string.stats_best_weekday), weekdayName(bestDay.day, locale, TextStyle.SHORT), stringResource(R.string.stats_on_average, durationText(bestDay.averageSeconds))))
+            report.topAlbums.firstOrNull()?.let { add(Tile(StatsChart.ALBUMS, stringResource(R.string.stats_top_album), it.title, it.artist)) }
+            report.topTracks.firstOrNull()?.let { add(Tile(StatsChart.TRACKS, stringResource(R.string.stats_top_track), it.title, it.artist)) }
+        }
+        tiles.chunked(2).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                row.forEach { t -> StatTile(t, Modifier.weight(1f)) { openChart(t.chart) } }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(10.dp))
+        }
+    }
+}
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        shape = RoundedCornerShape(22.dp)
+private data class Tile(val chart: StatsChart, val label: String, val value: String, val sub: String)
+
+@Composable
+private fun StatTile(tile: Tile, modifier: Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(20.dp)
+    val ink = MaterialTheme.colorScheme.onSurface
+    Column(
+        modifier
+            .clip(shape)
+            .background(ink.copy(alpha = 0.05f))
+            .border(1.dp, ink.copy(alpha = 0.11f), shape)
+            .clickable(onClickLabel = tile.label, onClick = onClick)
+            .heightIn(min = 100.dp)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(tile.label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Icon(Icons.Default.NorthEast, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Text(tile.value.uppercase(statsLocale()), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (tile.sub.isNotEmpty()) Text(tile.sub, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+// ─── Achievements ───────────────────────────────────────────────────────────
+
+@Composable
+private fun AchievementsPage(states: List<AchievementState>, haze: HazeState, onTarget: (AchievementTarget, AchievementState) -> Unit) {
+    var open by rememberSaveable { mutableStateOf<String?>(null) }
+    val toggle: (AchievementState) -> Unit = { s -> open = if (open == s.achievement.name) null else s.achievement.name }
+    val next = Achievements.nextUp(states)
+    val rest = Achievements.inProgress(states, next)
+    val done = Achievements.completed(states)
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 16.dp + LocalBottomChromeInset.current),
+    ) {
+        if (states.isEmpty()) {
+            item { Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
+            return@LazyColumn
+        }
+        if (next != null) item {
+            StatsCard(haze) {
+                AchievementRow(next, expanded = open == next.achievement.name, featured = true, onClick = { toggle(next) })
+                AnimatedVisibility(open == next.achievement.name) { AchievementDetails(next) { onTarget(it, next) } }
+            }
+        } else item {
+            StatsCard(haze) { Headline(stringResource(R.string.stats_all_done)) }
+        }
+        if (rest.isNotEmpty()) item {
+            StatsCard(haze) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BigWords(stringResource(R.string.stats_in_progress), modifier = Modifier.weight(1f), scale = 0.6f)
+                    Text(stringResource(R.string.stats_to_go, rest.size + (if (next != null) 1 else 0)), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                }
+                Muted(stringResource(R.string.stats_tap_for_details))
+                rest.forEach { s ->
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                    AchievementRow(s, expanded = open == s.achievement.name, featured = false, onClick = { toggle(s) })
+                    AnimatedVisibility(open == s.achievement.name) { AchievementDetails(s) { onTarget(it, s) } }
+                }
+            }
+        }
+        item {
+            StatsCard(haze) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BigWords(stringResource(R.string.stats_completed), modifier = Modifier.weight(1f), scale = 0.6f)
+                    Text(stringResource(R.string.stats_earned, done.size), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                }
+                if (done.isEmpty()) Muted(stringResource(R.string.stats_none_completed))
+                done.chunked(2).forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        row.forEach { CompletedBadge(it, Modifier.weight(1f)) }
+                        if (row.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AchievementRow(state: AchievementState, expanded: Boolean, featured: Boolean, onClick: () -> Unit) {
+    val copy = copyFor(state.achievement)
+    val accent = MaterialTheme.colorScheme.primary
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .drawBehind {
-                    val tv = t.value
-                    drawRect(
-                        Brush.linearGradient(
-                            colors = listOf(
-                                primary.copy(alpha = 0.22f + 0.10f * tv),
-                                tertiary.copy(alpha = 0.18f + 0.10f * (1f - tv)),
-                            )
-                        )
-                    )
-                }
-                .padding(20.dp),
+            Modifier
+                .size(if (featured) 60.dp else 44.dp)
+                .clip(CircleShape)
+                .background(if (featured) accent else accent.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center,
         ) {
-            Column {
+            Icon(copy.icon, contentDescription = null, tint = if (featured) MaterialTheme.colorScheme.onPrimary else accent, modifier = Modifier.size(if (featured) 30.dp else 22.dp))
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            if (featured) Kicker(stringResource(R.string.stats_next_up))
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    rangeSubtitle(state.range),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                    fontWeight = FontWeight.Medium,
+                    stringResource(copy.title).let { if (featured) it.uppercase(statsLocale()) else it },
+                    modifier = Modifier.weight(1f),
+                    style = if (featured) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
+                    fontWeight = if (featured) FontWeight.Black else FontWeight.Bold,
                 )
-                Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.Bottom) {
-                    AnimatedCounter(
-                        target = state.totalSeconds / 60L,
-                        style = MaterialTheme.typography.displayLarge,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "min",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
-                }
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HeroPill(
-                        icon = Icons.Default.MusicNote,
-                        text = pluralStringResource(R.plurals.plays_count, state.totalPlays, java.text.NumberFormat.getIntegerInstance().format(state.totalPlays.toLong()))
-                    )
-                    HeroPill(
-                        icon = Icons.Default.Schedule,
-                        text = pluralStringResource(R.plurals.sessions_count, state.sessionCount, java.text.NumberFormat.getIntegerInstance().format(state.sessionCount.toLong()))
-                    )
-                    if (state.currentStreakDays > 0) {
-                        HeroPill(
-                            icon = Icons.Default.LocalFireDepartment,
-                            text = pluralStringResource(R.plurals.day_streak, state.currentStreakDays, state.currentStreakDays),
-                            highlight = true,
-                        )
-                    }
-                }
+                Text(stringResource(R.string.stats_progress, state.done, state.total), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            ProgressGlass(state.fraction)
+            Text(goalText(state), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-    }
-}
-
-@Composable
-private fun HeroPill(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    text: String,
-    highlight: Boolean = false,
-) {
-    val bg = if (highlight) MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.75f)
-             else MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
-    val fg = if (highlight) MaterialTheme.colorScheme.onTertiaryContainer
-             else MaterialTheme.colorScheme.onSurface
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(bg)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = fg)
-        Spacer(Modifier.width(6.dp))
-        Text(text, style = MaterialTheme.typography.labelMedium, color = fg, fontWeight = FontWeight.Medium)
-    }
-}
-
-// ─── Highlight row — unique counts + peak hour/weekday + longest streak ─────
-
-@Composable
-private fun HighlightRow(state: StatsUiState) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        HighlightTile(stringResource(R.string.filter_tracks), state.uniqueTracks.toString())
-        HighlightTile(stringResource(R.string.filter_artists), state.uniqueArtists.toString())
-        HighlightTile(stringResource(R.string.filter_albums), state.uniqueAlbums.toString())
-        if (state.peakHour != null) {
-            HighlightTile(stringResource(R.string.peak_hour), hourLabel(state.peakHour!!))
-        }
-        if (state.peakWeekday != null) {
-            HighlightTile(stringResource(R.string.peak_day), weekdayLabel(state.peakWeekday!!))
-        }
-        if (state.longestStreakDays > 0) {
-            HighlightTile(stringResource(R.string.longest_streak), pluralStringResource(R.plurals.days_count, state.longestStreakDays, state.longestStreakDays))
-        }
-    }
-}
-
-@Composable
-private fun HighlightTile(label: String, value: String) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-        ),
-        modifier = Modifier.width(112.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
-        ) {
-            Text(
-                value,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-// ─── Animated counter ───────────────────────────────────────────────────────
-
-@Composable
-private fun AnimatedCounter(
-    target: Long,
-    style: androidx.compose.ui.text.TextStyle,
-    fontWeight: FontWeight = FontWeight.Bold,
-    color: Color = MaterialTheme.colorScheme.onSurface,
-) {
-    val value by animateFloatAsState(
-        targetValue = target.toFloat(),
-        animationSpec = tween(durationMillis = 900, easing = FastOutSlowInEasing),
-        label = "counter"
-    )
-    Text(
-        formatWithGrouping(value.roundToInt().toLong()),
-        style = style,
-        fontWeight = fontWeight,
-        color = color,
-    )
-}
-
-private fun formatWithGrouping(n: Long): String =
-    if (n < 1000) n.toString()
-    else n.toString().reversed().chunked(3).joinToString(",").reversed()
-
-// ─── Section card (shared) ──────────────────────────────────────────────────
-
-@Composable
-private fun SectionCard(title: String, content: @Composable () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-        ),
-        shape = RoundedCornerShape(18.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(Modifier.height(12.dp))
-            content()
-        }
-    }
-}
-
-@Composable
-private fun EmptyHint() {
-    Text(
-        stringResource(R.string.no_plays_for_range),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-}
-
-// ─── Charts ─────────────────────────────────────────────────────────────────
-
-@Composable
-private fun DayLineChart(data: List<DayAggregate>) {
-    val color = MaterialTheme.colorScheme.primary
-    val faded = color.copy(alpha = 0.22f)
-    val ghost = color.copy(alpha = 0.0f)
-    val maxV = (data.maxOfOrNull { it.playCount } ?: 1).coerceAtLeast(1)
-    val minDay = data.first().dayEpoch
-    // No coerceAtLeast: a single day keeps span == 0 so the point centers at
-    // w/2 (the old +1 fudge drew a stray gradient wedge with no line).
-    val maxDay = data.last().dayEpoch
-    val span = (maxDay - minDay).toFloat()
-
-    val grow by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = tween(900, easing = FastOutSlowInEasing),
-        label = "line-grow"
-    )
-
-    Canvas(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(148.dp)
-    ) {
-        val w = size.width
-        val h = size.height
-        // A single data point can't stroke a line (moveTo with no lineTo) — draw
-        // a short flat segment at its level instead of the empty stroke + stray
-        // gradient wedge (no dot markers on graphs).
-        if (data.size < 2) {
-            val only = data.firstOrNull() ?: return@Canvas
-            val y = h - (only.playCount / maxV.toFloat()) * h * grow
-            drawLine(
-                color = color,
-                start = Offset(w / 2 - 16f, y),
-                end = Offset(w / 2 + 16f, y),
-                strokeWidth = 3f,
-                cap = StrokeCap.Round,
-            )
-            return@Canvas
-        }
-        val path = Path()
-        val fill = Path()
-        data.forEachIndexed { i, d ->
-            val x = if (span == 0f) w / 2 else ((d.dayEpoch - minDay) / span) * w
-            val y = h - (d.playCount / maxV.toFloat()) * h * grow
-            if (i == 0) {
-                path.moveTo(x, y)
-                fill.moveTo(x, h)
-                fill.lineTo(x, y)
-            } else {
-                path.lineTo(x, y)
-                fill.lineTo(x, y)
-            }
-        }
-        fill.lineTo(w, h)
-        fill.close()
-        drawPath(
-            fill,
-            brush = Brush.verticalGradient(
-                colors = listOf(faded, ghost),
-                startY = 0f,
-                endY = h
-            )
+        Icon(
+            if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+            contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        drawPath(path, color = color, style = Stroke(width = 5f))
     }
 }
 
 @Composable
-private fun HourBarChart(data: List<HourAggregate>, peakHour: Int?) {
-    val color = MaterialTheme.colorScheme.primary
-    val peakColor = MaterialTheme.colorScheme.tertiary
-    val counts = IntArray(24)
-    data.forEach { if (it.hour in 0..23) counts[it.hour] = it.playCount }
-    val maxV = (counts.maxOrNull() ?: 1).coerceAtLeast(1)
-
-    val grow by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = tween(800, easing = FastOutSlowInEasing),
-        label = "hour-grow"
-    )
-
-    Canvas(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(124.dp)
-    ) {
-        val w = size.width
-        val h = size.height
-        val slot = w / 24f
-        val barW = slot * 0.7f
-        counts.forEachIndexed { i, v ->
-            val bh = (v / maxV.toFloat()) * h * grow
-            val c = if (i == peakHour) peakColor else color
-            val x = i * slot + (slot - barW) / 2f
-            // rounded top: approximate with a 2dp corner via drawRoundRect
-            drawRoundRect(
-                color = c,
-                topLeft = Offset(x, h - bh),
-                size = Size(barW, bh),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f, 4f)
-            )
-        }
-    }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        listOf("0", "6", "12", "18", "23").forEach {
-            Text(it, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+private fun ProgressGlass(fraction: Float) {
+    val glass = glassBarsOn()
+    val tint = MaterialTheme.colorScheme.primary
+    val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+    Canvas(Modifier.fillMaxWidth().height(8.dp)) {
+        drawRoundRect(track, cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2))
+        val w = size.width * fraction.coerceIn(0f, 1f)
+        if (w > 0.5f) glassBar(Offset.Zero, Size(w.coerceAtLeast(size.height), size.height), tint, selected = true, glass = glass, corner = size.height / 2)
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun WeekdayBarChart(data: List<WeekdayAggregate>) {
-    val color = MaterialTheme.colorScheme.secondary
-    val counts = IntArray(7)
-    data.forEach { if (it.weekday in 0..6) counts[it.weekday] = it.playCount }
-    val maxV = (counts.maxOrNull() ?: 1).coerceAtLeast(1)
-    val labels = (0..6).map { weekdayLabel(it) }
-
-    val grow by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = tween(800, easing = FastOutSlowInEasing),
-        label = "weekday-grow"
-    )
-
-    Canvas(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(118.dp)
-    ) {
-        val w = size.width
-        val h = size.height
-        val slot = w / 7f
-        val barW = slot * 0.58f
-        counts.forEachIndexed { i, v ->
-            val bh = (v / maxV.toFloat()) * h * grow
-            drawRoundRect(
-                color = color,
-                topLeft = Offset(i * slot + (slot - barW) / 2f, h - bh),
-                size = Size(barW, bh),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(6f, 6f)
-            )
+private fun AchievementDetails(state: AchievementState, onTarget: (AchievementTarget) -> Unit) {
+    val copy = copyFor(state.achievement)
+    val locale = statsLocale()
+    val ink = MaterialTheme.colorScheme.onSurface
+    Column(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        HorizontalDivider(color = ink.copy(alpha = 0.1f))
+        Kicker(stringResource(R.string.stats_what_it_is))
+        Text(stringResource(copy.what), style = MaterialTheme.typography.bodyMedium)
+        if (copy.path.isNotEmpty()) {
+            Kicker(stringResource(R.string.stats_where_to_find))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                copy.path.forEachIndexed { i, res ->
+                    if (i > 0) Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(16.dp).align(Alignment.CenterVertically), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Chip(stringResource(res), filled = true)
+                }
+            }
         }
-    }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
-        labels.forEach {
-            Text(it, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        todoFor(state, locale)?.let { (heading, items) ->
+            Kicker(heading)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                items.forEach { Chip(it, filled = false) }
+            }
         }
-    }
-}
-
-@Composable
-private fun QualityBars(data: List<QualityAggregate>) {
-    val total = data.sumOf { it.playCount }.coerceAtLeast(1)
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        data.forEach { q ->
-            val pct = q.playCount.toFloat() / total
-            HBarRow(label = q.quality, value = "${q.playCount}", fraction = pct)
-        }
-    }
-}
-
-@Composable
-private fun SourceBars(data: List<SourceAggregate>) {
-    val total = data.sumOf { it.playCount }.coerceAtLeast(1)
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        data.forEach { s ->
-            val pct = s.playCount.toFloat() / total
-            HBarRow(label = prettySource(s.source), value = "${s.playCount}", fraction = pct)
-        }
-    }
-}
-
-@Composable
-private fun HBarRow(label: String, value: String, fraction: Float) {
-    val color = MaterialTheme.colorScheme.primary
-    val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-    val grow by animateFloatAsState(
-        targetValue = fraction.coerceIn(0f, 1f),
-        animationSpec = tween(700, easing = FastOutSlowInEasing),
-        label = "hbar-$label"
-    )
-    Column {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
-            Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Spacer(Modifier.height(4.dp))
-        Canvas(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(10.dp)
-                .clip(RoundedCornerShape(5.dp))
-        ) {
-            drawRect(color = track, size = size)
-            drawRect(color = color, size = Size(size.width * grow, size.height))
-        }
-    }
-}
-
-// ─── Top lists ──────────────────────────────────────────────────────────────
-
-@Composable
-private fun TopTracksList(items: List<TopTrackAggregate>) {
-    val maxPlays = (items.maxOfOrNull { it.playCount } ?: 1).coerceAtLeast(1)
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        items.forEachIndexed { idx, t ->
-            TopListRow(
-                rank = idx + 1,
-                primary = t.title,
-                secondary = t.artistName,
-                playCount = t.playCount,
-                maxPlays = maxPlays,
-                cover = t.albumCover,
-            )
-        }
-    }
-}
-
-@Composable
-private fun TopArtistsList(items: List<TopArtistAggregate>) {
-    val maxPlays = (items.maxOfOrNull { it.playCount } ?: 1).coerceAtLeast(1)
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        items.forEachIndexed { idx, a ->
-            TopListRow(
-                rank = idx + 1,
-                primary = a.name,
-                secondary = pluralStringResource(R.plurals.track_count, a.uniqueTracks, a.uniqueTracks),
-                playCount = a.playCount,
-                maxPlays = maxPlays,
-                cover = null,
-            )
-        }
-    }
-}
-
-@Composable
-private fun TopAlbumsList(items: List<TopAlbumAggregate>) {
-    val maxPlays = (items.maxOfOrNull { it.playCount } ?: 1).coerceAtLeast(1)
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        items.forEachIndexed { idx, a ->
-            TopListRow(
-                rank = idx + 1,
-                primary = a.title,
-                secondary = a.artistName,
-                playCount = a.playCount,
-                maxPlays = maxPlays,
-                cover = a.albumCover,
-            )
-        }
-    }
-}
-
-@Composable
-private fun TopListRow(
-    rank: Int,
-    primary: String,
-    secondary: String,
-    playCount: Int,
-    maxPlays: Int,
-    cover: String?,
-) {
-    val color = MaterialTheme.colorScheme.primary
-    val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
-    val frac by animateFloatAsState(
-        targetValue = playCount.toFloat() / maxPlays,
-        animationSpec = tween(700, easing = FastOutSlowInEasing),
-        label = "toplist-$rank"
-    )
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        RankBadge(rank)
-        Spacer(Modifier.width(10.dp))
-        if (cover != null) {
-            AsyncImage(
-                model = cover,
-                contentDescription = null,
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(8.dp))
-            )
-            Spacer(Modifier.width(10.dp))
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                primary,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                secondary,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(6.dp))
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp))
+        val target = copy.target
+        val place = copy.place
+        if (target != null && place != null && !state.unlocked) {
+            Button(
+                onClick = { onTarget(target) },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
             ) {
-                drawRect(color = track, size = size)
-                drawRect(color = color, size = Size(size.width * frac, size.height))
+                Text(stringResource(R.string.stats_open_place, stringResource(place)), fontWeight = FontWeight.Bold)
+                Spacer(Modifier.width(8.dp))
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
             }
         }
-        Spacer(Modifier.width(10.dp))
-        PlayCountPill(playCount)
     }
 }
 
 @Composable
-private fun RankBadge(rank: Int) {
-    val medalColor = when (rank) {
-        1 -> MaterialTheme.colorScheme.primary
-        2 -> MaterialTheme.colorScheme.secondary
-        3 -> MaterialTheme.colorScheme.tertiary
-        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
-    }
-    val bg = medalColor.copy(alpha = if (rank <= 3) 0.18f else 0.10f)
-    Box(
+private fun Chip(text: String, filled: Boolean) {
+    val ink = MaterialTheme.colorScheme.onSurface
+    val shape = RoundedCornerShape(14.dp)
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = if (filled) FontWeight.SemiBold else FontWeight.Normal,
+        color = if (filled) ink else MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier
-            .size(26.dp)
-            .clip(CircleShape)
-            .background(bg),
-        contentAlignment = Alignment.Center
+            .clip(shape)
+            .then(if (filled) Modifier.background(ink.copy(alpha = 0.08f)) else Modifier)
+            .border(1.dp, ink.copy(alpha = if (filled) 0.14f else 0.24f), shape)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+    )
+}
+
+@Composable
+private fun CompletedBadge(state: AchievementState, modifier: Modifier) {
+    val copy = copyFor(state.achievement)
+    val accent = MaterialTheme.colorScheme.primary
+    val locale = statsLocale()
+    val shape = RoundedCornerShape(22.dp)
+    val date = state.unlockedAt?.let { shortDate(Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate(), locale) }.orEmpty()
+    Column(
+        modifier.clip(shape).background(accent.copy(alpha = 0.16f)).border(1.dp, accent.copy(alpha = 0.45f), shape).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(
-            "$rank",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = medalColor
-        )
+        Box(Modifier.size(52.dp).clip(CircleShape).background(accent), contentAlignment = Alignment.Center) {
+            Icon(copy.icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(28.dp))
+        }
+        Text(stringResource(copy.title).uppercase(locale), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+        Text(goalText(state), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(date.uppercase(locale), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = accent)
+    }
+}
+
+// ─── Shared helpers ─────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun <T> FlowRowOf(items: List<T>, item: @Composable (T) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        items.forEach { item(it) }
     }
 }
 
 @Composable
-private fun PlayCountPill(count: Int) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-            .padding(horizontal = 8.dp, vertical = 3.dp)
-    ) {
-        Text(
-            "$count",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold
-        )
-    }
+internal fun tierColors(): Map<QualityTier, Color> = mapOf(
+    QualityTier.HI_RES to MaterialTheme.colorScheme.primary,
+    QualityTier.LOSSLESS to MaterialTheme.colorScheme.secondary,
+    QualityTier.LOSSY to MaterialTheme.colorScheme.onSurfaceVariant,
+    QualityTier.UNKNOWN to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+)
+
+internal fun tierRes(tier: QualityTier): Int = when (tier) {
+    QualityTier.HI_RES -> R.string.stats_tier_hi_res
+    QualityTier.LOSSLESS -> R.string.stats_tier_lossless
+    QualityTier.LOSSY -> R.string.stats_tier_lossy
+    QualityTier.UNKNOWN -> R.string.unknown
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+internal fun sourceRes(source: PlaySource): Int = when (source) {
+    PlaySource.STREAMED -> R.string.stats_source_streamed
+    PlaySource.LOCAL -> R.string.stats_source_local
+}
+
+internal fun personaRes(p: Persona): Int = when (p) {
+    Persona.NIGHT_OWL -> R.string.stats_persona_night_owl
+    Persona.EVENING -> R.string.stats_persona_evening
+    Persona.AFTERNOON -> R.string.stats_persona_afternoon
+    Persona.EARLY_BIRD -> R.string.stats_persona_early_bird
+}
+
+private fun titleFor(r: StatsRange): Int = when (r) {
+    StatsRange.Week -> R.string.stats_title_week
+    StatsRange.Month -> R.string.stats_title_month
+    StatsRange.Quarter -> R.string.stats_title_quarter
+    StatsRange.Year -> R.string.stats_title_year
+    StatsRange.AllTime -> R.string.stats_title_all
+}
 
 @Composable
-private fun rangeSubtitle(r: StatsRange): String = stringResource(
+internal fun rangeSubtitle(r: StatsRange): String = stringResource(
     when (r) {
         StatsRange.Week -> R.string.range_last_7d
         StatsRange.Month -> R.string.range_last_30d
@@ -893,7 +773,7 @@ private fun rangeSubtitle(r: StatsRange): String = stringResource(
 )
 
 @androidx.annotation.StringRes
-private fun StatsRange.labelRes(): Int = when (this) {
+internal fun StatsRange.labelRes(): Int = when (this) {
     StatsRange.Week -> R.string.stats_range_7d
     StatsRange.Month -> R.string.stats_range_30d
     StatsRange.Quarter -> R.string.stats_range_90d
@@ -901,44 +781,46 @@ private fun StatsRange.labelRes(): Int = when (this) {
     StatsRange.AllTime -> R.string.stats_range_all
 }
 
-/** 0 = Sunday. The platform's own short name in the reader's language: 日, Mo., lun., Pzt. */
+/** "Sat, Oct 3", "Week of Sep 29", "October". */
 @Composable
-private fun weekdayLabel(w: Int): String {
-    if (w !in 0..6) return "—"
-    val day = java.time.DayOfWeek.SUNDAY.plus(w.toLong())
-    return day.getDisplayName(java.time.format.TextStyle.SHORT, currentLocale())
+internal fun bucketLabel(b: TimeBucket, unit: BucketUnit, locale: Locale): String = when (unit) {
+    BucketUnit.DAY -> weekdayName(b.start.dayOfWeek, locale, TextStyle.SHORT) + ", " + shortDate(b.start, locale)
+    BucketUnit.WEEK -> stringResource(R.string.stats_week_of, shortDate(b.start, locale))
+    BucketUnit.MONTH -> b.start.month.getDisplayName(TextStyle.FULL_STANDALONE, locale).replaceFirstChar { it.titlecase(locale) } + " " + b.start.year
 }
 
-/** An hour of the day the way the reader writes times: 3 PM, 15:00, 下午3:00. */
+/** The short form under a chart: "Oct 3", "Sep 29", "Oct". */
+internal fun bucketAxisLabel(b: TimeBucket, unit: BucketUnit, locale: Locale): String = when (unit) {
+    BucketUnit.DAY, BucketUnit.WEEK -> shortDate(b.start, locale)
+    BucketUnit.MONTH -> b.start.month.getDisplayName(TextStyle.SHORT_STANDALONE, locale)
+}
+
 @Composable
-private fun hourLabel(hour: Int): String =
-    java.time.LocalTime.of(hour.coerceIn(0, 23), 0).format(
-        java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT)
-            .withLocale(currentLocale())
+private fun shareTextFor(report: StatsReport): String? {
+    if (report.isEmpty) return null
+    return stringResource(
+        R.string.stats_share_text,
+        durationText(report.seconds),
+        report.topArtists.firstOrNull()?.name ?: "—",
+        report.topTracks.firstOrNull()?.title ?: "—",
     )
+}
 
-@Composable
-private fun currentLocale(): java.util.Locale =
-    androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
-
-@Composable
-private fun prettySource(s: String): String = when (s.lowercase()) {
-    "tidal" -> "TIDAL"
-    "collection" -> stringResource(R.string.source_collection)
-    "local" -> stringResource(R.string.source_local)
-    "unknown", "" -> stringResource(R.string.unknown)
-    else -> s.replaceFirstChar { it.uppercase() }
+private fun share(context: android.content.Context, text: String) {
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    context.startActivity(Intent.createChooser(send, null))
 }
 
 @Composable
 private fun LastSyncedLabel(syncedAtMs: Long) {
-    val now = System.currentTimeMillis()
-    val text = formatRelative(now - syncedAtMs)
     Text(
-        stringResource(R.string.synced_when, text),
+        stringResource(R.string.synced_when, formatRelative(System.currentTimeMillis() - syncedAtMs)),
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 4.dp)
+        modifier = Modifier.padding(start = 16.dp, bottom = 4.dp),
     )
 }
 
@@ -951,7 +833,7 @@ private fun LastSyncedLabel(syncedAtMs: Long) {
 private fun formatRelative(deltaMs: Long): String {
     val seconds = (deltaMs / 1000L).coerceAtLeast(0)
     val fmt = android.icu.text.RelativeDateTimeFormatter.getInstance(
-        android.icu.util.ULocale.forLocale(currentLocale()),
+        android.icu.util.ULocale.forLocale(statsLocale()),
         null,
         android.icu.text.RelativeDateTimeFormatter.Style.SHORT,
         android.icu.text.DisplayContext.CAPITALIZATION_FOR_MIDDLE_OF_SENTENCE,

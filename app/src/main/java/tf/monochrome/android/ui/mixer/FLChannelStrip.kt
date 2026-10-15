@@ -270,7 +270,9 @@ fun FLChannelStrip(
             Canvas(
                 modifier = Modifier
                     .matchParentSize()
-                    .playerGlass(tint = tint)
+                    // Its corner, so the rim runs round it rather than a
+                    // 2px bevel from the fill's alpha (docs/ui-invariants.md).
+                    .playerGlass(tint = tint, lensCorner = PlayerDesignTokens.GlassCornerSmall)
             ) {
                 val r = PlayerDesignTokens.GlassCornerSmall.toPx()
                 drawRoundRect(color = tint, cornerRadius = CornerRadius(r, r))

@@ -65,6 +65,9 @@ object WhatsNew {
     /** What travels between this device and the signed-in account, and when. */
     private const val ACCOUNT_SYNC = "Account sync"
 
+    /** Listening stats and achievements: what the plays add up to. */
+    private const val STATS = "Stats"
+
     /** The app as a whole: the languages it speaks, the size of its download. */
     private const val APP = "The app"
 
@@ -122,11 +125,194 @@ object WhatsNew {
     /** Moving from one song to the next: crossfades and gapless. */
     private const val PLAYBACK = "Playback"
 
+    /** Where lyrics come from, and what they are searched by. */
+    private const val LYRICS = "Lyrics"
+
     /** The projectM visualizer, its preset browser and its rotation. */
     private const val VISUALIZER = "Visualizer"
 
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
+        WhatsNewRelease(
+            versionCode = 194,
+            versionName = "1.9.4",
+            entries = listOf(
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "Your library as a galaxy",
+                    body = "Library galaxy, under Folders in Library, shows every artist on your phone as a star beside their genre, their albums as planets and their tracks as moons. It works offline.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "Albums in orbit",
+                    body = "An artist's first album orbits nearest and each later one further out. Albums you play a lot glow brighter. Tap a moon to play it; long-press a star to list every album and track.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LIBRARY,
+                    title = "Short tracks in your library",
+                    body = "A library scan no longer leaves out tracks under 30 seconds, so intros, interludes and skits are in your albums. Over the whole phone, a short clip on its own, like a voice note, stays out; in folders you pick, every length comes in.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "Track info",
+                    body = "A song's menu (long-press, or its ⋮) has Track info: its file's format, sample rate, bit depth and bitrate, and every tag in it, ready to copy. The menu itself is glass.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "Choose a song row's badges",
+                    body = "Settings › Appearance › Song row badges turns off the source, quality, format, download and length marks on every song list, one by one or all at once, so a song's artist and album get the whole line.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYLISTS,
+                    title = "Import a Spotify playlist from its link",
+                    body = "In Create playlist, paste a Spotify playlist link: it shows the playlist's cover, name and length, then imports it. No file and no account needed; without one, Spotify shares a playlist's first 100 songs.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYLISTS,
+                    title = "Exportify inside the app",
+                    body = "For a private playlist, Liked Songs or one over 100 songs, Create playlist opens Exportify inside the app. Sign in with any Spotify account, Free included, tap Export, and the playlist comes straight into your library.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = DISCOVER,
+                    title = "Search the galaxy",
+                    body = "A search button on both galaxies finds a genre, by any of its names, or an artist, and flies there.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = DISCOVER,
+                    title = "One sky, two galaxies",
+                    body = "Your library galaxy sits in the genre galaxy's sky. Switch between them from the title bar and the view stays where it was.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = STATS,
+                    title = "Stats to dig into",
+                    body = "Stats shows time listened against the period before, when you listen, your top artist, what's on repeat, new artists, your streak and audio quality. Every card opens a chart: tap a bar or a row to see what it holds.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = STATS,
+                    title = "Achievements",
+                    body = "Ten goals, from a 30-day streak and 25 new artists in a month to trying the mixer, AutoEQ and World radio. Each shows how far along you are, with a button that takes you there. They stay on this phone.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = ACCOUNT_SYNC,
+                    title = "Your picture and username",
+                    body = "The account button in the top bar shows your picture, or your initials, when you're signed in. Pick your own photo and choose a username: the photo stays on this phone, the username follows your account.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = DOWNLOADS,
+                    title = "Search and sort Downloads",
+                    body = "Downloads has the search bar and the sort options of Liked Songs, plus sorting by file size. Tapping a song plays the list as you've searched and sorted it.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = DISCOVER,
+                    title = "Galaxy and Timeline are two pills",
+                    body = "The panel at the bottom of the map is now two glass pills. Surprise me is in the title bar, and how much you have explored is under the title.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = DISCOVER,
+                    title = "A stronger zoom",
+                    body = "A pinch zooms further, starts at once, and stays on the planet you are zooming toward. Tapping a planet or a star brings it closer.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYER,
+                    title = "Glass Visualizer and Waveform buttons",
+                    body = "They are real glass now, like Timer, Sound, Speed and Mixer above them.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYER,
+                    title = "BPM at the right tempo",
+                    body = "The Speed panel's BPM no longer reads hardcore and most DnB at half, or slow songs at double, and goes up to 250. A song on your phone with a BPM tag shows its tag at once.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYER,
+                    title = "Panels read in light themes",
+                    body = "With dynamic colour in a light theme, the Speed panel, the audio tools and the preset browser had dark text on dark glass and lost their outlines. Their text is light and their pills show.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LYRICS,
+                    title = "Lyrics for songs named by number",
+                    body = "Untagged songs named like \"2-05 Song\" or \"CD1 - 05 - Song\" are searched without the number, and no longer get \"01\" or \"CD1\" as their artist. Refresh the library once to fix songs already scanned.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LYRICS,
+                    title = "Lyrics for compilations",
+                    body = "Songs on a Various Artists album are searched under their own artist, so they find their lyrics.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LYRICS,
+                    title = "The right lyrics for your own files",
+                    body = "Songs on your phone are no longer looked up on TIDAL by a made-up number, which could bring back another song's lyrics.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYBACK,
+                    title = "Blends need gapless",
+                    body = "Blend between tracks only runs with Gapless playback on. With it off, each song plays on its own from start to end, and the blend slider is greyed out.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYBACK,
+                    title = "No blends in exclusive mode",
+                    body = "With Exclusive USB DAC on, the blend slider is greyed out: a blend mixes two songs, and exclusive mode is the bit-perfect path. Songs play one at a time, gapless with Gapless playback on, and your blend comes back when it is off.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = USB_DAC,
+                    title = "More DACs in exclusive mode",
+                    body = "Exclusive mode now drives DACs that run in USB Audio 3.0's basic mode, like Apple's USB-C headphone adapter, which Android always puts in that mode. They play at 48 kHz, in 24-bit.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = USB_DAC,
+                    title = "DACs at their full output",
+                    body = "The DAC's own volume is unmuted and set to full when a song starts, so only the app's volume turns it down. The DAC card shows it as HW vol 0 dB.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = USB_DAC,
+                    title = "One volume bar",
+                    body = "The player no longer has a DAC volume bar of its own. The volume keys bring up the DAC's bar at the top of the screen everywhere, the player included.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = USB_DAC,
+                    title = "No full-volume burst between songs",
+                    body = "A song change could play a moment of noise at the DAC's full volume, whatever the volume was set to. Samples are now limited before the volume, leaving room for EQ boosts of up to 12 dB, and a crossfade's outgoing song gets Samsung's 16-bit fix too.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = USB_DAC,
+                    title = "DACs that refused every song",
+                    body = "Some DACs, Apple's adapter among them, were turned away with \"no alt setting matches\" whatever played. A song at a rate the DAC can't take now says so, and plays through Android instead.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.REMOVED,
+                    section = USB_DAC,
+                    title = "USB DAC bit-perfect routing",
+                    body = "It pointed Android's output at a USB DAC, still through Android's own mixer. Exclusive USB DAC is the bit-perfect path, so it is the one switch now.",
+                ),
+            ),
+        ),
         WhatsNewRelease(
             versionCode = 193,
             versionName = "1.9.3",

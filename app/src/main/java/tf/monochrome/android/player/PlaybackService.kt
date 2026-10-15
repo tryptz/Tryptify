@@ -33,6 +33,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -77,6 +78,12 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var upmixProcessor: tf.monochrome.android.audio.dsp.UpmixProcessor
     // The playing track's tempo, for the speed control's BPM unit.
     @Inject lateinit var bpmTap: tf.monochrome.android.audio.tempo.BpmTapProcessor
+    // Each local track's dynamic range, measured once as it plays through, for
+    // the library galaxy: the tap at the head of the chain, and what keeps it.
+    @Inject lateinit var dynamicRangeTap: tf.monochrome.android.audio.meter.DynamicRangeTapProcessor
+    @Inject lateinit var dynamicRangeRecorder: DynamicRangeRecorder
+    // A library track's own BPM tag, over the estimate from its audio.
+    @Inject lateinit var taggedTempo: TaggedTempo
     // The Oxford post-chain, injected so a blend's DSP copy can be seeded with
     // whatever these are set to right now.
     @Inject lateinit var inflatorEffect: tf.monochrome.android.audio.dsp.oxford.InflatorEffect
@@ -96,7 +103,6 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var audioPipelineMonitor: tf.monochrome.android.audio.pipeline.AudioPipelineMonitor
     @Inject lateinit var qobuzCache: tf.monochrome.android.data.cache.QobuzStreamCacheManager
     @Inject lateinit var deezerCache: tf.monochrome.android.data.cache.DeezerStreamCacheManager
-    @Inject lateinit var usbAudioRouter: tf.monochrome.android.audio.UsbAudioRouter
     @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
     @Inject lateinit var bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController
     // Atmos: the sample tap preserves raw E-AC-3 frames (which carry the JOC/OAMD
@@ -242,6 +248,8 @@ class PlaybackService : MediaSessionService() {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 // Also what wakes the blend watcher — see startCrossfadeWatcher.
                 playingSignal.value = isPlaying
+                // A track change waits here to become a play: see notePlay.
+                if (isPlaying) commitPendingPlay()
                 // Where the play head most likely sits until the app closes,
                 // so this is the one save that must not be throttled away.
                 playbackState.savePosition(player.currentPosition, player.duration, flush = true)
@@ -268,6 +276,8 @@ class PlaybackService : MediaSessionService() {
                 if (reason == Player.DISCONTINUITY_REASON_SEEK) {
                     // A seek is a new run at the end of the track.
                     crossfadeArmed = true
+                    // ...and a dynamic range measured across it is not the track's.
+                    dynamicRangeRecorder.seeked(newPosition.positionMs)
                     queueManager.currentTrack.value?.let { pushDiscordPresence(it) }
                     playbackState.savePosition(player.currentPosition, player.duration, flush = true)
                 }
@@ -276,6 +286,8 @@ class PlaybackService : MediaSessionService() {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 when (playbackState) {
                     Player.STATE_ENDED -> {
+                        // Played to its end: its dynamic range is whole.
+                        dynamicRangeRecorder.trackEnded()
                         val currentTrack = queueManager.currentTrack.value
                         // For a live station this is not "the song finished" —
                         // it is the server hanging up, which Icecast does
@@ -397,6 +409,15 @@ class PlaybackService : MediaSessionService() {
                 // A new track gets its own blend at its own end, and its own tempo.
                 crossfadeArmed = true
                 bpmTap.newTrack()
+                // A tagged library track's tempo is its tag: no estimate.
+                taggedTempo.trackChanged(mediaItem)
+                // The one before ran into this one (gapless, or a repeat) only
+                // on an automatic move: then its dynamic range is whole.
+                dynamicRangeRecorder.trackChanged(
+                    mediaItem,
+                    previousPlayedThrough = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO ||
+                        reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT,
+                )
                 // Integrated loudness and range are per track. The tap runs a
                 // buffer ahead of what is heard, so this lands a moment into
                 // the new track rather than exactly on it — a few hundred ms of
@@ -424,28 +445,10 @@ class PlaybackService : MediaSessionService() {
                 lastGaplessAttempt = null
                 syncGaplessNext()
 
-                if (mediaItem != null && reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) {
-                    val trackId = mediaItem.mediaId.toLongOrNull()
-                    if (trackId != null) {
-                        val track = queueManager.currentQueue.find { it.id == trackId }
-                        if (track != null) {
-                            serviceScope.launch {
-                                val unified = unifiedTrackRegistry[trackId]
-                                // A station is not something you listened to,
-                                // it is somewhere you tuned. Writing it to
-                                // history fills Recently Played — and the stats
-                                // Discover builds on — with entries keyed by a
-                                // synthetic hash, and telling Last.fm about it
-                                // scrobbles a "track" named after a station and
-                                // credited to a city.
-                                if (!isLiveStream(track)) {
-                                    libraryRepository.addToHistory(track, unified)
-                                    scrobblingService.updateNowPlaying(track)
-                                }
-                            }
-                        }
-                    }
-                }
+                // Every track change, however it came about — a tap in the
+                // app (a playlist change), the player moving on by itself, a
+                // repeat — is a play once it is heard. See notePlay.
+                notePlay(mediaItem, reason)
 
                 // Whenever the playing track actually changes and auto-shuffle is
                 // on, jump the ProjectM visualizer to a new preset right away — so
@@ -467,20 +470,6 @@ class PlaybackService : MediaSessionService() {
                 }
             }
         })
-
-        // Bit-perfect USB DAC routing — when the user has the toggle on
-        // and a USB Audio Class device is attached, pin ExoPlayer's
-        // output to it via setPreferredAudioDevice. Reverts to system
-        // default whenever the toggle goes off or the DAC is unplugged.
-        serviceScope.launch {
-            preferences.usbBitPerfectEnabled
-                .combine(usbAudioRouter.usbOutputDevice) { enabled, device ->
-                    if (enabled) device else null
-                }
-                .collect { preferred ->
-                    runCatching { player.setPreferredAudioDevice(preferred) }
-                }
-        }
 
         // Wrap the ExoPlayer so Media3's notification + lock-screen surface
         // working next / previous controls. The wrapper routes those commands
@@ -607,6 +596,9 @@ class PlaybackService : MediaSessionService() {
         serviceScope.launch {
             preferences.gaplessPlayback.collect { enabled ->
                 gaplessEnabled = enabled
+                // A blend needs gapless (CrossfadeRamp.blends): one running
+                // when it is turned off stops, and its second player with it.
+                if (!enabled) crossfade.cancel()
                 syncGaplessNext()
             }
         }
@@ -639,10 +631,12 @@ class PlaybackService : MediaSessionService() {
         }
 
         // Blend length. Any non-zero value takes over from the gapless window,
-        // so re-derive that whenever it changes.
+        // so re-derive that whenever it changes. Exclusive USB DAC turns it to
+        // none: a blend running when it is turned on stops, and its second
+        // player with it.
         serviceScope.launch {
-            preferences.crossfadeDuration.collect { seconds ->
-                crossfadeMs = seconds.coerceAtLeast(0) * 1_000L
+            blendLengthMs().distinctUntilChanged().collect { ms ->
+                crossfadeMs = ms
                 if (crossfadeMs == 0L) crossfade.cancel()
                 syncGaplessNext()
             }
@@ -980,6 +974,7 @@ class PlaybackService : MediaSessionService() {
                                 arrayOf(
                                 channelDetectorProcessor, // Passive tap: reports source channel count/layout + per-channel activity
                                 bpmTap,                 // Passive tap: the track's own tempo, before the mixer and the speed change
+                                dynamicRangeTap,        // Passive tap: the track's dynamic range, for the galaxy; off unless measuring
                                 atmosAudioProcessor,    // Atmos: multichannel bed → object render → binaural stereo or speakers; inactive for ≤2ch
                                 // The mixer before the fold, so it sees the song's own layout: a
                                 // 9.1.6 bed spreads one channel group per bus (nine of them), and
@@ -1042,9 +1037,16 @@ class PlaybackService : MediaSessionService() {
                             // through untouched. DefaultAudioSink gets the
                             // equivalent from Media3; this chain is ours to
                             // feed.
+                            //
+                            // Behind FloatPcmGuard, as the hi-res chain is: a
+                            // decoder that declares float and writes 16-bit
+                            // sends samples far past full scale, which the DAC
+                            // played at full scale whatever its level.
+                            tf.monochrome.android.audio.usb.FloatPcmGuard(),
                             tf.monochrome.android.audio.usb.ToFloatPcmAudioProcessor(),
                             channelDetectorProcessor,
                             bpmTap,
+                            dynamicRangeTap,
                             atmosAudioProcessor,
                             upmixProcessor,
                             // Mixer before the fold, as in the chain above.
@@ -1106,6 +1108,7 @@ class PlaybackService : MediaSessionService() {
                             tf.monochrome.android.audio.usb.ToFloatPcmAudioProcessor(),
                             channelDetectorProcessor,
                             bpmTap,
+                            dynamicRangeTap,
                             atmosAudioProcessor,
                             upmixProcessor,
                             // Mixer before the fold, as in the chain above.
@@ -1139,6 +1142,9 @@ class PlaybackService : MediaSessionService() {
                         delegate = fallback,
                         driver = libusbDriver,
                         volumeController = bypassVolumeController,
+                        // Nothing else runs here, but a float stream that is
+                        // really 16-bit must still not reach the DAC as static.
+                        processors = listOf(tf.monochrome.android.audio.usb.FloatPcmGuard()),
                     )
                 }
             }
@@ -1291,8 +1297,7 @@ class PlaybackService : MediaSessionService() {
                 player.setMediaItem(mediaItem)
                 player.prepare()
                 startPlayback()
-
-                libraryRepository.addToHistory(track)
+                // Recorded by the track change this causes (notePlay).
             } catch (e: Exception) {
                 // Skip to next on error
                 onTrackEnded()
@@ -1320,9 +1325,7 @@ class PlaybackService : MediaSessionService() {
                     player.setMediaItem(resolved.mediaItem)
                     player.prepare()
                     startPlayback()
-                    if (!isLiveStream(currentTrack)) {
-                        libraryRepository.addToHistory(currentTrack, unifiedTrack)
-                    }
+                    // Recorded by the track change this causes (notePlay).
                     return@launch
                 }
 
@@ -1358,8 +1361,7 @@ class PlaybackService : MediaSessionService() {
 
                 player.prepare()
                 startPlayback()
-
-                libraryRepository.addToHistory(currentTrack)
+                // Recorded by the track change this causes (notePlay).
 
                 // Preload next tracks
                 preloadNextTracks()
@@ -1541,8 +1543,18 @@ class PlaybackService : MediaSessionService() {
     // construction — an overlap needs the next track started *early*, which is
     // the opposite of handing it to the player to follow on seamlessly — so a
     // non-zero blend switches the gapless window off.
+    //
+    // [crossfadeMs] is the blend that applies, not the slider: none while the
+    // exclusive USB DAC is on (CrossfadeRamp.blendMs). Everything here reads
+    // it, so the gapless window carries the songs then rather than leave a gap.
 
     @Volatile private var crossfadeMs = 0L
+
+    /** The blend length that applies, in ms, as the settings change. */
+    private fun blendLengthMs(): Flow<Long> =
+        combine(preferences.crossfadeDuration, preferences.usbExclusiveBitPerfectEnabled) { seconds, exclusiveUsb ->
+            CrossfadeRamp.blendMs(seconds.coerceAtLeast(0) * 1_000L, exclusiveUsb)
+        }
 
     /** Where a blend's tail joins the exclusive USB stream. */
     @OptIn(UnstableApi::class)
@@ -1649,12 +1661,14 @@ class PlaybackService : MediaSessionService() {
         }
 
     /**
-     * Whether a blend can run right now. On the exclusive USB path too: the
-     * tail is mixed into the main stream before it reaches the DAC
-     * (UsbCrossfadeMix), so there is still one stream and one owner.
+     * Whether a blend can run right now. Never with the exclusive USB DAC
+     * switched on ([crossfadeMs] is none then). Should the DAC still be
+     * streaming when one starts, the tail is mixed into the main stream before
+     * it reaches the DAC (UsbCrossfadeMix), so there is still one stream and
+     * one owner.
      */
     @OptIn(UnstableApi::class)
-    private fun canCrossfade(): Boolean = crossfadeMs > 0L
+    private fun canCrossfade(): Boolean = CrossfadeRamp.blends(gaplessEnabled, crossfadeMs)
 
 
     /** Counts [AnalyticsListener.onAudioPositionAdvancing] on the main player. */
@@ -1761,10 +1775,17 @@ class PlaybackService : MediaSessionService() {
     private fun startCrossfadeWatcher() {
         serviceScope.launch {
             while (true) {
-                // Suspends until a blend length is set; wakes on the next
-                // preference change rather than on a timer.
+                // Suspends until a blend length applies; wakes on the next
+                // preference change rather than on a timer. The length that
+                // applies, not the slider's: with the exclusive USB DAC on, a
+                // slider above zero would wake this at once, every time.
                 if (crossfadeMs == 0L) {
-                    preferences.crossfadeDuration.first { it > 0 }
+                    blendLengthMs().first { it > 0L }
+                    continue
+                }
+                // Nor while gapless is off, which a blend needs.
+                if (!gaplessEnabled) {
+                    preferences.gaplessPlayback.first { it }
                     continue
                 }
                 if (!player.isPlaying) {
@@ -1828,6 +1849,61 @@ class PlaybackService : MediaSessionService() {
     private var liveReconnects = 0
 
     /** True when this track is a live stream rather than a recording. */
+    /** A track change not yet heard, waiting to become a play. */
+    private class PendingPlay(
+        val track: tf.monochrome.android.domain.model.Track,
+        val unified: tf.monochrome.android.domain.model.UnifiedTrack?,
+        val repeat: Boolean,
+    )
+
+    private var pendingPlay: PendingPlay? = null
+    private val playDeduper = PlayDeduper()
+
+    /**
+     * Notes the track [mediaItem] plays as the next play, and writes it when it
+     * is heard ([commitPendingPlay]): at once if the player is already playing
+     * (a gapless or repeat move), else when playback starts. A session restored
+     * paused at launch is not a play until it is played.
+     *
+     * Matched to its queue track by numeric id or by the library id it was
+     * queued under ([PlayRecording.trackFor]): a local file plays under the
+     * latter, which the old lookup — the id as a number — never matched, so
+     * local songs were missing from Recently Played.
+     */
+    private fun notePlay(mediaItem: MediaItem?, reason: Int) {
+        pendingPlay = null
+        if (mediaItem == null) return
+        val track = PlayRecording.trackFor(
+            mediaId = mediaItem.mediaId,
+            current = queueManager.currentTrack.value,
+            queue = queueManager.currentQueue,
+            unifiedIdOf = { unifiedTrackRegistry[it]?.id },
+        ) ?: return
+        // A station is not something you listened to, it is somewhere you
+        // tuned. Writing it to history fills Recently Played — and the stats
+        // Discover builds on — with entries keyed by a synthetic hash, and
+        // telling Last.fm about it scrobbles a "track" named after a station
+        // and credited to a city.
+        if (isLiveStream(track)) return
+        pendingPlay = PendingPlay(
+            track = track,
+            unified = unifiedTrackRegistry[track.id],
+            repeat = reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT,
+        )
+        if (player.isPlaying) commitPendingPlay()
+    }
+
+    /** Writes the pending play to history, once, unless it repeats the last one. */
+    private fun commitPendingPlay() {
+        val play = pendingPlay ?: return
+        pendingPlay = null
+        if (!playDeduper.shouldRecord(play.track.id, System.currentTimeMillis(), play.repeat)) return
+        serviceScope.launch {
+            libraryRepository.addToHistory(play.track, play.unified)
+            scrobblingService.updateNowPlaying(play.track)
+        }
+    }
+
     private fun isLiveStream(track: tf.monochrome.android.domain.model.Track): Boolean =
         unifiedTrackRegistry[track.id]?.source is
             tf.monochrome.android.domain.model.PlaybackSource.RadioStream

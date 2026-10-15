@@ -127,8 +127,6 @@ fun LegacyMainPlayerScreen(
     onLyrics: () -> Unit,
     topBar: @Composable () -> Unit,
     hero: @Composable (Modifier) -> Unit,
-    /** The USB DAC's volume bar in exclusive mode, else null; see MainPlayerScreen. */
-    dacVolume: (@Composable () -> Unit)? = null,
     /** The hero is the lyric surface (or dissolving to or from it): give it the whole region. */
     lyricsMode: Boolean = false,
 ) {
@@ -217,11 +215,6 @@ fun LegacyMainPlayerScreen(
                     onForward10 = onForward10,
                     onNext = onNext,
                 )
-            }
-
-            if (dacVolume != null) {
-                Spacer(Modifier.height(12.dp))
-                DevEditable("legacy_dacVolume", Modifier.fillMaxWidth()) { dacVolume() }
             }
 
             Spacer(Modifier.height(20.dp))

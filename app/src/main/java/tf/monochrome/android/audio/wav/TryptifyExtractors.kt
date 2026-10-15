@@ -1,5 +1,7 @@
 package tf.monochrome.android.audio.wav
 
+import androidx.media3.extractor.mp4.FragmentedMp4Extractor
+import tf.monochrome.android.audio.mp4.IndexedFragmentedMp4Extractor
 import android.net.Uri
 import androidx.media3.common.C
 import androidx.media3.common.DataReader
@@ -31,16 +33,40 @@ object TryptifyExtractors {
         override fun createExtractors(): Array<Extractor> = wrap(defaults.createExtractors())
 
         override fun createExtractors(uri: Uri, responseHeaders: Map<String, List<String>>): Array<Extractor> =
-            wrap(defaults.createExtractors(uri, responseHeaders))
+            wrap(defaults.createExtractors(uri, responseHeaders), indexFragmentedMp4 = isOnDevice(uri.scheme))
 
     }
 
-    /** [extractors] with the WAV one wrapped; everything else as it was. */
-    internal fun wrap(extractors: Array<Extractor>): Array<Extractor> =
+    /**
+     * [extractors] with the WAV one and the fragmented-MP4 one wrapped;
+     * everything else as it was. The fragmented-MP4 wrapper indexes a file
+     * that has no `sidx` (Apple's ALAC), which Media3 could not seek in, when
+     * [indexFragmentedMp4]: for a file on the device, not a stream.
+     *
+     * The index is built by walking every fragment before the first sample.
+     * On a file that is a moment's reading. Over HTTP (an Apple Music stream)
+     * it was a range request per fragment, or the whole file read through,
+     * before anything played, and then the file again from the start: seconds
+     * of silence at every track and twice the data. A stream plays as Media3
+     * plays it, unseekable as it was before the index existed.
+     */
+    internal fun wrap(extractors: Array<Extractor>, indexFragmentedMp4: Boolean = true): Array<Extractor> =
         Array(extractors.size) { i ->
-            val e = extractors[i]
-            if (e is WavExtractor) FloatAwareWavExtractor(e) else e
+            when (val e = extractors[i]) {
+                is WavExtractor -> FloatAwareWavExtractor(e)
+                is FragmentedMp4Extractor -> if (indexFragmentedMp4) IndexedFragmentedMp4Extractor(e) else e
+                else -> e
+            }
         }
+
+    /**
+     * Whether a URI with [scheme] is read from the device: a file, a content
+     * provider, the app's own resources. A path with no scheme is a file.
+     */
+    internal fun isOnDevice(scheme: String?): Boolean = when (scheme?.lowercase()) {
+        null, "", "file", "content", "android.resource", "asset", "rawresource", "data" -> true
+        else -> false
+    }
 }
 
 /**

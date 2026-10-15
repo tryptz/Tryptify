@@ -20,6 +20,10 @@ import io.github.jan.supabase.postgrest.Postgrest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.put
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -45,9 +49,17 @@ private class SharedPrefsCodeVerifierCache(context: Context) : CodeVerifierCache
 
 data class UserProfile(
     val id: String,
+    /** The name the sign-in provider gave (Google's). Never shown as the account's name. */
     val displayName: String?,
     val email: String?,
-    val photoUrl: String?
+    val photoUrl: String?,
+    /**
+     * The name the listener chose in the app; null until they choose one.
+     * Display only: it is not unique and can change at any time, so nothing
+     * is ever keyed by it. Synced data is keyed by [id], the account the
+     * listener signed in with (Google or email).
+     */
+    val username: String? = null,
 )
 
 @Singleton
@@ -322,11 +334,35 @@ class SupabaseAuthManager @Inject constructor(
         }
     }
 
+    /**
+     * Set the account's username: the name the app shows, chosen in the app
+     * and separate from the name Google gives. Saved as `username` in the
+     * user's metadata, so it follows the account to every device; Google
+     * rewrites only its own keys (`full_name`, `name`) on sign-in.
+     */
+    suspend fun updateUsername(name: String): Result<UserProfile> = try {
+        val user = auth.updateUser {
+            data = buildJsonObject { put(USERNAME_KEY, name) }
+        }
+        val profile = user.toProfile()
+        _userProfile.value = profile
+        Result.success(profile)
+    } catch (e: Exception) {
+        Result.failure(Exception(parseAuthError(e), e))
+    }
+
     private fun UserInfo.toProfile() = UserProfile(
         id = id ?: "",
-        displayName = userMetadata?.get("full_name")?.toString()?.removeSurrounding("\"")
-            ?: userMetadata?.get("name")?.toString()?.removeSurrounding("\""),
+        displayName = metadataString("full_name") ?: metadataString("name"),
         email = email,
-        photoUrl = userMetadata?.get("avatar_url")?.toString()?.removeSurrounding("\"")
+        photoUrl = metadataString("avatar_url"),
+        username = metadataString(USERNAME_KEY),
     )
+
+    private fun UserInfo.metadataString(key: String): String? =
+        (userMetadata?.get(key) as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+
+    private companion object {
+        const val USERNAME_KEY = "username"
+    }
 }

@@ -41,7 +41,7 @@ The reason it was ever faint: on a device where the shader silently no-ops
 compile it), a solid fill is left on screen as an opaque rounded rectangle. Ask
 `rememberLiquidGlassAvailable()` rather than hedging with a low alpha.
 
-**A rounded-rect slab passes its corner as `lensCorner`.** The alpha
+**A rounded-rect slab passes its corner as `lensCorner`.** And the slab itself is drawn rounded at that corner, never a square `drawRect`: the player's audio sheet drew one, the shader lit its square edges, the sheet's clip cut the corners off, and its rim stopped short of every corner (`GlassSlabCornerTest` reads every `.playerGlass(` for both). The alpha
 heightfield alone gives a solid fill a bevel 2–4px wide: the fill steps from 0
 to 1 across one anti-aliased pixel, so everything inside it is flat and
 `refract()` bends nothing. The pane then reads as a tinted sheet with a
@@ -141,6 +141,34 @@ rendered in the window whose background it is meant to blur, as a sibling of tha
 window's haze source: `MainPlayerScreen`'s `overlay` slot exists for exactly
 this, and the speed panel goes through it. The cost is owning the scrim, the
 slide and Back by hand, and that is the cheaper half of the trade.
+
+**The song menu is a `GlassOverlay`, not a `ModalBottomSheet`.** `TrackContextMenu`
+(a long-press or a row's ⋮, from every list) draws in the nav host's overlay slot
+at `Alignment.BottomCenter`, where the sheet was, so it blurs the list it was opened
+from. Its Track info turns the same pane into the song's tags and Back returns to
+the actions. Put back in a `ModalBottomSheet` it is a solid slab, for the reason
+above; outside the nav host it falls back to a plain dialog, never to nothing.
+
+**An overlay pane animates in its own layer, and a bottom one clears the bar.**
+`GlassOverlayLayer` fades the scrim and slides the pane up, and plays both
+backwards on the way out: it holds the withdrawn pane until it has left, and a
+leaving pane takes no presses (a second tap on a menu item would run it twice).
+Its transitions start hidden (`MutableTransitionState(false)`); given
+`visible = true` on its first composition `AnimatedVisibility` would just appear,
+and the first menu after launch would pop in. A pane at `Alignment.BottomCenter`
+sits `bottomClearance` (the nav host's `chromeHeightNow`) above the bottom edge,
+on top of the tab bar rather than over its buttons. In the song menu, Track info
+and the actions turn as pages (`AnimatedContent`, the pane's height following),
+not a cut.
+
+With low-performance mode these panes keep their fallback: "Disable
+animations" (`reduceMotion()`) makes the overlay, the page turn, Track info's
+growth and the DAC pop-up come and go at once, and stops the player title's
+back-and-forth loop (a tap jumps it to its end and back instead). With no
+shader and no blur a pane is plain surface colour, and a pane floating over a
+page of text — the overlay, the DAC pop-up — passes
+`fallbackMinAlpha = FLOATING_FALLBACK_MIN_ALPHA` so the rows behind do not read
+through its own; other panels keep the see-through 0.55 floor.
 
 **A `GlassPanel` inside a scrolling list passes `blockTouchesBelow = false`.**
 Its backstop consumes every touch its content does not handle, drags included.
@@ -392,6 +420,15 @@ tints its slab with the parent's original accent (`LocalGlassAccent`), not the
 readable one, so a chip on a sheet stays the sheet's material. `GlassInkTest`
 sweeps grounds, tints and opacities and asserts AA for the text everywhere.
 
+**The player says what its glass stands over** (`LocalGlassGround` provides
+`playerGlassGround`). The player paints its own dark background in every theme,
+so its panes — the Speed panel, the audio tools, the preset browser — work their
+ink out against that, never the theme's page. Against a light theme's page they
+decided they were light glass and drew dark text on dark red. `PlayerGlassGroundTest`
+sweeps covers from white to black. And a switch on glass takes its "off" colours
+from the ink too (`glassSwitchColors`): Material's own come from the theme's
+surface, which the ink does not move, and were a white pill on dark glass.
+
 **A selected chip's rim is `matchParentSize`, never `fillMaxSize`.** Filling made
 a selected chip as wide as the room offered: invisible in a scrolling row, but in
 a plain `Row` or a `FlowRow` it swallowed the line and squeezed its label to a
@@ -436,6 +473,12 @@ width) is for picking one icon out of a row, like the transport and dock.
 
 List rows keep the quieter scale squeeze; a full dome on a wide text row reads
 heavy.
+
+**Every button in the player's sheet is `PressableGlass`**: the four status
+cards and the Visualizer and Waveform buttons under them, one material and one
+corner. Those two stayed on the flat `liquidGlass` tint after the cards moved,
+and read as dark outlined tiles beside real glass. Their "on" is the accent
+and a ring, not a stronger tint: glass has none to switch to.
 
 **A press's swell is animated into `GlassPress.amount` by the animation
 itself** (`animate { press.amount = value }`). It must never be copied across
@@ -795,6 +838,17 @@ straight away from its star. The hole's shadow is *cleared*, not blacked out, or
 it casts a dark ring over its own disk. Do not add stripes or a starburst to fake
 rays: they come only from what is in the light's way.
 
+**A pinch zooms harder than the fingers move, and starts on the spread**
+(`GalaxyCamera.pinch`, `PINCH_GAIN`). Planets are a few hundredths of their
+star, and at one to one reaching one took pinch after pinch. The gesture
+starts when the fingers spread or close past the touch slop, not only when
+their middle moves: counted on the middle alone, a clean pinch did nothing.
+And a gesture that is mostly a pinch, while the camera follows a star or a
+planet, zooms without panning: a pan lets go of what is followed, so the planet
+you pinched toward orbited away. Arriving at a planet frames its third moon,
+not its last, so the world is big in the view; arriving at a star frames its
+planets, not the library's belt beyond them.
+
 **Every star is lit, always**, at full size and brightness; there is no "still
 dark" look for genres not listened to. **The star you are at is a sun** — the
 selected one, else the followed one, else the one whose system the camera sits
@@ -837,6 +891,132 @@ released. Work on its own thread or timer elsewhere — the ambient projectM
 render thread, the FFT taps, the loudness meter, the tilt sensor, projectM's
 audio feed — is held with `LifecycleStartEffect` or `rememberOnScreen()`, never
 a bare `DisposableEffect`, which holds it in the background too.
+
+### The library galaxy
+
+The music on the device as a sky: artists as stars, albums as planets, tracks
+as moons. How it is built, and why, is `docs/local-galaxy-architecture.md`.
+Everything under "The genre galaxy" above holds for it too.
+
+**The two galaxies are one stage** (`GalaxyStage`). The camera, the clock, the
+glides, full screen, the glass and the look sheet are the stage's; each map
+brings only its stars (`StarField`), its system and its panels through slots.
+Do not fork the stage for one map: a fix to one is a fix to both, and the rules
+above were each paid for once.
+
+**The genre galaxy draws from its stream in the order it always has**
+(`GenreStarField`). Its stars and the scene's dust share one seeded `Random`.
+Move a `gauss()` call, or draw a new number before the layout, and every dust
+grain and nebula moves, which looks like nothing until you compare. The split
+of `GalaxyScene` was proven against a fingerprint of every number in the scene.
+
+**Every library star is placed from its own key, never from a shared stream**
+(`LibraryStarField`). A library grows; the genre dataset does not. Seeded down
+the list, one new artist reshuffled the whole sky after every scan.
+`LibraryStarFieldTest` adds artists and checks no other star moved. (The dust
+is dealt out again on a change: it is decoration, not a place.)
+
+**An artist whose genre is not recognised is in the halo, not guessed at.**
+`GenreGraph.resolve` returns null rather than guessing, and the galaxy keeps
+that honesty: such a star floats above or below the disc, and the caption says why.
+
+**Orbits are release order; plays are glow.** The debut orbits nearest. A play
+never moves a planet: it brightens its atmosphere (`Planet.glow`). A system that
+rearranged itself as you listened could not be learned. `LocalSystemsTest` pins
+both.
+
+**A library planet is its album's sound; a chart planet is untouched by it.**
+Its size is the album's running time (full at 80 minutes), its colour its key
+round the Camelot wheel, deeper for minor and paler for major, its haze how loud
+it was mastered, its cover's turn one per 32 beats of its tempo, and its night
+side as deep as the dynamic range the master kept. Every one has a default that
+is the old look exactly (tone 0, haze 0, no spin, shade 1), which is all a chart
+planet ever has: `PlanetSystemTest` pins chart planets at every size and
+`PlanetLookTest` pins each default to the old numbers. An album missing a value
+keeps the old look for that one thing; nothing is guessed. Only the cover turns:
+the light and shadow masks stay turned toward the star, or the planet's lit side
+would spin with it. All of it is drawn with what each body was already drawn
+with, and the atmosphere colours are made once a system (`SystemArt.atmosphere`),
+not per planet per frame.
+
+A library moon is its track the same way: it goes round once every 16 beats of
+the track's tempo (outer slots slower, as before), and its glow is the track's
+key. Without a tempo it keeps its slot's pace, without a key its star's light,
+which is all a chart moon has; `PlanetSystemTest` pins chart moons too.
+
+**Nothing in the library is unreachable on the map.** Albums past the eighth are
+the belt and tracks past an album's sixth are its ring, and both are listed in
+full in the system's sheet. Drawn as grains, never dropped.
+
+**A library system keeps its planets' moons wholly apart** (`SystemLimits.apartMoons`),
+and its reach includes the belt (`PlanetSystem.reachFor`), so the camera frames
+all of it before it arrives. The genre map's spacing is unchanged.
+
+**Past 800 stars, the rest are points until you come near**
+(`GalaxyScene.STAR_SPRITE_BUDGET`, `drawStars`). The genre map has 771 and is
+under it, so it draws as it always did. Past it, each extra star's sprite fades
+in over its point as it grows on screen. Do not make it a hard cut: a hard top-N
+pops as the camera moves.
+
+**Nothing on it comes off the network.** `LocalGalaxyRepository` reads the
+library and the play history only, so the map works in airplane mode. A lookup
+added for a nicer planet breaks that.
+
+**The data layer returns records, not stars.** The repository hands back
+`LibraryArtist`/`LibraryAlbum` (domain); the ViewModel lays them out. The
+`data` package imports nothing from `ui`.
+
+**Genres ⇄ Mine swaps the map, and keeps the view** (`switchSafe`,
+`GalaxyHandoff`). Both maps are laid out in one frame, so the camera and the
+layout are handed over and the other map opens on the same part of the sky.
+The map being left comes off the back stack; otherwise switching back and forth
+stacked maps up behind Back. The handoff is taken once, and a map opened any
+other way frames the whole galaxy.
+
+**The library map is full bleed**, like the genre map (`fullBleedRoute`). Its
+panels clear the bars themselves.
+
+**Both galaxies' controls are pills, not a panel** (`GalaxyControls.kt`, shared,
+so the two maps cannot drift apart). With nothing selected, the bottom is two
+glass pills, Galaxy and Timeline, the one showing lit; Surprise is in the title
+bar. A panel there covered a third of the sky to hold two choices. What it also
+said moved into the caption: on the genre map, how many genres are explored and,
+once any are kept, what the dashed ring means.
+
+**Both galaxies search with the app's search bar, under the title**
+(`GalaxySearchBar`, in `GalaxyStage`'s `underTitle`): `GlassSearchBar` over the
+map, frosting it, with the matching stars as a row of pills inside the same
+pane, the globe's arrangement, so the sky stays in view. Genres match on their
+other names too ("dnb"). It lives in the measured top chrome, so its height is
+in the camera's top reserve and no star's name is drawn under it. Back closes
+it first.
+
+**It opens from a tile under Folders** in the local Library tab
+(`LibraryIndexList`'s `onGalaxy`), drawn like the categories but not one of
+them: the categories open in place, this opens a screen.
+
+### Stats charts
+
+**Bars are glass, and the glass is flat colour.** `glassBar` in `StatsVisuals.kt`
+draws each bar as layers that are each one colour: a translucent tint of the
+theme's primary (0.38, or 0.82 when selected), a white rim, a bright inner top
+edge, and a highlight streak on bars at least 16dp wide. No gradients, anywhere
+on the stats pages: the owner asked for the theme or dynamic colour and nothing
+else. A gradient fill looks like an easy upgrade, and it is the thing that was
+asked to go.
+
+Bars are drawn on the canvas, not as a `GlassPanel` each. The clock grid is 168
+cells, and a shader pane per cell spends the frame on squares a few dp wide. The
+cards around the charts are real `GlassPanel`s over the page's own haze source,
+the same pattern as Discover.
+
+When `disableLiquidGlass` is on, the bars drop to plain solid tint (0.6, or 1
+when selected), the same switch that flattens the rest of the glass. A chart
+that keeps its rims with glass off is out of step with every pane next to it.
+
+Stats and Achievements are **two pages under one glass pill**, not two tabs of
+a Material `TabRow`; the pill is a pair of `GlassChoiceChip`s, as on the chart
+page's view and compare switches.
 
 ### Discord presence
 
@@ -885,6 +1065,17 @@ shader has the artwork. It does: the overlay draws the blurred cover and the
 scrim itself and outputs opaque pixels, which is why it replaces
 `PlayerBlurredArtBackground` rather than layering over it. Two backdrops would
 be the artwork darkened twice.
+
+**A frame projectM did not draw is never presented.** `renderFrame` returns
+whether it drew: it does not when the Target FPS cap drops a frame (vsync off)
+or a paused frame is frozen. With vsync off the swap no longer waits for the
+display, so the render threads wait out the interval themselves
+(`nanosUntilNextFrame`) instead of drawing flat out and letting the cap drop;
+the dropped frames used to be presented anyway, the ambient overlay
+compositing its cleared, empty frame (the cover alone) and the hero swapping a
+buffer nothing drew into, and the visualizer flashed and vanished between real
+frames. When nothing new was drawn the overlay composites its last capture
+(`freshFrame = false`).
 
 **Alpha is inferred from the rendered image, never from the preset.** Presets
 assume an opaque, usually black framebuffer and many depend on feedback; making

@@ -28,6 +28,19 @@ interface PlayEventDao {
     suspend fun clearAll()
 
     /**
+     * Plays of each track on [albums], ever and since [since]: for the library
+     * galaxy, which planets are played most and which glow. Matched on the
+     * album and track titles as the tags spell them, because a local play
+     * records those and not the file's row.
+     */
+    @Query(
+        "SELECT title AS title, albumTitle AS albumTitle, COUNT(*) AS plays, " +
+            "SUM(CASE WHEN playedAt >= :since THEN 1 ELSE 0 END) AS recent " +
+            "FROM play_events WHERE albumTitle IN (:albums) GROUP BY title, albumTitle"
+    )
+    suspend fun playsOnAlbums(albums: List<String>, since: Long): List<AlbumTrackPlays>
+
+    /**
      * Plays the cloud has never accepted, played before [before], in row order
      * after [afterRowId]. Walking by row id means a backfill always moves on,
      * even past a row it could not settle this time.
@@ -57,6 +70,43 @@ interface PlayEventDao {
     suspend fun adoptCloudId(localId: Long, cloudId: Long) {
         if (countWithCloudId(cloudId) > 0) deleteRow(localId) else setCloudId(localId, cloudId)
     }
+
+    // --- Stats report ---
+    //
+    // The Stats screen reads the plays of a window as slim rows and does the
+    // arithmetic in Kotlin (StatsReportBuilder), rather than one aggregate
+    // query per chart: a 30-day window is a few hundred rows, and every chart
+    // then agrees on what a day, a session or a new artist is.
+
+    /** Every play in [from, until), oldest first, without the cover and ids. */
+    @Query(
+        "SELECT playedAt, trackId, title, artistName, albumTitle, duration, audioQuality, source " +
+            "FROM play_events WHERE playedAt >= :from AND playedAt < :until ORDER BY playedAt"
+    )
+    suspend fun playsBetween(from: Long, until: Long): List<PlayRow>
+
+    /** When each artist was first played, ever: what makes an artist "new". */
+    @Query("SELECT artistName AS name, MIN(playedAt) AS firstPlayed FROM play_events WHERE artistName != '' GROUP BY artistName")
+    suspend fun artistFirstPlays(): List<ArtistFirstPlay>
+
+    /** Just when and how long, for the 12-month trend and the streak. */
+    @Query("SELECT playedAt, duration FROM play_events WHERE playedAt >= :from ORDER BY playedAt")
+    suspend fun momentsSince(from: Long): List<PlayMoment>
+
+    @Query("SELECT MIN(playedAt) FROM play_events")
+    suspend fun firstPlayedAt(): Long?
+
+    /** Plays started between midnight and 4 am local time, ever: Night Owl. */
+    @Query("SELECT COUNT(*) FROM play_events WHERE CAST(strftime('%H', playedAt / 1000, 'unixepoch', 'localtime') AS INTEGER) < 4")
+    suspend fun playsAfterMidnight(): Int
+
+    /** Seconds of Hi-Res tracks played, ever: Golden Ears. */
+    @Query("SELECT COALESCE(SUM(duration), 0) FROM play_events WHERE UPPER(audioQuality) LIKE '%HI_RES%'")
+    suspend fun hiResSeconds(): Long
+
+    /** Changes whenever a play is added or removed: the report's refresh signal. */
+    @Query("SELECT COUNT(*) FROM play_events")
+    fun playCount(): Flow<Int>
 
     // --- Totals ---
 
@@ -207,8 +257,32 @@ data class TopAlbumAggregate(
     val lastPlayed: Long
 )
 
+/** One play as the Stats report reads it. */
+data class PlayRow(
+    val playedAt: Long,
+    val trackId: Long,
+    val title: String,
+    val artistName: String,
+    val albumTitle: String?,
+    val duration: Int,
+    val audioQuality: String?,
+    val source: String?,
+)
+
+data class ArtistFirstPlay(val name: String, val firstPlayed: Long)
+
+data class PlayMoment(val playedAt: Long, val duration: Int)
+
 data class QualityAggregate(val quality: String, val playCount: Int)
 data class SourceAggregate(val source: String, val playCount: Int)
 data class DayAggregate(val dayEpoch: Long, val playCount: Int)
 data class HourAggregate(val hour: Int, val playCount: Int)
 data class WeekdayAggregate(val weekday: Int, val playCount: Int)
+
+/** A track's plays on an album, ever and lately. */
+data class AlbumTrackPlays(
+    val title: String,
+    val albumTitle: String?,
+    val plays: Int,
+    val recent: Int,
+)

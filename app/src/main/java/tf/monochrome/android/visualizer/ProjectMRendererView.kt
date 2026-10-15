@@ -183,6 +183,18 @@ class ProjectMRendererView @JvmOverloads constructor(
         override fun onDrawFrame(gl: GL10?) {
             applyVsyncIfChanged()
             if (attached) {
+                // Vsync off: wait out the Target FPS interval before drawing.
+                // GLSurfaceView swaps after every onDrawFrame, so a frame the
+                // cap dropped was still presented, a buffer nothing had drawn
+                // into, and the visualizer flickered. Outside the engine lock.
+                val wait = repository.nanosUntilNextFrame(System.nanoTime())
+                if (wait > 0L) {
+                    try {
+                        Thread.sleep(wait / 1_000_000L, (wait % 1_000_000L).toInt())
+                    } catch (_: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                    }
+                }
                 repository.renderFrame(System.nanoTime())
             } else {
                 GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)

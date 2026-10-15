@@ -27,6 +27,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -76,6 +77,18 @@ fun CreatePlaylistDialog(
     onDismiss: () -> Unit,
     onSubmit: (name: String, description: String) -> Unit,
     onImportCsv: ((uri: Uri, strictMatch: Boolean, name: String, description: String) -> Unit)? = null,
+    /**
+     * Import from a pasted Spotify playlist link. When given, Spotify's tab is
+     * a link box rather than instructions for a third-party export: the app
+     * reads the playlist itself (SpotifyPublicPlaylistReader). A blank name
+     * takes the playlist's own.
+     */
+    onImportLink: ((url: String, strictMatch: Boolean, name: String, description: String) -> Unit)? = null,
+    /**
+     * Open Exportify inside the app, for what a link cannot bring: private
+     * playlists, Liked Songs, and playlists past 100 songs.
+     */
+    onOpenExportify: ((strictMatch: Boolean) -> Unit)? = null,
     initialName: String = "",
     initialDescription: String = "",
     title: String = stringResource(R.string.create_playlist_title),
@@ -93,6 +106,22 @@ fun CreatePlaylistDialog(
     var selectedSource by rememberSaveable { mutableStateOf(ImportSource.SPOTIFY.name) }
     var selectedUri by rememberSaveable { mutableStateOf<Uri?>(null) }
     var strictAlbumMatch by rememberSaveable { mutableStateOf(false) }
+    var spotifyLink by rememberSaveable { mutableStateOf("") }
+    // Import from a link or from a file; the link first, when one can be imported.
+    var importTab by rememberSaveable { mutableStateOf(if (onImportLink != null) TAB_LINK else TAB_FILE) }
+    val linkTab = onImportLink != null && importTab == TAB_LINK
+    // Outside the overlay's content, which is composed in the overlay host:
+    // state there would not survive the caller's recompositions.
+    val preview = rememberSpotifyLinkPreview(spotifyLink.takeIf { linkTab })
+    // The playlist's own name, written into an empty name box and kept in
+    // step while it is still the one written there: typed over, it is left.
+    var autoName by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(preview) {
+        if (preview is LinkPreview.Found && (name.isBlank() || name == autoName)) {
+            name = preview.name
+            autoName = preview.name
+        }
+    }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
@@ -140,8 +169,14 @@ fun CreatePlaylistDialog(
                 modifier = Modifier.heightIn(min = 88.dp),
             )
 
-            if (onImportCsv != null) {
+            if (onImportCsv != null || onImportLink != null) {
                 ImportPanel(
+                    linkAvailable = onImportLink != null,
+                    fileAvailable = onImportCsv != null,
+                    importTab = importTab,
+                    onImportTabChange = { importTab = it },
+                    preview = preview,
+                    onOpenExportify = onOpenExportify?.let { open -> { open(strictAlbumMatch); onDismiss() } },
                     selectedFormat = selectedFormat,
                     onFormatChange = { selectedFormat = it },
                     selectedSource = ImportSource.entries
@@ -166,6 +201,8 @@ fun CreatePlaylistDialog(
                     },
                     strictAlbumMatch = strictAlbumMatch,
                     onStrictChange = { strictAlbumMatch = it },
+                    spotifyLink = spotifyLink,
+                    onSpotifyLinkChange = { spotifyLink = it },
                 )
             }
 
@@ -176,17 +213,23 @@ fun CreatePlaylistDialog(
             ) {
                 TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
                 Spacer(Modifier.width(8.dp))
+                // A link on the link tab imports from the link; it needs no
+                // name, since the playlist has its own. Not one Spotify says
+                // does not exist; one it did not answer for may still work.
+                val linkReady = linkTab &&
+                    tf.monochrome.android.data.api.SpotifyEmbed.looksImportable(spotifyLink) &&
+                    preview != LinkPreview.NotFound
                 // Only the CSV format actually imports; a file picked while
                 // an unsupported format is selected must not silently run
                 // the CSV importer (it created garbage playlists).
-                val canImport = onImportCsv != null &&
+                val canImport = !linkTab && onImportCsv != null &&
                     selectedUri != null && selectedFormat == "CSV"
                 Button(
                     onClick = {
-                        if (canImport) {
-                            onImportCsv!!(selectedUri!!, strictAlbumMatch, name, description)
-                        } else {
-                            onSubmit(name, description)
+                        when {
+                            linkReady -> onImportLink!!(spotifyLink.trim(), strictAlbumMatch, name, description)
+                            canImport -> onImportCsv!!(selectedUri!!, strictAlbumMatch, name, description)
+                            else -> onSubmit(name, description)
                         }
                         onDismiss()
                     },
@@ -194,9 +237,10 @@ fun CreatePlaylistDialog(
                     // file is picked, otherwise creates a plain playlist. The
                     // old extra conditions left the button disabled for a
                     // plainly-named playlist in the default (upload) mode.
-                    enabled = name.isNotBlank(),
+                    // A link brings its own name.
+                    enabled = name.isNotBlank() || linkReady,
                 ) {
-                    Text(if (canImport) stringResource(R.string.action_import) else confirmLabel)
+                    Text(if (linkReady || canImport) stringResource(R.string.action_import) else confirmLabel)
                 }
             }
         }
@@ -236,6 +280,12 @@ private fun DialogPanel(
 
 @Composable
 private fun ImportPanel(
+    linkAvailable: Boolean,
+    fileAvailable: Boolean,
+    importTab: String,
+    onImportTabChange: (String) -> Unit,
+    preview: LinkPreview,
+    onOpenExportify: (() -> Unit)?,
     selectedFormat: String,
     onFormatChange: (String) -> Unit,
     selectedSource: ImportSource,
@@ -244,6 +294,8 @@ private fun ImportPanel(
     onPickFile: () -> Unit,
     strictAlbumMatch: Boolean,
     onStrictChange: (Boolean) -> Unit,
+    spotifyLink: String,
+    onSpotifyLinkChange: (String) -> Unit,
 ) {
     DialogPanel {
         Text(
@@ -252,6 +304,105 @@ private fun ImportPanel(
             color = MaterialTheme.colorScheme.onSurface,
         )
 
+        // From a Spotify link, or from an exported file. The link is the way
+        // in: it needs nothing but the link. The file is for what a link
+        // cannot do: a long playlist past the 100 songs Spotify shares
+        // without signing in, or Apple Music and YouTube Music.
+        if (linkAvailable && fileAvailable) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                ChoiceChip(
+                    label = stringResource(R.string.import_tab_link),
+                    selected = importTab == TAB_LINK,
+                    onClick = { onImportTabChange(TAB_LINK) },
+                    modifier = Modifier.weight(1f),
+                )
+                ChoiceChip(
+                    label = stringResource(R.string.import_tab_file),
+                    selected = importTab == TAB_FILE,
+                    onClick = { onImportTabChange(TAB_FILE) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+
+        if (linkAvailable && (importTab == TAB_LINK || !fileAvailable)) {
+            SpotifyLinkField(link = spotifyLink, onLinkChange = onSpotifyLinkChange) { trailing ->
+                DialogField(
+                    value = spotifyLink,
+                    onValueChange = onSpotifyLinkChange,
+                    placeholder = stringResource(R.string.import_spotify_link_hint),
+                    singleLine = true,
+                    trailingIcon = trailing,
+                )
+            }
+            LinkPreviewCard(preview)
+            if (onOpenExportify != null) {
+                // What a link cannot bring, Exportify can: it signs in to
+                // Spotify for any account, inside the app.
+                TextButton(onClick = onOpenExportify) {
+                    Text(stringResource(R.string.import_open_exportify))
+                }
+            }
+        } else {
+            // Where the export comes from. Equal shapes: one of these was a
+            // circle and the other two were rounded rectangles, which read as
+            // a rendering fault rather than a selection, and the selected fill
+            // was a hardcoded salmon that ignored the theme entirely.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                ImportSource.entries.forEach { source ->
+                    ChoiceChip(
+                        label = source.label,
+                        selected = selectedSource == source,
+                        onClick = { onSourceChange(source) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            FileImport(selectedFormat, onFormatChange, selectedSource, selectedUri, onPickFile)
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.strict_album_matching),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = stringResource(R.string.strict_album_matching_detail),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Switch(checked = strictAlbumMatch, onCheckedChange = onStrictChange)
+        }
+    }
+}
+
+private const val TAB_LINK = "link"
+private const val TAB_FILE = "file"
+
+/** An exported file: its format, where to get one, and the picker. */
+@Composable
+private fun FileImport(
+    selectedFormat: String,
+    onFormatChange: (String) -> Unit,
+    selectedSource: ImportSource,
+    selectedUri: Uri?,
+    onPickFile: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -272,25 +423,7 @@ private fun ImportPanel(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
-            return@DialogPanel
-        }
-
-        // Equal shapes. One of these was a circle and the other two were
-        // rounded rectangles, which read as a rendering fault rather than a
-        // selection, and the selected fill was a hardcoded salmon that ignored
-        // the theme entirely.
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            ImportSource.entries.forEach { source ->
-                ChoiceChip(
-                    label = source.label,
-                    selected = selectedSource == source,
-                    onClick = { onSourceChange(source) },
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            return@Column
         }
 
         Text(
@@ -322,27 +455,6 @@ private fun ImportPanel(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.strict_album_matching),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = stringResource(R.string.strict_album_matching_detail),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            Switch(checked = strictAlbumMatch, onCheckedChange = onStrictChange)
         }
     }
 }
@@ -399,6 +511,7 @@ private fun DialogField(
     placeholder: String,
     singleLine: Boolean,
     modifier: Modifier = Modifier,
+    trailingIcon: (@Composable () -> Unit)? = null,
 ) {
     val container = MaterialTheme.colorScheme.surfaceContainerHighest
     OutlinedTextField(
@@ -407,6 +520,7 @@ private fun DialogField(
         placeholder = {
             Text(placeholder, color = MaterialTheme.colorScheme.onSurfaceVariant)
         },
+        trailingIcon = trailingIcon,
         singleLine = singleLine,
         modifier = modifier.fillMaxWidth(),
         shape = MonoDimens.shapeSm,

@@ -593,18 +593,22 @@ class PlayerViewModel @Inject constructor(
                                 // resolved source is the authoritative signal;
                                 // qobuzIdRegistry is a backstop.
                                 // Deezer ids have the same problem.
-                                val resolvedSource = unifiedTrackRegistry[track.id]?.sourceType
-                                val skipTidal = resolvedSource ==
-                                    tf.monochrome.android.domain.model.SourceType.QOBUZ ||
-                                    resolvedSource == tf.monochrome.android.domain.model.SourceType.DEEZER ||
+                                // Local files and collections too: their ids
+                                // are hashes, not TIDAL ids (LyricsLookup).
+                                val unified = unifiedTrackRegistry[track.id]
+                                val skipTidal = LyricsLookup.skipsTidalById(unified?.sourceType) ||
                                     track.deezerId != null ||
                                     qobuzIdRegistry.isQobuzTrack(track.id) ||
                                     qobuzIdRegistry.isDeezerTrack(track.id)
                                 // Pass the full Track so the repository can fall
                                 // back to LRCLib (track + artist + album +
-                                // duration) when TIDAL returns no lyrics.
-                                _currentLyrics.value =
-                                    repository.getLyrics(track.id, track, skipTidal = skipTidal).getOrNull()
+                                // duration) when TIDAL returns no lyrics — with
+                                // a local file's own artist, not its album's.
+                                _currentLyrics.value = repository.getLyrics(
+                                    track.id,
+                                    LyricsLookup.trackFor(track, unified),
+                                    skipTidal = skipTidal,
+                                ).getOrNull()
                                 _isLyricsLoading.value = false
                             }
                             // Observe liked status

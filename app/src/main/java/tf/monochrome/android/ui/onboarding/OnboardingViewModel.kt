@@ -80,9 +80,6 @@ class OnboardingViewModel @Inject constructor(
     val downloadFolderUri: StateFlow<String?> = preferences.downloadFolderUri
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    val usbBitPerfectEnabled: StateFlow<Boolean> = preferences.usbBitPerfectEnabled
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
-
     init {
         // Re-running onboarding from Settings: show folders that are already
         // configured instead of pretending the user has none.
@@ -165,10 +162,6 @@ class OnboardingViewModel @Inject constructor(
 
     fun usbDeviceLabel(device: android.media.AudioDeviceInfo): String =
         usbAudioRouter.describe(device)
-
-    fun setBitPerfect(enabled: Boolean) {
-        viewModelScope.launch { preferences.setUsbBitPerfectEnabled(enabled) }
-    }
 
     // ── Exit ────────────────────────────────────────────────────────
 

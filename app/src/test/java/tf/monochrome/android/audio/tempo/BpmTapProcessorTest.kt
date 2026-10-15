@@ -48,6 +48,45 @@ class BpmTapProcessorTest {
         return seen
     }
 
+    /** The value [tap] settles on for [seconds] of [pattern] at [bpm], fed in [block]-frame buffers. */
+    private fun settle(pattern: SyntheticDrums.Pattern, bpm: Float, block: Int, seconds: Float = 20f): Float? {
+        val t = BpmTapProcessor().apply {
+            configure(AudioFormat(rate, 1, C.ENCODING_PCM_FLOAT))
+            flush()
+            newTrack()
+        }
+        val audio = SyntheticDrums.render(pattern, bpm, seconds, rate)
+        val buffer = ByteBuffer.allocateDirect(block * 4).order(ByteOrder.nativeOrder())
+        var i = 0
+        while (i < audio.size) {
+            val n = minOf(block, audio.size - i)
+            buffer.clear()
+            for (k in 0 until n) buffer.putFloat(audio[i + k])
+            buffer.flip()
+            t.queueInput(buffer)
+            t.getOutput()
+            i += n
+        }
+        return t.bpm.value
+    }
+
+    @Test
+    fun theFirstReadingDoesNotOverruleTheRest() {
+        // The first reading comes from six seconds of audio and can be an
+        // octave out; the four after it, from more, must decide. Folding them
+        // into the first's octave published a 70 BPM song as 140.
+        for (block in listOf(1024, 4096)) {
+            for ((pattern, bpm) in listOf(
+                SyntheticDrums.ROCK to 70f, SyntheticDrums.FUNK to 70f, SyntheticDrums.DNB to 174f,
+                SyntheticDrums.DNB to 189f, SyntheticDrums.HARDCORE to 200f, SyntheticDrums.HOUSE to 124f,
+            )) {
+                val got = settle(pattern, bpm, block)
+                assertNotNull("${pattern.name} at $bpm, $block-frame blocks", got)
+                assertEquals("${pattern.name} at $bpm, $block-frame blocks", bpm, got!!, bpm * 0.02f)
+            }
+        }
+    }
+
     @Test
     fun aNewTrackIsMeasuredOnceAndThenHolds() {
         tap.newTrack()

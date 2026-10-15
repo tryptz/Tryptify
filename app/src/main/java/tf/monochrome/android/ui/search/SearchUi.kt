@@ -696,18 +696,21 @@ private fun UnifiedSearchTrackItem(
                         onAlbumClick = if (selectionMode) ({}) else onAlbumClick,
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
-                    // Downloaded means it plays from the device, so it reads as Local.
-                    SourcePill(if (isDownloaded) SourceType.LOCAL else track.sourceType)
-                    if (track.isThxSpatialAudio) {
+                    val badges = tf.monochrome.android.ui.theme.rowBadges()
+                    if (badges.source) {
+                        Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
+                        // Downloaded means it plays from the device, so it reads as Local.
+                        SourcePill(if (isDownloaded) SourceType.LOCAL else track.sourceType)
+                    }
+                    if (badges.format && track.isThxSpatialAudio) {
                         Spacer(modifier = Modifier.width(4.dp))
                         tf.monochrome.android.ui.components.ThxBadgePill()
                     }
-                    if (track.isDolbyAtmos) {
+                    if (badges.format && track.isDolbyAtmos) {
                         Spacer(modifier = Modifier.width(4.dp))
                         tf.monochrome.android.ui.components.DolbyAtmosBadgePill()
                     }
-                    track.qualityBadge?.let { badge ->
+                    track.qualityBadge?.takeIf { badges.quality }?.let { badge ->
                         Spacer(modifier = Modifier.width(MonoDimens.spacingSm))
                         Text(
                             badge,
@@ -718,16 +721,19 @@ private fun UnifiedSearchTrackItem(
                     }
                 }
             }
-            if (isDownloaded) {
+            val badges = tf.monochrome.android.ui.theme.rowBadges()
+            if (isDownloaded && badges.download) {
                 tf.monochrome.android.ui.components.DownloadedBadge(size = 18f)
                 Spacer(modifier = Modifier.width(4.dp))
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = legacyTrack.formattedDuration,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (badges.duration) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = legacyTrack.formattedDuration,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             if (effectiveOnMoreClick != null) {
                 // Compact, as in the Library's Local list.
                 IconButton(onClick = effectiveOnMoreClick, modifier = Modifier.size(32.dp)) {

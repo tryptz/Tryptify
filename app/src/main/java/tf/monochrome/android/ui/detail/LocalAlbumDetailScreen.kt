@@ -320,9 +320,12 @@ private fun LocalTrackRow(
                 )
             }
             // Where it plays from — on this screen, the device.
-            tf.monochrome.android.ui.components.SourcePill(track.sourceType)
-            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(6.dp))
-            if (track.qualityBadge != null) {
+            val badges = tf.monochrome.android.ui.theme.rowBadges()
+            if (badges.source) {
+                tf.monochrome.android.ui.components.SourcePill(track.sourceType)
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(6.dp))
+            }
+            if (badges.quality && track.qualityBadge != null) {
                 Surface(
                     shape = RoundedCornerShape(999.dp),
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
@@ -336,11 +339,13 @@ private fun LocalTrackRow(
                 }
                 Spacer(modifier = Modifier.width(8.dp))
             }
-            Text(
-                text = formatDuration(track.durationSeconds),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (badges.duration) {
+                Text(
+                    text = formatDuration(track.durationSeconds),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             // Default IconButton size keeps the touch target at the 48dp
             // minimum (was forced to 32dp); the glyph stays 20dp.
             IconButton(onClick = onAddToQueue) {

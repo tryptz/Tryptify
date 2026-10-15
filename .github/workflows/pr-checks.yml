@@ -1,0 +1,76 @@
+name: PR checks
+
+# Builds and tests every pull request. main.yml builds the signed APK only
+# on a v* tag, so until this, nothing compiled or tested a PR before it was
+# merged.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to the same PR replaces the run still going for the last one.
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Compile and unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      # No submodules: compiling and the unit tests need neither projectM nor
+      # libusb, nor the NDK (AGENTS.md, "Fresh cloud container setup").
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      # Its default packages are "tools platform-tools", and the runners'
+      # cmdline-tools (16.0) no longer have "tools": the step failed before
+      # anything was built. platform-tools still exists.
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+
+      - name: Install required Android SDK packages
+        run: |
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Compile and run the unit tests
+        run: ./gradlew --no-daemon --stacktrace :app:compileDebugKotlin :app:testDebugUnitTest
+
+      - name: Upload the test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: app/build/reports/tests/testDebugUnitTest
+          if-no-files-found: ignore
+
+  native-host-tests:
+    name: Native DSP and USB driver host tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      # The USB DAC driver tests build against libusb's headers; the rest of
+      # the host tests need no submodule.
+      - name: Fetch libusb
+        run: git submodule update --init --depth 1 third_party/libusb
+
+      - name: Run the host tests
+        run: app/src/main/cpp/dsp/tests/run_host_tests.sh

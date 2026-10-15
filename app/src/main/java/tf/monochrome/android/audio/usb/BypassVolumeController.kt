@@ -35,6 +35,10 @@ import javax.inject.Singleton
  * At 0 dB with the player at unity the sink passes PCM through untouched, so
  * bit-perfect output stays bit-perfect.
  *
+ * The DAC's own volume is not this: the native driver unmutes it and sets it
+ * to full scale (capped at 0 dB) at every stream start, so this level is the
+ * only attenuation between the song and the DAC's analog output.
+ *
  * Writes are single stores to volatile fields and reads single loads: the
  * audio thread never locks or allocates to read the volume.
  */

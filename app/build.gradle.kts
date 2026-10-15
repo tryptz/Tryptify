@@ -53,8 +53,8 @@ android {
         applicationId = "tf.monotrypt.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 193
-        versionName = "1.9.3"
+        versionCode = 194
+        versionName = "1.9.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -346,6 +346,8 @@ dependencies {
     implementation(libs.core.ktx)
     implementation(libs.core.splashscreen)
     implementation(libs.browser)
+    // Exportify inside the app: a web message listener only exportify.net can post to.
+    implementation(libs.webkit)
 
     // Media (Android Auto)
     implementation(libs.media)

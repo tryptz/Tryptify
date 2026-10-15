@@ -65,6 +65,8 @@ add_library(monochrome_dsp SHARED
     dsp/scope/spectrum_waterfall_jni.cpp
     # EBU R128 loudness for the Audio Pipeline panel and the master strip.
     dsp/meter/loudness_jni.cpp
+    # Each local track's dynamic range, measured as it plays, for the library galaxy.
+    dsp/meter/dynamic_range_jni.cpp
 )
 
 target_include_directories(monochrome_dsp PRIVATE

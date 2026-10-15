@@ -45,8 +45,11 @@ class MixFeedAudioSink(
     private val stretch = FloatSonicAudioProcessor()
     private val resampler = VariRateAudioProcessor()
     // The USB path's order: DSP, then resampler, transposition, time-stretch.
+    // FloatPcmGuard first, as on the main path: a decoder that declares float
+    // and writes 16-bit made the tail full-scale static, mixed into the DAC
+    // at every crossfade.
     private val chain = AudioProcessorChain(
-        listOf<AudioProcessor>(ToFloatPcmAudioProcessor()) + dspProcessors +
+        listOf<AudioProcessor>(FloatPcmGuard(), ToFloatPcmAudioProcessor()) + dspProcessors +
             listOfNotNull(resampler, transposer, stretch),
     )
 

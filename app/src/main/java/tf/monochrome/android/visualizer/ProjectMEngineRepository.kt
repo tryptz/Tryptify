@@ -468,9 +468,15 @@ class ProjectMEngineRepository @Inject constructor(
         }
     }
 
-    fun renderFrame(frameTimeNanos: Long) {
+    /**
+     * Draws one projectM frame into the current framebuffer. True when it drew;
+     * false when it did not (no engine, a frame dropped by the Target FPS cap,
+     * or a frozen frame while paused), and then the framebuffer holds nothing
+     * new, so a caller must not present it as a frame.
+     */
+    fun renderFrame(frameTimeNanos: Long): Boolean {
         synchronized(engineLock) {
-            if (!_engineEnabled.value || !nativeInitialized) return
+            if (!_engineEnabled.value || !nativeInitialized) return false
             // The one place with a current GL context, so the one place these
             // can actually take effect.
             val appliedPendingWork = applyPendingGlWorkLocked()
@@ -478,7 +484,7 @@ class ProjectMEngineRepository @Inject constructor(
             // back by the cap, and skipped entirely on a frame that has one to
             // show. A dropped frame leaves its audio in the queue, which is
             // bounded by age, so nothing accumulates.
-            if (!appliedPendingWork && shouldSkipForFrameCapLocked(frameTimeNanos)) return
+            if (!appliedPendingWork && shouldSkipForFrameCapLocked(frameTimeNanos)) return false
             val frames = audioBus.drainAll()
             if (frames.isNotEmpty()) {
                 lastPcmTimestampMs = frames.last().timestampMs
@@ -532,8 +538,24 @@ class ProjectMEngineRepository @Inject constructor(
                 fpsFrameCount = 0
                 fpsStartTimeMs = System.currentTimeMillis()
             }
+            return !freezeFrame
         }
     }
+
+    /**
+     * How long the render thread should wait before its next frame, so the
+     * Target FPS cap is met by pacing rather than by dropping.
+     *
+     * Zero with vsync on: the display paces the swaps. With vsync off the swap
+     * returns at once, and a loop that drew whenever it could and let
+     * [renderFrame] drop the early frames presented those dropped frames
+     * anyway: the ambient overlay composited a cleared, empty frame (only the
+     * cover), the hero swapped a buffer nothing drew into, and the visualizer
+     * flashed and vanished between real frames. Read on the render thread,
+     * which is the thread that stamps the last frame.
+     */
+    fun nanosUntilNextFrame(nowNanos: Long): Long =
+        if (vsyncEnabled) 0L else frameWaitNanos(nowNanos, lastRenderedFrameNanos, targetFps)
 
     /**
      * Whether this frame should be dropped to hold the visualizer at Target FPS.
@@ -916,3 +938,13 @@ class ProjectMEngineRepository @Inject constructor(
  */
 internal fun shouldDropFrame(frameTimeNanos: Long, lastRenderedNanos: Long, cap: Int): Boolean =
     cap > 0 && frameTimeNanos - lastRenderedNanos < 1_000_000_000L / cap
+
+/**
+ * How long until a frame may be drawn at [cap] frames per second, given the
+ * last was at [lastRenderedNanos]: zero when one is due now, so a thread that
+ * waits this long first is never told by [shouldDropFrame] to drop. A cap of
+ * zero or less means no wait.
+ */
+internal fun frameWaitNanos(frameTimeNanos: Long, lastRenderedNanos: Long, cap: Int): Long =
+    if (cap <= 0) 0L
+    else (lastRenderedNanos + 1_000_000_000L / cap - frameTimeNanos).coerceAtLeast(0L)

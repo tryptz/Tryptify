@@ -13,7 +13,6 @@ import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -174,16 +173,12 @@ class BpmTapProcessor @Inject constructor() : AudioProcessor {
      */
     private fun takeReading(estimate: Float?) {
         if (estimate == null) return
-        // A reading an octave from the first is the same pulse counted
-        // differently; fold it back rather than let one stray 174 among 87s
-        // move the median.
-        val first = recent.firstOrNull()
-        val folded = if (first == null) estimate else when {
-            abs(estimate * 2f - first) < first * OCTAVE_TOLERANCE -> estimate * 2f
-            abs(estimate / 2f - first) < first * OCTAVE_TOLERANCE -> estimate / 2f
-            else -> estimate
-        }
-        recent.addLast(folded)
+        // Kept as read. Readings used to be folded into the first one's
+        // octave, but the first comes from the shortest window, six seconds,
+        // and the estimator settles half or double time itself: a first 140
+        // then four 70s published 140. The median of five lets the majority
+        // decide, and one stray reading never moves it.
+        recent.addLast(estimate)
         if (recent.size < READINGS) return
         measuring = false
         val sorted = recent.sorted()
@@ -239,7 +234,6 @@ class BpmTapProcessor @Inject constructor() : AudioProcessor {
     private companion object {
         /** Readings in one measurement, a second apart; their median is published. */
         const val READINGS = 5
-        const val OCTAVE_TOLERANCE = 0.04f
         const val REQUEST_NONE = 0
         const val REQUEST_MEASURE = 1
         const val REQUEST_SET = 2

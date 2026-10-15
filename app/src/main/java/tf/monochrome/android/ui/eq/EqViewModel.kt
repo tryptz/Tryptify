@@ -56,6 +56,7 @@ class EqViewModel @Inject constructor(
     private val headphoneRepository: HeadphoneRepository,
     private val preferences: PreferencesManager,
     private val outputEqSwitcher: tf.monochrome.android.audio.eq.OutputEqSwitcher,
+    private val achievements: tf.monochrome.android.data.achievements.AchievementStore,
 ) : ViewModel() {
 
     // ===== Per-device AutoEQ =====
@@ -1451,6 +1452,8 @@ class EqViewModel @Inject constructor(
                     _currentBandsR.value = bands
                     saveBandsRToPreferences(bands)
                 }
+                // Room Tuned: counted once a correction was really fitted and saved.
+                achievements.autoEqApplied()
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {

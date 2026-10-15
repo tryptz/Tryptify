@@ -90,6 +90,9 @@ class LibraryWatcher @Inject constructor(
             // builds it. Streaming-only listeners never get a scan from here.
             if (localMediaDao.getScanState() == null) return
             scanCoordinator.runBackgroundRefresh()
+            // Tracks scanned before tempo, key and ReplayGain were read get
+            // them once, in the background. A no-op on every launch after.
+            scanCoordinator.backfillMusicalTagsIfStale()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

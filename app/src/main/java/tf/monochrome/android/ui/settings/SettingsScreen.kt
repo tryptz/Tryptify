@@ -236,6 +236,9 @@ internal fun settingsLinkRoute(label: String): String? = settingsLinkTabs[label]
 /** The tabs that are pages of the pager, in chip order. */
 private val settingsPages: List<String> = settingsTabs.filter { it !in settingsLinkTabs }
 
+/** The page ids, for the Every Corner achievement to count against. */
+internal val settingsPageIds: List<String> get() = settingsPages
+
 /**
  * Index of the About tab, where the What's New panel lives. Derived from
  * [settingsTabs] rather than written down, so reordering the tabs can't leave a
@@ -278,6 +281,10 @@ fun SettingsScreen(
     // Tab changes slide normally; with "Disable animations" on they jump.
     val animateTabs = !tf.monochrome.android.ui.theme.reduceMotion()
     val selectedTab = settingsPager.currentPage
+    // Every Corner counts the pages seen. Keyed on the page, so a chip tap, a
+    // swipe, a search jump and a deep link landing all count alike.
+    val achievements = tf.monochrome.android.ui.stats.rememberAchievementStore()
+    LaunchedEffect(selectedTab) { achievements?.settingsTabOpened(settingsPages[selectedTab]) }
 
     // Toast one-shot ViewModel messages (font import, backup import, …) from
     // one always-composed collector, regardless of which tab is showing.
@@ -952,6 +959,36 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
         checked = explicit,
         onCheckedChange = { viewModel.setShowExplicitBadges(it) }
     )
+    // Song row badges: all of them at once, then each. Every one takes line
+    // width from the artist and album beside it.
+    val rowBadges by viewModel.rowBadges.collectAsStateWithLifecycle()
+    SettingSwitchItem(
+        title = stringResource(R.string.settings_row_badges),
+        subtitle = stringResource(R.string.settings_row_badges_summary),
+        checked = rowBadges.any,
+        onCheckedChange = {
+            viewModel.setRowBadges(
+                if (it) tf.monochrome.android.data.preferences.RowBadges()
+                else tf.monochrome.android.data.preferences.RowBadges.NONE
+            )
+        }
+    )
+    for ((badge, title, subtitle) in listOf(
+        Triple(tf.monochrome.android.data.preferences.RowBadge.SOURCE, R.string.settings_row_badge_source, R.string.settings_row_badge_source_summary),
+        Triple(tf.monochrome.android.data.preferences.RowBadge.QUALITY, R.string.settings_row_badge_quality, R.string.settings_row_badge_quality_summary),
+        Triple(tf.monochrome.android.data.preferences.RowBadge.FORMAT, R.string.settings_row_badge_format, R.string.settings_row_badge_format_summary),
+        Triple(tf.monochrome.android.data.preferences.RowBadge.DOWNLOAD, R.string.settings_row_badge_download, R.string.settings_row_badge_download_summary),
+        Triple(tf.monochrome.android.data.preferences.RowBadge.DURATION, R.string.settings_row_badge_duration, R.string.settings_row_badge_duration_summary),
+    )) {
+        Box(modifier = Modifier.padding(start = 16.dp)) {
+            SettingSwitchItem(
+                title = stringResource(title),
+                subtitle = stringResource(subtitle),
+                checked = rowBadges.shows(badge),
+                onCheckedChange = { viewModel.setRowBadges(rowBadges.with(badge, it)) }
+            )
+        }
+    }
     val romaji by viewModel.romajiLyrics.collectAsStateWithLifecycle()
     SettingSwitchItem(
         title = stringResource(R.string.settings_romaji_lyrics),
@@ -1554,6 +1591,7 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
     // owned them.
     val gapless by viewModel.gaplessPlayback.collectAsStateWithLifecycle()
     val crossfade by viewModel.crossfadeDuration.collectAsStateWithLifecycle()
+    val exclusiveUsb by viewModel.usbExclusiveBitPerfectEnabled.collectAsStateWithLifecycle()
     val gaplessNoResample by viewModel.gaplessNoResample.collectAsStateWithLifecycle()
     val qualities by viewModel.qualities.collectAsStateWithLifecycle()
     val tidalAtmos by viewModel.tidalAtmosPreferred.collectAsStateWithLifecycle()
@@ -1598,17 +1636,25 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         )
 
         // Sits under the gapless toggle because the two decide the same thing:
-        // what happens between one track and the next. They're also mutually
-        // exclusive in effect — any blend above 0s overlaps the tracks, so the
-        // gapless hand-off steps aside for it.
+        // what happens between one track and the next. A blend above 0s
+        // overlaps the tracks, so the gapless hand-off steps aside for it; and
+        // a blend needs gapless on (CrossfadeRamp.blends), so with it off the
+        // slider is greyed and says why, rather than look set and do nothing.
+        // The same with the exclusive USB DAC on (CrossfadeRamp.blendMs): no
+        // blend and no second player then, and the value set waits for it.
+        val blendAvailable = gapless && !exclusiveUsb
         Text(
             text = if (crossfade == 0) stringResource(R.string.settings_blend_gapless) else stringResource(R.string.settings_blend_seconds, crossfade),
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = if (blendAvailable) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.settingsAnchor(stringResource(R.string.search_crossfade)),
         )
         Text(
-            text = if (crossfade == 0) {
+            text = if (exclusiveUsb) {
+                stringResource(R.string.settings_blend_off_exclusive)
+            } else if (!gapless) {
+                stringResource(R.string.settings_blend_needs_gapless)
+            } else if (crossfade == 0) {
                 stringResource(R.string.settings_blend_zero_desc)
             } else {
                 stringResource(R.string.settings_blend_desc, crossfade)
@@ -1619,6 +1665,7 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         Slider(
             value = crossfade.toFloat(),
             onValueChange = { viewModel.setCrossfadeDuration(it.toInt()) },
+            enabled = blendAvailable,
             valueRange = 0f..12f,
             steps = 11,
             modifier = Modifier.fillMaxWidth()
@@ -1729,7 +1776,7 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
         DspBlockSizeSelector(viewModel)
 
         Spacer(modifier = Modifier.height(8.dp))
-        UsbBitPerfectToggle(viewModel)
+        OutputToggles(viewModel)
 
         Spacer(modifier = Modifier.height(8.dp))
         SettingItem(
@@ -2032,25 +2079,12 @@ private fun ChannelDetectorCard(viewModel: SettingsViewModel) {
 }
 
 /**
- * Settings switch that pins the player's output to an attached USB Audio
- * Class DAC via setPreferredAudioDevice. The device-name line below the
- * switch updates live as the DAC plugs / unplugs.
+ * Where the audio goes: hi-res on Android's own output, and the exclusive USB
+ * DAC path that bypasses it. (A third switch pinned Android's output to a USB
+ * DAC; exclusive mode is the bit-perfect path, so it went.)
  */
 @Composable
-private fun UsbBitPerfectToggle(viewModel: SettingsViewModel) {
-    val enabled by viewModel.usbBitPerfectEnabled.collectAsStateWithLifecycle()
-    val deviceName by viewModel.usbOutputDeviceName.collectAsStateWithLifecycle()
-    SettingSwitchItem(
-        title = stringResource(R.string.settings_usb_dac_bit_perfect_routing),
-        subtitle = when {
-            !enabled -> stringResource(R.string.settings_usb_off)
-            deviceName != null -> stringResource(R.string.settings_usb_on_device, deviceName!!)
-            else -> stringResource(R.string.settings_usb_on_waiting)
-        },
-        checked = enabled,
-        onCheckedChange = { viewModel.setUsbBitPerfectEnabled(it) },
-    )
-
+private fun OutputToggles(viewModel: SettingsViewModel) {
     val hiResHal by viewModel.hiResHalOutputEnabled.collectAsStateWithLifecycle()
     SettingSwitchItem(
         title = stringResource(R.string.settings_hi_res_output_bluetooth_speaker),
@@ -2199,6 +2233,10 @@ private fun BypassDiagnosticsCard(
                                 "async feedback ✓"
                             else "no feedback EP (open-loop)"
                         )
+                        diagnostics.hardwareVolumeLabel()?.let {
+                            append(" · ")
+                            append(it)
+                        }
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

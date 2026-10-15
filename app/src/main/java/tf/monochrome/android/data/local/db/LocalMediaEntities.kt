@@ -69,11 +69,25 @@ data class LocalTrackEntity(
     val channels: Int,
     val durationSeconds: Int,
 
-    // Replay gain
+    // Replay gain, from the file's tags: ReplayGain in dB against -18 LUFS,
+    // R128 (Opus) in 1/256 dB against -23 LUFS.
     val rgTrackGain: Float? = null,
     val rgAlbumGain: Float? = null,
     val r128TrackGain: Int? = null,
     val r128AlbumGain: Int? = null,
+
+    // Tempo and key, from the file's tags (TBPM / BPM, TKEY / INITIALKEY).
+    // The key is a Camelot code: 1..12 the minor keys 1A..12A, 13..24 the
+    // major keys 1B..12B (see data.local.tags.Camelot).
+    val bpm: Float? = null,
+    val camelotKey: Int? = null,
+
+    /**
+     * Dynamic range in dB, measured while the track played through to the
+     * end; a file has no tag for it. Null until then. Written by the player
+     * alone, so a rescan carries it over rather than reading it.
+     */
+    val dynamicRange: Float? = null,
 
     // Artwork
     val hasEmbeddedArt: Boolean = false,
@@ -97,9 +111,15 @@ data class LocalTrackEntity(
     val firstScannedAt: Long = System.currentTimeMillis(),
     val lastScannedAt: Long = System.currentTimeMillis()
 ) {
-    /** Display title - falls back to filename without extension */
+    /**
+     * Display title - falls back to filename without extension, and without
+     * the track or disc number it starts with ("2-05 Jolene" is "Jolene"):
+     * lyrics are searched by this, and no source knows a song as "2-05 Jolene".
+     */
     val displayTitle: String
-        get() = title ?: filePath.substringAfterLast('/').substringBeforeLast('.')
+        get() = title ?: tf.monochrome.android.data.local.tags.TrackNames.withoutNumberPrefix(
+            filePath.substringAfterLast('/').substringBeforeLast('.'),
+        )
 }
 
 @Entity(

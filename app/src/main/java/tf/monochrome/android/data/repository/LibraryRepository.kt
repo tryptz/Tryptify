@@ -166,7 +166,8 @@ class LibraryRepository @Inject constructor(
                 runCatching { historyJson.encodeToString(it) }.getOrNull()
             }
         )
-        val event = track.toPlayEventEntity()
+        val local = isLocalPlay(track.id, unified?.source)
+        val event = track.toPlayEventEntity(local)
         historyDao.addToHistory(historyRow)
         val localRowId = playEventDao.insert(event)
         // One song closer to the tip bar. Counted here rather than in the
@@ -180,8 +181,8 @@ class LibraryRepository @Inject constructor(
         syncScope.launch {
             val sessionId = playSessionManager.sessionFor(event.playedAt)
             val deviceId = deviceRegistry.snapshotRemoteId()
-            val sourceType = track.cloudSourceType()
-            val sourceRef = track.cloudSourceRef()
+            val sourceType = track.cloudSourceType(local)
+            val sourceRef = track.cloudSourceRef(sourceType)
             val cloudId = supabaseSync.pushPlayEvent(
                 event = event,
                 sessionId = sessionId,
@@ -410,7 +411,22 @@ private fun Track.toHistoryEntity() = HistoryTrackEntity(
     audioQuality = audioQuality
 )
 
-private fun Track.toPlayEventEntity() = PlayEventEntity(
+/**
+ * Whether a play is of a file in the local library: what the queued track
+ * says it plays from. A local file is always queued with its [UnifiedTrack],
+ * so a track without one is a catalogue stream, and the old rule (positive
+ * ids are the catalogue's) stands for it. The id alone can't tell a local
+ * file: its id is the hash of "local_<n>", positive about half the time.
+ */
+internal fun isLocalPlay(trackId: Long, source: PlaybackSource?): Boolean =
+    if (source == null) trackId <= 0 else source is PlaybackSource.LocalFile
+
+/**
+ * A play as the stats keep it. A local file's play says so ("local"); a stream
+ * leaves the source empty, as before, since which service it came from is not
+ * known here (see StatsReport's sourceOf).
+ */
+private fun Track.toPlayEventEntity(local: Boolean) = PlayEventEntity(
     trackId = id,
     title = title,
     duration = duration,
@@ -420,7 +436,7 @@ private fun Track.toPlayEventEntity() = PlayEventEntity(
     albumTitle = album?.title,
     albumCover = album?.cover,
     audioQuality = audioQuality,
-    source = null,
+    source = if (local) "local" else null,
     playedAt = System.currentTimeMillis()
 )
 
@@ -437,17 +453,19 @@ private fun Track.toPlaylistTrackEntity(playlistId: String) = PlaylistTrackEntit
 
 /**
  * Best-effort mapping from a Track to the canonical-catalog `source` tag
- * used by `public.catalog_track_sources`. Positive `id` values come from
- * the HiFi (TIDAL) backend; non-positive ids are local library tracks.
- * Collection-direct playback uses its own repository path (not this one).
+ * used by `public.catalog_track_sources`. A local file is "local", whatever
+ * its id ([isLocalPlay]: a local id is a hash, often positive, and was filed
+ * as a TIDAL track). Otherwise positive `id` values come from the HiFi (TIDAL)
+ * backend. Collection-direct playback uses its own repository path (not this
+ * one).
  */
-private fun Track.cloudSourceType(): String = if (id > 0) "tidal" else "local"
+private fun Track.cloudSourceType(local: Boolean): String = if (!local && id > 0) "tidal" else "local"
 
 /**
  * Stable per-source identifier for catalog upsert. Must be deterministic
  * so the same physical track always resolves to the same catalog_tracks.id.
  */
-private fun Track.cloudSourceRef(): String = when (cloudSourceType()) {
+private fun Track.cloudSourceRef(sourceType: String): String = when (sourceType) {
     "tidal" -> id.toString()
     else -> sha1("local:${artist?.id ?: 0}:${album?.id ?: 0}:$title:$duration")
 }

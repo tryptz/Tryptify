@@ -11,7 +11,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,14 +24,15 @@ import androidx.compose.ui.res.stringResource
 import tf.monochrome.android.R
 
 /**
- * Optional USB DAC intro. When a DAC is attached right now the toggle
- * enables bit-perfect routing on the spot; otherwise it's a short explainer
- * and a skip.
+ * Optional USB DAC intro: names a DAC attached right now, or says one can be
+ * plugged in any time, and points to where bit-perfect output is turned on
+ * (Settings › Audio › Exclusive USB DAC). No switch here: exclusive mode needs
+ * Android's "Disable USB audio routing" developer option too, which Settings
+ * explains beside it.
  */
 @Composable
 fun AudioOutputStep(viewModel: OnboardingViewModel) {
     val usbDevice by viewModel.usbDevice.collectAsStateWithLifecycle()
-    val bitPerfectEnabled by viewModel.usbBitPerfectEnabled.collectAsStateWithLifecycle()
 
     OnboardingStepScaffold(
         title = stringResource(R.string.bitperfect_title),
@@ -73,7 +73,7 @@ fun AudioOutputStep(viewModel: OnboardingViewModel) {
                             style = MaterialTheme.typography.titleMedium
                         )
                         Text(
-                            text = stringResource(R.string.enable_bitperfect_question),
+                            text = stringResource(R.string.dac_exclusive_hint),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -88,12 +88,6 @@ fun AudioOutputStep(viewModel: OnboardingViewModel) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                }
-                if (usbDevice != null) {
-                    Switch(
-                        checked = bitPerfectEnabled,
-                        onCheckedChange = { viewModel.setBitPerfect(it) }
-                    )
                 }
             }
         }

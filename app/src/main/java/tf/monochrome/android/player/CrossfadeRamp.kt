@@ -15,6 +15,21 @@ import kotlin.math.sin
  */
 internal object CrossfadeRamp {
 
+    /**
+     * Whether songs blend into each other: a blend length set, and gapless on.
+     * A blend plays the outgoing song on a second player; with gapless off
+     * there is only ever the one, and each song plays on its own, start to end.
+     */
+    fun blends(gapless: Boolean, blendMs: Long): Boolean = gapless && blendMs > 0L
+
+    /**
+     * The blend length that applies: the one set, or none while the exclusive
+     * USB DAC is on. Exclusive mode is the bit-perfect path, and a blend mixes
+     * two songs into one stream. At none no second player is made, and the
+     * gapless hand-off carries one song into the next instead.
+     */
+    fun blendMs(settingMs: Long, exclusiveUsb: Boolean): Long = if (exclusiveUsb) 0L else settingMs
+
     /** Gain for the incoming track, 0 at the start of the blend and 1 at the end. */
     fun fadeIn(progress: Float): Float =
         sin(progress.coerceIn(0f, 1f) * HALF_PI).toFloat()

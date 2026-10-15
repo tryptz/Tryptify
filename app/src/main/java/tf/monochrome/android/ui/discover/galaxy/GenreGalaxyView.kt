@@ -14,6 +14,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroidSize
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -178,8 +179,8 @@ internal fun GenreGalaxyView(
     // Each planet wears its artist's cover, when the chart has one.
     // By genre: the system is rebuilt as its planets' sizes come in, and the
     // covers are the same ones.
-    var covers by remember(system?.genreId) { mutableStateOf<List<Bitmap?>>(emptyList()) }
-    LaunchedEffect(system?.genreId) {
+    var covers by remember(system?.starId) { mutableStateOf<List<Bitmap?>>(emptyList()) }
+    LaunchedEffect(system?.starId) {
         val planets = system?.planets ?: return@LaunchedEffect
         covers = planets.map { planet -> planet.artworkUrl?.let { loadCover(context, it) } }
     }
@@ -359,7 +360,7 @@ internal fun GenreGalaxyView(
                 val lit = litStar(art, scene, camera, selected, f, morph(), dp, starSpot)
                 if (lit >= 0 && starSpot.strength > 0.01f && GalaxyLight.reachesView(starSpot, full.width, full.height)) {
                     // Its planets stand in its light once they are up.
-                    val sys = liveSystem.value?.takeIf { scene.index[it.genreId] == lit }
+                    val sys = liveSystem.value?.takeIf { scene.index[it.starId] == lit }
                     scale(lightK, lightK, pivot = Offset.Zero) {
                         drawStarLight(art, bodies, scene, sys, f, morph(), time(), systemAppear(), lit, dp, starSpot)
                     }
@@ -373,7 +374,7 @@ internal fun GenreGalaxyView(
                 val m = morph()
                 val lit = litStar(art, scene, camera, selected, f, m, dp, null)
                 val skip = if (lit >= 0 && starSpot.strength > 0.01f) lit else -1
-                val sys = liveSystem.value?.takeIf { selected >= 0 && scene.index[it.genreId] == selected }
+                val sys = liveSystem.value?.takeIf { selected >= 0 && scene.index[it.starId] == selected }
                 // They step back with the rest while a system is up.
                 val dim = if (sys != null) STAR_DIM_NEAR_SYSTEM * systemAppear().coerceIn(0f, 1f) * bodies.fade else 0f
                 pickStarLights(art, scene, f, m, dp, visuals.starRays, skip, dim, starLights)
@@ -408,17 +409,34 @@ internal fun GenreGalaxyView(
                         awaitFirstDown(requireUnconsumed = false)
                         liveOnInteract.value()
                         var travelled = 0f
+                        // How far the fingers have spread or closed, px: a
+                        // pinch whose middle holds still is still a gesture.
+                        // Counting only the middle's travel, a clean pinch did
+                        // nothing until the fingers happened to drift.
+                        var spread = 0f
                         var dragging = false
+                        var pinchOnly = false
                         do {
                             val event = awaitPointerEvent()
                             val pressed = event.changes.count { it.pressed }
                             val pan = event.calculatePan()
+                            val zoom = event.calculateZoom()
                             travelled += pan.getDistance()
-                            if (!dragging && travelled > viewConfiguration.touchSlop) dragging = true
+                            if (pressed >= 2) spread += kotlin.math.abs(1f - zoom) * event.calculateCentroidSize(useCurrent = false)
+                            if (!dragging && (travelled > viewConfiguration.touchSlop || spread > viewConfiguration.touchSlop)) {
+                                dragging = true
+                                // Mostly a pinch, on a star or a planet the
+                                // camera is following: zoom on it and keep it.
+                                // Panning lets go of what is followed, and the
+                                // planet you were pinching toward orbited off.
+                                pinchOnly = pressed >= 2 && camera.follow >= 0 && spread > travelled
+                            }
                             if (dragging) {
                                 if (pressed >= 2) {
-                                    camera.zoom(event.calculateZoom())
-                                    camera.pan(pan.x, pan.y, frameFor(Size(size.width.toFloat(), size.height.toFloat())))
+                                    camera.zoom(GalaxyCamera.pinch(zoom))
+                                    if (!pinchOnly) {
+                                        camera.pan(pan.x, pan.y, frameFor(Size(size.width.toFloat(), size.height.toFloat())))
+                                    }
                                 } else {
                                     camera.orbit(pan.x, pan.y)
                                 }
@@ -451,8 +469,8 @@ internal fun GenreGalaxyView(
                             // press is for the system, whichever body it hit.
                             val sys = liveSystem.value
                             val body = bodies.hit(sys, at.x, at.y, TAP_RADIUS_DP * dp * 0.8f)
-                            val id = if (body != null && sys != null) sys.genreId
-                            else starAt(at).takeIf { it >= 0 }?.let { scene.genres[it].id }
+                            val id = if (body != null && sys != null) sys.starId
+                            else starAt(at).takeIf { it >= 0 }?.let { scene.ids[it] }
                             if (id != null) liveOnLongPress.value(id)
                         },
                     ) { at ->
@@ -471,14 +489,14 @@ internal fun GenreGalaxyView(
                             return@detectTapGestures
                         }
                         val best = starAt(at)
-                        if (best >= 0) liveOnTap.value(scene.genres[best].id) else liveOnTapEmpty.value()
+                        if (best >= 0) liveOnTap.value(scene.ids[best]) else liveOnTapEmpty.value()
                     }
                 },
         ) {
             val f = frameFor(size)
             val m = morph()
             val t = time()
-            val sys = system?.takeIf { selected >= 0 && scene.index[it.genreId] == selected }
+            val sys = system?.takeIf { selected >= 0 && scene.index[it.starId] == selected }
             // The system's star is drawn with its planets, in depth order, so a
             // planet passing behind it is behind it.
             // While a solar system is up, the stars around it step back so its
@@ -678,6 +696,11 @@ private class GalaxyArt(scene: GalaxyScene, familyColors: Map<String, Color>) {
     /** Each family's stars, so they are drawn a family at a time (see drawStars). */
     val starsByFamily: Array<IntArray> =
         Array(scene.families.size) { fam -> (0 until scene.size).filter { scene.family[it] == fam }.toIntArray() }
+    /** Each family's stars past the sprite budget, as points this frame (see drawStars). */
+    val lodPoints: Array<FloatArray> = Array(scene.families.size) { fam ->
+        FloatArray(starsByFamily[fam].count { !scene.spriteAlways[it] } * 2)
+    }
+    val lodPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND; additive() }
     val flowCount = IntArray(scene.families.size)
     val puffBucket: Array<FloatArray>
     val puffCount = IntArray(scene.families.size)
@@ -1239,7 +1262,7 @@ private fun litStar(
             if (d < best) { best = d; star = i }
         }
         if (star < 0) return -1
-        val reach = PlanetSystem.reachFor(GalaxyScene.starRadius(scene.prominence[star]))
+        val reach = PlanetSystem.reachFor(GalaxyScene.starRadius(scene.prominence[star]), scene.starField.systemLimits)
         if (best > reach * reach) return -1
     }
     if (spot == null) return star
@@ -1247,7 +1270,7 @@ private fun litStar(
     if (!f.project(p[0], p[1], p[2], p, 0)) return star
     val depth = p[2]
     val scale = f.scaleAt(depth)
-    val reach = PlanetSystem.reachFor(GalaxyScene.starRadius(scene.prominence[star]))
+    val reach = PlanetSystem.reachFor(GalaxyScene.starRadius(scene.prominence[star]), scene.starField.systemLimits)
     spot.x = p[0]; spot.y = p[1]
     spot.glowR = (reach * scale * LIT_GLOW_REACH).coerceAtLeast(LIGHT_MIN_GLOW_DP * dp)
     spot.strength = ((reach * scale - SYSTEM_MIN_DP * dp) / (SYSTEM_FADE_DP * dp)).coerceIn(0f, 1f)
@@ -1356,7 +1379,7 @@ private fun DrawScope.drawStarLight(
             }
         }
     }
-    drawOccluders(art, scene, f, m, dp, spot, cx, cy, cz, PlanetSystem.reachFor(GalaxyScene.starRadius(scene.prominence[star])) * LIT_GLOW_REACH)
+    drawOccluders(art, scene, f, m, dp, spot, cx, cy, cz, PlanetSystem.reachFor(GalaxyScene.starRadius(scene.prominence[star]), scene.starField.systemLimits) * LIT_GLOW_REACH)
 }
 
 /** The light's glow, the medium its shadows show in: a soft disc in [argb], as far as [spot] reaches. */
@@ -1573,15 +1596,46 @@ private fun DrawScope.drawStars(
         val x = s[i * 3]; val y = s[i * 3 + 1]
         return !(x < -40f * dp || x > f.width + 40f * dp || y < -40f * dp || y > f.height + 40f * dp)
     }
-    for (members in art.starsByFamily) {
+    for ((fam, members) in art.starsByFamily.withIndex()) {
+        val pts = art.lodPoints[fam]
+        var n = 0
         for (i in members) {
-            if (visible(i)) drawStar(art, scene, i, s[i * 3], s[i * 3 + 1], s[i * 3 + 2], t, explored, hearted, selected, dp, dim, ring = false)
+            if (!visible(i)) continue
+            if (scene.spriteAlways[i]) {
+                drawStar(art, scene, i, s[i * 3], s[i * 3 + 1], s[i * 3 + 2], t, explored, hearted, selected, dp, dim, ring = false)
+                continue
+            }
+            // Past the sprite budget (a big library): a point while it is
+            // small on screen, its sprite fading in over it as you come near,
+            // so nothing pops.
+            val r = starRadiusPx(art, scene, i, s[i * 3 + 2], t, dp)
+            val promote = ((r - LOD_FROM_DP * dp) / (LOD_SPAN_DP * dp)).coerceIn(0f, 1f)
+            if (promote < 1f && n + 2 <= pts.size) {
+                pts[n++] = s[i * 3]; pts[n++] = s[i * 3 + 1]
+            }
+            if (promote > 0f) {
+                drawStar(art, scene, i, s[i * 3], s[i * 3 + 1], s[i * 3 + 2], t, explored, hearted, selected, dp, 1f - (1f - dim) * promote, ring = false)
+            }
+        }
+        if (n > 0) {
+            art.lodPaint.color = art.famColor[fam].toArgb()
+            art.lodPaint.alpha = (LOD_POINT_ALPHA * (1f - dim) * 255).toInt()
+            art.lodPaint.strokeWidth = LOD_POINT_DP * dp
+            drawContext.canvas.nativeCanvas.drawPoints(pts, 0, n, art.lodPaint)
         }
     }
     for (i in 0 until scene.size) {
         if (hearted[i] && visible(i)) drawHeartRing(art, scene, i, s[i * 3], s[i * 3 + 1], s[i * 3 + 2], t, dp)
     }
 }
+
+/** Past the sprite budget, a star's sprite starts fading in at this radius on screen, dp, and is whole this much later. */
+private const val LOD_FROM_DP = 5f
+private const val LOD_SPAN_DP = 4f
+
+/** A star drawn as a point: its size, dp, and how bright. */
+private const val LOD_POINT_DP = 2.4f
+private const val LOD_POINT_ALPHA = 0.85f
 
 /**
  * One star: a twinkling glow sprite in its family's colour, ringed if hearted.
@@ -1664,8 +1718,8 @@ private fun DrawScope.drawMarks(art: GalaxyArt, scene: GalaxyScene, f: CameraFra
  * gradients built per frame.
  */
 private class SystemArt {
-    private val stride = 1 + PlanetSystem.MAX_MOONS
-    private val n = PlanetSystem.MAX_PLANETS * stride
+    private val stride = 1 + SystemLimits.LARGEST.maxMoons
+    private val n = SystemLimits.LARGEST.maxPlanets * stride
     val x = FloatArray(n)
     val y = FloatArray(n)
     val r = FloatArray(n)
@@ -1685,8 +1739,8 @@ private class SystemArt {
 
     /** Body [k]'s size this frame: a step of the way to [target], or [target] on a system's first sight. */
     fun ease(sys: PlanetSystem, k: Int, target: Float): Float {
-        if (unitsFor != sys.genreId) {
-            unitsFor = sys.genreId
+        if (unitsFor != sys.starId) {
+            unitsFor = sys.starId
             units.fill(-1f)
         }
         val now = units[k]
@@ -1697,9 +1751,14 @@ private class SystemArt {
 
     /** Body ([p], moon [mi]) as last drawn, for the light pass drawn before it; [target] if it has not been. */
     fun easedOr(sys: PlanetSystem, p: Int, mi: Int, target: Float): Float =
-        units[slot(p, mi)].takeIf { unitsFor == sys.genreId && it > 0f } ?: target
+        units[slot(p, mi)].takeIf { unitsFor == sys.starId && it > 0f } ?: target
     val order = IntArray(n + 1)
     val orbit = FloatArray(ORBIT_SEGMENTS * 4)
+    /** The belt's and a ring's grains this frame, and where a belt grain projects to. */
+    val belt = FloatArray(BELT_MAX_GRAINS * 2)
+    val ring = FloatArray(RING_MAX_GRAINS * 2)
+    val beltProbe = FloatArray(3)
+    val grain = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND }
     val sprite = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     val cover = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     val rim = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
@@ -1739,11 +1798,53 @@ private class SystemArt {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) blendMode = BlendMode.PLUS
         else xfermode = PorterDuffXfermode(PorterDuff.Mode.ADD)
     }
-    private val filters = HashMap<Int, android.graphics.ColorFilter>()
+    // Keyed by the colour itself, as an int: a HashMap boxed the key on every
+    // lookup, three a body a frame.
+    private val filters = android.util.SparseArray<android.graphics.ColorFilter>()
 
     /** A white mask multiplied into [argb]. Cached: a system has a handful of colours. */
     fun tint(argb: Int): android.graphics.ColorFilter =
-        filters.getOrPut(argb) { android.graphics.LightingColorFilter(argb and 0xFFFFFF, 0) }
+        filters.get(argb) ?: android.graphics.LightingColorFilter(argb and 0xFFFFFF, 0).also { filters.put(argb, it) }
+
+    private var atmospheresFor: PlanetSystem? = null
+    private var atmospheres: Array<android.graphics.ColorFilter> = emptyArray()
+    private var moonAtmospheres: Array<Array<android.graphics.ColorFilter?>> = emptyArray()
+
+    /**
+     * Planet [p]'s atmosphere, as the filter that tints the glow: its hue, at
+     * the saturation and brightness of its key's tone ([PlanetLook]). Made
+     * once a system, where it was a colour built per planet per frame.
+     */
+    fun atmosphere(system: PlanetSystem, p: Int): android.graphics.ColorFilter {
+        atmospheresOf(system)
+        return atmospheres[p]
+    }
+
+    /**
+     * Moon [m] of planet [p]'s glow in its track's key, made the same way, or
+     * null for a moon with no key, which glows in its star's light.
+     */
+    fun moonAtmosphere(system: PlanetSystem, p: Int, m: Int): android.graphics.ColorFilter? {
+        atmospheresOf(system)
+        return moonAtmospheres[p][m]
+    }
+
+    private fun atmospheresOf(system: PlanetSystem) {
+        if (atmospheresFor === system) return
+        atmospheresFor = system
+        val hsv = FloatArray(3)
+        fun filter(hue: Float, tone: Float): android.graphics.ColorFilter {
+            hsv[0] = hue
+            hsv[1] = PlanetLook.atmosphereSaturation(tone)
+            hsv[2] = PlanetLook.atmosphereValue(tone)
+            return tint(android.graphics.Color.HSVToColor(hsv))
+        }
+        atmospheres = Array(system.planets.size) { i -> system.planets[i].let { filter(it.hue, it.tone) } }
+        moonAtmospheres = Array(system.planets.size) { i ->
+            val moons = system.planets[i].moons
+            Array(moons.size) { m -> moons[m].takeIf { it.hasKeyHue }?.let { filter(it.keyHue, it.tone) } }
+        }
+    }
 
     /** A moon: pale rock, a little lighter where the star is. */
     val moon: Bitmap = Bitmap.createBitmap(SPRITE / 2, SPRITE / 2, Bitmap.Config.ARGB_8888).also { b ->
@@ -1785,6 +1886,10 @@ private class SystemArt {
     }
 
     fun slot(p: Int, m: Int): Int = p * stride + m + 1
+
+    /** The planet, and the moon (-1 for the planet itself), that slot [k] holds. */
+    fun planetOf(k: Int): Int = k / stride
+    fun moonOf(k: Int): Int = k % stride - 1
 
     fun clear() {
         shown.fill(false)
@@ -1835,6 +1940,8 @@ private class SystemArt {
     companion object {
         const val SPRITE = 128
         const val ORBIT_SEGMENTS = 64
+        const val BELT_MAX_GRAINS = 220
+        const val RING_MAX_GRAINS = 80
 
         /** The share of the way a body's size moves toward a new one each frame: about half a second. */
         const val SIZE_EASE = 0.08f
@@ -1979,6 +2086,7 @@ private fun DrawScope.drawSystem(
         }
         canvas.drawLines(bodies.orbit, 0, n, bodies.rim)
     }
+    if (sys.beltCount > 0) drawBelt(bodies, sys, f, cx, cy, cz, t, spread, fade, dp)
 
     // Project every body, then draw back to front with the star among them.
     var count = 0
@@ -2029,8 +2137,8 @@ private fun DrawScope.drawSystem(
             continue
         }
         // slot = planet * stride + moon + 1, the planet itself being moon -1.
-        val p = k / (1 + PlanetSystem.MAX_MOONS)
-        val mi = k % (1 + PlanetSystem.MAX_MOONS) - 1
+        val p = bodies.planetOf(k)
+        val mi = bodies.moonOf(k)
         val x = bodies.x[k]; val y = bodies.y[k]; val r = bodies.r[k]
         // The light: from the body to its star, in the camera's terms. Its
         // turn on screen is which way the lit side faces; its pull toward the
@@ -2041,19 +2149,37 @@ private fun DrawScope.drawSystem(
         val toward = kotlin.math.atan2(-(lx * f.ux + ly * f.uy + lz * f.uz), lx * f.rx + ly * f.ry + lz * f.rz)
         val phase = SystemArt.phaseOf(-(lx * f.fx + ly * f.fy + lz * f.fz))
         art.rect.set(x - r, y - r, x + r, y + r)
-        // The atmosphere's scatter, behind the body, in its own colour.
-        val bodyColor = if (mi < 0) android.graphics.Color.HSVToColor(floatArrayOf(sys.planets[p].hue, 0.45f, 1f)) else starLight
-        bodies.tinted.colorFilter = bodies.tint(bodyColor)
-        bodies.tinted.alpha = (GLOW_ALPHA * fade * 255).toInt()
-        val g = r * 1.55f
+        val planet = if (mi < 0) sys.planets[p] else null
+        // The atmosphere's scatter, behind the body, in its own colour: a
+        // library album's key, deeper for minor and paler for major; a moon's
+        // its track's key, or its star's light without one.
+        bodies.tinted.colorFilter = if (planet != null) {
+            bodies.atmosphere(sys, p)
+        } else {
+            bodies.moonAtmosphere(sys, p, mi) ?: bodies.tint(starLight)
+        }
+        // A planet played a lot lately burns brighter and wider: heat is the
+        // atmosphere, never the orbit. A loud master hazes it wider still.
+        // Nothing has either on the genre map.
+        val heat = planet?.glow?.coerceIn(0f, 1f) ?: 0f
+        val haze = planet?.haze?.coerceIn(0f, 1f) ?: 0f
+        bodies.tinted.alpha = (GLOW_ALPHA * (1f + HEAT_GLOW_GAIN * heat) * fade * 255).toInt().coerceAtMost(255)
+        val g = r * (1.55f + HEAT_GLOW_SPREAD * heat + PlanetLook.HAZE_SPREAD * haze)
         bodies.src.set(x - g, y - g, x + g, y + g)
         canvas.drawBitmap(bodies.glow, null, bodies.src, bodies.tinted)
+        if (mi < 0 && sys.planets[p].ringCount > 0) drawRing(bodies, sys.planets[p], x, y, r, fade, dp)
         if (mi < 0) {
             val shader = bodies.coverShader(covers, p)
             val cover = covers.getOrNull(p)
             if (shader != null && cover != null) {
                 bodies.src.set(0f, 0f, cover.width.toFloat(), cover.height.toFloat())
                 bodies.matrix.setRectToRect(bodies.src, art.rect, android.graphics.Matrix.ScaleToFit.FILL)
+                // The cover turns with the album's tempo, once every 32
+                // beats. Only the cover: the light and shadow masks below
+                // stay turned toward the star.
+                if (planet != null && planet.spinPeriod > 0f) {
+                    bodies.matrix.postRotate(PlanetLook.spinDegrees(t, planet.spinPeriod, planet.phase), x, y)
+                }
                 shader.setLocalMatrix(bodies.matrix)
                 bodies.cover.shader = shader
                 bodies.cover.alpha = alpha
@@ -2068,7 +2194,9 @@ private fun DrawScope.drawSystem(
         }
         canvas.save()
         canvas.rotate(Math.toDegrees(toward.toDouble()).toFloat(), x, y)
-        bodies.sprite.alpha = alpha
+        // The night side as deep as the dynamic range the master kept: an
+        // album squashed flat is lit flat. Moons, and chart planets, full.
+        bodies.sprite.alpha = if (planet != null) PlanetLook.shadeAlpha(alpha, planet.shade) else alpha
         canvas.drawBitmap(bodies.shade[phase], null, art.rect, bodies.sprite)
         bodies.tinted.colorFilter = bodies.tint(starLight)
         bodies.tinted.alpha = alpha
@@ -2085,6 +2213,83 @@ private fun DrawScope.drawSystem(
     }
     return true
 }
+
+/**
+ * The asteroid belt: the albums past the last orbit, as grains in a band
+ * round the star, turning slowly. Each grain's place is fixed by its index,
+ * so the belt is the same every visit; its thickness is how many albums it
+ * holds.
+ */
+private fun DrawScope.drawBelt(
+    bodies: SystemArt, sys: PlanetSystem, f: CameraFrame, cx: Float, cy: Float, cz: Float,
+    t: Float, spread: Float, fade: Float, dp: Float,
+) {
+    val grains = (sys.beltCount * BELT_GRAINS_PER_ALBUM).coerceAtMost(SystemArt.BELT_MAX_GRAINS)
+    val inner = sys.beltInner
+    val width = sys.beltOuter - inner
+    val turn = t * BELT_TURN_RAD_S
+    val p = bodies.beltProbe
+    var n = 0
+    for (k in 0 until grains) {
+        // The golden angle round, a hashed share across: an even scatter.
+        val a = k * 2.3999631f + turn
+        val share = ((k * 0.618034f) % 1f)
+        val rr = (inner + width * share) * spread
+        val lift = (((k * 0.7548777f) % 1f) - 0.5f) * width * 0.35f
+        if (!f.project(cx + kotlin.math.cos(a) * rr, cy + lift, cz + kotlin.math.sin(a) * rr, p, 0)) continue
+        bodies.belt[n++] = p[0]; bodies.belt[n++] = p[1]
+    }
+    if (n == 0) return
+    bodies.grain.color = BELT_COLOR.toArgb()
+    bodies.grain.alpha = (BELT_ALPHA * fade * 255).toInt()
+    bodies.grain.strokeWidth = BELT_GRAIN_DP * dp
+    drawContext.canvas.nativeCanvas.drawPoints(bodies.belt, 0, n, bodies.grain)
+}
+
+/**
+ * A planet's ring: its tracks past the moons, as grains in an ellipse round
+ * it on screen, inside its first moon's orbit. Leant its own way, from its
+ * key, and as many grains as tracks it holds, within reason.
+ */
+private fun DrawScope.drawRing(bodies: SystemArt, planet: PlanetSystem.Planet, x: Float, y: Float, r: Float, fade: Float, dp: Float) {
+    if (r < RING_MIN_DP * dp) return
+    val grains = (RING_BASE_GRAINS + planet.ringCount * RING_GRAINS_PER_TRACK).coerceAtMost(SystemArt.RING_MAX_GRAINS)
+    val lean = planet.node
+    val cl = kotlin.math.cos(lean); val sl = kotlin.math.sin(lean)
+    var n = 0
+    for (k in 0 until grains) {
+        val a = k * (6.2831855f / grains)
+        val band = RING_INNER_RADII + (RING_OUTER_RADII - RING_INNER_RADII) * ((k * 0.618034f) % 1f)
+        val ex = kotlin.math.cos(a) * r * band
+        val ey = kotlin.math.sin(a) * r * band * RING_SQUASH
+        bodies.ring[n++] = x + ex * cl - ey * sl
+        bodies.ring[n++] = y + ex * sl + ey * cl
+    }
+    bodies.grain.color = RING_COLOR.toArgb()
+    bodies.grain.alpha = (RING_ALPHA * fade * 255).toInt()
+    bodies.grain.strokeWidth = (r * 0.08f).coerceIn(1f * dp, 2.2f * dp)
+    drawContext.canvas.nativeCanvas.drawPoints(bodies.ring, 0, n, bodies.grain)
+}
+
+/** A hot planet's atmosphere: how much brighter, and how much wider, at the hottest. */
+private const val HEAT_GLOW_GAIN = 1.4f
+private const val HEAT_GLOW_SPREAD = 0.9f
+
+private const val BELT_GRAINS_PER_ALBUM = 14
+private const val BELT_TURN_RAD_S = 0.02f
+private const val BELT_ALPHA = 0.55f
+private const val BELT_GRAIN_DP = 1.6f
+private val BELT_COLOR = Color(0xFFCFC6B8)
+
+/** A ring's grains: a few always, more for each track in it. Its band, in its planet's radii (inside the first moon's orbit), and how flat it lies. */
+private const val RING_BASE_GRAINS = 24
+private const val RING_GRAINS_PER_TRACK = 3
+private const val RING_INNER_RADII = 1.35f
+private const val RING_OUTER_RADII = 1.9f
+private const val RING_SQUASH = 0.32f
+private const val RING_ALPHA = 0.6f
+private const val RING_MIN_DP = 3f
+private val RING_COLOR = Color(0xFFE6E1D6)
 
 /** The atmosphere's glow round a body, and the galaxy's bounce on its night side. */
 private const val GLOW_ALPHA = 0.32f
@@ -2163,7 +2368,7 @@ private fun DrawScope.drawLabels(
         return true
     }
 
-    fun put(i: Int, color: Color, text: String = scene.genres[i].name.uppercase()): Boolean {
+    fun put(i: Int, color: Color, text: String = scene.names[i].uppercase()): Boolean {
         val depth = s[i * 3 + 2]
         if (depth < 0f) return false
         return place(text, style, color, s[i * 3], s[i * 3 + 1] - 10f * dp, centred = true, alpha = (2600f / depth).coerceIn(0.3f, 1f))
@@ -2178,7 +2383,7 @@ private fun DrawScope.drawLabels(
             val k = bodies.slot(p, -1)
             if (!bodies.shown[k]) continue
             place(
-                sys.planets[p].artist.uppercase(), style, GALAXY_INK,
+                sys.planets[p].label.uppercase(), style, GALAXY_INK,
                 bodies.x[k], bodies.y[k] - bodies.r[k] - 4f * dp, centred = true, alpha = 0.95f,
             )
         }
@@ -2189,7 +2394,7 @@ private fun DrawScope.drawLabels(
                 if (!bodies.shown[k]) continue
                 if (bodies.shown[pk] && hypot(bodies.x[k] - bodies.x[pk], bodies.y[k] - bodies.y[pk]) < bodies.r[pk] + MOON_LABEL_GAP_DP * dp) continue
                 place(
-                    sys.planets[p].moons[mi].entry.title, moonStyle, GALAXY_INK.copy(alpha = 0.85f),
+                    sys.planets[p].moons[mi].label, moonStyle, GALAXY_INK.copy(alpha = 0.85f),
                     bodies.x[k] + bodies.r[k] + 4f * dp, bodies.y[k], centred = false, alpha = 0.9f,
                 )
             }
@@ -2206,7 +2411,7 @@ private fun DrawScope.drawLabels(
         }
     }
 
-    if (here >= 0 && here != selected) put(here, WARM, "${scene.genres[here].name} · $hereLabel".uppercase())
+    if (here >= 0 && here != selected) put(here, WARM, "${scene.names[here]} · $hereLabel".uppercase())
     // Then the best known and nearest. A running top list rather than a sort:
     // this is every frame, and only the first few dozen can ever be drawn.
     val best = art.labelPick

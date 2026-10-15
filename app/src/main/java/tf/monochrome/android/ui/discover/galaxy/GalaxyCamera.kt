@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.setValue
 import kotlin.math.atan
 import kotlin.math.cos
+import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.math.tan
@@ -93,6 +94,15 @@ class GalaxyCamera {
         const val MIN_PITCH = 0.06f
         const val MAX_PITCH = 1.5f
         const val OVERVIEW_PITCH = 0.62f
+
+        /**
+         * A pinch's zoom, from the fingers' own: stronger than one to one.
+         * Planets are a few hundredths of their star, so reaching one at one to
+         * one took pinch after pinch; this is about half as many.
+         */
+        fun pinch(fingers: Float): Float = if (fingers > 0f) fingers.pow(PINCH_GAIN) else fingers
+
+        const val PINCH_GAIN = 1.6f
         private const val ORBIT_RATE = 0.005f
 
         /**

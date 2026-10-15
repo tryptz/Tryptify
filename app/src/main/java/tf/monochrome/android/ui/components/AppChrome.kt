@@ -32,6 +32,15 @@ class AppChrome {
         internal set
     var lensDivisor by mutableStateOf(1)
         internal set
+
+    // Who set each of them last. Only that screen puts it back: the next screen
+    // is composed before the last one is disposed, so a screen that leaves
+    // after another arrived must leave the newcomer's value alone. Comparing
+    // values instead failed when both asked for the same one (the genre galaxy
+    // and the library galaxy are both deep space): the one leaving cleared it.
+    internal var hiddenBy: Any? = null
+    internal var groundBy: Any? = null
+    internal var lensBy: Any? = null
 }
 
 val LocalAppChrome = staticCompositionLocalOf<AppChrome?> { null }
@@ -41,8 +50,15 @@ val LocalAppChrome = staticCompositionLocalOf<AppChrome?> { null }
 fun HideAppChrome(hidden: Boolean) {
     val chrome = LocalAppChrome.current ?: return
     DisposableEffect(chrome, hidden) {
+        val me = Any()
         chrome.hidden = hidden
-        onDispose { if (hidden) chrome.hidden = false }
+        chrome.hiddenBy = me
+        onDispose {
+            if (chrome.hiddenBy === me) {
+                chrome.hidden = false
+                chrome.hiddenBy = null
+            }
+        }
     }
 }
 
@@ -51,8 +67,15 @@ fun HideAppChrome(hidden: Boolean) {
 fun AppChromeGround(ground: Color) {
     val chrome = LocalAppChrome.current ?: return
     DisposableEffect(chrome, ground) {
+        val me = Any()
         chrome.ground = ground
-        onDispose { if (chrome.ground == ground) chrome.ground = null }
+        chrome.groundBy = me
+        onDispose {
+            if (chrome.groundBy === me) {
+                chrome.ground = null
+                chrome.groundBy = null
+            }
+        }
     }
 }
 
@@ -61,7 +84,14 @@ fun AppChromeGround(ground: Color) {
 fun AppChromeLens(divisor: Int) {
     val chrome = LocalAppChrome.current ?: return
     DisposableEffect(chrome, divisor) {
+        val me = Any()
         chrome.lensDivisor = divisor
-        onDispose { if (chrome.lensDivisor == divisor) chrome.lensDivisor = 1 }
+        chrome.lensBy = me
+        onDispose {
+            if (chrome.lensBy === me) {
+                chrome.lensDivisor = 1
+                chrome.lensBy = null
+            }
+        }
     }
 }

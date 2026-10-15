@@ -208,8 +208,8 @@ class GalaxyMathTest {
         for (i in 0 until scene.size) {
             val s = hypot(scene.sound[i * 3], scene.sound[i * 3 + 2])
             val t = hypot(scene.time[i * 3], scene.time[i * 3 + 2])
-            assertTrue("${scene.genres[i].name} in the disc at $s", s > clear)
-            assertTrue("${scene.genres[i].name} in the spiral at $t", t > clear)
+            assertTrue("${scene.names[i]} in the disc at $s", s > clear)
+            assertTrue("${scene.names[i]} in the spiral at $t", t > clear)
         }
         assertTrue(GalaxyScene.HOLE_SHADOW < GalaxyScene.DISK_INNER)
     }

@@ -74,7 +74,7 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         CollectionTrackArtistCrossRef::class,
         CollectionAlbumArtistCrossRef::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -243,6 +243,23 @@ abstract class MusicDatabase : RoomDatabase() {
         val MIGRATION_14_15 = object : Migration(14, 15) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE downloaded_tracks ADD COLUMN isDolbyAtmos INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * Tempo, key and dynamic range for scanned local tracks, which the
+         * library galaxy draws its planets from. All three are nullable with
+         * no default, which is how Room checks a `Float?` (REAL) and an
+         * `Int?` (INTEGER) field. Existing rows start empty: tempo and key are
+         * filled in from their tags once, after the upgrade
+         * (ScanCoordinator.backfillMusicalTagsIfStale), and dynamic range as
+         * each track is played through.
+         */
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `local_tracks` ADD COLUMN `bpm` REAL")
+                db.execSQL("ALTER TABLE `local_tracks` ADD COLUMN `camelotKey` INTEGER")
+                db.execSQL("ALTER TABLE `local_tracks` ADD COLUMN `dynamicRange` REAL")
             }
         }
     }

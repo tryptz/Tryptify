@@ -39,9 +39,9 @@ data class AudioTags(
     val channels: Int = 2,
     val durationSeconds: Int = 0,
 
-    // Replay Gain (parsed from custom tags when available)
-    val replayGainTrack: Float? = null,
-    val replayGainAlbum: Float? = null,
+    // Tempo, key and ReplayGain: tag fields the platform retriever never
+    // surfaces, read from the tag block by jaudiotagger or OggComments.
+    val musical: MusicalTags = MusicalTags(),
 
     // Artwork
     val hasEmbeddedArt: Boolean = false,
@@ -170,7 +170,11 @@ class TagReader @Inject constructor(
         val thxFromText = tf.monochrome.android.domain.model.isThxSpatialAudio(
             title = title, albumTitle = album,
         )
-        val isThx = thxFromText || (codec == AudioCodec.FLAC && detectThxInFlacTags(filePath))
+
+        // Tempo, key and ReplayGain. One tag read per file: a WAV's was its own
+        // read above, and a FLAC's answers the THX question as well.
+        val extra = if (codec == AudioCodec.WAV) wav?.let { ExtraTags(it.musical, namesThx = false) } else readExtraTags(filePath)
+        val isThx = thxFromText || (codec == AudioCodec.FLAC && extra?.namesThx == true)
 
         // Dolby Atmos: best-effort from the MIME (eac3-joc / atmos) or a "Dolby
         // Atmos" phrase in the metadata. A bare .ec3/.eac3 is only Atmos-capable,
@@ -240,6 +244,7 @@ class TagReader @Inject constructor(
             artworkCacheKey = artworkCacheKey,
             isThxSpatialAudio = isThx,
             isDolbyAtmos = isAtmos,
+            musical = extra?.musical ?: MusicalTags(),
             filePath = filePath,
             fileSizeBytes = fileSize,
             lastModified = lastModified
@@ -247,32 +252,64 @@ class TagReader @Inject constructor(
     }
 
     /**
-     * Reads a FLAC's embedded VERSION / COMMENT / TITLE / ALBUM Vorbis comments
-     * and reports whether any names a THX Spatial Audio release. Only touches
-     * the metadata blocks (no audio decode), FLAC-only, and fully guarded — any
-     * failure returns false so scanning never breaks on a malformed file.
-     * MediaMetadataRetriever can't surface custom Vorbis comments, hence the
-     * dedicated read here.
+     * Only the tempo, key and ReplayGain tags of [filePath]: no retriever, no
+     * artwork, no audio. For filling those in on files scanned before they were
+     * read; null when the file cannot be read at all.
      */
-    private fun detectThxInFlacTags(filePath: String): Boolean = try {
-        val file = File(filePath)
-        if (!file.exists()) {
-            false
+    fun readMusicalTags(filePath: String): MusicalTags? =
+        if (filePath.substringAfterLast('.', "").lowercase() == "wav") {
+            readWavTags(filePath)?.musical
         } else {
-            val tag = org.jaudiotagger.audio.AudioFileIO.read(file).tag
-            val candidates = listOfNotNull(
-                tag?.getFirst(org.jaudiotagger.tag.FieldKey.TITLE),
-                tag?.getFirst(org.jaudiotagger.tag.FieldKey.ALBUM),
-                tag?.getFirst(org.jaudiotagger.tag.FieldKey.COMMENT),
-                (tag as? org.jaudiotagger.tag.flac.FlacTag)?.getFirst("VERSION"),
-            )
-            candidates.any {
-                tf.monochrome.android.domain.model.isThxSpatialAudio(version = it)
-            }
+            readExtraTags(filePath)?.musical
         }
-    } catch (_: Exception) {
-        false
+
+    /** What one tag read gives beyond the retriever: tempo, key and gains, and for FLAC the THX mark. */
+    private class ExtraTags(val musical: MusicalTags, val namesThx: Boolean)
+
+    /**
+     * The tempo, key and ReplayGain tags of [filePath], and whether a FLAC's
+     * embedded VERSION / COMMENT / TITLE / ALBUM Vorbis comments name a THX
+     * Spatial Audio release (the fields a Tryptify download writes).
+     * MediaMetadataRetriever surfaces none of these.
+     *
+     * Only the tag block is read, never the audio. Ogg and Opus go through
+     * [OggComments], which reads just the first pages; the formats jaudiotagger
+     * knows go through it; anything else, and any failure, is null, so a
+     * malformed file never breaks a scan.
+     */
+    private fun readExtraTags(filePath: String): ExtraTags? {
+        val ext = filePath.substringAfterLast('.', "").lowercase()
+        return when (ext) {
+            in OGG_EXTENSIONS -> OggComments.read(File(filePath))?.let { ExtraTags(MusicalTags.from(it), namesThx = false) }
+            in JAUDIOTAGGER_EXTENSIONS -> try {
+                val file = File(filePath)
+                if (!file.isFile) {
+                    null
+                } else {
+                    val tag = org.jaudiotagger.audio.AudioFileIO.read(file).tag
+                    tag?.let { ExtraTags(MusicalTags.from(tagTextFields(it)), namesThx = ext == "flac" && namesThx(it)) }
+                }
+            } catch (_: Exception) {
+                null
+            } catch (_: OutOfMemoryError) {
+                // The whole tag block is loaded, cover art included.
+                null
+            }
+            else -> null
+        }
     }
+
+    private fun namesThx(tag: org.jaudiotagger.tag.Tag): Boolean {
+        fun get(key: org.jaudiotagger.tag.FieldKey) = runCatching { tag.getFirst(key) }.getOrNull()
+        val candidates = listOfNotNull(
+            get(org.jaudiotagger.tag.FieldKey.TITLE),
+            get(org.jaudiotagger.tag.FieldKey.ALBUM),
+            get(org.jaudiotagger.tag.FieldKey.COMMENT),
+            (tag as? org.jaudiotagger.tag.flac.FlacTag)?.let { runCatching { it.getFirst("VERSION") }.getOrNull() },
+        )
+        return candidates.any { tf.monochrome.android.domain.model.isThxSpatialAudio(version = it) }
+    }
+
 
     /** What a WAV file's own tags say; null fields where they say nothing. */
     private class WavTags(
@@ -281,6 +318,7 @@ class TagReader @Inject constructor(
         val track: Int?, val trackTotal: Int?, val disc: Int?, val discTotal: Int?,
         val artwork: ByteArray?,
         val sampleRate: Int?, val bitsPerSample: Int?, val channels: Int?, val durationSeconds: Int?,
+        val musical: MusicalTags,
     )
 
     /**
@@ -318,6 +356,7 @@ class TagReader @Inject constructor(
                 bitsPerSample = runCatching { header?.bitsPerSample }.getOrNull()?.takeIf { it > 0 },
                 channels = runCatching { header?.channels?.trim()?.toIntOrNull() }.getOrNull()?.takeIf { it > 0 },
                 durationSeconds = runCatching { header?.trackLength }.getOrNull()?.takeIf { it > 0 },
+                musical = tag?.let { MusicalTags.from(tagTextFields(it)) } ?: MusicalTags(),
             )
         }
     } catch (_: Exception) {
@@ -335,8 +374,11 @@ class TagReader @Inject constructor(
      * `(null, originalTitle)` when nothing can be confidently derived.
      */
     private fun deriveArtistFromTitle(rawTitle: String?, filePath: String): Pair<String?, String?> {
+        // A file name is numbered by its place on the release ("01 - Song",
+        // "CD1 - 05 - Song"); the numbering comes off first, or the track or
+        // disc number is taken for the artist.
         val base = rawTitle?.takeIf { it.isNotBlank() }
-            ?: File(filePath).nameWithoutExtension.takeIf { it.isNotBlank() }
+            ?: File(filePath).nameWithoutExtension.takeIf { it.isNotBlank() }?.let(TrackNames::withoutNumberPrefix)
             ?: return null to rawTitle
         return splitArtistTitle(base) ?: (null to rawTitle)
     }
@@ -519,6 +561,17 @@ class TagReader @Inject constructor(
     }
 
     companion object {
+        /**
+         * What jaudiotagger can open, WAV aside (read on its own above).
+         * AudioFileIO throws on anything else, so it is not asked.
+         */
+        internal val JAUDIOTAGGER_EXTENSIONS = setOf(
+            "mp3", "flac", "m4a", "m4b", "mp4", "aif", "aiff", "aifc", "wma", "dsf",
+        )
+
+        /** Read by [OggComments]: jaudiotagger has no Opus reader at all. */
+        internal val OGG_EXTENSIONS = setOf("ogg", "oga", "opus")
+
         private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
         private val COVER_STEMS = setOf(
             "cover", "folder", "album", "albumart", "front", "artwork"
@@ -544,4 +597,33 @@ internal fun splitArtistTitle(base: String): Pair<String, String>? {
     val artist = base.substring(0, sep.first).trim()
     val title = base.substring(sep.first + sep.second.length).trim()
     return if (artist.isNotEmpty() && title.isNotEmpty()) artist to title else null
+}
+
+/**
+ * A tag's text fields by name in upper case, as [MusicalTags.from] reads
+ * them. A custom field is named by what it says it is, not by its frame:
+ * an ID3 TXXX frame by its description ("REPLAYGAIN_TRACK_GAIN"), an MP4
+ * "----" atom by its name ("initialkey"). The format's own BPM and key
+ * fields (TBPM, tmpo, TKEY, …) are added as "BPM" and "KEY".
+ */
+internal fun tagTextFields(tag: org.jaudiotagger.tag.Tag): Map<String, String> {
+    val fields = HashMap<String, String>()
+    fun put(name: String?, value: String?) {
+        if (name.isNullOrBlank() || value.isNullOrBlank()) return
+        fields.putIfAbsent(name.trim().uppercase(), value)
+    }
+    put("BPM", runCatching { tag.getFirst(org.jaudiotagger.tag.FieldKey.BPM) }.getOrNull())
+    put("KEY", runCatching { tag.getFirst(org.jaudiotagger.tag.FieldKey.KEY) }.getOrNull())
+    val all = runCatching { tag.fields }.getOrNull() ?: return fields
+    while (runCatching { all.hasNext() }.getOrDefault(false)) {
+        val field = runCatching { all.next() }.getOrNull() ?: break
+        if (field.isBinary) continue
+        val txxx = (field as? org.jaudiotagger.tag.id3.AbstractID3v2Frame)?.body as? org.jaudiotagger.tag.id3.framebody.FrameBodyTXXX
+        when {
+            txxx != null -> put(txxx.description, txxx.firstTextValue)
+            field is org.jaudiotagger.tag.mp4.field.Mp4TagReverseDnsField -> put(field.descriptor, field.content)
+            field is org.jaudiotagger.tag.TagTextField -> put(field.id, field.content)
+        }
+    }
+    return fields
 }

@@ -43,13 +43,10 @@ class LocalMediaRepository @Inject constructor(
     // ── Scanning ────────────────────────────────────────────────────
 
     fun fullScan(
-        minDurationMs: Long = 30_000,
         excludedPaths: Set<String> = emptySet()
-    ): Flow<ScanProgress> = mediaScanner.fullScan(minDurationMs, excludedPaths)
+    ): Flow<ScanProgress> = mediaScanner.fullScan(excludedPaths)
 
-    fun incrementalScan(
-        minDurationMs: Long = 30_000
-    ): Flow<ScanProgress> = mediaScanner.incrementalScan(minDurationMs)
+    fun incrementalScan(): Flow<ScanProgress> = mediaScanner.incrementalScan()
 
     // ── Tracks ──────────────────────────────────────────────────────
 

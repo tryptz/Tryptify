@@ -126,6 +126,7 @@ cast-framework = { group = "com.google.android.gms", name = "play-services-cast-
 core-ktx = { group = "androidx.core", name = "core-ktx", version = "1.15.0" }
 core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version = "1.0.1" }
 browser = { group = "androidx.browser", name = "browser", version = "1.8.0" }
+webkit = { group = "androidx.webkit", name = "webkit", version = "1.12.1" }
 
 # Media (for Android Auto)
 media = { group = "androidx.media", name = "media", version = "1.7.0" }

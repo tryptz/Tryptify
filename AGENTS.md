@@ -64,7 +64,10 @@ files that nothing ever opened.
 The native DSP has host tests that build with the desktop compiler, no
 device or NDK needed — the multichannel mixer, the Oxford stages at Atmos
 widths, the WSOLA shifter, the EBU R128 loudness meter (against EBU Tech
-3341/3342's reference signals) and the spectrum waterfall's geometry:
+3341/3342's reference signals), the dynamic range meter (against signals whose
+DR is known by hand) and the spectrum waterfall's geometry. The same
+script runs the USB DAC bypass driver against stubbed libusb (`usb/tests/`),
+which needs the `third_party/libusb` submodule and is skipped without it:
 
 ```
 app/src/main/cpp/dsp/tests/run_host_tests.sh

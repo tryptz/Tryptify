@@ -73,7 +73,9 @@ class SpotifyImportForegroundService : Service() {
         val request: suspend () -> Result<ImportProgress.Done> = when (intent?.getStringExtra(EXTRA_MODE)) {
             MODE_URL -> {
                 val url = intent.getStringExtra(EXTRA_URL).orEmpty()
-                ({ playlistImporter.importFromUrl(url, strict) })
+                val name = intent.getStringExtra(EXTRA_NAME)
+                val description = intent.getStringExtra(EXTRA_DESCRIPTION)
+                ({ playlistImporter.importFromUrl(url, strict, name, description) })
             }
             MODE_PLAYLIST -> {
                 val id = intent.getStringExtra(EXTRA_PLAYLIST_ID).orEmpty()
@@ -109,12 +111,12 @@ class SpotifyImportForegroundService : Service() {
             progressMirror.cancel()
             result
                 .onSuccess { done ->
-                    finish(
-                        success = true,
-                        message = resources.getQuantityString(
-                            R.plurals.spotify_import_done, done.total, done.matched, done.total, done.playlistName,
-                        ),
+                    val imported = resources.getQuantityString(
+                        R.plurals.spotify_import_done, done.total, done.matched, done.total, done.playlistName,
                     )
+                    // Only part of a long public playlist could be read: say so.
+                    val partial = done.sourceTotal?.let { getString(R.string.import_spotify_partial, done.total, it) }
+                    finish(success = true, message = listOfNotNull(imported, partial).joinToString("\n"))
                 }
                 .onFailure { finish(success = false, message = it.message ?: getString(R.string.import_failed)) }
         }
@@ -228,16 +230,29 @@ class SpotifyImportForegroundService : Service() {
         private const val EXTRA_URL = "url"
         private const val EXTRA_PLAYLIST_ID = "playlist_id"
         private const val EXTRA_NAME = "name"
+        private const val EXTRA_DESCRIPTION = "description"
         private const val EXTRA_STRICT = "strict"
         private const val MODE_URL = "url"
         private const val MODE_PLAYLIST = "playlist"
         private const val MODE_LIKED = "liked"
 
-        fun importUrl(context: Context, url: String, strictAlbumMatch: Boolean) =
+        /**
+         * A pasted link. [name] and [description] are the Create playlist
+         * dialog's; blank, the playlist's own name is used.
+         */
+        fun importUrl(
+            context: Context,
+            url: String,
+            strictAlbumMatch: Boolean,
+            name: String? = null,
+            description: String? = null,
+        ) =
             start(context) {
                 putExtra(EXTRA_MODE, MODE_URL)
                 putExtra(EXTRA_URL, url)
                 putExtra(EXTRA_STRICT, strictAlbumMatch)
+                name?.let { putExtra(EXTRA_NAME, it) }
+                description?.let { putExtra(EXTRA_DESCRIPTION, it) }
             }
 
         fun importPlaylist(context: Context, playlistId: String, name: String, strictAlbumMatch: Boolean) =

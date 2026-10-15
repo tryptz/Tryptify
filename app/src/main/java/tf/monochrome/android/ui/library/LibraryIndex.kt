@@ -91,6 +91,11 @@ enum class LibraryCategory(
 fun LibraryIndexList(
     onSelect: (LibraryCategory) -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * The library galaxy, as one more tile after the categories. It is not a
+     * category: those open in place, and this opens a screen of its own.
+     */
+    onGalaxy: (() -> Unit)? = null,
 ) {
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
@@ -101,32 +106,43 @@ fun LibraryIndexList(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(LibraryCategory.entries, key = { it.id }, contentType = { "category" }) { category ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = MonoDimens.listItemPaddingH)
-                    .liquidGlass(shape = MonoDimens.shapeMd)
-                    .bounceClick { onSelect(category) }
-                    .padding(horizontal = 24.dp, vertical = 20.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    category.icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(MonoDimens.iconMd),
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(modifier = Modifier.width(MonoDimens.spacingLg))
-                Text(
-                    text = stringResource(category.label),
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            CategoryTile(category.icon, stringResource(category.label)) { onSelect(category) }
+        }
+        if (onGalaxy != null) {
+            item(key = "galaxy", contentType = "category") {
+                CategoryTile(tf.monochrome.android.ui.discover.galaxy.SystemGlyph, stringResource(R.string.library_galaxy), onGalaxy)
             }
         }
+    }
+}
+
+/** One of the index's tiles: a glyph and a name on glass. */
+@Composable
+private fun CategoryTile(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MonoDimens.listItemPaddingH)
+            .liquidGlass(shape = MonoDimens.shapeMd)
+            .bounceClick(onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.size(MonoDimens.iconMd),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(modifier = Modifier.width(MonoDimens.spacingLg))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

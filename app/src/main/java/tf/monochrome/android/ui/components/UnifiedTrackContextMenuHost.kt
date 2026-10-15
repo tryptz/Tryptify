@@ -85,6 +85,8 @@ fun UnifiedTrackContextMenuHost(
             onGoToArtist = track.artistId?.let { artistId ->
                 { navController.openArtist(track.sourceType, artistId) }
             },
+            // A library file's own path: Track info reads its tags from it.
+            filePath = (track.source as? tf.monochrome.android.domain.model.PlaybackSource.LocalFile)?.filePath,
         )
     }
 

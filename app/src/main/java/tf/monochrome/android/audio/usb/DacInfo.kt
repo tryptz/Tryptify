@@ -25,7 +25,7 @@ data class DacInfo(
     val vendorId: Int,
     val productId: Int,
     val deviceId: Int,
-    /** USB standard version the device advertises, e.g. "2.00" / "1.10". */
+    /** Device release number (bcdDevice) from UsbDevice.getVersion(), e.g. "26.50". */
     val usbVersion: String?,
     val deviceClass: Int,
     val deviceSubClass: Int,
@@ -48,13 +48,15 @@ data class DacInfo(
     val idHex: String
         get() = "%04x:%04x".format(vendorId, productId)
 
-    /** Compact descriptor line: identity + USB version, e.g.
-     *  "1d6b:01003 · USB 2.00 · class 0/0/0". */
+    /** Compact descriptor line: identity + device release, e.g.
+     *  "1d6b:01003 · rev 2.00 · class 0/0/0". [usbVersion] comes from
+     *  UsbDevice.getVersion(), which is bcdDevice (the device's own
+     *  firmware revision), not the USB spec version. */
     val descriptorLine: String
         get() = buildString {
             append(idHex)
             usbVersion?.takeIf { it.isNotBlank() }?.let {
-                append(" · USB ")
+                append(" · rev ")
                 append(it)
             }
             append(" · class ")

@@ -57,4 +57,32 @@ class VisualizerFrameCapTest {
             )
         }
     }
+
+    @Test
+    fun `a thread that waits first is never told to drop`() {
+        // The vsync-off flash: frames drawn whenever possible and dropped by
+        // the cap were presented anyway. Waiting frameWaitNanos first means
+        // the frame drawn after the wait is always one the cap allows.
+        for (cap in listOf(24, 30, 60, 90, 120, 144, 240)) {
+            var last = 0L
+            var now = 3L
+            repeat(500) {
+                val wait = frameWaitNanos(now, last, cap)
+                now += wait
+                assertFalse("cap $cap dropped a frame it had waited for", shouldDropFrame(now, last, cap))
+                last = now
+                now += 1_000L // the frame's own work
+            }
+        }
+    }
+
+    @Test
+    fun `no wait when a frame is due, or with no cap`() {
+        assertTrue(frameWaitNanos(oneSecond, 0L, 60) == 0L)
+        assertTrue(frameWaitNanos(1L, 0L, 0) == 0L)
+        assertTrue(frameWaitNanos(1L, 0L, -5) == 0L)
+        // Half an interval in, half an interval to go.
+        val interval = oneSecond / 60
+        assertTrue(frameWaitNanos(interval / 2, 0L, 60) == interval - interval / 2)
+    }
 }

@@ -16,6 +16,7 @@
 #pragma once
 
 #include <atomic>
+#include <climits>
 #include <cstdint>
 #include <mutex>
 #include <string>
@@ -57,6 +58,20 @@ struct ClockRateRange {
     uint32_t resHz = 0;
 };
 
+// One channel of a Feature Unit on the playback path, with the
+// controls the host may set on it (UAC1 §4.3.2.5, UAC2 §4.7.2.8).
+// Channel 0 is the master channel.
+struct HwFeatureControl {
+    uint8_t unitId = 0;
+    uint8_t channel = 0;
+    bool volume = false;
+    bool mute = false;
+};
+
+// StreamFormat::hwVolumeDb256 when the playback path has no settable
+// volume, or the DAC refused every request.
+constexpr int32_t kHwVolumeNone = INT32_MIN;
+
 // Negotiated PCM stream parameters (output of UAC2 enumeration).
 struct StreamFormat {
     int sampleRateHz = 0;
@@ -80,11 +95,20 @@ struct StreamFormat {
     // pitch-shifted distorted stream.
     uint8_t bInterval = 1;
     // UAC version, decoded from bcdADC in the AudioControl Header
-    // class-specific descriptor (UAC1 = 0x0100, UAC2 = 0x0200).
+    // class-specific descriptor (UAC1 = 0x0100, UAC2 = 0x0200), or
+    // 0x0300 when the AudioControl interface's bInterfaceProtocol is
+    // IP_VERSION_03_00 (UAC3 has no bcdADC field).
     // Different rate-set wire format and different AS_FORMAT_TYPE
     // layout — Focal Bathys is UAC1; most newer hi-res DACs are
     // UAC2.
     uint16_t uacVersion = 0x0200;
+    // UAC3 Basic Audio Device (BADD) profile. Such a configuration
+    // carries no class-specific descriptors at all: the format is
+    // implied by the endpoint's wMaxPacketSize and the rate is fixed
+    // at 48 kHz with no programmable clock. Apple's USB-C headphone
+    // adapter runs in this mode on Android, because the kernel picks
+    // the first UAC3 configuration over the UAC2 one.
+    bool badd = false;
     // Async iso feedback IN endpoint (UAC2 §3.16.2.2). Zero if the
     // device is adaptive/sync — most quality DACs (incl. Focal Bathys)
     // are async and expose one. The host reads a 16.16 fixed-point
@@ -100,6 +124,16 @@ struct StreamFormat {
     // devices' Selector / Multiplier resolution is non-obvious and
     // it's cheaper to just try them all than misparse the graph.
     std::vector<uint8_t> candidateClockIds;
+    // Volume and mute controls between the streaming terminal and the
+    // output, set to full scale and unmuted at every start() the way
+    // USB Audio Player Pro does: the bypass skips Android's mixer, so
+    // nothing else ever raises a DAC that the framework, the kernel or
+    // its own power-on default left attenuated or muted. The level
+    // heard is the app's own (BypassVolumeController), on the PCM.
+    std::vector<HwFeatureControl> featureControls;
+    // The DAC's own volume after that, in 1/256 dB (0 = full scale),
+    // read back where the DAC answers. kHwVolumeNone if it has none.
+    int32_t hwVolumeDb256 = kHwVolumeNone;
 };
 
 class LibusbUacDriver {
@@ -209,6 +243,10 @@ private:
     // control transfer to the clock source entity. UAC2 puts the rate
     // on a clock-source unit, not on the endpoint like UAC1 did.
     bool setSampleRate(uint32_t hz);
+    // Unmutes every playback-path Feature Unit channel and sets its
+    // volume to the top of its range, capped at 0 dB. Best effort:
+    // a DAC that refuses still plays, at whatever level it was at.
+    void applyHardwareVolume();
 
     // Issues GET_RANGE on the given clock entity and appends decoded
     // (min, max, res) subranges into supportedRates_. No-op if the
@@ -328,6 +366,10 @@ private:
     // errorMutex_ — readers and the start() writer don't race on the
     // hot path.
     std::vector<ClockRateRange> supportedRates_;
+    // Why the last selectAltSetting() found nothing, when there is
+    // something more useful to say than "no match" (e.g. a BADD
+    // device's fixed 48 kHz). Guarded by errorMutex_.
+    std::string selectHint_;
 };
 
 } // namespace monotrypt::usb

@@ -128,6 +128,24 @@ fun dynamicPlayerBackground(color: Color): Brush {
     )
 }
 
+/**
+ * What the player's glass stands over, as one colour: the lower half of
+ * [dynamicPlayerBackground], the album wash fading into black, where its
+ * panels sit. The player is dark in every theme, so its panes work their text
+ * colour out against this and never the theme's own background: in a light
+ * theme that said "light glass", and the Speed panel, the audio tools and the
+ * preset browser drew dark text on what was dark red glass.
+ */
+fun playerGlassGround(color: Color): Color =
+    androidx.compose.ui.graphics.lerp(
+        PlayerDesignTokens.BackgroundBlack,
+        androidx.compose.ui.graphics.lerp(color, Color.Black, 0.5f).copy(alpha = 1f),
+        PLAYER_GROUND_WASH,
+    )
+
+/** How much of the album wash is left where the player's panels sit: the gradient's middle stop. */
+private const val PLAYER_GROUND_WASH = 0.2f
+
 /** Soft radial glow behind the hero, tinted by the current album color. */
 @Composable
 fun DynamicAlbumGlow(color: Color, modifier: Modifier = Modifier) {

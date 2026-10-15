@@ -90,6 +90,7 @@ sealed interface StationsState {
 class WorldRadioViewModel @Inject constructor(
     private val repository: WorldRadioRepository,
     private val preferences: PreferencesManager,
+    private val achievements: tf.monochrome.android.data.achievements.AchievementStore,
 ) : ViewModel() {
 
     private val _globe = MutableStateFlow(WorldRadioData())
@@ -241,6 +242,7 @@ class WorldRadioViewModel @Inject constructor(
         viewModelScope.launch {
             val city = repository.locate(station)
             if (city != null) select(city)
+            achievements.radioCountryHeard(city?.country?.takeIf { it.isNotBlank() } ?: station.countryCode)
             player.playRadioStation(asTrack(station, city))
             runCatching { repository.reportPlay(station) }
         }
@@ -314,6 +316,7 @@ class WorldRadioViewModel @Inject constructor(
      * ready, the tapped station plays alone rather than the tap doing nothing.
      */
     fun play(station: RadioStation, index: Int, city: RadioCity, player: PlayerViewModel) {
+        achievements.radioCountryHeard(city.country.takeIf { it.isNotBlank() } ?: station.countryCode)
         val listed = (stations.value as? StationsState.Ready)?.stations.orEmpty()
         if (listed.isEmpty()) {
             player.playRadioStation(asTrack(station, city))

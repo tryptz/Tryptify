@@ -1,6 +1,8 @@
 package tf.monochrome.android.ui.player
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -43,6 +45,7 @@ import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import tf.monochrome.android.ui.theme.reduceMotion
 import tf.monochrome.android.R
 import tf.monochrome.android.audio.usb.BypassVolumeController
 import tf.monochrome.android.domain.model.PlayerGlassSettings
@@ -131,9 +134,9 @@ internal fun DacVolumeBar(
  * With a DAC in exclusive mode the keys move its level rather than Android's,
  * so Android's own volume panel has nothing to show, and this takes its place.
  *
- * Shown by a key press, hidden [HIDE_AFTER_MS] after the last one, and never
- * while a finger is on it. Not while [suppressed] — the full player carries the
- * bar itself — and only for presses made with the app on screen: in the
+ * Shown by a key press on every screen, the full player included (it has no
+ * bar of its own), hidden [HIDE_AFTER_MS] after the last one, and never while
+ * a finger is on it. Only for presses made with the app on screen: in the
  * background Android shows its own panel for them (the session reports the DAC
  * as a remote device), and one waiting here on return would be stale.
  *
@@ -149,11 +152,10 @@ internal fun DacVolumePopup(
     onMute: (Boolean) -> Unit,
     hazeState: HazeState?,
     glass: PlayerGlassSettings,
-    suppressed: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val isExclusive by exclusive.collectAsStateWithLifecycle()
-    val hidden by rememberUpdatedState(suppressed || !isExclusive)
+    val hidden by rememberUpdatedState(!isExclusive)
     var requested by remember { mutableStateOf(false) }
     var touching by remember { mutableStateOf(false) }
     // Bumped by every press and every change made on the bar; each one
@@ -185,11 +187,13 @@ internal fun DacVolumePopup(
         }
     }
 
+    // "Disable animations": it appears and goes at once.
+    val still = reduceMotion()
     AnimatedVisibility(
         visible = requested && !hidden,
         modifier = modifier,
-        enter = fadeIn(tween(150)) + slideInVertically(tween(220)) { -it / 2 },
-        exit = fadeOut(tween(200)) + slideOutVertically(tween(220)) { -it / 2 },
+        enter = if (still) EnterTransition.None else fadeIn(tween(150)) + slideInVertically(tween(220)) { -it / 2 },
+        exit = if (still) ExitTransition.None else fadeOut(tween(200)) + slideOutVertically(tween(220)) { -it / 2 },
     ) {
         val level by levelDb.collectAsStateWithLifecycle()
         GlassPanel(
@@ -197,6 +201,8 @@ internal fun DacVolumePopup(
             glass = glass,
             modifier = Modifier.statusBarsPadding(),
             avoidNavigationBar = false,
+            // Without glass, near-solid: it floats over whatever page is open.
+            fallbackMinAlpha = tf.monochrome.android.ui.components.FLOATING_FALLBACK_MIN_ALPHA,
         ) {
             // GlassPanel publishes its material to its own slab only; the tube
             // has a shader of its own and reads the same local.
