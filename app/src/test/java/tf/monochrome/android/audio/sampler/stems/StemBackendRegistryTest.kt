@@ -23,6 +23,8 @@ class StemBackendRegistryTest {
         override val kind: BackendKind,
         private var available: Boolean,
         private val model: String? = null,
+        /** False for an accelerator that says it is available but cannot load the model. */
+        private val loads: Boolean = true,
     ) : StemSeparationBackend {
         var initialized = false
         var released = false
@@ -38,7 +40,7 @@ class StemBackendRegistryTest {
         override fun availableStems(input: SampleEdits.Buffer) = Stem.entries.toSet()
         override suspend fun initialize(): Result<Unit> {
             initialized = true
-            return Result.success(Unit)
+            return if (loads) Result.success(Unit) else Result.failure(IllegalStateException("cannot compile"))
         }
 
         override suspend fun separate(
@@ -228,5 +230,69 @@ class StemBackendRegistryTest {
         // which is honest rather than a failure.
         val stereo = SampleEdits.Buffer(FloatArray(8192), FloatArray(8192), 44100)
         assertTrue(backend.availableStems(stereo).isNotEmpty())
+    }
+
+    // ── ready(): what actually loads ────────────────────────────────────
+
+    @Test
+    fun `the order is npu then gpu then cpu then dsp`() = runBlocking {
+        val registry = registry(
+            Fake(BackendKind.DSP, true),
+            Fake(BackendKind.CPU, true),
+            Fake(BackendKind.GPU, true),
+            Fake(BackendKind.QNN, true),
+        )
+        assertEquals(
+            listOf(BackendKind.QNN, BackendKind.GPU, BackendKind.CPU, BackendKind.DSP),
+            registry.all().map { it.kind },
+        )
+        assertEquals(BackendKind.QNN, registry.ready()?.kind)
+    }
+
+    /** An NPU that claims it can run the model and then cannot compile it. */
+    @Test
+    fun `an npu that fails to load is released and the gpu takes over`() = runBlocking {
+        val npu = Fake(BackendKind.QNN, true, loads = false)
+        val gpu = Fake(BackendKind.GPU, true)
+        val registry = registry(Fake(BackendKind.DSP, true), Fake(BackendKind.CPU, true), gpu, npu)
+
+        val ready = registry.ready()
+
+        assertEquals(BackendKind.GPU, ready?.kind)
+        assertTrue(npu.initialized)
+        assertTrue("a failed accelerator gives its memory back", npu.released)
+        assertTrue(gpu.initialized)
+    }
+
+    @Test
+    fun `with no accelerator that loads the cpu runs the model`() = runBlocking {
+        val registry = registry(
+            Fake(BackendKind.DSP, true),
+            Fake(BackendKind.CPU, true),
+            Fake(BackendKind.GPU, false),
+            Fake(BackendKind.QNN, true, loads = false),
+        )
+        assertEquals(BackendKind.CPU, registry.ready()?.kind)
+    }
+
+    /** What a song falls back to when its accelerator fails partway through. */
+    @Test
+    fun `ready after a kind only offers the backends below it`() = runBlocking {
+        val npu = Fake(BackendKind.QNN, true)
+        val registry = registry(Fake(BackendKind.DSP, true), Fake(BackendKind.CPU, true), Fake(BackendKind.GPU, true), npu)
+
+        assertEquals(BackendKind.GPU, registry.ready(after = BackendKind.QNN)?.kind)
+        assertEquals(BackendKind.CPU, registry.ready(after = BackendKind.GPU)?.kind)
+        assertEquals(BackendKind.DSP, registry.ready(after = BackendKind.CPU)?.kind)
+        assertEquals(null, registry.ready(after = BackendKind.DSP))
+        assertFalse("nothing above the failed one is touched", npu.initialized)
+    }
+
+    @Test
+    fun `both accelerators count as accelerated`() {
+        assertTrue(BackendKind.QNN.isAccelerated)
+        assertTrue(BackendKind.GPU.isAccelerated)
+        assertFalse(BackendKind.CPU.isAccelerated)
+        assertFalse(BackendKind.DSP.isAccelerated)
     }
 }

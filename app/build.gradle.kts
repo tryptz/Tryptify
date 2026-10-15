@@ -164,6 +164,30 @@ android {
         buildConfig = true
     }
 
+    packaging {
+        jniLibs {
+            // Extracted to disk at install rather than read from inside the APK.
+            // The Snapdragon NPU's half of QNN (the libQnnHtpV*Skel.so files) is
+            // loaded by the Hexagon DSP itself, from a directory it is pointed at
+            // (QnnStemBackend sets ADSP_LIBRARY_PATH); it cannot open a library
+            // that only exists inside an APK.
+            useLegacyPackaging = true
+            // Qualcomm's runtime carries an NPU library for every Hexagon
+            // generation back to 2019, a megabyte or twenty each. Kept: v79
+            // (Snapdragon 8 Elite) and v81 (Snapdragon 8 Elite Gen 5 / 8 Gen 5).
+            // An older Snapdragon finds no library for its NPU, and the stem
+            // backends move on to its GPU, then the CPU.
+            excludes += listOf(
+                "**/libQnnHtpV68Skel.so", "**/libQnnHtpV68Stub.so",
+                "**/libQnnHtpV69Skel.so", "**/libQnnHtpV69Stub.so",
+                "**/libQnnHtpV73Skel.so", "**/libQnnHtpV73Stub.so",
+                "**/libQnnHtpV75Skel.so", "**/libQnnHtpV75Stub.so",
+                // The pre-HTP Hexagon DSP backend, which nothing here uses.
+                "**/libQnnDsp.so", "**/libQnnDspV66Skel.so", "**/libQnnDspV66Stub.so",
+            )
+        }
+    }
+
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
@@ -331,10 +355,13 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
-    // ONNX Runtime — runs the downloaded stem separation models. Ships native
-    // libraries for every ABI, so it is a real size cost; it is here because a
-    // model the app cannot execute is not a feature.
-    implementation(libs.onnxruntime.android)
+    // ONNX Runtime — runs the downloaded stem separation models. The QNN build:
+    // the same runtime plus Qualcomm's execution provider, which runs the model
+    // on a Snapdragon's NPU or GPU, and Qualcomm's QNN runtime libraries
+    // (com.qualcomm.qti:qnn-runtime) with it. It is arm64-v8a only, so on the
+    // other ABIs a model cannot load and separation uses the built-in DSP; see
+    // the packaging block for what of Qualcomm's libraries is kept.
+    implementation(libs.onnxruntime.android.qnn)
 
     // Ktor
     implementation(libs.ktor.client.core)

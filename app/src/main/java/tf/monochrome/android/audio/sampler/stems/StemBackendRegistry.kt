@@ -9,7 +9,7 @@ import javax.inject.Singleton
 /**
  * Picks which backend runs, and tells the UI which one it picked.
  *
- * The order is NPU, then CPU, then the built-in DSP. What matters is the last
+ * The order is NPU, then GPU, then CPU, then the built-in DSP. What matters is the last
  * one: it needs no model, no download and no network, so stem separation is
  * never "unavailable" — it is only ever better or worse. A user who declines a
  * 300 MB download still gets a working feature.
@@ -29,13 +29,34 @@ class StemBackendRegistry @Inject constructor(
      * it is the floor, and QNN is first because when it is available it is
      * dramatically faster, not because it sounds better.
      */
-    private val order = listOf(BackendKind.QNN, BackendKind.CPU, BackendKind.DSP)
+    private val order = listOf(BackendKind.QNN, BackendKind.GPU, BackendKind.CPU, BackendKind.DSP)
 
     fun all(): List<StemSeparationBackend> =
         backends.sortedBy { order.indexOf(it.kind).takeIf { i -> i >= 0 } ?: order.size }
 
     /** The best backend that reports itself available right now. */
     fun active(): StemSeparationBackend? = all().firstOrNull { it.status().available }
+
+    /**
+     * The best backend that is available *and* loads, initialised and ready
+     * to separate; with [after], only those below that kind in the order.
+     *
+     * [active] trusts a backend's word, and an accelerator's word is not
+     * enough: whether the NPU can run a given model is only known by trying.
+     * One that fails is released and the next one tried, down to the DSP,
+     * which cannot fail to load.
+     */
+    suspend fun ready(after: BackendKind? = null): StemSeparationBackend? {
+        fun rank(kind: BackendKind) = order.indexOf(kind).let { if (it < 0) order.size else it }
+        val floor = after?.let(::rank) ?: -1
+        for (backend in all()) {
+            if (rank(backend.kind) <= floor) continue
+            if (!backend.status().available) continue
+            if (backend.initialize().isSuccess) return backend
+            backend.release()
+        }
+        return null
+    }
 
     fun of(kind: BackendKind): StemSeparationBackend? = backends.firstOrNull { it.kind == kind }
 

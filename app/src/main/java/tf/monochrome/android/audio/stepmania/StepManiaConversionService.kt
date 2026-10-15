@@ -23,7 +23,9 @@ import tf.monochrome.android.audio.sampler.stems.SeparationOptions
 import tf.monochrome.android.audio.sampler.stems.Stem
 import tf.monochrome.android.audio.sampler.stems.StemBackendRegistry
 import tf.monochrome.android.audio.sampler.stems.StemQuality
+import tf.monochrome.android.audio.sampler.stems.StemProgress
 import tf.monochrome.android.audio.sampler.stems.StemSeparationBackend
+import android.util.Log
 
 data class StepManiaConversionProgress(
     val fraction: Float,
@@ -58,13 +60,12 @@ class StepManiaConversionService @Inject constructor(
         onProgress: (StepManiaConversionProgress) -> Unit = {},
     ): Result<StepManiaConversionResult> = try {
         onProgress(StepManiaConversionProgress(0f, "Decoding audio"))
-        val backend = stemBackends.active()
-            ?: throw IllegalStateException("No stem separation backend is available")
-        val status = backend.status()
-        backend.initialize().getOrThrow()
+        val separation = Separation(
+            stemBackends.ready() ?: throw IllegalStateException("No stem separation backend is available"),
+        )
 
         val (envelope, layers) = withContext(Dispatchers.Default) {
-            separateStreaming(source, quality, backend, onProgress)
+            separateStreaming(source, quality, separation, onProgress)
         }
 
         onProgress(StepManiaConversionProgress(0.88f, "Generating charts"))
@@ -78,7 +79,7 @@ class StepManiaConversionService @Inject constructor(
             output.bufferedWriter(Charsets.UTF_8).use { it.write(generated.ssc) }
         }
         onProgress(StepManiaConversionProgress(1f, "Complete"))
-        Result.success(StepManiaConversionResult(generated, status.displayName))
+        Result.success(StepManiaConversionResult(generated, separation.displayName))
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (failure: Throwable) {
@@ -112,7 +113,7 @@ class StepManiaConversionService @Inject constructor(
     private suspend fun separateStreaming(
         source: Uri,
         quality: StemQuality,
-        backend: StemSeparationBackend,
+        separation: Separation,
         onProgress: (StepManiaConversionProgress) -> Unit,
     ): Pair<TransientEnvelopeBuilder, StemLayerEnvelopes> = coroutineScope {
         val chunks = Channel<SeparationChunker.Chunk>(capacity = 1)
@@ -155,11 +156,7 @@ class StepManiaConversionService @Inject constructor(
                 val done = chunk.startFrame + chunk.coreFrames * within.coerceIn(0f, 1f)
                 return (done / expectedFrames).coerceIn(0f, 1f)
             }
-            val separated = backend.separate(
-                input = mix,
-                requested = StemLayer.REQUESTED,
-                options = SeparationOptions(quality = quality),
-            ) { progress ->
+            val separated = separation.separate(mix, quality) { progress ->
                 onProgress(
                     StepManiaConversionProgress(
                         fraction = 0.02f + songFraction(progress.fraction) * 0.84f,
@@ -178,7 +175,50 @@ class StepManiaConversionService @Inject constructor(
         drums to (layers ?: StemLayerEnvelopes(drums.sampleRate))
     }
 
+    /**
+     * The backend separating this song, and the ones it has fallen back from.
+     *
+     * An accelerator that loaded can still fail on a piece. Rather than lose
+     * the minutes already spent, that piece is handed to the next backend down
+     * — the same model on the CPU, or the built-in separator — and the song
+     * carries on there. [displayName] names each one that ran, in order, so a
+     * chart that finished on the CPU never claims the NPU made it.
+     */
+    private inner class Separation(private var backend: StemSeparationBackend) {
+        private val used = mutableListOf(backend.status().displayName)
+
+        val displayName: String get() = used.distinct().joinToString(", then ")
+
+        suspend fun separate(
+            input: SampleEdits.Buffer,
+            quality: StemQuality,
+            onProgress: (StemProgress) -> Unit,
+        ): Map<Stem, SampleEdits.Buffer> {
+            while (true) {
+                try {
+                    return backend.separate(
+                        input = input,
+                        requested = StemLayer.REQUESTED,
+                        options = SeparationOptions(quality = quality),
+                        onProgress = onProgress,
+                    )
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Throwable) {
+                    if (!backend.kind.isAccelerated) throw failure
+                    Log.w(TAG, "${backend.kind.label} failed mid-song; continuing below it", failure)
+                    val failed = backend
+                    failed.release()
+                    backend = stemBackends.ready(after = failed.kind) ?: throw failure
+                    used += backend.status().displayName
+                }
+            }
+        }
+    }
+
     private companion object {
+        const val TAG = "StepManiaConversion"
+
         // Ten minutes at 48 kHz. Memory no longer depends on it — the song is
         // streamed — but separating a podcast picked by accident would still
         // take the better part of an hour.

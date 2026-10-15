@@ -25,13 +25,13 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tf.monochrome.android.audio.sampler.PcmDecoder
-import tf.monochrome.android.audio.sampler.stems.BackendKind
 import tf.monochrome.android.audio.sampler.stems.InstallResult
 import tf.monochrome.android.audio.sampler.stems.StemBackendRegistry
 import tf.monochrome.android.audio.sampler.stems.StemModelManager
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import tf.monochrome.android.audio.stepmania.StepManiaGenerationWorker
+import tf.monochrome.android.audio.sampler.stems.QnnStemBackend
 import tf.monochrome.android.audio.stepmania.DropFinder
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.audio.stepmania.StepManiaRequest
@@ -654,8 +654,10 @@ class GlyphViewModel @Inject constructor(
             withContext(Dispatchers.IO) {
                 // Free the loaded session too: it holds the whole model in
                 // native memory, and nothing would use it again.
-                stemBackends.of(BackendKind.CPU)?.release()
+                stemBackends.all().forEach { it.release() }
                 stemModels.uninstall()
+                // The NPU's compiled copy of the model, and what it failed on.
+                QnnStemBackend.clear(context)
             }
             updateModel {
                 it.copy(

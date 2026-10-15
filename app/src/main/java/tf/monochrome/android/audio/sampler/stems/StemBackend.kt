@@ -13,8 +13,15 @@ import tf.monochrome.android.audio.sampler.SampleEdits
  * a progress bar deserves to know why.
  */
 enum class BackendKind(val label: String, val detail: String) {
-    /** Qualcomm Hexagon NPU via QNN. Experimental — see MODEL_CARD.md. */
+    /**
+     * Qualcomm Hexagon NPU via ONNX Runtime's QNN execution provider. The
+     * installed ONNX model runs on it directly, at fp16; whatever the NPU
+     * cannot run of it falls back to the CPU inside the same session.
+     */
     QNN("Snapdragon NPU", "Hardware accelerated"),
+
+    /** Qualcomm Adreno GPU via the same QNN provider: runs the float model as it is. */
+    GPU("Snapdragon GPU", "Hardware accelerated"),
 
     /** ONNX Runtime on the CPU. The tier the product is actually built on. */
     CPU("CPU", "Slower, works everywhere"),
@@ -23,7 +30,7 @@ enum class BackendKind(val label: String, val detail: String) {
     DSP("Built-in", "No model needed"),
     ;
 
-    val isAccelerated: Boolean get() = this == QNN
+    val isAccelerated: Boolean get() = this == QNN || this == GPU
 }
 
 /**

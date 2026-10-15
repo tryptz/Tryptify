@@ -17,6 +17,8 @@ import tf.monochrome.android.audio.sampler.stems.KtorModelTransport
 import tf.monochrome.android.audio.sampler.stems.OnnxStemBackend
 import tf.monochrome.android.audio.sampler.stems.StemModelManager
 import tf.monochrome.android.audio.sampler.stems.StemSeparationBackend
+import tf.monochrome.android.audio.sampler.stems.QnnGpuStemBackend
+import tf.monochrome.android.audio.sampler.stems.QnnNpuStemBackend
 import tf.monochrome.android.audio.sampler.stems.StemSeparator
 import java.io.File
 import javax.inject.Singleton
@@ -85,4 +87,16 @@ abstract class StemModule {
     @Binds
     @IntoSet
     abstract fun bindOnnxBackend(implementation: OnnxStemBackend): StemSeparationBackend
+
+    /**
+     * The same model on a Snapdragon's NPU and GPU. Each reports itself
+     * unavailable on any other phone, and after it once fails to run a model.
+     */
+    @Binds
+    @IntoSet
+    abstract fun bindQnnNpuBackend(implementation: QnnNpuStemBackend): StemSeparationBackend
+
+    @Binds
+    @IntoSet
+    abstract fun bindQnnGpuBackend(implementation: QnnGpuStemBackend): StemSeparationBackend
 }

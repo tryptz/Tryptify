@@ -142,7 +142,11 @@ class SettingsViewModel @Inject constructor(
 
     fun deleteStemModel() {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { stemModels.uninstall() }
+            withContext(Dispatchers.IO) {
+                stemModels.uninstall()
+                // The NPU's compiled copy of the model goes with it.
+                tf.monochrome.android.audio.sampler.stems.QnnStemBackend.clear(appContext)
+            }
             refreshStemAi()
             _messages.emit(UiText.Raw("AI model deleted"))
         }

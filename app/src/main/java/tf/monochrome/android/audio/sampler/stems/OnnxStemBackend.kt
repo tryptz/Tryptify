@@ -16,7 +16,8 @@ import javax.inject.Singleton
 import kotlin.coroutines.coroutineContext
 
 /**
- * Runs a downloaded ONNX separator on the CPU.
+ * Runs a downloaded ONNX separator on the CPU — and, through
+ * [QnnStemBackend], on a Snapdragon's NPU or GPU.
  *
  * This is the backend that makes an installed model mean something. Everything
  * around it already existed — the manager puts a verified file on disk,
@@ -41,24 +42,43 @@ import kotlin.coroutines.coroutineContext
  * explicit that playback must not stall behind it.
  */
 @Singleton
-class OnnxStemBackend @Inject constructor(
-    private val models: StemModelManager,
+open class OnnxStemBackend @Inject constructor(
+    protected val models: StemModelManager,
 ) : StemSeparationBackend {
 
-    override val kind: BackendKind = BackendKind.CPU
+    override val kind: BackendKind get() = BackendKind.CPU
 
     private var session: OrtSession? = null
     private var loadedFor: String? = null
 
     override fun status(): BackendStatus {
         val model = models.installed()
+        val reason = if (model == null) "No model installed" else unavailableReason(model)
         return BackendStatus(
-            kind = BackendKind.CPU,
-            available = model != null,
+            kind = kind,
+            available = reason == null,
             modelName = model?.name,
             modelVersion = model?.version,
-            unavailableReason = if (model == null) "No model installed" else null,
+            unavailableReason = reason,
         )
+    }
+
+    /** Why [model] cannot run here although it is installed; null when it can. */
+    protected open fun unavailableReason(model: StemModel): String? = null
+
+    /**
+     * The session for [model]'s [file]. The CPU's own; an accelerator adds
+     * its execution provider to [baseOptions].
+     */
+    protected open fun openSession(env: OrtEnvironment, model: StemModel, file: java.io.File): OrtSession =
+        env.createSession(file.absolutePath, baseOptions())
+
+    protected fun baseOptions(): OrtSession.SessionOptions = OrtSession.SessionOptions().apply {
+        // Leave a core free. Pinning every thread makes the UI stutter for
+        // the whole job, and the job is measured in minutes.
+        val cores = Runtime.getRuntime().availableProcessors()
+        setIntraOpNumThreads(maxOf(1, cores - 1))
+        setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
     }
 
     override fun availableStems(input: SampleEdits.Buffer): Set<Stem> =
@@ -80,15 +100,7 @@ class OnnxStemBackend @Inject constructor(
         val file = models.modelFile(model)
         require(file.isFile) { "The installed model file is missing" }
 
-        val env = OrtEnvironment.getEnvironment()
-        val options = OrtSession.SessionOptions().apply {
-            // Leave a core free. Pinning every thread makes the UI stutter for
-            // the whole job, and the job is measured in minutes.
-            val cores = Runtime.getRuntime().availableProcessors()
-            setIntraOpNumThreads(maxOf(1, cores - 1))
-            setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-        }
-        val created = env.createSession(file.absolutePath, options)
+        val created = openSession(OrtEnvironment.getEnvironment(), model, file)
         session = created
         loadedFor = model.sha256
         return created
