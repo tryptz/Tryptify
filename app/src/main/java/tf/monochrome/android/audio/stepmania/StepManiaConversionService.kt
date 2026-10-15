@@ -63,13 +63,13 @@ class StepManiaConversionService @Inject constructor(
         val status = backend.status()
         backend.initialize().getOrThrow()
 
-        val envelope = withContext(Dispatchers.Default) {
+        val (envelope, layers) = withContext(Dispatchers.Default) {
             separateStreaming(source, quality, backend, onProgress)
         }
 
         onProgress(StepManiaConversionProgress(0.88f, "Generating charts"))
         val generated = withContext(Dispatchers.Default) {
-            generator.generate(analyzer.analyze(envelope), request)
+            generator.generate(analyzer.analyze(envelope, layers), request)
         }
         withContext(Dispatchers.IO) {
             onProgress(StepManiaConversionProgress(0.97f, "Writing simfile"))
@@ -98,20 +98,27 @@ class StepManiaConversionService @Inject constructor(
      * and dropped. The queue between the two holds one piece, so decoding
      * waits for separation instead of running ahead of it.
      *
-     * Only the drum stem's core is kept from each piece. When the separator
+     * Only each stem's core is kept from each piece. When the separator
      * gives back no drums, or a stem that does not line up with what it was
      * given, the piece's own mix stands in, as the analyzer did for the whole
      * song before.
+     *
+     * Every stem the separator can make is asked for, not just the drums: the
+     * vocals, bass and melody are folded into envelopes of their own
+     * ([StemLayerEnvelopes]) for the chart to follow the tune with. A model
+     * computes all its stems in one pass whatever is asked for, so this costs
+     * a model almost nothing; it costs the built-in separator a mask per stem.
      */
     private suspend fun separateStreaming(
         source: Uri,
         quality: StemQuality,
         backend: StemSeparationBackend,
         onProgress: (StepManiaConversionProgress) -> Unit,
-    ): TransientEnvelopeBuilder = coroutineScope {
+    ): Pair<TransientEnvelopeBuilder, StemLayerEnvelopes> = coroutineScope {
         val chunks = Channel<SeparationChunker.Chunk>(capacity = 1)
         var expectedFrames = 0L
         var envelope: TransientEnvelopeBuilder? = null
+        var layers: StemLayerEnvelopes? = null
 
         launch(Dispatchers.IO) {
             try {
@@ -124,6 +131,7 @@ class StepManiaConversionService @Inject constructor(
                     onFormat = { format ->
                         expectedFrames = format.estimatedFrames
                         envelope = TransientEnvelopeBuilder(format.sampleRate)
+                        layers = StemLayerEnvelopes(format.sampleRate)
                         chunker = SeparationChunker(
                             coreFrames = format.sampleRate * CHUNK_SECONDS,
                             contextFrames = format.sampleRate * CONTEXT_SECONDS,
@@ -139,6 +147,7 @@ class StepManiaConversionService @Inject constructor(
 
         chunks.consumeEach { chunk ->
             val sink = envelope ?: return@consumeEach
+            val layerSink = layers ?: return@consumeEach
             val mix = SampleEdits.Buffer(chunk.left, chunk.right, sink.sampleRate)
             // How far through the song this piece starts and ends, for the bar.
             fun songFraction(within: Float): Float {
@@ -148,7 +157,7 @@ class StepManiaConversionService @Inject constructor(
             }
             val separated = backend.separate(
                 input = mix,
-                requested = setOf(Stem.DRUMS),
+                requested = StemLayer.REQUESTED,
                 options = SeparationOptions(quality = quality),
             ) { progress ->
                 onProgress(
@@ -162,9 +171,11 @@ class StepManiaConversionService @Inject constructor(
                 it.sampleRate == mix.sampleRate && it.frames == mix.frames
             } ?: mix
             sink.add(drums.left, drums.right, chunk.coreOffset, chunk.coreOffset + chunk.coreFrames)
+            layerSink.add(separated, mix.frames, chunk.coreOffset, chunk.coreFrames)
         }
 
-        envelope ?: throw IOException("No audio could be decoded from that file")
+        val drums = envelope ?: throw IOException("No audio could be decoded from that file")
+        drums to (layers ?: StemLayerEnvelopes(drums.sampleRate))
     }
 
     private companion object {
@@ -173,8 +184,13 @@ class StepManiaConversionService @Inject constructor(
         // take the better part of an hour.
         const val MAX_DECODED_FRAMES = 48_000L * 60 * 10
 
-        /** How much of the song is separated at once. */
-        const val CHUNK_SECONDS = 30
+        /**
+         * How much of the song is separated at once. A separator holds every
+         * stem it returns for the whole piece, and charts ask for all of them —
+         * six on a six-stem model — so a piece is kept short enough for six
+         * stems of it to sit comfortably on the heap.
+         */
+        const val CHUNK_SECONDS = 20
 
         /** What each piece hears either side of its own, so its edges come out clean. */
         const val CONTEXT_SECONDS = 3

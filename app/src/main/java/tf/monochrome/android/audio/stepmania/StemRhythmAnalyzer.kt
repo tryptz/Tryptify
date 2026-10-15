@@ -8,6 +8,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import kotlin.math.ln
 import tf.monochrome.android.audio.sampler.SampleEdits
+import tf.monochrome.android.audio.sampler.stems.Stem
 
 /**
  * Lightweight rhythm analysis tuned for an isolated drum stem.
@@ -15,6 +16,9 @@ import tf.monochrome.android.audio.sampler.SampleEdits
  * Separation has already removed most harmonic energy, so a transient envelope
  * plus normalized autocorrelation is enough for the first on-device version.
  * The full mix remains a fallback when no drum stem was requested or produced.
+ *
+ * The other stems never move the tempo; given them, it adds what they do on
+ * the drums' grid (see [StemFeatureExtractor]).
  */
 class StemRhythmAnalyzer(
     private val minimumBpm: Float = 65f,
@@ -32,6 +36,31 @@ class StemRhythmAnalyzer(
         val envelope = TransientEnvelopeBuilder(source.sampleRate)
         envelope.add(source.left, source.right, 0, source.frames)
         return analyze(envelope)
+    }
+
+    /**
+     * Drums for the tempo and grid, and every other stem the separator gave
+     * back for what the tune does on that grid (see [StemFeatureExtractor]).
+     */
+    override fun analyze(
+        mix: SampleEdits.Buffer,
+        stems: Map<Stem, SampleEdits.Buffer>,
+    ): RhythmAnalysis {
+        val drums = stems[Stem.DRUMS]?.takeIf {
+            it.sampleRate == mix.sampleRate && it.frames == mix.frames
+        } ?: mix
+        require(drums.sampleRate > 0) { "sample rate must be positive" }
+        val envelope = TransientEnvelopeBuilder(drums.sampleRate)
+        envelope.add(drums.left, drums.right, 0, drums.frames)
+        val layers = StemLayerEnvelopes(drums.sampleRate)
+        layers.add(stems, mix.frames, 0, mix.frames)
+        return analyze(envelope, layers)
+    }
+
+    /** [analyze] of the drums, with what [layers] heard on the same grid. */
+    fun analyze(envelope: TransientEnvelopeBuilder, layers: StemLayerEnvelopes): RhythmAnalysis {
+        val rhythm = analyze(envelope)
+        return rhythm.copy(stems = StemFeatureExtractor.extract(rhythm, layers.builders))
     }
 
     /**
@@ -195,6 +224,10 @@ class StemRhythmAnalyzer(
  * scale. A block boundary changes nothing — the difference across it is taken
  * from the last sample of the block before — so streaming a song through this
  * gives exactly the values the whole song in one buffer does.
+ *
+ * Alongside it, how often the signal crosses zero in each hop ([crossingRates]).
+ * On a melodic stem that rises and falls with the pitch, which is all the
+ * chart needs from it: which way the tune went between two notes.
  */
 class TransientEnvelopeBuilder(val sampleRate: Int) {
 
@@ -210,6 +243,8 @@ class TransientEnvelopeBuilder(val sampleRate: Int) {
     private var differenceEnergy = 0.0
     private var peak = 0f
     private var inHop = 0
+    private var rates = FloatArray(1024)
+    private var crossings = 0
 
     /** Frames taken so far. */
     var frames = 0L
@@ -224,6 +259,7 @@ class TransientEnvelopeBuilder(val sampleRate: Int) {
                 started = true
             }
             val difference = sample - previous
+            if ((sample >= 0f) != (previous >= 0f)) crossings += 1
             differenceEnergy += difference * difference
             peak = max(peak, kotlin.math.abs(sample))
             previous = sample
@@ -240,14 +276,32 @@ class TransientEnvelopeBuilder(val sampleRate: Int) {
         return out
     }
 
+    /**
+     * Zero crossings per second in each hop, the same length as [raw]. Half of
+     * it is a pure tone's frequency.
+     */
+    fun crossingRates(): FloatArray {
+        val out = rates.copyOf(count + if (inHop > 0) 1 else 0)
+        if (inHop > 0) out[count] = rateOf(crossings, inHop)
+        return out
+    }
+
     private fun close() {
-        if (count == values.size) values = values.copyOf(values.size * 2)
+        if (count == values.size) {
+            values = values.copyOf(values.size * 2)
+            rates = rates.copyOf(values.size)
+        }
         values[count] = valueOf(differenceEnergy, peak, inHop)
+        rates[count] = rateOf(crossings, inHop)
         count += 1
         differenceEnergy = 0.0
         peak = 0f
         inHop = 0
+        crossings = 0
     }
+
+    private fun rateOf(crossings: Int, samples: Int): Float =
+        crossings.toFloat() * sampleRate / samples.coerceAtLeast(1)
 
     private fun valueOf(energy: Double, peak: Float, samples: Int): Float {
         val highPassedRms = sqrt(energy / samples.coerceAtLeast(1)).toFloat()

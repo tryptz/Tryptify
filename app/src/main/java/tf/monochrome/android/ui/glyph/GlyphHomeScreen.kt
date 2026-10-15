@@ -468,8 +468,9 @@ private fun SelectionPanel(
                             GlyphChartState.UNREADABLE ->
                                 "The chart on disk could not be read. Generating again will replace it."
                             else ->
-                                "This song has no chart yet. Generating one separates the drums " +
-                                    "and reads the rhythm off them; it runs offline and takes a while."
+                                "This song has no chart yet. Generating one separates the drums, vocals, " +
+                                    "melody and bass, and charts the beat and the tune; it runs offline " +
+                                    "and in the background, and takes a while."
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

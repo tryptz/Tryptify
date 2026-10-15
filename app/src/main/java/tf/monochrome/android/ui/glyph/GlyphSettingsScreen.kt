@@ -535,7 +535,7 @@ private fun ModelSection(model: GlyphModelUi, onEvent: (GlyphEvent) -> Unit) {
     GlyphPanel(modifier = Modifier.fillMaxWidth()) {
         val scheme = MaterialTheme.colorScheme
         Text(
-            text = "Drum separation model",
+            text = "Stem separation model",
             style = MaterialTheme.typography.titleSmall,
             modifier = Modifier.semantics { heading() },
         )
@@ -543,7 +543,7 @@ private fun ModelSection(model: GlyphModelUi, onEvent: (GlyphEvent) -> Unit) {
         val installed = model.installedName
         Text(
             text = if (installed != null) {
-                "$installed · ${StemModelManager.formatBytes(model.sizeBytes)}. New charts read the rhythm off its drum stem."
+                "$installed · ${StemModelManager.formatBytes(model.sizeBytes)}. New charts read the rhythm off its drums and follow the vocals, melody and bass."
             } else {
                 "None installed. Charts use the built-in separator, which hears drums less cleanly. " +
                     "Import a model file from your phone to use it instead."
