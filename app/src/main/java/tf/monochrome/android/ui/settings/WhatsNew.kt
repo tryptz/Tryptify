@@ -65,6 +65,9 @@ object WhatsNew {
     /** What travels between this device and the signed-in account, and when. */
     private const val ACCOUNT_SYNC = "Account sync"
 
+    /** Listening stats and achievements: what the plays add up to. */
+    private const val STATS = "Stats"
+
     /** The app as a whole: the languages it speaks, the size of its download. */
     private const val APP = "The app"
 
@@ -189,6 +192,30 @@ object WhatsNew {
                     body = "Your library galaxy sits in the genre galaxy's sky. Switch between them from the title bar and the view stays where it was.",
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = STATS,
+                    title = "Stats to dig into",
+                    body = "Stats shows time listened against the period before, when you listen, your top artist, what's on repeat, new artists, your streak and audio quality. Every card opens a chart: tap a bar or a row to see what it holds.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = STATS,
+                    title = "Achievements",
+                    body = "Ten goals, from a 30-day streak and 25 new artists in a month to trying the mixer, AutoEQ and World radio. Each shows how far along you are, with a button that takes you there. They stay on this phone.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = ACCOUNT_SYNC,
+                    title = "Your picture and username",
+                    body = "The account button in the top bar shows your picture, or your initials, when you're signed in. Pick your own photo and choose a username: the photo stays on this phone, the username follows your account.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = DOWNLOADS,
+                    title = "Search and sort Downloads",
+                    body = "Downloads has the search bar and the sort options of Liked Songs, plus sorting by file size. Tapping a song plays the list as you've searched and sorted it.",
+                ),
+                WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = DISCOVER,
                     title = "Galaxy and Timeline are two pills",
@@ -270,7 +297,7 @@ object WhatsNew {
                     kind = WhatsNewKind.CHANGED,
                     section = USB_DAC,
                     title = "No full-volume burst between songs",
-                    body = "A song change could play a moment of noise at the DAC's full volume, whatever the volume was set to. Samples that aren't audio are now held to the volume set, and a crossfade's outgoing song gets Samsung's 16-bit fix too.",
+                    body = "A song change could play a moment of noise at the DAC's full volume, whatever the volume was set to. Samples are now limited before the volume, leaving room for EQ boosts of up to 12 dB, and a crossfade's outgoing song gets Samsung's 16-bit fix too.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
