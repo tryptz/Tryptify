@@ -117,8 +117,8 @@ Java_tf_monochrome_android_glyph_engine_GlyphNativeBridge_nativeCreate(
     std::vector<Note> notes(t.size());
     for (std::size_t i = 0; i < t.size(); ++i) {
         // A lane past the arrays would be a write past them on its hold.
-        if (l[i] < 0 || l[i] >= kLaneCount) {
-            LOGE("note %zu is on lane %d, outside 0..%d", i, l[i], kLaneCount - 1);
+        if (l[i] < 0 || l[i] >= tryptify::glyph::kLaneCount) {
+            LOGE("note %zu is on lane %d, outside 0..%d", i, l[i], tryptify::glyph::kLaneCount - 1);
             return 0;
         }
         notes[i] = Note{t[i], e[i], l[i], ty[i]};
