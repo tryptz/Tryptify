@@ -4,6 +4,7 @@ package tf.monochrome.android.glyph.data
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import tf.monochrome.android.audio.stepmania.CourseType
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.glyph.engine.GlyphJudgement
 
@@ -62,6 +63,8 @@ data class GlyphAttempt(
     /** Timing window scale; 1 is StepMania's Judge 4. */
     @SerialName("judgeScale") val judgeScale: Float = 1f,
     @SerialName("turn") val turn: String = "off",
+    /** The buttons the run was on. A run saved before pop'n was on the dance panels. */
+    @SerialName("course") val course: CourseType = CourseType.DANCE,
 ) {
     val isFullRun: Boolean get() = segmentStartSeconds == null
 
@@ -106,7 +109,7 @@ data class GlyphGhost(
     @SerialName("v") val version: Int = GlyphAttempt.CURRENT_VERSION,
     /** Song position of each judged note, ascending. */
     @SerialName("t") val timesMs: List<Int> = emptyList(),
-    /** Lane index per judgement, 0..3. */
+    /** Lane index per judgement: 0..3 on the dance panels, 0..8 on pop'n's buttons. */
     @SerialName("l") val lanes: List<Int> = emptyList(),
     /** Signed timing error per judgement, negative is early. */
     @SerialName("o") val offsetsMs: List<Int> = emptyList(),

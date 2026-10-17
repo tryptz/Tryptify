@@ -26,7 +26,10 @@
 
 namespace tryptify::glyph {
 
-constexpr int kLaneCount = 4;
+// Every column either course can have: dance uses the first four, pop'n all
+// nine. Sized once for the most, so a chart of either plays in the same
+// arrays; which are in use is the chart's business.
+constexpr int kLaneCount = 9;
 
 enum NoteType : int32_t { kTap = 0, kHold = 1, kRoll = 2, kMine = 3, kLift = 4, kFake = 5 };
 
@@ -196,8 +199,8 @@ private:
 
     std::size_t cursor_ = 0;
     float position_ = 0.0f;
-    bool laneHeld_[kLaneCount] = {false, false, false, false};
-    int32_t activeHold_[kLaneCount] = {-1, -1, -1, -1};
+    bool laneHeld_[kLaneCount] = {};
+    int32_t activeHold_[kLaneCount] = {-1, -1, -1, -1, -1, -1, -1, -1, -1};
 
     // Pending events: a ring sized for every judgement the chart can produce.
     std::vector<Event> events_;

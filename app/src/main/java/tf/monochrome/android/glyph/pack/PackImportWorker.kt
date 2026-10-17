@@ -83,7 +83,7 @@ class PackImportWorker @AssistedInject constructor(
             }
             library.refresh()
             val packs = result.packs.joinToString(", ") { it.name }
-            val skipped = if (result.skippedSongs > 0) " ${result.skippedSongs} without a four-panel chart were left out." else ""
+            val skipped = if (result.skippedSongs > 0) " ${result.skippedSongs} without a dance or pop'n chart were left out." else ""
             notifyFinished("Pack imported", "$packs: ${result.songs} songs.$skipped")
             Result.success(workDataOf(KEY_NAME to packs, KEY_SONGS to result.songs, KEY_SKIPPED to result.skippedSongs))
         } catch (cancelled: CancellationException) {
@@ -123,7 +123,7 @@ class PackImportWorker @AssistedInject constructor(
         )
         library.refresh()
         val packs = result.packs.joinToString(", ") { it.name }
-        val skipped = if (result.skippedSongs > 0) " ${result.skippedSongs} without a four-panel chart were left out." else ""
+        val skipped = if (result.skippedSongs > 0) " ${result.skippedSongs} without a dance or pop'n chart were left out." else ""
         notifyFinished("Songs imported", "$packs: ${result.songs} songs.$skipped")
         return Result.success(workDataOf(KEY_NAME to packs, KEY_SONGS to result.songs, KEY_SKIPPED to result.skippedSongs))
     }

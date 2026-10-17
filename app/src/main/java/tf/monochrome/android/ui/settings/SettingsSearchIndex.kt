@@ -181,6 +181,11 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
             "training ground", "practice", "simfile", "ddr", "itg",
         ),
     ).at(SettingsDestination.Route("glyph")),
+    entry(
+        "Course type", null,
+        "Audio",
+        listOf("pop'n", "popn", "pop'n music", "nine buttons", "9 buttons", "four panels", "dance", "trypt mania", "pnm"),
+    ).at(SettingsDestination.Route("glyph")),
     entry("Streaming quality", R.string.settings_streaming_quality, "Audio", listOf("bitrate", "wifi", "cellular", "data", "tidal", "qobuz", "deezer", "aac", "mp3", "flac", "hi-res", "dolby", "atmos")),
     // The switch itself, so "atmos" lands on it rather than on the header,
     // whose text reads "Download quality" while the tab shows downloads.

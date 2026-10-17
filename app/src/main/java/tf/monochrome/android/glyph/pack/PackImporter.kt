@@ -10,6 +10,7 @@ import java.util.zip.ZipInputStream
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import tf.monochrome.android.glyph.chart.SmConverter
+import tf.monochrome.android.audio.stepmania.CourseType
 import tf.monochrome.android.glyph.chart.SscParser
 
 /**
@@ -132,7 +133,7 @@ class PackImporter(
                 pack?.let { linked += it }
             }
             if (linked.isEmpty()) {
-                throw PackImportException("No song in that folder has a four-panel (dance-single) chart with its music.")
+                throw PackImportException("No song in that folder has a dance (dance-single) or pop'n (pnm-nine) chart with its music.")
             }
             return Result(linked, skippedInPlace)
         }
@@ -203,7 +204,7 @@ class PackImporter(
             }
         }
         if (packs.isEmpty()) {
-            throw PackImportException("No song in that folder has a four-panel (dance-single) chart with its music.")
+            throw PackImportException("No song in that folder has a dance (dance-single) or pop'n (pnm-nine) chart with its music.")
         }
         return Result(packs, skipped)
     }
@@ -338,7 +339,9 @@ class PackImporter(
         if (chartFile.size > 16L * MB) return null
         val text = runCatching { chartFile.open().use { it.readBytes().toString(Charsets.UTF_8) } }.getOrNull() ?: return null
         val ssc = SmConverter.toSsc(text)
-        val simfile = runCatching { SscParser.parse(ssc) }.getOrNull() ?: return null
+        // A song plays with a chart of either course: the dance panels, or pop'n's buttons.
+        val popn = runCatching { SscParser.parse(ssc, CourseType.POPN) }.getOrNull()
+        val simfile = runCatching { SscParser.parse(ssc, CourseType.DANCE) }.getOrNull() ?: popn ?: return null
         val musicName = StepManiaPack.musicName(names, ssc) ?: return null
         val music = files.first { it.path.last() == musicName }
         val musicUri = music.uri ?: return null
@@ -357,7 +360,8 @@ class PackImporter(
             title = simfile.title,
             artist = simfile.artist,
             durationSeconds = runCatching { durationOfUri(musicUri) }.getOrDefault(0),
-            difficulties = simfile.availableDifficulties.map { it.name },
+            difficulties = if (simfile.charts.first().course == CourseType.DANCE) simfile.availableDifficulties.map { it.name } else emptyList(),
+            popnDifficulties = popn?.availableDifficulties?.map { it.name }.orEmpty(),
             bpm = simfile.listedBpm,
             musicUri = musicUri,
             artUri = art?.uri,
@@ -429,14 +433,14 @@ class PackImporter(
             packs += ImportedPack(packName, destination, songs.size)
         }
         if (packs.isEmpty()) {
-            throw PackImportException("No song in that pack has a four-panel (dance-single) chart with its music.")
+            throw PackImportException("No song in that pack has a dance (dance-single) or pop'n (pnm-nine) chart with its music.")
         }
         return Result(packs, skipped)
     }
 
     /**
      * Check one song folder and make its chart an `.ssc`. Null when it cannot
-     * be played: no chart that reads, no four-panel chart, or no music.
+     * be played: no chart that reads, no dance or pop'n chart, or no music.
      */
     private fun prepareSong(folder: File): PackIndex.Song? {
         val chartFile = StepManiaPack.CHART_EXTENSIONS.firstNotNullOfOrNull { ext ->
@@ -444,7 +448,9 @@ class PackImporter(
         } ?: return null
         val text = runCatching { chartFile.readText() }.getOrNull() ?: return null
         val ssc = SmConverter.toSsc(text)
-        val simfile = runCatching { SscParser.parse(ssc) }.getOrNull() ?: return null
+        // A song plays with a chart of either course: the dance panels, or pop'n's buttons.
+        val popn = runCatching { SscParser.parse(ssc, CourseType.POPN) }.getOrNull()
+        val simfile = runCatching { SscParser.parse(ssc, CourseType.DANCE) }.getOrNull() ?: popn ?: return null
         val music = StepManiaPack.music(folder, ssc) ?: return null
 
         // An .sm is kept as it came, with the .ssc the app reads beside it.
@@ -460,7 +466,8 @@ class PackImporter(
             title = simfile.title,
             artist = simfile.artist,
             durationSeconds = runCatching { durationOf(music) }.getOrDefault(0),
-            difficulties = simfile.availableDifficulties.map { it.name },
+            difficulties = if (simfile.charts.first().course == CourseType.DANCE) simfile.availableDifficulties.map { it.name } else emptyList(),
+            popnDifficulties = popn?.availableDifficulties?.map { it.name }.orEmpty(),
             bpm = simfile.listedBpm,
         )
     }
@@ -499,5 +506,10 @@ class PackImporter(
         fun readIndex(folder: File): PackIndex? = runCatching {
             JSON.decodeFromString<PackIndex>(File(folder, StepManiaPack.INDEX_FILE).readText())
         }.getOrNull()
+
+        /** Write [index] for the pack in [folder], as the importer writes it. */
+        fun writeIndex(folder: File, index: PackIndex) {
+            File(folder, StepManiaPack.INDEX_FILE).writeText(JSON.encodeToString(index))
+        }
     }
 }

@@ -2575,4 +2575,9 @@
     <string name="fx_curve_all">Toda la letra</string>
     <string name="fx_curve_line">Línea cantada</string>
     <string name="fx_curve_word">Palabra cantada</string>
+    <string name="glyph_course_type">Tipo de curso</string>
+    <string name="glyph_course_dance">Baile</string>
+    <string name="glyph_course_popn">pop\'n</string>
+    <string name="glyph_course_dance_note">Cuatro paneles de flechas, como empezó el modo</string>
+    <string name="glyph_course_popn_note">Los nueve botones de colores de pop\'n music: cuatro arriba, cinco abajo</string>
 </resources>

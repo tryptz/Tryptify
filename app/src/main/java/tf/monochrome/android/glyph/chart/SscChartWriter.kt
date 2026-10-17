@@ -3,6 +3,7 @@
 package tf.monochrome.android.glyph.chart
 
 import java.util.Locale
+import tf.monochrome.android.audio.stepmania.CourseType
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 
 /**
@@ -16,12 +17,18 @@ import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
  */
 object SscChartWriter {
 
-    /** [text] with [difficulty]'s note data replaced by [noteData], or added. */
+    /**
+     * [text] with [difficulty]'s note data of [course] replaced by
+     * [noteData], or added. The course matters: a file can hold a dance and
+     * a pop'n chart of the same difficulty, and an edit to one must leave the
+     * other as it was.
+     */
     fun withChart(
         text: String,
         difficulty: StepManiaDifficulty,
         meter: Int,
         noteData: String,
+        course: CourseType = CourseType.DANCE,
     ): String {
         val tags = tagsOf(text)
         // The chart blocks: each starts at a #NOTEDATA and runs to the next.
@@ -31,14 +38,27 @@ object SscChartWriter {
             val block = tags.subList(start, end)
             val label = block.firstOrNull { it.key == "DIFFICULTY" }?.value ?: continue
             if (difficultyOf(label) != difficulty) continue
+            if (!course.matchesStepsType(block.firstOrNull { it.key == "STEPSTYPE" }?.value)) continue
             val notes = block.firstOrNull { it.key == "NOTES" } ?: continue
             return text.replaceRange(notes.valueStart, notes.valueEnd, "\n" + noteData)
         }
         return buildString {
             append(text.trimEnd())
             append("\n\n")
-            append(chartBlock(difficulty, meter, noteData))
+            append(chartBlock(difficulty, meter, noteData, course))
         }
+    }
+
+    /**
+     * [text] with [other]'s chart blocks after its own: one StepMania
+     * simfile holding a song's dance and pop'n charts, which the app keeps
+     * in two files. [other]'s header is left behind; the song's timing is
+     * [text]'s. Just [text] when there is no other.
+     */
+    fun withOtherCourse(text: String, other: String?): String {
+        if (other.isNullOrBlank()) return text
+        val firstChart = tagsOf(other).firstOrNull { it.key == "NOTEDATA" }?.tagStart ?: return text
+        return text.trimEnd() + "\n\n" + other.substring(firstChart).trim() + "\n"
     }
 
     /**
@@ -66,6 +86,7 @@ object SscChartWriter {
         difficulty: StepManiaDifficulty,
         meter: Int,
         noteData: String,
+        course: CourseType = CourseType.DANCE,
     ): String = buildString {
         append("#VERSION:0.83;\n")
         append("#TITLE:${tag(title)};\n")
@@ -75,13 +96,13 @@ object SscChartWriter {
         append("#OFFSET:${decimal(-beatZeroSeconds)};\n")
         append("#BPMS:0.000=${decimal(bpm)};\n")
         append("#DISPLAYBPM:${decimal(bpm)};\n\n")
-        append(chartBlock(difficulty, meter, noteData))
+        append(chartBlock(difficulty, meter, noteData, course))
     }
 
-    private fun chartBlock(difficulty: StepManiaDifficulty, meter: Int, noteData: String): String = buildString {
+    private fun chartBlock(difficulty: StepManiaDifficulty, meter: Int, noteData: String, course: CourseType): String = buildString {
         append("#NOTEDATA:;\n")
         append("#CHARTNAME:${difficulty.sscName};\n")
-        append("#STEPSTYPE:dance-single;\n")
+        append("#STEPSTYPE:${course.stepsType};\n")
         append("#DESCRIPTION:Made in the map editor;\n")
         append("#CHARTSTYLE:;\n")
         append("#DIFFICULTY:${difficulty.sscName};\n")

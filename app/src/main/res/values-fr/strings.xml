@@ -2575,4 +2575,9 @@
     <string name="fx_curve_all">Toutes les paroles</string>
     <string name="fx_curve_line">Ligne chantée</string>
     <string name="fx_curve_word">Mot chanté</string>
+    <string name="glyph_course_type">Type de parcours</string>
+    <string name="glyph_course_dance">Danse</string>
+    <string name="glyph_course_popn">pop\'n</string>
+    <string name="glyph_course_dance_note">Quatre panneaux fléchés, comme au début du mode</string>
+    <string name="glyph_course_popn_note">Les neuf boutons colorés de pop\'n music : quatre en haut, cinq en bas</string>
 </resources>

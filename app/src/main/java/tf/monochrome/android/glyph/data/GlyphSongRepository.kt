@@ -10,10 +10,12 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.withContext
+import tf.monochrome.android.audio.stepmania.CourseType
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.data.local.repository.LocalMediaRepository
 import tf.monochrome.android.domain.model.AudioCodec
@@ -47,6 +49,13 @@ class GlyphSongRepository @Inject constructor(
         get() = File(context.filesDir, CHART_DIRECTORY).apply { mkdirs() }
 
     /**
+     * The course the list is for: which of a song's charts it says it has.
+     * Set by the screen when the player switches; the list re-emits with
+     * each song's charts of that course.
+     */
+    val course = MutableStateFlow(CourseType.DANCE)
+
+    /**
      * Every local MP3 or FLAC, each with whatever chart it already has, then
      * every song of every imported StepMania pack ([GlyphPackLibrary]).
      *
@@ -57,15 +66,31 @@ class GlyphSongRepository @Inject constructor(
     fun songs(): Flow<List<GlyphSong>> = combine(
         localMedia.getAllTracks(),
         packs.songs.onStart { packs.ensureLoaded() },
-    ) { tracks, packSongs ->
-        tracks.filter { it.isConvertible }.map { it.toGlyphSong() } + packSongs.map { it.withEditedChart() }
+        course,
+    ) { tracks, packSongs, course ->
+        tracks.filter { it.isConvertible }.map { it.toGlyphSong(course) } +
+            packSongs.map { it.forCourse(course).withEditedChart(course) }
     }
 
     /** A pack song whose chart was edited here: what the list says comes from the edit. */
-    private suspend fun GlyphSong.withEditedChart(): GlyphSong {
-        if (!simfileFile(trackId).exists()) return this
-        val edited = simfile(trackId) ?: return this
-        return copy(bpm = edited.listedBpm, difficulties = edited.availableDifficulties)
+    private suspend fun GlyphSong.withEditedChart(course: CourseType): GlyphSong {
+        if (!simfileFile(trackId, course).exists()) return this
+        val edited = simfile(trackId, course) ?: return this
+        return copy(bpm = edited.listedBpm, difficulties = edited.availableDifficulties, chartState = GlyphChartState.READY)
+    }
+
+    /** [this] pack song as [course] sees it: that course's charts, from the pack's index. */
+    private fun GlyphSong.forCourse(course: CourseType): GlyphSong {
+        val levels = chartsByCourse[course].orEmpty()
+        return copy(
+            difficulties = levels,
+            chartState = when {
+                levels.isNotEmpty() -> GlyphChartState.READY
+                // A pack song with a chart of the other course only can be charted for this one.
+                chartsByCourse.values.any { it.isNotEmpty() } -> GlyphChartState.NOT_GENERATED
+                else -> GlyphChartState.UNREADABLE
+            },
+        )
     }
 
     suspend fun song(trackId: String): GlyphSong? =
@@ -81,8 +106,9 @@ class GlyphSongRepository @Inject constructor(
      * here instead of trusting the cached row.
      */
     suspend fun withCurrentChart(song: GlyphSong): Pair<GlyphSong, GlyphSimfile?> {
-        val simfile = simfile(song.trackId)
-        val exists = withContext(Dispatchers.IO) { chartFile(song.trackId).exists() }
+        val course = course.value
+        val simfile = simfile(song.trackId, course)
+        val exists = withContext(Dispatchers.IO) { chartFile(song.trackId, course).exists() }
         return song.copy(
             bpm = simfile?.listedBpm ?: song.bpm,
             difficulties = simfile?.availableDifficulties.orEmpty(),
@@ -95,25 +121,28 @@ class GlyphSongRepository @Inject constructor(
     }
 
     /**
-     * Where the app's own simfile for [trackId] is written, whether or not it
-     * exists yet: a generated chart, or an edit. A pack song's edit goes here
-     * too, so the pack's own file is never written to.
+     * Where the app's own simfile for [trackId] and [course] is written,
+     * whether or not it exists yet: a generated chart, or an edit. A pack
+     * song's edit goes here too, so the pack's own file is never written to.
+     * The dance file keeps the name it always had; pop'n's sits beside it.
      */
-    fun simfileFile(trackId: String): File = File(chartRoot, "${chartId(trackId)}.ssc")
+    fun simfileFile(trackId: String, course: CourseType = this.course.value): File =
+        File(chartRoot, "${chartId(trackId)}${course.fileSuffix}.ssc")
 
     /**
-     * The chart [trackId] plays from: the app's own when there is one, else a
-     * pack song's chart from its pack. What the editor starts from, too.
+     * The chart [trackId] plays from in [course]: the app's own when there is
+     * one, else a pack song's chart from its pack, which may hold charts of
+     * either course. What the editor starts from, too.
      */
-    fun chartFile(trackId: String): File {
-        val own = simfileFile(trackId)
+    fun chartFile(trackId: String, course: CourseType = this.course.value): File {
+        val own = simfileFile(trackId, course)
         if (own.exists()) return own
         return packs.chartFile(trackId) ?: own
     }
 
     /** The text of [chartFile], or null when there is none. */
-    suspend fun chartText(trackId: String): String? = withContext(Dispatchers.IO) {
-        chartFile(trackId).takeIf { it.isFile }?.readText()
+    suspend fun chartText(trackId: String, course: CourseType = this.course.value): String? = withContext(Dispatchers.IO) {
+        chartFile(trackId, course).takeIf { it.isFile }?.readText()
     }
 
     /**
@@ -133,10 +162,10 @@ class GlyphSongRepository @Inject constructor(
      * one. The reason is logged rather than surfaced as an error state nobody
      * can act on.
      */
-    suspend fun simfile(trackId: String): GlyphSimfile? = withContext(Dispatchers.IO) {
-        val file = chartFile(trackId)
+    suspend fun simfile(trackId: String, course: CourseType = this.course.value): GlyphSimfile? = withContext(Dispatchers.IO) {
+        val file = chartFile(trackId, course)
         if (!file.exists()) return@withContext null
-        runCatching { SscParser.parse(file.readText()) }
+        runCatching { SscParser.parse(file.readText(), course) }
             .onFailure { Log.w(TAG, "chart for $trackId is unreadable: ${it.message}") }
             .getOrNull()
     }
@@ -145,10 +174,10 @@ class GlyphSongRepository @Inject constructor(
         get() = sourceType == tf.monochrome.android.domain.model.SourceType.LOCAL &&
             (codec == AudioCodec.MP3 || codec == AudioCodec.FLAC)
 
-    private suspend fun UnifiedTrack.toGlyphSong(): GlyphSong {
+    private suspend fun UnifiedTrack.toGlyphSong(course: CourseType): GlyphSong {
         val path = (source as? PlaybackSource.LocalFile)?.filePath.orEmpty()
-        val chartFile = simfileFile(id)
-        val simfile = if (chartFile.exists()) simfile(id) else null
+        val chartFile = simfileFile(id, course)
+        val simfile = if (chartFile.exists()) simfile(id, course) else null
         return GlyphSong(
             trackId = id,
             chartId = chartId(id),
@@ -209,6 +238,8 @@ data class GlyphSong(
     val pack: String? = null,
     /** A pack song's own full-screen background, what its `#BACKGROUND` names; null for any other. */
     val backgroundUri: String? = null,
+    /** A pack song's charts of each course, from its index; empty for a song of the library. */
+    val chartsByCourse: Map<CourseType, List<StepManiaDifficulty>> = emptyMap(),
 ) {
     val hasChart: Boolean get() = chartState == GlyphChartState.READY
 

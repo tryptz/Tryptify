@@ -83,6 +83,8 @@ import tf.monochrome.android.R
 import tf.monochrome.android.glyph.asset.GlyphBeatDivision
 import tf.monochrome.android.glyph.asset.GlyphPalette
 import tf.monochrome.android.glyph.chart.GlyphNoteType
+import tf.monochrome.android.audio.stepmania.CourseType
+import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.glyph.editor.GlyphChartDraft
 import tf.monochrome.android.glyph.editor.GlyphEditTool
 import tf.monochrome.android.glyph.editor.GlyphSnap
@@ -142,9 +144,9 @@ fun GlyphEditorScreen(
                 val code = event.nativeKeyEvent.keyCode
                 val stepBeats = 1f / editor.snap.perBeat
                 val lane = when {
-                    code in KEYCODE_1..KEYCODE_4 -> code - KEYCODE_1
+                    code in KEYCODE_1 until KEYCODE_1 + editor.draft.laneCount -> code - KEYCODE_1
                     code in ARROW_KEYS -> null
-                    else -> state.keys.laneFor(code)?.ordinal
+                    else -> state.keys.laneFor(code, editor.draft.course)?.ordinal
                 }
                 when {
                     code == KEYCODE_SPACE -> onEvent(GlyphEvent.EditorTogglePlay(playhead))
@@ -167,7 +169,7 @@ fun GlyphEditorScreen(
                 Column {
                     Text("Map editor", maxLines = 1, modifier = Modifier.semantics { heading() })
                     Text(
-                        text = "${editor.song.title} · ${editor.difficulty.sscName} ${editor.meter}" +
+                        text = "${editor.song.title} · ${editor.draft.course.difficultyLabel(editor.difficulty)} ${editor.meter}" +
                             if (editor.isNew) " · new" else "",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -382,9 +384,9 @@ private fun EditorGrid(
             .pointerInput(editor.playing) {
                 if (editor.playing) return@pointerInput
                 detectTapGestures { tap ->
-                    val laneWidth = (size.width - gutterPx) / GlyphChartDraft.LANES
+                    val laneWidth = (size.width - gutterPx) / editor.draft.laneCount
                     val lane = floor((tap.x - gutterPx) / laneWidth).toInt()
-                    if (lane !in 0 until GlyphChartDraft.LANES) return@detectTapGestures
+                    if (lane !in 0 until editor.draft.laneCount) return@detectTapGestures
                     val beat = playhead() + (tap.y - size.height * PLAYHEAD_AT) / beatPx
                     onEvent(GlyphEvent.EditorTap(beat, lane))
                 }
@@ -403,13 +405,15 @@ private fun EditorGrid(
     ) {
         val head = playhead()
         val playY = size.height * PLAYHEAD_AT
-        val laneWidth = (size.width - gutterPx) / GlyphChartDraft.LANES
+        val laneCount = editor.draft.laneCount
+        val course = editor.draft.course
+        val laneWidth = (size.width - gutterPx) / laneCount
         val firstBeat = head - playY / beatPx
         val lastBeat = head + (size.height - playY) / beatPx
         fun yOf(beat: Float) = playY + (beat - head) * beatPx
 
         // Alternate lane grounds.
-        for (lane in 0 until GlyphChartDraft.LANES) {
+        for (lane in 0 until laneCount) {
             if (lane % 2 == 1) {
                 drawRect(
                     GlyphTheme.InkPanel,
@@ -467,7 +471,8 @@ private fun EditorGrid(
             if (note.endTick < firstTick || note.tick > lastTick) continue
             val cx = gutterPx + (note.lane + 0.5f) * laneWidth
             val y = yOf(note.tick / GlyphChartDraft.TICKS_PER_BEAT.toFloat())
-            val colour = divisionColour(note.tick, palette)
+            // A dance note is coloured by its beat; a pop-kun by its button.
+            val colour = if (course == CourseType.POPN) GlyphPopnArt.colour(GlyphLane.entries[note.lane]) else divisionColour(note.tick, palette)
             if (note.type.hasTail) {
                 val end = yOf(note.endTick / GlyphChartDraft.TICKS_PER_BEAT.toFloat())
                 drawRoundRect(
@@ -479,6 +484,8 @@ private fun EditorGrid(
             }
             if (note.type == GlyphNoteType.MINE) {
                 drawMine(Offset(cx, y), noteSize * 0.42f)
+            } else if (course == CourseType.POPN) {
+                with(GlyphPopnArt) { drawPopnNote(Offset(cx, y), noteSize, GlyphLane.entries[note.lane]) }
             } else {
                 drawArrow(Offset(cx, y), noteSize, note.lane, colour)
             }
@@ -620,7 +627,6 @@ private const val KEYCODE_DPAD_DOWN = 20
 private const val KEYCODE_PAGE_UP = 92
 private const val KEYCODE_PAGE_DOWN = 93
 private const val KEYCODE_1 = 8
-private const val KEYCODE_4 = 11
 
 /** Up, down, left and right: in the editor they move, never place. */
 private val ARROW_KEYS = setOf(19, 20, 21, 22)

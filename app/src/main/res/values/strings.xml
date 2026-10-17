@@ -2514,4 +2514,9 @@
     <string name="fx_curve_all">All lyrics</string>
     <string name="fx_curve_line">Sung line</string>
     <string name="fx_curve_word">Sung word</string>
+    <string name="glyph_course_type">Course type</string>
+    <string name="glyph_course_dance">Dance</string>
+    <string name="glyph_course_popn">pop\'n</string>
+    <string name="glyph_course_dance_note">Four arrow panels, as the mode began</string>
+    <string name="glyph_course_popn_note">pop\'n music\'s nine coloured buttons: four above, five below</string>
 </resources>

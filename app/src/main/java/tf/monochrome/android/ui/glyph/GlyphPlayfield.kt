@@ -36,6 +36,7 @@ import tf.monochrome.android.glyph.asset.GlyphAssetId
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
 import tf.monochrome.android.glyph.asset.GlyphBeatDivision
 import tf.monochrome.android.glyph.asset.GlyphEffectArt
+import tf.monochrome.android.audio.stepmania.CourseType
 import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.glyph.asset.GlyphPalette
 import tf.monochrome.android.glyph.asset.GlyphSkin
@@ -113,10 +114,13 @@ fun GlyphPlayfield(
         val widthPx = with(density) { maxWidth.toPx() }
         val heightPx = with(density) { maxHeight.toPx() }
 
+        // The chart's lanes: the four dance panels, or pop'n's nine buttons.
+        val course = engine?.chart?.course ?: CourseType.DANCE
+        val lanes = GlyphLane.forCourse(course)
         // Lane width is snapped to whole pixels and every note is drawn at that
         // exact size. A fractional lane width would put each lane on a
         // different sub-pixel phase and the arrows would shimmer as they moved.
-        val laneWidthPx = (widthPx / GlyphLane.entries.size).toInt().coerceAtLeast(1)
+        val laneWidthPx = (widthPx / lanes.size).toInt().coerceAtLeast(1)
         // Mini shrinks the notes, as StepMania's does: 100% would be half size.
         val noteSizePx = (laneWidthPx * NOTE_SCALE * noteScale * (1f - look.mini / 2f)).toInt().coerceAtLeast(1)
         // Reverse puts the receptors at the top, clear of the HUD, and the
@@ -177,16 +181,17 @@ fun GlyphPlayfield(
         val raysOn = rememberHitRaysAvailable(reducedMotion) && look.graphics.hitRays
         val hitLight = remember { GlyphHitLight() }
 
-        val laneNames = remember {
-            GlyphLane.entries.joinToString(", ") { it.label }
+        val laneNames = remember(course) {
+            lanes.joinToString(", ") { it.labelIn(course) }
         }
+        val laneCountWord = if (course == CourseType.POPN) "nine" else "four"
 
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
                 .semantics {
                     contentDescription =
-                        "Playfield with four lanes: $laneNames. " +
+                        "Playfield with $laneCountWord lanes: $laneNames. " +
                             if (look.reverse) {
                                 "Notes rise toward the receptors at the top."
                             } else {
@@ -242,18 +247,35 @@ fun GlyphPlayfield(
                 // receptor line: the body and its end cap then hang the
                 // right way round, as StepMania's do in reverse.
                 withTransform({ if (look.reverse) scale(1f, -1f, Offset(0f, receptorYPx)) }) {
-                    drawHoldBody(
-                        assets = assets,
-                        note = note,
-                        isRoll = note.type == GlyphNoteType.ROLL,
-                        headY = receptorYPx - frame.bodyHeadUnits(i) * pixelsPerUnit,
-                        tailY = receptorYPx - frame.tailUnits(i) * pixelsPerUnit,
-                        laneWidthPx = laneWidthPx,
-                        noteSizePx = noteSizePx,
-                        active = frame.isHeld(i),
-                        light = hitLight,
-                        alphaAt = { y -> look.appearance.alphaAt((receptorYPx - y) / fieldLengthPx) },
-                    )
+                    if (!note.lane.isDance) {
+                        // A long pop-kun: a bar of its button's colour.
+                        val headY = receptorYPx - frame.bodyHeadUnits(i) * pixelsPerUnit
+                        val tailY = receptorYPx - frame.tailUnits(i) * pixelsPerUnit
+                        with(GlyphPopnArt) {
+                            drawPopnHoldBody(
+                                centreX = note.lane.ordinal * laneWidthPx + laneWidthPx / 2f,
+                                headY = headY,
+                                tailY = tailY,
+                                sizePx = noteSizePx.toFloat(),
+                                lane = note.lane,
+                                active = frame.isHeld(i),
+                                alpha = look.appearance.alphaAt((receptorYPx - (headY + tailY) / 2f) / fieldLengthPx),
+                            )
+                        }
+                    } else {
+                        drawHoldBody(
+                            assets = assets,
+                            note = note,
+                            isRoll = note.type == GlyphNoteType.ROLL,
+                            headY = receptorYPx - frame.bodyHeadUnits(i) * pixelsPerUnit,
+                            tailY = receptorYPx - frame.tailUnits(i) * pixelsPerUnit,
+                            laneWidthPx = laneWidthPx,
+                            noteSizePx = noteSizePx,
+                            active = frame.isHeld(i),
+                            light = hitLight,
+                            alphaAt = { y -> look.appearance.alphaAt((receptorYPx - y) / fieldLengthPx) },
+                        )
+                    }
                 }
             }
 
@@ -261,7 +283,7 @@ fun GlyphPlayfield(
             // gets a sustained mark, which is the only feedback distinguishing
             // "holding correctly" from "the head was hit and then nothing".
             if (!reducedMotion) {
-                for (lane in GlyphLane.entries) {
+                for (lane in lanes) {
                     if (holdingMask and (1 shl lane.ordinal) == 0) continue
                     val glow = assets.image(
                         GlyphAssetCatalog.effect(GlyphEffectArt.HOLD_GLOW, lane),
@@ -290,11 +312,24 @@ fun GlyphPlayfield(
                 val fade = 1f - (beat - kotlin.math.floor(beat))
                 BEAT_FLASH * fade * fade * fade
             }
-            if (!look.dark) for (lane in GlyphLane.entries) {
-                val id = GlyphAssetCatalog.receptor(lane, active = lane in heldLanes)
-                val image = assets.image(id, noteSizePx, noteSizePx) ?: continue
+            if (!look.dark) for (lane in lanes) {
                 val x = lane.ordinal * laneWidthPx + (laneWidthPx - noteSizePx) / 2f
                 val y = receptorYPx - noteSizePx / 2f
+                if (!lane.isDance) {
+                    // A pop'n button's receptor is a ring in its colour.
+                    with(GlyphPopnArt) {
+                        drawPopnReceptor(
+                            centre = Offset(x + noteSizePx / 2f, receptorYPx),
+                            sizePx = noteSizePx.toFloat(),
+                            lane = lane,
+                            held = lane in heldLanes,
+                            flash = beatFlash,
+                        )
+                    }
+                    continue
+                }
+                val id = GlyphAssetCatalog.receptor(lane, active = lane in heldLanes)
+                val image = assets.image(id, noteSizePx, noteSizePx) ?: continue
                 drawSnapped(image = image, x = x, y = y, size = noteSizePx, light = hitLight)
                 if (beatFlash > LIT_THRESHOLD) {
                     drawImage(
@@ -406,9 +441,16 @@ fun GlyphPlayfield(
                 val shown = look.appearance.alphaAt(travelled / fieldLengthPx)
                 if (shown <= 0f) continue
 
+                val x = note.lane.ordinal * laneWidthPx + (laneWidthPx - noteSizePx) / 2f
+                if (!note.lane.isDance && note.type != GlyphNoteType.MINE && note.type != GlyphNoteType.FAKE) {
+                    // A pop-kun: the disc of its button, drawn, not loaded.
+                    with(GlyphPopnArt) {
+                        drawPopnNote(Offset(x + noteSizePx / 2f, y), noteSizePx.toFloat(), note.lane, shown)
+                    }
+                    continue
+                }
                 val id = noteAssetFor(note.type, note.lane, note.division)
                 val image = assets.image(id, noteSizePx, noteSizePx)
-                val x = note.lane.ordinal * laneWidthPx + (laneWidthPx - noteSizePx) / 2f
 
                 if (image != null) {
                     drawSnapped(image, x, y - noteSizePx / 2f, noteSizePx, hitLight, shown)

@@ -67,6 +67,7 @@ import tf.monochrome.android.glyph.asset.GlyphPalette
 import tf.monochrome.android.glyph.chart.GlyphTiming
 import tf.monochrome.android.glyph.engine.GlyphAppearance
 import tf.monochrome.android.glyph.engine.GlyphFullCombo
+import tf.monochrome.android.audio.stepmania.CourseType
 import tf.monochrome.android.glyph.engine.GlyphGameplayEngine
 import tf.monochrome.android.glyph.engine.GlyphJudge
 import tf.monochrome.android.glyph.engine.GlyphJudgement
@@ -80,7 +81,7 @@ import tf.monochrome.android.ui.theme.MonoDimens
  * The play screen: a HUD, the playfield, and the lane input over it.
  *
  * The playfield is given the whole area and the readouts sit above and below it
- * rather than beside it, so the four lanes stay as wide as the device allows.
+ * rather than beside it, so the lanes stay as wide as the device allows.
  * Nothing overlaps the receptor row, which is the one part of the screen the
  * player is actually looking at.
  */
@@ -107,6 +108,8 @@ fun GlyphGameplayScreen(
     val gameplay = state.gameplay
     val landscape = glyphIsLandscape()
     val fieldFraction = glyphFieldFraction(gameplay.modifiers.landscapeFieldWidth)
+    // The chart's buttons: the four dance panels, or pop'n's nine.
+    val course = state.chart?.course ?: state.course
     // A chart that failed to load still has to draw something rather than
     // crash; a steady map is the harmless stand-in.
     val timing = state.simfile?.timing ?: remember { GlyphTiming.constant(120f) }
@@ -149,6 +152,7 @@ fun GlyphGameplayScreen(
                 onRelease = { lane, at -> onEvent(GlyphEvent.LaneReleased(lane, at)) },
                 onPause = { onEvent(GlyphEvent.TogglePause) },
                 focus = keyboard,
+                course = course,
             ),
     ) {
         // The game through the TV: the playfield, the judgements and the HUD.
@@ -181,15 +185,22 @@ fun GlyphGameplayScreen(
             ) {
                 // The stage, under everything and across the whole screen, the
                 // field's column included: seen through the TV with the rest.
-                GlyphDanceStage(
-                    heldLanes = gameplay.heldLanes,
-                    explosionProvider = explosionProvider,
-                    reducedMotion = gameplay.modifiers.reducedMotion,
-                    // The album art is the room; the chart's own picture when
-                    // the song has none.
-                    artUri = state.selectedSong?.let { it.artworkUri ?: it.backgroundUri },
-                    beatProvider = { timing.secondsToBeat(positionProvider()) },
-                )
+                // It is a dance pad; pop'n's buttons are its own pad, below.
+                if (course == CourseType.DANCE) {
+                    GlyphDanceStage(
+                        heldLanes = gameplay.heldLanes,
+                        explosionProvider = explosionProvider,
+                        reducedMotion = gameplay.modifiers.reducedMotion,
+                        // The album art is the room; the chart's own picture when
+                        // the song has none.
+                        artUri = state.selectedSong?.let { it.artworkUri ?: it.backgroundUri },
+                        beatProvider = { timing.secondsToBeat(positionProvider()) },
+                    )
+                } else {
+                    GlyphPopnStage(
+                        artUri = state.selectedSong?.let { it.artworkUri ?: it.backgroundUri },
+                    )
+                }
 
                 GlyphPlayfield(
                     engine = engine,
@@ -210,7 +221,7 @@ fun GlyphGameplayScreen(
                     receptorInset = if (landscape && !gameplay.modifiers.reverse) LANDSCAPE_RECEPTOR_INSET else null,
                     modifier = Modifier
                         .fillMaxSize()
-                        .glyphFieldColumn(fieldFraction)
+                        .glyphFieldColumn(fieldFraction, course.laneCount)
                         // Rises into place during READY.
                         .graphicsLayer {
                             alpha = intro.value
@@ -226,6 +237,8 @@ fun GlyphGameplayScreen(
                     onRelease = { lane, at -> onEvent(GlyphEvent.LaneReleased(lane, at)) },
                     hitboxScale = gameplay.modifiers.hitboxScale,
                     fieldFraction = fieldFraction,
+                    course = course,
+                    heldLanes = gameplay.heldLanes,
                     modifier = Modifier.fillMaxSize(),
                 )
 

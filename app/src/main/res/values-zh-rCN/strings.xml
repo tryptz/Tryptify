@@ -2443,4 +2443,9 @@
     <string name="fx_curve_all">全部歌词</string>
     <string name="fx_curve_line">正在唱的行</string>
     <string name="fx_curve_word">正在唱的词</string>
+    <string name="glyph_course_type">课程类型</string>
+    <string name="glyph_course_dance">跳舞</string>
+    <string name="glyph_course_popn">pop\'n</string>
+    <string name="glyph_course_dance_note">模式最初的四个箭头踏板</string>
+    <string name="glyph_course_popn_note">pop\'n music 的九个彩色按钮：上排四个，下排五个</string>
 </resources>

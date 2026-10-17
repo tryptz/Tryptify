@@ -2509,4 +2509,9 @@
     <string name="fx_curve_all">Tüm sözler</string>
     <string name="fx_curve_line">Söylenen satır</string>
     <string name="fx_curve_word">Söylenen kelime</string>
+    <string name="glyph_course_type">Kurs türü</string>
+    <string name="glyph_course_dance">Dans</string>
+    <string name="glyph_course_popn">pop\'n</string>
+    <string name="glyph_course_dance_note">Modun başladığı dört ok paneli</string>
+    <string name="glyph_course_popn_note">pop\'n music\'in dokuz renkli düğmesi: dört üstte, beş altta</string>
 </resources>

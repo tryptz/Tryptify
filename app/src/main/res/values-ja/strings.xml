@@ -2443,4 +2443,9 @@
     <string name="fx_curve_all">すべての歌詞</string>
     <string name="fx_curve_line">歌っている行</string>
     <string name="fx_curve_word">歌っている単語</string>
+    <string name="glyph_course_type">コースタイプ</string>
+    <string name="glyph_course_dance">ダンス</string>
+    <string name="glyph_course_popn">pop\'n</string>
+    <string name="glyph_course_dance_note">モード本来の4枚の矢印パネル</string>
+    <string name="glyph_course_popn_note">pop\'n musicの9つのカラーボタン：上に4つ、下に5つ</string>
 </resources>

@@ -263,6 +263,7 @@ private fun column(lane: GlyphLane): Int = when (lane) {
     GlyphLane.LEFT -> 0
     GlyphLane.DOWN, GlyphLane.UP -> 1
     GlyphLane.RIGHT -> 2
+    else -> -1
 }
 
 /** Which of the pad's 3 by 3 panels a lane is: its row. */
@@ -270,6 +271,7 @@ private fun row(lane: GlyphLane): Int = when (lane) {
     GlyphLane.UP -> 0
     GlyphLane.LEFT, GlyphLane.RIGHT -> 1
     GlyphLane.DOWN -> 2
+    else -> -1
 }
 
 /** Up and down pink, left and right cyan, as on a cabinet's pad. */
@@ -285,6 +287,7 @@ private fun turn(lane: GlyphLane): Float = when (lane) {
     GlyphLane.DOWN -> 180f
     GlyphLane.UP -> 0f
     GlyphLane.RIGHT -> 90f
+    else -> 0f
 }
 
 /** An arrow pointing up, on a 24-unit square. */
@@ -386,7 +389,7 @@ private fun DrawScope.drawPadFace(arrow: Path) {
                 translate(bx, by) { drawCircle(BOLT_BRUSH, radius = BOLT_R, center = Offset(BOLT_R, BOLT_R)) }
             }
 
-            val lane = GlyphLane.entries.firstOrNull { column(it) == c && row(it) == r } ?: return@translate
+            val lane = GlyphLane.DANCE.firstOrNull { column(it) == c && row(it) == r } ?: return@translate
             // The arrow's black well, sunk into the panel: lit on its near
             // lip, in shadow under its far one.
             translate(0f, 1f) { drawPath(well, Color.White.copy(alpha = 0.7f)) }
@@ -513,7 +516,7 @@ private fun DrawScope.drawLights(
     reducedMotion: Boolean,
     now: Long,
 ) {
-    val lit = GlyphLane.entries.mapNotNull { lane ->
+    val lit = GlyphLane.DANCE.mapNotNull { lane ->
         val amount = stageLight(
             held = lane in heldLanes,
             flash = if (reducedMotion) null else flashes[lane],

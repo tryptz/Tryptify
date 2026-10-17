@@ -149,8 +149,14 @@ data class PackIndex(
         val title: String,
         val artist: String,
         val durationSeconds: Int = 0,
-        /** The difficulties the chart has, by name, and its opening tempo: the song list's columns. */
+        /** The difficulties the chart has for the dance panels, by name, and its opening tempo: the song list's columns. */
         val difficulties: List<String> = emptyList(),
+        /**
+         * The same for pop'n's nine buttons. Null for an index written before
+         * the app read pop'n charts, which [GlyphPackLibrary] fills in from
+         * the chart the first time it sees it.
+         */
+        val popnDifficulties: List<String>? = null,
         val bpm: Float? = null,
         /** A pack read in place: the music and art as documents in [PackIndex.source]. */
         val musicUri: String? = null,

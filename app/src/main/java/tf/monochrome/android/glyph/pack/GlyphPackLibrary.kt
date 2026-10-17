@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
+import tf.monochrome.android.glyph.chart.SscParser
+import tf.monochrome.android.audio.stepmania.CourseType
 import tf.monochrome.android.domain.model.AudioCodec
 import tf.monochrome.android.glyph.data.GlyphChartState
 import tf.monochrome.android.glyph.data.GlyphSong
@@ -61,7 +63,7 @@ class GlyphPackLibrary @Inject constructor(
         val songs = ArrayList<GlyphSong>()
         val packs = ArrayList<Pack>()
         for (folder in folders.sortedBy { it.name.lowercase() }) {
-            val index = PackImporter.readIndex(folder) ?: continue
+            val index = PackImporter.readIndex(folder)?.let { withPopnCharts(folder, it) } ?: continue
             packs += Pack(
                 name = index.name,
                 songs = index.songs.size,
@@ -154,10 +156,31 @@ class GlyphPackLibrary @Inject constructor(
         return File(folder, "$song/${entry.chart}")
     }
 
+    /**
+     * [index] with each song's pop'n charts listed. An index written before
+     * the app read pop'n charts says nothing about them (null), so the chart
+     * is read once for them here and the index rewritten; a song whose
+     * chart cannot be read is left as it was.
+     */
+    private fun withPopnCharts(folder: File, index: PackIndex): PackIndex {
+        if (index.songs.none { it.popnDifficulties == null }) return index
+        val songs = index.songs.map { song ->
+            if (song.popnDifficulties != null) return@map song
+            val chart = File(folder, "${song.folder}/${song.chart}")
+            val popn = runCatching { SscParser.parse(chart.readText(), CourseType.POPN) }.getOrNull()
+            song.copy(popnDifficulties = popn?.availableDifficulties?.map { it.name }.orEmpty())
+        }
+        val filled = index.copy(songs = songs)
+        runCatching { PackImporter.writeIndex(folder, filled) }
+        return filled
+    }
+
     private fun PackIndex.Song.toGlyphSong(packFolder: File, packName: String): GlyphSong {
         val songFolder = File(packFolder, folder)
         val musicFile = File(songFolder, music)
-        val levels = difficulties.mapNotNull { name -> StepManiaDifficulty.entries.firstOrNull { it.name == name } }
+        fun levelsOf(names: List<String>?) = names.orEmpty().mapNotNull { name -> StepManiaDifficulty.entries.firstOrNull { it.name == name } }
+        val levels = levelsOf(difficulties)
+        val popnLevels = levelsOf(popnDifficulties)
         val id = "$PREFIX${packFolder.name}/$folder"
         return GlyphSong(
             trackId = id,
@@ -171,8 +194,14 @@ class GlyphPackLibrary @Inject constructor(
             durationSeconds = durationSeconds,
             codec = codecOf(music),
             bpm = bpm,
+            // The dance view; GlyphSongRepository turns it to the course in play.
             difficulties = levels,
-            chartState = if (levels.isNotEmpty()) GlyphChartState.READY else GlyphChartState.UNREADABLE,
+            chartState = when {
+                levels.isNotEmpty() -> GlyphChartState.READY
+                popnLevels.isNotEmpty() -> GlyphChartState.NOT_GENERATED
+                else -> GlyphChartState.UNREADABLE
+            },
+            chartsByCourse = mapOf(CourseType.DANCE to levels, CourseType.POPN to popnLevels),
             pack = packName,
             backgroundUri = backgroundUri
                 ?: (background ?: headerBackground(songFolder, chart, music))

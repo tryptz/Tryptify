@@ -1240,6 +1240,25 @@ column, with nothing to jump between.
   for the whole route; the bottom insets follow, so the wheel and the pills
   take its place.
 
+**The course type is one pill above the difficulties, and the field follows
+the chart.** Trypt Mania has two course types (`CourseType`): the four dance
+panels and pop'n music's nine buttons. The choice is a `GlyphSegmented` on a
+line of its own at the top of the selection pills, and again under Settings ›
+More; it is one setting for the whole mode, kept in the preferences, and the
+song list, the selection, the editor, the keys, the tables and the leaderboard
+all follow it. The playfield reads its lane count from the chart in play, never
+from `GlyphLane.entries`, which has nine entries: the first four are the dance
+panels (and pop'n's first four buttons), the last five pop'n's alone. A
+pop'n note is a disc in its button's colour drawn by `GlyphPopnArt`, its
+receptor a ring, its hold a bar; nothing of it comes from a noteskin, so every
+skin and skin test stays as it was. pop'n's touch input is the controller
+along the bottom (`GlyphPopnPadInput`): five buttons below, four above over the
+gaps, each zone drawing its own button and lit while it is down; the field
+above the pad is not touchable, because nine columns the height of the screen
+would each be a thumb wide. The dance stage is for dance; pop'n has
+`GlyphPopnStage`. The design, the research behind it and what is left for
+later are in `docs/popn-course-design.md`.
+
 **The card over the wheel reads the chart; it never grades it.**
 `GlyphSongInfoCard`: DDR's Groove Radar, the BPM meter, the meter in stars and a
 density graph, from `GlyphChartStats`. The radar is StepMania's own

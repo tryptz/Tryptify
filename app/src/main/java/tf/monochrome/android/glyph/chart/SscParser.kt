@@ -2,6 +2,7 @@
 
 package tf.monochrome.android.glyph.chart
 
+import tf.monochrome.android.audio.stepmania.CourseType
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.glyph.asset.GlyphBeatDivision
 import tf.monochrome.android.glyph.asset.GlyphLane
@@ -21,12 +22,14 @@ import tf.monochrome.android.glyph.asset.GlyphLane
  */
 object SscParser {
 
-    /** Four lanes, in SSC column order: left, down, up, right. */
-    private val LANES = GlyphLane.entries.toTypedArray()
-
     private const val BEATS_PER_MEASURE = 4f
 
-    fun parse(text: String): GlyphSimfile? {
+    /**
+     * The simfile's charts of one [course]: dance's four-panel charts, or
+     * pop'n's nine-button ones. A file can hold both, as StepMania's can,
+     * and each course reads its own; null when it has none of that course.
+     */
+    fun parse(text: String, course: CourseType = CourseType.DANCE): GlyphSimfile? {
         // An .sm, or comments in an .ssc, are rewritten into plain .ssc first.
         val tags = readTags(SmConverter.toSsc(text))
 
@@ -42,13 +45,12 @@ object SscParser {
         val timing = GlyphTiming(offsetSeconds, bpms, stops)
 
         val charts = tags.charts
-            // Four panels only. A pack's dance-double (eight lanes) or pump
-            // (five) chart squeezed into four would play as something nobody
-            // wrote; an unnamed type is taken as the default, dance-single.
-            .filter { chart ->
-                chart["STEPSTYPE"]?.trim()?.lowercase().let { it.isNullOrEmpty() || it == SINGLE }
-            }
-            .mapNotNull { chart -> parseChart(chart, timing)?.let { it to isExactDifficulty(chart["DIFFICULTY"]) } }
+            // This course's charts only. A pack's dance-double (eight lanes)
+            // or pump (five) chart squeezed into four would play as something
+            // nobody wrote; an unnamed type is taken as the default,
+            // dance-single, and pop'n's pnm-nine is read as pop'n.
+            .filter { chart -> course.matchesStepsType(chart["STEPSTYPE"]) }
+            .mapNotNull { chart -> parseChart(chart, timing, course)?.let { it to isExactDifficulty(chart["DIFFICULTY"]) } }
             // One chart per difficulty. A pack can carry several Edits, or an
             // Edit beside a real Challenge, and they all land on Challenge:
             // the one that is named so wins, then the first.
@@ -72,6 +74,7 @@ object SscParser {
     private fun parseChart(
         raw: Map<String, String>,
         songTiming: GlyphTiming,
+        course: CourseType,
     ): GlyphChart? {
         val noteData = raw["NOTES"] ?: return null
 
@@ -92,27 +95,30 @@ object SscParser {
             )
         }
 
-        val notes = parseNotes(noteData, timing) ?: return null
+        val notes = parseNotes(noteData, timing, course) ?: return null
         val difficulty = difficultyOf(raw["DIFFICULTY"]) ?: return null
 
         return GlyphChart(
             difficulty = difficulty,
-            meter = raw["METER"]?.trim()?.toIntOrNull() ?: difficulty.meter,
+            meter = raw["METER"]?.trim()?.toIntOrNull() ?: course.meter(difficulty),
             chartName = raw["CHARTNAME"]?.trim()?.ifEmpty { null }
                 ?: raw["DESCRIPTION"]?.trim()?.ifEmpty { null }
                 ?: difficulty.sscName,
-            stepsType = raw["STEPSTYPE"]?.trim()?.ifEmpty { null } ?: "dance-single",
+            stepsType = raw["STEPSTYPE"]?.trim()?.ifEmpty { null } ?: course.stepsType,
             notes = notes,
+            course = course,
         )
     }
 
-    private fun parseNotes(data: String, timing: GlyphTiming): List<GlyphNote>? {
+    private fun parseNotes(data: String, timing: GlyphTiming, course: CourseType): List<GlyphNote>? {
+        // The columns, in SSC order: four for dance, nine for pop'n.
+        val lanes = GlyphLane.forCourse(course)
         val measures = data.split(',')
         val notes = ArrayList<GlyphNote>()
         // Holds are opened on their head and closed on the next '3' in the same
         // lane, so an unterminated hold is visible as a leftover here rather
         // than as a note that never ends during play.
-        val openHolds = arrayOfNulls<PendingHold>(LANES.size)
+        val openHolds = arrayOfNulls<PendingHold>(lanes.size)
 
         for ((measureIndex, measure) in measures.withIndex()) {
             val rows = measure.lineSequence()
@@ -126,7 +132,7 @@ object SscParser {
                 val seconds = timing.beatToSeconds(beat)
                 val division = GlyphBeatDivision.forRow(rowIndex, rows.size)
 
-                for (lane in LANES.indices) {
+                for (lane in lanes.indices) {
                     // A row shorter than the lane count is padded with '0'
                     // rather than throwing: a truncated line should cost the
                     // notes it lost, not the chart.
@@ -144,7 +150,7 @@ object SscParser {
                                 ?: continue
                             if (type.hasTail) {
                                 openHolds[lane] = PendingHold(
-                                    lane = LANES[lane],
+                                    lane = lanes[lane],
                                     type = type,
                                     beat = beat,
                                     startSeconds = seconds,
@@ -153,7 +159,7 @@ object SscParser {
                                 )
                             } else {
                                 notes += GlyphNote(
-                                    lane = LANES[lane],
+                                    lane = lanes[lane],
                                     type = type,
                                     beat = beat,
                                     timeSeconds = seconds,
@@ -196,8 +202,6 @@ object SscParser {
             measure = measure,
         )
     }
-
-    private const val SINGLE = "dance-single"
 
     private fun isExactDifficulty(value: String?): Boolean {
         val name = value?.trim().orEmpty()

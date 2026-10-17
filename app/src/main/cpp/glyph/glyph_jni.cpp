@@ -115,7 +115,14 @@ Java_tf_monochrome_android_glyph_engine_GlyphNativeBridge_nativeCreate(
         return 0;
     }
     std::vector<Note> notes(t.size());
-    for (std::size_t i = 0; i < t.size(); ++i) notes[i] = Note{t[i], e[i], l[i], ty[i]};
+    for (std::size_t i = 0; i < t.size(); ++i) {
+        // A lane past the arrays would be a write past them on its hold.
+        if (l[i] < 0 || l[i] >= kLaneCount) {
+            LOGE("note %zu is on lane %d, outside 0..%d", i, l[i], kLaneCount - 1);
+            return 0;
+        }
+        notes[i] = Note{t[i], e[i], l[i], ty[i]};
+    }
 
     const auto sb = floats(env, segmentBeats);
     const auto sp = floats(env, segmentBpms);

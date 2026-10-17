@@ -12,8 +12,8 @@ import tf.monochrome.android.glyph.asset.GlyphLane
 import kotlin.math.roundToInt
 
 /**
- * Where the four lanes sit across a screen [widthPx] wide: a centred column
- * of whole-pixel lanes.
+ * Where the lanes sit across a screen [widthPx] wide: a centred column of
+ * whole-pixel lanes, four for dance or nine for pop'n.
  *
  * Portrait gives the lanes the whole width, as it always has. Landscape gave
  * them the whole width too, which on a phone held sideways made each arrow
@@ -21,14 +21,14 @@ import kotlin.math.roundToInt
  * arrow's height and covered the HUD. In landscape the lanes take
  * [GlyphModifiers.landscapeFieldWidth] of the width instead, centred.
  */
-data class GlyphFieldBounds(val leftPx: Int, val laneWidthPx: Int) {
-    val widthPx: Int get() = laneWidthPx * LANES
+data class GlyphFieldBounds(val leftPx: Int, val laneWidthPx: Int, val lanes: Int = DANCE_LANES) {
+    val widthPx: Int get() = laneWidthPx * lanes
 
     companion object {
         /** [fraction] of [widthPx], cut to a whole number of pixels a lane so no lane shimmers. */
-        fun of(widthPx: Int, fraction: Float): GlyphFieldBounds {
-            val lane = (widthPx * fraction.coerceIn(MIN_LANDSCAPE_FIELD, 1f) / LANES).toInt().coerceAtLeast(1)
-            return GlyphFieldBounds(((widthPx - lane * LANES) / 2).coerceAtLeast(0), lane)
+        fun of(widthPx: Int, fraction: Float, lanes: Int = DANCE_LANES): GlyphFieldBounds {
+            val lane = (widthPx * fraction.coerceIn(MIN_LANDSCAPE_FIELD, 1f) / lanes).toInt().coerceAtLeast(1)
+            return GlyphFieldBounds(((widthPx - lane * lanes) / 2).coerceAtLeast(0), lane, lanes)
         }
     }
 }
@@ -43,13 +43,13 @@ data class GlyphFieldBounds(val leftPx: Int, val laneWidthPx: Int) {
  * never narrows an outer lane from the screen's edge, where there is nothing
  * to tell it apart from.
  */
-fun glyphLaneSpans(widthPx: Int, fieldFraction: Float, hitboxScale: Float): List<IntRange> {
-    val bounds = GlyphFieldBounds.of(widthPx, fieldFraction)
+fun glyphLaneSpans(widthPx: Int, fieldFraction: Float, hitboxScale: Float, lanes: Int = DANCE_LANES): List<IntRange> {
+    val bounds = GlyphFieldBounds.of(widthPx, fieldFraction, lanes)
     val gutter = (bounds.laneWidthPx * (1f - hitboxScale.coerceIn(MIN_HITBOX, MAX_HITBOX)) / 2f).roundToInt()
-    return List(LANES) { i ->
+    return List(lanes) { i ->
         val laneLeft = bounds.leftPx + bounds.laneWidthPx * i
         val start = if (i == 0) 0 else laneLeft + gutter
-        val end = if (i == LANES - 1) widthPx else laneLeft + bounds.laneWidthPx - gutter
+        val end = if (i == lanes - 1) widthPx else laneLeft + bounds.laneWidthPx - gutter
         start until end
     }
 }
@@ -75,20 +75,21 @@ fun glyphIsLandscape(): Boolean {
  * Lays its content out as the field's centred column, [GlyphFieldBounds]
  * wide, the full height. The whole width when [fraction] is 1, as before.
  */
-fun Modifier.glyphFieldColumn(fraction: Float): Modifier =
+fun Modifier.glyphFieldColumn(fraction: Float, lanes: Int = DANCE_LANES): Modifier =
     if (fraction >= 1f) {
         this
     } else {
         layout { measurable, constraints ->
             val width = constraints.maxWidth
             val height = constraints.maxHeight
-            val bounds = GlyphFieldBounds.of(width, fraction)
+            val bounds = GlyphFieldBounds.of(width, fraction, lanes)
             val placeable = measurable.measure(Constraints.fixed(bounds.widthPx, height))
             layout(width, height) { placeable.place(bounds.leftPx, 0) }
         }
     }
 
-private val LANES = GlyphLane.entries.size
+/** The dance field's lanes, which every caller that names no course gets. */
+private val DANCE_LANES = GlyphLane.DANCE_LANES
 
 /**
  * The receptors' distance from the bottom in landscape. Portrait's 96 dp

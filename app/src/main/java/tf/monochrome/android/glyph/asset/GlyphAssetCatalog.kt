@@ -2,6 +2,8 @@
 
 package tf.monochrome.android.glyph.asset
 
+import tf.monochrome.android.audio.stepmania.CourseType
+
 /**
  * Every glyph the mode can draw, as a closed set of names.
  *
@@ -15,24 +17,100 @@ package tf.monochrome.android.glyph.asset
 @JvmInline
 value class GlyphAssetId(val name: String)
 
-/** The four lanes, in SSC column order. */
+/**
+ * The columns a chart can have, in SSC column order.
+ *
+ * Dance uses the first four: left, down, up, right, each with its own arrow
+ * art ([assetSuffix]). pop'n uses all nine as its buttons 1 to 9, left white
+ * to right white, so the first four carry two meanings and the last five are
+ * pop'n's alone; [GlyphPopnLane] says what each is there. The ordinals are
+ * what the native engine and the saved ghosts carry, so nothing here is
+ * reordered.
+ */
 enum class GlyphLane(val assetSuffix: String, val label: String) {
     LEFT("left", "Left"),
     DOWN("down", "Down"),
     UP("up", "Up"),
     RIGHT("right", "Right"),
+    RED("red", "Red"),
+    RIGHT_BLUE("right_blue", "Right blue"),
+    RIGHT_GREEN("right_green", "Right green"),
+    RIGHT_YELLOW("right_yellow", "Right yellow"),
+    RIGHT_WHITE("right_white", "Right white"),
     ;
 
+    /** Whether this is one of the four dance panels, with arrow art of its own. */
+    val isDance: Boolean get() = ordinal < DANCE_LANES
+
+    /** What the lane is called in [course]: a dance direction, or a pop'n button. */
+    fun labelIn(course: CourseType): String = when (course) {
+        CourseType.DANCE -> label
+        CourseType.POPN -> GlyphPopnLane.of(this).label
+    }
+
     companion object {
-        /** Left/right and up/down swapped — the mirror modifier. */
-        fun mirrorOf(lane: GlyphLane): GlyphLane = when (lane) {
-            LEFT -> RIGHT
-            RIGHT -> LEFT
-            UP -> DOWN
-            DOWN -> UP
+        const val DANCE_LANES = 4
+
+        /** The four dance panels, in column order. */
+        val DANCE: List<GlyphLane> = entries.take(DANCE_LANES)
+
+        /** The lanes a course plays, in column order. */
+        fun forCourse(course: CourseType): List<GlyphLane> = entries.take(course.laneCount)
+
+        /**
+         * The lane opposite [lane] — the mirror modifier. Dance swaps left
+         * with right and up with down; pop'n reflects the nine buttons about
+         * the red centre, which stays where it is.
+         */
+        fun mirrorOf(lane: GlyphLane, course: CourseType = CourseType.DANCE): GlyphLane = when (course) {
+            CourseType.DANCE -> when (lane) {
+                LEFT -> RIGHT
+                RIGHT -> LEFT
+                UP -> DOWN
+                DOWN -> UP
+                else -> lane
+            }
+            CourseType.POPN -> entries[course.laneCount - 1 - lane.ordinal]
         }
     }
 }
+
+/**
+ * What a lane is on a pop'n field: its button, left to right 1 to 9, its
+ * colour, and which of the controller's two rows it sits on. The bottom row
+ * holds the odd buttons, white green red green white; the top row the even
+ * ones, yellow blue blue yellow, each over the gap between two below.
+ */
+enum class GlyphPopnLane(val button: Int, val colour: GlyphPopnColour, val label: String) {
+    LEFT_WHITE(1, GlyphPopnColour.WHITE, "Left white"),
+    LEFT_YELLOW(2, GlyphPopnColour.YELLOW, "Left yellow"),
+    LEFT_GREEN(3, GlyphPopnColour.GREEN, "Left green"),
+    LEFT_BLUE(4, GlyphPopnColour.BLUE, "Left blue"),
+    RED(5, GlyphPopnColour.RED, "Red"),
+    RIGHT_BLUE(6, GlyphPopnColour.BLUE, "Right blue"),
+    RIGHT_GREEN(7, GlyphPopnColour.GREEN, "Right green"),
+    RIGHT_YELLOW(8, GlyphPopnColour.YELLOW, "Right yellow"),
+    RIGHT_WHITE(9, GlyphPopnColour.WHITE, "Right white"),
+    ;
+
+    /** The lower row of five, or the upper row of four. */
+    val isBottomRow: Boolean get() = button % 2 == 1
+
+    val lane: GlyphLane get() = GlyphLane.entries[ordinal]
+
+    companion object {
+        fun of(lane: GlyphLane): GlyphPopnLane = entries[lane.ordinal]
+
+        /** The bottom row's buttons, left to right. */
+        val BOTTOM_ROW: List<GlyphPopnLane> = entries.filter { it.isBottomRow }
+
+        /** The top row's buttons, left to right. */
+        val TOP_ROW: List<GlyphPopnLane> = entries.filter { !it.isBottomRow }
+    }
+}
+
+/** The five colours of pop'n's buttons; the notes falling on a button share its colour. */
+enum class GlyphPopnColour { WHITE, YELLOW, GREEN, BLUE, RED }
 
 /**
  * The rhythmic subdivision a note falls on.
@@ -216,10 +294,10 @@ object GlyphAssetCatalog {
     /**
      * An effect drawn in a lane. A skin whose explosion is arrow-shaped turns
      * it per lane; the vector pack's are round and have one for all four,
-     * which [fallback] finds.
+     * which [fallback] finds. pop'n's lanes take the round one straight away.
      */
     fun effect(art: GlyphEffectArt, lane: GlyphLane): GlyphAssetId =
-        if (art in LANE_EFFECTS) GlyphAssetId("${art.assetName}_${lane.assetSuffix}") else effect(art)
+        if (art in LANE_EFFECTS && lane.isDance) GlyphAssetId("${art.assetName}_${lane.assetSuffix}") else effect(art)
 
     /**
      * What to draw when a pack has no [id]: the resting body for an active
@@ -236,6 +314,16 @@ object GlyphAssetCatalog {
                 if (name == "${art.assetName}_${lane.assetSuffix}") return effect(art)
             }
         }
+        // pop'n's lanes have no art of their own: the field draws their discs.
+        for (lane in GlyphLane.entries) {
+            if (lane.isDance) continue
+            if (name == receptor(lane, false).name || name == receptor(lane, true).name ||
+                name == tapDefault(lane).name || name.startsWith("tap_${lane.assetSuffix}_") ||
+                name == holdHead(lane, false).name || name == holdHead(lane, true).name
+            ) {
+                return null
+            }
+        }
         return null
     }
 
@@ -243,7 +331,7 @@ object GlyphAssetCatalog {
     fun playfieldEffects(): List<GlyphAssetId> = buildList {
         for (art in GlyphEffectArt.entries) {
             add(effect(art))
-            if (art in LANE_EFFECTS) for (lane in GlyphLane.entries) add(effect(art, lane))
+            if (art in LANE_EFFECTS) for (lane in GlyphLane.DANCE) add(effect(art, lane))
         }
     }
 
@@ -263,7 +351,7 @@ object GlyphAssetCatalog {
      * frame.
      */
     fun playfieldAssets(divisions: Set<GlyphBeatDivision>): List<GlyphAssetId> = buildList {
-        for (lane in GlyphLane.entries) {
+        for (lane in GlyphLane.DANCE) {
             add(receptor(lane, active = false))
             add(receptor(lane, active = true))
             add(tapDefault(lane))

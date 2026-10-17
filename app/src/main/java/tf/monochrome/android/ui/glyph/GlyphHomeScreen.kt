@@ -70,6 +70,7 @@ import dev.chrisbanes.haze.rememberHazeState
 import tf.monochrome.android.R
 import tf.monochrome.android.audio.stepmania.ChartMode
 import tf.monochrome.android.audio.stepmania.ChartPace
+import tf.monochrome.android.audio.stepmania.CourseType
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
@@ -576,6 +577,18 @@ private fun SelectionPanel(
                 .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingSm),
             verticalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm),
         ) {
+            // The course type on a line of its own above the charts, since
+            // which charts a song has depends on it: Dance's four panels or
+            // pop'n's nine buttons.
+            GlyphSegmented(
+                options = CourseType.entries.toList(),
+                selected = state.course,
+                label = { "${it.label} · ${it.buttonsLabel}" },
+                onSelect = { onEvent(GlyphEvent.SetCourse(it)) },
+                description = "Course type",
+                height = 40.dp,
+                textStyle = MaterialTheme.typography.labelMedium,
+            )
             when {
                 state.songListMode == GlyphSongListMode.EDIT -> EditChoice(song = song, state = state, onEvent = onEvent)
                 // The card says why there is no chart; the pill makes one, or
@@ -597,7 +610,7 @@ private fun SelectionPanel(
                     GlyphChipRow(
                         options = song.difficulties,
                         selected = state.selectedDifficulty,
-                        label = { difficulty -> "${difficulty.sscName} ${meterOf(state, difficulty)}" },
+                        label = { difficulty -> "${state.course.difficultyLabel(difficulty)} ${meterOf(state, difficulty)}" },
                         onSelect = { onEvent(GlyphEvent.SelectDifficulty(it)) },
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -658,7 +671,8 @@ private fun EditChoice(song: GlyphSong, state: GlyphUiState, onEvent: (GlyphEven
         options = StepManiaDifficulty.entries.toList(),
         selected = difficulty,
         label = { option ->
-            if (option in song.difficulties) "${option.sscName} ${meterOf(state, option)}" else "${option.sscName} · new"
+            val name = state.course.difficultyLabel(option)
+            if (option in song.difficulties) "$name ${meterOf(state, option)}" else "$name · new"
         },
         onSelect = { difficulty = it },
         modifier = Modifier.fillMaxWidth(),
@@ -724,7 +738,7 @@ internal fun PersonalBest(best: GlyphAttempt) {
 }
 
 private fun meterOf(state: GlyphUiState, difficulty: StepManiaDifficulty): Int =
-    state.simfile?.chart(difficulty)?.meter ?: difficulty.meter
+    state.simfile?.chart(difficulty)?.meter ?: state.course.meter(difficulty)
 
 /**
  * Charting, as the line has it: one song's separation, generation and

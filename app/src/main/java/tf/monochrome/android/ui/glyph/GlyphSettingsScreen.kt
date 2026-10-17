@@ -84,6 +84,8 @@ import tf.monochrome.android.R
 import tf.monochrome.android.audio.stepmania.ChartMode
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
 import tf.monochrome.android.glyph.asset.GlyphLane
+import tf.monochrome.android.glyph.asset.GlyphPopnLane
+import tf.monochrome.android.audio.stepmania.CourseType
 import tf.monochrome.android.glyph.asset.GlyphPalette
 import tf.monochrome.android.glyph.chart.GlyphDemoChart
 import tf.monochrome.android.glyph.data.GlyphCalibration
@@ -153,9 +155,9 @@ fun GlyphSettingsScreen(
                         // Back and the system's keys keep their jobs.
                         GlyphKeyBindings.isReserved(code) -> false
                         else -> {
-                            val rebound = state.keys.bind(slot.first, slot.second, code)
+                            val rebound = state.keys.bind(slot.first, slot.second, code, state.course)
                             moved = rebound.movedFrom?.let {
-                                "${GlyphKeyBindings.label(code)} moved from ${it.label} to ${slot.first.label}."
+                                "${GlyphKeyBindings.label(code)} moved from ${it.labelIn(state.course)} to ${slot.first.labelIn(state.course)}."
                             }
                             onEvent(GlyphEvent.SetKey(slot.first, slot.second, code))
                             listening = null
@@ -163,7 +165,7 @@ fun GlyphSettingsScreen(
                         }
                     }
                     testing -> {
-                        val lane = state.keys.laneFor(code) ?: return@onPreviewKeyEvent false
+                        val lane = state.keys.laneFor(code, state.course) ?: return@onPreviewKeyEvent false
                         lit = when (event.type) {
                             KeyEventType.KeyDown -> lit + lane
                             KeyEventType.KeyUp -> lit - lane
@@ -217,6 +219,7 @@ fun GlyphSettingsScreen(
             when (tab) {
                 SettingsTab.CONTROLS -> ControlsTab(
                     keys = state.keys,
+                    course = state.course,
                     listening = listening,
                     testing = testing,
                     lit = lit,
@@ -259,6 +262,7 @@ private fun ControlsTab(
     keys: GlyphKeyBindings,
     listening: Pair<GlyphLane, Int>?,
     testing: Boolean,
+    course: CourseType,
     lit: Set<GlyphLane>,
     moved: String?,
     onListen: (GlyphLane, Int) -> Unit,
@@ -266,28 +270,37 @@ private fun ControlsTab(
     onReset: () -> Unit,
 ) {
     Text(
-        text = "For playing with a keyboard. Tap a key, then press the one you want; each lane takes two.",
+        text = when (course) {
+            CourseType.DANCE -> "For playing with a keyboard. Tap a key, then press the one you want; each lane takes two."
+            CourseType.POPN -> "For playing pop'n with a keyboard: its nine buttons, laid out as its two rows. Tap a key, then press the one you want; each button takes two."
+        },
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    Row(horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm)) {
-        for (lane in GlyphLane.entries) {
+    // Dance's four in a row; pop'n's as its pad, the four above the five.
+    val rows = when (course) {
+        CourseType.DANCE -> listOf(GlyphLane.DANCE)
+        CourseType.POPN -> listOf(GlyphPopnLane.TOP_ROW.map { it.lane }, GlyphPopnLane.BOTTOM_ROW.map { it.lane })
+    }
+    for (row in rows) Row(horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm)) {
+        for (lane in row) {
             Column(
                 modifier = Modifier.weight(1f),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm),
             ) {
-                LaneArrow(lane = lane, lit = lane in lit)
+                LaneArrow(lane = lane, lit = lane in lit, course = course)
                 Text(
-                    text = lane.label,
+                    text = lane.labelIn(course),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
                 )
                 for (slot in 0 until GlyphKeyBindings.SLOTS) {
                     KeyCap(
-                        code = keys.key(lane, slot),
+                        code = keys.key(lane, slot, course),
                         listening = listening == lane to slot,
-                        description = "${lane.label} ${if (slot == 0) "key" else "second key"}",
+                        description = "${lane.labelIn(course)} ${if (slot == 0) "key" else "second key"}",
                         onClick = { onListen(lane, slot) },
                     )
                 }
@@ -295,7 +308,7 @@ private fun ControlsTab(
         }
     }
     val note = when {
-        listening != null -> "Press the new key for ${listening.first.label}. Esc keeps the old one."
+        listening != null -> "Press the new key for ${listening.first.labelIn(course)}. Esc keeps the old one."
         moved != null -> moved
         else -> null
     }
@@ -316,22 +329,33 @@ private fun ControlsTab(
         modifier = Modifier.fillMaxWidth(),
     )
     GlyphButton(
-        text = "Reset to the arrows and D F J K",
+        text = GlyphKeyBindings.defaultLabel(course),
         onClick = onReset,
         modifier = Modifier.fillMaxWidth(),
     )
 }
 
-/** A lane's arrow, outlined, filled while one of its keys is down. */
+/** A lane's arrow, outlined, filled while one of its keys is down; a pop'n button's disc. */
 @Composable
-private fun LaneArrow(lane: GlyphLane, lit: Boolean) {
+private fun LaneArrow(lane: GlyphLane, lit: Boolean, course: CourseType = CourseType.DANCE) {
     val ink = MaterialTheme.colorScheme.onSurface
     val faint = MaterialTheme.colorScheme.onSurfaceVariant
+    if (course == CourseType.POPN) {
+        Canvas(
+            modifier = Modifier
+                .size(40.dp)
+                .semantics { contentDescription = lane.labelIn(course) + if (lit) ", pressed" else "" },
+        ) {
+            with(GlyphPopnArt) { drawPopnButton(center, size.minDimension, lane, held = lit) }
+        }
+        return
+    }
     val degrees = when (lane) {
         GlyphLane.LEFT -> -90f
         GlyphLane.DOWN -> 180f
         GlyphLane.UP -> 0f
         GlyphLane.RIGHT -> 90f
+        else -> 0f
     }
     Canvas(
         modifier = Modifier
@@ -1065,6 +1089,7 @@ private fun MoreTab(state: GlyphUiState, onEvent: (GlyphEvent) -> Unit) {
             onClick = { editingName = true },
         )
     }
+    CourseSection(state, onEvent)
     ChartModeSection(state, onEvent)
 
     if (editingName) {
@@ -1084,6 +1109,35 @@ private fun MoreTab(state: GlyphUiState, onEvent: (GlyphEvent) -> Unit) {
  * nothing; this says where it happens and what it costs, and what is missing
  * when the chosen mode has no server to go to.
  */
+/**
+ * The course type: which buttons the charts are made for and played on. One
+ * setting for the whole mode, since the song list, the charts and the keys
+ * all follow it; the song list carries the same pill for switching in place.
+ */
+@Composable
+private fun CourseSection(state: GlyphUiState, onEvent: (GlyphEvent) -> Unit) {
+    val names = mapOf(
+        CourseType.DANCE to stringResource(R.string.glyph_course_dance),
+        CourseType.POPN to stringResource(R.string.glyph_course_popn),
+    )
+    Column {
+        GlyphControlHeader(
+            stringResource(R.string.glyph_course_type),
+            when (state.course) {
+                CourseType.DANCE -> stringResource(R.string.glyph_course_dance_note)
+                CourseType.POPN -> stringResource(R.string.glyph_course_popn_note)
+            },
+        )
+        GlyphSegmented(
+            options = CourseType.entries.toList(),
+            selected = state.course,
+            label = { "${names.getValue(it)} · ${it.buttonsLabel}" },
+            onSelect = { onEvent(GlyphEvent.SetCourse(it)) },
+            description = stringResource(R.string.glyph_course_type),
+        )
+    }
+}
+
 @Composable
 private fun ChartModeSection(state: GlyphUiState, onEvent: (GlyphEvent) -> Unit) {
     val servers = state.chartServers

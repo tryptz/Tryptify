@@ -2509,4 +2509,9 @@
     <string name="fx_curve_all">Alle Zeilen</string>
     <string name="fx_curve_line">Gesungene Zeile</string>
     <string name="fx_curve_word">Gesungenes Wort</string>
+    <string name="glyph_course_type">Kursart</string>
+    <string name="glyph_course_dance">Tanz</string>
+    <string name="glyph_course_popn">pop\'n</string>
+    <string name="glyph_course_dance_note">Vier Pfeilfelder, wie der Modus begann</string>
+    <string name="glyph_course_popn_note">Die neun farbigen Tasten von pop\'n music: vier oben, fünf unten</string>
 </resources>

@@ -442,7 +442,7 @@ class GlyphComposeTest {
         }
         // The lanes are unlabelled touch zones over artwork; without these
         // names there is no way to tell them apart without sight.
-        for (lane in GlyphLane.entries) {
+        for (lane in GlyphLane.DANCE) {
             compose.onNodeWithContentDescription("${lane.label} lane").assertIsDisplayed()
         }
     }

@@ -71,6 +71,8 @@ object GlyphTheme {
         GlyphLane.DOWN -> Color(0xFF58D9FF)
         GlyphLane.UP -> Color(0xFF63F2A2)
         GlyphLane.RIGHT -> Color(0xFFFFD95A)
+        // pop'n's lanes are their buttons' colours, which the field draws.
+        else -> GlyphPopnArt.colour(lane)
     }
 
     /** The beat palette, from the pack's own manifest when it could be read. */
