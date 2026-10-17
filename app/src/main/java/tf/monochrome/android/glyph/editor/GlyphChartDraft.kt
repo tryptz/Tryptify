@@ -2,6 +2,8 @@
 
 package tf.monochrome.android.glyph.editor
 
+import tf.monochrome.android.audio.stepmania.CourseType
+
 import kotlin.math.roundToInt
 import tf.monochrome.android.glyph.chart.GlyphChart
 import tf.monochrome.android.glyph.chart.GlyphNoteType
@@ -22,8 +24,13 @@ import tf.monochrome.android.glyph.chart.GlyphTiming
 data class GlyphChartDraft(
     /** Sorted by tick, then lane. */
     val notes: List<DraftNote> = emptyList(),
+    /** The buttons the chart is for: how many lanes there are, and how wide a saved row is. */
+    val course: CourseType = CourseType.DANCE,
 ) {
     val noteCount: Int get() = notes.size
+
+    /** Lanes 0 until this: four on the dance panels, nine on pop'n's buttons. */
+    val laneCount: Int get() = course.laneCount
 
     /** The last tick anything reaches, a hold's end included. */
     val lastTick: Int get() = notes.maxOfOrNull { it.endTick } ?: 0
@@ -59,16 +66,16 @@ data class GlyphChartDraft(
         val end = maxOf(fromTick, toTick)
         if (end == start) return place(start, lane, GlyphNoteType.TAP)
         val cleared = notes.filterNot { it.lane == lane && it.endTick >= start && it.tick <= end }
-        return GlyphChartDraft(cleared).with(DraftNote(start, lane, type, end))
+        return copy(notes = cleared).with(DraftNote(start, lane, type, end))
     }
 
     /** Take away whatever is at [tick] in [lane], a hold it falls inside included. */
     fun erase(tick: Int, lane: Int): GlyphChartDraft = noteAt(tick, lane)?.let { without(it) } ?: this
 
     private fun with(note: DraftNote): GlyphChartDraft =
-        GlyphChartDraft((notes + note).sortedWith(ORDER))
+        copy(notes = (notes + note).sortedWith(ORDER))
 
-    private fun without(note: DraftNote): GlyphChartDraft = GlyphChartDraft(notes - note)
+    private fun without(note: DraftNote): GlyphChartDraft = copy(notes = notes - note)
 
     /**
      * StepMania's `#NOTES` body: a measure at a time, `,` between measures,
@@ -81,7 +88,8 @@ data class GlyphChartDraft(
         // What each lane shows on each tick: a head's own character, or '3'
         // where a hold or a roll ends.
         val cells = HashMap<Int, CharArray>()
-        fun cell(tick: Int): CharArray = cells.getOrPut(tick) { CharArray(LANES) { '0' } }
+        val empty = "0".repeat(laneCount)
+        fun cell(tick: Int): CharArray = cells.getOrPut(tick) { CharArray(laneCount) { '0' } }
         for (note in notes) {
             cell(note.tick)[note.lane] = note.type.sscCharacter
             if (note.type.hasTail) cell(note.endTick)[note.lane] = '3'
@@ -97,7 +105,7 @@ data class GlyphChartDraft(
                 val step = TICKS_PER_MEASURE / rows
                 for (row in 0 until rows) {
                     val lanes = cells[first + row * step]
-                    if (lanes == null) append("0000") else append(lanes)
+                    if (lanes == null) append(empty) else append(lanes)
                     append('\n')
                 }
                 if (measure + 1 < measures) append(",\n")
@@ -109,7 +117,6 @@ data class GlyphChartDraft(
         const val TICKS_PER_BEAT = 48
         const val BEATS_PER_MEASURE = 4
         const val TICKS_PER_MEASURE = TICKS_PER_BEAT * BEATS_PER_MEASURE
-        const val LANES = 4
 
         /** The row counts StepMania saves a measure at, coarsest first. */
         private val ROWS_PER_MEASURE = listOf(4, 8, 12, 16, 24, 32, 48, 64, 96, 192)
@@ -135,7 +142,7 @@ data class GlyphChartDraft(
                 DraftNote(tick, note.lane.ordinal, note.type, end)
             }
             // Two notes the grid rounded onto one cell keep the first.
-            return GlyphChartDraft(notes.distinctBy { it.tick to it.lane }.sortedWith(ORDER))
+            return GlyphChartDraft(notes.distinctBy { it.tick to it.lane }.sortedWith(ORDER), chart.course)
         }
     }
 }

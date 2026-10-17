@@ -102,7 +102,7 @@ class GlyphAutoplay {
     }
 
     private companion object {
-        const val LANES = 4
+        val LANES = GlyphLane.entries.size
         const val NONE = -1f
 
         /** Inside StepMania's half second between roll taps, comfortably. */

@@ -2590,4 +2590,9 @@
     <string name="crt_preset_exported">Exported %1$s</string>
     <string name="crt_preset_export_failed">Could not write the file</string>
     <string name="crt_preset_import_failed">Could not import: %1$s</string>
+    <string name="glyph_course_type">Course type</string>
+    <string name="glyph_course_dance">Dance</string>
+    <string name="glyph_course_popn">pop\'n</string>
+    <string name="glyph_course_dance_note">Four arrow panels, as the mode began</string>
+    <string name="glyph_course_popn_note">pop\'n music\'s nine coloured buttons: four above, five below</string>
 </resources>

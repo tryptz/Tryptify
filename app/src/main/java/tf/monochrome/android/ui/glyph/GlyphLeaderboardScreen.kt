@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.R
+import tf.monochrome.android.audio.stepmania.CourseType
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.glyph.data.GlyphSongSort
 import tf.monochrome.android.glyph.data.GlyphSortKey
@@ -124,7 +125,7 @@ fun GlyphLeaderboardScreen(
                 verticalArrangement = Arrangement.spacedBy(MonoDimens.spacingMd),
             ) {
                 items(board.sorted(state.songSort), key = { it.chartId }) { entry ->
-                    BoardCard(entry)
+                    BoardCard(entry, state.course)
                 }
             }
         }
@@ -132,7 +133,7 @@ fun GlyphLeaderboardScreen(
 }
 
 @Composable
-private fun BoardCard(board: GlyphBoard) {
+private fun BoardCard(board: GlyphBoard, course: CourseType) {
     val difficulties = StepManiaDifficulty.entries.filter { it in board.tables }
     // Opens on the difficulty played most recently.
     var chosen by rememberSaveable(board.chartId) {
@@ -168,13 +169,13 @@ private fun BoardCard(board: GlyphBoard) {
             GlyphChipRow(
                 options = difficulties,
                 selected = chosen,
-                label = { it.sscName },
+                label = { course.difficultyLabel(it) },
                 onSelect = { chosen = it },
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(MonoDimens.spacingSm))
         } else {
-            GlyphSectionLabel(chosen.sscName)
+            GlyphSectionLabel(course.difficultyLabel(chosen))
         }
         GlyphScoreTable(runs = board.tables[chosen].orEmpty())
     }

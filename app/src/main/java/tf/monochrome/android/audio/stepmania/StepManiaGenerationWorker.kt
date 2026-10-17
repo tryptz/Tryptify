@@ -34,6 +34,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withContext
 import tf.monochrome.android.R
 import tf.monochrome.android.glyph.pack.OwnPackStore
+import tf.monochrome.android.glyph.chart.SscChartWriter
 import tf.monochrome.android.glyph.pack.PackWriter
 import tf.monochrome.android.glyph.pack.StepManiaPack
 import tf.monochrome.android.glyph.pack.TreePackSink
@@ -131,6 +132,7 @@ class StepManiaGenerationWorker @AssistedInject constructor(
             artist = job.artist,
             musicFileName = job.musicFileName,
             difficulties = StepManiaDifficulty.entries.toSet(),
+            course = job.course,
         )
         val result = try {
             conversion.convert(
@@ -173,16 +175,24 @@ class StepManiaGenerationWorker @AssistedInject constructor(
      * ([OwnPackStore]), with its music beside it, as any StepMania song. Null
      * when no folder is chosen. A failure here never fails the chart: it is
      * made and plays in the app either way.
+     *
+     * A song's dance and pop'n charts are kept in separate files here, but a
+     * StepMania song is one simfile, so the pack's copy carries both: the one
+     * just made, and the other course's charts when it has them.
      */
     private fun saveToOwnPack(chart: File, music: Uri, request: StepManiaRequest): kotlin.Result<Unit>? {
         val folder = ownPack.folder.value ?: return null
         return runCatching {
+            val other = CourseType.entries.firstOrNull { it != request.course }?.let { course ->
+                File(chart.parentFile, chart.name.removeSuffix(request.course.fileSuffix + ".ssc") + course.fileSuffix + ".ssc")
+                    .takeIf { it.isFile }?.readText()
+            }
             PackWriter.writeSong(
                 sink = TreePackSink(applicationContext, folder),
                 pack = StepManiaPack.OWN_PACK,
                 title = request.title,
                 artist = request.artist,
-                ssc = chart.readText(),
+                ssc = SscChartWriter.withOtherCourse(chart.readText(), other),
                 music = {
                     applicationContext.contentResolver.openInputStream(music)
                         ?: throw java.io.IOException("The song's file could not be read.")

@@ -2519,4 +2519,9 @@
     <string name="crt_preset_exported">%1$s を書き出しました</string>
     <string name="crt_preset_export_failed">ファイルを書き込めませんでした</string>
     <string name="crt_preset_import_failed">読み込めませんでした：%1$s</string>
+    <string name="glyph_course_type">コースタイプ</string>
+    <string name="glyph_course_dance">ダンス</string>
+    <string name="glyph_course_popn">pop\'n</string>
+    <string name="glyph_course_dance_note">モード本来の4枚の矢印パネル</string>
+    <string name="glyph_course_popn_note">pop\'n musicの9つのカラーボタン：上に4つ、下に5つ</string>
 </resources>

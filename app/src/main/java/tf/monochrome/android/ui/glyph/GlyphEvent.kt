@@ -97,6 +97,9 @@ sealed interface GlyphEvent {
     /** Fast (GPU) or Slow (CPU), for every chart from now on. */
     data class SetChartMode(val mode: tf.monochrome.android.audio.stepmania.ChartMode) : GlyphEvent
 
+    /** The buttons to chart and play for: the dance panels or pop'n's nine. */
+    data class SetCourse(val course: tf.monochrome.android.audio.stepmania.CourseType) : GlyphEvent
+
     // ── multiplayer ─────────────────────────────────────────────────────
     data object OpenMultiplayer : GlyphEvent
     data object CloseMultiplayer : GlyphEvent

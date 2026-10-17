@@ -2,6 +2,7 @@
 
 package tf.monochrome.android.ui.glyph
 
+import tf.monochrome.android.audio.stepmania.CourseType
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.glyph.chart.GlyphChart
@@ -64,6 +65,11 @@ data class GlyphUiState(
     val packs: GlyphPacksUi = GlyphPacksUi(),
     /** Fast (a GPU server) or Slow (a CPU server); kept between sessions. */
     val chartMode: tf.monochrome.android.audio.stepmania.ChartMode = tf.monochrome.android.audio.stepmania.ChartMode.FAST,
+    /**
+     * The course type the list, the charts and the play are for: the four
+     * dance panels or pop'n's nine buttons; kept between sessions.
+     */
+    val course: CourseType = CourseType.DANCE,
     /** The separation servers there are, for what each mode can do. */
     val chartServers: GlyphChartServers = GlyphChartServers(),
     /** Songs waiting or being charted, so their Generate says so. */

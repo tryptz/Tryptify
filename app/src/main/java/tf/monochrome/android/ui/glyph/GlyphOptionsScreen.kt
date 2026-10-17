@@ -126,7 +126,7 @@ fun GlyphOptionsScreen(
                             text = buildString {
                                 append(song.title)
                                 if (chart != null) {
-                                    append(" · ").append(chart.difficulty.sscName).append(' ').append(chart.meter)
+                                    append(" · ").append(chart.course.difficultyLabel(chart.difficulty)).append(' ').append(chart.meter)
                                 }
                             },
                             style = MaterialTheme.typography.bodySmall,

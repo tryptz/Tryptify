@@ -128,7 +128,7 @@ fun GlyphPacksScreen(
                 Text(
                     "Simfile packs from StepMania Online, a pack ZIP you already have, or songs already " +
                         "unpacked on the phone — pick one song, one pack, or StepMania's whole Songs folder, and " +
-                        "they play from where they are, nothing copied. Their four-panel charts play here with " +
+                        "they play from where they are, nothing copied. Their dance and pop'n charts play here with " +
                         "the pack's own music.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = scheme.onSurfaceVariant,

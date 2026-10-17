@@ -2651,4 +2651,9 @@
     <string name="crt_preset_exported">%1$s exportado</string>
     <string name="crt_preset_export_failed">No se pudo escribir el archivo</string>
     <string name="crt_preset_import_failed">No se pudo importar: %1$s</string>
+    <string name="glyph_course_type">Tipo de curso</string>
+    <string name="glyph_course_dance">Baile</string>
+    <string name="glyph_course_popn">pop\'n</string>
+    <string name="glyph_course_dance_note">Cuatro paneles de flechas, como empezó el modo</string>
+    <string name="glyph_course_popn_note">Los nueve botones de colores de pop\'n music: cuatro arriba, cinco abajo</string>
 </resources>

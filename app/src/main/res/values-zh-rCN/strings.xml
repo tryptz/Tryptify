@@ -2519,4 +2519,9 @@
     <string name="crt_preset_exported">已导出 %1$s</string>
     <string name="crt_preset_export_failed">无法写入文件</string>
     <string name="crt_preset_import_failed">无法导入：%1$s</string>
+    <string name="glyph_course_type">课程类型</string>
+    <string name="glyph_course_dance">跳舞</string>
+    <string name="glyph_course_popn">pop\'n</string>
+    <string name="glyph_course_dance_note">模式最初的四个箭头踏板</string>
+    <string name="glyph_course_popn_note">pop\'n music 的九个彩色按钮：上排四个，下排五个</string>
 </resources>

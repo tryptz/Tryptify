@@ -2585,4 +2585,9 @@
     <string name="crt_preset_exported">%1$s exportiert</string>
     <string name="crt_preset_export_failed">Die Datei konnte nicht geschrieben werden</string>
     <string name="crt_preset_import_failed">Import fehlgeschlagen: %1$s</string>
+    <string name="glyph_course_type">Kursart</string>
+    <string name="glyph_course_dance">Tanz</string>
+    <string name="glyph_course_popn">pop\'n</string>
+    <string name="glyph_course_dance_note">Vier Pfeilfelder, wie der Modus begann</string>
+    <string name="glyph_course_popn_note">Die neun farbigen Tasten von pop\'n music: vier oben, fünf unten</string>
 </resources>

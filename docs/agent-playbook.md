@@ -37,6 +37,7 @@ Repository conventions in `AGENTS.md` override this file. When opening a pull re
 | Radio queue, ranking, discovery, recommendations | Radio Ranking | Deterministic tests and observability |
 | Supabase sync, favourites/playlists/presets persistence, settings sync | Cloud Sync | `SyncOutboxTest`, `SettingsSyncCodecTest`, `PresetSyncMappingTest` |
 | AGP/Kotlin/KSP/Hilt upgrade | Engineering Gates | Full clean build and migration review |
+| Trypt Mania charts, lanes, course types, pop'n | Engineering Gates › Two course types | `PopnChartTest`, `GlyphPopnPlayTest`, the generator and parser tests |
 | R8/ProGuard or release-size work | Engineering Gates | Release build plus keep-rule evidence |
 
 The repository also ships a `player-visuals-themes` skill under `.claude/skills/`. It is the detailed reference for authoring Lyrics FX and Player Glass themes; this playbook's Glass Surfaces section is the process around it. Where the two disagree, the model's own `clamped()` wins — see the Known Review Targets below, which record where that skill is currently wrong.
@@ -251,6 +252,10 @@ The phone's separators were removed: ONNX Runtime with Qualcomm's QNN (the NPU a
 Charting is a line, `ChartQueue`, kept on disk and drained by one `StepManiaGenerationWorker`, two songs in flight so the next uploads while the server separates the current one. Generate joins the line; a folder heading's pill and "Chart every song without one" put many in at once, after `GlyphBatchDialog` shows each mode's time and cost (`ChartPace`, learned from the servers' own timings and `pricePerHour`/`idleSeconds`, never by waking one to ask). A song's failure is counted and the batch goes on. `ChartQueueTest` holds the rule that a song added as the worker stops still gets a worker.
 
 The server's envelopes are a port of `TransientEnvelopeBuilder`, held to it by `stemsapi/envelope_parity.json`, which both repositories test against (`EnvelopeParityTest` here): change the builder and the server's port with it, regenerate the fixture there, and copy it here. `STEMS` is not a catalog: every `when` over `ApiService` gives it no search, no quality and a plain pill, which says GPU or CPU.
+
+### Two course types from one analysis
+
+Trypt Mania charts and plays two course types, `CourseType.DANCE` (four panels, `dance-single`) and `CourseType.POPN` (pop'n music's nine buttons, `pnm-nine`). Both come from the same `RhythmAnalysis`; the server and the analysis know nothing of courses. The course threads through the request (`StepManiaRequest.course`), the chart (`StepChart.course`, `GlyphChart.course`), the queue (`ChartJob.course`), the files (one simfile per course: `GlyphSongRepository.simfileFile(trackId, course)`, pop'n's with `.popn.ssc`), the parser (`SscParser.parse(text, course)`), the editor's draft and writer, the attempts (`GlyphAttempt.course`, and every high score query), the keys (a set per course) and the UI state (`GlyphUiState.course`). When adding anything that reads a chart, takes a lane count or sizes an array by `GlyphLane.entries`, ask which course it is for: the enum has nine entries and the dance field uses four. `PopnChartTest` and `GlyphPopnPlayTest` hold the rules; `docs/popn-course-design.md` has the research (buttons, tiers, judgements, gauge, score, formats) and what is deliberately not built yet.
 
 ### Compose performance
 

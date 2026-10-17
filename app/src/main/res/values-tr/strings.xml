@@ -2585,4 +2585,9 @@
     <string name="crt_preset_exported">%1$s dışa aktarıldı</string>
     <string name="crt_preset_export_failed">Dosya yazılamadı</string>
     <string name="crt_preset_import_failed">İçe aktarılamadı: %1$s</string>
+    <string name="glyph_course_type">Kurs türü</string>
+    <string name="glyph_course_dance">Dans</string>
+    <string name="glyph_course_popn">pop\'n</string>
+    <string name="glyph_course_dance_note">Modun başladığı dört ok paneli</string>
+    <string name="glyph_course_popn_note">pop\'n music\'in dokuz renkli düğmesi: dört üstte, beş altta</string>
 </resources>

@@ -2,6 +2,7 @@
 
 package tf.monochrome.android.glyph.chart
 
+import tf.monochrome.android.audio.stepmania.CourseType
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.glyph.asset.GlyphBeatDivision
 import tf.monochrome.android.glyph.asset.GlyphLane
@@ -23,7 +24,12 @@ data class GlyphChart(
     val stepsType: String,
     /** Sorted by [GlyphNote.timeSeconds], then lane. */
     val notes: List<GlyphNote>,
+    /** The buttons the chart is for, as [stepsType] names them. */
+    val course: CourseType = CourseType.forStepsType(stepsType) ?: CourseType.DANCE,
 ) {
+    /** The lanes this chart can put a note on, in column order. */
+    val lanes: List<GlyphLane> get() = GlyphLane.forCourse(course)
+
     /** Notes that count toward the score — mines and fakes do not. */
     val scorableNotes: List<GlyphNote> = notes.filter { it.type.isScorable }
 

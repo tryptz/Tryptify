@@ -16,6 +16,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonPrimitive
+import tf.monochrome.android.audio.stepmania.CourseType
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 
 /**
@@ -66,20 +67,26 @@ class GlyphAttemptStore @Inject constructor(
      * ghost" target. One difficulty only: a Beginner run is not a best for
      * Challenge, which is what it was when every difficulty shared a list.
      */
-    suspend fun bestAttempt(chartId: String, difficulty: StepManiaDifficulty): GlyphAttempt? =
-        highScores(chartId, difficulty, limit = 1).firstOrNull()
+    suspend fun bestAttempt(
+        chartId: String,
+        difficulty: StepManiaDifficulty,
+        course: CourseType = CourseType.DANCE,
+    ): GlyphAttempt? = highScores(chartId, difficulty, course, limit = 1).firstOrNull()
 
     /**
-     * The machine's high score table for one chart and difficulty: full runs,
-     * best first by StepMania's percent and then by points, as StepMania ranks
-     * them. Runs saved before the percent was recorded rank by accuracy.
+     * The machine's high score table for one chart, difficulty and course:
+     * full runs, best first by StepMania's percent and then by points, as
+     * StepMania ranks them. Runs saved before the percent was recorded rank by
+     * accuracy. One course only: a run on pop'n's nine buttons is not a
+     * record on the dance panels, however the two charts are named.
      */
     suspend fun highScores(
         chartId: String,
         difficulty: StepManiaDifficulty,
+        course: CourseType = CourseType.DANCE,
         limit: Int = HIGH_SCORES_PER_CHART,
     ): List<GlyphAttempt> =
-        rankHighScores(attempts(chartId).filter { it.difficulty == difficulty }).take(limit)
+        rankHighScores(attempts(chartId).filter { it.difficulty == difficulty && it.course == course }).take(limit)
 
     /**
      * The most recent attempt carrying a usable ghost.
@@ -97,7 +104,7 @@ class GlyphAttemptStore @Inject constructor(
      * difficulty to the ten best full runs. Charts with no full run are left
      * out. One small file per chart, read in turn.
      */
-    suspend fun allHighScores(): Map<String, Map<StepManiaDifficulty, List<GlyphAttempt>>> =
+    suspend fun allHighScores(course: CourseType = CourseType.DANCE): Map<String, Map<StepManiaDifficulty, List<GlyphAttempt>>> =
         withContext(Dispatchers.IO) {
             val files = root.listFiles { file -> file.isFile && file.name.endsWith(".json") }.orEmpty()
             buildMap {
@@ -108,7 +115,7 @@ class GlyphAttemptStore @Inject constructor(
                         Log.w(TAG, "high scores in ${file.name} are unreadable: ${it.message}")
                     }.getOrDefault(emptyList())
                     val chartId = runs.firstOrNull()?.chartId ?: continue
-                    val tables = runs.groupBy { it.difficulty }
+                    val tables = runs.filter { it.course == course }.groupBy { it.difficulty }
                         .mapValues { (_, inDifficulty) ->
                             rankHighScores(inDifficulty).take(HIGH_SCORES_PER_CHART)
                         }

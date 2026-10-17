@@ -2,6 +2,7 @@
 
 package tf.monochrome.android.glyph.engine
 
+import tf.monochrome.android.audio.stepmania.CourseType
 import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.glyph.chart.GlyphChart
 import kotlin.math.abs
@@ -17,6 +18,10 @@ import kotlin.math.roundToInt
  * arrows had been rotated a quarter turn counter-clockwise. Right is the
  * other way. Shuffle is a permutation seeded by the chart, so the same chart
  * shuffles the same way every time and can be learned.
+ *
+ * On pop'n's nine buttons a quarter turn means nothing, so Left and Right
+ * slide every note one button that way, wrapping round; Mirror is pop'n's
+ * own MIRROR, reflected about the red centre, and Shuffle its RANDOM.
  */
 enum class GlyphTurn(val id: String, val label: String) {
     OFF("off", "Off"),
@@ -30,30 +35,41 @@ enum class GlyphTurn(val id: String, val label: String) {
      * Where a note written in [lane] lands. [shuffleSeed] seeds Shuffle and
      * is ignored by the rest.
      */
-    fun map(lane: GlyphLane, shuffleSeed: Long = 0L): GlyphLane = when (this) {
+    fun map(lane: GlyphLane, shuffleSeed: Long = 0L, course: CourseType = CourseType.DANCE): GlyphLane = when (this) {
         OFF -> lane
-        MIRROR -> GlyphLane.mirrorOf(lane)
-        LEFT -> when (lane) {
-            GlyphLane.UP -> GlyphLane.LEFT
-            GlyphLane.LEFT -> GlyphLane.DOWN
-            GlyphLane.DOWN -> GlyphLane.RIGHT
-            GlyphLane.RIGHT -> GlyphLane.UP
+        MIRROR -> GlyphLane.mirrorOf(lane, course)
+        LEFT -> when (course) {
+            CourseType.DANCE -> when (lane) {
+                GlyphLane.UP -> GlyphLane.LEFT
+                GlyphLane.LEFT -> GlyphLane.DOWN
+                GlyphLane.DOWN -> GlyphLane.RIGHT
+                GlyphLane.RIGHT -> GlyphLane.UP
+                else -> lane
+            }
+            CourseType.POPN -> slide(lane, -1, course)
         }
-        RIGHT -> when (lane) {
-            GlyphLane.UP -> GlyphLane.RIGHT
-            GlyphLane.RIGHT -> GlyphLane.DOWN
-            GlyphLane.DOWN -> GlyphLane.LEFT
-            GlyphLane.LEFT -> GlyphLane.UP
+        RIGHT -> when (course) {
+            CourseType.DANCE -> when (lane) {
+                GlyphLane.UP -> GlyphLane.RIGHT
+                GlyphLane.RIGHT -> GlyphLane.DOWN
+                GlyphLane.DOWN -> GlyphLane.LEFT
+                GlyphLane.LEFT -> GlyphLane.UP
+                else -> lane
+            }
+            CourseType.POPN -> slide(lane, 1, course)
         }
-        SHUFFLE -> shuffleOrder(shuffleSeed)[lane.ordinal]
+        SHUFFLE -> shuffleOrder(shuffleSeed, course).getOrNull(lane.ordinal) ?: lane
     }
+
+    private fun slide(lane: GlyphLane, by: Int, course: CourseType): GlyphLane =
+        GlyphLane.entries[Math.floorMod(lane.ordinal + by, course.laneCount)]
 
     companion object {
         fun fromId(id: String?): GlyphTurn = entries.firstOrNull { it.id == id } ?: OFF
 
-        /** One permutation of the lanes, the same for the same seed. */
-        fun shuffleOrder(seed: Long): List<GlyphLane> {
-            val order = GlyphLane.entries.toMutableList()
+        /** One permutation of a course's lanes, the same for the same seed. */
+        fun shuffleOrder(seed: Long, course: CourseType = CourseType.DANCE): List<GlyphLane> {
+            val order = GlyphLane.forCourse(course).toMutableList()
             val random = java.util.Random(seed)
             for (index in order.indices.reversed()) {
                 val swap = random.nextInt(index + 1)
@@ -72,7 +88,7 @@ enum class GlyphTurn(val id: String, val label: String) {
 fun GlyphChart.withTurn(turn: GlyphTurn): GlyphChart {
     if (turn == GlyphTurn.OFF) return this
     val seed = chartName.hashCode().toLong()
-    return copy(notes = notes.map { it.copy(lane = turn.map(it.lane, seed)) })
+    return copy(notes = notes.map { it.copy(lane = turn.map(it.lane, seed, course)) })
 }
 
 /**

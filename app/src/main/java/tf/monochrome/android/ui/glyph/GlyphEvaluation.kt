@@ -134,7 +134,7 @@ fun GlyphEvaluationPanel(
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(MonoDimens.spacingLg)) {
         GlyphPanel(modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = "${attempt.difficulty.sscName} · ${attempt.playerName.ifBlank { "PLAYER" }}",
+                text = "${attempt.course.difficultyLabel(attempt.difficulty)} · ${attempt.playerName.ifBlank { "PLAYER" }}",
                 style = MaterialTheme.typography.labelLarge,
                 color = scheme.onSurfaceVariant,
             )
@@ -490,7 +490,7 @@ fun GlyphHighScoresPanel(
             modifier = Modifier.semantics { heading() },
         )
         Text(
-            text = "${attempt.difficulty.sscName} · this phone",
+            text = "${attempt.course.difficultyLabel(attempt.difficulty)} · this phone",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -31,6 +31,7 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import tf.monochrome.android.audio.stepmania.ChartJob
 import tf.monochrome.android.audio.stepmania.ChartMode
+import tf.monochrome.android.audio.stepmania.CourseType
 import tf.monochrome.android.audio.stepmania.ChartPace
 import tf.monochrome.android.audio.stepmania.ChartQueue
 import tf.monochrome.android.audio.stepmania.RemoteStemAnalysis
@@ -303,7 +304,7 @@ class GlyphViewModel @Inject constructor(
                 _ui.value = _ui.value.copy(screen = GlyphScreen.MENU, tapSync = null)
             }
             is GlyphEvent.SetKey -> setKey(event.lane, event.slot, event.code)
-            GlyphEvent.ResetKeys -> saveKeys(GlyphKeyBindings.DEFAULT)
+            GlyphEvent.ResetKeys -> saveKeys(_ui.value.keys.reset(_ui.value.course))
             is GlyphEvent.SetAudioOffset -> setAudioOffset(event.ms)
             GlyphEvent.ApplyRecentTiming -> {
                 val late = _ui.value.recentLateMs ?: return
@@ -446,6 +447,7 @@ class GlyphViewModel @Inject constructor(
                 prefs.edit().putString(PREF_CHART_MODE, event.mode.name).apply()
                 _ui.value = _ui.value.copy(chartMode = event.mode)
             }
+            is GlyphEvent.SetCourse -> setCourse(event.course)
 
             GlyphEvent.OpenOptions -> if (_ui.value.chart != null) {
                 // A song the wheel was about to choose must not replace the
@@ -794,12 +796,13 @@ class GlyphViewModel @Inject constructor(
                 ChartJob(
                     trackId = trackId,
                     source = source.toString(),
-                    destination = songs.simfileFile(trackId).absolutePath,
+                    destination = songs.simfileFile(trackId, _ui.value.course).absolutePath,
                     title = song?.title ?: displayName.substringBeforeLast('.'),
                     artist = song?.artist.orEmpty(),
                     musicFileName = displayName,
                     durationSeconds = song?.durationSeconds ?: 0,
                     mode = _ui.value.chartMode,
+                    course = _ui.value.course,
                 ),
             ),
         )
@@ -894,12 +897,13 @@ class GlyphViewModel @Inject constructor(
             ChartJob(
                 trackId = song.trackId,
                 source = song.audioUri.toString(),
-                destination = songs.simfileFile(song.trackId).absolutePath,
+                destination = songs.simfileFile(song.trackId, _ui.value.course).absolutePath,
                 title = song.title,
                 artist = song.artist,
                 musicFileName = song.audioFileName,
                 durationSeconds = song.durationSeconds,
                 mode = offer.mode,
+                course = _ui.value.course,
             )
         }
         stopPreview()
@@ -1035,7 +1039,7 @@ class GlyphViewModel @Inject constructor(
                             WorkInfo.State.SUCCEEDED -> {
                                 val skipped = info.outputData.getInt(PackImportWorker.KEY_SKIPPED, 0)
                                 "$name imported: ${info.outputData.getInt(PackImportWorker.KEY_SONGS, 0)} songs." +
-                                    if (skipped > 0) " $skipped had no four-panel chart." else ""
+                                    if (skipped > 0) " $skipped had no dance or pop'n chart." else ""
                             }
                             WorkInfo.State.FAILED -> "${name.ifBlank { "The pack" }} was not imported: " +
                                 (info.outputData.getString(PackImportWorker.KEY_FAILURE) ?: "unknown error")
@@ -1764,8 +1768,11 @@ class GlyphViewModel @Inject constructor(
 
     private fun loadOptions() {
         if (prefs.contains(LEGACY_PREF_DARK)) prefs.edit().remove(LEGACY_PREF_DARK).apply()
+        val course = CourseType.fromId(prefs.getString(PREF_COURSE, null))
+        songs.course.value = course
         _ui.value = _ui.value.copy(
             chartMode = ChartMode.entries.firstOrNull { it.name == prefs.getString(PREF_CHART_MODE, null) } ?: ChartMode.FAST,
+            course = course,
         )
         val mode = when (prefs.getString(PREF_SCROLL_FAMILY, null)) {
             GlyphScrollFamily.X.name -> GlyphScrollMode.XMod(prefs.getFloat(PREF_SCROLL_VALUE, 2f))
@@ -1907,7 +1914,7 @@ class GlyphViewModel @Inject constructor(
         )
         viewModelScope.launch {
             val byChart = _ui.value.songs.associateBy { it.chartId }
-            val boards = attempts.allHighScores().map { (chartId, tables) ->
+            val boards = attempts.allHighScores(_ui.value.course).map { (chartId, tables) ->
                 val song = byChart[chartId]
                 GlyphBoard(
                     chartId = chartId,
@@ -1922,7 +1929,7 @@ class GlyphViewModel @Inject constructor(
 
     private suspend fun bestGradesFor(song: GlyphSong): Map<StepManiaDifficulty, GlyphAttempt> =
         StepManiaDifficulty.entries.mapNotNull { difficulty ->
-            attempts.bestAttempt(song.chartId, difficulty)?.let { difficulty to it }
+            attempts.bestAttempt(song.chartId, difficulty, _ui.value.course)?.let { difficulty to it }
         }.toMap()
 
     // ── settings ────────────────────────────────────────────────────────
@@ -1938,7 +1945,20 @@ class GlyphViewModel @Inject constructor(
 
     private fun setKey(lane: GlyphLane, slot: Int, code: Int) {
         if (GlyphKeyBindings.isReserved(code) || slot !in 0 until GlyphKeyBindings.SLOTS) return
-        saveKeys(_ui.value.keys.bind(lane, slot, code).bindings)
+        saveKeys(_ui.value.keys.bind(lane, slot, code, _ui.value.course).bindings)
+    }
+
+    /**
+     * The course switched: the list, the selection, the keys and the high
+     * score tables all follow it. A chart being played stays as it is.
+     */
+    private fun setCourse(course: CourseType) {
+        if (course == _ui.value.course) return
+        prefs.edit().putString(PREF_COURSE, course.name).apply()
+        songs.course.value = course
+        _ui.value = _ui.value.copy(course = course, simfile = null, selectedDifficulty = null, bestGrades = emptyMap())
+        _ui.value.selectedSong?.let { loadSelection(it) }
+        if (_ui.value.screen == GlyphScreen.LEADERBOARD) openLeaderboard()
     }
 
     private fun saveKeys(keys: GlyphKeyBindings) {
@@ -2066,8 +2086,8 @@ class GlyphViewModel @Inject constructor(
                 editor = GlyphEditorUi(
                     song = song,
                     difficulty = difficulty,
-                    meter = chart?.meter ?: difficulty.meter,
-                    draft = chart?.let { GlyphChartDraft.of(it, timing) } ?: GlyphChartDraft(),
+                    meter = chart?.meter ?: _ui.value.course.meter(difficulty),
+                    draft = chart?.let { GlyphChartDraft.of(it, timing) } ?: GlyphChartDraft(course = _ui.value.course),
                     timing = timing,
                     tempoEditable = timing.isConstantTempo && timing.stops.isEmpty(),
                     isNew = chart == null,
@@ -2091,7 +2111,7 @@ class GlyphViewModel @Inject constructor(
      */
     private fun editorTap(beat: Float, lane: Int) {
         val editor = _ui.value.editor ?: return
-        if (lane !in 0 until GlyphChartDraft.LANES || beat < 0f) return
+        if (lane !in 0 until editor.draft.laneCount || beat < 0f) return
         val tick = editor.snap.snap(GlyphChartDraft.tickOf(beat))
         val draft = editor.draft
         val pending = editor.pendingHold
@@ -2161,16 +2181,17 @@ class GlyphViewModel @Inject constructor(
             return false
         }
         val song = editor.song
-        val file = songs.simfileFile(song.trackId)
+        val course = editor.draft.course
+        val file = songs.simfileFile(song.trackId, course)
         val written = withContext(Dispatchers.IO) {
             runCatching {
                 val noteData = editor.draft.toNoteData()
                 // A pack song starts from the pack's chart; the edit is saved as
                 // the app's own copy, and the pack's file is left as it came.
-                val existing = songs.chartText(song.trackId)
+                val existing = songs.chartText(song.trackId, course)
                 val timing = editor.timing
                 var text = if (existing != null) {
-                    SscChartWriter.withChart(existing, editor.difficulty, editor.meter, noteData)
+                    SscChartWriter.withChart(existing, editor.difficulty, editor.meter, noteData, course)
                 } else {
                     SscChartWriter.newSimfile(
                         title = song.title,
@@ -2181,12 +2202,13 @@ class GlyphViewModel @Inject constructor(
                         difficulty = editor.difficulty,
                         meter = editor.meter,
                         noteData = noteData,
+                        course = course,
                     )
                 }
                 if (existing != null && editor.tempoEditable) {
                     text = SscChartWriter.withTempo(text, timing.startBpm, timing.offsetSeconds)
                 }
-                val parsed = SscParser.parse(text)?.takeIf { it.chart(editor.difficulty) != null }
+                val parsed = SscParser.parse(text, course)?.takeIf { it.chart(editor.difficulty) != null }
                     ?: error("the chart did not read back")
                 // Written beside the old file and moved over it, so a save cut
                 // short leaves the old charts, never half a file.
@@ -2424,6 +2446,7 @@ class GlyphViewModel @Inject constructor(
             playerName = effectiveName(),
             judgeScale = modifiers.timingWindowScale,
             turn = modifiers.turn.id,
+            course = running.chart.course,
         )
         if (_ui.value.inRoomPlay) {
             // The room ranks everyone once the last phone has said how it went.
@@ -2433,7 +2456,7 @@ class GlyphViewModel @Inject constructor(
         // A room's run of another phone's chart is not a run of this phone's:
         // it goes to the room and is not kept against the local scores.
         if (!_ui.value.inRoomPlay || roomPlan?.sameChart == true) attempts.save(attempt)
-        val machine = attempts.highScores(song.chartId, difficulty)
+        val machine = attempts.highScores(song.chartId, difficulty, running.chart.course)
 
         _ui.value = _ui.value.copy(
             screen = GlyphScreen.RESULTS,
@@ -2603,15 +2626,21 @@ class GlyphViewModel @Inject constructor(
     }
 
     private suspend fun planRoomChart(chart: RoomChart): RoomPlan? {
-        val simfile = runCatching { SscParser.parse(chart.notes) }.getOrNull() ?: return null
+        // The host's notes are one course's file: dance or pop'n. Read them
+        // as whichever course they are written for; the run then plays in it.
+        val (course, simfile) = CourseType.entries.firstNotNullOfOrNull { course ->
+            runCatching { SscParser.parse(chart.notes, course) }.getOrNull()
+                ?.takeIf { it.charts.isNotEmpty() }
+                ?.let { course to it }
+        } ?: return null
         val difficulty = StepManiaDifficulty.entries.firstOrNull { it.sscName.equals(chart.difficulty, ignoreCase = true) }
             ?: simfile.charts.firstOrNull()?.difficulty
             ?: return null
         if (simfile.chart(difficulty) == null) return null
         val candidates = _ui.value.songs.filter { it.filePath.isNotBlank() && it.title.equals(chart.title, ignoreCase = true) }
         // The same chart on this phone: its own song, and its scores count.
-        for (song in candidates.filter { it.hasChart }) {
-            val text = songs.chartText(song.trackId) ?: continue
+        for (song in candidates) {
+            val text = songs.chartText(song.trackId, course) ?: continue
             if (RoomProtocol.chartHash(text) == chart.hash) return RoomPlan(song, simfile, difficulty, chart.hash, sameChart = true)
         }
         val song = candidates.firstOrNull { it.artist.equals(chart.artist, ignoreCase = true) && it.lengthMatches(chart) }
@@ -2794,6 +2823,7 @@ class GlyphViewModel @Inject constructor(
         const val PREF_JUDGE = "judge"
         const val PREF_LANDSCAPE_FIELD = "landscape_field"
         const val PREF_CHART_MODE = "chart_mode"
+        const val PREF_COURSE = "course"
         const val PREF_NAME = "player_name"
         const val PREF_SORT_KEY = "song_sort"
         const val PREF_PREVIEWS = "previews"

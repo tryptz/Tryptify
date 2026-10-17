@@ -61,6 +61,7 @@ import tf.monochrome.android.glyph.asset.GlyphPalette
 import tf.monochrome.android.glyph.asset.GlyphSkin
 import tf.monochrome.android.glyph.chart.GlyphTiming
 import tf.monochrome.android.glyph.data.GlyphGhost
+import tf.monochrome.android.audio.stepmania.CourseType
 import tf.monochrome.android.glyph.engine.GlyphGameplayEngine
 import tf.monochrome.android.glyph.engine.GlyphScrollFamily
 import tf.monochrome.android.glyph.engine.GlyphScrollMode
@@ -101,6 +102,8 @@ fun GlyphTrainingScreen(
     val gameplay = state.gameplay
     val landscape = glyphIsLandscape()
     val fieldFraction = glyphFieldFraction(gameplay.modifiers.landscapeFieldWidth)
+    // The chart's buttons: the four dance panels, or pop'n's nine.
+    val course = state.chart?.course ?: state.course
     val duration = state.selectedSong?.durationSeconds?.toFloat() ?: 0f
     val keyboard = rememberGlyphKeyboardFocus()
 
@@ -117,6 +120,7 @@ fun GlyphTrainingScreen(
                 onRelease = { lane, at -> onEvent(GlyphEvent.LaneReleased(lane, at)) },
                 onPause = { onEvent(GlyphEvent.TogglePause) },
                 focus = keyboard,
+                course = course,
             ),
     ) {
         TopAppBar(
@@ -185,13 +189,15 @@ fun GlyphTrainingScreen(
                 receptorInset = if (landscape && !gameplay.modifiers.reverse) LANDSCAPE_RECEPTOR_INSET else null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .glyphFieldColumn(fieldFraction),
+                    .glyphFieldColumn(fieldFraction, course.laneCount),
             )
             GlyphLaneInput(
                 onPress = { lane, at -> onEvent(GlyphEvent.LanePressed(lane, at)) },
                 onRelease = { lane, at -> onEvent(GlyphEvent.LaneReleased(lane, at)) },
                 hitboxScale = gameplay.modifiers.hitboxScale,
                 fieldFraction = fieldFraction,
+                course = course,
+                heldLanes = gameplay.heldLanes,
                 modifier = Modifier.fillMaxSize(),
             )
         }

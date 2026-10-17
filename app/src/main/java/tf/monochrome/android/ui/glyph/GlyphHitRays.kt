@@ -186,6 +186,15 @@ private fun HitRaysLayer(
             for ((lane, flash) in explosionProvider()) {
                 val life = flashLife(now, flash.atNanos)
                 if (life <= 0f) continue
+                if (!lane.isDance) {
+                    // A pop-kun has no sprite: its disc, white-hot or red.
+                    drawCircle(
+                        color = (if (flash.isHit) tint[0] else GlyphComboRays.MISS).copy(alpha = life),
+                        radius = noteSizePx / 2f,
+                        center = Offset(lane.ordinal * laneWidthPx + laneWidthPx / 2f, localReceptorY),
+                    )
+                    continue
+                }
                 val image = assets.image(
                     GlyphAssetCatalog.tap(lane, GlyphBeatDivision.QUARTER), noteSizePx, noteSizePx,
                 ) ?: continue

@@ -29,6 +29,8 @@ data class StepManiaRequest(
         StepManiaDifficulty.MEDIUM,
         StepManiaDifficulty.HARD,
     ),
+    /** Which buttons the charts are written for; the four dance panels unless asked otherwise. */
+    val course: CourseType = CourseType.DANCE,
 )
 
 /**
@@ -112,10 +114,13 @@ class StemFeatures(
 }
 
 /**
- * One four-lane DDR event. Bits 0..3 are left, down, up, right.
+ * One event: the lanes struck together on one sixteenth. Bit `n` is lane `n`
+ * in the chart's column order: for dance, bits 0..3 are left, down, up,
+ * right; for pop'n, bits 0..8 are the nine buttons from the left white to
+ * the right white.
  *
- * A [holdTicks] above zero makes it a freeze arrow: held from [tick] for that
- * many sixteenths. Only a single arrow can be one.
+ * A [holdTicks] above zero makes it a freeze arrow (a long pop-kun): held
+ * from [tick] for that many sixteenths. Only a single note can be one.
  */
 data class StepEvent(
     val tick: Int,
@@ -124,7 +129,7 @@ data class StepEvent(
 ) {
     init {
         require(tick >= 0) { "tick must be non-negative" }
-        require(laneMask in 1..0b1111) { "laneMask must contain at least one lane" }
+        require(laneMask in 1 until (1 shl CourseType.MAX_LANES)) { "laneMask must contain at least one lane" }
         require(holdTicks >= 0) { "a hold cannot be negative" }
         require(holdTicks == 0 || Integer.bitCount(laneMask) == 1) { "only a single arrow can be held" }
     }
@@ -137,6 +142,8 @@ data class StepChart(
     val events: List<StepEvent>,
     /** Sixteenth-note ticks covered by the serialized note data. */
     val lengthTicks: Int,
+    /** The buttons the events' lanes are, and how wide a serialized row is. */
+    val course: CourseType = CourseType.DANCE,
 )
 
 data class GeneratedSimfile(

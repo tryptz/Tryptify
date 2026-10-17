@@ -100,7 +100,7 @@ class GlyphAssetCatalogTest {
     @Test
     fun everyCatalogNameResolvesToAManifestEntry() {
         val ids = buildList {
-            for (lane in GlyphLane.entries) {
+            for (lane in GlyphLane.DANCE) {
                 add(GlyphAssetCatalog.receptor(lane, active = false))
                 add(GlyphAssetCatalog.receptor(lane, active = true))
                 add(GlyphAssetCatalog.tapDefault(lane))
@@ -189,7 +189,7 @@ class GlyphAssetCatalogTest {
             .map { it.name }
             .toSet()
 
-        for (lane in GlyphLane.entries) {
+        for (lane in GlyphLane.DANCE) {
             assertTrue(
                 "receptors must be warm before play",
                 GlyphAssetCatalog.receptor(lane, active = false).name in ids &&

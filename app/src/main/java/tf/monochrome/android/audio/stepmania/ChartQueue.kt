@@ -47,6 +47,8 @@ data class ChartJob(
     val durationSeconds: Int = 0,
     /** The mode it was queued in: a batch keeps the one it was started with. */
     val mode: ChartMode = ChartMode.FAST,
+    /** The buttons the chart is for; a job queued before pop'n is a dance one. */
+    val course: CourseType = CourseType.DANCE,
 )
 
 /** How one song of a batch went. */

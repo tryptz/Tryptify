@@ -55,7 +55,7 @@ class GlyphSkinTest {
     @Test
     fun everySkinImageIsSomethingThePlayfieldAsksFor() {
         val askable = buildSet {
-            for (lane in GlyphLane.entries) {
+            for (lane in GlyphLane.DANCE) {
                 add(GlyphAssetCatalog.receptor(lane, active = false))
                 add(GlyphAssetCatalog.receptor(lane, active = true))
                 add(GlyphAssetCatalog.tapDefault(lane))
