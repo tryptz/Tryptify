@@ -1575,8 +1575,18 @@ internal fun safeSourceSample(x: Float): Float =
 /** Whether [x] could be audio: a number, within [limit] of silence. */
 internal fun looksLikeAudio(x: Float, limit: Float): Boolean = x.isFinite() && x >= -limit && x <= limit
 
-/** Room past full scale a float stream keeps before its level: +6 dB. */
-internal const val SOURCE_HEADROOM = 2f
+/**
+ * Room past full scale a float stream keeps before its level: +12 dB.
+ *
+ * The trade between two things. An EQ boost up to this much plays clean at a
+ * level this far down or lower; past it, the peaks are flattened before the
+ * level, at any volume. And it is how far above the level a stream that is
+ * not audio can ever reach the DAC: at the level exclusive mode starts on,
+ * −24 dB, a burst peaks at −12 dB, never at full scale. It was +6 dB, which
+ * clipped the boosts the EQ is there to make (+24 dB a band, +24 dB preamp);
+ * +24 dB would let a burst reach full scale at the starting level again.
+ */
+internal const val SOURCE_HEADROOM = 4f
 
 /**
  * A float sample as the little-endian integer a USB Audio Type I subslot of

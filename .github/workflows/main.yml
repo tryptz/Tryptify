@@ -31,8 +31,13 @@ jobs:
           java-version: '17'
           cache: gradle
 
+      # Its default packages are "tools platform-tools", and the runners'
+      # cmdline-tools (16.0) no longer have "tools", which fails this step.
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
 
       - name: Install required Android SDK packages
         run: |
