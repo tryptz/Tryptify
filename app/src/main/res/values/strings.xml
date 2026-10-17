@@ -2595,4 +2595,13 @@
     <string name="glyph_course_popn">pop\'n</string>
     <string name="glyph_course_dance_note">Four arrow panels, as the mode began</string>
     <string name="glyph_course_popn_note">pop\'n music\'s nine coloured buttons: four above, five below</string>
+
+    <!-- Trypt Mania: hit sound kits -->
+    <string name="tm_hit_sounds">Hit sounds</string>
+    <string name="tm_hit_off">Off</string>
+    <string name="tm_hit_volume">Hit sound volume</string>
+    <string name="tm_hit_note_off">No sound on a press.</string>
+    <string name="tm_hit_note_taiko">A deep don on the middle lanes, a wooden ka on the outer ones, as a taiko drum answers each hit.</string>
+    <string name="tm_hit_note_osu">One soft, crisp tap on every press.</string>
+    <string name="tm_hit_note_popn">A bright pon pitched by button, so a run of presses plays a tune.</string>
 </resources>

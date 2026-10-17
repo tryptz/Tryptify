@@ -2524,4 +2524,13 @@
     <string name="glyph_course_popn">pop\'n</string>
     <string name="glyph_course_dance_note">模式最初的四个箭头踏板</string>
     <string name="glyph_course_popn_note">pop\'n music 的九个彩色按钮：上排四个，下排五个</string>
+
+    <!-- Trypt Mania: hit sound kits -->
+    <string name="tm_hit_sounds">击打音效</string>
+    <string name="tm_hit_off">关闭</string>
+    <string name="tm_hit_volume">击打音量</string>
+    <string name="tm_hit_note_off">按下时不发声。</string>
+    <string name="tm_hit_note_taiko">中间轨道是低沉的“咚”，外侧轨道是木质的“咔”，像太鼓一样回应每一击。</string>
+    <string name="tm_hit_note_osu">每次按下都有一声柔和清脆的轻击。</string>
+    <string name="tm_hit_note_popn">按键各有音高的明亮“嘭”声，连续按下就能奏出旋律。</string>
 </resources>

@@ -1098,6 +1098,42 @@ private fun MoreTab(state: GlyphUiState, onEvent: (GlyphEvent) -> Unit) {
         onChange = { onEvent(GlyphEvent.SetWheelSound(it)) },
         note = "A soft swish as each song turns into the middle",
     )
+    // The sound each press makes, in the manner of another rhythm game.
+    Column {
+        GlyphControlHeader(stringResource(R.string.tm_hit_sounds), null)
+        val offLabel = stringResource(R.string.tm_hit_off)
+        GlyphChipRow(
+            options = tf.monochrome.android.glyph.engine.GlyphHitKit.entries,
+            selected = state.hitKit,
+            label = { kit ->
+                if (kit == tf.monochrome.android.glyph.engine.GlyphHitKit.OFF) offLabel else kit.label
+            },
+            onSelect = { onEvent(GlyphEvent.SetHitKit(it)) },
+        )
+        Text(
+            text = stringResource(
+                when (state.hitKit) {
+                    tf.monochrome.android.glyph.engine.GlyphHitKit.OFF -> R.string.tm_hit_note_off
+                    tf.monochrome.android.glyph.engine.GlyphHitKit.TAIKO -> R.string.tm_hit_note_taiko
+                    tf.monochrome.android.glyph.engine.GlyphHitKit.OSU -> R.string.tm_hit_note_osu
+                    tf.monochrome.android.glyph.engine.GlyphHitKit.POPN -> R.string.tm_hit_note_popn
+                },
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = MonoDimens.spacingSm),
+        )
+    }
+    if (state.hitKit != tf.monochrome.android.glyph.engine.GlyphHitKit.OFF) {
+        GlyphSlider(
+            label = stringResource(R.string.tm_hit_volume),
+            value = state.hitVolume,
+            reading = "${(state.hitVolume * 100).roundToInt()}%",
+            default = 0.7f,
+            onChange = { onEvent(GlyphEvent.SetHitVolume(it)) },
+            onChangeFinished = { onEvent(GlyphEvent.SetHitVolume(state.hitVolume, preview = true)) },
+        )
+    }
     GlyphSwitchRow(
         label = "Metronome",
         checked = state.gameplay.modifiers.metronome,

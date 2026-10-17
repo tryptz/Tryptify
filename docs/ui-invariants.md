@@ -1611,6 +1611,17 @@ takes the request when it is up, finds the song by its file, its download or
 its name, centres and chooses it, and makes its chart when it has none; a song
 not on the phone, or not an MP3 or FLAC in the library, says so.
 
+**Hit sounds sound on the press, not the judgement.** Trypt Mania › Settings
+› More › Hit sounds picks a kit (`GlyphHitKit`): Off by default, Taiko (a
+deep don on the middle lanes, a wooden ka on the outer ones; pop'n's two
+buttons at each end are the rim), osu! (one soft tap), pop'n (a bright pon
+pitched by button, up a pentatonic scale along the row; dance's four panels
+take a chord's notes). Every sound is synthesised (`GlyphHitSynth`), never
+another game's sample, and plays through a SoundPool from the press itself,
+so it is never a frame late and sounds on a miss too, as a drum does. A kit
+picked plays its first sound once, to be heard; the volume slider plays one
+on release. A sound not yet loaded is silent, never late.
+
 **Back in a run pauses it; Back from the pause leaves.** The pause panel is
 where "Quit to songs" is, so Back walks the same two steps. Quitting on the
 first Back threw a run away to a stray edge swipe. On the home screen Back

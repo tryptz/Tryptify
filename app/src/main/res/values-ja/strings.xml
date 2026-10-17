@@ -2524,4 +2524,13 @@
     <string name="glyph_course_popn">pop\'n</string>
     <string name="glyph_course_dance_note">モード本来の4枚の矢印パネル</string>
     <string name="glyph_course_popn_note">pop\'n musicの9つのカラーボタン：上に4つ、下に5つ</string>
+
+    <!-- Trypt Mania: hit sound kits -->
+    <string name="tm_hit_sounds">ヒット音</string>
+    <string name="tm_hit_off">オフ</string>
+    <string name="tm_hit_volume">ヒット音の音量</string>
+    <string name="tm_hit_note_off">押しても音は鳴りません。</string>
+    <string name="tm_hit_note_taiko">中央のレーンは低い「ドン」、外側は木の「カッ」。太鼓のように鳴ります。</string>
+    <string name="tm_hit_note_osu">押すたびに柔らかく歯切れのよいタップ音。</string>
+    <string name="tm_hit_note_popn">ボタンごとに音程の付いた明るい「ポン」。連打するとメロディになります。</string>
 </resources>

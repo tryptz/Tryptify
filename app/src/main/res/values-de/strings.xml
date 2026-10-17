@@ -2590,4 +2590,13 @@
     <string name="glyph_course_popn">pop\'n</string>
     <string name="glyph_course_dance_note">Vier Pfeilfelder, wie der Modus begann</string>
     <string name="glyph_course_popn_note">Die neun farbigen Tasten von pop\'n music: vier oben, fünf unten</string>
+
+    <!-- Trypt Mania: hit sound kits -->
+    <string name="tm_hit_sounds">Treffer-Sounds</string>
+    <string name="tm_hit_off">Aus</string>
+    <string name="tm_hit_volume">Lautstärke der Treffer-Sounds</string>
+    <string name="tm_hit_note_off">Kein Ton beim Drücken.</string>
+    <string name="tm_hit_note_taiko">Ein tiefes Don auf den mittleren Spuren, ein hölzernes Ka auf den äußeren, wie eine Taiko-Trommel.</string>
+    <string name="tm_hit_note_osu">Ein weicher, knackiger Tap bei jedem Druck.</string>
+    <string name="tm_hit_note_popn">Ein heller Pon-Ton je nach Taste, sodass eine Folge von Drücken eine Melodie spielt.</string>
 </resources>

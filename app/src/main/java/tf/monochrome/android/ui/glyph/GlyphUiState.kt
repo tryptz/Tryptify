@@ -55,6 +55,10 @@ data class GlyphUiState(
     val wheelFocus: String? = null,
     /** The wheel's swish as it turns. */
     val wheelSound: Boolean = true,
+    /** The sound each press makes, in the manner of another game; off by default. */
+    val hitKit: tf.monochrome.android.glyph.engine.GlyphHitKit = tf.monochrome.android.glyph.engine.GlyphHitKit.OFF,
+    /** How loud the hit sounds are, 0 to 1. */
+    val hitVolume: Float = 0.7f,
     /** How the song list and the leaderboard are ordered; kept between sessions. */
     val songSort: GlyphSongSort = GlyphSongSort(),
     val leaderboard: GlyphLeaderboardUi = GlyphLeaderboardUi(),

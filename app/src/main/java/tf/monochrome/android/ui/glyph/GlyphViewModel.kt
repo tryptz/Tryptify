@@ -199,6 +199,9 @@ class GlyphViewModel @Inject constructor(
     private val ghostRecorder = GlyphGhostRecorder()
     private val metronome = GlyphMetronome()
 
+    /** The press sounds (Settings › More › Hit sounds). */
+    private val hitSounds by lazy { tf.monochrome.android.glyph.engine.GlyphHitSoundPlayer(context) }
+
     /**
      * The ghost being played back, if any.
      *
@@ -263,6 +266,8 @@ class GlyphViewModel @Inject constructor(
 
     init {
         loadOptions()
+        // A kit chosen last time is loaded now, so the first press sounds.
+        if (_ui.value.hitKit != tf.monochrome.android.glyph.engine.GlyphHitKit.OFF) hitSounds.setKit(_ui.value.hitKit)
         watchCharts()
         watchChartServers()
         watchPlayRequests()
@@ -381,6 +386,17 @@ class GlyphViewModel @Inject constructor(
             is GlyphEvent.SetWheelSound -> {
                 prefs.edit().putBoolean(PREF_WHEEL_SOUND, event.on).apply()
                 _ui.value = _ui.value.copy(wheelSound = event.on)
+            }
+            is GlyphEvent.SetHitKit -> {
+                prefs.edit().putString(PREF_HIT_KIT, event.kit.id).apply()
+                _ui.value = _ui.value.copy(hitKit = event.kit)
+                hitSounds.setKit(event.kit, preview = true, volume = _ui.value.hitVolume)
+            }
+            is GlyphEvent.SetHitVolume -> {
+                val volume = event.volume.coerceIn(0f, 1f)
+                _ui.value = _ui.value.copy(hitVolume = volume)
+                prefs.edit().putFloat(PREF_HIT_VOLUME, volume).apply()
+                if (event.preview) hitSounds.play(GlyphLane.DOWN, _ui.value.course, volume)
             }
             is GlyphEvent.SelectDifficulty ->
                 _ui.value = _ui.value.copy(selectedDifficulty = event.difficulty)
@@ -1529,6 +1545,12 @@ class GlyphViewModel @Inject constructor(
         // judged at the stopped music, and the results read the engine's count.
         if (_ui.value.gameplay.failStops) return
         running.press(lane, transport.positionAt(touchNanos(atUptimeMillis)) - audioOffsetSeconds)
+        // The kit's sound on every press, as a taiko drum answers each hit:
+        // right away, from the press, not from the judgement after it.
+        val ui = _ui.value
+        if (ui.hitKit != tf.monochrome.android.glyph.engine.GlyphHitKit.OFF) {
+            hitSounds.play(lane, running.chart.course, ui.hitVolume)
+        }
     }
 
     private fun releaseLane(lane: GlyphLane, atUptimeMillis: Long) {
@@ -1812,6 +1834,8 @@ class GlyphViewModel @Inject constructor(
                 .coerceIn(-GlyphCalibration.MAX_OFFSET_MS, GlyphCalibration.MAX_OFFSET_MS),
             previews = prefs.getBoolean(PREF_PREVIEWS, true),
             wheelSound = prefs.getBoolean(PREF_WHEEL_SOUND, true),
+            hitKit = tf.monochrome.android.glyph.engine.GlyphHitKit.fromId(prefs.getString(PREF_HIT_KIT, null)),
+            hitVolume = prefs.getFloat(PREF_HIT_VOLUME, DEFAULT_HIT_VOLUME).coerceIn(0f, 1f),
             songSort = GlyphSongSort(
                 key = GlyphSortKey.fromId(prefs.getString(PREF_SORT_KEY, null)),
                 ascending = prefs.getBoolean(PREF_SORT_ASCENDING, true),
@@ -2781,6 +2805,7 @@ class GlyphViewModel @Inject constructor(
         stopTick()
         replaceEngine(null)
         metronome.release()
+        hitSounds.release()
         transport.release()
         super.onCleared()
     }
@@ -2828,6 +2853,9 @@ class GlyphViewModel @Inject constructor(
         const val PREF_SORT_KEY = "song_sort"
         const val PREF_PREVIEWS = "previews"
         const val PREF_WHEEL_SOUND = "wheel_sound"
+        const val PREF_HIT_KIT = "hit_kit"
+        const val PREF_HIT_VOLUME = "hit_volume"
+        const val DEFAULT_HIT_VOLUME = 0.7f
         const val PREF_KEYS = "keys"
         const val PREF_AUDIO_OFFSET = "audio_offset_ms"
 

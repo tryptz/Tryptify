@@ -2590,4 +2590,13 @@
     <string name="glyph_course_popn">pop\'n</string>
     <string name="glyph_course_dance_note">Modun başladığı dört ok paneli</string>
     <string name="glyph_course_popn_note">pop\'n music\'in dokuz renkli düğmesi: dört üstte, beş altta</string>
+
+    <!-- Trypt Mania: hit sound kits -->
+    <string name="tm_hit_sounds">Vuruş sesleri</string>
+    <string name="tm_hit_off">Kapalı</string>
+    <string name="tm_hit_volume">Vuruş sesi düzeyi</string>
+    <string name="tm_hit_note_off">Basınca ses çıkmaz.</string>
+    <string name="tm_hit_note_taiko">Ortadaki şeritlerde derin bir don, dıştakilerde tahta bir ka; bir taiko davulu gibi.</string>
+    <string name="tm_hit_note_osu">Her basışta yumuşak, net bir dokunuş.</string>
+    <string name="tm_hit_note_popn">Tuşa göre perdelenmiş parlak bir pon: art arda basışlar bir ezgi çalar.</string>
 </resources>

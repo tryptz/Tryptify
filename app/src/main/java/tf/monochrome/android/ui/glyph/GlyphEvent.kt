@@ -75,6 +75,10 @@ sealed interface GlyphEvent {
     /** Close the open folder, as StepMania's Up-Down does. */
     data class CloseFolder(val name: String) : GlyphEvent
     data class SetWheelSound(val on: Boolean) : GlyphEvent
+    /** The hit sound kit; its first sound plays once, to be heard. */
+    data class SetHitKit(val kit: tf.monochrome.android.glyph.engine.GlyphHitKit) : GlyphEvent
+    /** The hit sounds' volume, 0 to 1; [preview] plays one at it (on letting go of the slider). */
+    data class SetHitVolume(val volume: Float, val preview: Boolean = false) : GlyphEvent
     data class SelectDifficulty(val difficulty: StepManiaDifficulty) : GlyphEvent
 
     /** Generate a chart for the selected song from the file already on disk. */

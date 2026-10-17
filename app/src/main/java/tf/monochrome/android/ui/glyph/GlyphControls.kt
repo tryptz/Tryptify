@@ -297,6 +297,8 @@ fun GlyphSlider(
     note: String? = null,
     /** When set, a reset beside the reading puts the slider back to it. */
     default: Float? = null,
+    /** Called once the slider is let go. */
+    onChangeFinished: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     Column(modifier = modifier.fillMaxWidth()) {
@@ -327,6 +329,7 @@ fun GlyphSlider(
         Slider(
             value = value.coerceIn(range),
             onValueChange = onChange,
+            onValueChangeFinished = onChangeFinished,
             valueRange = range,
             steps = steps,
             colors = SliderDefaults.colors(

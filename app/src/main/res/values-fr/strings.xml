@@ -2656,4 +2656,13 @@
     <string name="glyph_course_popn">pop\'n</string>
     <string name="glyph_course_dance_note">Quatre panneaux fléchés, comme au début du mode</string>
     <string name="glyph_course_popn_note">Les neuf boutons colorés de pop\'n music : quatre en haut, cinq en bas</string>
+
+    <!-- Trypt Mania: hit sound kits -->
+    <string name="tm_hit_sounds">Sons de frappe</string>
+    <string name="tm_hit_off">Désactivé</string>
+    <string name="tm_hit_volume">Volume des sons de frappe</string>
+    <string name="tm_hit_note_off">Aucun son à l’appui.</string>
+    <string name="tm_hit_note_taiko">Un don grave sur les pistes du milieu, un ka boisé sur celles du bord, comme un tambour taiko.</string>
+    <string name="tm_hit_note_osu">Une frappe douce et nette à chaque appui.</string>
+    <string name="tm_hit_note_popn">Un pon clair accordé selon le bouton : une suite d’appuis joue une mélodie.</string>
 </resources>
