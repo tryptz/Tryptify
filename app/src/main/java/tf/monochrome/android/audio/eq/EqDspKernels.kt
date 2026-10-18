@@ -296,11 +296,21 @@ internal fun designBiquadCoefficients(
     }
 }
 
-/** RBJ biquad (Transposed Direct Form II) with NaN/degenerate-coefficient guards. */
+/**
+ * RBJ biquad (Transposed Direct Form II) with NaN/degenerate-coefficient guards.
+ *
+ * Coefficients arrive as float32 (that's what [designBiquadCoefficients]
+ * emits) but the state and the multiply-adds run in DOUBLE, and only the
+ * output is rounded back to float. Sub-bass bands put the poles within ~1e-3
+ * of z = 1, and float32 state there turns rounding error into audible-range
+ * noise: a single 20 Hz bell measured -68 dB THD+N at 40 Hz in float32
+ * (tools/autoeq-bench), versus ~-136 dB with double state. Scalar double
+ * costs the same as float on ARM64.
+ */
 internal class EqBiquad {
-    private var b0 = 1f; private var b1 = 0f; private var b2 = 0f
-    private var a1 = 0f; private var a2 = 0f
-    private var z1 = 0f; private var z2 = 0f
+    private var b0 = 1.0; private var b1 = 0.0; private var b2 = 0.0
+    private var a1 = 0.0; private var a2 = 0.0
+    private var z1 = 0.0; private var z2 = 0.0
 
     /**
      * Designs and installs coefficients, clearing the filter memory.
@@ -318,7 +328,7 @@ internal class EqBiquad {
         matched: Boolean = false,
     ) {
         retune(designBiquadCoefficients(type, sr, freq, q, gainDb, matched))
-        z1 = 0f; z2 = 0f
+        z1 = 0.0; z2 = 0.0
     }
 
     /**
@@ -331,21 +341,22 @@ internal class EqBiquad {
      * state holds output history, not raw input), so stepping the coefficients
      * between blocks moves the response continuously.
      *
-     * Cheap enough for the audio thread by construction: five float stores,
-     * with all the transcendental design work already done by
+     * Cheap enough for the audio thread by construction: five stores, with
+     * all the transcendental design work already done by
      * [designBiquadCoefficients] at control rate.
      */
     fun retune(c: FloatArray) {
-        b0 = c[0]; b1 = c[1]; b2 = c[2]; a1 = c[3]; a2 = c[4]
+        b0 = c[0].toDouble(); b1 = c[1].toDouble(); b2 = c[2].toDouble()
+        a1 = c[3].toDouble(); a2 = c[4].toDouble()
     }
 
     fun processBlock(data: FloatArray, n: Int) {
         for (i in 0 until n) {
-            val x = data[i]
+            val x = data[i].toDouble()
             val y = b0 * x + z1
             z1 = b1 * x - a1 * y + z2
             z2 = b2 * x - a2 * y
-            data[i] = y
+            data[i] = y.toFloat()
         }
     }
 }
