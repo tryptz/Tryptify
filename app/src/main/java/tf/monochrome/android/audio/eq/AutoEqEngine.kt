@@ -75,6 +75,10 @@ object AutoEqEngine {
     private const val MIN_Q = 0.6
     private const val MAX_Q = 5.0
     private const val DEFAULT_SAMPLE_RATE = 48000f
+    /** Same-type bands closer than this are treated as one (merged, never duplicated). */
+    private const val MERGE_OCTAVES = 1.0 / 12.0
+    /** Half-width of the scan exclusion around a band already at its gain cap. */
+    private const val SATURATED_OCTAVES = 1.0 / 6.0
 
     fun calculateBiquadResponse(
         freqHz: Float,
@@ -273,7 +277,15 @@ object AutoEqEngine {
             )?.let(bands::add)
         }
 
-        while (bands.size < bandCount) {
+        // Grid points the scan may no longer pick: regions where a band is
+        // already saturated at its gain cap. Without this the scan keeps
+        // landing on the same residual peak (the cap is per band), and the
+        // old loop answered by stacking identical bands there: four +3 dB
+        // bells at one treble frequency is +12 dB, past the very cap that
+        // limited each of them.
+        val excluded = BooleanArray(error.size)
+        var attempts = 0
+        while (bands.size < bandCount && attempts++ < bandCount * 8) {
             var maxDev = 0.0
             var maxWeightedDev = 0.0
             var peakFreq = 1000.0
@@ -282,7 +294,7 @@ object AutoEqEngine {
             // Scan: find largest weighted deviation (both positive and negative)
             for (j in error.indices) {
                 val freq = error[j].freq.toDouble()
-                if (freq < minFrequency || freq > maxFrequency) continue
+                if (freq < minFrequency || freq > maxFrequency || excluded[j]) continue
 
                 // 3-point smooth
                 var v = error[j].gain.toDouble()
@@ -315,6 +327,35 @@ object AutoEqEngine {
             if (gain < -MAX_CUT) gain = -MAX_CUT
 
             if (abs(gain) < 0.2) break
+            if (maxWeightedDev == 0.0) break  // every candidate excluded
+
+            // Same-type band already within 1/12 octave: merge into it
+            // (add the gain, re-clamp to that band's cap) instead of spending
+            // a slot on a duplicate. Nothing left to add -> the region is
+            // saturated, so take it off the scan and look elsewhere.
+            val nearIdx = bands.indexOfFirst {
+                it.type == FilterType.PEAKING &&
+                    abs(log2(it.freq.toDouble() / peakFreq)) < MERGE_OCTAVES
+            }
+            if (nearIdx >= 0) {
+                val old = bands[nearIdx]
+                val merged = clampGain(old.gain + gain, old.type, old.freq.toDouble())
+                if (abs(merged - old.gain) < 0.2) {
+                    for (j in error.indices) {
+                        if (abs(log2(error[j].freq.toDouble() / peakFreq)) < SATURATED_OCTAVES) excluded[j] = true
+                    }
+                    continue
+                }
+                val updated = old.copy(gain = merged.toFloat())
+                bands[nearIdx] = updated
+                for (j in error.indices) {
+                    val f = error[j].freq
+                    error[j] = FrequencyPoint(f, error[j].gain -
+                        calculateBiquadResponse(f, old, sampleRate) +
+                        calculateBiquadResponse(f, updated, sampleRate))
+                }
+                continue
+            }
 
             // Q calculation: half-energy bandwidth
             val targetEnergy = maxDev / 2.0
@@ -458,6 +499,13 @@ object AutoEqEngine {
                 var best = band
                 var bestScore = Double.MAX_VALUE
                 for (fc in freqCands) for (qc0 in qCands) {
+                    // Don't let refinement walk a band onto a neighbour: two
+                    // same-type bands within 1/12 octave are one band with
+                    // summed gain, so the pair would dodge the per-band cap.
+                    if (bands.indices.any { o ->
+                            o != k && bands[o].type == band.type &&
+                                abs(log2(bands[o].freq.toDouble() / fc)) < MERGE_OCTAVES
+                        }) continue
                     var qc = qc0
                     if (band.type == FilterType.PEAKING && fc > 5000f && qc > 3f) qc = 3f
 
