@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.eq
 
+import tf.monochrome.android.ui.navigation.navigateTool
 import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -292,6 +293,49 @@ fun EqualizerScreen(
                     }
                 }
               }
+            }
+
+            // ─── EQ Studio ───
+            item {
+                tf.monochrome.android.ui.components.GlassPill(
+                    onClick = {
+                        navController.navigateTool(tf.monochrome.android.ui.navigation.Screen.EqStudio)
+                    },
+                    hazeState = null,
+                    height = 48.dp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(horizontal = 16.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.Tune,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            stringResource(R.string.eq_studio_open),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            stringResource(R.string.eq_studio_tagline),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        )
+                    }
+                }
             }
 
             // ─── Interactive Frequency Graph ───
@@ -1562,7 +1606,7 @@ private fun parseFreqLabel(label: String): Float =
  * Serialize the current EQ to EqualizerAPO-style ParametricEQ text, which
  * Wavelet, Poweramp, RootlessJamesDSP and most parametric EQs can import.
  */
-private fun buildParametricEqText(
+internal fun buildParametricEqText(
     bands: List<tf.monochrome.android.domain.model.EqBand>,
     preamp: Float,
 ): String {
@@ -1585,5 +1629,5 @@ private fun buildParametricEqText(
 
 /** A measurement's label as shown: a file import is named in the reader's language. */
 @Composable
-private fun measurementLabelText(label: String?): String? =
+internal fun measurementLabelText(label: String?): String? =
     if (label == IMPORTED_FILE_LABEL) stringResource(R.string.eq_imported_file) else label

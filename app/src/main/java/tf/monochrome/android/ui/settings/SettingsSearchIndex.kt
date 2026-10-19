@@ -186,6 +186,8 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     // ── Equalizer ───────────────────────────────────────────────────────
     entry("Equalizer", R.string.settings_equalizer, "Equalizer", listOf("eq", "bass", "treble", "bands", "graphic"))
         .at(SettingsDestination.Route("equalizer")),
+    entry("EQ Studio", R.string.eq_studio_title, "Equalizer", listOf("peqdb", "studio", "filters", "graph", "autoeq", "pinch"))
+        .at(SettingsDestination.Route("eq_studio")),
     entry("Parametric EQ", R.string.search_parametric_eq, "Equalizer", listOf("eq", "filter", "peaking", "shelf", "q"))
         .at(SettingsDestination.Route("parametric_eq")),
     entry("AutoEQ headphone profile", R.string.search_autoeq_headphone_profile, "Equalizer", listOf("headphone", "harman", "target", "correction")),

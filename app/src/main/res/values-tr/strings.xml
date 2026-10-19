@@ -2061,4 +2061,43 @@
         <item quantity="one">%1$d alt tür</item>
         <item quantity="other">%1$d alt tür</item>
     </plurals>
+
+    <!-- EQ Studio -->
+    <string name="eq_studio_title">EQ Stüdyosu</string>
+    <string name="eq_studio_tagline">Her filtreyi sürükle, sıkıştır ve ayarla</string>
+    <string name="eq_studio_open">EQ Stüdyosu\'nu aç</string>
+    <string name="eq_studio_graph_description">Frekans yanıtı grafiği. Bir filtreyi taşımak için tutamacı sürükleyin, genişliğini değiştirmek için iki parmakla sıkıştırın.</string>
+    <string name="eq_studio_with_eq">EQ ile</string>
+    <string name="eq_studio_import_target">İçe aktar</string>
+    <string name="eq_studio_tab_filters">Filtreler</string>
+    <string name="eq_studio_tab_headphone">Kulaklık</string>
+    <string name="eq_studio_tab_output">Çıkış</string>
+    <string name="eq_studio_on">Açık</string>
+    <string name="eq_studio_off">Kapalı</string>
+    <string name="eq_studio_bypassed">Atlandı</string>
+    <string name="eq_studio_delete">Sil</string>
+    <string name="eq_studio_autoeq">AutoEQ</string>
+    <string name="eq_studio_add">Ekle</string>
+    <string name="eq_studio_sort">Sırala</string>
+    <string name="eq_studio_flat">Düz</string>
+    <string name="eq_studio_no_filters">Henüz filtre yok. Bir kulaklık seçip AutoEQ çalıştırın ya da elle bir tane ekleyin.</string>
+    <string name="eq_studio_no_filter_selected">Grafikteki bir tutamaca ya da yukarıdaki bir filtreye dokunun. Taşımak için tutamacı sürükleyin, genişliğini değiştirmek için iki parmakla sıkıştırın, okumak için grafiğe dokunun.</string>
+    <string name="eq_studio_filter_n">Filtre %1$d</string>
+    <string name="eq_studio_low_shelf">Alçak raf</string>
+    <string name="eq_studio_peak">Tepe</string>
+    <string name="eq_studio_high_shelf">Yüksek raf</string>
+    <string name="eq_studio_freq">Frekans</string>
+    <string name="eq_studio_gain">Kazanç</string>
+    <string name="eq_studio_q">Q</string>
+    <string name="eq_studio_search_headphones">Kulaklık ara</string>
+    <string name="eq_studio_import_measurement">Dosya içe aktar</string>
+    <string name="eq_studio_loading_headphones">Kulaklıklar yükleniyor…</string>
+    <string name="eq_studio_no_headphones">Eşleşen kulaklık yok</string>
+    <string name="eq_studio_auto">Otomatik</string>
+    <string name="eq_studio_two_channel">Sol ve sağ ayrı</string>
+    <string name="eq_studio_copy_apo">Equalizer APO olarak kopyala</string>
+    <string name="eq_studio_copied">Kopyalandı</string>
+    <string name="eq_studio_scrub_hint">Ayarlamak için yana kaydırın, yazmak için dokunun</string>
+    <string name="eq_studio_type_value">Bir değer yazın</string>
+    <string name="eq_studio_set">Uygula</string>
 </resources>

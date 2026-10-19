@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+
+#### EQ Studio
+- **A new way to tune the equalizer, built around its graph**, after peqdb.com's studio: open it from the top of the Equalizer screen, or search Settings for "EQ Studio". It runs on the app's own EQ — the same filters, AutoEQ, headphone database and targets as the classic screen, so what you tune is what plays, and the two screens always show the same bands.
+- **Every filter has its own colour**, on its handle, its curve on the graph and its chip in the list, so you can see which filter is shaping which part of the sound.
+- **Touch the graph to tune it.** Drag a handle to move a filter, pinch with two fingers to make it wider or narrower, and touch anywhere else for a readout of the measurement, the target and the result at that frequency.
+- **Frequency, gain and Q are liquid-glass scrub pills.** Swipe one sideways to change the value, feeling a tick at each step, or tap it to type an exact number.
+- **Every target is one tap away** in a row under the graph, so comparing two is one tap instead of a menu.
+- **Add, sort, bypass and delete filters**, run AutoEQ, set the preamp, save a preset or copy the EQ as Equalizer APO text, all without leaving the graph. On a phone the graph stays on screen while the panel under it scrolls; on a tablet or in landscape they sit side by side.
+
 ### Fixed
 
 #### The mixer crashed on smaller screens

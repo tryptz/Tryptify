@@ -1416,6 +1416,42 @@ class EqViewModel @Inject constructor(
         }
     }
 
+    // ===== EQ Studio: whole-list band edits =====
+
+    /**
+     * Adds a flat peaking filter where the current ones leave the most room
+     * (see [StudioBands.withNewBand]) and returns its id, so the Studio can
+     * select it straight away. -1 when the list is already full.
+     */
+    fun addBand(): Int {
+        var added = -1
+        editActiveBands { bands ->
+            StudioBands.withNewBand(bands).also { if (it.size > bands.size) added = it.last().id }
+        }
+        return added
+    }
+
+    fun removeBand(bandId: Int) = editActiveBands { StudioBands.without(it, bandId) }
+
+    fun sortBandsByFrequency() = editActiveBands { StudioBands.sortedByFrequency(it) }
+
+    /**
+     * One edit to the bands of whichever ear is being edited, written through
+     * immediately. Unlike a drag these are single taps, so there is no tail to
+     * coalesce.
+     */
+    private fun editActiveBands(transform: (List<EqBand>) -> List<EqBand>) {
+        if (_stereoMode.value && _editChannel.value == EqChannel.RIGHT) {
+            val bands = transform(_currentBandsR.value)
+            _currentBandsR.value = bands
+            saveBandsRToPreferences(bands)
+        } else {
+            val bands = transform(_currentBands.value)
+            _currentBands.value = bands
+            saveBandsToPreferences(bands)
+        }
+    }
+
     fun runAutoEq() {
         if (_isCalculating.value) return
         launchFit {

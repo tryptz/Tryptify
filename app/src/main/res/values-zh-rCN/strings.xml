@@ -2006,4 +2006,43 @@
     <plurals name="galaxy_subgenres">
         <item quantity="other">%1$d 个子流派</item>
     </plurals>
+
+    <!-- EQ Studio -->
+    <string name="eq_studio_title">EQ 工作室</string>
+    <string name="eq_studio_tagline">拖动、捏合，调好每个滤波器</string>
+    <string name="eq_studio_open">打开 EQ 工作室</string>
+    <string name="eq_studio_graph_description">频率响应图。拖动手柄可移动滤波器，双指捏合可改变其宽度。</string>
+    <string name="eq_studio_with_eq">应用 EQ 后</string>
+    <string name="eq_studio_import_target">导入</string>
+    <string name="eq_studio_tab_filters">滤波器</string>
+    <string name="eq_studio_tab_headphone">耳机</string>
+    <string name="eq_studio_tab_output">输出</string>
+    <string name="eq_studio_on">开</string>
+    <string name="eq_studio_off">关</string>
+    <string name="eq_studio_bypassed">已旁通</string>
+    <string name="eq_studio_delete">删除</string>
+    <string name="eq_studio_autoeq">AutoEQ</string>
+    <string name="eq_studio_add">添加</string>
+    <string name="eq_studio_sort">排序</string>
+    <string name="eq_studio_flat">平直</string>
+    <string name="eq_studio_no_filters">还没有滤波器。选择耳机并运行 AutoEQ，或手动添加一个。</string>
+    <string name="eq_studio_no_filter_selected">点按图上的手柄或上方的滤波器。拖动手柄可移动，双指捏合可改变宽度，触摸图表可读取数值。</string>
+    <string name="eq_studio_filter_n">滤波器 %1$d</string>
+    <string name="eq_studio_low_shelf">低架</string>
+    <string name="eq_studio_peak">峰值</string>
+    <string name="eq_studio_high_shelf">高架</string>
+    <string name="eq_studio_freq">频率</string>
+    <string name="eq_studio_gain">增益</string>
+    <string name="eq_studio_q">Q</string>
+    <string name="eq_studio_search_headphones">搜索耳机</string>
+    <string name="eq_studio_import_measurement">导入文件</string>
+    <string name="eq_studio_loading_headphones">正在加载耳机…</string>
+    <string name="eq_studio_no_headphones">没有匹配的耳机</string>
+    <string name="eq_studio_auto">自动</string>
+    <string name="eq_studio_two_channel">左右分开</string>
+    <string name="eq_studio_copy_apo">复制为 Equalizer APO 格式</string>
+    <string name="eq_studio_copied">已复制</string>
+    <string name="eq_studio_scrub_hint">左右滑动调整，点按输入</string>
+    <string name="eq_studio_type_value">输入数值</string>
+    <string name="eq_studio_set">设定</string>
 </resources>

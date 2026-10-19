@@ -2116,4 +2116,43 @@
         <item quantity="many">%1$d sous-genres</item>
         <item quantity="other">%1$d sous-genres</item>
     </plurals>
+
+    <!-- EQ Studio -->
+    <string name="eq_studio_title">Studio EQ</string>
+    <string name="eq_studio_tagline">Glissez, pincez et réglez chaque filtre</string>
+    <string name="eq_studio_open">Ouvrir le Studio EQ</string>
+    <string name="eq_studio_graph_description">Graphique de réponse en fréquence. Faites glisser une poignée pour déplacer un filtre, pincez pour changer sa largeur.</string>
+    <string name="eq_studio_with_eq">Avec EQ</string>
+    <string name="eq_studio_import_target">Importer</string>
+    <string name="eq_studio_tab_filters">Filtres</string>
+    <string name="eq_studio_tab_headphone">Casque</string>
+    <string name="eq_studio_tab_output">Sortie</string>
+    <string name="eq_studio_on">Activé</string>
+    <string name="eq_studio_off">Désactivé</string>
+    <string name="eq_studio_bypassed">Contourné</string>
+    <string name="eq_studio_delete">Supprimer</string>
+    <string name="eq_studio_autoeq">AutoEQ</string>
+    <string name="eq_studio_add">Ajouter</string>
+    <string name="eq_studio_sort">Trier</string>
+    <string name="eq_studio_flat">Neutre</string>
+    <string name="eq_studio_no_filters">Aucun filtre pour l\'instant. Choisissez un casque et lancez AutoEQ, ou ajoutez-en un à la main.</string>
+    <string name="eq_studio_no_filter_selected">Touchez une poignée du graphique ou un filtre ci-dessus. Faites glisser une poignée pour la déplacer, pincez à deux doigts pour changer sa largeur et touchez le graphique pour le lire.</string>
+    <string name="eq_studio_filter_n">Filtre %1$d</string>
+    <string name="eq_studio_low_shelf">Plateau grave</string>
+    <string name="eq_studio_peak">Crête</string>
+    <string name="eq_studio_high_shelf">Plateau aigu</string>
+    <string name="eq_studio_freq">Fréquence</string>
+    <string name="eq_studio_gain">Gain</string>
+    <string name="eq_studio_q">Q</string>
+    <string name="eq_studio_search_headphones">Rechercher un casque</string>
+    <string name="eq_studio_import_measurement">Importer un fichier</string>
+    <string name="eq_studio_loading_headphones">Chargement des casques…</string>
+    <string name="eq_studio_no_headphones">Aucun casque ne correspond</string>
+    <string name="eq_studio_auto">Auto</string>
+    <string name="eq_studio_two_channel">Gauche et droite séparés</string>
+    <string name="eq_studio_copy_apo">Copier pour Equalizer APO</string>
+    <string name="eq_studio_copied">Copié</string>
+    <string name="eq_studio_scrub_hint">Glissez latéralement pour régler, touchez pour saisir</string>
+    <string name="eq_studio_type_value">Saisir une valeur</string>
+    <string name="eq_studio_set">Appliquer</string>
 </resources>

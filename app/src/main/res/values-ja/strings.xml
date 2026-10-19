@@ -2006,4 +2006,43 @@
     <plurals name="galaxy_subgenres">
         <item quantity="other">サブジャンル %1$d</item>
     </plurals>
+
+    <!-- EQ Studio -->
+    <string name="eq_studio_title">EQ スタジオ</string>
+    <string name="eq_studio_tagline">すべてのフィルターをドラッグ・ピンチで調整</string>
+    <string name="eq_studio_open">EQ スタジオを開く</string>
+    <string name="eq_studio_graph_description">周波数特性グラフ。ハンドルをドラッグしてフィルターを移動し、ピンチで幅を変更します。</string>
+    <string name="eq_studio_with_eq">EQ 適用後</string>
+    <string name="eq_studio_import_target">読み込む</string>
+    <string name="eq_studio_tab_filters">フィルター</string>
+    <string name="eq_studio_tab_headphone">ヘッドホン</string>
+    <string name="eq_studio_tab_output">出力</string>
+    <string name="eq_studio_on">オン</string>
+    <string name="eq_studio_off">オフ</string>
+    <string name="eq_studio_bypassed">バイパス</string>
+    <string name="eq_studio_delete">削除</string>
+    <string name="eq_studio_autoeq">AutoEQ</string>
+    <string name="eq_studio_add">追加</string>
+    <string name="eq_studio_sort">並べ替え</string>
+    <string name="eq_studio_flat">フラット</string>
+    <string name="eq_studio_no_filters">フィルターはまだありません。ヘッドホンを選んで AutoEQ を実行するか、手動で追加してください。</string>
+    <string name="eq_studio_no_filter_selected">グラフのハンドルか上のフィルターをタップします。ハンドルをドラッグして移動、2 本指のピンチで幅を変更、グラフに触れると値を読み取れます。</string>
+    <string name="eq_studio_filter_n">フィルター %1$d</string>
+    <string name="eq_studio_low_shelf">ローシェルフ</string>
+    <string name="eq_studio_peak">ピーク</string>
+    <string name="eq_studio_high_shelf">ハイシェルフ</string>
+    <string name="eq_studio_freq">周波数</string>
+    <string name="eq_studio_gain">ゲイン</string>
+    <string name="eq_studio_q">Q</string>
+    <string name="eq_studio_search_headphones">ヘッドホンを検索</string>
+    <string name="eq_studio_import_measurement">ファイルを読み込む</string>
+    <string name="eq_studio_loading_headphones">ヘッドホンを読み込み中…</string>
+    <string name="eq_studio_no_headphones">一致するヘッドホンがありません</string>
+    <string name="eq_studio_auto">自動</string>
+    <string name="eq_studio_two_channel">左右を個別に</string>
+    <string name="eq_studio_copy_apo">Equalizer APO 形式でコピー</string>
+    <string name="eq_studio_copied">コピーしました</string>
+    <string name="eq_studio_scrub_hint">横にスワイプで調整、タップで入力</string>
+    <string name="eq_studio_type_value">値を入力</string>
+    <string name="eq_studio_set">設定</string>
 </resources>

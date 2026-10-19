@@ -2062,4 +2062,43 @@
         <item quantity="one">%1$d subgenre</item>
         <item quantity="other">%1$d subgenres</item>
     </plurals>
+
+    <!-- EQ Studio -->
+    <string name="eq_studio_title">EQ Studio</string>
+    <string name="eq_studio_tagline">Drag, pinch and tune every filter</string>
+    <string name="eq_studio_open">Open EQ Studio</string>
+    <string name="eq_studio_graph_description">Frequency response graph. Drag a handle to move a filter, pinch to change its width.</string>
+    <string name="eq_studio_with_eq">With EQ</string>
+    <string name="eq_studio_import_target">Import</string>
+    <string name="eq_studio_tab_filters">Filters</string>
+    <string name="eq_studio_tab_headphone">Headphone</string>
+    <string name="eq_studio_tab_output">Output</string>
+    <string name="eq_studio_on">On</string>
+    <string name="eq_studio_off">Off</string>
+    <string name="eq_studio_bypassed">Bypassed</string>
+    <string name="eq_studio_delete">Delete</string>
+    <string name="eq_studio_autoeq">AutoEQ</string>
+    <string name="eq_studio_add">Add</string>
+    <string name="eq_studio_sort">Sort</string>
+    <string name="eq_studio_flat">Flat</string>
+    <string name="eq_studio_no_filters">No filters yet. Pick a headphone and run AutoEQ, or add one by hand.</string>
+    <string name="eq_studio_no_filter_selected">Tap a handle on the graph or a filter above. Drag a handle to move it, pinch with two fingers to change its width, and touch the graph anywhere to read it.</string>
+    <string name="eq_studio_filter_n">Filter %1$d</string>
+    <string name="eq_studio_low_shelf">Low shelf</string>
+    <string name="eq_studio_peak">Peak</string>
+    <string name="eq_studio_high_shelf">High shelf</string>
+    <string name="eq_studio_freq">Frequency</string>
+    <string name="eq_studio_gain">Gain</string>
+    <string name="eq_studio_q">Q</string>
+    <string name="eq_studio_search_headphones">Search headphones</string>
+    <string name="eq_studio_import_measurement">Import file</string>
+    <string name="eq_studio_loading_headphones">Loading headphones…</string>
+    <string name="eq_studio_no_headphones">No headphone matches</string>
+    <string name="eq_studio_auto">Auto</string>
+    <string name="eq_studio_two_channel">Separate left and right</string>
+    <string name="eq_studio_copy_apo">Copy as Equalizer APO</string>
+    <string name="eq_studio_copied">Copied</string>
+    <string name="eq_studio_scrub_hint">Swipe sideways to adjust, tap to type</string>
+    <string name="eq_studio_type_value">Type a value</string>
+    <string name="eq_studio_set">Set</string>
 </resources>

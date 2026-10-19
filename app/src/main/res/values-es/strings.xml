@@ -2116,4 +2116,43 @@
         <item quantity="many">%1$d subgéneros</item>
         <item quantity="other">%1$d subgéneros</item>
     </plurals>
+
+    <!-- EQ Studio -->
+    <string name="eq_studio_title">Estudio EQ</string>
+    <string name="eq_studio_tagline">Arrastra, pellizca y ajusta cada filtro</string>
+    <string name="eq_studio_open">Abrir Estudio EQ</string>
+    <string name="eq_studio_graph_description">Gráfico de respuesta en frecuencia. Arrastra un punto para mover un filtro y pellizca para cambiar su anchura.</string>
+    <string name="eq_studio_with_eq">Con EQ</string>
+    <string name="eq_studio_import_target">Importar</string>
+    <string name="eq_studio_tab_filters">Filtros</string>
+    <string name="eq_studio_tab_headphone">Auriculares</string>
+    <string name="eq_studio_tab_output">Salida</string>
+    <string name="eq_studio_on">Activado</string>
+    <string name="eq_studio_off">Desactivado</string>
+    <string name="eq_studio_bypassed">Omitido</string>
+    <string name="eq_studio_delete">Eliminar</string>
+    <string name="eq_studio_autoeq">AutoEQ</string>
+    <string name="eq_studio_add">Añadir</string>
+    <string name="eq_studio_sort">Ordenar</string>
+    <string name="eq_studio_flat">Plano</string>
+    <string name="eq_studio_no_filters">Aún no hay filtros. Elige unos auriculares y ejecuta AutoEQ, o añade uno a mano.</string>
+    <string name="eq_studio_no_filter_selected">Toca un punto del gráfico o un filtro de arriba. Arrastra un punto para moverlo, pellizca con dos dedos para cambiar su anchura y toca el gráfico para leerlo.</string>
+    <string name="eq_studio_filter_n">Filtro %1$d</string>
+    <string name="eq_studio_low_shelf">Estante grave</string>
+    <string name="eq_studio_peak">Pico</string>
+    <string name="eq_studio_high_shelf">Estante agudo</string>
+    <string name="eq_studio_freq">Frecuencia</string>
+    <string name="eq_studio_gain">Ganancia</string>
+    <string name="eq_studio_q">Q</string>
+    <string name="eq_studio_search_headphones">Buscar auriculares</string>
+    <string name="eq_studio_import_measurement">Importar archivo</string>
+    <string name="eq_studio_loading_headphones">Cargando auriculares…</string>
+    <string name="eq_studio_no_headphones">Ningún auricular coincide</string>
+    <string name="eq_studio_auto">Auto</string>
+    <string name="eq_studio_two_channel">Izquierdo y derecho por separado</string>
+    <string name="eq_studio_copy_apo">Copiar como Equalizer APO</string>
+    <string name="eq_studio_copied">Copiado</string>
+    <string name="eq_studio_scrub_hint">Desliza a los lados para ajustar, toca para escribir</string>
+    <string name="eq_studio_type_value">Escribe un valor</string>
+    <string name="eq_studio_set">Aplicar</string>
 </resources>

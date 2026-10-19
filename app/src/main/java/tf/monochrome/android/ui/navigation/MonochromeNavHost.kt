@@ -150,6 +150,7 @@ sealed class Screen(val route: String) {
         fun createRoute(tab: Int = 0) = "settings?tab=$tab"
     }
     data object Equalizer : Screen("equalizer")
+    data object EqStudio : Screen("eq_studio")
     data object ParametricEq : Screen("parametric_eq")
     data object ParametricEqEdit : Screen("parametric_eq_edit")
     data object Profile : Screen("profile")
@@ -758,6 +759,21 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 composable(Screen.Equalizer.route) {
                     tf.monochrome.android.devedit.DevEditScreen("equalizer") {
                         EqualizerScreen(navController = navController)
+                    }
+                }
+                composable(Screen.EqStudio.route) { entry ->
+                    // The Studio edits the classic screen's bands, so it borrows
+                    // that screen's view model while it is on the back stack: two
+                    // would each hold a copy, and going back would show the old
+                    // one and write it over the Studio's edits on the next change.
+                    val parent = remember(entry) {
+                        runCatching { navController.getBackStackEntry(Screen.Equalizer.route) }.getOrNull()
+                    }
+                    tf.monochrome.android.devedit.DevEditScreen("eq_studio") {
+                        tf.monochrome.android.ui.eq.EqStudioScreen(
+                            navController = navController,
+                            viewModel = if (parent != null) hiltViewModel(parent) else hiltViewModel(),
+                        )
                     }
                 }
                 composable(Screen.ParametricEq.route) {

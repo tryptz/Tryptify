@@ -2061,4 +2061,43 @@
         <item quantity="one">%1$d Subgenre</item>
         <item quantity="other">%1$d Subgenres</item>
     </plurals>
+
+    <!-- EQ Studio -->
+    <string name="eq_studio_title">EQ-Studio</string>
+    <string name="eq_studio_tagline">Jeden Filter ziehen, zoomen und abstimmen</string>
+    <string name="eq_studio_open">EQ-Studio öffnen</string>
+    <string name="eq_studio_graph_description">Frequenzgang-Diagramm. Ziehe einen Griff, um einen Filter zu verschieben, und spreize zwei Finger, um seine Breite zu ändern.</string>
+    <string name="eq_studio_with_eq">Mit EQ</string>
+    <string name="eq_studio_import_target">Importieren</string>
+    <string name="eq_studio_tab_filters">Filter</string>
+    <string name="eq_studio_tab_headphone">Kopfhörer</string>
+    <string name="eq_studio_tab_output">Ausgabe</string>
+    <string name="eq_studio_on">An</string>
+    <string name="eq_studio_off">Aus</string>
+    <string name="eq_studio_bypassed">Umgangen</string>
+    <string name="eq_studio_delete">Löschen</string>
+    <string name="eq_studio_autoeq">AutoEQ</string>
+    <string name="eq_studio_add">Hinzufügen</string>
+    <string name="eq_studio_sort">Sortieren</string>
+    <string name="eq_studio_flat">Neutral</string>
+    <string name="eq_studio_no_filters">Noch keine Filter. Wähle einen Kopfhörer und starte AutoEQ, oder füge einen von Hand hinzu.</string>
+    <string name="eq_studio_no_filter_selected">Tippe auf einen Griff im Diagramm oder einen Filter oben. Ziehe einen Griff, um ihn zu verschieben, spreize zwei Finger, um seine Breite zu ändern, und berühre das Diagramm, um es abzulesen.</string>
+    <string name="eq_studio_filter_n">Filter %1$d</string>
+    <string name="eq_studio_low_shelf">Low-Shelf</string>
+    <string name="eq_studio_peak">Peak</string>
+    <string name="eq_studio_high_shelf">High-Shelf</string>
+    <string name="eq_studio_freq">Frequenz</string>
+    <string name="eq_studio_gain">Verstärkung</string>
+    <string name="eq_studio_q">Q</string>
+    <string name="eq_studio_search_headphones">Kopfhörer suchen</string>
+    <string name="eq_studio_import_measurement">Datei importieren</string>
+    <string name="eq_studio_loading_headphones">Kopfhörer werden geladen…</string>
+    <string name="eq_studio_no_headphones">Kein passender Kopfhörer</string>
+    <string name="eq_studio_auto">Auto</string>
+    <string name="eq_studio_two_channel">Links und rechts getrennt</string>
+    <string name="eq_studio_copy_apo">Als Equalizer APO kopieren</string>
+    <string name="eq_studio_copied">Kopiert</string>
+    <string name="eq_studio_scrub_hint">Zum Einstellen seitlich wischen, zum Eingeben tippen</string>
+    <string name="eq_studio_type_value">Wert eingeben</string>
+    <string name="eq_studio_set">Übernehmen</string>
 </resources>
