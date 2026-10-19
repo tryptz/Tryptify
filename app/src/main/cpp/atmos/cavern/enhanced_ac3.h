@@ -13,8 +13,10 @@
 // Scope: the fixed syncframe header (syncword through bsid, plus the AC-3
 // "repackaged" frame-size recalculation) is reproduced exactly. Cavern's
 // streaming BlockBuffer/Expand plumbing is replaced by a flat BitReader over a
-// caller-supplied frame. The BSI / mixing / addbsi metadata parse (which is
-// where the EMDF Atmos payload lives) is the next slice — see atmos/README.md.
+// caller-supplied frame. For E-AC-3 the rest of the BSI is walked (clean-room,
+// ETSI TS 102 366 E.1.2.2) only to reach addbsi, whose Atmos flag says whether
+// the stream is still JOC on frames that carry no EMDF payload. The EMDF Atmos
+// payload itself rides in the auxiliary data, not here — see atmos/README.md.
 #ifndef TF_ATMOS_CAVERN_ENHANCED_AC3_H
 #define TF_ATMOS_CAVERN_ENHANCED_AC3_H
 
@@ -105,6 +107,15 @@ class EnhancedAC3Header {
   }
 
   // Number of full-bandwidth + LFE channels in this frame.
+  /// flag_ec3_extension_type_a from addbsi: the encoder marks every syncframe
+  /// of a JOC (Atmos) stream with it, including the many that carry no JOC
+  /// payload, so it tells "JOC is held" apart from "the stream is not Atmos".
+  bool atmos() const { return atmos_; }
+
+  /// complexity_index_type_a, the addbsi byte after the Atmos flag (the
+  /// stream's object-count class, e.g. 16), or 0 when the frame carries none.
+  int atmos_complexity() const { return atmos_complexity_; }
+
   int channel_count() const {
     int base = (channel_mode_ < 8)
                    ? eac3::kChannelArrangementLen[channel_mode_]
@@ -126,6 +137,8 @@ class EnhancedAC3Header {
   bool decode(BitReader& br) {
     valid_ = true;
     compre_ = false;  // per-frame; must not leak from a previously decoded frame
+    atmos_ = false;
+    atmos_complexity_ = 0;
     if (br.read(16) != eac3::kSyncWord) return fail();
 
     stream_type_ = static_cast<eac3::StreamTypes>(br.read(2));
@@ -168,6 +181,7 @@ class EnhancedAC3Header {
         br.skip(5);                      // dialnorm2
         if (br.read_bit()) br.skip(8);   // compr2e / compr2
       }
+      read_addbsi(br);
     }
 
     if (stream_type_ == eac3::StreamTypes::kDependent) substream_id_ += 8;
@@ -181,6 +195,63 @@ class EnhancedAC3Header {
   bool fail() {
     valid_ = false;
     return false;
+  }
+
+  // The E-AC-3 BSI after compr2 (ETSI TS 102 366 E.1.2.2), skipped field by
+  // field to reach addbsi. strmtyp is the raw bitstream value here: 0
+  // independent, 1 dependent, 2 converted from AC-3.
+  void read_addbsi(BitReader& br) {
+    const int strmtyp = static_cast<int>(stream_type_);
+    const int acmod = channel_mode_;
+    const int programs = acmod == 0 ? 2 : 1;  // dual mono carries two of some fields
+    if (strmtyp == 1 && br.read_bit()) br.skip(16);  // chanmape / chanmap
+    if (br.read_bit()) {                             // mixmdate
+      if (acmod > 2) br.skip(2);                     // dmixmod
+      if ((acmod & 1) && acmod > 2) br.skip(6);      // ltrt/loro centre mix levels
+      if (acmod & 4) br.skip(6);                     // ltrt/loro surround mix levels
+      if (lfe_ && br.read_bit()) br.skip(5);         // lfemixlevcode / lfemixlevcod
+      if (strmtyp == 0) {
+        for (int p = 0; p < programs; ++p) {
+          if (br.read_bit()) br.skip(6);             // pgmscle / pgmscl
+        }
+        if (br.read_bit()) br.skip(6);               // extpgmscle / extpgmscl
+        switch (br.read(2)) {                        // mixdef
+          case 1: br.skip(5); break;
+          case 2: br.skip(12); break;
+          case 3: br.skip((br.read(5) + 2) * 8); break;  // mixdeflen
+          default: break;
+        }
+        if (acmod < 2) {
+          for (int p = 0; p < programs; ++p) {
+            if (br.read_bit()) br.skip(14);          // paninfoe / panmean + paninfo
+          }
+        }
+        if (br.read_bit()) {                         // frmmixcfginfoe
+          for (int blk = 0; blk < blocks_; ++blk) {
+            if (blocks_ == 1 || br.read_bit()) br.skip(5);  // blkmixcfginfo
+          }
+        }
+      }
+    }
+    if (br.read_bit()) {                             // infomdate
+      br.skip(5);                                    // bsmod, copyrightb, origbs
+      if (acmod == 2) br.skip(4);                    // dsurmod, dheadphonmod
+      if (acmod >= 6) br.skip(2);                    // dsurexmod
+      for (int p = 0; p < programs; ++p) {
+        if (br.read_bit()) br.skip(8);               // audprodie / mixlevel, roomtyp, adconvtyp
+      }
+      if (sample_rate_code_ < 3) br.skip(1);         // sourcefscod
+    }
+    if (strmtyp == 0 && blocks_ != 6) br.skip(1);    // convsync
+    if (strmtyp == 2 && (blocks_ == 6 || br.read_bit())) br.skip(6);  // blkid / frmsizecod
+    if (!br.read_bit()) return;                      // addbsie
+    const int addbsil = static_cast<int>(br.read(6));
+    const bool flag = (br.read(8) & 1u) != 0;        // 7 reserved bits, then the flag
+    const int complexity = (flag && addbsil >= 1) ? static_cast<int>(br.read(8)) : 0;
+    // Past-end reads return 0, but only a BSI that ends inside the frame is trusted.
+    if (br.position() > br.size_bits()) return;
+    atmos_ = flag;
+    atmos_complexity_ = complexity;
   }
 
   static eac3::Decoders parse_decoder(int bsid) {
@@ -205,6 +276,8 @@ class EnhancedAC3Header {
   int dialnorm_ = 0;
   bool compre_ = false;
   int compr_ = 0;
+  bool atmos_ = false;
+  int atmos_complexity_ = 0;
   eac3::Decoders decoder_ = eac3::Decoders::kUnsupported;
   eac3::StreamTypes stream_type_ = eac3::StreamTypes::kIndependent;
 };

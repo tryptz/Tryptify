@@ -119,9 +119,15 @@ worth knowing when debugging:
 
 - **Metadata association is time-keyed.** The `AtmosAudioProcessor` matches
   raw frames to decoded PCM by presentation time against an anchored clock
-  (re-anchoring on discontinuities), not by arrival order. JOC/OAMD hold
-  across payload-less frames (expiring after 32) per the DD+ hold-until-update
-  rule.
+  (re-anchoring on discontinuities), not by arrival order.
+- **JOC/OAMD hold until the next update, for as long as the stream is
+  Atmos.** Payloads are sparse — about a quarter of the frames of moving music,
+  2% of Dolby's channel-check tones (gaps up to ~20 s). Whether the stream is
+  still Atmos comes from each syncframe's addbsi `flag_ec3_extension_type_a`
+  (`cavern/enhanced_ac3.h`), which the encoder sets on every frame, payload or
+  not: a frame without it (a gapless change into plain E-AC-3) ends the hold at
+  once, a seek drops it until the next payload, and only frames with no
+  readable header fall back to a 32-frame expiry.
 - **Both output paths are latency-aligned.** The object render's bed passes
   through QMF analysis+synthesis — a measured 577-sample delay (pinned by
   `cavern_qmf_test`). The fallback ITU downmix runs every frame behind the
@@ -246,3 +252,22 @@ layout-aware cube warp in speaker_renderer.h over a fixed one (5.1 surrounds
 
 The clip exercises no mixed-update blocks, zones, size, snap or divergence, so
 those paths remain spec-checked only.
+
+## Channel check (7.1.4 / 9.1.6)
+
+The 5.1 core can't check the height or the 7.1 surrounds. Dolby's 7.1.4 test
+tones can: they play each 7.1.4 speaker in turn as one object placed exactly at
+that speaker, so every frame has a known right answer.
+`tools/reference_check/channel_check.sh dolby-test-tones_7_1_4.mp4` renders the
+clip to 7.1.4 and 9.1.6 and fails unless, for every speaker, at least 98% of
+the frames put at least 90% of their energy on it. The clip (~190 MB, not
+committed) is mirrored with other Atmos demo files at
+https://www.peterpee.com/demo.
+
+It found the hold expiring mid-tone. The tones carry JOC in 2% of their frames,
+with gaps up to ~20 s, and the old fixed 32-frame hold dropped to the 5.1 bed
+for most of each gap: top-front tones played from L, rear tones from between
+the side and rear speakers. Frames with 90% on target: 69% before the
+header-driven hold, 100% after, with every speaker, heights included, at 91%
+or more of its energy on target. Neither the TIDAL reference check nor the
+Santeria demo (DD+JOC 640 kb/s, from the same mirror) moved.

@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "bit_reader.h"
+#include "cavern/enhanced_ac3.h"
 #include "cavern/extensible_metadata_decoder.h"
 #include "cavern/joint_object_coding.h"
 #include "cavern/joint_object_coding_applier.h"
@@ -38,28 +39,39 @@ class ObjectEngine {
                   int bed_channels, int frame_samples) {
     BitReader reader(frame, frame_size);
     emdf_.decode(reader);
-    // JOC/OAMD are transmitted sparsely — only ~22% of E-AC-3 frames carry a JOC
-    // payload — and are defined to hold until the next update. The EMDF decoder
-    // overwrites joc_/oamd_ only when a payload is actually present, so a frame
-    // without one still has the previous frame's matrices and positions, and
-    // re-running the interpolation below holds them steady (prev_matrix_ already
-    // equals the decoded endpoint, so the lerp collapses to a constant).
+    // JOC/OAMD are transmitted sparsely and are defined to hold until the next
+    // update: about a quarter of the frames of moving music carry a payload,
+    // and static content far fewer — Dolby's 7.1.4 channel-check tones carry
+    // one in 2% of frames, with gaps of up to 20 s. The EMDF decoder overwrites
+    // joc_/oamd_ only when a payload is actually present, so a frame without
+    // one still has the previous frame's matrices and positions, and re-running
+    // the interpolation below holds them steady (prev_matrix_ already equals
+    // the decoded endpoint, so the lerp collapses to a constant).
     //
-    // Returning -1 for those frames instead — as this did — makes the caller
-    // fall back to its stereo downmix, so the output alternates between the
-    // binaural render and a plain fold-down every 32 ms. That is audible as
-    // chopping, and it is what "micro-stutter" turned out to be.
+    // Returning -1 for those frames instead makes the caller fall back to its
+    // bed render or downmix. Every 32 ms that is audible as chopping (what
+    // "micro-stutter" turned out to be); for seconds at a time it drops every
+    // height and rear object onto the 5.1 bed's speakers.
+    //
+    // How long to hold is decided by the syncframe header, not a timer: the
+    // encoder flags every frame of a JOC stream as Atmos in addbsi, payload or
+    // not. A frame flagged as not Atmos (a gapless change into plain E-AC-3)
+    // ends the hold at once; a frame whose header can't be read (the caller
+    // had no raw frame for this chunk) counts toward kMaxHeldFrames.
     if (emdf_.has_objects()) {
       held_frames_ = 0;
-    } else if (held_frames_ >= kMaxHeldFrames) {
-      // Never saw a JOC payload, or the stream stopped carrying one (a track
-      // change into non-Atmos content). Stop rendering rather than hold stale
-      // metadata forever — this expiry is what keeps the hold self-limiting
-      // without needing a reset call plumbed through the pipeline and JNI.
-      return -1;
-    } else {
-      ++held_frames_;
+    } else if (held_frames_ < kMaxHeldFrames) {
+      BitReader header_reader(frame, frame_size);
+      cavern::EnhancedAC3Header header;
+      if (!header.decode(header_reader)) {
+        ++held_frames_;
+      } else if (header.atmos()) {
+        held_frames_ = 0;
+      } else {
+        held_frames_ = kMaxHeldFrames;
+      }
     }
+    if (held_frames_ >= kMaxHeldFrames) return -1;
     return upmix(emdf_.joc(), bed, bed_channels, frame_samples);
   }
 
@@ -190,11 +202,14 @@ class ObjectEngine {
   // the renderer sums it to both ears instead of placing it at a point.
   int lfe_object_index() const { return lfe_slot_; }
 
-  // Clears time history (the spliced LFE's latency delay) on seek/flush.
-  // Allocation-free.
+  // Clears time history (the spliced LFE's latency delay) on seek/flush, and
+  // drops the held JOC/OAMD: after a seek it describes another point of the
+  // stream, so rendering waits for the next payload (the caller plays the bed
+  // until then). Allocation-free.
   void flush_history() {
     std::fill(lfe_delay_.begin(), lfe_delay_.end(), 0.0f);
     lfe_delay_idx_ = 0;
+    held_frames_ = kMaxHeldFrames;
   }
 
   // Render-space position of object `obj` (x = left..right, y = down..up,
@@ -237,15 +252,15 @@ class ObjectEngine {
     }
   }
 
-  // How long the last JOC/OAMD update stays valid when later frames carry none.
-  // Real gaps are ~4-5 frames at the observed ~22% payload density; 32 frames
-  // (~1 s at 1536 samples / 48 kHz) covers those with a wide margin while still
-  // expiring promptly once a stream really stops carrying object metadata.
+  // How many consecutive frames without a readable syncframe header the last
+  // JOC/OAMD update survives (~1 s at 1536 samples / 48 kHz). Frames whose
+  // header says Atmos hold it indefinitely, so this only bounds the case the
+  // header can't vouch for.
   static constexpr int kMaxHeldFrames = 32;
 
   cavern::ExtensibleMetadataDecoder emdf_;
-  // Frames rendered since the last JOC payload; starts expired so a stream that
-  // never carries JOC is never rendered.
+  // Consecutive frames with neither a JOC payload nor an Atmos header; starts
+  // expired so a stream that never carries JOC is never rendered.
   int held_frames_ = kMaxHeldFrames;
   std::unique_ptr<cavern::JointObjectCodingApplier> applier_;
   int applier_channels_ = -1;

@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
   std::printf("frame,t,joc_objects");
   for (int c = 0; c < out_ch; ++c) std::printf(",ch%d", c);
   std::printf("\n");
-  std::fprintf(stderr, "frame,t,obj,active,bed,x,y,z,gain,w,zone,snap,div,rms\n");
+  std::fprintf(stderr, "frame,t,obj,active,bed,lfe,x,y,z,gain,w,zone,snap,div,rms\n");
 
   size_t off = 0;
   for (size_t f = 0; f < sizes.size(); ++f) {
@@ -69,8 +69,8 @@ int main(int argc, char** argv) {
       if (!st) continue;
       double pe = 0; const float* pp = eng.object_channel(o);
       for (int i = 0; pp && i < kN; ++i) pe += pp[i] * pp[i];
-      std::fprintf(stderr, "%zu,%.3f,%d,%d,%d,%.4f,%.4f,%.4f,%.4f,%.3f,%d,%d,%.3f,%.6f\n", f, t, o, st->active,
-                   st->is_bed, st->room.x, st->room.y, st->room.z, st->gain, st->width,
+      std::fprintf(stderr, "%zu,%.3f,%d,%d,%d,%d,%.4f,%.4f,%.4f,%.4f,%.3f,%d,%d,%.3f,%.6f\n", f, t, o, st->active,
+                   st->is_bed, o == eng.lfe_object_index(), st->room.x, st->room.y, st->room.z, st->gain, st->width,
                    st->zone_constraints_idx, st->snap, st->divergence, std::sqrt(pe / kN));
     }
   }

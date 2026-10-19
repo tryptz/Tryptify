@@ -101,9 +101,10 @@ old_HomeViewModel.kt
 # The host CTest project for the native Atmos tests. `*.txt` above would drop
 # it silently, and the tests would go back to being run by hand only.
 !app/src/main/cpp/atmos/tests/CMakeLists.txt
-# The Atmos real-content reference check's analysis script (the blanket *.py
-# rule would leave run.sh calling a file that isn't in the repo).
+# The Atmos real-content reference checks' analysis scripts (the blanket *.py
+# rule would leave run.sh / channel_check.sh calling a file that isn't in the repo).
 !app/src/main/cpp/atmos/tools/reference_check/compare.py
+!app/src/main/cpp/atmos/tools/reference_check/channel_check.py
 # The preset crash scanner: a host CMake project and its driver, which
 # KnownCrashPresets.kt is regenerated from. Same two blanket rules.
 !tools/preset_crash_scan/CMakeLists.txt

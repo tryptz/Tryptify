@@ -144,12 +144,78 @@ void test_metadata_hold() {
   for (int i = 0; i < samples; ++i) if (!std::isfinite(held[i])) finite = false;
   CHECK(finite);
 
-  // ...but the hold expires, so a stream that stops carrying JOC stops rendering
-  // instead of spatializing stale metadata forever.
+  // ...but frames with no readable syncframe header can't vouch that the
+  // stream is still Atmos, so after ~1 s of them the hold expires instead of
+  // spatializing stale metadata forever.
   for (int i = 0; i < 40; ++i) {
     engine.upmix_frame(bare.data(), bare.size(), ptrs.data(), 5, samples);
   }
   CHECK(engine.upmix_frame(bare.data(), bare.size(), ptrs.data(), 5, samples) == -1);
+}
+
+// An E-AC-3 5.1 syncframe header with no metadata blocks and, when `atmos`,
+// the addbsi flag_ec3_extension_type_a a JOC encoder sets on every frame.
+std::vector<uint8_t> eac3_header_frame(bool atmos) {
+  BitWriter bw;
+  bw.put(16, 0x0B77);
+  bw.put(2, 0); bw.put(3, 0); bw.put(11, 100);  // independent, substream 0, frmsiz
+  bw.put(2, 0); bw.put(2, 3);                   // 48 kHz, 6 blocks
+  bw.put(3, 7); bw.put_bit(1);                  // 5.0 + LFE
+  bw.put(5, 16);                                // E-AC-3
+  bw.put(5, 31); bw.put_bit(0);                 // dialnorm, no compr
+  bw.put_bit(0); bw.put_bit(0);                 // no mixing / informational metadata
+  bw.put_bit(atmos ? 1 : 0);                    // addbsie
+  if (atmos) { bw.put(6, 1); bw.put(8, 0x01); bw.put(8, 16); }
+  while (bw.bytes.size() < 64) bw.put(8, 0);
+  return bw.bytes;
+}
+
+// Dolby's 7.1.4 channel-check tones carry JOC in 2% of their frames, with gaps
+// of up to 646 frames (~20 s). Every frame is still flagged Atmos in its
+// header, and the hold must last through all of them: expiring it drops each
+// height and rear object onto the 5.1 bed for the rest of the gap.
+void test_hold_follows_header() {
+  std::printf("ObjectEngine: hold lasts while the header says Atmos\n");
+  BitWriter fw; write_emdf_joc_frame(fw);
+  const std::vector<uint8_t> atmos = eac3_header_frame(true);
+  const std::vector<uint8_t> plain = eac3_header_frame(false);
+  const int samples = 1536;
+  std::vector<std::vector<float>> bed(5, std::vector<float>(samples, 0.1f));
+  std::vector<const float*> ptrs(5);
+  for (int ch = 0; ch < 5; ++ch) ptrs[ch] = bed[ch].data();
+
+  ObjectEngine engine;
+  // Atmos-flagged frames before any JOC payload: nothing to render yet.
+  CHECK(engine.upmix_frame(atmos.data(), atmos.size(), ptrs.data(), 5, samples) == -1);
+  CHECK(engine.upmix_frame(fw.bytes.data(), fw.bytes.size(), ptrs.data(), 5, samples) == 1);
+  int held = 0;
+  for (int i = 0; i < 700; ++i) {
+    held += engine.upmix_frame(atmos.data(), atmos.size(), ptrs.data(), 5, samples) == 1;
+  }
+  CHECK(held == 700);
+
+  // A few frames without a raw frame (the tap had none) inside the gap still hold.
+  std::vector<uint8_t> none;
+  CHECK(engine.upmix_frame(none.data(), 0, ptrs.data(), 5, samples) == 1);
+  CHECK(engine.upmix_frame(atmos.data(), atmos.size(), ptrs.data(), 5, samples) == 1);
+
+  // A gapless change into plain E-AC-3 ends the hold on its first frame, and
+  // Atmos-flagged frames don't revive the stale JOC; only a new payload does.
+  CHECK(engine.upmix_frame(plain.data(), plain.size(), ptrs.data(), 5, samples) == -1);
+  CHECK(engine.upmix_frame(atmos.data(), atmos.size(), ptrs.data(), 5, samples) == -1);
+  CHECK(engine.upmix_frame(fw.bytes.data(), fw.bytes.size(), ptrs.data(), 5, samples) == 1);
+  CHECK(engine.upmix_frame(atmos.data(), atmos.size(), ptrs.data(), 5, samples) == 1);
+
+  // After a seek the held JOC describes another point of the stream: drop it
+  // and render again from the next payload.
+  engine.flush_history();
+  CHECK(engine.upmix_frame(atmos.data(), atmos.size(), ptrs.data(), 5, samples) == -1);
+  CHECK(engine.upmix_frame(fw.bytes.data(), fw.bytes.size(), ptrs.data(), 5, samples) == 1);
+  CHECK(engine.upmix_frame(atmos.data(), atmos.size(), ptrs.data(), 5, samples) == 1);
+
+  // upmix_held still renders the fade-out frame of a render -> bed seam.
+  CHECK(engine.upmix_frame(plain.data(), plain.size(), ptrs.data(), 5, samples) == -1);
+  CHECK(engine.upmix_held(ptrs.data(), 5, samples) == 1);
 }
 
 }  // namespace
@@ -159,6 +225,7 @@ int main() {
   test_upmix_smoke();
   test_no_joc_frame();
   test_metadata_hold();
+  test_hold_follows_header();
   std::printf("=== %d checks, %d failures ===\n", g_checks, g_fail);
   return g_fail == 0 ? 0 : 1;
 }
