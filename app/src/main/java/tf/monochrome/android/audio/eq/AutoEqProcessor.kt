@@ -98,15 +98,15 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
     private class Design(
         val enabled: Boolean,
         val preampLinear: Float,
-        val coefsL: Array<FloatArray>,
-        val coefsR: Array<FloatArray>,
+        val coefsL: Array<DoubleArray>,
+        val coefsR: Array<DoubleArray>,
         /**
          * For channels on neither side — centre, LFE, back centre — of a
          * multichannel stream. The left curve when the ears match (almost
          * every profile); otherwise both ears' bands at half gain, which sums
          * to the average of the two curves in dB.
          */
-        val coefsC: Array<FloatArray>,
+        val coefsC: Array<DoubleArray>,
     )
 
     /** The user's curve, in absolute Hz, before any pitch pre-warp. */
@@ -356,7 +356,7 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
         bands: List<EqBand>,
         warpFactor: Float,
         sr: Double,
-    ): Array<FloatArray> {
+    ): Array<DoubleArray> {
         val active = bands.filter { it.enabled && it.gain != 0f }
         if (active.isEmpty()) return emptyArray()
         val maxHz = sr * 0.49

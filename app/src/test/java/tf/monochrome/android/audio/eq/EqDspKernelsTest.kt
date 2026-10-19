@@ -121,6 +121,36 @@ class EqDspKernelsTest {
     }
 
     @Test
+    fun `sub-bass bands keep their shape at every sample rate`() {
+        // A 20 Hz band at 96 kHz puts the poles within ~1e-3 of z = 1, where
+        // float32 coefficients cannot say where they are: an AutoEQ fit's
+        // +0.34 dB bell came out 0.79 dB wrong at 24 Hz.
+        fun analogDb(f: Double, f0: Double, q: Double, gDb: Double): Double {
+            val a = Math.pow(10.0, gDb / 40.0)
+            val x = f / f0
+            val re = 1.0 - x * x
+            val num = sqrt(re * re + (x * a / q) * (x * a / q))
+            val den = sqrt(re * re + (x / (a * q)) * (x / (a * q)))
+            return 20.0 * kotlin.math.log10(num / den)
+        }
+        data class Band(val f0: Double, val q: Double, val g: Double)
+        val bands = listOf(Band(20.0, 2.0, 0.34), Band(20.0, 0.6, 3.7), Band(25.0, 2.76, -0.65))
+        for (fs in doubleArrayOf(44100.0, 48000.0, 96000.0, 192000.0)) {
+            val n = 2 * fs.toInt()
+            for (band in bands) for (probe in doubleArrayOf(20.0, 24.0, 40.0)) {
+                val bq = EqBiquad()
+                bq.configure(EqBiquadType.PEAKING, fs, band.f0, band.q, band.g, matched = true)
+                val x = FloatArray(n) { sin(2.0 * PI * probe * it / fs).toFloat() }
+                bq.processBlock(x, n)
+                // Last second only: settled, and a whole number of cycles.
+                val got = 20.0 * kotlin.math.log10(goertzel(x, n - fs.toInt(), n, probe, fs))
+                val err = abs(got - analogDb(probe, band.f0, band.q, band.g))
+                assertTrue("$band at $fs Hz, probe $probe: err $err dB", err < 0.05)
+            }
+        }
+    }
+
+    @Test
     fun `degenerate configure falls back to passthrough`() {
         val bq = EqBiquad()
         bq.configure(EqBiquadType.PEAKING, 48000.0, Double.NaN, 1.0, 6.0)

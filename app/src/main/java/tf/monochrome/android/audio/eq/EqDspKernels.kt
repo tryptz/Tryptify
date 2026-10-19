@@ -222,6 +222,11 @@ internal fun matchedShelfCoefficients(
  * bands, tournament-picked (never worse than RBJ) for shelves. Degenerate
  * input falls back to plain RBJ, and a degenerate RBJ falls back to
  * passthrough rather than emitting NaN/Inf audio.
+ *
+ * The coefficients stay in double all the way into [EqBiquad]. Rounding them
+ * to float32 moves a sub-bass band's poles: at 96 kHz a 20 Hz bell sits
+ * within ~1e-3 of z = 1, and float32 a1/a2 put a +0.34 dB band 0.79 dB off
+ * at 24 Hz, worse than having no band at all.
  */
 internal fun designBiquadCoefficients(
     type: EqBiquadType,
@@ -230,19 +235,14 @@ internal fun designBiquadCoefficients(
     q: Double,
     gainDb: Double,
     matched: Boolean = false,
-): FloatArray {
+): DoubleArray {
     if (matched) {
         val c = when (type) {
             EqBiquadType.PEAKING -> matchedPeakingCoefficients(sr, freq, q, gainDb)
             EqBiquadType.LOW_SHELF -> matchedShelfCoefficients(sr, freq, q, gainDb, high = false)
             EqBiquadType.HIGH_SHELF -> matchedShelfCoefficients(sr, freq, q, gainDb, high = true)
         }
-        if (c != null) {
-            return floatArrayOf(
-                c[0].toFloat(), c[1].toFloat(), c[2].toFloat(),
-                c[3].toFloat(), c[4].toFloat(),
-            )
-        }
+        if (c != null) return c
         // fall through to RBJ on degenerate input
     }
     val w0 = 2.0 * Math.PI * freq / sr
@@ -281,31 +281,22 @@ internal fun designBiquadCoefficients(
     }
     if (abs(na0) < 1e-20 || !na0.isFinite()) {
         // Degenerate coefficient — fall back to passthrough instead of emitting NaN/Inf audio.
-        return floatArrayOf(1f, 0f, 0f, 0f, 0f)
+        return doubleArrayOf(1.0, 0.0, 0.0, 0.0, 0.0)
     }
-    val nb0f = (nb0 / na0).toFloat()
-    val nb1f = (nb1 / na0).toFloat()
-    val nb2f = (nb2 / na0).toFloat()
-    val na1f = (na1 / na0).toFloat()
-    val na2f = (na2 / na0).toFloat()
-    return if (!nb0f.isFinite() || !nb1f.isFinite() || !nb2f.isFinite() ||
-        !na1f.isFinite() || !na2f.isFinite()) {
-        floatArrayOf(1f, 0f, 0f, 0f, 0f)
-    } else {
-        floatArrayOf(nb0f, nb1f, nb2f, na1f, na2f)
-    }
+    val c = doubleArrayOf(nb0 / na0, nb1 / na0, nb2 / na0, na1 / na0, na2 / na0)
+    return if (c.all { it.isFinite() }) c else doubleArrayOf(1.0, 0.0, 0.0, 0.0, 0.0)
 }
 
 /**
  * RBJ biquad (Transposed Direct Form II) with NaN/degenerate-coefficient guards.
  *
- * Coefficients arrive as float32 (that's what [designBiquadCoefficients]
- * emits) but the state and the multiply-adds run in DOUBLE, and only the
- * output is rounded back to float. Sub-bass bands put the poles within ~1e-3
- * of z = 1, and float32 state there turns rounding error into audible-range
- * noise: a single 20 Hz bell measured -68 dB THD+N at 40 Hz in float32
- * (tools/autoeq-bench), versus ~-136 dB with double state. Scalar double
- * costs the same as float on ARM64.
+ * Coefficients, state and the multiply-adds are all DOUBLE; only the output
+ * is rounded back to float. Sub-bass bands put the poles within ~1e-3 of
+ * z = 1, and float32 there goes wrong twice over: float32 state turns
+ * rounding error into audible-range noise (a single 20 Hz bell measured
+ * -68 dB THD+N at 40 Hz, versus ~-136 dB with double state), and float32
+ * coefficients misplace the poles, bending the response itself (see
+ * [designBiquadCoefficients]). Scalar double costs the same as float on ARM64.
  */
 internal class EqBiquad {
     private var b0 = 1.0; private var b1 = 0.0; private var b2 = 0.0
@@ -345,9 +336,8 @@ internal class EqBiquad {
      * all the transcendental design work already done by
      * [designBiquadCoefficients] at control rate.
      */
-    fun retune(c: FloatArray) {
-        b0 = c[0].toDouble(); b1 = c[1].toDouble(); b2 = c[2].toDouble()
-        a1 = c[3].toDouble(); a2 = c[4].toDouble()
+    fun retune(c: DoubleArray) {
+        b0 = c[0]; b1 = c[1]; b2 = c[2]; a1 = c[3]; a2 = c[4]
     }
 
     fun processBlock(data: FloatArray, n: Int) {
