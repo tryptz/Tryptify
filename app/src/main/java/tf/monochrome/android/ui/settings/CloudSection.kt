@@ -1,6 +1,7 @@
 package tf.monochrome.android.ui.settings
 
 import android.text.format.Formatter
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,6 +14,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -25,11 +28,16 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -53,6 +61,10 @@ import java.util.Currency
  * music storage, for a listener who would rather not run a server. Plans and
  * the trial, the storage used, connecting the player, and the uploads.
  * Unwrapped from any scroll container, like [SubsonicSection].
+ *
+ * Folded by default under its title, which opens it: most people on
+ * Connections are there for something else, and three plan cards made the
+ * page long. Folded, it does not ask the server for the account either.
  */
 @Composable
 internal fun CloudSection(viewModel: CloudSettingsViewModel = hiltViewModel()) {
@@ -61,15 +73,38 @@ internal fun CloudSection(viewModel: CloudSettingsViewModel = hiltViewModel()) {
     val state by viewModel.account.collectAsStateWithLifecycle()
     val plans by viewModel.plans.collectAsStateWithLifecycle()
     val openUrl by viewModel.openUrl.collectAsStateWithLifecycle()
+    var open by rememberSaveable { mutableStateOf(false) }
 
     // Back from the payment page: the webhook has usually landed by now.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
-    LaunchedEffect(signedIn) { viewModel.refresh() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { if (open) viewModel.refresh() }
+    LaunchedEffect(signedIn, open) { if (open) viewModel.refresh() }
     LaunchedEffect(openUrl) {
         openUrl?.let { openDonationUrl(context, it); viewModel.urlOpened() }
     }
 
-    SettingsGroupHeader(stringResource(R.string.cloud_title))
+    val title = stringResource(R.string.cloud_title)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .settingsAnchor(title)
+            .clickable(role = Role.Button) { open = !open }
+            .padding(top = 4.dp, bottom = 8.dp),
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(Modifier.width(6.dp))
+        Icon(
+            if (open) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
+    }
+    if (!open) return
     Text(
         text = stringResource(R.string.cloud_intro),
         style = MaterialTheme.typography.bodyMedium,

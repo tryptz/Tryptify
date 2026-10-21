@@ -1038,6 +1038,13 @@ once a server is connected.
 
 ### Tryptify Cloud
 
+**It starts folded under its title.** "Tryptify Cloud", with a ▾ beside it,
+is the only line until it is tapped; the intro, the plans or the storage, and
+the uploads open under it, and stay open while the screen lives. Three plan
+cards made Connections long for everyone who came for something else. Folded,
+it does not ask the server for the account; opening it, and coming back from
+the payment page with it open, does.
+
 **It is described as storage, never as hosting a server**: "your personal
 Subsonic-API music storage, made for fast streaming". It sits right under the
 music server section in Settings › Connections, because it plays through that
