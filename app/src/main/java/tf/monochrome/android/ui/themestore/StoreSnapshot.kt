@@ -68,6 +68,15 @@ const val SNAPSHOT_ASPECT = 270f / 584f
 private val PANELS_BAND = 168.dp
 
 /**
+ * Width over height of the top of a store picture, the lyrics and the
+ * player, cut off above the panels band (and the gap and padding at its
+ * foot): what a card in the store shows. The whole picture made two cards
+ * fill a screen, and the panels band's coloured backdrop, there to show its
+ * glass bend, read as clutter at card size. The pack's page shows it whole.
+ */
+const val SNAPSHOT_CARD_ASPECT = 270f / (584f - 168f - 8f)
+
+/**
  * A pack as the store pictures it, drawn by the real renderers: its lyrics
  * with their glow, rays and music links, the player's transport and dock
  * under its glass, and the mini player and tab bar under the panels' glass,

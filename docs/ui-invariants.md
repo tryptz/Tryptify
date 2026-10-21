@@ -1133,7 +1133,13 @@ pack of theirs with none gets one the first time they open it.
 **The store is two tiles to a row, each one `PressableGlass`** with the picture
 inset at the top and the name, author, likes and downloads on the glass under
 it. The picture is what a theme is chosen by, so it gets the room; part icons
-stay on the pack's page. The list refreshes quietly on coming back to it
+stay on the pack's page.
+
+**A card shows the top of the picture, the lyrics and the player, cut off
+above the panels band** (`SNAPSHOT_CARD_ASPECT`, cropped from the top). The
+whole 270 by 584 picture made two cards fill a screen, and the panels band's
+coloured backdrop, drawn so its glass has something to bend, read as clutter
+at card size. The pack's own page shows the picture whole. The list refreshes quietly on coming back to it
 (`refreshQuietly`), so a download or a like counts on the card at once.
 
 ### The globe
