@@ -37,7 +37,10 @@ export default {
     // Browsers say where they come from; the app sends no Origin.
     const origin = request.headers.get("origin");
     const allowed = [...ORIGINS, ...(env.ALLOWED_ORIGINS ?? "").split(",").map((s) => s.trim()).filter(Boolean)];
-    const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(url.hostname);
+    // This computer: by the address asked for and, when Cloudflare says who
+    // connected (always, once deployed), by that too.
+    const ip = request.headers.get("cf-connecting-ip");
+    const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(url.hostname) && (ip === null || /^(127\.|::1$|::ffff:127\.)/.test(ip));
     if (origin && !allowed.includes(origin) && !(local && env.DEV_TOKENS === "1")) return new Response("Not from here.", { status: 403 });
 
     const { token, protocol } = tokenFrom(request.headers);

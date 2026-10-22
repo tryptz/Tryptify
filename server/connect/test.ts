@@ -84,10 +84,26 @@ await test("garbage is nobody", async () => assert.equal(await personOf("not.a.t
 await test("shared-secret tokens are asked of Supabase Auth, then remembered", async () => {
   let asked = 0;
   const hs = supabaseAuth(base, "anon", (async () => { asked++; return Response.json({ id: A }); }) as typeof fetch);
-  const token = await new SignJWT({ sub: A }).setProtectedHeader({ alg: "HS256" }).setExpirationTime("5m").sign(new TextEncoder().encode("secret"));
+  const token = await new SignJWT({ sub: A }).setProtectedHeader({ alg: "HS256" }).setIssuer(issuer).setExpirationTime("5m").sign(new TextEncoder().encode("secret"));
   assert.equal(await hs(token), A);
   assert.equal(await hs(token), A);
   assert.equal(asked, 1);
+});
+await test("shared-secret tokens of another project are not asked about, and a refusal is remembered", async () => {
+  let asked = 0;
+  const hs = supabaseAuth(base, "anon", (async () => { asked++; return new Response("{}", { status: 401 }); }) as typeof fetch);
+  const make = (iss: string) => new SignJWT({ sub: A }).setProtectedHeader({ alg: "HS256" }).setIssuer(iss).setExpirationTime("5m").sign(new TextEncoder().encode("secret"));
+  assert.equal(await hs(await make("https://elsewhere.example/auth/v1")), null);
+  assert.equal(asked, 0);
+  const dead = await make(issuer);
+  assert.equal(await hs(dead), null);
+  assert.equal(await hs(dead), null);
+  assert.equal(asked, 1);
+});
+await test("Supabase Auth failing is not a sign-out", async () => {
+  const hs = supabaseAuth(base, "anon", (async () => new Response("down", { status: 503 })) as typeof fetch);
+  const token = await new SignJWT({ sub: A }).setProtectedHeader({ alg: "HS256" }).setIssuer(issuer).setExpirationTime("5m").sign(new TextEncoder().encode("secret"));
+  await assert.rejects(hs(token));
 });
 
 server.stop();

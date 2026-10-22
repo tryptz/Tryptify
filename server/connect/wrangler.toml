@@ -6,8 +6,14 @@ compatibility_date = "2026-10-01"
 workers_dev = true
 routes = [{ pattern = "connect.tryptify.com", custom_domain = true }]
 
+# Logs keep what the code writes, but not each request's headers: a
+# connection's sign-in travels in Sec-WebSocket-Protocol.
 [observability]
 enabled = true
+
+[observability.logs]
+enabled = true
+invocation_logs = false
 
 # One room per account (src/room.ts), on SQLite storage (the Free plan's kind).
 [[durable_objects.bindings]]

@@ -13,12 +13,17 @@ export function supabaseAuth(supabaseUrl: string, anonKey: string, fetcher: type
   const jwks = createRemoteJWKSet(new URL(`${issuer}/.well-known/jwks.json`));
   // Shared-secret tokens Supabase vouched for, by hash, until they expire (five minutes at most).
   const vouched = new Map<string, { uid: string; until: number }>();
+  // And the ones it turned away, for half a minute: a reconnecting device
+  // with a dead token costs Supabase one question, not one per attempt.
+  const refused = new Map<string, number>();
 
   return async function personOf(token: string): Promise<string | null> {
-    let alg: string | undefined, exp = 0;
+    let alg: string | undefined, exp = 0, iss: unknown;
     try {
       alg = decodeProtectedHeader(token).alg;
-      exp = Number(decodeJwt(token).exp ?? 0);
+      const claims = decodeJwt(token);
+      exp = Number(claims.exp ?? 0);
+      iss = claims.iss;
     } catch {
       return null;
     }
@@ -35,10 +40,17 @@ export function supabaseAuth(supabaseUrl: string, anonKey: string, fetcher: type
     const key = Array.from(digest, (b) => b.toString(16).padStart(2, "0")).join("");
     const now = Date.now(), hit = vouched.get(key);
     if (hit && hit.until > now) return hit.uid;
+    if (iss !== issuer || (refused.get(key) ?? 0) > now) return null;
+    const refuse = () => {
+      if (refused.size > 10_000) refused.clear();
+      refused.set(key, now + 30_000);
+      return null;
+    };
     const res = await fetcher(`${issuer}/user`, { headers: { apikey: anonKey, authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) });
-    if (!res.ok) return null;
+    if (res.status >= 500) throw new Error("Supabase Auth is unreachable");
+    if (!res.ok) return refuse();
     const user = (await res.json().catch(() => null)) as { id?: unknown } | null;
-    if (typeof user?.id !== "string" || !UUID.test(user.id)) return null;
+    if (typeof user?.id !== "string" || !UUID.test(user.id)) return refuse();
     if (vouched.size > 10_000) vouched.clear();
     vouched.set(key, { uid: user.id, until: Math.min(exp * 1000, now + 5 * 60_000) });
     return user.id;
