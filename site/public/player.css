@@ -252,6 +252,15 @@
 }
 @keyframes wp-run { from { width: var(--from, 0%); } to { width: 100%; } }
 body.has-elsewhere .wp-main { padding-bottom: calc(var(--bar-h) + 110px); }
+#tile-connect { display: flex; flex-direction: column; gap: 12px; }
+#tile-connect h2 { margin-bottom: 0; }
+.wp-connect-card { display: grid; gap: 4px; padding: 14px; border-radius: 16px; background: var(--panel-2); border: 1px solid var(--line); }
+.wp-connect-card .eyebrow { margin: 0; color: var(--ok); }
+.wp-connect-card strong { font-size: 17px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wp-connect-card .wp-row { margin: 4px 0 0; }
+.wp-connect-bar { height: 3px; margin-top: 6px; border-radius: 2px; background: color-mix(in srgb, var(--text) 14%, transparent); overflow: hidden; }
+.wp-connect-bar span { display: block; height: 100%; background: var(--ok); width: var(--from, 0%); animation: wp-run var(--left, 1s) linear forwards; animation-play-state: var(--state, paused); }
+#tile-connect .wp-device-list { margin: 0; }
 .wp-devices {
   position: fixed; z-index: 36; right: 12px; bottom: calc(var(--bar-h) + 12px); width: min(360px, calc(100vw - 24px));
   padding: 16px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--glass-shadow);

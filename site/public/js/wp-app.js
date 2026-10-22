@@ -803,7 +803,7 @@
       : h("p", { class: "muted", text: "Nothing after this song." }),
       h("button", { type: "button", class: "btn", "data-act": "queue", text: "Show the queue" }));
   }
-  function renderHome() { renderNow(); renderEqTile(); renderPath(); renderSources(); renderPlayback(); renderNext(); }
+  function renderHome() { renderNow(); renderConnectTile(); renderEqTile(); renderPath(); renderSources(); renderPlayback(); renderNext(); }
 
   // ── AutoEQ ──────────────────────────────────────────────────────────
   const NS = "http://www.w3.org/2000/svg";
@@ -1021,6 +1021,38 @@
         dur ? h("div", { class: "wp-elsewhere-bar", "aria-hidden": "true" }, bar) : null);
     }
     if (!$("wp-devices").hidden) renderDevices();
+    renderConnectTile();
+  }
+  /** The other device's progress, moved by CSS alone: no timer ticks here for it. */
+  function progressOf(n) {
+    const bar = h("span"), dur = n.track.duration || 0;
+    if (!dur) return null;
+    const at = C.positionOf(n), playing = C.online(n.device) && n.playing;
+    bar.style.cssText = `--from: ${(Math.min(at, dur) / dur) * 100}%; --left: ${Math.max(0.1, (dur - at) / (n.rate || 1))}s; --state: ${playing ? "running" : "paused"}`;
+    return h("div", { class: "wp-connect-bar", "aria-hidden": "true" }, bar);
+  }
+  /** Tryptify Connect on the dashboard: what plays elsewhere, with its controls and Play here, and every device. */
+  function renderConnectTile() {
+    if (!C || $("view-home").hidden) return;
+    const n = C.elsewhere(), box = h("div");
+    let card = null;
+    if (n && C.status === "on") {
+      const online = C.online(n.device), name = nameOf(n.device, n.name);
+      card = h("div", { class: "wp-connect-card" },
+        h("p", { class: "eyebrow", text: `${online && n.playing ? "Playing" : "Last played"} on ${name}` }),
+        h("strong", { text: n.track.title || "Untitled" }),
+        h("span", { class: "muted small", text: [n.track.artist, n.track.quality].filter(Boolean).join(" · ") }),
+        progressOf(n),
+        h("div", { class: "wp-row" },
+          online ? h("div", { class: "wp-controls" },
+            h("button", { type: "button", class: "wp-icon", icon: "prev", "aria-label": `Previous on ${name}`, onclick: () => remote("prev") }),
+            h("button", { type: "button", class: "wp-icon", icon: n.playing ? "pause" : "play", "aria-label": `${n.playing ? "Pause" : "Play"} on ${name}`, onclick: () => remote(n.playing ? "pause" : "play") }),
+            h("button", { type: "button", class: "wp-icon", icon: "next", "aria-label": `Next on ${name}`, onclick: () => remote("next") })) : null,
+          h("span", { class: "wp-grow" }),
+          h("button", { type: "button", class: "btn primary wp-small", text: "Play here", onclick: () => playOn(C.id) })));
+    }
+    devicesInto(box);
+    tile("tile-connect", "Tryptify Connect", card, box);
   }
   function toggleDevices(force) {
     const p = $("wp-devices");
@@ -1028,20 +1060,23 @@
     $("bar-devices").setAttribute("aria-expanded", String(!p.hidden));
     if (!p.hidden) renderDevices();
   }
-  function renderDevices() {
-    const box = $("wp-devices-list");
+  function renderDevices() { devicesInto($("wp-devices-list")); }
+  /** Your devices into [box]: this browser first, each a tap to move the music there. */
+  function devicesInto(box) {
     box.textContent = "";
     const st = C ? C.status : "off";
     if (st === "signed-out") { box.append(h("p", { class: "muted", text: "Sign in to see your other devices and move music between them." }), h("a", { class: "btn primary", href: "/account", text: "Sign in" })); return; }
     if (st === "replaced") { box.append(h("p", { class: "muted", text: "Tryptify Connect is on in another tab of this browser." }), h("button", { type: "button", class: "btn", text: "Use it in this tab", onclick: () => C.reconnect() })); return; }
     if (st !== "on") { box.append(h("p", { class: "muted", text: "Connecting…" })); return; }
-    const n = C.now, holder = n && n.playing ? n.device : null;
+    // The device playing counts only while it is online; a song left on one that is gone can still be resumed here.
+    const n = C.now, holder = n && n.playing && C.online(n.device) ? n.device : null;
     const list = [...C.devices].sort((a, b) => (a.id === C.id ? -1 : b.id === C.id ? 1 : a.name.localeCompare(b.name)));
     const ul = h("ul", { class: "wp-device-list" });
     for (const d of list) {
       const here = d.id === C.id, active = d.id === holder;
+      const can = here ? !!(n && n.track && n.device !== C.id) : !active && (!!holder || !!current);
       const detail = [here ? "This browser" : d.kind === "android" ? "Tryptify app" : "tryptify.com", active ? "Playing" : null].filter(Boolean).join(" · ");
-      ul.append(h("li", null, h("button", { type: "button", class: "wp-device" + (active ? " is-active" : ""), disabled: active || (here && !holder) || (!holder && !current),
+      ul.append(h("li", null, h("button", { type: "button", class: "wp-device" + (active ? " is-active" : ""), disabled: !can,
         onclick: () => playOn(d.id) },
         h("span", { class: "wp-i", icon: d.kind === "android" ? "phone" : "devices", "aria-hidden": "true" }),
         h("span", { class: "wp-device-text" }, h("strong", { text: d.name }), h("small", { class: "muted", text: detail })),

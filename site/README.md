@@ -160,9 +160,9 @@ up next), a menu on the left and the bar at the bottom.
 
 - **Tryptify Connect** (`wp-connect.js`, server in
   [`server/connect`](../server/connect/README.md)): signed in, this browser is
-  one of the listener's devices. A strip over the bar shows what plays on
-  another device, with its controls and **Play here**; the Devices button in
-  the bar lists them and moves the music to any of them, at the same second
+  one of the listener's devices. A strip over the bar and a tile on the
+  dashboard show what plays on another device, with its controls and **Play
+  here**; the tile and the Devices button in the bar list them and moves the music to any of them, at the same second
   and with the queue. When another device starts playing, this one pauses.
   One WebSocket, a message only on change, and no connection while the tab is
   hidden with nothing playing.
