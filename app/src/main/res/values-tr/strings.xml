@@ -3072,6 +3072,8 @@
     <string name="subsonic_error_login">Kullanıcı adı veya şifre yanlış.</string>
     <string name="subsonic_error_not_subsonic">Bir şey yanıt verdi ama bu bir Subsonic sunucusu değil. Adresi ve bağlantı noktasını kontrol edin.</string>
     <string name="subsonic_error_unreachable">Sunucuya ulaşılamadı. Sunucu çalışıyor mu ve bu telefon aynı ağda mı?</string>
+    <string name="subsonic_error_needs_https">Bu sunucu internette, bu yüzden adresi https:// ile başlamalı. Düz http:// yalnızca kendi ağınızdaki sunucular içindir.</string>
+    <string name="subsonic_error_password_needs_https">Bu sunucu yalnızca parolanızın kendisini göndererek oturum açabiliyor, bu yüzden evde bile https:// gerekir.</string>
     <string name="subsonic_error_other">Sunucunun yanıtı: %1$s</string>
     <string name="subsonic_howto_title">Nasıl kurulur</string>
     <string name="subsonic_howto_install">Bir bilgisayarda, NAS’ta veya bu telefonda Subsonic uyumlu bir sunucu çalıştırın. Başlamak için en kolayı Navidrome; Gonic, Airsonic-Advanced, Ampache ve LMS de çalışır.</string>

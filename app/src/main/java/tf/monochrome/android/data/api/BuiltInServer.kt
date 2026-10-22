@@ -47,6 +47,13 @@ object BuiltInServer {
         return kept.takeIf { it.size != servers.size }
     }
 
+    /**
+     * [servers] without the build's own entry, for settings sync: its address
+     * carries a secret path, and every device puts it back from its own build.
+     */
+    fun withoutBuiltIn(servers: List<ApiServer>, roomsServer: String): List<ApiServer> =
+        servers.filterNot { isBuiltIn(it.url, roomsServer) }
+
     private fun sha256(s: String): String =
         java.security.MessageDigest.getInstance("SHA-256").digest(s.toByteArray()).joinToString("") { "%02x".format(it) }
 

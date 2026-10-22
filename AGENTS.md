@@ -161,6 +161,29 @@ The other settings `local.properties` can override (`spotify.clientId`,
 They are not secrets, but the rule for `local.properties` stays the same: it is
 never committed.
 
+## Plain http:// is for servers at home only
+
+`data/net/CleartextPolicy.kt` is the one rule, and every HTTP stack asks it:
+the API client (an OkHttp network interceptor in `NetworkModule`, so
+redirects are checked too), the player and song previews (a
+`ResolvingDataSource` in front of the HTTP source), and Coil (its own
+OkHttp fetcher in `MonochromeApp`). http:// goes only to localhost, private
+and link-local ranges, 100.64/10 (Tailscale) and home names (`.local`,
+`.lan`, `.home.arpa`, `.internal`). Audio and covers without a sign-in in
+their address (internet radio) may still use http:// anywhere. A Subsonic
+plain password (`p=`) never goes over http://, home or not. The manifest keeps
+`usesCleartextTraffic="true"` because Android's own config cannot say "any
+private address"; the policy is what refuses.
+
+Logs go through `debug/LogRedactor.kt` before they are kept, shown or written
+to a crash file: tokens, codes, Subsonic `t`/`s`/`p`/`u`, keys, JWTs and the
+rooms server's secret path. Sign-in links are PKCE only
+(`SupabaseAuthManager.handleDeepLink`); tokens in a link's fragment are
+ignored. Android backup and device transfer leave out SharedPreferences and
+`monochrome_prefs` (`res/xml/data_extraction_rules.xml`, `backup_rules.xml`),
+which hold every sign-in. `CleartextPolicyTest` and `LogRedactorTest` hold
+these.
+
 ## A listener's Subsonic server is a device secret
 
 Settings › Connections › Music server stores one Subsonic server

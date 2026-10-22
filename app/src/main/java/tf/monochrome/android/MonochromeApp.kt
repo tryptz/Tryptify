@@ -168,6 +168,18 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
                 // subsonic-cover:// references so the sign-in in the real URL
                 // never leaves the app (see Subsonic.coverArtRef).
                 add(tf.monochrome.android.data.subsonic.SubsonicCoverMapper { subsonicRepository.current.value })
+                // A cover whose address carries a sign-in (a music server's)
+                // loads over http:// only at home (CleartextPolicy).
+                add(
+                    coil3.network.okhttp.OkHttpNetworkFetcherFactory(callFactory = {
+                        okhttp3.OkHttpClient.Builder()
+                            .addNetworkInterceptor { chain ->
+                                tf.monochrome.android.data.net.CleartextPolicy.requireForMedia(chain.request().url.toString())
+                                chain.proceed(chain.request())
+                            }
+                            .build()
+                    }),
+                )
             }
             .build()
     }

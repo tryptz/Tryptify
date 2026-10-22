@@ -2999,6 +2999,8 @@
     <string name="subsonic_error_login">ユーザー名またはパスワードが違います。</string>
     <string name="subsonic_error_not_subsonic">応答はありましたが、Subsonic サーバーではありません。アドレスとポートを確認してください。</string>
     <string name="subsonic_error_unreachable">サーバーに接続できませんでした。サーバーは起動していますか？この端末は同じネットワークにありますか？</string>
+    <string name="subsonic_error_needs_https">このサーバーはインターネット上にあるため、アドレスには https:// が必要です。http:// は自宅のネットワーク内のサーバー専用です。</string>
+    <string name="subsonic_error_password_needs_https">このサーバーはパスワードそのものを送らないとサインインできないため、自宅でも https:// が必要です。</string>
     <string name="subsonic_error_other">サーバーの応答：%1$s</string>
     <string name="subsonic_howto_title">設定方法</string>
     <string name="subsonic_howto_install">パソコン、NAS、またはこの端末で Subsonic 互換サーバーを動かします。始めるなら Navidrome が最も簡単です。Gonic、Airsonic-Advanced、Ampache、LMS も使えます。</string>

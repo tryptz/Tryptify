@@ -207,7 +207,8 @@ class ConnectController @Inject constructor(
     // ── Handing over and taking over ──────────────────────────────────
 
     private suspend fun release(m: ConnectIncoming) {
-        val to = m.to ?: return
+        // Only to a device of this account that is in the room now.
+        val to = m.to?.takeIf { id -> ConnectProtocol.isDeviceId(id) && client.state.value.devices.any { it.id == id } } ?: return
         val upcoming = queueManager.queue.value.drop(queueManager.currentIndex.value + 1).take(ConnectProtocol.MAX_QUEUE).map(::descriptorOf)
         client.tell(ConnectProtocol.handoff(to, stateOut(), upcoming))
         if (signals.change.value.playing) {
@@ -271,7 +272,9 @@ class ConnectController @Inject constructor(
         return UnifiedTrack(
             id = id, title = t.title.ifBlank { "Untitled" }, durationSeconds = (t.duration ?: 0.0).toInt(),
             artistName = t.artist.ifBlank { "Unknown Artist" }, albumTitle = t.album.ifBlank { null },
-            artworkUri = t.cover, source = source, sourceType = type,
+            // Another device's cover only as a plain https:// picture: never a
+            // file, a content:// grant or an address carrying a sign-in.
+            artworkUri = ConnectProtocol.shareableCover(t.cover), source = source, sourceType = type,
         )
     }
 

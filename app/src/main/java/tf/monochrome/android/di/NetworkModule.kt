@@ -42,6 +42,12 @@ object NetworkModule {
                 connectTimeout(30, TimeUnit.SECONDS)
                 readTimeout(30, TimeUnit.SECONDS)
                 writeTimeout(30, TimeUnit.SECONDS)
+                // http:// only to servers at home (CleartextPolicy), checked on
+                // every hop, redirects included.
+                addNetworkInterceptor { chain ->
+                    tf.monochrome.android.data.net.CleartextPolicy.require(chain.request().url.toString())
+                    chain.proceed(chain.request())
+                }
                 // OkHttp runs five requests to one host at a time and queues
                 // the rest: a Trypt Mania batch sends a song to every
                 // replica of its chart server at once (StepManiaGenerationWorker.MAX_LANES).

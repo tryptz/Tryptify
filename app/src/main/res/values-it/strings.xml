@@ -3145,6 +3145,8 @@
     <string name="subsonic_error_login">Nome utente o password errati.</string>
     <string name="subsonic_error_not_subsonic">Qualcosa ha risposto, ma non è un server Subsonic. Controlla l\'indirizzo e la porta.</string>
     <string name="subsonic_error_unreachable">Impossibile raggiungere il server. È in esecuzione e questo telefono è sulla stessa rete?</string>
+    <string name="subsonic_error_needs_https">Questo server è su internet, quindi il suo indirizzo richiede https://. Il semplice http:// è solo per i server della tua rete.</string>
+    <string name="subsonic_error_password_needs_https">Questo server può accedere solo inviando la password stessa, quindi richiede https://, anche a casa.</string>
     <string name="subsonic_error_other">Il server ha risposto: %1$s</string>
     <string name="subsonic_howto_title">Come configurarlo</string>
     <string name="subsonic_howto_install">Esegui un server compatibile con Subsonic su un computer, un NAS o questo telefono. Navidrome è il più semplice per iniziare; funzionano anche Gonic, Airsonic-Advanced, Ampache e LMS.</string>

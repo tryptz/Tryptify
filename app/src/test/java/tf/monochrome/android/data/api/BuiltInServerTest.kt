@@ -91,6 +91,13 @@ class BuiltInServerTest {
     }
 
     @Test
+    fun settingsSyncCarriesTheListWithoutIt() {
+        val listed = BuiltInServer.ensureAll(listOf(tidal), built)!!
+        assertEquals(listOf(tidal), BuiltInServer.withoutBuiltIn(listed, built))
+        assertEquals(listed, BuiltInServer.withoutBuiltIn(listed, ""))
+    }
+
+    @Test
     fun aBuildWithoutOneAddsNothing() {
         assertNull(BuiltInServer.ensure(listOf(tidal), ""))
         assertFalse(BuiltInServer.isBuiltIn(tidal.url, ""))

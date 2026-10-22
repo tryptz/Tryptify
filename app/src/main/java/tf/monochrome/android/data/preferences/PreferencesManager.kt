@@ -2695,6 +2695,14 @@ class PreferencesManager @Inject constructor(
         prefs.asMap()
             .filterKeys { it in SETTINGS_SYNC_KEYS }
             .mapKeys { it.key.name }
+            .let { snapshot ->
+                // The built-in rooms server's address carries a secret path: it
+                // never leaves the device, and each device puts it back itself.
+                if (API_SERVERS.name !in snapshot) snapshot
+                else snapshot + (API_SERVERS.name to json.encodeToString(
+                    tf.monochrome.android.data.api.BuiltInServer.withoutBuiltIn(savedApiServers(prefs), BuildConfig.BUILT_IN_ROOMS_SERVER),
+                ))
+            }
 
     /**
      * Apply a settings snapshot pulled from the cloud, in a single atomic edit.

@@ -3072,6 +3072,8 @@
     <string name="subsonic_error_login">Benutzername oder Passwort falsch.</string>
     <string name="subsonic_error_not_subsonic">Etwas hat geantwortet, aber es ist kein Subsonic-Server. Prüfe Adresse und Port.</string>
     <string name="subsonic_error_unreachable">Server nicht erreichbar. Läuft er, und ist dieses Handy im selben Netzwerk?</string>
+    <string name="subsonic_error_needs_https">Dieser Server ist im Internet, seine Adresse braucht also https://. Einfaches http:// ist nur für Server im eigenen Netzwerk.</string>
+    <string name="subsonic_error_password_needs_https">Dieser Server kann sich nur anmelden, indem er dein Passwort selbst sendet. Er braucht deshalb https://, auch zu Hause.</string>
     <string name="subsonic_error_other">Der Server meldet: %1$s</string>
     <string name="subsonic_howto_title">So richtest du es ein</string>
     <string name="subsonic_howto_install">Lass einen Subsonic-kompatiblen Server auf einem Computer, einem NAS oder diesem Handy laufen. Am einfachsten ist Navidrome; Gonic, Airsonic-Advanced, Ampache und LMS gehen auch.</string>

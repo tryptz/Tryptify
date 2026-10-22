@@ -32,8 +32,10 @@ class DebugLogBuffer @Inject constructor() {
     val updates: SharedFlow<Unit> = _updates.asSharedFlow()
 
     fun append(entry: DebugLogEntry) {
+        // Sign-ins never reach the buffer, so the viewer, the export and crash files never see them.
+        val clean = entry.copy(message = LogRedactor.redact(entry.message), raw = LogRedactor.redact(entry.raw))
         synchronized(lock) {
-            entries.addLast(entry)
+            entries.addLast(clean)
             while (entries.size > MAX_ENTRIES) entries.removeFirst()
         }
         _updates.tryEmit(Unit)
