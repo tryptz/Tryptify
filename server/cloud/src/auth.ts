@@ -18,13 +18,19 @@ export function supabaseAuth(supabaseUrl: string, anonKey: string) {
   // Tokens Supabase Auth has vouched for, by their hash, until they expire
   // (five minutes at most). Per isolate, which is all a cache needs to be.
   const vouched = new Map<string, { uid: string; until: number }>();
+  // And tokens it turned away, for half a minute, so a stream of bad ones
+  // costs Supabase one question each, not one per request.
+  const refused = new Map<string, number>();
 
   return async function personOf(token: string): Promise<string | null> {
     let alg: string | undefined;
     let exp = 0;
+    let iss: unknown;
     try {
       alg = decodeProtectedHeader(token).alg;
-      exp = Number(decodeJwt(token).exp ?? 0);
+      const claims = decodeJwt(token);
+      exp = Number(claims.exp ?? 0);
+      iss = claims.iss;
     } catch {
       return null;
     }
@@ -41,6 +47,14 @@ export function supabaseAuth(supabaseUrl: string, anonKey: string) {
     const now = Date.now();
     const hit = vouched.get(key);
     if (hit && hit.until > now) return hit.uid;
+    // Not this project's, or expired: no need to ask.
+    if (iss !== issuer || !(exp * 1000 > now)) return null;
+    if ((refused.get(key) ?? 0) > now) return null;
+    const refuse = () => {
+      if (refused.size > 10_000) refused.clear();
+      refused.set(key, now + 30_000);
+      return null;
+    };
     let res: Response;
     try {
       res = await fetch(`${issuer}/user`, {
@@ -51,9 +65,9 @@ export function supabaseAuth(supabaseUrl: string, anonKey: string) {
       throw new AuthUnreachable();
     }
     if (res.status >= 500) throw new AuthUnreachable();
-    if (!res.ok) return null;
+    if (!res.ok) return refuse();
     const user = (await res.json().catch(() => null)) as { id?: unknown } | null;
-    if (typeof user?.id !== "string" || !UUID.test(user.id)) return null;
+    if (typeof user?.id !== "string" || !UUID.test(user.id)) return refuse();
     if (vouched.size > 10_000) {
       for (const [k, v] of vouched) if (v.until <= now) vouched.delete(k);
       if (vouched.size > 10_000) vouched.clear();

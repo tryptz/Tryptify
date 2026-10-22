@@ -345,6 +345,20 @@ test("the trial's worst case costs pennies, not a plan", async () => {
   assert.ok(cost < 0.15, `a trial can cost ${cost.toFixed(2)}`);
 });
 
+test("a second trial checkout does not add its days to the first", async () => {
+  const first = cloud.applyEvent(
+    { plan: null, paidUntil: null, usedBytes: 0 },
+    { kind: "paid", eventId: "t1", userId: A, plan: "max", paidUntil: days(7), trial: true, subscriptionId: "sub_1" },
+    now,
+  );
+  const onFile = { ...first, subscriptionId: "sub_1" };
+  const second = { kind: "paid", eventId: "t2", userId: A, plan: "max", paidUntil: days(9), trial: true, subscriptionId: "sub_2" } as const;
+  assert.equal(cloud.applyEvent(onFile, second, now), onFile);
+  // The same subscription's own news (its $0 payment next to "trialing") still counts.
+  const again = cloud.applyEvent(onFile, { ...second, subscriptionId: "sub_1", paidUntil: days(7) }, now);
+  assert.deepEqual(again.paidUntil, days(7));
+});
+
 // ── Routes ───────────────────────────────────────────────────────────────────
 
 test("health and plans answer without an account", async () => {
@@ -784,6 +798,37 @@ test("a cover counts against the quota, shows as coverArt, and is served", async
     method: "PUT", headers: { authorization: `Bearer ${who}`, "content-length": "3" }, body: new Uint8Array([1, 2, 3]),
   }));
   assert.equal(notImage.status, 415);
+  // A WAV starts RIFF like a WebP; only "WEBP" in bytes 8 to 11 makes it one.
+  const riff = (kind: string) => new Uint8Array([0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, ...new TextEncoder().encode(kind)]);
+  const putCover = (body: Uint8Array, length?: string) => fetchCloud(new Request(`http://cloud.test/v1/songs/${song.id}/cover`, {
+    method: "PUT", headers: { authorization: `Bearer ${who}`, ...(length ? { "content-length": length } : {}) }, body,
+  }));
+  assert.equal((await putCover(riff("WAVE"), "12")).status, 415);
+  assert.equal((await putCover(riff("WEBP"), "12")).status, 204);
+  assert.equal((await putCover(jpeg)).status, 411);
+  assert.equal((await putCover(jpeg, "8")).status, 204);
+  assert.equal(art.headers.get("x-content-type-options"), "nosniff");
+});
+
+test("a token signed with the shared secret: Supabase is asked only for a live one of this project, and a refusal is remembered", async () => {
+  let asked = 0;
+  const server = Bun.serve({ port: 0, fetch() { asked++; return new Response("{}", { status: 401 }); } });
+  try {
+    const issuer = `http://127.0.0.1:${server.port}/auth/v1`;
+    const personOf = supabaseAuth(`http://127.0.0.1:${server.port}`, "anon");
+    const secret = new TextEncoder().encode("shared-secret-of-at-least-32-bytes!!");
+    const hs = (iss: string, exp: string | number) => new SignJWT({ role: "authenticated" })
+      .setProtectedHeader({ alg: "HS256" }).setSubject(L).setIssuer(iss).setExpirationTime(exp).sign(secret);
+    assert.equal(await personOf(await hs("https://elsewhere.example/auth/v1", "5m")), null);
+    assert.equal(await personOf(await hs(issuer, Math.floor(Date.now() / 1000) - 60)), null);
+    assert.equal(asked, 0);
+    const live = await hs(issuer, "5m");
+    assert.equal(await personOf(live), null);
+    assert.equal(await personOf(live), null);
+    assert.equal(asked, 1);
+  } finally {
+    server.stop(true);
+  }
 });
 
 test("the web app lists, searches and shows covers, only for the signed-in person", async () => {

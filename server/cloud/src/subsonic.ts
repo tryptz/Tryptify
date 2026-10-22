@@ -327,7 +327,11 @@ export async function subsonic(request: Request, db: Db, bucket: Bucket | null, 
       const object = row ? await bucket.get(row.cover_key) : null;
       if (!object) return new Response(null, { status: 404 });
       return new Response(object.body, {
-        headers: { "content-type": object.httpMetadata?.contentType ?? "image/jpeg", "cache-control": "private, max-age=86400" },
+        headers: {
+          "content-type": object.httpMetadata?.contentType ?? "image/jpeg",
+          "cache-control": "private, max-age=86400",
+          "x-content-type-options": "nosniff",
+        },
       });
     }
 
