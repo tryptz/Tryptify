@@ -260,6 +260,11 @@
   }));
   const links = new Map();
   const Cloud = {
+    /** The session's access token (refreshed when due), or null when signed out. Tryptify Connect signs in with it. */
+    async token() {
+      const c = client();
+      return c ? ((await c.auth.getSession()).data.session || {}).access_token || null : null;
+    },
     async signedIn() {
       const c = client();
       return !!(c && (await c.auth.getSession()).data.session);

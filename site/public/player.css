@@ -233,6 +233,44 @@
 .wp-bar-end input { width: 110px; accent-color: var(--accent); }
 .wp-badge { font-size: 12px; color: var(--accent-2); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
 
+/* ── Tryptify Connect ── */
+.wp-icon.lit { color: var(--ok); }
+.wp-elsewhere {
+  position: fixed; z-index: 29; left: 0; right: 0; bottom: var(--bar-h); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px;
+  padding: 8px 18px 10px; background: var(--ok); color: #0a0a0a; font-size: 14px; overflow: hidden;
+}
+[data-design="white"] .wp-elsewhere { color: #fff; }
+.wp-elsewhere .wp-icon { color: inherit; width: 40px; height: 40px; }
+.wp-elsewhere .wp-icon:hover { background: rgba(0, 0, 0, 0.12); }
+.wp-elsewhere .btn { background: rgba(0, 0, 0, 0.85); color: #fff; border-color: transparent; }
+.wp-elsewhere-text { display: grid; flex: 1 1 200px; min-width: 0; }
+.wp-elsewhere-text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.85; }
+.wp-elsewhere-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(0, 0, 0, 0.18); }
+.wp-elsewhere-bar span {
+  display: block; height: 100%; background: currentColor; width: var(--from, 0%);
+  animation: wp-run var(--left, 1s) linear forwards; animation-play-state: var(--state, paused);
+}
+@keyframes wp-run { from { width: var(--from, 0%); } to { width: 100%; } }
+body.has-elsewhere .wp-main { padding-bottom: calc(var(--bar-h) + 110px); }
+.wp-devices {
+  position: fixed; z-index: 36; right: 12px; bottom: calc(var(--bar-h) + 12px); width: min(360px, calc(100vw - 24px));
+  padding: 16px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--glass-shadow);
+}
+.wp-devices h2 { margin: 0 0 10px; font-size: 16px; }
+.wp-devices p { margin: 0 0 10px; }
+.wp-device-list { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; }
+.wp-device {
+  width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px; border: 0; border-radius: 12px;
+  background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.wp-device:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 7%, transparent); }
+.wp-device:disabled { cursor: default; }
+.wp-device.is-active { background: var(--panel-2); color: var(--ok); }
+.wp-device-text { flex: 1; display: grid; min-width: 0; }
+.wp-device-text strong { font-weight: 600; }
+.wp-device-go { font-size: 13px; font-weight: 600; color: var(--accent-2); }
+.wp-device:disabled .wp-device-go { display: none; }
+
 /* ── Narrow screens ── */
 @media (max-width: 1000px) {
   .wp-track-play { grid-template-columns: 32px minmax(0, 1fr) 90px 48px; }

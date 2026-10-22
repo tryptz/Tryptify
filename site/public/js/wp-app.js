@@ -6,7 +6,7 @@
 // what changed, so an idle tab costs nothing.
 (() => {
   "use strict";
-  const Eng = window.TryptifyEngine, S = window.TryptifySources, E = window.TryptifyAutoEq;
+  const Eng = window.TryptifyEngine, S = window.TryptifySources, E = window.TryptifyAutoEq, C = window.TryptifyConnect;
   if (!Eng || !S) return;
   const { Local, Cloud, HiFi, Subsonic, Library } = S;
   const $ = (id) => document.getElementById(id);
@@ -34,6 +34,8 @@
     plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
     sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>',
     moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg>',
+    devices: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="11" height="9" rx="1.5"/><path d="M6 17h5"/><rect x="16" y="7" width="5" height="12" rx="1.5"/></svg>',
+    phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 17.5h2"/></svg>',
     folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2h8.5A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/></svg>',
   };
 
@@ -51,6 +53,8 @@
     for (const k of kids.flat()) if (k != null && k !== false) e.append(k instanceof Node ? k : String(k));
     return e;
   }
+  /** el.append, skipping the empty slots of optional parts (append itself would print "null"). */
+  const put = (el, ...kids) => el.append(...kids.flat().filter((k) => k != null && k !== false));
   const setIcon = (btn, name) => { if (btn.dataset.icon !== name) { btn.innerHTML = ICON[name]; btn.dataset.icon = name; } };
   const songs = (n) => `${n} song${n === 1 ? "" : "s"}`;
   // A cover that will not load (a server without one) becomes the plain square.
@@ -108,7 +112,7 @@
     toast(`“${track.title}” plays next.`);
     renderQueue(); renderNext(); preloadNext();
   }
-  async function start(autoplay = true) {
+  async function start(autoplay = true, startAt = 0) {
     const t = queue[order[pos]];
     if (!t) return;
     current = t;
@@ -119,7 +123,7 @@
       if (t.src === "cloud") Cloud.cover(t).then(() => { if (my === starting) { renderBar(); renderNow(); session(); } }).catch(() => {});
       const url = await S.url(t);
       if (my !== starting) return;
-      await Eng.load(url, t.key, autoplay);
+      await Eng.load(url, t.key, autoplay, startAt);
       failures = 0;
     } catch (e) {
       if (my === starting) fail(e);
@@ -179,8 +183,8 @@
 
   Eng.on("ended", () => next(true));
   Eng.on("error", () => fail(new Error("this browser cannot play that file.")));
-  Eng.on("play", () => { renderBar(); renderNow(); if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing"; });
-  Eng.on("pause", () => { renderBar(); renderNow(); if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; });
+  Eng.on("play", () => { if (C) playSince = C.serverNow(); renderBar(); renderNow(); publish(); renderConnect(); if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing"; });
+  Eng.on("pause", () => { renderBar(); renderNow(); publish(); renderConnect(); if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; });
   Eng.on("durationchange", () => {
     const s = $("bar-seek");
     s.max = String(Eng.duration || 0);
@@ -220,7 +224,7 @@
 
   // ── The bar ─────────────────────────────────────────────────────────
   for (const b of document.querySelectorAll("[data-act]")) {
-    const name = { toggle: "play", prev: "prev", next: "next", shuffle: "shuffle", repeat: "repeat", queue: "queue", mute: "volume" }[b.dataset.act];
+    const name = { toggle: "play", prev: "prev", next: "next", shuffle: "shuffle", repeat: "repeat", queue: "queue", mute: "volume", devices: "devices" }[b.dataset.act];
     if (name) setIcon(b, b.closest(".wp-queue") ? "close" : name);
   }
   document.addEventListener("click", (e) => {
@@ -233,6 +237,7 @@
     else if (act === "shuffle") setShuffle(!settings.shuffle);
     else if (act === "repeat") cycleRepeat();
     else if (act === "queue") toggleQueue();
+    else if (act === "devices") toggleDevices();
     else if (act === "mute") { setVolume(settings.volume > 0 ? 0 : settings.lastVolume || 0.8); }
   });
   function playFirst() {
@@ -241,7 +246,7 @@
   }
   const seek = $("bar-seek");
   seek.addEventListener("input", () => { dragging = true; $("bar-time").textContent = clock(Number(seek.value)); });
-  seek.addEventListener("change", () => { Eng.seek(Number(seek.value)); dragging = false; position(); });
+  seek.addEventListener("change", () => { Eng.seek(Number(seek.value)); dragging = false; position(); publish(); });
   const vol = $("bar-volume");
   vol.value = String(settings.volume);
   function setVolume(v) {
@@ -782,7 +787,7 @@
     const speedVal = h("span", { class: "wp-mono", text: `${settings.speed.toFixed(2)}×` });
     const speed = h("input", { type: "range", min: 0.25, max: 4, step: 0.05, value: settings.speed, "aria-label": "Speed" });
     speed.addEventListener("input", () => { settings.speed = Number(speed.value); speedVal.textContent = `${settings.speed.toFixed(2)}×`; Eng.setSpeed(settings.speed); });
-    speed.addEventListener("change", () => { saveSettings(); position(); renderPath(); });
+    speed.addEventListener("change", () => { saveSettings(); position(); renderPath(); publish(); });
     tile("tile-playback", "Playback",
       toggle("Gapless", "gapless", (on) => on && preloadNext(), "Loads the next song early so it starts right away"),
       toggle("Mono", "mono", (on) => Eng.setMono(on)),
@@ -899,6 +904,152 @@
     window.TryptifyTryout.restore(eq).then(() => chipSync.forEach((f) => f())).catch(() => { restoring = false; });
   }
 
+  // ── Tryptify Connect: the listener's other devices ───────────────────
+  // A song travels as a descriptor any device can find again: a TIDAL id for
+  // Trypt HiFi, the Cloud's song id, the music server's id. Covers travel only
+  // as plain https links: a music server's carry its sign-in, and blob: ones
+  // are this browser's alone. Files on a computer stay on that computer.
+  const shareable = (u) => (typeof u === "string" && /^https:\/\//.test(u) && !/[?&](t|s|p|u)=/.test(u) ? u : null);
+  function descriptor(t) {
+    return {
+      src: t.src, id: t.src === "local" ? t.key : String(t.ref.id), title: t.title, artist: t.artist || "", album: t.album || "",
+      duration: t.duration || (t === current ? Eng.duration : 0) || null, quality: t.quality || "",
+      cover: t.src === "subsonic" ? null : shareable(t.cover), coverArt: (t.ref && t.ref.coverArt) || null,
+    };
+  }
+  function trackFrom(d) {
+    if (!d) return null;
+    const base = { title: d.title || "Untitled", artist: d.artist || "", album: d.album || "", n: null, duration: d.duration || null, quality: d.quality || "", cover: d.cover || null };
+    if (d.src === "hifi") return HiFi.base ? { ...base, key: `hifi:${d.id}`, src: "hifi", ref: { id: d.id, hires: true } } : null;
+    if (d.src === "cloud") return { ...base, key: `cloud:${d.id}`, src: "cloud", cover: null, ref: { id: d.id, hasCover: true } };
+    if (d.src === "subsonic") return Subsonic.server ? Subsonic.withCover({ ...base, key: `subsonic:${d.id}`, src: "subsonic", ref: { id: d.id, coverArt: d.coverArt } }) : null;
+    if (d.src === "local" && Local.tree) return S.util.allFiles(Local.tree).find((t) => t.key === d.id) || null;
+    return null;
+  }
+  const whyNot = (d, from) => (d.src === "local" ? `“${d.title}” is a file on ${from}, so it stays there.`
+    : d.src === "hifi" ? `“${d.title}” needs an API URL in this browser first.`
+    : d.src === "subsonic" ? `“${d.title}” is on a music server this browser is not signed in to.` : `“${d.title}” cannot play here.`);
+  const nameOf = (id, fallback) => ((C && C.devices.find((d) => d.id === id)) || {}).name || fallback || "your other device";
+
+  let playSince = 0; // when this browser last started playing, by the server's clock
+  function publish() {
+    if (!C || !current) return;
+    C.publish({ playing: !Eng.paused, track: descriptor(current), position: Eng.time, rate: settings.speed, since: playSince });
+  }
+  let transferTimer = 0;
+  /** Plays what is playing on [id] instead (this browser included). */
+  function playOn(id) {
+    const n = C.now;
+    const holder = n && C.online(n.device) ? n.device : null;
+    if (!C.transfer(id, !holder)) { toast("Tryptify Connect is not connected.", true); return; }
+    toggleDevices(false);
+    clearTimeout(transferTimer);
+    transferTimer = setTimeout(() => toast(`No answer from ${nameOf(holder || id)}. It may be asleep; try again.`, true), 7000);
+  }
+  function remote(action) {
+    const n = C && C.elsewhere();
+    if (n && C.online(n.device)) C.command(n.device, action);
+  }
+
+  if (C) {
+    // Asked to give it up: our place to the second, and what comes next.
+    C.on("release", (m) => {
+      C.handoff(m.to, current ? { playing: !Eng.paused, track: descriptor(current), position: Eng.time, rate: settings.speed, since: playSince } : null,
+        upcoming().slice(0, 100).map(descriptor));
+      if (current && !Eng.paused) { Eng.pause(); toast(`Now playing on ${m.toName || nameOf(m.to)}.`); }
+      clearTimeout(transferTimer);
+    });
+    // Handed it: carry on from that second.
+    C.on("takeover", (m) => {
+      clearTimeout(transferTimer);
+      const n = m.now, from = nameOf(m.from, n && n.name);
+      if (!n || !n.track) { toast("Nothing was playing there."); return; }
+      const first = trackFrom(n.track);
+      if (!first) { toast(whyNot(n.track, from), true); return; }
+      queue = [first, ...(m.queue || []).map(trackFrom).filter(Boolean)];
+      order = [...queue.keys()];
+      pos = 0;
+      start(n.playing, C.positionOf(n));
+      toast(`Playing here, from ${from}.`);
+    });
+    // Steered from another device.
+    C.on("command", (m) => {
+      if (m.action === "play") (current ? Eng.play() : Promise.resolve()).catch(fail);
+      else if (m.action === "pause") Eng.pause();
+      else if (m.action === "next") next(false);
+      else if (m.action === "prev") prev();
+      else if (m.action === "seek" && m.value != null) { Eng.seek(m.value); publish(); }
+    });
+    // Another device started playing: this one makes way, as Spotify does.
+    C.on("now", (n) => {
+      // Only for a device that started after this one did: a late message from an earlier start does not count.
+      if (n && n.playing && n.device !== C.id && current && !Eng.paused && (n.since || n.at) >= playSince) { Eng.pause(); toast(`${nameOf(n.device, n.name)} started playing, so this browser paused.`); }
+      renderConnect();
+    });
+    C.on("devices", renderConnect);
+    C.on("status", renderConnect);
+    C.on("error", (m) => { clearTimeout(transferTimer); toast(m.message || "Tryptify Connect said no.", true); });
+  }
+
+  /** The strip over the bar ("Playing on Pixel 8"), the Devices button and its list. */
+  function renderConnect() {
+    if (!C) return;
+    const btn = $("bar-devices"), others = C.devices.filter((d) => d.id !== C.id);
+    btn.classList.toggle("lit", others.length > 0);
+    btn.setAttribute("aria-label", others.length ? `Devices: ${others.length} other online` : "Devices");
+    const strip = $("wp-elsewhere"), n = C.elsewhere();
+    const show = !!n && (Eng.paused || !current);
+    strip.hidden = !show;
+    document.body.classList.toggle("has-elsewhere", show);
+    if (show) {
+      const online = C.online(n.device), playing = online && n.playing, name = nameOf(n.device, n.name);
+      strip.textContent = "";
+      const bar = h("span");
+      const at = C.positionOf(n), dur = n.track.duration || 0;
+      // The other device's progress moves by CSS alone: no timer ticks here for it.
+      if (dur) bar.style.cssText = `--from: ${(Math.min(at, dur) / dur) * 100}%; --left: ${Math.max(0.1, (dur - at) / (n.rate || 1))}s; --state: ${playing ? "running" : "paused"}`;
+      put(strip,
+        h("span", { class: "wp-i", icon: "phone", "aria-hidden": "true" }),
+        h("div", { class: "wp-elsewhere-text" },
+          h("strong", { text: `${playing ? "Playing" : "Last played"} on ${name}` }),
+          h("span", { text: [n.track.title, n.track.artist].filter(Boolean).join(" · ") })),
+        online ? h("div", { class: "wp-controls" },
+          h("button", { type: "button", class: "wp-icon", icon: "prev", "aria-label": `Previous on ${name}`, onclick: () => remote("prev") }),
+          h("button", { type: "button", class: "wp-icon", icon: n.playing ? "pause" : "play", "aria-label": `${n.playing ? "Pause" : "Play"} on ${name}`, onclick: () => remote(n.playing ? "pause" : "play") }),
+          h("button", { type: "button", class: "wp-icon", icon: "next", "aria-label": `Next on ${name}`, onclick: () => remote("next") })) : null,
+        h("button", { type: "button", class: "btn wp-small", text: "Play here", onclick: () => playOn(C.id) }),
+        dur ? h("div", { class: "wp-elsewhere-bar", "aria-hidden": "true" }, bar) : null);
+    }
+    if (!$("wp-devices").hidden) renderDevices();
+  }
+  function toggleDevices(force) {
+    const p = $("wp-devices");
+    p.hidden = force != null ? !force : !p.hidden;
+    $("bar-devices").setAttribute("aria-expanded", String(!p.hidden));
+    if (!p.hidden) renderDevices();
+  }
+  function renderDevices() {
+    const box = $("wp-devices-list");
+    box.textContent = "";
+    const st = C ? C.status : "off";
+    if (st === "signed-out") { box.append(h("p", { class: "muted", text: "Sign in to see your other devices and move music between them." }), h("a", { class: "btn primary", href: "/account", text: "Sign in" })); return; }
+    if (st === "replaced") { box.append(h("p", { class: "muted", text: "Tryptify Connect is on in another tab of this browser." }), h("button", { type: "button", class: "btn", text: "Use it in this tab", onclick: () => C.reconnect() })); return; }
+    if (st !== "on") { box.append(h("p", { class: "muted", text: "Connecting…" })); return; }
+    const n = C.now, holder = n && n.playing ? n.device : null;
+    const list = [...C.devices].sort((a, b) => (a.id === C.id ? -1 : b.id === C.id ? 1 : a.name.localeCompare(b.name)));
+    const ul = h("ul", { class: "wp-device-list" });
+    for (const d of list) {
+      const here = d.id === C.id, active = d.id === holder;
+      const detail = [here ? "This browser" : d.kind === "android" ? "Tryptify app" : "tryptify.com", active ? "Playing" : null].filter(Boolean).join(" · ");
+      ul.append(h("li", null, h("button", { type: "button", class: "wp-device" + (active ? " is-active" : ""), disabled: active || (here && !holder) || (!holder && !current),
+        onclick: () => playOn(d.id) },
+        h("span", { class: "wp-i", icon: d.kind === "android" ? "phone" : "devices", "aria-hidden": "true" }),
+        h("span", { class: "wp-device-text" }, h("strong", { text: d.name }), h("small", { class: "muted", text: detail })),
+        active ? null : h("span", { class: "wp-device-go", text: here ? "Play here" : "Play there" }))));
+    }
+    put(box, ul, list.length < 2 ? h("p", { class: "muted small", text: "Open Tryptify on another device, signed in to the same account, and it shows up here." }) : null);
+  }
+
   // ── Pages ───────────────────────────────────────────────────────────
   const ROUTES = ["home", "liked", "playlists", "files", "cloud", "hifi", "subsonic", "search", "autoeq"];
   function route() {
@@ -946,4 +1097,9 @@
   route();
   Local.restore().then(() => { localChanged(); if (!$("view-files").hidden) route(); }).catch(() => {});
   if (HiFi.base) { pill("Trypt HiFi", null); testHifi(); }
+  if (C) C.start({ token: () => Cloud.token(), playing: () => !!current && !Eng.paused });
+  document.addEventListener("click", (e) => {
+    const p = $("wp-devices");
+    if (!p.hidden && !e.target.closest("#wp-devices, #bar-devices")) toggleDevices(false);
+  });
 })();

@@ -158,6 +158,15 @@ up next), a menu on the left and the bar at the bottom.
   keeps it, and `TryptifyTryout.restore` fits the same headphone again when
   the view next opens. Settings are kept in `tryptify-player-*` keys.
 
+- **Tryptify Connect** (`wp-connect.js`, server in
+  [`server/connect`](../server/connect/README.md)): signed in, this browser is
+  one of the listener's devices. A strip over the bar shows what plays on
+  another device, with its controls and **Play here**; the Devices button in
+  the bar lists them and moves the music to any of them, at the same second
+  and with the queue. When another device starts playing, this one pauses.
+  One WebSocket, a message only on change, and no connection while the tab is
+  hidden with nothing playing.
+
 `node site/tests/webplayer.mjs` checks the pure parts: file names into a
 library, the sources' rows into tracks, cover ids, addresses, MD5, and that
 the coefficients the player hands to its filters give the engine's curve.

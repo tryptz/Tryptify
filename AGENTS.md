@@ -311,6 +311,17 @@ are in `src/rules.ts` and held by `test.ts` (`bun run test.ts`), including the
 worst-case pricing check. Deploy with `npx wrangler deploy` after the tests
 pass; secrets live only in the Worker.
 
+## Tryptify Connect server
+
+[`server/connect/`](server/connect/README.md): a listener's devices, what
+plays on which, and moving it between them (like Spotify Connect). A
+Cloudflare Worker with one Durable Object per account, on the WebSocket
+Hibernation API so it sleeps between messages; Supabase sign-in, no secret.
+Its README is the protocol the web player speaks and the app is to speak.
+`bun run test.ts`, then `npm run dev` and `bun run e2e.ts` in Cloudflare's
+own runtime. `DEV_TOKENS` is for `wrangler dev` only, never the deployed
+Worker.
+
 ## Website
 
 [`site/`](site/README.md) is the public site (app, Tryptify Cloud and its

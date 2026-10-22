@@ -90,8 +90,8 @@
   window.TryptifyEngine = {
     on(name, fn) { if (!listeners.has(name)) listeners.set(name, new Set()); listeners.get(name).add(fn); },
 
-    /** Plays [url] now; [key] names the song so a preload of it is reused. */
-    async load(url, key, autoplay = true) {
+    /** Plays [url] now, from [startAt] seconds; [key] names the song so a preload of it is reused. */
+    async load(url, key, autoplay = true, startAt = 0) {
       graph();
       const other = els[1 - cur];
       if (key != null && key === nextKey && other.src) {
@@ -103,6 +103,11 @@
       nextKey = null;
       const a = el();
       applyRate(a);
+      if (startAt > 0) {
+        a.currentTime = startAt; // before its metadata, this is where it will start
+        // Some browsers drop that before the file is known: once it is, put it back.
+        a.addEventListener("loadedmetadata", () => { if (Math.abs(a.currentTime - startAt) > 0.5) a.currentTime = startAt; }, { once: true });
+      }
       emit("durationchange", a);
       if (autoplay) await this.play();
     },
