@@ -96,6 +96,10 @@
           <h2>Your music <span class="muted small" id="lib-count"></span></h2>
           <input type="search" id="lib-search" placeholder="Search title, artist or album" aria-label="Search your music">
         </div>
+        <div class="buttons lib-play" id="lib-play" hidden>
+          <button type="button" class="btn primary" id="play-all">Play all</button>
+          <button type="button" class="btn" id="shuffle-all">Shuffle</button>
+        </div>
         <ul class="songs" id="songs"></ul>
         <button type="button" class="btn" id="lib-more" hidden>Show more</button>
       </section>
@@ -148,6 +152,7 @@
   <script src="/js/site.js"></script>
   <script src="/js/vendor/supabase-2.117.3.js"></script>
   <script src="/js/vendor/jsmediatags-3.9.7.min.js"></script>
+  <script src="/js/player.js"></script>
   <script src="/js/account.js"></script>
 </body>
 </html>

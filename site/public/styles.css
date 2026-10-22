@@ -938,3 +938,135 @@ footer { font-size: 13.5px; }
   box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.6); background: #000;
 }
 @media (max-width: 560px) { .trio { gap: 8px; } .trio figcaption { font-size: 12px; } }
+
+/* ── The web player (/account, js/player.js) ──────────────────────────── */
+.lib-play { margin: 4px 0 6px; }
+.song-play {
+  position: relative; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 8px;
+  background: none; cursor: pointer; display: block;
+}
+.song-play:disabled { cursor: default; }
+.song-play .cover { display: block; }
+.song-play-icon {
+  position: absolute; inset: 0; border-radius: 8px; display: grid; place-items: center;
+  background: rgba(0, 0, 0, 0.45); opacity: 0; transition: opacity 0.15s;
+}
+.song-play-icon::before {
+  content: ""; width: 0; height: 0; margin-left: 3px;
+  border-left: 12px solid #fff; border-top: 8px solid transparent; border-bottom: 8px solid transparent;
+}
+.song-play:not(:disabled):hover .song-play-icon, .song-play:focus-visible .song-play-icon { opacity: 1; }
+.song.is-current .song-play-icon { opacity: 1; }
+/* The one playing: three little bars that move while it plays. */
+.song.is-current .song-play-icon::before {
+  border: 0; margin: 0; width: 18px; height: 16px;
+  background:
+    linear-gradient(#fff, #fff) 0 100% / 4px 60% no-repeat,
+    linear-gradient(#fff, #fff) 50% 100% / 4px 100% no-repeat,
+    linear-gradient(#fff, #fff) 100% 100% / 4px 40% no-repeat;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .song.is-playing .song-play-icon::before { animation: eq 0.9s ease-in-out infinite alternate; }
+}
+@keyframes eq {
+  0% { background-size: 4px 60%, 4px 100%, 4px 40%; }
+  50% { background-size: 4px 100%, 4px 45%, 4px 80%; }
+  100% { background-size: 4px 35%, 4px 75%, 4px 100%; }
+}
+.song.is-current { border-color: color-mix(in srgb, var(--text) 28%, transparent); background: color-mix(in srgb, var(--text) 7%, var(--panel)); }
+.song.is-current .song-text strong { color: var(--text); }
+.song-text.is-clickable { cursor: pointer; }
+.app-only {
+  justify-self: start; margin-top: 3px; padding: 1px 8px; border-radius: 999px;
+  color: var(--muted); border: 1px solid var(--line);
+}
+
+body.has-player main { padding-bottom: 120px; }
+.player {
+  position: fixed; z-index: 24; left: 50%; bottom: 16px; transform: translateX(-50%);
+  width: min(calc(100% - 32px), 1040px); border-radius: 24px; padding: 10px 16px 10px 10px;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr); align-items: center; gap: 16px;
+  color: var(--text);
+}
+.player[hidden] { display: none !important; }
+.pl-now { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.pl-art {
+  position: relative; flex: none; width: 52px; height: 52px; border-radius: 12px; overflow: hidden;
+  background: color-mix(in srgb, var(--text) 10%, transparent); display: grid; place-items: center;
+}
+.pl-art img { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; }
+.pl-art-ph svg { width: 24px; height: 24px; color: var(--muted); }
+.pl-text { display: grid; min-width: 0; line-height: 1.35; }
+.pl-title, .pl-artist { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-title { font-weight: 600; font-size: 15px; }
+.pl-artist { color: var(--muted); font-size: 13px; }
+.pl-middle { display: grid; gap: 2px; min-width: 0; }
+.pl-buttons { display: flex; justify-content: center; align-items: center; gap: 6px; }
+.pl-btn {
+  position: relative; display: grid; place-items: center; width: 38px; height: 38px; padding: 0;
+  border: 0; border-radius: 50%; background: none; color: var(--text); cursor: pointer;
+}
+.pl-btn svg { width: 22px; height: 22px; }
+.pl-btn:hover { background: color-mix(in srgb, var(--text) 10%, transparent); }
+.pl-btn:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; }
+.pl-play { width: 46px; height: 46px; background: var(--text); color: var(--bg); }
+.pl-play:hover { background: var(--text); opacity: 0.9; }
+.pl-play svg { width: 24px; height: 24px; }
+.pl-shuffle, .pl-repeat { color: var(--muted); }
+.pl-shuffle svg, .pl-repeat svg { width: 19px; height: 19px; }
+.pl-shuffle[aria-pressed="true"], .pl-repeat[aria-pressed="true"] { color: var(--text); }
+.pl-shuffle[aria-pressed="true"]::after, .pl-repeat[aria-pressed="true"]::after {
+  content: ""; position: absolute; bottom: 4px; width: 4px; height: 4px; border-radius: 50%; background: currentColor;
+}
+.pl-one { display: none; position: absolute; top: 6px; right: 6px; font: 600 9px/1 var(--display); font-style: normal; }
+.pl-repeat.is-one .pl-one { display: block; }
+.player.is-loading .pl-play { opacity: 0.6; }
+.pl-seek { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; gap: 8px; }
+.pl-time { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pl-length { text-align: right; }
+.pl-at { text-align: left; }
+.pl-right { display: flex; justify-content: flex-end; align-items: center; gap: 8px; min-width: 0; }
+.pl-spectrum { width: 120px; height: 36px; flex: none; color: var(--text); opacity: 0.85; }
+.pl-mute svg { width: 20px; height: 20px; }
+.pl-volume { width: 100px; flex: none; }
+.pl-msg {
+  position: absolute; left: 16px; right: 16px; bottom: calc(100% + 8px); margin: 0; padding: 8px 14px;
+  border-radius: 12px; font-size: 13px; background: var(--panel); border: 1px solid var(--line); color: var(--text);
+}
+/* The seek and volume sliders: a thin line, filled up to where you are. */
+.pl-range, .pl-volume {
+  -webkit-appearance: none; appearance: none; height: 18px; margin: 0; background: none; cursor: pointer; --fill: 0%;
+}
+.pl-range::-webkit-slider-runnable-track, .pl-volume::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 4px;
+  background: linear-gradient(90deg, var(--text) var(--fill), color-mix(in srgb, var(--text) 18%, transparent) var(--fill));
+}
+.pl-range::-moz-range-track, .pl-volume::-moz-range-track {
+  height: 4px; border-radius: 4px;
+  background: linear-gradient(90deg, var(--text) var(--fill), color-mix(in srgb, var(--text) 18%, transparent) var(--fill));
+}
+.pl-range::-webkit-slider-thumb, .pl-volume::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 12px; height: 12px; margin-top: -4px; border-radius: 50%; background: var(--text); border: 0;
+}
+.pl-range::-moz-range-thumb, .pl-volume::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--text); border: 0; }
+
+@media (max-width: 760px) {
+  .player {
+    grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "now buttons" "seek seek";
+    gap: 4px 10px; padding: 8px 10px 4px 8px; border-radius: 20px;
+  }
+  .pl-now { grid-area: now; }
+  .pl-art { width: 44px; height: 44px; border-radius: 10px; }
+  .pl-middle { display: contents; }
+  .pl-buttons { grid-area: buttons; gap: 0; }
+  .pl-shuffle, .pl-repeat { display: none; }
+  .pl-btn { width: 36px; height: 36px; }
+  .pl-play { width: 40px; height: 40px; }
+  .pl-seek { grid-area: seek; grid-template-columns: 34px 1fr 34px; }
+  .pl-right { display: none; }
+}
+/* On phones the site's tab bar floats at the bottom: the player sits on it. */
+@media (max-width: 560px) {
+  .player { bottom: 84px; width: calc(100% - 24px); }
+  body.has-player main { padding-bottom: 150px; }
+}

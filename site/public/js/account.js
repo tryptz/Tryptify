@@ -2,7 +2,8 @@
 // same Supabase account as the app (supabase-js, js/vendor), then talks to
 // the cloud server's /v1 API with that session, exactly as the app does:
 // plan and storage, checkout and the billing portal, uploads in the server's
-// parts, the library, and the devices signed in to the Subsonic API.
+// parts, the library and its player (js/player.js), and the devices signed in
+// to the Subsonic API.
 (() => {
   "use strict";
   const API = "https://cloud.tryptify.com";
@@ -111,6 +112,28 @@
     sb.auth.signInWithOAuth({ provider: "discord", options: { redirectTo: location.origin + "/account" } }));
   $("sign-out").addEventListener("click", () => sb.auth.signOut());
 
+  // ── The player ──────────────────────────────────────────────────────
+  const player = window.TryptifyPlayer;
+  player.init({
+    link: (song) => api("GET", `/songs/${song.id}/play`),
+    cover: async (song) => {
+      if (!coverCache.has(song.id)) {
+        const res = await api("GET", `/songs/${song.id}/cover`);
+        coverCache.set(song.id, URL.createObjectURL(await res.blob()));
+      }
+      return coverCache.get(song.id);
+    },
+  });
+  player.onChange((song, playing) => {
+    for (const li of document.querySelectorAll("#songs > li.song")) {
+      const on = !!song && li.dataset.id === song.id;
+      li.classList.toggle("is-current", on);
+      li.classList.toggle("is-playing", on && playing);
+    }
+  });
+  $("play-all").addEventListener("click", () => songs.length && player.play(songs, 0));
+  $("shuffle-all").addEventListener("click", () => player.shuffle(songs));
+
   let shownFor; // undefined until the first answer, so "signed out" is shown too
   sb.auth.onAuthStateChange((event, session) => {
     if (event === "PASSWORD_RECOVERY") {
@@ -122,6 +145,7 @@
     shownFor = id;
     $("signed-out").hidden = !!id;
     $("signed-in").hidden = !id;
+    if (!id) player.stop();
     if (id) {
       $("who").textContent = session.user.email || "your account";
       if (moving) M.animate("#signed-in > section", { opacity: [0, 1], y: [20, 0] }, { delay: M.stagger(0.08), duration: 0.5 });
@@ -380,6 +404,7 @@
 
   // ── The library ─────────────────────────────────────────────────────
   let offset = 0;
+  let songs = []; // the songs listed, in order: the player's queue when it plays from here
   let query = "";
   let searchTimer = null;
   $("lib-search").addEventListener("input", (e) => {
@@ -413,11 +438,13 @@
     try {
       const r = await api("GET", `/songs?offset=${offset}${query ? `&q=${encodeURIComponent(query)}` : ""}`);
       const list = $("songs");
-      if (reset) list.textContent = "";
+      if (reset) { list.textContent = ""; songs = []; }
       $("lib-count").textContent = r.total ? `${r.total} song${r.total === 1 ? "" : "s"}` : "";
       if (!r.total && reset) list.append(el("li", "muted", query ? "Nothing matches that." : "Nothing here yet. Upload some music above, or from the app."));
-      for (const s of r.songs) list.append(songRow(s));
+      for (const s of r.songs) { songs.push(s); list.append(songRow(s)); }
       offset += r.songs.length;
+      if (!reset) player.extend(songs);
+      $("lib-play").hidden = !songs.length;
       $("lib-more").hidden = offset >= r.total;
       if (moving && reset) M.animate("#songs > li", { opacity: [0, 1], y: [10, 0] }, { delay: M.stagger(0.02, { from: "first" }), duration: 0.3 });
     } catch (e) {
@@ -428,6 +455,8 @@
 
   function songRow(s) {
     const li = el("li", "song");
+    li.dataset.id = s.id;
+    if (player.current() === s.id) li.classList.add("is-current");
     const img = el("img", "cover");
     img.alt = "";
     img.width = 44;
@@ -437,6 +466,22 @@
     if (s.hasCover) coverObserver ? coverObserver.observe(img) : loadCover(img);
     const text = el("div", "song-text");
     text.append(el("strong", null, s.title), el("span", "muted small", [s.artist, s.album].filter(Boolean).join(" · ")));
+    // The cover is the play button; the title plays too.
+    const play = el("button", "song-play");
+    play.type = "button";
+    const canPlay = player.playable(s);
+    play.setAttribute("aria-label", canPlay ? `Play ${s.title}` : `${s.title} plays in the app only`);
+    play.disabled = !canPlay;
+    play.append(img, el("span", "song-play-icon"));
+    const start = () => {
+      if (!canPlay) return;
+      if (player.current() === s.id) return player.toggle();
+      player.play(songs, songs.findIndex((x) => x.id === s.id));
+    };
+    play.addEventListener("click", start);
+    text.addEventListener("click", start);
+    if (canPlay) text.classList.add("is-clickable");
+    else text.append(el("span", "app-only small", "App only"));
     const facts = el("span", "song-facts muted small",
       [clock(s.duration), (s.suffix || "").toUpperCase(), s.bitDepth && s.sampleRate ? `${s.bitDepth}/${(s.sampleRate / 1000).toFixed(1).replace(/\.0$/, "")}` : null, gb(s.size)]
         .filter(Boolean).join(" · "));
@@ -449,12 +494,15 @@
         await api("DELETE", `/songs/${s.id}`);
         if (moving) await M.animate(li, { opacity: 0, x: 40 }, { duration: 0.25 });
         li.remove();
+        songs = songs.filter((x) => x.id !== s.id);
+        player.forget(s.id);
+        $("lib-play").hidden = !songs.length;
         loadPlan();
       } catch (e) {
         alert(e.message);
       }
     });
-    li.append(img, text, facts, del);
+    li.append(play, text, facts, del);
     return li;
   }
 

@@ -26,7 +26,7 @@ export const productKey = (plan: PlanId, period: Period, trial = false) =>
   `CREEM_PRODUCT_${plan.toUpperCase()}_${period.toUpperCase()}${trial ? "_TRIAL" : ""}`;
 
 /** Constant-time comparison of two hex strings. */
-function sameHex(a: string, b: string): boolean {
+export function sameHex(a: string, b: string): boolean {
   if (a.length !== b.length || a.length === 0) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);

@@ -38,6 +38,7 @@ export default {
         storage: env.MUSIC ?? null,
         billing: creemBilling(strings),
         personOf: supabaseAuth(env.SUPABASE_URL ?? DEFAULT_SUPABASE_URL, env.SUPABASE_ANON_KEY ?? DEFAULT_SUPABASE_ANON_KEY),
+        playKey: strings.PLAY_KEY ?? null,
       });
     }
     return app.fetch(request, env, ctx as never);

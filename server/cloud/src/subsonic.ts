@@ -157,7 +157,8 @@ export function parseRange(header: string | null, size: number): { offset: numbe
   return { offset: start, length: end - start + 1 };
 }
 
-async function streamSong(bucket: Bucket, song: SongRow, rangeHeader: string | null, download: boolean): Promise<Response> {
+/** [song]'s file, whole or the range asked for; also the web player's (app.ts, /play). */
+export async function streamSong(bucket: Bucket, song: SongRow, rangeHeader: string | null, download: boolean): Promise<Response> {
   const range = parseRange(rangeHeader, song.size);
   if (rangeHeader && !range) {
     return new Response(null, { status: 416, headers: { "content-range": `bytes */${song.size}` } });

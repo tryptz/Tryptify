@@ -172,6 +172,8 @@ async function call(method: string, path: string, who?: string, body?: unknown, 
   return { status: res.status, body: text ? JSON.parse(text) : null };
 }
 
+const PLAY_KEY = "test-play-key";
+
 const tests: [string, () => Promise<void>][] = [];
 const test = (name: string, fn: () => Promise<void>) => tests.push([name, fn]);
 
@@ -208,6 +210,7 @@ async function setUp() {
     db: d1(sqlite),
     storage: bucket,
     personOf: supabaseAuth(`http://127.0.0.1:${supabase.port}/`, "test-anon-key"),
+    playKey: PLAY_KEY,
     billing: creemBilling({
       CREEM_API_KEY: "creem_test_key",
       CREEM_WEBHOOK_SECRET: SECRET,
@@ -697,6 +700,59 @@ test("stream plays the file, with ranges for seeking", async () => {
   assert.deepEqual(new Uint8Array(await part.arrayBuffer()), stored.slice(100, 200));
   const bad = await rest("stream", { id: song.id }, subsonicLogin, { range: "bytes=999999-" });
   assert.equal(bad.status, 416);
+});
+
+test("the web player gets a signed link that plays, with ranges, and CORS only for the site", async () => {
+  const who = await token(L);
+  const song = (await restJson("search3", { query: "Song", songCount: "1" })).searchResult3.song[0];
+  const stored = bucket.objects.get(`u/${L}/${song.id}.flac`)!.data;
+  const link = await call("GET", `/v1/songs/${song.id}/play`, who);
+  assert.equal(link.status, 200, JSON.stringify(link.body));
+  assert.equal(link.body.contentType, "audio/flac");
+  assert.match(link.body.url, new RegExp(`^http://cloud\\.test/play/${song.id}\\?u=${L}&e=\\d+&s=[0-9a-f]{64}$`));
+  const whole = await fetchCloud(new Request(link.body.url));
+  assert.equal(whole.status, 200);
+  assert.deepEqual(new Uint8Array(await whole.arrayBuffer()), stored);
+  assert.equal(whole.headers.get("access-control-allow-origin"), null);
+  const part = await fetchCloud(new Request(link.body.url, { headers: { range: "bytes=10-19", origin: "https://tryptify.com" } }));
+  assert.equal(part.status, 206);
+  assert.equal(part.headers.get("content-range"), `bytes 10-19/${stored.length}`);
+  assert.deepEqual(new Uint8Array(await part.arrayBuffer()), stored.slice(10, 20));
+  assert.equal(part.headers.get("access-control-allow-origin"), "https://tryptify.com");
+  const elsewhere = await fetchCloud(new Request(link.body.url, { headers: { origin: "https://evil.test" } }));
+  assert.equal(elsewhere.headers.get("access-control-allow-origin"), null);
+});
+
+test("a play link can't be bent: another song, a later expiry, a bad signature or old age", async () => {
+  const who = await token(L);
+  const songs = (await restJson("search3", { query: "", songCount: "10" })).searchResult3.song;
+  const url = new URL((await call("GET", `/v1/songs/${songs[0].id}/play`, who)).body.url);
+  const other = new URL(url); other.pathname = `/play/${songs[1].id}`;
+  assert.equal((await fetchCloud(new Request(other))).status, 403);
+  const later = new URL(url); later.searchParams.set("e", String(Number(url.searchParams.get("e")) + 3600));
+  assert.equal((await fetchCloud(new Request(later))).status, 403);
+  const forged = new URL(url); forged.searchParams.set("s", "0".repeat(64));
+  assert.equal((await fetchCloud(new Request(forged))).status, 403);
+  const someoneElse = new URL(url); someoneElse.searchParams.set("u", B);
+  assert.equal((await fetchCloud(new Request(someoneElse))).status, 403);
+  const tomorrow = createApp({
+    db: d1(sqlite), storage: bucket, billing: null, personOf: async () => null, playKey: PLAY_KEY,
+    now: () => new Date(Date.now() + 7 * 3600_000),
+  });
+  const old = await tomorrow.fetch(new Request(url));
+  assert.equal(old.status, 403);
+  assert.equal((await old.json()).error, "link_expired");
+});
+
+test("no plan, no play link; another person's song has none either", async () => {
+  const N = "cccccccc-3333-4333-8333-cccccccccccc";
+  const song = (await restJson("search3", { query: "Song", songCount: "1" })).searchResult3.song[0];
+  const none = await call("GET", `/v1/songs/${song.id}/play`, await token(N));
+  assert.equal(none.status, 402);
+  assert.equal(none.body.error, "no_plan");
+  subscribe(N, "lite");
+  assert.equal((await call("GET", `/v1/songs/${song.id}/play`, await token(N))).status, 404);
+  assert.equal((await call("GET", `/v1/songs/${song.id}/play`)).status, 401);
 });
 
 test("nobody else's songs: another person cannot stream or see them", async () => {

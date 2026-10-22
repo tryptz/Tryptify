@@ -5,14 +5,14 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { AuthUnreachable } from "./auth";
-import type { Billing } from "./creem";
+import { hmacHex, sameHex, type Billing } from "./creem";
 import { accessOf, isPlan, mayStartTrial, PLANS, READ_ONLY_DAYS, TRIAL_DAYS, TRIAL_GB } from "./rules";
 import { loadAccount, record, type Db } from "./store";
 import {
-  abortUpload, completeUpload, deleteSong, LibraryError, MAX_COVER_BYTES, PART_SIZE, setCover, startUpload, uploadPart, usage,
+  abortUpload, completeUpload, deleteSong, getSong, LibraryError, MAX_COVER_BYTES, PART_SIZE, setCover, startUpload, uploadPart, usage,
   type Bucket,
 } from "./library";
-import { newDevicePassword, subsonic } from "./subsonic";
+import { newDevicePassword, streamSong, subsonic } from "./subsonic";
 
 /** Pages allowed to call /v1 from a browser: the site, and a local copy while it is built. */
 const WEB_ORIGINS = /^(https:\/\/(www\.)?tryptify\.com|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/;
@@ -23,19 +23,28 @@ const SONG_PAGE = 200;
 /** Devices a person may have signed in to the Subsonic API at once; the oldest goes first. */
 const MAX_DEVICE_KEYS = 10;
 
+/** How long a web player's song link works: a long FLAC, paused a good while. */
+const PLAY_LINK_SECONDS = 6 * 3600;
+
+/** What a /play link signs: the person, the song and when the link stops working. */
+const playSignature = (key: string, uid: string, id: string, expires: number) =>
+  hmacHex(key, `play:${uid}:${id}:${expires}`);
+
 export interface Deps {
   db: Db | null;
   /** The music bucket (R2). */
   storage?: Bucket | null;
   billing: Billing | null;
   personOf: (token: string) => Promise<string | null>;
+  /** Signs the web player's song links (PLAY_KEY); without it the web player is off. */
+  playKey?: string | null;
   now?: () => Date;
 }
 
 const fail = (status: number, error: string) =>
   new Response(JSON.stringify({ error }), { status, headers: { "content-type": "application/json" } });
 
-export function createApp({ db, storage = null, billing, personOf, now = () => new Date() }: Deps) {
+export function createApp({ db, storage = null, billing, personOf, playKey = null, now = () => new Date() }: Deps) {
   const app = new Hono<{ Variables: { uid: string } }>();
 
   const health = (c: { json: (body: unknown) => Response }) =>
@@ -258,6 +267,25 @@ export function createApp({ db, storage = null, billing, personOf, now = () => n
     });
   });
 
+  /**
+   * A link the web player's audio element can play. <audio> sends no
+   * Authorization header, so the song is fetched from /play/:id with a
+   * signature that names the person, the song and when the link stops
+   * working. The same plan check as the Subsonic API: read-only still plays.
+   */
+  app.get("/v1/songs/:id/play", async (c) => {
+    if (!storage || !playKey) return fail(503, "not_set_up");
+    const uid = c.get("uid");
+    const id = c.req.param("id");
+    if (accessOf(await loadAccount(db!, uid), now()).access === "none") return fail(402, "no_plan");
+    const song = await getSong(db!, uid, id);
+    if (!song) return fail(404, "not_found");
+    const expires = Math.floor(now().getTime() / 1000) + PLAY_LINK_SECONDS;
+    const signature = await playSignature(playKey, uid, id, expires);
+    const url = `${new URL(c.req.url).origin}/play/${encodeURIComponent(id)}?u=${uid}&e=${expires}&s=${signature}`;
+    return c.json({ url, expiresAt: new Date(expires * 1000).toISOString(), contentType: song.content_type, suffix: song.suffix });
+  });
+
   app.delete("/v1/songs/:id", async (c) => {
     const missing = needsStorage();
     if (missing) return missing;
@@ -314,6 +342,38 @@ export function createApp({ db, storage = null, billing, personOf, now = () => n
   app.delete("/v1/subsonic-keys", async (c) => {
     await db!.prepare("delete from cloud_subsonic_keys where user_id = ?1").bind(c.get("uid")).run();
     return c.body(null, 204);
+  });
+
+  // ── The web player's songs ────────────────────────────────────────────
+
+  /**
+   * A song for the web player, by a link from /v1/songs/:id/play: whole or a
+   * range, for seeking. The site's own pages get CORS, so the player can read
+   * the audio for its spectrum; the signature is the gate, not the origin.
+   */
+  app.on(["GET", "HEAD"], "/play/:id", async (c) => {
+    const origin = c.req.header("origin") ?? "";
+    const cors = (res: Response) => {
+      if (WEB_ORIGINS.test(origin)) {
+        res.headers.set("access-control-allow-origin", origin);
+        res.headers.set("access-control-expose-headers", "content-range, content-length, accept-ranges");
+        res.headers.set("vary", "origin");
+      }
+      return res;
+    };
+    if (!db || !storage || !playKey) return cors(fail(503, "not_set_up"));
+    const id = c.req.param("id");
+    const uid = c.req.query("u") ?? "";
+    const expires = Number(c.req.query("e"));
+    const given = (c.req.query("s") ?? "").toLowerCase();
+    if (!Number.isInteger(expires) || !sameHex(given, await playSignature(playKey, uid, id, expires))) {
+      return cors(fail(403, "bad_link"));
+    }
+    if (expires * 1000 < now().getTime()) return cors(fail(403, "link_expired"));
+    if (accessOf(await loadAccount(db, uid), now()).access === "none") return cors(fail(402, "no_plan"));
+    const song = await getSong(db, uid, id);
+    if (!song) return cors(fail(404, "not_found"));
+    return cors(await streamSong(storage, song, c.req.header("range") ?? null, false));
   });
 
   app.all("/rest/*", async (c) => {

@@ -76,7 +76,13 @@ follows live until the button is used.
   the cloud server's `/v1` API like the app does: plan, checkout, billing
   portal, uploads in the server's parts (tags and covers read in the browser
   by `js/vendor/jsmediatags-3.9.7.min.js`), the library, and the devices
-  signed in to the Subsonic API. Google sign-in needs
+  signed in to the Subsonic API. The library plays in the page
+  (`js/player.js`): each song comes from the cloud's storage through a
+  six-hour signed link (`/v1/songs/:id/play`), never relayed or transcoded,
+  so a play costs nothing but the request. A queue from the list, shuffle,
+  repeat, seeking, the phone's lock-screen controls (Media Session) and a
+  spectrum read from the audio. A format the browser can't play (ALAC and
+  AIFF in Chrome, APE, WMA) is marked "App only", or skipped if it fails. Google sign-in needs
   `https://tryptify.com/account` in Supabase's Auth › URL Configuration ›
   Redirect URLs.
 - `/autoeq` (`js/autoeq.js`, `js/measures.js`, `js/graphs.js`): the AutoEQ ranking, the measures explained, and the frequency-response and EQ graphs (curves in `data/autoeq-curves.json`), from a snapshot of
