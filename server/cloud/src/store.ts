@@ -36,6 +36,7 @@ interface Row {
   paid_until: string | null;
   used_bytes: number;
   trial: number;
+  subscription_id: string | null;
   version: number;
 }
 
@@ -46,13 +47,14 @@ const toAccount = (row: Row | null): Account & { version: number } =>
         paidUntil: row.paid_until ? new Date(row.paid_until) : null,
         usedBytes: Number(row.used_bytes),
         trial: row.trial === 1,
+        subscriptionId: row.subscription_id ?? null,
         version: Number(row.version),
       }
     : { ...NO_ACCOUNT, version: 0 };
 
 async function read(db: Db, userId: string) {
   const row = await db
-    .prepare("select plan, paid_until, used_bytes, trial, version from cloud_accounts where user_id = ?1")
+    .prepare("select plan, paid_until, used_bytes, trial, subscription_id, version from cloud_accounts where user_id = ?1")
     .bind(userId)
     .first<Row>();
   return toAccount(row);
@@ -89,14 +91,16 @@ export async function record(db: Db, provider: string, e: BillingEvent, now = ()
     console.error(`billing event ${e.eventId} (${e.kind}) names nobody this service knows; ignored`);
     return false;
   }
-  const customer = e.kind === "paid" ? e.customerId ?? null : null;
-  const subscription = e.kind === "paid" ? e.subscriptionId ?? null : null;
-
   for (let attempt = 0; attempt < 8; attempt++) {
     if (await seen(db, provider, e.eventId)) return false;
     const before = await read(db, userId);
     const at = now();
     const after = applyEvent(before, e, at);
+    // The customer and subscription are kept only from an event that changed
+    // the account: a refused second trial does not become the one on file.
+    const took = after !== before;
+    const customer = e.kind === "paid" && took ? e.customerId ?? null : null;
+    const subscription = e.kind === "paid" && took ? e.subscriptionId ?? null : null;
     // Write the account only if the event is new and nobody wrote it since the
     // read; then record the event only if that write is the one that landed:
     // the row then carries this event's id and the next version. Another

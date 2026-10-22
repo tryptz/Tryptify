@@ -147,7 +147,7 @@ class CrashLogger @Inject constructor(
                 }
             }
         }
-        val bytes = content.toByteArray(Charsets.UTF_8)
+        val bytes = LogRedactor.redact(content).toByteArray(Charsets.UTF_8)
         val fileName = "monotrypt-crash-native-$stamp.log"
         val wrote = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) writeViaMediaStore(fileName, bytes)
             else writeViaPublicDirectory(fileName, bytes)
@@ -225,13 +225,14 @@ class CrashLogger @Inject constructor(
             appendLine()
         }
         val recentLog = runCatching { debugLogBuffer.dumpAsText() }.getOrDefault("(log buffer unavailable)")
-        return buildString {
+        // A crash message can carry an address with a sign-in in it: out before it reaches Downloads.
+        return LogRedactor.redact(buildString {
             append(header)
             appendLine("--- stack trace ---")
             appendLine(stack)
             appendLine("--- recent log ---")
             appendLine(recentLog)
-        }
+        })
     }
 
     companion object {

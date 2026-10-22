@@ -2126,6 +2126,26 @@ Ready, the host's Start, Leave, and a line of chat.
   its own (`PartyClient`, never `RoomClient`), Back from the party screen
   leaves the party on, and only Leave the party ends it.
 
+### Tryptify Connect
+
+**The Devices button sits in the player's top bar, left of the output
+(headphones) button**, white like its neighbours; `DevicesOther` while another
+of the listener's devices is online, `Devices` otherwise. It opens
+`ConnectPanel`, a pane of the player's own glass through `MainPlayerScreen`'s
+`overlay` slot, like the Speed panel and the audio tools: never a dialog or a
+`ModalBottomSheet` (see Glass), swiped down or Back to close.
+
+* Top to bottom: the grab handle and "Tryptify Connect"; when another device
+  plays, "Playing on …" (or "Last played on …" once it is gone), the song, its
+  Previous, Play/Pause and Next, and Play here; then the devices, this phone
+  first, each a list row (`MonoDimens.listRowHeight`) with "Play here" or
+  "Play there" when the music can move to it.
+* Its text and icons are the glass's ink (Text on glass): the playing device
+  is said in words ("Playing"), never by an accent colour.
+* What it says once ("Now playing on …", "Playing here, from …", "… started
+  playing, so this phone paused") is a toast, and only while the app is on
+  screen.
+
 ### Listening party
 
 **A listening party is the song first** (direction A, the owner's pick from

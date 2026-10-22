@@ -8,21 +8,7 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="stylesheet" href="/styles.css">
-  <script>
-    (function () {
-      var root = document.documentElement;
-      // Black or white: the one last picked with the nav bar's button, else the device's own.
-      var t = null;
-      try { t = localStorage.getItem("tryptify-theme"); } catch (e) {}
-      if (t !== "dark" && t !== "white") t = matchMedia("(prefers-color-scheme: light)").matches ? "white" : "dark";
-      root.dataset.design = t;
-      // Motion only when it is welcome; if site.js has not started in 3 s, show everything as is.
-      if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        root.classList.add("motion");
-        setTimeout(function () { if (!window.__tryptifyMotion) root.classList.remove("motion"); }, 3000);
-      }
-    })();
-  </script>
+  <script src="/js/theme-boot.js"></script>
 </head>
 <body>
   <header class="top">
@@ -32,6 +18,7 @@
         <a href="/">App</a>
         <a href="/autoeq">AutoEQ</a>
         <a href="/cloud">Cloud</a>
+        <a href="/player">Player</a>
         <a href="/account">Account</a>
         <a href="/contact">Contact</a>
       </nav>
@@ -93,6 +80,7 @@
       <div>© 2026 tryptz · Tryptify · <a href="mailto:support@tryptify.com">support@tryptify.com</a></div>
       <nav>
         <a href="/download">Download</a>
+        <a href="/player">Web player</a>
         <a href="/autoeq">AutoEQ ranking</a>
         <a href="/">App</a>
         <a href="/cloud">Tryptify Cloud</a>

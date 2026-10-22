@@ -1053,7 +1053,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun removeApi(url: String) {
-        if (tf.monochrome.android.data.api.BuiltInServer.isBuiltIn(url, tf.monochrome.android.BuildConfig.BUILT_IN_CPU_SERVER, tf.monochrome.android.BuildConfig.BUILT_IN_ROOMS_SERVER)) return
+        if (tf.monochrome.android.data.api.BuiltInServer.isBuiltIn(url, tf.monochrome.android.BuildConfig.BUILT_IN_ROOMS_SERVER)) return
         viewModelScope.launch {
             preferences.setApiServers(preferences.apiServers.first().filterNot { it.url == url })
         }

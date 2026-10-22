@@ -127,6 +127,9 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
     @Inject
     lateinit var libraryWatcher: javax.inject.Provider<tf.monochrome.android.data.local.watcher.LibraryWatcher>
 
+    @Inject
+    lateinit var connectController: tf.monochrome.android.connect.ConnectController
+
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override val workManagerConfiguration: Configuration
@@ -165,6 +168,18 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
                 // subsonic-cover:// references so the sign-in in the real URL
                 // never leaves the app (see Subsonic.coverArtRef).
                 add(tf.monochrome.android.data.subsonic.SubsonicCoverMapper { subsonicRepository.current.value })
+                // A cover whose address carries a sign-in (a music server's)
+                // loads over http:// only at home (CleartextPolicy).
+                add(
+                    coil3.network.okhttp.OkHttpNetworkFetcherFactory(callFactory = {
+                        okhttp3.OkHttpClient.Builder()
+                            .addNetworkInterceptor { chain ->
+                                tf.monochrome.android.data.net.CleartextPolicy.requireForMedia(chain.request().url.toString())
+                                chain.proceed(chain.request())
+                            }
+                            .build()
+                    }),
+                )
             }
             .build()
     }
@@ -194,10 +209,11 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
         appScope.launch {
             tf.monochrome.android.audio.dsp.DspNativeLoader.ensureLoaded()
         }
-        // The chart server this build ships with, under Settings › Connections
-        // the first time (BuiltInServer), so Trypt Mania can chart at once.
+        // The rooms server this build ships with, under Settings › Connections
+        // (BuiltInServer), for multiplayer and listening parties; and, once,
+        // out with the chart server older builds put there (never built in now).
         appScope.launch {
-            runCatching { preferencesProvider.get().seedBuiltInServer(BuildConfig.BUILT_IN_CPU_SERVER, BuildConfig.BUILT_IN_ROOMS_SERVER) }
+            runCatching { preferencesProvider.get().seedBuiltInServer(BuildConfig.BUILT_IN_ROOMS_SERVER, BuildConfig.RETIRED_CPU_HOST_SHA256) }
         }
         // libusb gets the same off-thread warm-up so the dlopen + libusb_init
         // don't land on the audio thread the first time the user toggles
@@ -240,6 +256,9 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
         // Auto-save app settings to the user's Supabase row: pull on sign-in,
         // then push (debounced) whenever an allow-listed setting changes.
         settingsSyncCoordinator.start(appScope)
+        // Tryptify Connect: this phone among the listener's devices, connected
+        // only while signed in and on screen or playing (ConnectController).
+        connectController.start(this)
         // Settings have repaired themselves on sign-in for a while; the library
         // did not, and an account whose playlists were intact in the cloud
         // still showed an empty Playlists tab. Now both do.

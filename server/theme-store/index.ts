@@ -209,6 +209,14 @@ app.use("/v1/*", async (c, next) => {
   await next();
 });
 
+/**
+ * A pack as anyone but its author sees it: the author's account id is shown
+ * only to the author (the app compares it with its own to say "yours"); to
+ * everyone else it is "", so the store does not hand out account ids.
+ */
+const shown = <T extends { user_id?: unknown }>(row: T, uid: string): T =>
+  row.user_id === uid ? row : { ...row, user_id: "" };
+
 /** The store's list: popular, new, or the person's own; optionally by name. */
 app.get("/v1/packs", async (c) => {
   const sort = c.req.query("sort") ?? "popular";
@@ -243,7 +251,7 @@ app.get("/v1/packs", async (c) => {
        order by likes desc, downloads desc, created_at desc
        limit ${PAGE} offset ${offset}`;
   }
-  return c.json(rows);
+  return c.json(rows.map((r: { user_id?: unknown }) => shown(r, uid)));
 });
 
 /** One pack, the pack itself included. */
@@ -254,7 +262,7 @@ app.get("/v1/packs/:id", async (c) => {
     select id, user_id, author_name, name, description, parts, accent, background, listed,
            share_code, likes, downloads, created_at, snapshot, pack
       from theme_packs where id = ${id}`;
-  return row ? c.json(row) : fail(404, "not_found");
+  return row ? c.json(shown(row, c.get("uid"))) : fail(404, "not_found");
 });
 
 /** A pack by the code its author shared, listed or not. */
@@ -265,7 +273,7 @@ app.get("/v1/codes/:code", async (c) => {
     select id, user_id, author_name, name, description, parts, accent, background, listed,
            share_code, likes, downloads, created_at, snapshot
       from theme_packs where share_code = ${code}`;
-  return row ? c.json(row) : fail(404, "not_found");
+  return row ? c.json(shown(row, c.get("uid"))) : fail(404, "not_found");
 });
 
 app.post("/v1/packs", async (c) => {

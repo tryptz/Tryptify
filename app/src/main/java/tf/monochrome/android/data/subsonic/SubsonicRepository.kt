@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.SerializationException
+import tf.monochrome.android.data.net.CleartextPolicy
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.AudioCodec
 import tf.monochrome.android.domain.model.PlaybackSource
@@ -24,6 +25,12 @@ import javax.inject.Singleton
 enum class SubsonicConnectError {
     /** The address is not an http(s) URL. */
     BAD_ADDRESS,
+
+    /** http:// to a server that is not on the listener's own network (CleartextPolicy). */
+    NEEDS_HTTPS,
+
+    /** The server takes only the plain password, which never goes over http://. */
+    PASSWORD_NEEDS_HTTPS,
 
     /** The server says the username or password is wrong (error 40). */
     WRONG_LOGIN,
@@ -75,9 +82,14 @@ class SubsonicRepository @Inject constructor(
     suspend fun connect(address: String, username: String, password: String): SubsonicConnectResult {
         val url = Subsonic.normalizeUrl(address)
             ?: return SubsonicConnectResult.Failed(SubsonicConnectError.BAD_ADDRESS)
+        if (CleartextPolicy.refusal(url) != null) return SubsonicConnectResult.Failed(SubsonicConnectError.NEEDS_HTTPS)
         val user = username.trim()
         val first = attempt(Subsonic.tokenServer(url, user, password))
         val result = if (first is Attempt.Refused && Subsonic.wantsPassword(first.error)) {
+            // The password itself would cross the network readable: never over http://, home or not.
+            if (url.startsWith("http://", ignoreCase = true)) {
+                return SubsonicConnectResult.Failed(SubsonicConnectError.PASSWORD_NEEDS_HTTPS)
+            }
             attempt(Subsonic.passwordServer(url, user, password))
         } else first
         return when (result) {

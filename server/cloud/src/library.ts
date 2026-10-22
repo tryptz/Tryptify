@@ -289,7 +289,9 @@ export async function setCover(db: Db, bucket: Bucket, userId: string, songId: s
   if (!song) throw new LibraryError(404, "not_found");
   const bytes = new Uint8Array(image);
   if (bytes.length === 0 || bytes.length > MAX_COVER_BYTES) throw new LibraryError(413, "cover_too_big");
-  const type = IMAGE_TYPES.find(([magic]) => magic.every((b, i) => bytes[i] === b))?.[1];
+  let type = IMAGE_TYPES.find(([magic]) => magic.every((b, i) => bytes[i] === b))?.[1];
+  // RIFF is any RIFF file (a WAV too): WebP says so in bytes 8 to 11.
+  if (type === "image/webp" && String.fromCharCode(...bytes.subarray(8, 12)) !== "WEBP") type = undefined;
   if (!type) throw new LibraryError(415, "not_an_image");
   const { access, quotaBytes } = await usage(db, userId, now);
   if (access !== "full") throw new LibraryError(access === "none" ? 402 : 409, access === "none" ? "no_plan" : "read_only");

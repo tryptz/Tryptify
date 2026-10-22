@@ -98,6 +98,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var spectrumAnalyzerTap: SpectrumAnalyzerTap
     @Inject lateinit var unifiedTrackRegistry: UnifiedTrackRegistry
     @Inject lateinit var playbackState: PlaybackStateRepository
+    @Inject lateinit var playbackSignals: PlaybackSignals
     // The Audio Pipeline panel's window into the decoder. Nothing else in
     // the app can see a Format: the UI reaches the player through a
     // MediaController, which carries neither one nor any decoder identity.
@@ -145,7 +146,12 @@ class PlaybackService : MediaSessionService() {
             .setUserAgent(RADIO_USER_AGENT)
             .setConnectTimeoutMs(15_000)
             .setReadTimeoutMs(15_000)
-        val default = androidx.media3.datasource.DefaultDataSource.Factory(this, http)
+        // A stream carrying a sign-in (a music server's) plays over http:// only at home (CleartextPolicy).
+        val guarded = androidx.media3.datasource.ResolvingDataSource.Factory(http) { spec ->
+            tf.monochrome.android.data.net.CleartextPolicy.requireForMedia(spec.uri.toString())
+            spec
+        }
+        val default = androidx.media3.datasource.DefaultDataSource.Factory(this, guarded)
         val qobuz = tf.monochrome.android.data.cache.QobuzPartialDataSource.Factory(qobuzCache)
         val deezer = tf.monochrome.android.data.cache.DeezerPartialDataSource.Factory(deezerCache)
         return androidx.media3.datasource.DataSource.Factory {
@@ -246,6 +252,8 @@ class PlaybackService : MediaSessionService() {
             }
 
         player.addAnalyticsListener(audioPipelineAnalytics())
+        // Play, pause, seeks, songs and speed for Tryptify Connect, without it holding a controller.
+        playbackSignals.attach(player)
 
         player.addListener(object : Player.Listener {
             // Keep the home-screen now-playing widget live: the widget uses
@@ -1291,6 +1299,7 @@ class PlaybackService : MediaSessionService() {
             }
         }
         crossfade.release()
+        playbackSignals.detach()
         mediaSession?.run {
             player.release()
             release()
@@ -2424,8 +2433,14 @@ class PlaybackService : MediaSessionService() {
             // PlayerWrapper.setMediaItems makes DefaultMediaSourceFactory NPE
             // at line 457 (visible in logcat as MediaSessionStub: Session
             // operation failed). Drop them here.
+            // And an address to play comes only from this app itself: another
+            // app's controller could otherwise make the player open any URI
+            // with this app's permissions and sign-ins (a private file, a
+            // content:// grant). Media3 already strips the address from
+            // items sent across processes; this keeps it that way.
+            val own = controller.packageName == this@PlaybackService.packageName
             val playable = mediaItems.filterTo(mutableListOf()) { item ->
-                item.localConfiguration?.uri?.toString()?.isNotBlank() == true
+                own && item.localConfiguration?.uri?.toString()?.isNotBlank() == true
             }
             return com.google.common.util.concurrent.Futures.immediateFuture(playable)
         }

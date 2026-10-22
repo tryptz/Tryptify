@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  What Android may copy to Google Drive and to a new phone (Android 12 and up).
+  Every sign-in the app keeps is left out: the Supabase session and the PKCE
+  state (SharedPreferences), and monochrome_prefs, which holds the Discord,
+  Spotify, Last.fm and ListenBrainz tokens and the music server's token. A
+  backup would carry them, working, to another device. Settings come back on
+  the new phone through the account's settings sync instead. The library,
+  history and the rest are still backed up.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="file" path="datastore/monochrome_prefs.preferences_pb" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="file" path="datastore/monochrome_prefs.preferences_pb" />
+    </device-transfer>
+</data-extraction-rules>

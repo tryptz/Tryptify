@@ -9,8 +9,14 @@ workers_dev = true
 # working, for app builds made before it.
 routes = [{ pattern = "cloud.tryptify.com", custom_domain = true }]
 
+# Logs keep what the code writes (console.error), but not each request's
+# address: a /play link and a Subsonic app's request carry a sign-in in it.
 [observability]
 enabled = true
+
+[observability.logs]
+enabled = true
+invocation_logs = false
 
 [[d1_databases]]
 binding = "DB"

@@ -379,5 +379,6 @@
     return out.sort((a, b) => a.freq - b.freq);
   }
 
-  window.TryptifyAutoEq = { run, peakBoostDb, eqCurve, response, smoothCurve, parse, normalizationOffset, interpolate };
+  // coeffs: one band's [b0, b1, b2, a1, a2] at a sample rate, for the web player's filters (js/wp-engine.js).
+  window.TryptifyAutoEq = { run, peakBoostDb, eqCurve, response, smoothCurve, parse, normalizationOffset, interpolate, coeffs: coeffsFor };
 })();

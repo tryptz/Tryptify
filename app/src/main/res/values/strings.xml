@@ -3074,6 +3074,8 @@
     <string name="subsonic_error_login">Wrong username or password.</string>
     <string name="subsonic_error_not_subsonic">Something answered, but it isn’t a Subsonic server. Check the address and the port.</string>
     <string name="subsonic_error_unreachable">Couldn’t reach the server. Is it running, and is this phone on the same network?</string>
+    <string name="subsonic_error_needs_https">This server is on the internet, so its address needs https://. Plain http:// is only for servers on your own network.</string>
+    <string name="subsonic_error_password_needs_https">This server can only sign in by sending your password itself, so it needs https://, even at home.</string>
     <string name="subsonic_error_other">The server said: %1$s</string>
     <string name="subsonic_howto_title">How to set up</string>
     <string name="subsonic_howto_install">Run a Subsonic-compatible server on a computer, a NAS or this phone. Navidrome is the easiest to start with; Gonic, Airsonic-Advanced, Ampache and LMS work too.</string>
@@ -3141,4 +3143,22 @@
     <string name="cloud_uploads_channel_desc">Progress of songs uploading to Tryptify Cloud.</string>
     <string name="cloud_manage_subscription">Manage or cancel subscription</string>
     <string name="action_upload_to_cloud">Upload to Tryptify Cloud</string>
+    <string name="tryptify_connect" translatable="false">Tryptify Connect</string>
+    <string name="connect_devices">Devices</string>
+    <string name="connect_this_phone">This phone</string>
+    <string name="connect_playing">Playing</string>
+    <string name="connect_play_here">Play here</string>
+    <string name="connect_play_there">Play there</string>
+    <string name="connect_playing_on">Playing on %1$s</string>
+    <string name="connect_last_played_on">Last played on %1$s</string>
+    <string name="connect_now_on">Now playing on %1$s</string>
+    <string name="connect_here_from">Playing here, from %1$s</string>
+    <string name="connect_made_way">%1$s started playing, so this phone paused</string>
+    <string name="connect_cannot_play">“%1$s” can’t play on this phone</string>
+    <string name="connect_not_connected">Tryptify Connect is not connected</string>
+    <string name="connect_signed_out">Sign in to see your other devices and move music between them.</string>
+    <string name="connect_connecting">Connecting…</string>
+    <string name="connect_alone">Open Tryptify on another device, signed in to the same account, and it shows up here.</string>
+    <string name="connect_kind_app">Tryptify app</string>
+    <string name="connect_kind_web">tryptify.com</string>
 </resources>

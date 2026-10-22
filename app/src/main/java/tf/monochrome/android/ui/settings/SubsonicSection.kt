@@ -250,6 +250,8 @@ private fun ConnectDialog(viewModel: SubsonicSettingsViewModel, onDismiss: () ->
 @Composable
 private fun connectErrorText(error: SubsonicConnectError, detail: String?): String = when (error) {
     SubsonicConnectError.BAD_ADDRESS -> stringResource(R.string.subsonic_error_address)
+    SubsonicConnectError.NEEDS_HTTPS -> stringResource(R.string.subsonic_error_needs_https)
+    SubsonicConnectError.PASSWORD_NEEDS_HTTPS -> stringResource(R.string.subsonic_error_password_needs_https)
     SubsonicConnectError.WRONG_LOGIN -> stringResource(R.string.subsonic_error_login)
     SubsonicConnectError.NOT_SUBSONIC -> stringResource(R.string.subsonic_error_not_subsonic)
     SubsonicConnectError.UNREACHABLE -> stringResource(R.string.subsonic_error_unreachable)

@@ -3145,6 +3145,8 @@
     <string name="subsonic_error_login">Nombre de usuario o contraseña incorrectos.</string>
     <string name="subsonic_error_not_subsonic">Algo respondió, pero no es un servidor Subsonic. Revisa la dirección y el puerto.</string>
     <string name="subsonic_error_unreachable">No se pudo llegar al servidor. ¿Está en marcha y este teléfono está en la misma red?</string>
+    <string name="subsonic_error_needs_https">Este servidor está en internet, así que su dirección necesita https://. El http:// simple es solo para servidores de tu propia red.</string>
+    <string name="subsonic_error_password_needs_https">Este servidor solo puede iniciar sesión enviando tu contraseña tal cual, así que necesita https://, incluso en casa.</string>
     <string name="subsonic_error_other">El servidor respondió: %1$s</string>
     <string name="subsonic_howto_title">Cómo configurarlo</string>
     <string name="subsonic_howto_install">Ejecuta un servidor compatible con Subsonic en un equipo, un NAS o este teléfono. Navidrome es el más fácil para empezar; Gonic, Airsonic-Advanced, Ampache y LMS también funcionan.</string>
@@ -3213,4 +3215,21 @@
     <string name="cloud_uploads_channel_desc">Progreso de las canciones que se suben a Tryptify Cloud.</string>
     <string name="cloud_manage_subscription">Gestionar o cancelar la suscripción</string>
     <string name="action_upload_to_cloud">Subir a Tryptify Cloud</string>
+    <string name="connect_devices">Dispositivos</string>
+    <string name="connect_this_phone">Este teléfono</string>
+    <string name="connect_playing">Reproduciendo</string>
+    <string name="connect_play_here">Reproducir aquí</string>
+    <string name="connect_play_there">Reproducir allí</string>
+    <string name="connect_playing_on">Reproduciendo en %1$s</string>
+    <string name="connect_last_played_on">Última reproducción en %1$s</string>
+    <string name="connect_now_on">Ahora suena en %1$s</string>
+    <string name="connect_here_from">Suena aquí, desde %1$s</string>
+    <string name="connect_made_way">%1$s empezó a reproducir, así que este teléfono se pausó</string>
+    <string name="connect_cannot_play">“%1$s” no se puede reproducir en este teléfono</string>
+    <string name="connect_not_connected">Tryptify Connect no está conectado</string>
+    <string name="connect_signed_out">Inicia sesión para ver tus otros dispositivos y pasar la música entre ellos.</string>
+    <string name="connect_connecting">Conectando…</string>
+    <string name="connect_alone">Abre Tryptify en otro dispositivo con la misma cuenta y aparecerá aquí.</string>
+    <string name="connect_kind_app">App Tryptify</string>
+    <string name="connect_kind_web">tryptify.com</string>
 </resources>

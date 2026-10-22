@@ -237,9 +237,9 @@ that does not fit is refused (`mayUpload`).
 | `PUT /v1/uploads/:id/parts/:n` | One part as the raw body: exactly `partSize` (50 MB) except the last → `{partNumber, etag}` |
 | `POST /v1/uploads/:id/complete` | `{parts}` → the song; the file must be exactly the reserved size |
 | `DELETE /v1/uploads/:id` | Gives the upload and its reservation up |
-| `PUT /v1/songs/:id/cover` | JPEG, PNG or WebP up to 1 MB, counted in the quota |
+| `PUT /v1/songs/:id/cover` | JPEG, PNG or WebP up to 1 MB, counted in the quota, with its Content-Length (411 `length_required` without) |
 | `DELETE /v1/songs/:id` | The song, its file and cover; the space comes back |
-| `GET /v1/songs/:id/play` | `{url, expiresAt, contentType, suffix}`: a link the web player's `<audio>` can play for 6 hours (402 `no_plan`, 404 `not_found`; read-only still plays) |
+| `GET /v1/songs/:id/play` | `{url, expiresAt, contentType, suffix}`: a link the web player's `<audio>` can play for 2 hours (402 `no_plan`, 404 `not_found`; read-only still plays) |
 | `GET /play/:id?u&e&s` | The song by that link, whole or a Range. The HMAC (`PLAY_KEY`) names the person, the song and the expiry, so none can be changed (403 `bad_link`, `link_expired`). CORS for tryptify.com only, so the player can draw its spectrum; the signature, not the origin, is the gate. Without `PLAY_KEY` it answers 503 |
 | `POST /v1/subsonic-keys` | `{label?}` → `{server, username, password}`: one device's Subsonic sign-in (at most 10 kept) |
 | `DELETE /v1/subsonic-keys` | Signs every device out of the Subsonic API |

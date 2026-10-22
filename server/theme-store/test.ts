@@ -181,6 +181,10 @@ async function setUp() {
     assert.equal(res.body.likes, 0);
     assert.equal(res.body.pack, undefined);
     assert.equal(typeof res.body.created_at, "string");
+    // Only its author sees whose it is: to anyone else the account id is "".
+    assert.equal((await call("GET", `/v1/packs/${res.body.id}`, a)).body.user_id, A);
+    assert.equal((await call("GET", `/v1/packs/${res.body.id}`, b)).body.user_id, "");
+    assert.equal((await call("GET", `/v1/codes/${res.body.share_code}`, b)).body.user_id, "");
   });
 
   test("a pack of all nine parts, the CRT among them, is taken", async () => {

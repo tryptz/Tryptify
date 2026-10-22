@@ -83,7 +83,8 @@ class StepManiaConversionService @Inject constructor(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
-                Log.w(TAG, "${server.url} could not separate it; trying the next server", failure)
+                // The host only: a server's address can carry a secret path.
+                Log.w(TAG, "${server.url.substringAfter("://").substringBefore('/')} could not separate it; trying the next server", failure)
                 lastFailure = failure
             }
         }

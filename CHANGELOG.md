@@ -4,6 +4,13 @@
 
 ### Added
 
+#### Tryptify Connect
+- **Your devices, together.** Signed in, the phone and tryptify.com/player see each other: the player's Devices button lists every device online and which one is playing.
+- **Move the music** to any of them with a tap, at the same second, the queue coming too; or take it from another device with Play here.
+- **Steer the other device** from the panel: play, pause, previous and next.
+- **One plays at a time.** When another device starts playing, this one pauses, as Spotify does.
+- **Next to no battery.** Connected only while the app is on screen or playing, and a message only when something changes.
+
 #### Listening parties
 - **Listen together, in sync.** Start a party from your profile or join one with its code; Invite shares a link that opens in the app. Everyone hears the same moment of the same song, and the party page shows who's listening and whether you're in sync.
 - **Guests on the web.** Anyone without the app joins from the link in a web browser, sees the song, the queue and the chat, and can vote to skip and add songs. The app's guest list marks them On the web. A website guest can't be the host.

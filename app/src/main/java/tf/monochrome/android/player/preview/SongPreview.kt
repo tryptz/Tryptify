@@ -257,7 +257,11 @@ class SongPreview @Inject constructor(
             .setUserAgent(USER_AGENT)
             .setConnectTimeoutMs(15_000)
             .setReadTimeoutMs(15_000)
-        val default = DefaultDataSource.Factory(context, http)
+        val guarded = androidx.media3.datasource.ResolvingDataSource.Factory(http) { spec ->
+            tf.monochrome.android.data.net.CleartextPolicy.requireForMedia(spec.uri.toString())
+            spec
+        }
+        val default = DefaultDataSource.Factory(context, guarded)
         val qobuz = QobuzPartialDataSource.Factory(qobuzCache)
         val deezer = DeezerPartialDataSource.Factory(deezerCache)
         // The main player's routing: qobuz:// and deezer:// read their caches.

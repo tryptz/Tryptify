@@ -2999,6 +2999,8 @@
     <string name="subsonic_error_login">用户名或密码错误。</string>
     <string name="subsonic_error_not_subsonic">有响应，但不是 Subsonic 服务器。请检查地址和端口。</string>
     <string name="subsonic_error_unreachable">无法连接到服务器。服务器是否在运行？这部手机是否在同一网络中？</string>
+    <string name="subsonic_error_needs_https">该服务器位于互联网上，因此地址需要使用 https://。普通的 http:// 仅适用于你自己网络中的服务器。</string>
+    <string name="subsonic_error_password_needs_https">该服务器只能通过直接发送密码来登录，因此即使在家中也需要 https://。</string>
     <string name="subsonic_error_other">服务器返回：%1$s</string>
     <string name="subsonic_howto_title">设置方法</string>
     <string name="subsonic_howto_install">在电脑、NAS 或这部手机上运行兼容 Subsonic 的服务器。Navidrome 最容易上手；Gonic、Airsonic-Advanced、Ampache 和 LMS 也可以。</string>
@@ -3065,4 +3067,21 @@
     <string name="cloud_uploads_channel_desc">歌曲上传到 Tryptify Cloud 的进度。</string>
     <string name="cloud_manage_subscription">管理或取消订阅</string>
     <string name="action_upload_to_cloud">上传到 Tryptify Cloud</string>
+    <string name="connect_devices">设备</string>
+    <string name="connect_this_phone">这部手机</string>
+    <string name="connect_playing">正在播放</string>
+    <string name="connect_play_here">在这里播放</string>
+    <string name="connect_play_there">在那里播放</string>
+    <string name="connect_playing_on">正在 %1$s 上播放</string>
+    <string name="connect_last_played_on">上次在 %1$s 上播放</string>
+    <string name="connect_now_on">现在在 %1$s 上播放</string>
+    <string name="connect_here_from">已从 %1$s 转到这里播放</string>
+    <string name="connect_made_way">%1$s 开始播放，这部手机已暂停</string>
+    <string name="connect_cannot_play">这部手机无法播放“%1$s”</string>
+    <string name="connect_not_connected">Tryptify Connect 未连接</string>
+    <string name="connect_signed_out">登录后即可看到你的其他设备，并在它们之间切换音乐。</string>
+    <string name="connect_connecting">正在连接…</string>
+    <string name="connect_alone">在另一台设备上用同一账号登录 Tryptify，它就会出现在这里。</string>
+    <string name="connect_kind_app">Tryptify 应用</string>
+    <string name="connect_kind_web">tryptify.com</string>
 </resources>

@@ -24,7 +24,7 @@ const SONG_PAGE = 200;
 const MAX_DEVICE_KEYS = 10;
 
 /** How long a web player's song link works: a long FLAC, paused a good while. */
-const PLAY_LINK_SECONDS = 6 * 3600;
+const PLAY_LINK_SECONDS = 2 * 3600;
 
 /** What a /play link signs: the person, the song and when the link stops working. */
 const playSignature = (key: string, uid: string, id: string, expires: number) =>
@@ -223,7 +223,10 @@ export function createApp({ db, storage = null, billing, personOf, playKey = nul
   app.put("/v1/songs/:id/cover", async (c) => {
     const missing = needsStorage();
     if (missing) return missing;
-    const length = Number(c.req.header("content-length") ?? "0");
+    // Read whole into memory, so its size is asked first: a body that does
+    // not say how long it is could be anything.
+    const length = Number(c.req.header("content-length") ?? NaN);
+    if (!Number.isInteger(length) || length <= 0) return fail(411, "length_required");
     if (length > MAX_COVER_BYTES) return fail(413, "cover_too_big");
     try {
       await setCover(db!, storage!, c.get("uid"), c.req.param("id"), await c.req.arrayBuffer(), now());
@@ -268,7 +271,11 @@ export function createApp({ db, storage = null, billing, personOf, playKey = nul
     const object = row ? await storage.get(row.cover_key) : null;
     if (!object) return fail(404, "not_found");
     return new Response(object.body, {
-      headers: { "content-type": object.httpMetadata?.contentType ?? "image/jpeg", "cache-control": "private, max-age=86400" },
+      headers: {
+        "content-type": object.httpMetadata?.contentType ?? "image/jpeg",
+        "cache-control": "private, max-age=86400",
+        "x-content-type-options": "nosniff",
+      },
     });
   });
 

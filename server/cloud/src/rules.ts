@@ -60,6 +60,8 @@ export interface Account {
   trial?: boolean;
   /** Given, not sold (cloud_grants): full access with no quota and no end. */
   unlimited?: boolean;
+  /** The provider's subscription the account pays (or trials) with. */
+  subscriptionId?: string | null;
 }
 
 /**
@@ -127,6 +129,10 @@ export function applyEvent(a: Account, e: BillingEvent, now: Date): Account {
     // A trial never takes the place of time someone paid for, and comes once.
     const paidUp = a.paidUntil !== null && !a.trial && a.paidUntil > now;
     if (paidUp || (!mayStartTrial(a) && !a.trial)) return a;
+    // A trial running already takes news only of its own subscription: a
+    // second trial checkout, opened before the first one's webhook came,
+    // must not add its days on top.
+    if (a.trial && a.subscriptionId && e.subscriptionId !== a.subscriptionId) return a;
     const later = !a.paidUntil || e.paidUntil > a.paidUntil ? e.paidUntil : a.paidUntil;
     return { ...a, plan: e.plan, paidUntil: later, trial: true };
   }
