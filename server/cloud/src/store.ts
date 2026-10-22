@@ -58,7 +58,14 @@ async function read(db: Db, userId: string) {
   return toAccount(row);
 }
 
-export const loadAccount = async (db: Db, userId: string): Promise<Account> => read(db, userId);
+/** [userId]'s account as access is judged: what they paid for, and any grant (cloud_grants). */
+export const loadAccount = async (db: Db, userId: string): Promise<Account> => {
+  const [account, grant] = await Promise.all([
+    read(db, userId),
+    db.prepare("select kind from cloud_grants where user_id = ?1").bind(userId).first<{ kind: string }>(),
+  ]);
+  return grant?.kind === "unlimited" ? { ...account, unlimited: true } : account;
+};
 
 const seen = async (db: Db, provider: string, eventId: string) =>
   (await db.prepare("select 1 as hit from cloud_billing_events where provider = ?1 and event_id = ?2").bind(provider, eventId).first()) !== null;

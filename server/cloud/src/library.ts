@@ -155,7 +155,7 @@ export async function startUpload(
     .prepare(
       `insert into cloud_uploads (id, user_id, key, r2_upload, size, meta, created_at)
        select ?1, ?2, ?3, ?4, ?5, ?6, ?7
-        where (select coalesce(used_bytes, 0) from cloud_accounts where user_id = ?2)
+        where coalesce((select used_bytes from cloud_accounts where user_id = ?2), 0)
               + (select coalesce(sum(size), 0) from cloud_uploads where user_id = ?2) + ?5 <= ?8
           and (select count(*) from cloud_uploads where user_id = ?2) < ?9`,
     )

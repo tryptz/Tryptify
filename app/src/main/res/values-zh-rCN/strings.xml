@@ -3024,6 +3024,8 @@
     <string name="cloud_trial_until">免费试用至 %1$s</string>
     <string name="cloud_plan_until">%1$s 套餐，已付费至 %2$s</string>
     <string name="cloud_used_of">已用 %1$s，共 %2$s</string>
+    <string name="cloud_unlimited_title">无限存储空间</string>
+    <string name="cloud_unlimited_used">已用 %1$s · 无上限，无到期日</string>
     <string name="cloud_player_connected">你的云端音乐会显示在“音乐库 › 我的服务器”和搜索中。</string>
     <string name="cloud_connect_player">在“音乐库 › 我的服务器”中播放</string>
     <string name="cloud_replaces_server">这会替换上方已连接的音乐服务器（%1$s）。你可以随时重新连接它。</string>

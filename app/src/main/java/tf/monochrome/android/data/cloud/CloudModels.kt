@@ -37,6 +37,8 @@ data class CloudAccount(
     val quotaBytes: Long = 0,
     val trial: Boolean = false,
     val trialAvailable: Boolean = false,
+    /** Storage given, not sold (the server's cloud_grants): no quota, no end date, no subscription. */
+    val unlimited: Boolean = false,
 ) {
     val canUpload: Boolean get() = access == "full"
     val canPlay: Boolean get() = access == "full" || access == "read_only"

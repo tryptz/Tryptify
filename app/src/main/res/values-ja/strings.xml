@@ -3024,6 +3024,8 @@
     <string name="cloud_trial_until">無料トライアル：%1$s まで</string>
     <string name="cloud_plan_until">%1$s プラン（%2$s まで支払い済み）</string>
     <string name="cloud_used_of">%2$s 中 %1$s 使用中</string>
+    <string name="cloud_unlimited_title">容量無制限</string>
+    <string name="cloud_unlimited_used">%1$s 使用中 · 上限なし、期限なし</string>
     <string name="cloud_player_connected">クラウドの音楽は「ライブラリ › マイサーバー」と検索に表示されます。</string>
     <string name="cloud_connect_player">「ライブラリ › マイサーバー」で再生</string>
     <string name="cloud_replaces_server">上で接続中の音楽サーバー（%1$s）と置き換わります。いつでも再接続できます。</string>

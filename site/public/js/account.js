@@ -167,11 +167,15 @@
       card.textContent = "";
       const name = a.plan ? a.plan[0].toUpperCase() + a.plan.slice(1) : null;
       const title = el("h3", null,
-        a.access === "none" ? "No plan yet"
+        a.unlimited ? "Unlimited storage"
+        : a.access === "none" ? "No plan yet"
           : a.trial ? `Free trial until ${date(a.paidUntil)}`
             : `${name} plan, paid until ${date(a.paidUntil)}`);
       card.append(title);
-      if (a.access !== "none") {
+      if (a.unlimited) {
+        // Given, not sold: no quota to fill and no subscription to manage.
+        card.append(el("p", "muted small", `${gb(a.usedBytes)} used · no limit, no end date`));
+      } else if (a.access !== "none") {
         const frac = a.quotaBytes ? Math.min(1, a.usedBytes / a.quotaBytes) : 0;
         const bar = el("div", "meter");
         const fill = el("i");
@@ -184,7 +188,7 @@
         card.append(el("p", "bad", `Your plan has ended. Your music can still be played and downloaded until ${date(a.deleteAfter)}, then it is deleted. Pick a plan to keep it.`));
       }
       const buttons = el("div", "buttons");
-      if (a.plan) {
+      if (a.plan && !a.unlimited) {
         const manage = el("button", "btn", "Manage or cancel subscription");
         manage.type = "button";
         manage.addEventListener("click", () => act("plan-msg", async () => {

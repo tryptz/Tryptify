@@ -99,6 +99,7 @@ export function createApp({ db, storage = null, billing, personOf, playKey = nul
       quotaBytes,
       trial: a.trial ?? false,
       trialAvailable: mayStartTrial(a),
+      unlimited: a.unlimited ?? false,
     });
   });
 

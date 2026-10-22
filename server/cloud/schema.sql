@@ -16,6 +16,16 @@ create table if not exists cloud_accounts (
 );
 create index if not exists cloud_accounts_subscription on cloud_accounts (provider, subscription_id);
 
+-- Storage given rather than sold: an account listed here has no quota and no
+-- end date, whatever it has paid for (the owner's own, by hand; see README).
+-- Never sold, never in /plans, never touched by a webhook or the cleanup.
+create table if not exists cloud_grants (
+  user_id     text primary key,
+  kind        text not null check (kind in ('unlimited')),
+  note        text,
+  created_at  text not null
+);
+
 -- Each provider event is applied once, however often it is delivered.
 create table if not exists cloud_billing_events (
   provider     text not null,

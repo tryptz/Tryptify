@@ -142,8 +142,11 @@ private fun Ready(viewModel: CloudSettingsViewModel, account: CloudAccount, plan
         Player(viewModel, busy)
         Uploads(viewModel)
         // Creem requires that a subscriber can cancel from inside the product.
-        TextButton(onClick = viewModel::manageSubscription, enabled = !busy) {
-            Text(stringResource(R.string.cloud_manage_subscription))
+        // Unlimited storage is given, not bought: there is nothing to manage.
+        if (!account.unlimited) {
+            TextButton(onClick = viewModel::manageSubscription, enabled = !busy) {
+                Text(stringResource(R.string.cloud_manage_subscription))
+            }
         }
     } else {
         PlanPicker(plans, account.trialAvailable, busy) { plan, period, trial -> viewModel.checkout(plan, period, trial) }
@@ -165,6 +168,16 @@ private fun StorageCard(account: CloudAccount) {
         shape = RoundedCornerShape(8.dp),
     ) {
         Column(Modifier.fillMaxWidth().padding(12.dp)) {
+            if (account.unlimited) {
+                Text(stringResource(R.string.cloud_unlimited_title), style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    stringResource(R.string.cloud_unlimited_used, Formatter.formatShortFileSize(context, account.usedBytes)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                return@Column
+            }
             val plan = planName(account.plan)
             Text(
                 if (account.trial) stringResource(R.string.cloud_trial_until, dateOf(account.paidUntil))

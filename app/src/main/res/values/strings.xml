@@ -3099,6 +3099,8 @@
     <string name="cloud_trial_until">Free trial until %1$s</string>
     <string name="cloud_plan_until">%1$s plan, paid until %2$s</string>
     <string name="cloud_used_of">%1$s of %2$s used</string>
+    <string name="cloud_unlimited_title">Unlimited storage</string>
+    <string name="cloud_unlimited_used">%1$s used · no limit, no end date</string>
     <string name="cloud_player_connected">Your cloud music plays under Library › My server and in Search.</string>
     <string name="cloud_connect_player">Play it in Library › My server</string>
     <string name="cloud_replaces_server">This replaces the music server connected above (%1$s). You can connect it again at any time.</string>

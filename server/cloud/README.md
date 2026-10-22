@@ -190,6 +190,30 @@ A trial that is cancelled costs at most 20 GB for 9 days, about $0.10. That is
 the one place a non-payer costs anything, by the owner's choice; the test
 `the trial's worst case costs pennies` keeps it so.
 
+## Unlimited storage, given by hand
+
+An account in `cloud_grants` (kind `unlimited`) has full access with no quota
+(`UNLIMITED_BYTES`, a petabyte, so the arithmetic still works) and no end
+date, whatever it has paid for. It is never sold, never in `/plans`, never
+changed by a webhook, and the daily cleanup skips it. `/v1/account` says
+`unlimited: true`, and the app and the site show "Unlimited storage" with
+no subscription to manage. A grant needs an account row too: that row keeps
+the bytes used. In D1:
+
+```sql
+insert into cloud_grants (user_id, kind, note, created_at)
+  values ('<user id>', 'unlimited', '<who and why>', '<ISO date>');
+insert into cloud_accounts (user_id) values ('<user id>') on conflict (user_id) do nothing;
+-- to take it back:
+delete from cloud_grants where user_id = '<user id>';
+```
+
+The user id is the Supabase account's (`auth.users.id`). Taken back, the
+account falls back to whatever it paid for, and with nothing paid its
+library is deleted by the cleanup after the grace days, like any other.
+
+Granted so far: the owner's account (tryptz, 2026-10-22).
+
 ## The rule it enforces
 
 A listener can never cost more than they pay. Access comes only from the date

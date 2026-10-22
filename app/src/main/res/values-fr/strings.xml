@@ -3170,6 +3170,8 @@
     <string name="cloud_trial_until">Essai gratuit jusqu’au %1$s</string>
     <string name="cloud_plan_until">Formule %1$s, payée jusqu’au %2$s</string>
     <string name="cloud_used_of">%1$s utilisés sur %2$s</string>
+    <string name="cloud_unlimited_title">Stockage illimité</string>
+    <string name="cloud_unlimited_used">%1$s utilisés · sans limite ni date de fin</string>
     <string name="cloud_player_connected">Votre musique dans le cloud se trouve dans Bibliothèque › Mon serveur et dans la recherche.</string>
     <string name="cloud_connect_player">Écouter dans Bibliothèque › Mon serveur</string>
     <string name="cloud_replaces_server">Cela remplace le serveur musical connecté plus haut (%1$s). Vous pourrez le reconnecter à tout moment.</string>

@@ -364,7 +364,7 @@ test("a new person has no plan and no access", async () => {
   assert.equal(r.status, 200);
   assert.deepEqual(r.body, {
     plan: null, access: "none", paidUntil: null, deleteAfter: null, usedBytes: 0, quotaBytes: 0,
-    trial: false, trialAvailable: true,
+    trial: false, trialAvailable: true, unlimited: false,
   });
 });
 
@@ -856,6 +856,36 @@ test("a lapsed library still plays (read-only) but takes no uploads", async () =
   const who = await token(L);
   assert.equal((await call("POST", "/v1/uploads", who, { size: 10, suffix: "mp3", meta: meta("x") })).status, 409);
   assert.equal((await restJson("getAlbumList2", { type: "newest" })).status, "ok");
+});
+
+test("an unlimited grant: full access with no plan, no quota, plays, and the cleanup leaves it alone", async () => {
+  const G = "dddddddd-4444-4444-8444-dddddddddddd";
+  // A grant comes with an account row (README): it is where the bytes used are kept.
+  sqlite.query("insert into cloud_grants (user_id, kind, note, created_at) values (?1, 'unlimited', 'test', ?2)").run(G, new Date().toISOString());
+  sqlite.query("insert into cloud_accounts (user_id) values (?1)").run(G);
+  const who = await token(G);
+  const acct = (await call("GET", "/v1/account", who)).body;
+  assert.equal(acct.plan, null);
+  assert.equal(acct.access, "full");
+  assert.equal(acct.unlimited, true);
+  assert.equal(acct.quotaBytes, rules.UNLIMITED_BYTES);
+  assert.equal(acct.trialAvailable, false);
+  const id = await upload(who, new Uint8Array(800), meta("Granted"));
+  assert.equal((await call("GET", "/v1/account", who)).body.usedBytes, 800);
+  // Past even Max's 500 GB, an upload still fits.
+  sqlite.query("update cloud_accounts set used_bytes = ?2, plan = 'lite', paid_until = ?3 where user_id = ?1")
+    .run(G, 600 * GB, new Date(Date.now() - 30 * DAY).toISOString());
+  const more = await call("POST", "/v1/uploads", who, { size: 10, suffix: "mp3", meta: meta("more") });
+  assert.equal(more.status, 201, JSON.stringify(more.body));
+  await call("DELETE", `/v1/uploads/${more.body.id}`, who);
+  assert.equal((await call("GET", `/v1/songs/${id}/play`, who)).status, 200);
+  // A plan that ran out a month ago, which would be deleted without the grant.
+  await cleanup(d1(sqlite), bucket, new Date());
+  assert.equal((sqlite.query("select count(*) as n from cloud_songs where user_id = ?1").get(G) as any).n, 1);
+  assert.equal([...bucket.objects.keys()].some((k) => k.startsWith(`u/${G}/`)), true);
+  // Without the grant, the same account has nothing.
+  sqlite.query("delete from cloud_grants where user_id = ?1").run(G);
+  assert.equal((await call("GET", "/v1/account", who)).body.access, "none");
 });
 
 test("cleanup deletes libraries past their grace and abandoned uploads, nothing else", async () => {

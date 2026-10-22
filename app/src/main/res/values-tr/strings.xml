@@ -3097,6 +3097,8 @@
     <string name="cloud_trial_until">%1$s tarihine kadar ücretsiz deneme</string>
     <string name="cloud_plan_until">%1$s planı, %2$s tarihine kadar ödendi</string>
     <string name="cloud_used_of">%2$s alanın %1$s kadarı kullanıldı</string>
+    <string name="cloud_unlimited_title">Sınırsız depolama</string>
+    <string name="cloud_unlimited_used">%1$s kullanıldı · sınır yok, bitiş tarihi yok</string>
     <string name="cloud_player_connected">Buluttaki müziğin Kitaplık › Sunucum altında ve aramada görünür.</string>
     <string name="cloud_connect_player">Kitaplık › Sunucum’da çal</string>
     <string name="cloud_replaces_server">Bu, yukarıda bağlı olan müzik sunucusunun (%1$s) yerini alır. İstediğin zaman yeniden bağlayabilirsin.</string>

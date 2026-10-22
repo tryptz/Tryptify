@@ -58,18 +58,28 @@ export interface Account {
   usedBytes: number;
   /** The paid-until date is a free trial's end, not a payment's. */
   trial?: boolean;
+  /** Given, not sold (cloud_grants): full access with no quota and no end. */
+  unlimited?: boolean;
 }
+
+/**
+ * The quota an unlimited account is held to: a petabyte, far past anything
+ * one listener uploads, but a real number, so the arithmetic that compares
+ * against a quota keeps working.
+ */
+export const UNLIMITED_BYTES = 1_000_000 * GB;
 
 export const NO_ACCOUNT: Account = { plan: null, paidUntil: null, usedBytes: 0, trial: false };
 
 /** Whether [a] may start a free trial: only an account that has never had a plan or a trial. */
-export const mayStartTrial = (a: Account): boolean => a.plan === null;
+export const mayStartTrial = (a: Account): boolean => a.plan === null && !a.unlimited;
 
 /**
  * The one place the rule lives. Only [Account.paidUntil] grants anything: a
  * plan without a future paid-until date is no plan.
  */
 export function accessOf(a: Account, now: Date): { access: Access; quotaBytes: number; deleteAfter: Date | null } {
+  if (a.unlimited) return { access: "full", quotaBytes: UNLIMITED_BYTES, deleteAfter: null };
   if (!a.plan || !a.paidUntil) return { access: "none", quotaBytes: 0, deleteAfter: null };
   const quotaBytes = (a.trial ? TRIAL_GB : PLANS[a.plan].storageGb) * GB;
   const graceDays = a.trial ? REFUND_EXPORT_DAYS : READ_ONLY_DAYS;
