@@ -112,3 +112,48 @@ The headphone list, `data/headphones.json`, comes from
 `python3 tools/headphone_index/build.py` (AutoEq's `results/INDEX.md` and the
 twelve squig.link phone books the app searches); re-run it now and then. The
 targets in `data/targets/` are copies of the app's `assets/autoeq/targets/`.
+
+## The web player
+
+`/player` (`player.html`, `player.css`, `js/wp-engine.js`, `js/wp-sources.js`,
+`js/wp-app.js`) plays music in the browser through the same AutoEQ as the
+app: a dashboard (now playing, AutoEQ, the signal path, sources, playback,
+up next), a menu on the left and the bar at the bottom.
+
+- **The sound** (`wp-engine.js`): two `<audio>` elements take turns, so the
+  next song loads early (Gapless) and starts as this one ends, into one Web
+  Audio chain: preamp, the AutoEQ bands as IIR filters made from the engine's
+  own matched-Z coefficients (`TryptifyAutoEq.coeffs`) at the context's rate,
+  mono, volume. Speed (0.25–4×) and keeping the pitch are the elements' own.
+  Nothing runs on a timer and the context asks for playback-sized buffers, so
+  a paused or quiet tab costs next to nothing. Every source sends CORS (the
+  elements are `crossOrigin="anonymous"`), or Web Audio would hear silence.
+- **The music** (`wp-sources.js`), each turned into the same queue track:
+  - Files: a folder read in the browser, never uploaded (File System Access;
+    Chrome and Edge keep it between visits, in IndexedDB; other browsers pick
+    it each visit). Folders are the library; tags and covers are read with
+    jsmediatags for the song playing and the next one only.
+  - Tryptify Cloud: `/v1/songs` and its signed play links, with the Supabase
+    session `/account` signs in.
+  - Liked songs and playlists: the account's `favorite_tracks`,
+    `user_playlists` and `playlist_tracks` in Supabase, as the app syncs them
+    (RLS keeps each row its owner's). Their songs are TIDAL ids, so they play
+    through Trypt HiFi.
+  - Trypt HiFi: the listener's TrypT-hifi server, by its `/api/tidal` routes
+    (the ones that send CORS): `get-music`, `get-album`, and `stream-file` for
+    the audio. Its root HiFi API routes send no CORS, so they are not used.
+  - Music server: Navidrome or any Subsonic server, by `/rest/*.view` with
+    `f=json`. Like the app's music server, a token and salt are kept (in
+    localStorage), never the password, unless the server refuses tokens
+    (error 41/42), and then the password's hex. Songs stream with
+    `format=raw`, so lossless stays lossless. The server must send CORS for
+    tryptify.com (Navidrome does).
+- **AutoEQ**: the view is `/autoeq`'s try-out, the same markup and
+  `js/tryout.js`, with the band count, top frequency and method as the
+  ranking's chips. Each fit fires `tryptify:fit`; the player plays it and
+  keeps it, and `TryptifyTryout.restore` fits the same headphone again when
+  the view next opens. Settings are kept in `tryptify-player-*` keys.
+
+`node site/tests/webplayer.mjs` checks the pure parts: file names into a
+library, the sources' rows into tracks, cover ids, addresses, MD5, and that
+the coefficients the player hands to its filters give the engine's curve.

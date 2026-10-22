@@ -116,7 +116,7 @@
   });
   input.addEventListener("blur", () => setTimeout(() => { results.hidden = true; }, 120));
 
-  function choose(p) {
+  function choose(p, source = 0) {
     phone = p;
     input.value = p.n;
     results.hidden = true;
@@ -129,6 +129,7 @@
       o.textContent = s.target === "squig.link" ? `${s.label} (squig.link)` : `${s.label} · ${s.target}`;
       sel.append(o);
     });
+    sel.value = String(source < p.m.length ? source : 0);
     // Harman for the headphone's kind, as the app suggests.
     const def = p.t === "in-ear" || p.t === "earbud" ? "Harman_IE_2019" : "Harman_OE_2018";
     if (!tSel.dataset.touched) tSel.value = def;
@@ -220,6 +221,11 @@
     }
     draw(smoothed, offset, eqAt, tgt);
     table(bands);
+    // The web player (/player) plays each fit and remembers how to make it again.
+    box.dispatchEvent(new CustomEvent("tryptify:fit", { bubbles: true, detail: {
+      ...lastFit, phone: phone.own ? null : phone.n, source: Number($("hp-source").value) || 0,
+      targetId: tSel.value, smooth: Number($("hp-smooth").value),
+    } }));
   }
 
   // ── Drawing ─────────────────────────────────────────────────────────
@@ -286,6 +292,21 @@
       body.append(tr);
     });
   }
+
+  // ── Restoring (the web player, after a reload) ───────────────────────
+  window.TryptifyTryout = {
+    /** Picks [saved.phone] again with the settings it was fitted with. */
+    async restore(saved) {
+      if (!saved || !saved.phone) return;
+      const o = saved.opts || {};
+      for (const [id, v] of [["hp-bands", o.bandCount], ["hp-max", o.maxFrequency], ["hp-alg", o.algorithm], ["hp-smooth", saved.smooth]])
+        if (v != null) $(id).value = String(v);
+      if (saved.targetId) { tSel.value = saved.targetId; tSel.dataset.touched = "1"; }
+      await loadIndex();
+      const p = index.phones.find((x) => x.n === saved.phone);
+      if (p) { input.value = p.n; choose(p, saved.source || 0); }
+    },
+  };
 
   // ── Export ──────────────────────────────────────────────────────────
   function apo() {

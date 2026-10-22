@@ -1,0 +1,928 @@
+// The web player (/player): the dashboard, the folders, Tryptify Cloud, Trypt
+// HiFi, search, the queue and the bar at the bottom. The sound is
+// wp-engine.js, the music wp-sources.js, and the AutoEQ view is the AutoEQ
+// page's own try-out (tryout.js), whose every fit this plays.
+// Nothing here polls: the audio's own events and the listener's taps redraw
+// what changed, so an idle tab costs nothing.
+(() => {
+  "use strict";
+  const Eng = window.TryptifyEngine, S = window.TryptifySources, E = window.TryptifyAutoEq;
+  if (!Eng || !S) return;
+  const { Local, Cloud, HiFi, Subsonic, Library } = S;
+  const $ = (id) => document.getElementById(id);
+  const loadJSON = (k) => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch (_) { return {}; } };
+  const saveJSON = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} };
+  const clock = (s) => {
+    if (!Number.isFinite(s) || s < 0) return "0:00";
+    const m = Math.floor(s / 60);
+    return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+  };
+  const SRC = { local: "Files", cloud: "Tryptify Cloud", hifi: "Trypt HiFi", subsonic: "Music server" };
+
+  const ICON = {
+    play: '<svg viewBox="0 0 24 24"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.6-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" fill="currentColor"/></svg>',
+    pause: '<svg viewBox="0 0 24 24"><rect x="6.5" y="5" width="4" height="14" rx="1.2" fill="currentColor"/><rect x="13.5" y="5" width="4" height="14" rx="1.2" fill="currentColor"/></svg>',
+    prev: '<svg viewBox="0 0 24 24"><rect x="5" y="5.5" width="2.4" height="13" rx="1" fill="currentColor"/><path d="M19 6.3v11.4a.9.9 0 0 1-1.38.76L9.3 13.06a1.25 1.25 0 0 1 0-2.12l8.32-5.4A.9.9 0 0 1 19 6.3Z" fill="currentColor"/></svg>',
+    next: '<svg viewBox="0 0 24 24"><rect x="16.6" y="5.5" width="2.4" height="13" rx="1" fill="currentColor"/><path d="M5 6.3v11.4a.9.9 0 0 0 1.38.76l8.32-5.4a1.25 1.25 0 0 0 0-2.12l-8.32-5.4A.9.9 0 0 0 5 6.3Z" fill="currentColor"/></svg>',
+    shuffle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h3.5c4.5 0 6.5 10 11 10H21M3 17h3.5c1.8 0 3.1-1.6 4.2-3.6M14.3 9.6C15.3 8 16.5 7 18 7h3M18.5 4.5 21 7l-2.5 2.5M18.5 14.5 21 17l-2.5 2.5"/></svg>',
+    repeat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11V9.5A3.5 3.5 0 0 1 7.5 6H19M16.5 3.5 19 6l-2.5 2.5M20 13v1.5a3.5 3.5 0 0 1-3.5 3.5H5M7.5 20.5 5 18l2.5-2.5"/></svg>',
+    repeatOne: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11V9.5A3.5 3.5 0 0 1 7.5 6H19M16.5 3.5 19 6l-2.5 2.5M20 13v1.5a3.5 3.5 0 0 1-3.5 3.5H5M7.5 20.5 5 18l2.5-2.5"/><path d="M11.2 10.6 12.5 9.8v4.6" stroke-width="1.6"/></svg>',
+    volume: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3l4.5-4v13l-4.5-4H4z" fill="currentColor" stroke="none"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18.3 6.5a8 8 0 0 1 0 11"/></svg>',
+    mute: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 9.5h3l4.5-4v13l-4.5-4H4z" fill="currentColor" stroke="none"/><path d="m16 9.5 5 5M21 9.5l-5 5"/></svg>',
+    queue: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h12M4 11h12M4 16h7"/><path d="M17 14v6l4-3z" fill="currentColor" stroke="none"/></svg>',
+    close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>',
+    plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+    sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>',
+    moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg>',
+    folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2h8.5A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/></svg>',
+  };
+
+  /** A DOM element; text always goes in as text, never as markup (track names come from servers). */
+  function h(tag, props, ...kids) {
+    const e = document.createElement(tag);
+    if (props) for (const [k, v] of Object.entries(props)) {
+      if (v == null || v === false) continue;
+      if (k === "class") e.className = v;
+      else if (k === "text") e.textContent = v;
+      else if (k === "icon") e.innerHTML = ICON[v]; // our own SVGs only
+      else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+      else e.setAttribute(k, v === true ? "" : String(v));
+    }
+    for (const k of kids.flat()) if (k != null && k !== false) e.append(k instanceof Node ? k : String(k));
+    return e;
+  }
+  const setIcon = (btn, name) => { if (btn.dataset.icon !== name) { btn.innerHTML = ICON[name]; btn.dataset.icon = name; } };
+  const songs = (n) => `${n} song${n === 1 ? "" : "s"}`;
+  // A cover that will not load (a server without one) becomes the plain square.
+  document.addEventListener("error", (e) => {
+    const img = e.target;
+    if (!(img instanceof HTMLImageElement)) return;
+    if (img.id === "bar-cover") { img.dataset.failed = img.getAttribute("src"); img.hidden = true; $("bar-cover-none").hidden = false; return; }
+    if (img.closest(".wp-main")) img.replaceWith(h("span", { class: `${img.className} wp-cover-none`.trim() }));
+  }, true);
+  const head = (title, lead) => h("div", { class: "wp-head" }, h("div", null, h("h1", { text: title }), lead ? h("p", { class: "muted", text: lead }) : null));
+
+  let toastTimer = 0;
+  function toast(msg, bad) {
+    const t = $("wp-toast");
+    t.textContent = msg;
+    t.classList.toggle("bad", !!bad);
+    t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; }, 6000);
+  }
+
+  // ── Settings ────────────────────────────────────────────────────────
+  const settings = Object.assign({ volume: 0.8, speed: 1, preservePitch: true, mono: false, gapless: true, shuffle: false, repeat: "off" },
+    loadJSON("tryptify-player-settings"));
+  const saveSettings = () => saveJSON("tryptify-player-settings", settings);
+  let eq = Object.assign({ on: false, bands: [], preamp: 0 }, loadJSON("tryptify-player-eq"));
+  const saveEq = () => saveJSON("tryptify-player-eq", eq);
+  Eng.setVolume(settings.volume);
+  Eng.setSpeed(settings.speed);
+  Eng.setPreservePitch(settings.preservePitch);
+  Eng.setMono(settings.mono);
+  Eng.setEq(eq);
+
+  // ── The queue ───────────────────────────────────────────────────────
+  let queue = [], order = [], pos = -1, current = null, starting = 0, failures = 0;
+  const shuffled = (n, first) => {
+    const a = [...Array(n).keys()].filter((i) => i !== first);
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return first == null ? a : [first, ...a];
+  };
+  const upcoming = () => order.slice(pos + 1).map((i) => queue[i]);
+
+  function playList(tracks, i = 0) {
+    if (!tracks.length) return;
+    queue = tracks.slice();
+    order = settings.shuffle ? shuffled(queue.length, i) : [...queue.keys()];
+    pos = order.indexOf(i);
+    start();
+  }
+  function enqueue(track) {
+    queue.push(track);
+    const i = queue.length - 1;
+    if (pos < 0) { order = [i]; pos = 0; start(); return; }
+    order.splice(pos + 1, 0, i);
+    toast(`“${track.title}” plays next.`);
+    renderQueue(); renderNext(); preloadNext();
+  }
+  async function start(autoplay = true) {
+    const t = queue[order[pos]];
+    if (!t) return;
+    current = t;
+    const my = ++starting;
+    renderAll();
+    try {
+      if (t.src === "local") await Local.tags(t).catch(() => {});
+      if (t.src === "cloud") Cloud.cover(t).then(() => { if (my === starting) { renderBar(); renderNow(); session(); } }).catch(() => {});
+      const url = await S.url(t);
+      if (my !== starting) return;
+      await Eng.load(url, t.key, autoplay);
+      failures = 0;
+    } catch (e) {
+      if (my === starting) fail(e);
+      return;
+    }
+    renderAll();
+    session();
+    preloadNext();
+  }
+  function fail(e) {
+    if (!current) return;
+    const why = e && e.name === "NotAllowedError" ? "the browser wants a tap first." : (e && e.message) || "it would not load.";
+    toast(`Could not play “${current.title}”: ${why}`, true);
+    renderBar();
+    if (e && e.name === "NotAllowedError") return;
+    if (++failures < 3 && pos + 1 < order.length) { pos++; start(); }
+  }
+  async function preloadNext() {
+    if (!settings.gapless || settings.repeat === "one") return;
+    const nx = queue[order[pos + 1]] || (settings.repeat === "all" && !settings.shuffle ? queue[order[0]] : null);
+    if (!nx || nx === current) return;
+    try {
+      if (nx.src === "local") await Local.tags(nx).catch(() => {});
+      Eng.preload(await S.url(nx), nx.key);
+    } catch (_) { /* it loads when its turn comes */ }
+  }
+  function next(auto) {
+    if (!queue.length) return;
+    if (auto && settings.repeat === "one") { Eng.seek(0); Eng.play(); return; }
+    if (pos + 1 < order.length) pos++;
+    else if (settings.repeat === "all") { if (settings.shuffle) order = shuffled(queue.length, null); pos = 0; }
+    else { renderAll(); return; }
+    start();
+  }
+  function prev() {
+    if (Eng.time > 3 || pos <= 0) { Eng.seek(0); return; }
+    pos--;
+    start();
+  }
+  function setShuffle(on) {
+    settings.shuffle = on;
+    saveSettings();
+    if (queue.length) {
+      const at = order[pos];
+      order = on ? shuffled(queue.length, at) : [...queue.keys()];
+      pos = order.indexOf(at);
+      preloadNext();
+    }
+    renderBar(); renderQueue(); renderNext();
+  }
+  function cycleRepeat() {
+    settings.repeat = settings.repeat === "off" ? "all" : settings.repeat === "all" ? "one" : "off";
+    saveSettings();
+    renderBar();
+    preloadNext();
+  }
+
+  Eng.on("ended", () => next(true));
+  Eng.on("error", () => fail(new Error("this browser cannot play that file.")));
+  Eng.on("play", () => { renderBar(); renderNow(); if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing"; });
+  Eng.on("pause", () => { renderBar(); renderNow(); if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; });
+  Eng.on("durationchange", () => {
+    const s = $("bar-seek");
+    s.max = String(Eng.duration || 0);
+    $("bar-dur").textContent = clock(Eng.duration);
+    position();
+  });
+  let dragging = false;
+  Eng.on("timeupdate", () => {
+    if (!dragging) { $("bar-seek").value = String(Eng.time); $("bar-time").textContent = clock(Eng.time); }
+    const bar = $("now-bar");
+    if (bar && Eng.duration) bar.style.width = `${(Eng.time / Eng.duration) * 100}%`;
+  });
+
+  // ── The phone's lock screen and the keyboard's media keys ───────────
+  function position() {
+    const ms = navigator.mediaSession;
+    if (!ms || !ms.setPositionState || !Eng.duration) return;
+    try { ms.setPositionState({ duration: Eng.duration, position: Math.min(Eng.time, Eng.duration), playbackRate: settings.speed }); } catch (_) {}
+  }
+  function session() {
+    const ms = navigator.mediaSession;
+    if (!ms || !window.MediaMetadata || !current) return;
+    ms.metadata = new MediaMetadata({
+      title: current.title, artist: current.artist || "", album: current.album || "",
+      artwork: current.cover ? [{ src: current.cover, sizes: "512x512" }] : [{ src: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    });
+    position();
+  }
+  if (navigator.mediaSession) {
+    const set = (a, fn) => { try { navigator.mediaSession.setActionHandler(a, fn); } catch (_) {} };
+    set("play", () => Eng.play());
+    set("pause", () => Eng.pause());
+    set("previoustrack", prev);
+    set("nexttrack", () => next(false));
+    set("seekto", (d) => { Eng.seek(d.seekTime); position(); });
+  }
+
+  // ── The bar ─────────────────────────────────────────────────────────
+  for (const b of document.querySelectorAll("[data-act]")) {
+    const name = { toggle: "play", prev: "prev", next: "next", shuffle: "shuffle", repeat: "repeat", queue: "queue", mute: "volume" }[b.dataset.act];
+    if (name) setIcon(b, b.closest(".wp-queue") ? "close" : name);
+  }
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-act]");
+    if (!b) return;
+    const act = b.dataset.act;
+    if (act === "toggle") current ? Eng.toggle().catch(fail) : playFirst();
+    else if (act === "prev") prev();
+    else if (act === "next") next(false);
+    else if (act === "shuffle") setShuffle(!settings.shuffle);
+    else if (act === "repeat") cycleRepeat();
+    else if (act === "queue") toggleQueue();
+    else if (act === "mute") { setVolume(settings.volume > 0 ? 0 : settings.lastVolume || 0.8); }
+  });
+  function playFirst() {
+    if (Local.tree && Local.count) return playList(S.util.allFiles(Local.tree));
+    location.hash = "#/files";
+  }
+  const seek = $("bar-seek");
+  seek.addEventListener("input", () => { dragging = true; $("bar-time").textContent = clock(Number(seek.value)); });
+  seek.addEventListener("change", () => { Eng.seek(Number(seek.value)); dragging = false; position(); });
+  const vol = $("bar-volume");
+  vol.value = String(settings.volume);
+  function setVolume(v) {
+    if (v > 0) settings.lastVolume = v;
+    settings.volume = v;
+    vol.value = String(v);
+    Eng.setVolume(v);
+    setIcon($("bar-mute"), v > 0 ? "volume" : "mute");
+    $("bar-mute").setAttribute("aria-label", v > 0 ? "Mute" : "Unmute");
+    renderPath();
+  }
+  vol.addEventListener("input", () => setVolume(Number(vol.value)));
+  vol.addEventListener("change", saveSettings);
+  setVolume(settings.volume);
+
+  function renderBar() {
+    const t = current;
+    $("bar-title").textContent = t ? t.title : "Nothing playing";
+    $("bar-artist").textContent = t ? [t.artist, t.album].filter(Boolean).join(" · ") : "";
+    const img = $("bar-cover");
+    const cover = t && t.cover && img.dataset.failed !== t.cover ? t.cover : null;
+    img.hidden = !cover;
+    $("bar-cover-none").hidden = !!cover;
+    if (cover && img.getAttribute("src") !== cover) img.src = cover;
+    const play = $("bar-play");
+    setIcon(play, Eng.paused ? "play" : "pause");
+    play.setAttribute("aria-label", Eng.paused ? "Play" : "Pause");
+    $("bar-shuffle").setAttribute("aria-pressed", String(settings.shuffle));
+    const rep = $("bar-repeat");
+    rep.setAttribute("aria-pressed", String(settings.repeat !== "off"));
+    rep.setAttribute("aria-label", `Repeat: ${settings.repeat === "off" ? "off" : settings.repeat === "all" ? "all" : "this song"}`);
+    setIcon(rep, settings.repeat === "one" ? "repeatOne" : "repeat");
+    const badge = $("bar-badge");
+    badge.hidden = !t;
+    if (t) badge.textContent = [t.quality, eqActive() ? "AutoEQ" : null].filter(Boolean).join(" · ");
+    document.title = t && !Eng.paused ? `${t.title} · Tryptify` : "Player · Tryptify";
+  }
+  function markRows() {
+    for (const li of document.querySelectorAll(".wp-track")) li.classList.toggle("is-current", !!current && li.dataset.key === current.key);
+  }
+  function renderAll() { renderBar(); markRows(); renderQueue(); if (!$("view-home").hidden) renderHome(); }
+
+  // ── The queue panel ─────────────────────────────────────────────────
+  function toggleQueue(force) {
+    const q = $("wp-queue");
+    q.hidden = force != null ? !force : !q.hidden;
+    $("bar-queue").setAttribute("aria-expanded", String(!q.hidden));
+    renderQueue();
+  }
+  function renderQueue() {
+    if ($("wp-queue").hidden) return;
+    const ol = $("wp-queue-list");
+    ol.textContent = "";
+    if (!order.length) { ol.append(h("li", { class: "muted", text: "Nothing in the queue yet." })); return; }
+    order.forEach((qi, j) => {
+      if (j < pos) return;
+      const t = queue[qi];
+      ol.append(h("li", { class: j === pos ? "is-current" : null },
+        h("button", { type: "button", class: "wp-queue-song", onclick: () => { pos = j; start(); } },
+          h("strong", { text: t.title }), h("span", { class: "muted", text: [t.artist, SRC[t.src]].filter(Boolean).join(" · ") })),
+        j === pos ? null : h("button", { type: "button", class: "wp-icon", icon: "close", "aria-label": `Remove ${t.title}`,
+          onclick: () => { order.splice(j, 1); renderQueue(); renderNext(); preloadNext(); } })));
+    });
+  }
+
+  // ── Track lists ─────────────────────────────────────────────────────
+  function trackList(tracks, { album = true, numbered = false } = {}) {
+    const ol = h("ol", { class: "wp-tracks" + (album ? "" : " no-album") });
+    tracks.forEach((t, i) => {
+      ol.append(h("li", { class: "wp-track" + (current && current.key === t.key ? " is-current" : ""), "data-key": t.key },
+        h("button", { type: "button", class: "wp-track-play", onclick: () => playList(tracks, i) },
+          h("span", { class: "wp-track-n", text: String(numbered && t.n ? t.n : i + 1) }),
+          h("span", { class: "wp-track-main" }, h("strong", { text: t.title }), h("span", { class: "muted", text: t.artist || "" })),
+          album ? h("span", { class: "wp-track-album muted", text: t.album || "" }) : null,
+          h("span", { class: "wp-track-q", text: t.quality || "" }),
+          h("span", { class: "wp-track-len muted", text: t.duration ? clock(t.duration) : "" })),
+        h("button", { type: "button", class: "wp-icon wp-track-add", icon: "plus", "aria-label": `Play ${t.title} next`, title: "Play next", onclick: () => enqueue(t) })));
+    });
+    return ol;
+  }
+  const playButtons = (tracks) => h("div", { class: "buttons" },
+    h("button", { type: "button", class: "btn primary", text: "Play", onclick: () => { settings.shuffle && setShuffle(false); playList(tracks); } }),
+    h("button", { type: "button", class: "btn", text: "Shuffle", onclick: () => { setShuffle(true); playList(tracks, Math.floor(Math.random() * tracks.length)); } }));
+
+  // ── Files ───────────────────────────────────────────────────────────
+  function pickButton(label) {
+    const go = () => { localChanged(); location.hash = "#/files"; route(); };
+    if (Local.canKeep) return h("button", { type: "button", class: "btn primary", text: label,
+      onclick: async () => { try { await Local.pick(); go(); } catch (e) { if (e.name !== "AbortError") toast(e.message, true); } } });
+    const input = h("input", { type: "file", webkitdirectory: true, multiple: true, hidden: true });
+    input.addEventListener("change", () => { if (input.files.length) { Local.fromFileList(input.files); go(); } });
+    return h("label", { class: "btn primary" }, label, input);
+  }
+  function reconnectButton() {
+    return h("button", { type: "button", class: "btn primary", text: `Open “${Local.pending.name}” again`,
+      onclick: async () => { if (await Local.reconnect()) { localChanged(); route(); } } });
+  }
+  function localChanged() {
+    $("wp-count-local").textContent = Local.count ? String(Local.count) : "";
+    if (!$("view-home").hidden) renderSources();
+  }
+  function renderFiles(path) {
+    const v = $("view-files");
+    v.textContent = "";
+    v.append(head("Files", "Your music folder, read right here in the browser. Nothing is uploaded."));
+    if (!Local.tree) {
+      v.append(h("div", { class: "card wp-empty" },
+        h("p", { text: Local.pending ? "Your browser asks before Tryptify reads the folder again." : "Choose the folder your music is in. The folders inside it become your library." }),
+        Local.pending ? reconnectButton() : pickButton("Choose your music folder"),
+        Local.canKeep ? null : h("p", { class: "muted small", text: "This browser picks the folder again on each visit. Chrome and Edge remember it." })));
+      return;
+    }
+    let node = Local.tree;
+    for (const p of path) { const d = node.byName.get(p); if (!d) break; node = d; }
+    const crumbs = h("nav", { class: "wp-crumbs", "aria-label": "Folder" }, h("a", { href: "#/files", text: Local.tree.name }));
+    node.path.forEach((p, i) => crumbs.append(h("span", { "aria-hidden": "true", text: "/" }),
+      h("a", { href: "#/files/" + node.path.slice(0, i + 1).map(encodeURIComponent).join("/"), text: p, "aria-current": i === node.path.length - 1 ? "page" : null })));
+    const all = S.util.allFiles(node);
+    v.append(crumbs, h("div", { class: "wp-row" }, all.length ? playButtons(all) : null,
+      h("span", { class: "muted small", text: songs(all.length) }),
+      h("span", { class: "wp-grow" }), pickButtonSmall()));
+    if (node.dirs.length) {
+      const ul = h("ul", { class: "wp-folders" });
+      for (const d of node.dirs) {
+        const n = S.util.allFiles(d).length;
+        ul.append(h("li", null, h("a", { href: "#/files/" + d.path.map(encodeURIComponent).join("/") },
+          h("span", { class: "wp-i", icon: "folder", "aria-hidden": "true" }), h("strong", { text: d.name }), h("small", { class: "muted", text: String(n) }))));
+      }
+      v.append(ul);
+    }
+    if (node.files.length) v.append(trackList(node.files, { album: false, numbered: true }));
+  }
+  function pickButtonSmall() {
+    const b = pickButton("Change folder");
+    b.className = "btn";
+    return b;
+  }
+
+  // ── Tryptify Cloud ──────────────────────────────────────────────────
+  const cloud = { q: "", tracks: [], total: 0 };
+  async function renderCloud() {
+    const v = $("view-cloud");
+    v.textContent = "";
+    v.append(head("Tryptify Cloud", "Your Cloud library, played straight from storage, through your AutoEQ."));
+    if (!(await Cloud.signedIn().catch(() => false))) {
+      v.append(h("div", { class: "card wp-empty" }, h("p", { text: "Sign in with the same account as the app, then come back." }),
+        h("a", { class: "btn primary", href: "/account", text: "Sign in" })));
+      return;
+    }
+    const input = h("input", { type: "search", class: "wp-input", placeholder: "Search your Cloud", value: cloud.q, "aria-label": "Search your Cloud" });
+    const form = h("form", { class: "wp-row", role: "search" }, input, h("button", { type: "submit", class: "btn", text: "Search" }));
+    const list = h("div");
+    const more = h("button", { type: "button", class: "btn", text: "More", hidden: true });
+    v.append(form, list, more);
+    const load = async (reset) => {
+      try {
+        if (reset) { cloud.tracks = []; }
+        const r = await Cloud.songs(cloud.tracks.length, cloud.q);
+        cloud.tracks.push(...r.tracks);
+        cloud.total = r.total;
+        list.textContent = "";
+        list.append(cloud.tracks.length ? trackList(cloud.tracks) : h("p", { class: "muted", text: cloud.q ? "Nothing matches that." : "Nothing here yet. Upload music on the Account page or from the app." }));
+        more.hidden = cloud.tracks.length >= cloud.total;
+      } catch (e) { list.textContent = ""; list.append(h("p", { class: "bad", text: e.message })); }
+    };
+    form.addEventListener("submit", (e) => { e.preventDefault(); cloud.q = input.value.trim(); load(true); });
+    more.addEventListener("click", () => load(false));
+    load(true);
+  }
+
+  // ── Trypt HiFi ──────────────────────────────────────────────────────
+  const hifi = { q: "", result: null };
+  function hifiForm() {
+    const addr = h("input", { type: "url", class: "wp-input", id: "hifi-addr", placeholder: "https://your-trypt-hifi-server", value: HiFi.base || "", autocomplete: "off", spellcheck: "false" });
+    const qual = h("select", { class: "wp-input", id: "hifi-quality" });
+    for (const [v, l] of [["HI_RES_LOSSLESS", "Hi-Res Lossless (24-bit)"], ["LOSSLESS", "Lossless (16-bit)"], ["HIGH", "AAC 320"], ["LOW", "AAC 96"]])
+      qual.append(h("option", { value: v, text: l, selected: HiFi.quality === v }));
+    qual.addEventListener("change", () => { HiFi.quality = qual.value; renderPath(); });
+    const msg = h("p", { class: "small muted", role: "status" });
+    const form = h("form", { class: "wp-form" },
+      h("label", { for: "hifi-addr", text: "Server address" }), addr,
+      h("label", { for: "hifi-quality", text: "Stream quality" }), qual,
+      h("div", { class: "buttons" }, h("button", { type: "submit", class: "btn primary", text: HiFi.base ? "Save" : "Connect" }),
+        HiFi.base ? h("button", { type: "button", class: "btn", text: "Remove", onclick: () => { HiFi.base = null; pill(); route(); } }) : null),
+      msg);
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const base = S.util.normalizeBase(addr.value);
+      if (!base) { msg.textContent = "That is not an address."; return; }
+      if (base.startsWith("http://") && !/^http:\/\/(localhost|127\.|\[::1\])/.test(base)) { msg.textContent = "Use https://: this page is secure, so the browser blocks http:// servers."; return; }
+      HiFi.base = base;
+      msg.textContent = "Connecting…";
+      await testHifi(msg);
+    });
+    return form;
+  }
+  async function testHifi(msg) {
+    try {
+      const ms = await HiFi.test();
+      pill(`Trypt HiFi · ${ms} ms`, true);
+      if (msg) msg.textContent = `Connected in ${ms} ms.`;
+      return true;
+    } catch (e) {
+      pill("Trypt HiFi unreachable", false);
+      if (msg) msg.textContent = e.message === "Failed to fetch" ? "No answer. Check the address, and that the server is running." : e.message;
+      return false;
+    }
+  }
+  function pill(text, ok) {
+    const p = $("wp-hifi-pill");
+    p.hidden = !HiFi.base || !text;
+    if (text) { p.textContent = text; p.classList.toggle("ok", !!ok); p.classList.toggle("bad", ok === false); }
+  }
+  function albumGrid(albums, base = "#/hifi/album/") {
+    const ul = h("ul", { class: "wp-albums" });
+    for (const a of albums) ul.append(h("li", null, h("a", { href: base + encodeURIComponent(a.id) },
+      a.cover ? h("img", { src: a.cover, alt: "", loading: "lazy", width: 160, height: 160 }) : h("span", { class: "wp-cover-none" }),
+      h("strong", { text: a.title }), h("span", { class: "muted small", text: [a.artist, a.year, a.hires ? "Hi-Res" : null].filter(Boolean).join(" · ") }))));
+    return ul;
+  }
+  function renderHifi() {
+    const v = $("view-hifi");
+    v.textContent = "";
+    v.append(head("Trypt HiFi", "Streams from your own Trypt HiFi server, through your AutoEQ."));
+    if (!HiFi.base) { v.append(h("div", { class: "card" }, hifiForm())); return; }
+    const input = h("input", { type: "search", class: "wp-input", placeholder: "Search Trypt HiFi", value: hifi.q, "aria-label": "Search Trypt HiFi" });
+    const form = h("form", { class: "wp-row", role: "search" }, input, h("button", { type: "submit", class: "btn", text: "Search" }));
+    const out = h("div");
+    v.append(form, out);
+    const show = () => {
+      out.textContent = "";
+      if (!hifi.result) return;
+      const { albums, tracks } = hifi.result;
+      if (!albums.length && !tracks.length) { out.append(h("p", { class: "muted", text: "Nothing matches that." })); return; }
+      if (tracks.length) out.append(h("h2", { text: "Songs" }), trackList(tracks));
+      if (albums.length) out.append(h("h2", { text: "Albums" }), albumGrid(albums));
+    };
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      hifi.q = input.value.trim();
+      if (!hifi.q) return;
+      out.textContent = "";
+      out.append(h("p", { class: "muted", text: "Searching…" }));
+      try { hifi.result = await HiFi.search(hifi.q); show(); } catch (err) { out.textContent = ""; out.append(h("p", { class: "bad", text: err.message })); }
+    });
+    show();
+    v.append(h("details", { class: "card wp-details" }, h("summary", { text: "Server and quality" }), hifiForm()));
+  }
+  async function renderHifiAlbum(id) {
+    const v = $("view-hifi");
+    v.textContent = "";
+    v.append(h("p", { class: "muted", text: "Loading the album…" }));
+    try {
+      const { album, tracks } = await HiFi.album(id);
+      v.textContent = "";
+      v.append(h("div", { class: "wp-album-head" },
+        album.cover ? h("img", { src: album.cover, alt: "", width: 200, height: 200 }) : h("span", { class: "wp-cover-none" }),
+        h("div", null, h("p", { class: "eyebrow", text: `Album · Trypt HiFi${album.hires ? " · Hi-Res" : ""}` }), h("h1", { text: album.title }),
+          h("p", { class: "muted", text: [album.artist, album.year, songs(tracks.length)].filter(Boolean).join(" · ") }), playButtons(tracks))),
+      trackList(tracks, { album: false, numbered: true }));
+    } catch (e) { v.textContent = ""; v.append(h("p", { class: "bad", text: e.message })); }
+  }
+
+  // ── The account's liked songs and playlists ─────────────────────────
+  const signInCard = (what) => h("div", { class: "card wp-empty" },
+    h("p", { text: `Sign in with the same account as the app to see your ${what}.` }), h("a", { class: "btn primary", href: "/account", text: "Sign in" }));
+  const needsHifi = () => (HiFi.base ? null : h("p", { class: "card wp-note" },
+    "These songs play through Trypt HiFi. ", h("a", { href: "#/hifi", text: "Connect your server" }), " to play them."));
+  const library = { liked: null, playlists: null };
+  async function renderLiked() {
+    const v = $("view-liked");
+    v.textContent = "";
+    v.append(head("Liked songs", "The songs you liked in the app, kept in your account."));
+    if (!(await Cloud.signedIn().catch(() => false))) { v.append(signInCard("liked songs")); return; }
+    const box = h("div", null, h("p", { class: "muted", text: "Loading…" }));
+    v.append(needsHifi() || "", box);
+    try {
+      library.liked = await Library.liked();
+      $("wp-count-liked").textContent = library.liked.length ? String(library.liked.length) : "";
+      box.textContent = "";
+      box.append(...(library.liked.length ? [playButtons(library.liked), trackList(library.liked)] : [h("p", { class: "muted", text: "No liked songs yet. Tap the heart on a song in the app." })]));
+    } catch (e) { box.textContent = ""; box.append(h("p", { class: "bad", text: e.message })); }
+  }
+  async function renderPlaylists(id) {
+    const v = $("view-playlists");
+    v.textContent = "";
+    if (!(await Cloud.signedIn().catch(() => false))) { v.append(head("Playlists", null), signInCard("playlists")); return; }
+    const box = h("div", null, h("p", { class: "muted", text: "Loading…" }));
+    if (id) {
+      v.append(box);
+      try {
+        const p = await Library.playlist(id);
+        box.textContent = "";
+        box.append(head(p.name, p.description || songs(p.tracks.length)), needsHifi() || "",
+          ...(p.tracks.length ? [playButtons(p.tracks), trackList(p.tracks)] : [h("p", { class: "muted", text: "This playlist is empty." })]));
+      } catch (e) { box.textContent = ""; box.append(h("p", { class: "bad", text: e.message })); }
+      return;
+    }
+    v.append(head("Playlists", "The playlists you made in the app, kept in your account."), box);
+    try {
+      library.playlists = await Library.playlists();
+      $("wp-count-playlists").textContent = library.playlists.length ? String(library.playlists.length) : "";
+      box.textContent = "";
+      if (!library.playlists.length) { box.append(h("p", { class: "muted", text: "No playlists yet. Make one in the app." })); return; }
+      const ul = h("ul", { class: "wp-folders" });
+      for (const p of library.playlists) ul.append(h("li", null, h("a", { href: `#/playlists/${encodeURIComponent(p.id)}` },
+        h("strong", { text: p.name }), h("small", { class: "muted", text: String(p.count) }))));
+      box.append(ul);
+    } catch (e) { box.textContent = ""; box.append(h("p", { class: "bad", text: e.message })); }
+  }
+
+  // ── Music server (Navidrome and other Subsonic servers) ────────────
+  function subsonicForm() {
+    const srv = Subsonic.server;
+    const url = h("input", { type: "url", class: "wp-input", id: "sub-url", placeholder: "https://music.example.com", value: srv ? srv.url : "", autocomplete: "off", spellcheck: "false" });
+    const user = h("input", { type: "text", class: "wp-input", id: "sub-user", value: srv ? srv.user : "", autocomplete: "username", spellcheck: "false" });
+    const pass = h("input", { type: "password", class: "wp-input", id: "sub-pass", autocomplete: "current-password" });
+    const msg = h("p", { class: "small muted", role: "status", text: "Navidrome, Gonic, Airsonic and other Subsonic servers. Your password is not kept: only a token made from it." });
+    const form = h("form", { class: "wp-form" },
+      h("label", { for: "sub-url", text: "Server address" }), url,
+      h("label", { for: "sub-user", text: "Username" }), user,
+      h("label", { for: "sub-pass", text: "Password" }), pass,
+      h("div", { class: "buttons" }, h("button", { type: "submit", class: "btn primary", text: srv ? "Sign in again" : "Connect" }),
+        srv ? h("button", { type: "button", class: "btn", text: "Remove", onclick: () => { Subsonic.server = null; route(); } }) : null),
+      msg);
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const base = S.util.normalizeBase(url.value);
+      if (base && base.startsWith("http://") && !/^http:\/\/(localhost|127\.|\[::1\])/.test(base)) { msg.textContent = "Use https://: this page is secure, so the browser blocks http:// servers."; return; }
+      msg.textContent = "Connecting…";
+      try {
+        await Subsonic.connect(url.value, user.value.trim(), pass.value);
+        pass.value = "";
+        msg.textContent = "Connected.";
+        route();
+      } catch (err) {
+        msg.textContent = err.message === "Failed to fetch" ? "No answer. Check the address, and that the server allows this site (CORS)." : err.message;
+      }
+    });
+    return form;
+  }
+  const subsonic = { tab: "albums", q: "" };
+  async function renderSubsonic(kind, id) {
+    const v = $("view-subsonic");
+    v.textContent = "";
+    if (!Subsonic.server) {
+      v.append(head("Music server", "Your own Navidrome or other Subsonic server, through your AutoEQ."), h("div", { class: "card" }, subsonicForm()));
+      return;
+    }
+    const box = h("div", null, h("p", { class: "muted", text: "Loading…" }));
+    const fill = (...kids) => { box.textContent = ""; box.append(...kids); };
+    const failed = (e) => fill(h("p", { class: "bad", text: e.message }));
+    if (kind === "album" && id) {
+      v.append(box);
+      Subsonic.album(id).then(({ album, tracks }) => fill(h("div", { class: "wp-album-head" },
+        album.cover ? h("img", { src: album.cover, alt: "", width: 200, height: 200 }) : h("span", { class: "wp-cover-none" }),
+        h("div", null, h("p", { class: "eyebrow", text: "Album · Music server" }), h("h1", { text: album.title }),
+          h("p", { class: "muted", text: [album.artist, album.year, songs(tracks.length)].filter(Boolean).join(" · ") }), playButtons(tracks))),
+        trackList(tracks, { album: false, numbered: true }))).catch(failed);
+      return;
+    }
+    if (kind === "playlist" && id) {
+      v.append(box);
+      Subsonic.playlist(id).then((p) => fill(head(p.name, songs(p.tracks.length)), ...(p.tracks.length ? [playButtons(p.tracks), trackList(p.tracks)] : [h("p", { class: "muted", text: "This playlist is empty." })]))).catch(failed);
+      return;
+    }
+    v.append(head("Music server", new URL(Subsonic.server.url).host));
+    const input = h("input", { type: "search", class: "wp-input", placeholder: "Search your server", value: subsonic.q, "aria-label": "Search your server" });
+    const form = h("form", { class: "wp-row", role: "search" }, input, h("button", { type: "submit", class: "btn", text: "Search" }));
+    const tabs = h("div", { class: "chips wp-tabs", role: "group", "aria-label": "Show" });
+    for (const [t, label] of [["albums", "New albums"], ["recent", "Played lately"], ["starred", "Starred"], ["playlists", "Playlists"]])
+      tabs.append(h("button", { type: "button", "aria-pressed": String(subsonic.tab === t), text: label, onclick: () => { subsonic.tab = t; subsonic.q = ""; renderSubsonic(); } }));
+    v.append(form, tabs, box, h("details", { class: "card wp-details" }, h("summary", { text: "Server and sign-in" }), subsonicForm()));
+    form.addEventListener("submit", (e) => { e.preventDefault(); subsonic.q = input.value.trim(); renderSubsonic(); });
+    if (subsonic.q) {
+      Subsonic.search(subsonic.q).then((r) => fill(...(r.tracks.length || r.albums.length
+        ? [r.tracks.length ? [h("h2", { text: "Songs" }), trackList(r.tracks)] : [], r.albums.length ? [h("h2", { text: "Albums" }), albumGrid(r.albums, "#/subsonic/album/")] : []].flat()
+        : [h("p", { class: "muted", text: "Nothing matches that." })]))).catch(failed);
+    } else if (subsonic.tab === "starred") {
+      Subsonic.starred().then((t) => fill(...(t.length ? [playButtons(t), trackList(t)] : [h("p", { class: "muted", text: "No starred songs on this server." })]))).catch(failed);
+    } else if (subsonic.tab === "playlists") {
+      Subsonic.playlists().then((ps) => {
+        if (!ps.length) return fill(h("p", { class: "muted", text: "No playlists on this server." }));
+        const ul = h("ul", { class: "wp-folders" });
+        for (const p of ps) ul.append(h("li", null, h("a", { href: `#/subsonic/playlist/${encodeURIComponent(p.id)}` }, h("strong", { text: p.name }), h("small", { class: "muted", text: String(p.count) }))));
+        fill(ul);
+      }).catch(failed);
+    } else {
+      Subsonic.albums(subsonic.tab === "recent" ? "recent" : "newest").then((a) => fill(a.length ? albumGrid(a, "#/subsonic/album/") : h("p", { class: "muted", text: "No albums yet." }))).catch(failed);
+    }
+  }
+
+  // ── Search, everywhere at once ──────────────────────────────────────
+  async function renderSearch(q) {
+    const v = $("view-search");
+    v.textContent = "";
+    v.append(head(`“${q}”`, null));
+    if (!q) return;
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    if (Local.tree) {
+      const hits = S.util.allFiles(Local.tree).filter((t) => {
+        const hay = `${t.title} ${t.artist} ${t.album} ${t.file}`.toLowerCase();
+        return words.every((w) => hay.includes(w));
+      }).slice(0, 50);
+      v.append(h("h2", { text: "Files" }), hits.length ? trackList(hits) : h("p", { class: "muted", text: "Nothing in your folder." }));
+    }
+    const section = (title) => { const box = h("div", null, h("h2", { text: title }), h("p", { class: "muted", text: "Searching…" })); v.append(box); return box; };
+    if (await Cloud.signedIn().catch(() => false)) {
+      const box = section("Tryptify Cloud");
+      Cloud.songs(0, q).then((r) => { box.lastChild.replaceWith(r.tracks.length ? trackList(r.tracks.slice(0, 20)) : h("p", { class: "muted", text: "Nothing in your Cloud." })); })
+        .catch((e) => box.lastChild.replaceWith(h("p", { class: "bad", text: e.message })));
+    }
+    if (Subsonic.server) {
+      const box = section("Music server");
+      Subsonic.search(q).then((r) => {
+        const kids = [];
+        if (r.tracks.length) kids.push(trackList(r.tracks));
+        if (r.albums.length) kids.push(albumGrid(r.albums, "#/subsonic/album/"));
+        box.lastChild.replaceWith(...(kids.length ? kids : [h("p", { class: "muted", text: "Nothing on your server." })]));
+      }).catch((e) => box.lastChild.replaceWith(h("p", { class: "bad", text: e.message })));
+    }
+    if (HiFi.base) {
+      const box = section("Trypt HiFi");
+      HiFi.search(q).then((r) => {
+        const kids = [];
+        if (r.tracks.length) kids.push(trackList(r.tracks));
+        if (r.albums.length) kids.push(albumGrid(r.albums));
+        box.lastChild.replaceWith(...(kids.length ? kids : [h("p", { class: "muted", text: "Nothing on Trypt HiFi." })]));
+      }).catch((e) => box.lastChild.replaceWith(h("p", { class: "bad", text: e.message })));
+    }
+  }
+  $("wp-search").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const q = $("wp-q").value.trim();
+    if (q) location.hash = "#/search/" + encodeURIComponent(q);
+  });
+
+  // ── The dashboard ───────────────────────────────────────────────────
+  const eqActive = () => eq.on && eq.bands.length > 0;
+  function tile(id, title, ...kids) {
+    const t = $(id);
+    if (!t) return null;
+    t.textContent = "";
+    if (title) t.append(h("h2", { text: title }));
+    t.append(...kids.filter(Boolean));
+    return t;
+  }
+  function renderNow() {
+    if ($("view-home").hidden) return;
+    const t = current;
+    $("tile-now").classList.toggle("is-empty", !t);
+    if (!t) {
+      tile("tile-now", null, h("p", { class: "eyebrow", text: "Now playing" }), h("p", { class: "wp-now-title", text: "Nothing yet" }),
+        h("p", { class: "muted", text: "Start with your music folder, your Cloud or Trypt HiFi." }),
+        h("div", { class: "buttons" }, h("a", { class: "btn primary", href: "#/files", text: "Files" }),
+          h("a", { class: "btn", href: "#/cloud", text: "Tryptify Cloud" }), h("a", { class: "btn", href: "#/hifi", text: "Trypt HiFi" })));
+      return;
+    }
+    const playBtn = h("button", { type: "button", class: "wp-icon wp-play", "data-act": "toggle", "aria-label": Eng.paused ? "Play" : "Pause", icon: Eng.paused ? "play" : "pause" });
+    tile("tile-now", null,
+      t.cover ? h("img", { class: "wp-now-cover", src: t.cover, alt: "", width: 200, height: 200 }) : h("span", { class: "wp-now-cover wp-cover-none" }),
+      h("div", { class: "wp-now-text" },
+        h("div", { class: "wp-badges" }, ...[t.quality, `from ${SRC[t.src]}`, eqActive() ? `AutoEQ · ${eq.name}` : null].filter(Boolean).map((x) => h("span", { text: x }))),
+        h("p", { class: "wp-now-title", text: t.title }),
+        h("p", { class: "muted", text: [t.artist, t.album].filter(Boolean).join(" · ") }),
+        h("div", { class: "wp-progress" }, h("span", { id: "now-bar", style: `width: ${Eng.duration ? (Eng.time / Eng.duration) * 100 : 0}%` })),
+        h("div", { class: "wp-controls" },
+          h("button", { type: "button", class: "wp-icon", "data-act": "prev", "aria-label": "Previous", icon: "prev" }), playBtn,
+          h("button", { type: "button", class: "wp-icon", "data-act": "next", "aria-label": "Next", icon: "next" }))));
+  }
+  function renderEqTile() {
+    if ($("view-home").hidden) return;
+    const sw = h("label", { class: "wp-switch" }, h("input", { type: "checkbox", checked: eq.on, disabled: !eq.bands.length, onchange: (e) => setEqOn(e.target.checked) }), h("span", { text: "On" }));
+    if (!eq.bands.length) {
+      tile("tile-eq", "AutoEQ", h("p", { class: "muted", text: "Pick your headphone once and everything plays corrected, with the same engine as the app." }),
+        h("a", { class: "btn primary", href: "#/autoeq", text: "Pick a headphone" }));
+      return;
+    }
+    const graph = h("div", { class: "wp-mini-graph" });
+    drawEq(graph, eq.bands, { W: 1000, H: 260, labels: false });
+    tile("tile-eq", "AutoEQ", h("div", { class: "wp-row" }, h("strong", { text: `${eq.name} → ${eq.target}` }), h("span", { class: "wp-grow" }), sw),
+      h("p", { class: "muted small", text: `${eq.bands.length} bands · preamp −${eq.preamp.toFixed(1)} dB` }), graph,
+      h("a", { class: "btn", href: "#/autoeq", text: "Change" }));
+  }
+  function renderPath() {
+    if ($("view-home").hidden) return;
+    const on = (x) => (x ? "on" : "");
+    const rows = [
+      ["Source", current ? SRC[current.src] : "—", !!current],
+      ["File", current ? current.quality || "—" : "—", !!current],
+      ["AutoEQ", eqActive() ? `${eq.bands.length} bands` : "off", eqActive()],
+      ["Preamp", eqActive() ? `−${eq.preamp.toFixed(1)} dB` : "0 dB", eqActive()],
+      ["Mono", settings.mono ? "on" : "off", settings.mono],
+      ["Speed", `${settings.speed.toFixed(2)}×${settings.speed !== 1 && settings.preservePitch ? " · pitch kept" : ""}`, settings.speed !== 1],
+      ["Volume", `${Math.round(settings.volume * 100)} %`, true],
+      ["Output", Eng.rate ? `${+(Eng.rate / 1000).toFixed(1)} kHz · this browser` : "this browser", true],
+    ];
+    tile("tile-path", "Signal path", h("ol", { class: "wp-path" }, ...rows.map(([k, val, lit]) =>
+      h("li", { class: on(lit) }, h("span", { class: "wp-dot", "aria-hidden": "true" }), h("span", { text: k }), h("span", { class: "muted", text: val })))));
+  }
+  function renderSources() {
+    if ($("view-home").hidden) return;
+    const local = h("li", null, h("div", null, h("strong", { text: "Files" }),
+      h("span", { class: "muted small", text: Local.tree ? `${Local.count} songs in “${Local.tree.name}” · read in the browser, never uploaded` : Local.pending ? `“${Local.pending.name}” · needs a tap to open again` : "No folder chosen" })),
+      Local.pending && !Local.tree ? reconnectButton() : Local.tree ? h("a", { class: "btn", href: "#/files", text: "Open" }) : pickButton("Choose folder"));
+    const cloudLi = h("li", null, h("div", null, h("strong", { text: "Tryptify Cloud" }), h("span", { class: "muted small", text: "Checking…" })), h("a", { class: "btn", href: "#/cloud", text: "Open" }));
+    Cloud.signedIn().then((s) => { cloudLi.querySelector(".small").textContent = s ? "Signed in" : "Signed out · sign in on the Account page"; }).catch(() => {});
+    const subLi = h("li", null, h("div", null, h("strong", { text: "Music server" }),
+      h("span", { class: "muted small", text: Subsonic.server ? `${Subsonic.server.user} on ${new URL(Subsonic.server.url).host}` : "Navidrome or another Subsonic server" })),
+      h("a", { class: Subsonic.server ? "btn" : "btn primary", href: "#/subsonic", text: Subsonic.server ? "Open" : "Connect" }));
+    const hifiLi = h("li", { class: "wp-src-hifi" }, h("div", null, h("strong", { text: "Trypt HiFi" }),
+      h("span", { class: "muted small", text: HiFi.base ? new URL(HiFi.base).host : "Not connected" })), hifiForm());
+    tile("tile-sources", "Sources", h("ul", { class: "wp-sources" }, local, cloudLi, subLi, hifiLi));
+  }
+  function renderPlayback() {
+    if ($("view-home").hidden) return;
+    const toggle = (label, key, fn, hint) => h("label", { class: "wp-set" }, h("span", null, label, hint ? h("small", { class: "muted", text: hint }) : null),
+      h("input", { type: "checkbox", checked: settings[key], onchange: (e) => { settings[key] = e.target.checked; saveSettings(); fn && fn(settings[key]); renderPath(); } }));
+    const speedVal = h("span", { class: "wp-mono", text: `${settings.speed.toFixed(2)}×` });
+    const speed = h("input", { type: "range", min: 0.25, max: 4, step: 0.05, value: settings.speed, "aria-label": "Speed" });
+    speed.addEventListener("input", () => { settings.speed = Number(speed.value); speedVal.textContent = `${settings.speed.toFixed(2)}×`; Eng.setSpeed(settings.speed); });
+    speed.addEventListener("change", () => { saveSettings(); position(); renderPath(); });
+    tile("tile-playback", "Playback",
+      toggle("Gapless", "gapless", (on) => on && preloadNext(), "Loads the next song early so it starts right away"),
+      toggle("Mono", "mono", (on) => Eng.setMono(on)),
+      toggle("Keep pitch when the speed changes", "preservePitch", (on) => Eng.setPreservePitch(on)),
+      h("label", { class: "wp-set" }, h("span", { text: "Speed" }), speed, speedVal,
+        h("button", { type: "button", class: "btn wp-small", text: "1×", onclick: () => { settings.speed = 1; Eng.setSpeed(1); saveSettings(); renderPlayback(); renderPath(); } })));
+  }
+  function renderNext() {
+    if ($("view-home").hidden) return;
+    const list = upcoming().slice(0, 5);
+    tile("tile-next", "Up next", list.length
+      ? h("ol", { class: "wp-next" }, ...list.map((t) => h("li", null, h("strong", { text: t.title }), h("span", { class: "muted small", text: [t.artist, SRC[t.src], t.quality].filter(Boolean).join(" · ") }))))
+      : h("p", { class: "muted", text: "Nothing after this song." }),
+      h("button", { type: "button", class: "btn", "data-act": "queue", text: "Show the queue" }));
+  }
+  function renderHome() { renderNow(); renderEqTile(); renderPath(); renderSources(); renderPlayback(); renderNext(); }
+
+  // ── AutoEQ ──────────────────────────────────────────────────────────
+  const NS = "http://www.w3.org/2000/svg";
+  const svgNode = (tag, attrs, parent) => {
+    const e = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    parent && parent.append(e);
+    return e;
+  };
+  /** The EQ curve alone (the AutoEQ page's "EQ curves, no preamp"), in the page's graph style. */
+  function drawEq(host, bands, { W = 1000, H = 300, labels = true } = {}) {
+    host.textContent = "";
+    if (!E || !bands.length) return;
+    const P = labels ? { l: 44, r: 14, t: 14, b: 30 } : { l: 6, r: 6, t: 8, b: 8 };
+    const N = 220, freqs = [];
+    for (let i = 0; i < N; i++) freqs.push(20 * Math.pow(1000, i / (N - 1)));
+    const vals = E.eqCurve(bands, freqs);
+    const lo = Math.min(-5, Math.floor((Math.min(...vals) - 1) / 5) * 5), hi = Math.max(10, Math.ceil((Math.max(...vals) + 1) / 5) * 5);
+    const svg = svgNode("svg", { viewBox: `0 0 ${W} ${H}`, class: "graph", role: "img", "aria-label": "The EQ curve, without preamp" }, host);
+    const x = (f) => P.l + ((Math.log10(f) - Math.log10(20)) / 3) * (W - P.l - P.r);
+    const y = (db) => P.t + ((hi - db) / (hi - lo)) * (H - P.t - P.b);
+    for (let v = lo; v <= hi; v += 5) {
+      svgNode("line", { x1: P.l, x2: W - P.r, y1: y(v), y2: y(v), class: "g-h" }, svg);
+      if (labels) svgNode("text", { x: P.l - 8, y: y(v) + 4, class: "g-tick", "text-anchor": "end" }, svg).textContent = String(v);
+    }
+    for (const f of [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000]) {
+      svgNode("line", { x1: x(f), x2: x(f), y1: P.t, y2: H - P.b, class: "g-v major" }, svg);
+      if (labels) svgNode("text", { x: x(f), y: H - P.b + 18, class: "g-tick", "text-anchor": "middle" }, svg).textContent = f >= 1000 ? `${f / 1000}k` : String(f);
+    }
+    svgNode("line", { x1: P.l, x2: W - P.r, y1: y(0), y2: y(0), class: "g-zero" }, svg);
+    svgNode("path", { d: freqs.map((f, i) => `${i ? "L" : "M"}${x(f).toFixed(1)},${y(vals[i]).toFixed(1)}`).join(""), class: "g-line s-sq" }, svg);
+  }
+  const BAND_NAMES = { PEAKING: "Peak", LOWSHELF: "Low shelf", HIGHSHELF: "High shelf" };
+  function bandTable(bands) {
+    const body = $("try-table").querySelector("tbody");
+    body.textContent = "";
+    bands.forEach((b, i) => body.append(h("tr", null, ...[i + 1, BAND_NAMES[b.type],
+      b.freq >= 1000 ? `${(b.freq / 1000).toFixed(2)} kHz` : `${Math.round(b.freq)} Hz`,
+      `${b.gain > 0 ? "+" : ""}${b.gain.toFixed(1)} dB`, b.q.toFixed(2)].map((v) => h("td", { text: String(v) })))));
+  }
+  function setEqOn(on) {
+    eq.on = !!on && eq.bands.length > 0;
+    saveEq();
+    Eng.setEq(eq);
+    renderEqState();
+  }
+  function renderEqState() {
+    const has = eq.bands.length > 0;
+    $("wp-eq-on").checked = eqActive();
+    $("wp-eq-on").disabled = !has;
+    $("wp-eq-side").textContent = eqActive() ? "On" : "";
+    $("wp-eq-active").textContent = has
+      ? `${eq.on ? "Playing everything through" : "Off. Saved:"} ${eq.name} → ${eq.target}, ${eq.bands.length} bands, preamp −${eq.preamp.toFixed(1)} dB.`
+      : "Pick a headphone and Tryptify fits an EQ to it with the app's own engine, then plays everything through it.";
+    $("wp-eq-card").hidden = !has;
+    $("wp-bands").hidden = !has;
+    if (has) { drawEq($("wp-eq-graph"), eq.bands); bandTable(eq.bands); }
+    const o = eq.opts;
+    $("wp-fr-caption").textContent = o ? `${eq.bands.length} bands · up to ${o.maxFrequency / 1000} kHz · ${o.algorithm === "SHELF_ENDS" ? "shelf ends" : "peaking"}` : "";
+    renderBar();
+    renderEqTile();
+    renderPath();
+  }
+  let restoring = false, restored = false;
+  const chipSync = [];
+  function initAutoEq() {
+    const host = $("wp-chips");
+    for (const [id, label] of [["hp-max", "Highest EQ frequency"], ["hp-bands", "Band count"], ["hp-alg", "Method"]]) {
+      const sel = $(id);
+      if (!sel) continue;
+      const chips = h("div", { class: "chips", role: "group", "aria-label": label });
+      const buttons = [...sel.options].map((o) => h("button", { type: "button", text: o.textContent,
+        onclick: () => { sel.value = o.value; sel.dispatchEvent(new Event("change")); sync(); } }));
+      const sync = () => buttons.forEach((b, i) => b.setAttribute("aria-pressed", String(sel.selectedIndex === i)));
+      chipSync.push(sync);
+      sel.addEventListener("change", sync);
+      sync();
+      chips.append(...buttons);
+      host.append(h("div", { class: "rank-group" }, h("span", { class: "rank-label", text: label }), chips));
+    }
+    $("wp-eq-on").addEventListener("change", (e) => setEqOn(e.target.checked));
+    $("tryout").addEventListener("tryptify:fit", (e) => {
+      const d = e.detail;
+      eq = { on: restoring ? eq.on : true, bands: d.bands, preamp: d.preamp, name: d.name, target: d.target,
+        phone: d.phone, source: d.source, targetId: d.targetId, smooth: d.smooth, opts: d.opts };
+      restoring = false;
+      saveEq();
+      Eng.setEq(eq);
+      renderEqState();
+    });
+    renderEqState();
+  }
+  function renderAutoEq() {
+    // Fit the saved headphone again, so its graphs show; only when this view opens (the headphone list is large).
+    if (restored || !eq.phone || !window.TryptifyTryout) return;
+    restored = true;
+    restoring = true;
+    window.TryptifyTryout.restore(eq).then(() => chipSync.forEach((f) => f())).catch(() => { restoring = false; });
+  }
+
+  // ── Pages ───────────────────────────────────────────────────────────
+  const ROUTES = ["home", "liked", "playlists", "files", "cloud", "hifi", "subsonic", "search", "autoeq"];
+  function route() {
+    const parts = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean).map((p) => { try { return decodeURIComponent(p); } catch (_) { return p; } });
+    const view = ROUTES.includes(parts[0]) ? parts[0] : "home";
+    for (const r of ROUTES) $("view-" + r).hidden = r !== view;
+    for (const a of document.querySelectorAll(".wp-side a")) {
+      if (a.dataset.route === view) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+    }
+    if (view === "home") renderHome();
+    else if (view === "liked") renderLiked();
+    else if (view === "playlists") renderPlaylists(parts[1]);
+    else if (view === "files") renderFiles(parts.slice(1));
+    else if (view === "cloud") renderCloud();
+    else if (view === "subsonic") renderSubsonic(parts[1], parts[2]);
+    else if (view === "hifi") parts[1] === "album" && parts[2] ? renderHifiAlbum(parts[2]) : renderHifi();
+    else if (view === "search") { $("wp-q").value = parts.slice(1).join("/"); renderSearch(parts.slice(1).join("/")); }
+    else if (view === "autoeq") renderAutoEq();
+  }
+  addEventListener("hashchange", () => { route(); window.scrollTo(0, 0); });
+
+  // ── Black or white, shared with the rest of the site ────────────────
+  const themeBtn = $("wp-theme");
+  const paintTheme = () => setIcon(themeBtn, document.documentElement.dataset.design === "white" ? "moon" : "sun");
+  themeBtn.addEventListener("click", () => {
+    const next = document.documentElement.dataset.design === "white" ? "dark" : "white";
+    document.documentElement.dataset.design = next;
+    try { localStorage.setItem("tryptify-theme", next); } catch (_) {}
+    paintTheme();
+  });
+  paintTheme();
+
+  // Space plays and pauses; "/" goes to search. Not while typing.
+  document.addEventListener("keydown", (e) => {
+    if (e.target.closest("input, select, textarea, [contenteditable]") || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === " " && !e.target.closest("button, a")) { e.preventDefault(); current ? Eng.toggle().catch(fail) : playFirst(); }
+    else if (e.key === "/") { e.preventDefault(); $("wp-q").focus(); }
+  });
+
+  // ── Start ───────────────────────────────────────────────────────────
+  initAutoEq();
+  renderBar();
+  route();
+  Local.restore().then(() => { localChanged(); if (!$("view-files").hidden) route(); }).catch(() => {});
+  if (HiFi.base) { pill("Trypt HiFi", null); testHifi(); }
+})();
