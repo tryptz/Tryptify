@@ -108,20 +108,23 @@ android {
             "\"${localProperties.getProperty("lastfm.apiKey") ?: "153452aaeaa3e666645274b3a9e5bb0a"}\"",
         )
 
-        // The Trypt Mania chart server every install starts with (Slow, a
-        // CPU server on Railway), its secret path and all. From
-        // local.properties (`tryptmania.cpuServer`) or the
-        // TRYPTMANIA_CPU_SERVER environment variable, never the repository:
-        // a build without either ships no server, and charting waits for one
-        // under Settings › Connections. Anyone with the APK can read it.
-        buildConfigField(
-            "String",
-            "BUILT_IN_CPU_SERVER",
-            "\"${(localProperties.getProperty("tryptmania.cpuServer") ?: System.getenv("TRYPTMANIA_CPU_SERVER") ?: "").trim()}\"",
-        )
+        // The Trypt Mania chart server (Slow, a CPU server on Railway), its
+        // secret path and all. Left out of every build unless that build asks
+        // for it with `-Ptryptmania.withCpuServer=true`: having the address in
+        // local.properties (`tryptmania.cpuServer`) or TRYPTMANIA_CPU_SERVER is
+        // not enough, so no APK carries it by accident. Without it charting
+        // waits for a server under Settings › Connections. Never from the
+        // repository; anyone with an APK that has it can read it.
+        val withCpuServer = (findProperty("tryptmania.withCpuServer") as String?)?.trim()?.toBoolean() == true
+        val cpuServer = if (withCpuServer) {
+            (localProperties.getProperty("tryptmania.cpuServer") ?: System.getenv("TRYPTMANIA_CPU_SERVER") ?: "").trim()
+        } else {
+            ""
+        }
+        buildConfigField("String", "BUILT_IN_CPU_SERVER", "\"$cpuServer\"")
         // The rooms server for Trypt Mania's multiplayer (TryptMania-Parser's
-        // multiplayer/ service on Railway), the same way: local.properties
-        // `tryptmania.roomsServer` or TRYPTMANIA_ROOMS_SERVER.
+        // multiplayer/ service on Railway), built in whenever local.properties
+        // `tryptmania.roomsServer` or TRYPTMANIA_ROOMS_SERVER is set.
         val roomsServer = (localProperties.getProperty("tryptmania.roomsServer") ?: System.getenv("TRYPTMANIA_ROOMS_SERVER") ?: "").trim()
         buildConfigField("String", "BUILT_IN_ROOMS_SERVER", "\"$roomsServer\"")
         // Listening party invites (https://<rooms host>/…/party/<code>) open

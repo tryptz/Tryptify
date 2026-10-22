@@ -126,12 +126,14 @@ or the environment, never from the repository (`app/build.gradle.kts`):
 | `tryptmania.cpuServer` | `TRYPTMANIA_CPU_SERVER` | `BuildConfig.BUILT_IN_CPU_SERVER` | the chart server (Slow mode, a CPU server; it also times lyrics) |
 | `tryptmania.roomsServer` | `TRYPTMANIA_ROOMS_SERVER` | `BuildConfig.BUILT_IN_ROOMS_SERVER` | the multiplayer rooms server |
 
-The `local.properties` key wins over the variable. A release build for the
-owner needs both. Without them the app still builds and runs, but nothing is
-built in: no server is added under Settings › Connections, charting waits until
-the listener adds one there, and multiplayer has no rooms server. With them,
-`BuiltInServer` puts each one back in that list on every read, and the list
-shows only its host.
+The `local.properties` key wins over the variable. **The chart server is left
+out of every build by default**, even with its key or variable set: only a
+build run with `-Ptryptmania.withCpuServer=true` carries it, and that is made
+only when the owner asks for it. So a normal release, the owner's included, has
+the rooms server and no chart server, and charting waits until the listener
+adds one under Settings › Connections. Without the rooms key multiplayer has
+no rooms server either. A built-in server is put back in that list by
+`BuiltInServer` on every read, and the list shows only its host.
 
 Never print, log or commit the values, and never write them into a document, a
 test, a commit message or a chat reply. Anyone with the APK can dig them out;
@@ -145,7 +147,8 @@ grep -c 'BUILT_IN_CPU_SERVER = ""' $f; grep -c 'BUILT_IN_ROOMS_SERVER = ""' $f
 ```
 
 After a release build, each `grep` prints `1` when that server was left out and
-`0` when it is built in. The cloud setup below writes `local.properties` with
+`0` when it is built in: the chart server's should print `1` unless the build
+was asked for it. The cloud setup below writes `local.properties` with
 `>`, which replaces the file, so add these keys after it, not before. The CI
 workflow sets neither variable, so an APK it builds has no built-in servers.
 

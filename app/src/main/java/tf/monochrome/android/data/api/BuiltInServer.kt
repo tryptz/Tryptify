@@ -3,12 +3,13 @@
 package tf.monochrome.android.data.api
 
 /**
- * The chart server every install has: a TryptMania Parser on a CPU
- * (Railway), Trypt Mania's Slow mode, so charting works with nothing set up.
+ * The servers a build can ship: a TryptMania Parser on a CPU (Railway),
+ * Trypt Mania's Slow mode, so charting works with nothing set up.
  *
  * Its address, secret path and all, comes from the build
  * (`BuildConfig.BUILT_IN_CPU_SERVER`, from local.properties), never from the
- * repository; a build without one has none. The rooms server for Trypt
+ * repository, and only when the build asks for it with
+ * `-Ptryptmania.withCpuServer=true`; by default a build has none. The rooms server for Trypt
  * Mania's multiplayer (`BUILT_IN_ROOMS_SERVER`) ships the same way. It is always in the list under
  * Settings › Connections and cannot be removed: [ensure] puts it back on
  * every read and every save. It can still be moved and checked again.

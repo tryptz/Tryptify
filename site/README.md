@@ -93,10 +93,12 @@ follows live until the button is used.
   for a static file) and `src/worker.js` serves it at
   `/download/tryptify.apk`, with ranges. Publish a new one with
   `wrangler r2 object put tryptify-downloads/tryptify.apk --remote --file … --content-type application/vnd.android.package-archive --content-disposition 'attachment; filename="Tryptify-<version>.apk"'`
-  and update `data/apk.json` (version, size, SHA-256). The public APK is built
-  without the Trypt Mania server secrets: `env -u TRYPTMANIA_CPU_SERVER -u
-  TRYPTMANIA_ROOMS_SERVER ./gradlew :app:assembleRelease`, and checked with
-  the BuildConfig greps in AGENTS.md before upload.
+  and update `data/apk.json` (version, size, SHA-256). The public APK is a
+  normal release build, `./gradlew :app:assembleRelease`, which leaves the
+  chart server out by default (never pass `-Ptryptmania.withCpuServer=true`
+  for it) and keeps the rooms server when its key is set. Check it with the
+  BuildConfig greps in AGENTS.md before upload: the chart server's must print
+  `1`.
 
 ## The AutoEQ try-out
 

@@ -27,9 +27,13 @@ compaction, so anything that must not be forgotten belongs here, not in chat.
   it. Before each commit, check the staged diff does not contain it.
 - The multiplayer rooms server address is kept the same way, in
   `tryptmania.roomsServer` (or `TRYPTMANIA_ROOMS_SERVER`), under the same rules.
-- A release built without these keys has no built-in chart or rooms server.
-  Before a release build, check both keys are set (without printing them), and
-  say so if they are not.
+- The chart server is never built in by default, on any build, even when its
+  key is set. Only a build run with `-Ptryptmania.withCpuServer=true` carries
+  it, and only when the owner asks for that build. The rooms server is built
+  in whenever its key is set.
+- Before a release build, check the rooms key is set (without printing it),
+  and say so if it is not. After it, check the chart server was left out
+  (the BuildConfig grep in AGENTS.md prints `1`).
 - Never commit `keystore.properties` or any `.jks`, and never print keystore
   passwords.
 
