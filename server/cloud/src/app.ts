@@ -52,7 +52,20 @@ export function createApp({ db, storage = null, billing, personOf, playKey = nul
   app.get("/", health);
   app.get("/health", health);
 
-  /** The plans and the trial's terms, for the app's plan picker. No account needed. */
+  // The web app at tryptify.com calls /v1 and /plans from the browser. Only
+  // its own pages may: the session token is the gate, this keeps other sites
+  // out. Without it on /plans the browser refused the price list, and the
+  // account page's whole plan card with it.
+  const webCors = cors({
+    origin: (origin) => (WEB_ORIGINS.test(origin) ? origin : null),
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowHeaders: ["authorization", "content-type"],
+    maxAge: 86400,
+  });
+  app.use("/plans", webCors);
+  app.use("/v1/*", webCors);
+
+  /** The plans and the trial's terms, for the app's plan picker and the site's. No account needed. */
   app.get("/plans", (c) =>
     c.json({
       readOnlyDays: READ_ONLY_DAYS,
@@ -60,15 +73,6 @@ export function createApp({ db, storage = null, billing, personOf, playKey = nul
       plans: Object.entries(PLANS).map(([id, p]) => ({ id, ...p })),
     }),
   );
-
-  // The web app at tryptify.com calls /v1 from the browser. Only its own
-  // pages may: the session token is the gate, this keeps other sites out.
-  app.use("/v1/*", cors({
-    origin: (origin) => (WEB_ORIGINS.test(origin) ? origin : null),
-    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowHeaders: ["authorization", "content-type"],
-    maxAge: 86400,
-  }));
 
   app.use("/v1/*", async (c, next) => {
     if (!db) return fail(503, "not_set_up");

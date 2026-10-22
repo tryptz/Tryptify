@@ -839,6 +839,13 @@ test("the web app's pages may call /v1 from a browser; other sites may not", asy
   for (const bad of ["https://evil.example", "https://tryptify.com.evil.example", "http://tryptify.com"]) {
     assert.equal((await pre(bad)).headers.get("access-control-allow-origin"), null, bad);
   }
+  // The price list too: the account page's plan card reads it, and a browser
+  // that may not read it fails the whole card.
+  const plans = await fetchCloud(new Request("http://cloud.test/plans", { headers: { origin: "https://tryptify.com" } }));
+  assert.equal(plans.status, 200);
+  assert.equal(plans.headers.get("access-control-allow-origin"), "https://tryptify.com");
+  const elsewhere = await fetchCloud(new Request("http://cloud.test/plans", { headers: { origin: "https://evil.example" } }));
+  assert.equal(elsewhere.headers.get("access-control-allow-origin"), null);
 });
 
 test("deleting a song removes its file and cover and gives the space back", async () => {
