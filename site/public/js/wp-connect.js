@@ -9,7 +9,9 @@
   "use strict";
   const recall = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
   const remember = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };
-  const BASE = recall("tryptify-connect-url") || "wss://connect.tryptify.com";
+  // Only the real room, or one on this computer (for testing): the address
+  // gets the account's sign-in, so a stored one elsewhere is ignored.
+  const BASE = ((u) => /^(wss:\/\/connect\.tryptify\.com|wss?:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/.test(u || "") ? u : "wss://connect.tryptify.com")(recall("tryptify-connect-url"));
 
   /** This browser's id, made once and kept. */
   const deviceId = (() => {

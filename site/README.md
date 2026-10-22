@@ -170,3 +170,13 @@ up next), a menu on the left and the bar at the bottom.
 `node site/tests/webplayer.mjs` checks the pure parts: file names into a
 library, the sources' rows into tracks, cover ids, addresses, MD5, and that
 the coefficients the player hands to its filters give the engine's curve.
+
+## Security headers
+
+`public/_headers` gives every page a Content-Security-Policy (only the
+site's own scripts run; no inline script, so the theme picker is
+`js/theme-boot.js`), no framing, `nosniff`, HSTS and a Permissions-Policy.
+A new script, font or picture from another site has to be added to the policy
+there, or the browser refuses it. After changing either, serve the site with
+`npx wrangler dev` and open every page with the browser console open: a
+refused resource is logged as a Content Security Policy error.

@@ -9,15 +9,7 @@
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/player.css">
-  <script>
-    (function () {
-      // Black or white: the one last picked on any page, else the device's own.
-      var t = null;
-      try { t = localStorage.getItem("tryptify-theme"); } catch (e) {}
-      if (t !== "dark" && t !== "white") t = matchMedia("(prefers-color-scheme: light)").matches ? "white" : "dark";
-      document.documentElement.dataset.design = t;
-    })();
-  </script>
+  <script src="/js/theme-boot.js"></script>
 </head>
 <body class="wp">
   <a class="wp-skip" href="#wp-main">Skip to the music</a>
