@@ -421,20 +421,32 @@
       qual.append(h("option", { value: v, text: l, selected: HiFi.quality === v }));
     qual.addEventListener("change", () => { HiFi.quality = qual.value; renderPath(); });
     const msg = h("p", { class: "small muted", role: "status" });
+    const unlocked = !!HiFi.base;
     const form = h("form", { class: "wp-form" },
-      h("label", { for: "hifi-addr", text: "Server address" }), addr,
-      h("label", { for: "hifi-quality", text: "Stream quality" }), qual,
-      h("div", { class: "buttons" }, h("button", { type: "submit", class: "btn primary", text: HiFi.base ? "Save" : "Connect" }),
-        HiFi.base ? h("button", { type: "button", class: "btn", text: "Remove", onclick: () => { HiFi.base = null; pill(); route(); } }) : null),
+      h("label", { for: "hifi-addr", text: "API URL" }), addr,
+      unlocked ? [h("label", { for: "hifi-quality", text: "Stream quality" }), qual] : null,
+      h("div", { class: "buttons" }, h("button", { type: "submit", class: "btn primary", text: unlocked ? "Save" : "Unlock" }),
+        unlocked ? h("button", { type: "button", class: "btn", text: "Remove", onclick: () => {
+          HiFi.base = null; paintUnlock(); pill(); toast("Trypt HiFi removed."); location.hash = "#/"; route();
+        } }) : null),
       msg);
+    // A URL is kept only once it answers, so a typo never unlocks an empty Trypt HiFi.
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const base = S.util.normalizeBase(addr.value);
-      if (!base) { msg.textContent = "That is not an address."; return; }
-      if (base.startsWith("http://") && !/^http:\/\/(localhost|127\.|\[::1\])/.test(base)) { msg.textContent = "Use https://: this page is secure, so the browser blocks http:// servers."; return; }
-      HiFi.base = base;
-      msg.textContent = "Connecting…";
-      await testHifi(msg);
+      if (!base) { msg.textContent = "That is not a URL."; return; }
+      if (base.startsWith("http://") && !/^http:\/\/(localhost|127\.|\[::1\])/.test(base)) { msg.textContent = "Use https://: this page is secure, so the browser blocks http:// addresses."; return; }
+      msg.textContent = "Checking…";
+      try {
+        const ms = await HiFi.test(base);
+        HiFi.base = base;
+        pill(`Trypt HiFi · ${ms} ms`, true);
+        paintUnlock();
+        if (unlocked) msg.textContent = `Saved. Answered in ${ms} ms.`;
+        else { toast("Trypt HiFi unlocked."); route(); }
+      } catch (err) {
+        msg.textContent = err.message === "Failed to fetch" ? "No answer from that URL. Check it, and that the server is running." : err.message;
+      }
     });
     return form;
   }
@@ -449,6 +461,11 @@
       if (msg) msg.textContent = e.message === "Failed to fetch" ? "No answer. Check the address, and that the server is running." : e.message;
       return false;
     }
+  }
+  /** Trypt HiFi shows nowhere until its API URL is in. */
+  function paintUnlock() {
+    $("wp-side-hifi").hidden = !HiFi.base;
+    $("wp-q").placeholder = HiFi.base ? "Search your music and Trypt HiFi" : "Search your music";
   }
   function pill(text, ok) {
     const p = $("wp-hifi-pill");
@@ -509,7 +526,7 @@
   const signInCard = (what) => h("div", { class: "card wp-empty" },
     h("p", { text: `Sign in with the same account as the app to see your ${what}.` }), h("a", { class: "btn primary", href: "/account", text: "Sign in" }));
   const needsHifi = () => (HiFi.base ? null : h("p", { class: "card wp-note" },
-    "These songs play through Trypt HiFi. ", h("a", { href: "#/hifi", text: "Connect your server" }), " to play them."));
+    "These songs need an API URL to play. Add one under Sources, on ", h("a", { href: "#/", text: "the dashboard" }), "."));
   const library = { liked: null, playlists: null };
   async function renderLiked() {
     const v = $("view-liked");
@@ -695,9 +712,10 @@
     $("tile-now").classList.toggle("is-empty", !t);
     if (!t) {
       tile("tile-now", null, h("p", { class: "eyebrow", text: "Now playing" }), h("p", { class: "wp-now-title", text: "Nothing yet" }),
-        h("p", { class: "muted", text: "Start with your music folder, your Cloud or Trypt HiFi." }),
+        h("p", { class: "muted", text: "Start with your music folder, your Cloud or your music server." }),
         h("div", { class: "buttons" }, h("a", { class: "btn primary", href: "#/files", text: "Files" }),
-          h("a", { class: "btn", href: "#/cloud", text: "Tryptify Cloud" }), h("a", { class: "btn", href: "#/hifi", text: "Trypt HiFi" })));
+          h("a", { class: "btn", href: "#/cloud", text: "Tryptify Cloud" }), h("a", { class: "btn", href: "#/subsonic", text: "Music server" }),
+          HiFi.base ? h("a", { class: "btn", href: "#/hifi", text: "Trypt HiFi" }) : null));
       return;
     }
     const playBtn = h("button", { type: "button", class: "wp-icon wp-play", "data-act": "toggle", "aria-label": Eng.paused ? "Play" : "Pause", icon: Eng.paused ? "play" : "pause" });
@@ -752,8 +770,9 @@
     const subLi = h("li", null, h("div", null, h("strong", { text: "Music server" }),
       h("span", { class: "muted small", text: Subsonic.server ? `${Subsonic.server.user} on ${new URL(Subsonic.server.url).host}` : "Navidrome or another Subsonic server" })),
       h("a", { class: Subsonic.server ? "btn" : "btn primary", href: "#/subsonic", text: Subsonic.server ? "Open" : "Connect" }));
-    const hifiLi = h("li", { class: "wp-src-hifi" }, h("div", null, h("strong", { text: "Trypt HiFi" }),
-      h("span", { class: "muted small", text: HiFi.base ? new URL(HiFi.base).host : "Not connected" })), hifiForm());
+    const hifiLi = HiFi.base
+      ? h("li", { class: "wp-src-hifi" }, h("div", null, h("strong", { text: "Trypt HiFi" }), h("span", { class: "muted small", text: new URL(HiFi.base).host })), hifiForm())
+      : h("li", { class: "wp-src-hifi" }, h("details", { class: "wp-unlock" }, h("summary", { text: "Add an API URL" }), hifiForm()));
     tile("tile-sources", "Sources", h("ul", { class: "wp-sources" }, local, cloudLi, subLi, hifiLi));
   }
   function renderPlayback() {
@@ -884,7 +903,8 @@
   const ROUTES = ["home", "liked", "playlists", "files", "cloud", "hifi", "subsonic", "search", "autoeq"];
   function route() {
     const parts = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean).map((p) => { try { return decodeURIComponent(p); } catch (_) { return p; } });
-    const view = ROUTES.includes(parts[0]) ? parts[0] : "home";
+    const asked = ROUTES.includes(parts[0]) ? parts[0] : "home";
+    const view = asked === "hifi" && !HiFi.base ? "home" : asked;
     for (const r of ROUTES) $("view-" + r).hidden = r !== view;
     for (const a of document.querySelectorAll(".wp-side a")) {
       if (a.dataset.route === view) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
@@ -921,6 +941,7 @@
 
   // ── Start ───────────────────────────────────────────────────────────
   initAutoEq();
+  paintUnlock();
   renderBar();
   route();
   Local.restore().then(() => { localChanged(); if (!$("view-files").hidden) route(); }).catch(() => {});

@@ -303,18 +303,18 @@
     set base(v) { remember("tryptify-player-hifi", normalizeBase(v)); },
     get quality() { return recall("tryptify-player-hifi-quality") || "LOSSLESS"; },
     set quality(v) { remember("tryptify-player-hifi-quality", v); },
-    async get(path, params) {
-      if (!this.base) throw new Error("Add your Trypt HiFi server first.");
+    async get(path, params, base = this.base) {
+      if (!base) throw new Error("Add the Trypt HiFi API URL first.");
       const qs = new URLSearchParams(params).toString();
-      const res = await fetch(`${this.base}${path}?${qs}`);
+      const res = await fetch(`${base}${path}?${qs}`);
       const j = await res.json().catch(() => null);
       if (!res.ok || !j || !j.success) throw new Error((j && typeof j.error === "string" && j.error) || `Trypt HiFi answered ${res.status}.`);
       return j.data;
     },
-    /** Round-trip time in ms, or throws with the reason. */
-    async test() {
+    /** Round-trip time in ms to [base] (the saved one by default), or throws with the reason. */
+    async test(base = this.base) {
       const t0 = performance.now();
-      await this.get("/api/tidal/get-music", { q: "a", offset: 0 });
+      await this.get("/api/tidal/get-music", { q: "a", offset: 0 }, base);
       return Math.round(performance.now() - t0);
     },
     async search(q) {
@@ -329,7 +329,7 @@
       return { album: hifiAlbum(a), tracks: ((a.tracks && a.tracks.items) || []).map((t) => hifiTrack(t, a, this.quality)) };
     },
     url(track) {
-      if (!this.base) throw new Error("connect Trypt HiFi on the dashboard to play this.");
+      if (!this.base) throw new Error("it needs an API URL: add one under Sources, on the dashboard.");
       const q = this.quality === "HI_RES_LOSSLESS" && !track.ref.hires ? "LOSSLESS" : this.quality;
       return `${this.base}/api/tidal/stream-file?track_id=${encodeURIComponent(track.ref.id)}&quality=${q}`;
     },

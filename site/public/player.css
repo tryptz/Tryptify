@@ -68,6 +68,10 @@
 .wp-side a:hover { color: var(--text); background: color-mix(in srgb, var(--text) 5%, transparent); }
 .wp-side a[aria-current="page"] { background: var(--panel-2); color: var(--text); font-weight: 600; }
 .wp-side small { color: var(--muted); font-size: 12px; }
+.wp-side a[hidden] { display: none; }
+.wp-unlock { flex: 1 1 100%; }
+.wp-unlock summary { cursor: pointer; font-weight: 600; font-size: 14px; color: var(--accent-2); }
+.wp-unlock[open] summary { margin-bottom: 10px; }
 .wp-main { min-width: 0; padding: 28px 32px calc(var(--bar-h) + 40px); outline: none; }
 .wp-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 18px; }
 .wp-head p { margin: 0; max-width: 64ch; }

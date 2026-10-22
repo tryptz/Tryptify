@@ -142,6 +142,10 @@ up next), a menu on the left and the bar at the bottom.
   - Trypt HiFi: the listener's TrypT-hifi server, by its `/api/tidal` routes
     (the ones that send CORS): `get-music`, `get-album`, and `stream-file` for
     the audio. Its root HiFi API routes send no CORS, so they are not used.
+    It is locked until its API URL is in: until then nothing names it (no
+    menu entry, search, pill or button; `#/hifi` opens the dashboard), only
+    "Add an API URL" under Sources. A URL is kept only once it answers, and
+    Remove locks it again.
   - Music server: Navidrome or any Subsonic server, by `/rest/*.view` with
     `f=json`. Like the app's music server, a token and salt are kept (in
     localStorage), never the password, unless the server refuses tokens
