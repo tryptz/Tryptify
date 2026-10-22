@@ -135,6 +135,8 @@ class PreferencesManager @Inject constructor(
 
         // Player state
         private val SHUFFLE_ENABLED = booleanPreferencesKey("shuffle_enabled")
+        // Device-local, like the list it edits: whether the retired built-in chart server was taken out.
+        private val RETIRED_CPU_SERVER_REMOVED = booleanPreferencesKey("retired_cpu_server_removed")
         private val REPEAT_MODE = intPreferencesKey("repeat_mode")
         private val VOLUME = doublePreferencesKey("volume")
 
@@ -1032,12 +1034,12 @@ class PreferencesManager @Inject constructor(
      */
     val apiServers: Flow<List<tf.monochrome.android.data.api.ApiServer>> = dataStore.data.map { prefs -> apiServersOf(prefs) }
 
-    /** The saved list, always with the build's chart server in it (BuiltInServer). */
+    /** The saved list, always with the build's rooms server in it (BuiltInServer). */
     private fun apiServersOf(prefs: Preferences): List<tf.monochrome.android.data.api.ApiServer> =
         withBuiltIn(savedApiServers(prefs))
 
     private fun withBuiltIn(servers: List<tf.monochrome.android.data.api.ApiServer>) =
-        tf.monochrome.android.data.api.BuiltInServer.ensureAll(servers, BuildConfig.BUILT_IN_CPU_SERVER, BuildConfig.BUILT_IN_ROOMS_SERVER) ?: servers
+        tf.monochrome.android.data.api.BuiltInServer.ensureAll(servers, BuildConfig.BUILT_IN_ROOMS_SERVER) ?: servers
 
     private fun savedApiServers(prefs: Preferences): List<tf.monochrome.android.data.api.ApiServer> =
         prefs[API_SERVERS]
@@ -1050,11 +1052,21 @@ class PreferencesManager @Inject constructor(
                 appleUrl = prefs[APPLE_INSTANCE_URL],
             )
 
-    /** Writes the build's servers into the saved list, once a launch (BuiltInServer). */
-    suspend fun seedBuiltInServer(builtIn: String, roomsServer: String = "") {
+    /**
+     * Writes the build's rooms server into the saved list, once a launch, and
+     * the first time takes out the chart server older builds put there
+     * (BuiltInServer.withoutRetired): once only, so one added again stays.
+     */
+    suspend fun seedBuiltInServer(roomsServer: String, retiredCpuHostSha256: String = "") {
         dataStore.edit { prefs ->
-            val saved = savedApiServers(prefs)
-            tf.monochrome.android.data.api.BuiltInServer.ensureAll(saved, builtIn, roomsServer)?.let { prefs[API_SERVERS] = json.encodeToString(it) }
+            var saved = savedApiServers(prefs)
+            var changed = false
+            if (prefs[RETIRED_CPU_SERVER_REMOVED] != true && retiredCpuHostSha256.isNotBlank()) {
+                tf.monochrome.android.data.api.BuiltInServer.withoutRetired(saved, retiredCpuHostSha256)?.let { saved = it; changed = true }
+                prefs[RETIRED_CPU_SERVER_REMOVED] = true
+            }
+            tf.monochrome.android.data.api.BuiltInServer.ensureAll(saved, roomsServer)?.let { saved = it; changed = true }
+            if (changed) prefs[API_SERVERS] = json.encodeToString(saved)
         }
     }
 

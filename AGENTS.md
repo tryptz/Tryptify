@@ -117,21 +117,27 @@ StepMania's notice requires next to the art.
 
 ## Trypt Mania's built-in servers are build secrets
 
-A release can ship with two TryptMania Parser servers built in. Each address
-carries a secret path, so it comes only from the gitignored `local.properties`
-or the environment, never from the repository (`app/build.gradle.kts`):
+A release ships with one TryptMania Parser server built in, the rooms server
+for multiplayer and listening parties. Its address carries a secret path, so it
+comes only from the gitignored `local.properties` or the environment, never
+from the repository (`app/build.gradle.kts`):
 
 | `local.properties` key | or environment variable | becomes | what it is |
 |---|---|---|---|
-| `tryptmania.cpuServer` | `TRYPTMANIA_CPU_SERVER` | `BuildConfig.BUILT_IN_CPU_SERVER` | the chart server (Slow mode, a CPU server; it also times lyrics) |
 | `tryptmania.roomsServer` | `TRYPTMANIA_ROOMS_SERVER` | `BuildConfig.BUILT_IN_ROOMS_SERVER` | the multiplayer rooms server |
+| `tryptmania.cpuServer` | `TRYPTMANIA_CPU_SERVER` | `BuildConfig.RETIRED_CPU_HOST_SHA256` (its host's hash only) | the chart server, **never built in** |
+
+**The chart server is never put in the default API list** (the owner's rule).
+No build adds it under Settings › Connections, and charting waits until the
+listener adds a server there. Builds before 2026-10-23 did add it, so the
+build carries only the SHA-256 of its host, and `PreferencesManager.
+seedBuiltInServer` takes that entry out once (`retired_cpu_server_removed`);
+one the listener adds again stays. The address itself is not in the APK.
 
 The `local.properties` key wins over the variable. A release build for the
-owner needs both. Without them the app still builds and runs, but nothing is
-built in: no server is added under Settings › Connections, charting waits until
-the listener adds one there, and multiplayer has no rooms server. With them,
-`BuiltInServer` puts each one back in that list on every read, and the list
-shows only its host.
+owner needs the rooms key. Without it there is no rooms server; with it,
+`BuiltInServer` puts it back in that list on every read, and the list shows
+only its host.
 
 Never print, log or commit the values, and never write them into a document, a
 test, a commit message or a chat reply. Anyone with the APK can dig them out;
@@ -141,11 +147,12 @@ value:
 ```
 cut -d= -f1 local.properties     # the key names only
 f=app/build/generated/source/buildConfig/release/tf/monochrome/android/BuildConfig.java
-grep -c 'BUILT_IN_CPU_SERVER = ""' $f; grep -c 'BUILT_IN_ROOMS_SERVER = ""' $f
+grep -c 'BUILT_IN_ROOMS_SERVER = ""' $f   # 0: the rooms server is built in; 1: left out
+grep -c 'BUILT_IN_CPU_SERVER' $f            # always 0: the chart server is never built in
 ```
 
-After a release build, each `grep` prints `1` when that server was left out and
-`0` when it is built in. The cloud setup below writes `local.properties` with
+After a release build, the first prints `0` when the rooms server is built in
+and `1` when it was left out; the second must print `0`. The cloud setup below writes `local.properties` with
 `>`, which replaces the file, so add these keys after it, not before. The CI
 workflow sets neither variable, so an APK it builds has no built-in servers.
 

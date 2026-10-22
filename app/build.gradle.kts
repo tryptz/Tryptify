@@ -1,4 +1,5 @@
 import java.net.URI
+import java.security.MessageDigest
 import java.util.Properties
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -108,16 +109,20 @@ android {
             "\"${localProperties.getProperty("lastfm.apiKey") ?: "153452aaeaa3e666645274b3a9e5bb0a"}\"",
         )
 
-        // The Trypt Mania chart server every install starts with (Slow, a
-        // CPU server on Railway), its secret path and all. From
-        // local.properties (`tryptmania.cpuServer`) or the
-        // TRYPTMANIA_CPU_SERVER environment variable, never the repository:
-        // a build without either ships no server, and charting waits for one
-        // under Settings › Connections. Anyone with the APK can read it.
+        // The TryptMania Parser chart server is never built in (the owner's
+        // rule): no build puts it under Settings › Connections. Charting
+        // waits for a server the listener adds there. Builds before this one
+        // did put it there, so the app takes that entry out once, by its
+        // host: only the host's SHA-256 goes in, never the address. From
+        // local.properties (`tryptmania.cpuServer`) or TRYPTMANIA_CPU_SERVER;
+        // empty without either.
+        val retiredCpuHost = runCatching {
+            URI((localProperties.getProperty("tryptmania.cpuServer") ?: System.getenv("TRYPTMANIA_CPU_SERVER") ?: "").trim()).host
+        }.getOrNull()?.lowercase()?.takeIf { it.isNotBlank() }
         buildConfigField(
             "String",
-            "BUILT_IN_CPU_SERVER",
-            "\"${(localProperties.getProperty("tryptmania.cpuServer") ?: System.getenv("TRYPTMANIA_CPU_SERVER") ?: "").trim()}\"",
+            "RETIRED_CPU_HOST_SHA256",
+            "\"${retiredCpuHost?.let { h -> MessageDigest.getInstance("SHA-256").digest(h.toByteArray()).joinToString("") { "%02x".format(it) } } ?: ""}\"",
         )
         // The rooms server for Trypt Mania's multiplayer (TryptMania-Parser's
         // multiplayer/ service on Railway), the same way: local.properties

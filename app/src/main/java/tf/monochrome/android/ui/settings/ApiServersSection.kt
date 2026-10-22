@@ -184,11 +184,10 @@ private fun ApiServerCard(
     onRecheck: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    // The build's own chart server: shown by its host (its path is its
+    // The build's own rooms server: shown by its host (its path is its
     // secret), marked as built in, and with nothing to remove it.
     val builtIn = tf.monochrome.android.data.api.BuiltInServer.isBuiltIn(
         server.url,
-        tf.monochrome.android.BuildConfig.BUILT_IN_CPU_SERVER,
         tf.monochrome.android.BuildConfig.BUILT_IN_ROOMS_SERVER,
     )
     Card(
