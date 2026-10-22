@@ -2,7 +2,7 @@
 
 **Which of a listener's devices are online, what plays on which, and moving
 it from one to another**, like Spotify Connect. The web player
-(`site/public/js/wp-connect.js`) speaks it today; the app is next.
+(`site/public/js/wp-connect.js`) and the app (`app/…/connect/`) speak it.
 
 It is a Cloudflare Worker (`src/worker.ts`) with one Durable Object per
 account (`src/room.ts`, SQLite storage, the Free plan's kind), at
@@ -42,10 +42,11 @@ since browsers cannot set headers on a WebSocket, as the subprotocols
 Every message from the room carries `serverTime` (ms), for clock offsets.
 
 A song travels as a **track**:
-`{ src: "hifi"|"cloud"|"subsonic"|"local", id, title, artist, album, duration, quality, cover, coverArt }`.
+`{ src: "hifi"|"cloud"|"subsonic"|"local"|"qobuz"|"deezer"|"apple", id, title, artist, album, duration, quality, cover, coverArt }`.
 `id` is a TIDAL id for `hifi`, the Cloud song id for `cloud`, the music
-server's id for `subsonic`, and the file's own key for `local` (which only
-that device can play). `cover` must be a plain `https` link: the room drops
+server's id for `subsonic`, the file's own key for `local` (which only
+that device can play), and the catalogue's own id for `qobuz`, `deezer` and
+`apple`, which the app plays and the web player does not. `cover` must be a plain `https` link: the room drops
 blob: links and any link with a sign-in in it (a Subsonic cover's `u`/`t`/`s`/`p`).
 
 **Now playing** is `{ device, name, playing, track, position, rate, at, since }`:

@@ -3139,4 +3139,21 @@
     <string name="cloud_uploads_channel_desc">Tryptify Cloud’a yüklenen şarkıların ilerlemesi.</string>
     <string name="cloud_manage_subscription">Aboneliği yönet veya iptal et</string>
     <string name="action_upload_to_cloud">Tryptify Cloud’a yükle</string>
+    <string name="connect_devices">Cihazlar</string>
+    <string name="connect_this_phone">Bu telefon</string>
+    <string name="connect_playing">Çalıyor</string>
+    <string name="connect_play_here">Burada çal</string>
+    <string name="connect_play_there">Orada çal</string>
+    <string name="connect_playing_on">%1$s cihazında çalıyor</string>
+    <string name="connect_last_played_on">En son %1$s cihazında çalındı</string>
+    <string name="connect_now_on">Şimdi %1$s cihazında çalıyor</string>
+    <string name="connect_here_from">%1$s cihazından alınıp burada çalıyor</string>
+    <string name="connect_made_way">%1$s çalmaya başladı, bu telefon duraklatıldı</string>
+    <string name="connect_cannot_play">“%1$s” bu telefonda çalınamıyor</string>
+    <string name="connect_not_connected">Tryptify Connect bağlı değil</string>
+    <string name="connect_signed_out">Diğer cihazlarını görmek ve müziği aralarında taşımak için giriş yap.</string>
+    <string name="connect_connecting">Bağlanıyor…</string>
+    <string name="connect_alone">Tryptify\'ı aynı hesapla giriş yapılmış başka bir cihazda aç, burada görünür.</string>
+    <string name="connect_kind_app">Tryptify uygulaması</string>
+    <string name="connect_kind_web">tryptify.com</string>
 </resources>

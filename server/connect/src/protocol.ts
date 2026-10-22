@@ -6,7 +6,8 @@ export const MAX_MESSAGE = 64 * 1024;
 export const MAX_DEVICES = 20;
 export const MAX_QUEUE = 100;
 export const ACTIONS = new Set(["play", "pause", "next", "prev", "seek"]);
-export const SOURCES = new Set(["hifi", "cloud", "subsonic", "local"]);
+// "qobuz", "deezer" and "apple" are the app's other catalogues: another phone can play them, a browser cannot (yet).
+export const SOURCES = new Set(["hifi", "cloud", "subsonic", "local", "qobuz", "deezer", "apple"]);
 export const KINDS = new Set(["web", "android", "desktop"]);
 
 export interface Device { id: string; name: string; kind: string }

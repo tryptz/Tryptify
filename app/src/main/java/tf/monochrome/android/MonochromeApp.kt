@@ -127,6 +127,9 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
     @Inject
     lateinit var libraryWatcher: javax.inject.Provider<tf.monochrome.android.data.local.watcher.LibraryWatcher>
 
+    @Inject
+    lateinit var connectController: tf.monochrome.android.connect.ConnectController
+
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override val workManagerConfiguration: Configuration
@@ -240,6 +243,9 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
         // Auto-save app settings to the user's Supabase row: pull on sign-in,
         // then push (debounced) whenever an allow-listed setting changes.
         settingsSyncCoordinator.start(appScope)
+        // Tryptify Connect: this phone among the listener's devices, connected
+        // only while signed in and on screen or playing (ConnectController).
+        connectController.start(this)
         // Settings have repaired themselves on sign-in for a while; the library
         // did not, and an account whose playlists were intact in the cloud
         // still showed an empty Playlists tab. Now both do.

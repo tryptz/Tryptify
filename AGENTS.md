@@ -317,7 +317,10 @@ pass; secrets live only in the Worker.
 plays on which, and moving it between them (like Spotify Connect). A
 Cloudflare Worker with one Durable Object per account, on the WebSocket
 Hibernation API so it sleeps between messages; Supabase sign-in, no secret.
-Its README is the protocol the web player speaks and the app is to speak.
+Its README is the protocol the web player and the app both speak; the app's
+side is `connect/` (`ConnectController`, which watches the player through
+`PlaybackSignals` rather than holding a controller, and is connected only
+while signed in and on screen or playing).
 `bun run test.ts`, then `npm run dev` and `bun run e2e.ts` in Cloudflare's
 own runtime. `DEV_TOKENS` is for `wrangler dev` only, never the deployed
 Worker.

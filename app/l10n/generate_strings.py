@@ -31,7 +31,7 @@ PLURAL_FORMS = {
     'fr': ['one', 'many', 'other'], 'es': ['one', 'many', 'other'], 'de': ['one', 'other'],
     'it': ['one', 'many', 'other'],
 }
-NON_TRANSLATABLE = {'app_name', 'trypt_mania'}
+NON_TRANSLATABLE = {'app_name', 'trypt_mania', 'tryptify_connect'}
 
 def french_spacing(s):
     """French puts a space before : ; ? ! and it has to be non-breaking, or a

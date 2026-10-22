@@ -3065,4 +3065,21 @@
     <string name="cloud_uploads_channel_desc">Tryptify Cloud への曲のアップロードの進行状況。</string>
     <string name="cloud_manage_subscription">サブスクリプションの管理・解約</string>
     <string name="action_upload_to_cloud">Tryptify Cloud にアップロード</string>
+    <string name="connect_devices">デバイス</string>
+    <string name="connect_this_phone">このスマートフォン</string>
+    <string name="connect_playing">再生中</string>
+    <string name="connect_play_here">ここで再生</string>
+    <string name="connect_play_there">そちらで再生</string>
+    <string name="connect_playing_on">%1$s で再生中</string>
+    <string name="connect_last_played_on">最後に %1$s で再生</string>
+    <string name="connect_now_on">%1$s で再生を始めました</string>
+    <string name="connect_here_from">%1$s から引き継いで再生中</string>
+    <string name="connect_made_way">%1$s で再生が始まったため、このスマートフォンは一時停止しました</string>
+    <string name="connect_cannot_play">「%1$s」はこのスマートフォンでは再生できません</string>
+    <string name="connect_not_connected">Tryptify Connect に接続していません</string>
+    <string name="connect_signed_out">サインインすると、ほかのデバイスを表示して音楽を移せます。</string>
+    <string name="connect_connecting">接続中…</string>
+    <string name="connect_alone">同じアカウントでサインインした別のデバイスで Tryptify を開くと、ここに表示されます。</string>
+    <string name="connect_kind_app">Tryptify アプリ</string>
+    <string name="connect_kind_web">tryptify.com</string>
 </resources>

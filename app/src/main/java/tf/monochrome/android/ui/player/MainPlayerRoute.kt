@@ -208,6 +208,9 @@ fun MainPlayerRoute(
     var showSpeedSheet by rememberSaveable { mutableStateOf(false) }
     var showSleepSheet by rememberSaveable { mutableStateOf(false) }
     var showPipelineSheet by rememberSaveable { mutableStateOf(false) }
+    var showConnectSheet by rememberSaveable { mutableStateOf(false) }
+    val connectViewModel: ConnectViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    val connectState by connectViewModel.state.collectAsStateWithLifecycle()
     // Overflow › "Add to playlist" and the create-playlist follow-up it opens.
     // Held as the pending track rather than a flag so the follow-up dialog
     // still knows what to add after the picker sheet is gone.
@@ -687,6 +690,8 @@ fun MainPlayerRoute(
             downloadState = downloadState,
             onCollapse = { navController.popBackStackSafe() },
             onOutputClick = { showPipelineSheet = true },
+            onDevicesClick = { showConnectSheet = true },
+            devicesOnline = connectState.devices.any { it.id != connectViewModel.myId },
             onSpeedClick = { showSpeedSheet = true },
             onToggleShuffle = playerViewModel::toggleShuffle,
             onCycleRepeat = playerViewModel::cycleRepeatMode,
@@ -1040,6 +1045,11 @@ fun MainPlayerRoute(
             visible = showPipelineSheet,
             track = currentUnified,
             onDismiss = { showPipelineSheet = false },
+        )
+        ConnectPanel(
+            visible = showConnectSheet,
+            onDismiss = { showConnectSheet = false },
+            viewModel = connectViewModel,
         )
         SpeedPanel(
             visible = showSpeedSheet,

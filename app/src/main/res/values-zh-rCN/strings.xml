@@ -3065,4 +3065,21 @@
     <string name="cloud_uploads_channel_desc">歌曲上传到 Tryptify Cloud 的进度。</string>
     <string name="cloud_manage_subscription">管理或取消订阅</string>
     <string name="action_upload_to_cloud">上传到 Tryptify Cloud</string>
+    <string name="connect_devices">设备</string>
+    <string name="connect_this_phone">这部手机</string>
+    <string name="connect_playing">正在播放</string>
+    <string name="connect_play_here">在这里播放</string>
+    <string name="connect_play_there">在那里播放</string>
+    <string name="connect_playing_on">正在 %1$s 上播放</string>
+    <string name="connect_last_played_on">上次在 %1$s 上播放</string>
+    <string name="connect_now_on">现在在 %1$s 上播放</string>
+    <string name="connect_here_from">已从 %1$s 转到这里播放</string>
+    <string name="connect_made_way">%1$s 开始播放，这部手机已暂停</string>
+    <string name="connect_cannot_play">这部手机无法播放“%1$s”</string>
+    <string name="connect_not_connected">Tryptify Connect 未连接</string>
+    <string name="connect_signed_out">登录后即可看到你的其他设备，并在它们之间切换音乐。</string>
+    <string name="connect_connecting">正在连接…</string>
+    <string name="connect_alone">在另一台设备上用同一账号登录 Tryptify，它就会出现在这里。</string>
+    <string name="connect_kind_app">Tryptify 应用</string>
+    <string name="connect_kind_web">tryptify.com</string>
 </resources>

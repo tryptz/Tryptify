@@ -98,6 +98,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var spectrumAnalyzerTap: SpectrumAnalyzerTap
     @Inject lateinit var unifiedTrackRegistry: UnifiedTrackRegistry
     @Inject lateinit var playbackState: PlaybackStateRepository
+    @Inject lateinit var playbackSignals: PlaybackSignals
     // The Audio Pipeline panel's window into the decoder. Nothing else in
     // the app can see a Format: the UI reaches the player through a
     // MediaController, which carries neither one nor any decoder identity.
@@ -246,6 +247,8 @@ class PlaybackService : MediaSessionService() {
             }
 
         player.addAnalyticsListener(audioPipelineAnalytics())
+        // Play, pause, seeks, songs and speed for Tryptify Connect, without it holding a controller.
+        playbackSignals.attach(player)
 
         player.addListener(object : Player.Listener {
             // Keep the home-screen now-playing widget live: the widget uses
@@ -1291,6 +1294,7 @@ class PlaybackService : MediaSessionService() {
             }
         }
         crossfade.release()
+        playbackSignals.detach()
         mediaSession?.run {
             player.release()
             release()

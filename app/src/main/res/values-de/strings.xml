@@ -3139,4 +3139,21 @@
     <string name="cloud_uploads_channel_desc">Fortschritt der Songs, die in Tryptify Cloud hochgeladen werden.</string>
     <string name="cloud_manage_subscription">Abo verwalten oder kündigen</string>
     <string name="action_upload_to_cloud">In Tryptify Cloud hochladen</string>
+    <string name="connect_devices">Geräte</string>
+    <string name="connect_this_phone">Dieses Telefon</string>
+    <string name="connect_playing">Spielt</string>
+    <string name="connect_play_here">Hier abspielen</string>
+    <string name="connect_play_there">Dort abspielen</string>
+    <string name="connect_playing_on">Spielt auf %1$s</string>
+    <string name="connect_last_played_on">Zuletzt auf %1$s gespielt</string>
+    <string name="connect_now_on">Läuft jetzt auf %1$s</string>
+    <string name="connect_here_from">Läuft jetzt hier, von %1$s</string>
+    <string name="connect_made_way">%1$s spielt jetzt, darum pausiert dieses Telefon</string>
+    <string name="connect_cannot_play">„%1$s“ kann auf diesem Telefon nicht abgespielt werden</string>
+    <string name="connect_not_connected">Tryptify Connect ist nicht verbunden</string>
+    <string name="connect_signed_out">Melde dich an, um deine anderen Geräte zu sehen und Musik zwischen ihnen zu wechseln.</string>
+    <string name="connect_connecting">Verbinde…</string>
+    <string name="connect_alone">Öffne Tryptify auf einem anderen Gerät mit demselben Konto, dann erscheint es hier.</string>
+    <string name="connect_kind_app">Tryptify-App</string>
+    <string name="connect_kind_web">tryptify.com</string>
 </resources>
