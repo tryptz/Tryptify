@@ -4,6 +4,10 @@
 it from one to another**, like Spotify Connect. The web player
 (`site/public/js/wp-connect.js`) and the app (`app/…/connect/`) speak it.
 
+**Live since 2026-10-22** at `wss://connect.tryptify.com/v1/connect`
+(Worker `tryptify-connect`; checked live: no sign-in, a bad or a dev token is
+401, another site's page is 403).
+
 It is a Cloudflare Worker (`src/worker.ts`) with one Durable Object per
 account (`src/room.ts`, SQLite storage, the Free plan's kind), at
 `wss://connect.tryptify.com/v1/connect`. Sign-in is the app's Supabase
