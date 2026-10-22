@@ -147,7 +147,7 @@ up next), a menu on the left and the bar at the bottom.
     localStorage), never the password, unless the server refuses tokens
     (error 41/42), and then the password's hex. Songs stream with
     `format=raw`, so lossless stays lossless. The server must send CORS for
-    tryptify.com (Navidrome does).
+    tryptify.com, or the browser cannot read it.
 - **AutoEQ**: the view is `/autoeq`'s try-out, the same markup and
   `js/tryout.js`, with the band count, top frequency and method as the
   ranking's chips. Each fit fires `tryptify:fit`; the player plays it and
