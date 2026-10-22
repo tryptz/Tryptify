@@ -1009,13 +1009,24 @@ all. The listener's quality setting is untouched for real plays.
 ### My server (Subsonic)
 
 **My server is one Library page, with its own small stack inside it.** Index
-(Albums · Artists) → artist → album, and Back pops that stack before it leaves
+(Albums · Artists · Songs) → artist → album, and Back pops that stack before it leaves
 the page (`SubsonicLibraryTab`'s `BackHandler`, like Local's categories). It
 pushes no nav routes: a server's ids are strings, and the catalogue album and
 artist screens take Longs, so a pushed route would open the wrong page or none.
 For the same reason a server song's "Go to album/artist" is hidden
 (`CatalogNav`, `SourceType.SUBSONIC` beside `LIVE_RADIO`), and Search shows its
 songs only, never its albums or artists.
+
+**Songs and the search ask the server, they never filter on the phone.**
+Songs is search3 with an empty query, a page of 500 at a time, fetched only
+once the chip is opened; the list ends on an empty page (videos are dropped
+from each page, so a short page is not the end) or one that adds nothing new
+(a server that ignores `songOffset`). The search is the page's own
+`SearchOverlay`, like Local's: songs only, asked again once typing pauses,
+and Back closes it before it leaves the page. The three chips scroll sideways
+and the buttons stay pinned right, because three chips and four buttons are
+wider than a phone. A tap in a long list queues that song and the next 999,
+not the whole server: the player maps every row of a queue on the tap.
 
 **It is built from the Local page's lists**: `AlbumGrid`, `ArtistList`,
 `SongList`. Material rows at `listRowHeight`, never glass, so the two pages read

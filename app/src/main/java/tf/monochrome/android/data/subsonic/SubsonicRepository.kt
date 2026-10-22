@@ -168,6 +168,18 @@ class SubsonicRepository @Inject constructor(
             .map { it.toUnifiedTrack() }
     }
 
+    /**
+     * One page of the server's songs, matching [query]. A blank query is every
+     * song: search3 with an empty query is how Navidrome and the Tryptify Cloud
+     * hand out the whole library a page at a time.
+     */
+    suspend fun songs(query: String, offset: Int, size: Int): List<UnifiedTrack> {
+        val server = requireServer()
+        return client.search(server, query.trim(), songCount = size, songOffset = offset).song
+            .filterNot { it.isVideo }
+            .map { it.toUnifiedTrack() }
+    }
+
     suspend fun randomSongs(size: Int = 200): List<UnifiedTrack> {
         val server = requireServer()
         return client.randomSongs(server, size).filterNot { it.isVideo }.map { it.toUnifiedTrack() }

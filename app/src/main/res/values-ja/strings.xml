@@ -3009,6 +3009,7 @@
     <string name="subsonic_howto_connect">「サーバーに接続」をタップし、アドレス、ユーザー名、パスワードを入力して「接続」をタップします。音楽は「ライブラリ › マイサーバー」と検索に表示されます。</string>
     <string name="subsonic_howto_tip">接続できない場合は、まずこの端末のブラウザーでアドレスを開いてみてください。そこでサーバーのページが開かなければ、Tryptify からも接続できません。</string>
     <string name="subsonic_refresh">サーバーから再読み込み</string>
+    <string name="subsonic_search_songs">サーバーの曲を検索…</string>
     <string name="subsonic_sort_most_played">再生回数順</string>
     <string name="subsonic_sort_random">ランダム</string>
     <string name="subsonic_load_failed">サーバーのライブラリを読み込めませんでした。</string>

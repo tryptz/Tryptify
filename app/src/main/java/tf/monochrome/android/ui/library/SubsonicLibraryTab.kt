@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
@@ -18,6 +20,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,6 +36,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +49,7 @@ import androidx.navigation.NavController
 import tf.monochrome.android.R
 import tf.monochrome.android.data.subsonic.SubsonicAlbumSort
 import tf.monochrome.android.domain.model.UnifiedTrack
+import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
 import tf.monochrome.android.ui.library.SubsonicLibraryViewModel.Load
 import tf.monochrome.android.ui.library.SubsonicLibraryViewModel.Section
@@ -56,8 +61,8 @@ import tf.monochrome.android.ui.settings.settingsTabIndex
 import tf.monochrome.android.ui.theme.MonoDimens
 
 /**
- * The "My server" Library page: albums and artists on the listener's
- * Subsonic server, and an album's songs.
+ * The "My server" Library page: albums, artists and songs on the listener's
+ * Subsonic server, an album's songs, and a search of the server's songs.
  *
  * Built from the Local page's own lists ([AlbumGrid], [ArtistList],
  * [SongList]) so the two read as one library: Material rows at the shared row
@@ -96,7 +101,7 @@ fun SubsonicLibraryTab(
     BackHandler(enabled = stack.size > 1) { viewModel.back() }
 
     when (val top = stack.last()) {
-        View.Index -> Index(viewModel, playerViewModel)
+        View.Index -> Index(viewModel, playerViewModel, navController, onMore = { menuTrack = it })
         is View.Artist -> {
             val albums by viewModel.artistAlbums.collectAsStateWithLifecycle()
             Column(Modifier.fillMaxSize()) {
@@ -138,28 +143,70 @@ fun SubsonicLibraryTab(
 }
 
 @Composable
-private fun Index(viewModel: SubsonicLibraryViewModel, playerViewModel: PlayerViewModel) {
+private fun Index(
+    viewModel: SubsonicLibraryViewModel,
+    playerViewModel: PlayerViewModel,
+    navController: NavController,
+    onMore: (UnifiedTrack) -> Unit,
+) {
     val section by viewModel.section.collectAsStateWithLifecycle()
     val albums by viewModel.albums.collectAsStateWithLifecycle()
     val artists by viewModel.artists.collectAsStateWithLifecycle()
+    val songs by viewModel.songs.collectAsStateWithLifecycle()
     val sort by viewModel.albumSort.collectAsStateWithLifecycle()
+    val query by viewModel.query.collectAsStateWithLifecycle()
+    val results by viewModel.results.collectAsStateWithLifecycle()
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
+    val closeSearch = { searchOpen = false; viewModel.setQuery("") }
+    // Back closes the search before it leaves the page.
+    BackHandler(enabled = searchOpen) { closeSearch() }
+    val playSong = { track: UnifiedTrack, list: List<UnifiedTrack> ->
+        playerViewModel.playUnifiedTrack(track, queueFrom(list, track))
+    }
 
-    Column(Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = MonoDimens.spacingLg),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm),
-        ) {
-            for ((value, label) in listOf(Section.ALBUMS to R.string.filter_albums, Section.ARTISTS to R.string.filter_artists)) {
-                tf.monochrome.android.ui.mixer.GlassChoiceChip(
-                    label = stringResource(label),
-                    selected = section == value,
-                    accent = MaterialTheme.colorScheme.primary,
-                    onClick = { viewModel.selectSection(value) },
-                )
+    // The search floats over the page, as on Local, and asks the server: a
+    // library on a server is too big to hold on the phone and filter here.
+    SearchOverlay(
+        open = searchOpen,
+        query = query,
+        onQueryChange = viewModel::setQuery,
+        placeholder = stringResource(R.string.subsonic_search_songs),
+        onClose = closeSearch,
+    ) { searchTopInset ->
+    Column(Modifier.fillMaxSize().padding(top = searchTopInset)) {
+        if (searchOpen && query.isNotBlank()) {
+            LoadContent(results, onRetry = viewModel::retrySearch, empty = R.string.no_results) { list ->
+                SongList(tracks = list, onTrackClick = playSong, onMoreClick = onMore, navController = navController)
             }
-            Spacer(Modifier.weight(1f))
+            return@Column
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = MonoDimens.spacingLg, end = MonoDimens.spacingSm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // The chips slide sideways when three of them and the buttons are
+            // wider than the phone; the buttons stay put on the right.
+            Row(
+                modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm),
+            ) {
+                for ((value, label) in listOf(
+                    Section.ALBUMS to R.string.filter_albums,
+                    Section.ARTISTS to R.string.filter_artists,
+                    Section.SONGS to R.string.category_songs,
+                )) {
+                    tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                        label = stringResource(label),
+                        selected = section == value,
+                        accent = MaterialTheme.colorScheme.primary,
+                        onClick = { viewModel.selectSection(value) },
+                    )
+                }
+            }
             if (section == Section.ALBUMS) AlbumSortMenu(sort, viewModel::setAlbumSort)
+            IconButton(onClick = { if (searchOpen) closeSearch() else searchOpen = true }) {
+                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.tab_search))
+            }
             IconButton(onClick = { viewModel.shuffleAll(playerViewModel::shufflePlayUnified) }) {
                 Icon(Icons.Default.Shuffle, contentDescription = stringResource(R.string.shuffle_all))
             }
@@ -174,9 +221,26 @@ private fun Index(viewModel: SubsonicLibraryViewModel, playerViewModel: PlayerVi
             Section.ARTISTS -> LoadContent(artists, onRetry = viewModel::reload) { list ->
                 ArtistList(artists = list, onArtistClick = viewModel::openArtist)
             }
+            Section.SONGS -> LoadContent(songs, onRetry = viewModel::reload) { list ->
+                SongList(tracks = list, onTrackClick = playSong, onMoreClick = onMore, navController = navController)
+            }
         }
     }
+    }
 }
+
+/**
+ * The queue for a tap in a long list: the song and the ones after it, up to
+ * [QUEUE_FROM_LIST]. A whole server's songs is tens of thousands of rows, and
+ * the player maps every row of a queue on the tap itself.
+ */
+private fun queueFrom(list: List<UnifiedTrack>, track: UnifiedTrack): List<UnifiedTrack> {
+    if (list.size <= QUEUE_FROM_LIST) return list
+    val at = list.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
+    return list.subList(at, minOf(list.size, at + QUEUE_FROM_LIST))
+}
+
+private const val QUEUE_FROM_LIST = 1_000
 
 private val SubsonicAlbumSort.label: Int
     get() = when (this) {
@@ -244,6 +308,7 @@ private fun DetailHeader(
 private fun <T> LoadContent(
     load: Load<List<T>>,
     onRetry: () -> Unit,
+    empty: Int = R.string.subsonic_library_empty,
     content: @Composable (List<T>) -> Unit,
 ) {
     when (load) {
@@ -256,7 +321,7 @@ private fun <T> LoadContent(
             onAction = onRetry,
         )
         is Load.Loaded -> if (load.value.isEmpty()) {
-            Message(text = stringResource(R.string.subsonic_library_empty))
+            Message(text = stringResource(empty))
         } else {
             content(load.value)
         }

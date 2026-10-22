@@ -3,12 +3,18 @@ package tf.monochrome.android.ui.library
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -33,7 +39,7 @@ class SubsonicLibraryViewModel @Inject constructor(
     private val repository: SubsonicRepository,
 ) : ViewModel() {
 
-    enum class Section { ALBUMS, ARTISTS }
+    enum class Section { ALBUMS, ARTISTS, SONGS }
 
     sealed interface View {
         data object Index : View
@@ -66,6 +72,38 @@ class SubsonicLibraryViewModel @Inject constructor(
     private val _artists = MutableStateFlow<Load<List<UnifiedArtist>>>(Load.Loading)
     val artists: StateFlow<Load<List<UnifiedArtist>>> = _artists.asStateFlow()
 
+    private val _songs = MutableStateFlow<Load<List<UnifiedTrack>>>(Load.Loading)
+    val songs: StateFlow<Load<List<UnifiedTrack>>> = _songs.asStateFlow()
+
+    private val _query = MutableStateFlow("")
+
+    /** Bumped by [retrySearch], to ask again for the same words. */
+    private val searchTries = MutableStateFlow(0)
+    val query: StateFlow<String> = _query.asStateFlow()
+
+    /**
+     * The server's own search over its songs, asked again once typing pauses.
+     * Songs only, like Search's server results: an album or artist row would
+     * open this page's stack from a place that has none.
+     */
+    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
+    val results: StateFlow<Load<List<UnifiedTrack>>> = _query
+        .map { it.trim() }
+        .distinctUntilChanged()
+        .debounce(SEARCH_DEBOUNCE_MS)
+        .combine(searchTries) { q, _ -> q }
+        .flatMapLatest { q ->
+            flow {
+                if (q.isEmpty()) {
+                    emit(Load.Loaded(emptyList()))
+                } else {
+                    emit(Load.Loading)
+                    emit(runLoad { repository.songs(q, offset = 0, size = SEARCH_RESULTS) })
+                }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), Load.Loaded(emptyList()))
+
     private val _stack = MutableStateFlow<List<View>>(listOf(View.Index))
     val view: StateFlow<List<View>> = _stack.asStateFlow()
 
@@ -76,6 +114,7 @@ class SubsonicLibraryViewModel @Inject constructor(
     val albumTracks: StateFlow<Load<List<UnifiedTrack>>> = _detailTracks.asStateFlow()
 
     private var albumsJob: Job? = null
+    private var songsJob: Job? = null
     private var loadedFor: SubsonicServer? = null
 
     /** Called when the page shows a connected server: loads once per server. */
@@ -89,10 +128,25 @@ class SubsonicLibraryViewModel @Inject constructor(
     fun reload() {
         loadAlbums()
         loadArtists()
+        // Every song can be tens of thousands of rows: fetched only once the
+        // Songs chip has been opened, not on every visit to the page.
+        if (_section.value == Section.SONGS) loadSongs() else {
+            songsJob?.cancel()
+            _songs.value = Load.Loading
+        }
     }
 
     fun selectSection(section: Section) {
         _section.value = section
+        if (section == Section.SONGS && _songs.value !is Load.Loaded && songsJob?.isActive != true) loadSongs()
+    }
+
+    fun setQuery(query: String) {
+        _query.value = query
+    }
+
+    fun retrySearch() {
+        searchTries.value++
     }
 
     fun setAlbumSort(sort: SubsonicAlbumSort) {
@@ -124,6 +178,35 @@ class SubsonicLibraryViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 if (all.isEmpty()) _albums.value = Load.Failed(e.message)
+            }
+        }
+    }
+
+    /**
+     * Every song, a page at a time, the way [loadAlbums] does albums. The end
+     * is an empty page, not a short one: videos are dropped from each page, so
+     * a short page can still have more after it. A page that adds nothing new
+     * also ends it, in case a server ignores songOffset and repeats page one.
+     */
+    private fun loadSongs() {
+        songsJob?.cancel()
+        _songs.value = Load.Loading
+        songsJob = viewModelScope.launch {
+            val all = LinkedHashMap<String, UnifiedTrack>()
+            var offset = 0
+            try {
+                while (all.size < MAX_SONGS) {
+                    val page = repository.songs("", offset = offset, size = SONG_PAGE)
+                    val before = all.size
+                    page.forEach { all.putIfAbsent(it.id, it) }
+                    _songs.value = Load.Loaded(all.values.toList())
+                    if (page.isEmpty() || all.size == before) break
+                    offset += SONG_PAGE
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (all.isEmpty()) _songs.value = Load.Failed(e.message)
             }
         }
     }
@@ -176,5 +259,9 @@ class SubsonicLibraryViewModel @Inject constructor(
     private companion object {
         const val ALBUM_PAGE = 500
         const val MAX_ALBUMS = 20_000
+        const val SONG_PAGE = 500
+        const val MAX_SONGS = 100_000
+        const val SEARCH_RESULTS = 200
+        const val SEARCH_DEBOUNCE_MS = 300L
     }
 }

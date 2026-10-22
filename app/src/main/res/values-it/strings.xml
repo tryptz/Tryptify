@@ -3155,6 +3155,7 @@
     <string name="subsonic_howto_connect">Tocca «Connetti un server», inserisci indirizzo, nome utente e password e tocca «Connetti». La tua musica compare in Libreria › Il mio server e in Cerca.</string>
     <string name="subsonic_howto_tip">Non si connette? Apri prima l\'indirizzo nel browser di questo telefono. Se lì la pagina del server non si carica, nemmeno Tryptify può raggiungerlo.</string>
     <string name="subsonic_refresh">Ricarica dal server</string>
+    <string name="subsonic_search_songs">Cerca brani sul tuo server…</string>
     <string name="subsonic_sort_most_played">Più ascoltati</string>
     <string name="subsonic_sort_random">Casuale</string>
     <string name="subsonic_load_failed">Impossibile caricare la libreria del tuo server.</string>

@@ -3009,6 +3009,7 @@
     <string name="subsonic_howto_connect">点按“连接服务器”，输入地址、用户名和密码，然后点按“连接”。音乐会显示在“音乐库 › 我的服务器”和搜索中。</string>
     <string name="subsonic_howto_tip">连接不上？先在这部手机的浏览器中打开该地址。如果那里也打不开服务器页面，Tryptify 同样无法连接。</string>
     <string name="subsonic_refresh">从服务器重新加载</string>
+    <string name="subsonic_search_songs">搜索服务器上的歌曲…</string>
     <string name="subsonic_sort_most_played">最常播放</string>
     <string name="subsonic_sort_random">随机</string>
     <string name="subsonic_load_failed">无法加载服务器上的音乐库。</string>

@@ -3082,6 +3082,7 @@
     <string name="subsonic_howto_connect">Sunucu bağla’ya dokunun, adresi, kullanıcı adını ve şifreyi girin, ardından Bağlan’a dokunun. Müziğiniz Kitaplık › Sunucum altında ve Ara’da görünür.</string>
     <string name="subsonic_howto_tip">Bağlanmıyor mu? Önce adresi bu telefonun tarayıcısında açın. Sunucunun sayfası orada açılmıyorsa Tryptify de ona ulaşamaz.</string>
     <string name="subsonic_refresh">Sunucudan yeniden yükle</string>
+    <string name="subsonic_search_songs">Sunucunuzdaki şarkılarda ara…</string>
     <string name="subsonic_sort_most_played">En çok çalınanlar</string>
     <string name="subsonic_sort_random">Rastgele</string>
     <string name="subsonic_load_failed">Sunucunuzun kitaplığı yüklenemedi.</string>

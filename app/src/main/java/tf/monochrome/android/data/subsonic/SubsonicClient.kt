@@ -44,6 +44,7 @@ class SubsonicClient @Inject constructor(
         songCount: Int = 50,
         albumCount: Int = 0,
         artistCount: Int = 0,
+        songOffset: Int = 0,
     ): SubsonicSearchResult = call(
         server,
         "search3",
@@ -52,6 +53,7 @@ class SubsonicClient @Inject constructor(
             "songCount" to "$songCount",
             "albumCount" to "$albumCount",
             "artistCount" to "$artistCount",
+            "songOffset" to "$songOffset",
         ),
     ).searchResult3 ?: SubsonicSearchResult()
 

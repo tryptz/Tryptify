@@ -3082,6 +3082,7 @@
     <string name="subsonic_howto_connect">Tippe auf „Server verbinden“, gib Adresse, Benutzername und Passwort ein und tippe auf „Verbinden“. Deine Musik erscheint unter Bibliothek › Mein Server und in der Suche.</string>
     <string name="subsonic_howto_tip">Klappt die Verbindung nicht? Öffne die Adresse zuerst im Browser dieses Handys. Lädt die Seite des Servers dort nicht, erreicht Tryptify ihn auch nicht.</string>
     <string name="subsonic_refresh">Vom Server neu laden</string>
+    <string name="subsonic_search_songs">Titel auf deinem Server suchen …</string>
     <string name="subsonic_sort_most_played">Meistgespielt</string>
     <string name="subsonic_sort_random">Zufällig</string>
     <string name="subsonic_load_failed">Die Bibliothek deines Servers konnte nicht geladen werden.</string>
