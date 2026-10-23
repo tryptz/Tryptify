@@ -235,7 +235,7 @@ class ProjectMOverlayView(
         try {
             if (!surface.isValid) return
             val wanted = if (producingFrames) {
-                display?.supportedModes?.maxOfOrNull { it.refreshRate } ?: return
+                wantedFrameRate(display?.supportedModes?.maxOfOrNull { it.refreshRate } ?: return)
             } else {
                 0f
             }

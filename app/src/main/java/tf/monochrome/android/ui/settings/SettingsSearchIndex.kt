@@ -267,6 +267,8 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
 
     // ── System ──────────────────────────────────────────────────────────
     entry("Performance", R.string.settings_performance, "System", listOf("battery", "fps", "low power", "glass", "blur")),
+    entry("Frame rate limit", R.string.settings_frame_rate_limit, "System", listOf("fps", "frames", "refresh", "hz", "cap", "battery", "heat")),
+    entry("FPS counter", R.string.settings_fps_counter, "System", listOf("frames", "frame rate", "refresh", "hz", "overlay", "meter")),
     entry(
         "Full screen", R.string.settings_full_screen,
         "System",

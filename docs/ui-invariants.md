@@ -2308,6 +2308,36 @@ Local (`content://` / `file://`) artwork has no URL Discord can fetch, so it is
 uploaded as an attachment and referenced by the media-proxy path — the same route
 the animation takes. This needs the upload channel configured.
 
+### Frame rate limit and FPS counter
+
+**The limit is a slower frame clock, never a display vote.** Settings ›
+System › Performance › Frame rate limit (Max, 30, 45, 60, 90, 120; per device,
+not synced) puts the activity's whole composition on `CappedFrameClock`, the
+display's clock with `FramePacer` keeping only the frames due: every
+recomposition, animation and `withFrameNanos` loop, Trypt Mania's playfield
+included, moves on at most that many frames a second, and with nothing changed
+nothing is redrawn. The window still holds no refresh-rate or resolution vote
+(MainActivity says why); the panel runs at whatever the system picks. A due
+frame runs inside the display's own frame callback, so what it changes is drawn
+on that frame. Each kept frame books the next one interval on, so a limit the
+panel does not divide (90 on 120 Hz) averages out to it, and a stall starts
+afresh rather than catching up. Touch input still arrives every vsync.
+
+**Nothing that keeps time counts frames.** Every animation measures the time
+between its frames, so a slower clock moves things further a frame at the same
+speed. The kick pulse was the one that counted frames, its decay and cooldown
+tuned per 60 fps frame; it now raises each rate to the frames of 60 fps a frame
+stood for (`KickPulse`). Trypt Mania's judgement never follows the frame clock:
+the audio clock, the 8 ms tick and the touch timestamps place every note, so a
+limit costs the playfield frames of animation and never a judgement.
+
+**The FPS counter counts what reached the screen.** `FpsCounter` counts the
+window's frame metrics each second, beside the display's refresh rate and the
+limit. An app at rest reads near 0 (its own update is one frame a second). It
+is drawn over the CRT's layer, not in it, and takes no touches. The
+visualizer's surface is not the window's and keeps its own counter (Settings ›
+Visualizer › Show FPS).
+
 ## The visualizer has two compositions, and only one at a time
 
 The hero visualizer (`ProjectMRendererView`, a `GLSurfaceView`) **replaces** the
@@ -2357,6 +2387,14 @@ compositing its cleared, empty frame (the cover alone) and the hero swapping a
 buffer nothing drew into, and the visualizer flashed and vanished between real
 frames. When nothing new was drawn the overlay composites its last capture
 (`freshFrame = false`).
+
+**The app's frame rate limit caps the visualizer too, vsync on or off.**
+`effectiveFrameCap` is Target FPS with vsync off and Settings › System ›
+Performance › Frame rate limit either way, the lower when both apply. With vsync
+on the wait is cut `VSYNC_SLACK_NANOS` short, so the swap makes the vsync it was
+held for instead of the one after. Target FPS stays no ceiling with vsync on.
+The surface's rate hint asks for the limit when it is below the panel's top
+(`wantedFrameRate`): still one float on the surface, never a mode.
 
 **Alpha is inferred from the rendered image, never from the preset.** Presets
 assume an opaque, usually black framebuffer and many depend on feedback; making

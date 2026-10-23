@@ -2970,10 +2970,6 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         }
 
         Spacer(modifier = Modifier.height(20.dp))
-        // Frame rate and resolution are whole-app settings and were sitting in
-        // Appearance under a "Display" header, next to the explicit-badge
-        // toggle. They cost battery and heat, which makes them System's
-        // business — the visualizer's own GPU settings stay with the visualizer.
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader(stringResource(R.string.settings_performance))
 
@@ -3010,6 +3006,52 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
                 onCheckedChange = { viewModel.setDisableLiquidGlass(it) }
             )
         }
+
+        // The frame rate limit. Not a display-mode vote (the window holds
+        // none): the app draws on fewer of the panel's refreshes, and the
+        // visualizer's render threads wait out the same interval.
+        val frameRateLimit by viewModel.frameRateLimit.collectAsStateWithLifecycle()
+        val showFpsCounter by viewModel.showFpsCounter.collectAsStateWithLifecycle()
+        val frameRateLimitTitle = stringResource(R.string.settings_frame_rate_limit)
+        Text(
+            frameRateLimitTitle,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.settingsAnchor(frameRateLimitTitle).padding(top = 8.dp, bottom = 2.dp),
+        )
+        Text(
+            stringResource(R.string.settings_frame_rate_limit_desc),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            val limits = listOf(tf.monochrome.android.performance.FrameRateLimit.MAX) +
+                tf.monochrome.android.performance.FrameRateLimit.CHOICES
+            limits.forEach { fps ->
+                val max = fps == tf.monochrome.android.performance.FrameRateLimit.MAX
+                tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                    label = if (max) stringResource(R.string.waterfall_max) else "$fps",
+                    selected = frameRateLimit == fps,
+                    accent = MaterialTheme.colorScheme.primary,
+                    onClick = { viewModel.setFrameRateLimit(fps) },
+                    modifier = Modifier.width(if (max) 64.dp else 52.dp),
+                    description = if (max) {
+                        stringResource(R.string.waterfall_every_refresh_desc)
+                    } else {
+                        stringResource(R.string.settings_frame_rate_limit_chip, fps)
+                    },
+                )
+            }
+        }
+        SettingSwitchItem(
+            title = stringResource(R.string.settings_fps_counter),
+            subtitle = stringResource(R.string.settings_fps_counter_desc),
+            checked = showFpsCounter,
+            onCheckedChange = { viewModel.setShowFpsCounter(it) }
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader(stringResource(R.string.settings_display))

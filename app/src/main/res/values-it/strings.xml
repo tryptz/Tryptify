@@ -3247,4 +3247,11 @@
     <string name="connect_alone">Apri Tryptify su un altro dispositivo con lo stesso account e comparirà qui.</string>
     <string name="connect_kind_app">App Tryptify</string>
     <string name="connect_kind_web">tryptify.com</string>
+    <string name="settings_frame_rate_limit">Limite frame rate</string>
+    <string name="settings_frame_rate_limit_desc">Il numero massimo di fotogrammi al secondo che disegnano l’app, le sue animazioni, Trypt Mania e il visualizzatore. Più basso fa risparmiare batteria e calore. Max disegna a ogni aggiornamento dello schermo.</string>
+    <string name="settings_frame_rate_limit_chip">Al massimo %1$d fotogrammi al secondo</string>
+    <string name="settings_fps_counter">Contatore FPS</string>
+    <string name="settings_fps_counter_desc">Mostra in alto a destra i fotogrammi disegnati ogni secondo e la frequenza di aggiornamento dello schermo</string>
+    <string name="fps_counter_reading">%1$d fps · %2$d Hz</string>
+    <string name="fps_counter_reading_limited">%1$d fps · %2$d Hz · limite %3$d</string>
 </resources>

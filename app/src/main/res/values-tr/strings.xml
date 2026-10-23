@@ -3171,4 +3171,11 @@
     <string name="connect_alone">Tryptify\'ı aynı hesapla giriş yapılmış başka bir cihazda aç, burada görünür.</string>
     <string name="connect_kind_app">Tryptify uygulaması</string>
     <string name="connect_kind_web">tryptify.com</string>
+    <string name="settings_frame_rate_limit">Kare hızı sınırı</string>
+    <string name="settings_frame_rate_limit_desc">Uygulamanın, animasyonlarının, Trypt Mania’nın ve görselleştiricinin saniyede çizdiği en fazla kare sayısı. Düşük değer pil ve ısıdan tasarruf sağlar. Maks. her ekran yenilemesinde çizer.</string>
+    <string name="settings_frame_rate_limit_chip">Saniyede en fazla %1$d kare</string>
+    <string name="settings_fps_counter">FPS sayacı</string>
+    <string name="settings_fps_counter_desc">Saniyede çizilen kareleri ve ekran yenileme hızını sağ üst köşede gösterir</string>
+    <string name="fps_counter_reading">%1$d fps · %2$d Hz</string>
+    <string name="fps_counter_reading_limited">%1$d fps · %2$d Hz · sınır %3$d</string>
 </resources>

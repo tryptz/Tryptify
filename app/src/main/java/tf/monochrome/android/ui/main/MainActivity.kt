@@ -23,6 +23,11 @@ import androidx.compose.runtime.SideEffect
 import android.widget.FrameLayout
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
@@ -32,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.createLifecycleAwareWindowRecomposer
 import androidx.compose.ui.graphics.luminance
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -173,6 +179,23 @@ class MainActivity : ComponentActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
         ))
         setContentView(rootContainer)
+        // Settings › System › Performance › Frame rate limit: the whole app is
+        // composed on the display's frame clock with the limit applied, so
+        // every recomposition, animation and frame loop under it, Trypt
+        // Mania's playfield included, moves on at most that many frames a
+        // second. Not a display vote: the panel's rate is left alone.
+        val displayClock = androidx.compose.ui.platform.AndroidUiDispatcher.CurrentThread[
+            androidx.compose.runtime.MonotonicFrameClock,
+        ]
+        if (displayClock != null) {
+            composeView.setParentCompositionContext(
+                composeView.createLifecycleAwareWindowRecomposer(
+                    androidx.compose.ui.platform.AndroidUiDispatcher.CurrentThread +
+                        tf.monochrome.android.performance.CappedFrameClock(displayClock),
+                    lifecycle,
+                ),
+            )
+        }
 
         composeView.setContent {
             val themeName by preferences.theme.collectAsStateWithLifecycle(initialValue = "monochrome_dark")
@@ -253,6 +276,13 @@ class MainActivity : ComponentActivity() {
                 .collectAsStateWithLifecycle(
                     initialValue = tf.monochrome.android.performance.LowPerformanceSettings()
                 )
+            // Settings › System › Performance: the frame rate limit, read by
+            // the frame clock and the visualizer's render threads, and the
+            // FPS counter drawn over everything.
+            val frameRateLimit by preferences.frameRateLimit
+                .collectAsStateWithLifecycle(initialValue = tf.monochrome.android.performance.FrameRateLimit.MAX)
+            val showFpsCounter by preferences.showFpsCounter.collectAsStateWithLifecycle(initialValue = false)
+            SideEffect { tf.monochrome.android.performance.FrameRateLimit.fps = frameRateLimit }
             // The album palette crosses over at the Color transition length —
             // a few hundred milliseconds by default, not the audio blend, which
             // could make every track change a six-second repaint.
@@ -408,6 +438,17 @@ class MainActivity : ComponentActivity() {
                                 true -> MonochromeNavHost(initialRoute = pendingPostRoute)
                             }
                         }
+                    }
+                    // Over the CRT's layer, not in it, so it reads plainly.
+                    if (showFpsCounter) {
+                        tf.monochrome.android.performance.FpsCounter(
+                            limit = frameRateLimit,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .wrapContentSize(Alignment.TopEnd)
+                                .statusBarsPadding()
+                                .padding(top = 4.dp, end = 8.dp),
+                        )
                     }
                 }
             }

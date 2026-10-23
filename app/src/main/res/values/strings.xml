@@ -3174,4 +3174,11 @@
     <string name="connect_alone">Open Tryptify on another device, signed in to the same account, and it shows up here.</string>
     <string name="connect_kind_app">Tryptify app</string>
     <string name="connect_kind_web">tryptify.com</string>
+    <string name="settings_frame_rate_limit">Frame rate limit</string>
+    <string name="settings_frame_rate_limit_desc">The most frames a second the app draws, with its animations, Trypt Mania and the visualizer. Lower saves battery and heat. Max draws on every display refresh.</string>
+    <string name="settings_frame_rate_limit_chip">At most %1$d frames a second</string>
+    <string name="settings_fps_counter">FPS counter</string>
+    <string name="settings_fps_counter_desc">Show the frames drawn each second and the display’s refresh rate in the top corner</string>
+    <string name="fps_counter_reading">%1$d fps · %2$d Hz</string>
+    <string name="fps_counter_reading_limited">%1$d fps · %2$d Hz · limit %3$d</string>
 </resources>

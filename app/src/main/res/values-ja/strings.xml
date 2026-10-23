@@ -3095,4 +3095,11 @@
     <string name="connect_alone">同じアカウントでサインインした別のデバイスで Tryptify を開くと、ここに表示されます。</string>
     <string name="connect_kind_app">Tryptify アプリ</string>
     <string name="connect_kind_web">tryptify.com</string>
+    <string name="settings_frame_rate_limit">フレームレートの上限</string>
+    <string name="settings_frame_rate_limit_desc">アプリとそのアニメーション、Trypt Mania、ビジュアライザが 1 秒に描画する最大フレーム数。下げるとバッテリーと発熱を抑えられます。「最大」は画面のリフレッシュごとに描画します。</string>
+    <string name="settings_frame_rate_limit_chip">1 秒に最大 %1$d フレーム</string>
+    <string name="settings_fps_counter">FPS カウンター</string>
+    <string name="settings_fps_counter_desc">1 秒に描画したフレーム数と画面のリフレッシュレートを右上に表示します</string>
+    <string name="fps_counter_reading">%1$d fps · %2$d Hz</string>
+    <string name="fps_counter_reading_limited">%1$d fps · %2$d Hz · 上限 %3$d</string>
 </resources>

@@ -29,6 +29,7 @@ import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.ToneControls
+import tf.monochrome.android.performance.FrameRateLimit
 import tf.monochrome.android.performance.LowPerformanceSettings
 import tf.monochrome.android.performance.PerformanceProfile
 import tf.monochrome.android.visualizer.AmbientVisualizerSettings
@@ -287,6 +288,8 @@ class PreferencesManager @Inject constructor(
         private val DISABLE_ANIMATIONS = booleanPreferencesKey("disable_animations")
         private val LEGACY_PLAYER = booleanPreferencesKey("legacy_player")
         private val DISABLE_LIQUID_GLASS = booleanPreferencesKey("disable_liquid_glass")
+        private val FRAME_RATE_LIMIT = intPreferencesKey("frame_rate_limit")
+        private val SHOW_FPS_COUNTER = booleanPreferencesKey("show_fps_counter")
 
         // Interface
         private val GAPLESS_PLAYBACK = booleanPreferencesKey("gapless_playback")
@@ -2980,6 +2983,26 @@ class PreferencesManager @Inject constructor(
                 disableLiquidGlass = prefs[DISABLE_LIQUID_GLASS] ?: false,
             ).allEnabled
         }
+    }
+
+    // --- Frame rate limit and FPS counter (Settings › System › Performance) ---
+    // Per-device tuning like the switches above: not in SETTINGS_SYNC_KEYS.
+
+    /** The most frames a second the app draws; [FrameRateLimit.MAX] (0) for every refresh. */
+    val frameRateLimit: Flow<Int> = dataStore.data.map {
+        (it[FRAME_RATE_LIMIT] ?: FrameRateLimit.MAX).let { fps ->
+            if (fps in FrameRateLimit.CHOICES) fps else FrameRateLimit.MAX
+        }
+    }
+
+    suspend fun setFrameRateLimit(fps: Int) {
+        dataStore.edit { it[FRAME_RATE_LIMIT] = if (fps in FrameRateLimit.CHOICES) fps else FrameRateLimit.MAX }
+    }
+
+    val showFpsCounter: Flow<Boolean> = dataStore.data.map { it[SHOW_FPS_COUNTER] ?: false }
+
+    suspend fun setShowFpsCounter(enabled: Boolean) {
+        dataStore.edit { it[SHOW_FPS_COUNTER] = enabled }
     }
 
     // --- Clear all prefs (System) ---

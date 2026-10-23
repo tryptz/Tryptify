@@ -3095,4 +3095,11 @@
     <string name="connect_alone">在另一台设备上用同一账号登录 Tryptify，它就会出现在这里。</string>
     <string name="connect_kind_app">Tryptify 应用</string>
     <string name="connect_kind_web">tryptify.com</string>
+    <string name="settings_frame_rate_limit">帧率上限</string>
+    <string name="settings_frame_rate_limit_desc">应用及其动画、Trypt Mania 和可视化每秒最多绘制的帧数。调低可省电并减少发热。“最大”会在每次屏幕刷新时绘制。</string>
+    <string name="settings_frame_rate_limit_chip">每秒最多 %1$d 帧</string>
+    <string name="settings_fps_counter">帧率计数器</string>
+    <string name="settings_fps_counter_desc">在右上角显示每秒绘制的帧数和屏幕刷新率</string>
+    <string name="fps_counter_reading">%1$d fps · %2$d Hz</string>
+    <string name="fps_counter_reading_limited">%1$d fps · %2$d Hz · 上限 %3$d</string>
 </resources>
