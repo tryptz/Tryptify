@@ -207,7 +207,7 @@ internal fun SpectrumWaterfallSettingsSection(
                 selected = draft.targetFps == fps,
                 accent = MaterialTheme.colorScheme.primary,
                 onClick = { onChange(draft.copy(targetFps = fps)) },
-                modifier = Modifier.width(if (fps == SpectrumWaterfallSettings.FPS_DISPLAY) 64.dp else 52.dp),
+                modifier = Modifier.width(if (fps == SpectrumWaterfallSettings.FPS_DISPLAY || fps >= 100) 64.dp else 52.dp),
                 description = if (fps == SpectrumWaterfallSettings.FPS_DISPLAY) {
                     stringResource(R.string.waterfall_every_refresh_desc)
                 } else {

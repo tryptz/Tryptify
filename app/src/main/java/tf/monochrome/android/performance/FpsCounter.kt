@@ -34,9 +34,11 @@ import kotlin.math.roundToInt
 /**
  * Settings › System › Performance › FPS counter: the frames the window drew in
  * the last second, beside the display's refresh rate. Counted from the
- * window's frame metrics, so it is what reached the screen, not what the
- * clock asked for: an app at rest draws nothing and reads near 0 (the
- * counter's own update is one frame a second). The visualizer's surface is
+ * window's frame metrics, so it is what reached the screen. In brackets, the
+ * frames the app's own clock moved its animations on ([CappedFrameClock]): a
+ * window drawing more than that is drawing for something outside it. An app
+ * at rest draws nothing and reads near 0 (the counter's own update is one
+ * frame a second). The visualizer's surface is
  * not the window's and keeps its own counter (Settings › Visualizer › Show
  * FPS).
  *
@@ -52,6 +54,7 @@ fun FpsCounter(
     val view = LocalView.current
     val frames = remember { AtomicInteger() }
     var fps by remember { mutableIntStateOf(0) }
+    var composed by remember { mutableIntStateOf(0) }
     var hz by remember { mutableIntStateOf(0) }
     DisposableEffect(view) {
         val window = view.context.findActivity()?.window
@@ -72,13 +75,14 @@ fun FpsCounter(
         while (true) {
             delay(1_000L)
             fps = frames.getAndSet(0)
+            composed = FrameRateLimit.composedFrames.getAndSet(0)
             hz = view.display?.refreshRate?.roundToInt() ?: 0
         }
     }
     val text = if (limit > 0) {
-        stringResource(R.string.fps_counter_reading_limited, fps, hz, limit)
+        stringResource(R.string.fps_counter_reading_limited, fps, composed, hz, limit)
     } else {
-        stringResource(R.string.fps_counter_reading, fps, hz)
+        stringResource(R.string.fps_counter_reading, fps, composed, hz)
     }
     Text(
         text = text,

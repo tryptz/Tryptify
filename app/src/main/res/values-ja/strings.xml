@@ -3100,8 +3100,8 @@
     <string name="settings_frame_rate_limit_chip">1 秒に最大 %1$d フレーム</string>
     <string name="settings_fps_counter">FPS カウンター</string>
     <string name="settings_fps_counter_desc">1 秒に描画したフレーム数と画面のリフレッシュレートを右上に表示します</string>
-    <string name="fps_counter_reading">%1$d fps · %2$d Hz</string>
-    <string name="fps_counter_reading_limited">%1$d fps · %2$d Hz · 上限 %3$d</string>
+    <string name="fps_counter_reading">%1$d fps (%2$d) · %3$d Hz</string>
+    <string name="fps_counter_reading_limited">%1$d fps (%2$d) · %3$d Hz · 上限 %4$d</string>
     <string name="settings_add_stepmania_packs">StepMania パックを追加</string>
     <string name="settings_add_stepmania_packs_desc">Trypt Mania がフォルダから読み込むパックを曲として追加します。各曲は譜面のタイトル、アーティスト、画像を使い、パックごとに 1 枚のアルバムになります。Trypt Mania では各曲が譜面付きで 1 回だけ表示されます。</string>
     <string name="settings_stepmania_packs_scanning">StepMania パックをライブラリに追加しています…</string>

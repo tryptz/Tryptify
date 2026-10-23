@@ -88,4 +88,18 @@ class FrameRateLimitTest {
         assertEquals(60f, wantedFrameRate(120f, limit = 60))
         assertEquals(60f, wantedFrameRate(60f, limit = 90))
     }
+
+    @Test
+    fun `the display is asked for the slowest rate that holds the limit, and nothing at Max`() {
+        val ltpo = listOf(1f, 10f, 24f, 30f, 60f, 90f, 120f)
+        val plain = listOf(60f, 120f)
+        assertEquals(0f, FrameRateLimit.refreshRateFor(FrameRateLimit.MAX, plain))
+        assertEquals(30f, FrameRateLimit.refreshRateFor(30, ltpo))
+        assertEquals(60f, FrameRateLimit.refreshRateFor(30, plain))
+        assertEquals(60f, FrameRateLimit.refreshRateFor(45, ltpo))
+        assertEquals(120f, FrameRateLimit.refreshRateFor(90, plain))
+        // A limit above the panel's fastest asks for its fastest.
+        assertEquals(60f, FrameRateLimit.refreshRateFor(120, listOf(60f)))
+        assertEquals(59.94f, FrameRateLimit.refreshRateFor(60, listOf(59.94f, 90f)))
+    }
 }

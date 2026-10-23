@@ -3037,7 +3037,8 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
                     selected = frameRateLimit == fps,
                     accent = MaterialTheme.colorScheme.primary,
                     onClick = { viewModel.setFrameRateLimit(fps) },
-                    modifier = Modifier.width(if (max) 64.dp else 52.dp),
+                    // Three digits (120) need the room "Max" has; at 52 dp it read "12…".
+                    modifier = Modifier.width(if (max || fps >= 100) 64.dp else 52.dp),
                     description = if (max) {
                         stringResource(R.string.waterfall_every_refresh_desc)
                     } else {

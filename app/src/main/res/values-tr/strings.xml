@@ -3176,8 +3176,8 @@
     <string name="settings_frame_rate_limit_chip">Saniyede en fazla %1$d kare</string>
     <string name="settings_fps_counter">FPS sayacı</string>
     <string name="settings_fps_counter_desc">Saniyede çizilen kareleri ve ekran yenileme hızını sağ üst köşede gösterir</string>
-    <string name="fps_counter_reading">%1$d fps · %2$d Hz</string>
-    <string name="fps_counter_reading_limited">%1$d fps · %2$d Hz · sınır %3$d</string>
+    <string name="fps_counter_reading">%1$d fps (%2$d) · %3$d Hz</string>
+    <string name="fps_counter_reading_limited">%1$d fps (%2$d) · %3$d Hz · sınır %4$d</string>
     <string name="settings_add_stepmania_packs">StepMania paketlerini ekle</string>
     <string name="settings_add_stepmania_packs_desc">Trypt Mania’nın bir klasörden okuduğu paketler parça olarak eklenir: her biri kendi chart’ının adı, sanatçısı ve resmiyle, her paket bir albüm olarak. Trypt Mania her parçayı yine chart’ıyla yalnızca bir kez listeler.</string>
     <string name="settings_stepmania_packs_scanning">StepMania paketlerin kitaplığa ekleniyor…</string>

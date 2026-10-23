@@ -2330,14 +2330,20 @@ the animation takes. This needs the upload channel configured.
 
 ### Frame rate limit and FPS counter
 
-**The limit is a slower frame clock, never a display vote.** Settings ›
+**The limit is a slower frame clock, and the listener's own refresh-rate
+vote.** Settings ›
 System › Performance › Frame rate limit (Max, 30, 45, 60, 90, 120; per device,
 not synced) puts the activity's whole composition on `CappedFrameClock`, the
 display's clock with `FramePacer` keeping only the frames due: every
 recomposition, animation and `withFrameNanos` loop, Trypt Mania's playfield
 included, moves on at most that many frames a second, and with nothing changed
-nothing is redrawn. The window still holds no refresh-rate or resolution vote
-(MainActivity says why); the panel runs at whatever the system picks. A due
+nothing is redrawn. The clock alone was not enough on an LTPO phone (seen on
+device): the system and Compose's own votes held the panel at 120 Hz and the
+window drew on every refresh, 120 fps at "30". So a limit below Max also sets
+the window's `preferredRefreshRate` to the slowest of the display's rates at the
+current resolution that holds it (`FrameRateLimit.applyTo`, `refreshRateFor`):
+the rate alone, never a mode id or a resolution. At Max the window holds no
+refresh-rate or resolution vote, as before (MainActivity says why). A due
 frame runs inside the display's own frame callback, so what it changes is drawn
 on that frame. Each kept frame books the next one interval on, so a limit the
 panel does not divide (90 on 120 Hz) averages out to it, and a stall starts
@@ -2352,8 +2358,10 @@ the audio clock, the 8 ms tick and the touch timestamps place every note, so a
 limit costs the playfield frames of animation and never a judgement.
 
 **The FPS counter counts what reached the screen.** `FpsCounter` counts the
-window's frame metrics each second, beside the display's refresh rate and the
-limit. An app at rest reads near 0 (its own update is one frame a second). It
+window's frame metrics each second, in brackets the frames the app's clock
+moved its animations on (`FrameRateLimit.composedFrames`), beside the display's
+refresh rate and the limit: a window drawing more than the bracket is drawing
+for something outside the clock. An app at rest reads near 0 (its own update is one frame a second). It
 is drawn over the CRT's layer, not in it, and takes no touches. The
 visualizer's surface is not the window's and keeps its own counter (Settings ›
 Visualizer › Show FPS).

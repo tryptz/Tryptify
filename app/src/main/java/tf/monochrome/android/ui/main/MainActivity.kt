@@ -169,7 +169,10 @@ class MainActivity : ComponentActivity() {
         // top rate is only offered at a lower resolution it is a slower one
         // than the override asked for, so the app ended up arguing its own
         // display down. What used to be Settings › System › Display › Frame
-        // Rate and Resolution was removed for this reason.
+        // Rate and Resolution was removed for this reason. The one exception
+        // is the listener's own: a Frame rate limit below Max asks for a
+        // slower rate (never a mode, never a resolution), because that is
+        // what they asked the app to do (FrameRateLimit.applyTo).
 
         // Root container wrapping the Compose content. (Real glass blur is
         // handled by Haze in-Compose; no native BlurView wrapper is needed.)
@@ -282,7 +285,10 @@ class MainActivity : ComponentActivity() {
             val frameRateLimit by preferences.frameRateLimit
                 .collectAsStateWithLifecycle(initialValue = tf.monochrome.android.performance.FrameRateLimit.MAX)
             val showFpsCounter by preferences.showFpsCounter.collectAsStateWithLifecycle(initialValue = false)
-            SideEffect { tf.monochrome.android.performance.FrameRateLimit.fps = frameRateLimit }
+            SideEffect {
+                tf.monochrome.android.performance.FrameRateLimit.fps = frameRateLimit
+                tf.monochrome.android.performance.FrameRateLimit.applyTo(window, frameRateLimit)
+            }
             // The album palette crosses over at the Color transition length —
             // a few hundred milliseconds by default, not the audio blend, which
             // could make every track change a six-second repaint.

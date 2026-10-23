@@ -1,6 +1,8 @@
 package tf.monochrome.android.performance
 
+import android.view.Window
 import androidx.compose.runtime.MonotonicFrameClock
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Settings › System › Performance › Frame rate limit: the most frames a second
@@ -9,9 +11,11 @@ import androidx.compose.runtime.MonotonicFrameClock
  * activity's whole composition runs on; the visualizer's render threads through
  * `ProjectMEngineRepository`, which reads [fps] for itself.
  *
- * It is not a display-mode vote. The window still holds none (see
- * MainActivity): the panel refreshes at whatever the system picks, and the app
- * draws on fewer of its refreshes.
+ * With a limit set it also asks the display for the slowest refresh rate that
+ * holds it ([applyTo]), since an LTPO panel kept at 120 Hz by the system's own
+ * votes (Compose's among them) still had the window drawing at 120: the rate
+ * alone, never a mode id, and none at all at Max, where the window holds no
+ * vote (see MainActivity).
  */
 object FrameRateLimit {
     /** 0: no limit, every refresh. */
@@ -26,6 +30,38 @@ object FrameRateLimit {
      */
     @Volatile
     var fps: Int = MAX
+
+    /** Frames [CappedFrameClock] let through, for the FPS counter to read and reset. */
+    val composedFrames = AtomicInteger()
+
+    /**
+     * Asks the display, through [window], for the refresh rate [fps] needs
+     * ([refreshRateFor]), or for nothing at Max. The preferred rate only: the
+     * system keeps the resolution, and a touch or another window may still
+     * raise it.
+     */
+    fun applyTo(window: Window, fps: Int) {
+        val display = window.decorView.display ?: return
+        val current = display.mode
+        val rates = display.supportedModes
+            .filter { it.physicalWidth == current.physicalWidth && it.physicalHeight == current.physicalHeight }
+            .map { it.refreshRate }
+        val wanted = refreshRateFor(fps, rates)
+        val attributes = window.attributes
+        if (attributes.preferredRefreshRate == wanted) return
+        attributes.preferredRefreshRate = wanted
+        window.attributes = attributes
+    }
+
+    /**
+     * The slowest of the display's [rates] that is at least [fps], so the
+     * panel refreshes no faster than the limit needs; the fastest when none
+     * is; 0, no preference, at Max.
+     */
+    internal fun refreshRateFor(fps: Int, rates: List<Float>): Float {
+        if (fps <= 0 || rates.isEmpty()) return 0f
+        return rates.filter { it >= fps - 0.5f }.minOrNull() ?: rates.max()
+    }
 }
 
 /**
@@ -76,6 +112,7 @@ internal class CappedFrameClock(private val display: MonotonicFrameClock) : Mono
             var result: R? = null
             display.withFrameNanos { now ->
                 if (pacer.due(now, FrameRateLimit.fps)) {
+                    FrameRateLimit.composedFrames.incrementAndGet()
                     ran = true
                     result = onFrame(now)
                 }

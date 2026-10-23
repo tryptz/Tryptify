@@ -3252,8 +3252,8 @@
     <string name="settings_frame_rate_limit_chip">Au plus %1$d images par seconde</string>
     <string name="settings_fps_counter">Compteur de FPS</string>
     <string name="settings_fps_counter_desc">Affiche en haut à droite les images dessinées chaque seconde et la fréquence de rafraîchissement de l’écran</string>
-    <string name="fps_counter_reading">%1$d FPS · %2$d Hz</string>
-    <string name="fps_counter_reading_limited">%1$d FPS · %2$d Hz · limite %3$d</string>
+    <string name="fps_counter_reading">%1$d FPS (%2$d) · %3$d Hz</string>
+    <string name="fps_counter_reading_limited">%1$d FPS (%2$d) · %3$d Hz · limite %4$d</string>
     <string name="settings_add_stepmania_packs">Ajouter les packs StepMania</string>
     <string name="settings_add_stepmania_packs_desc">Les packs que Trypt Mania lit depuis un dossier, comme titres : chacun avec le titre, l’artiste et l’image de sa chart, chaque pack étant un album. Trypt Mania liste toujours chaque titre une seule fois, avec sa chart.</string>
     <string name="settings_stepmania_packs_scanning">Ajout de vos packs StepMania à la bibliothèque…</string>

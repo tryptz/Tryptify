@@ -3100,8 +3100,8 @@
     <string name="settings_frame_rate_limit_chip">每秒最多 %1$d 帧</string>
     <string name="settings_fps_counter">帧率计数器</string>
     <string name="settings_fps_counter_desc">在右上角显示每秒绘制的帧数和屏幕刷新率</string>
-    <string name="fps_counter_reading">%1$d fps · %2$d Hz</string>
-    <string name="fps_counter_reading_limited">%1$d fps · %2$d Hz · 上限 %3$d</string>
+    <string name="fps_counter_reading">%1$d fps (%2$d) · %3$d Hz</string>
+    <string name="fps_counter_reading_limited">%1$d fps (%2$d) · %3$d Hz · 上限 %4$d</string>
     <string name="settings_add_stepmania_packs">添加 StepMania 曲包</string>
     <string name="settings_add_stepmania_packs_desc">将 Trypt Mania 从文件夹读取的曲包作为歌曲加入：每首歌使用其谱面的标题、艺人和图片，每个曲包是一张专辑。Trypt Mania 中每首歌仍只列出一次，并带有其谱面。</string>
     <string name="settings_stepmania_packs_scanning">正在将你的 StepMania 曲包添加到音乐库…</string>
