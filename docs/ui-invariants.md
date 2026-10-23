@@ -1835,6 +1835,14 @@ copy (`appTvTuning`, one line in the settings store, synced), and the app is
 their preview: a drag moves the whole app live (`AppTvLive`, read in the
 root layer's draw) and the store is written once, on release.
 
+**The CRT look reads each TV pixel once.** Its glow and its sharp spread share
+one read of each line's pixels (`glowLine`), and the sideways weights are
+worked out once a pixel, not once a read: thirty-one reads with the glow on,
+eleven without. The original's arithmetic read the middle lines twice, forty-two
+reads a pixel over the whole screen every frame, and the phone dropped frames
+over the app and the playfield alike. The picture is the same to within one
+step in 255; a "simpler" `tri` plus `bloom` brings the dropped frames back.
+
 **Chromatic shift and the two curves are the tube's glass, over any look.** A
 second pass chained after the pattern (`TUBE_SHADER`), so the scanlines and the
 mask bow with the picture, as on a tube; it runs only while one is above 0, and
