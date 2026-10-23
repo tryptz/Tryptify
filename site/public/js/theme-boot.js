@@ -8,8 +8,8 @@
   if (t !== "dark" && t !== "white") t = matchMedia("(prefers-color-scheme: light)").matches ? "white" : "dark";
   document.documentElement.dataset.design = t;
   // Motion only when it is welcome (site.js waits for .motion); if site.js has
-  // not started in 3 s, show everything as is.
-  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  // not started in 3 s, show everything as is. The web player has no site.js.
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches && !/\/player(\.html)?$/.test(location.pathname)) {
     var root = document.documentElement;
     root.classList.add("motion");
     setTimeout(function () { if (!window.__tryptifyMotion) root.classList.remove("motion"); }, 3000);

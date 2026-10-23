@@ -3,7 +3,9 @@
    top bar, a menu on the left, the page, and the bar at the bottom; on a phone
    the menu becomes a row of tabs and the bar stacks. */
 
-.wp { --bar-h: 88px; --top-h: 64px; min-height: 100vh; }
+/* --bar-h is the room kept free at the bottom: the floating bar and the gap under it
+   (js/wp-app.js keeps it to the bar's real height). */
+.wp { --bar-gap: 12px; --bar-h: 100px; --top-h: 64px; min-height: 100vh; }
 .wp .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .wp-skip { position: absolute; left: -9999px; top: 8px; z-index: 50; background: var(--accent); color: var(--on-accent); padding: 10px 14px; border-radius: 10px; }
 .wp-skip:focus { left: 8px; }
@@ -221,12 +223,89 @@
 .wp-queue-song strong { font-weight: 500; }
 .wp-queue-song span { font-size: 13px; }
 
-/* ── The bar ── */
+/* ── The bar: liquid glass, floating, like the site's menu and the app's mini
+   player. The page scrolls on under it, bent at the rim (js/glass.js). ── */
 .wp-bar {
-  position: fixed; z-index: 30; left: 0; right: 0; bottom: 0; height: var(--bar-h); margin: 0;
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr); align-items: center; gap: 16px; padding: 0 18px;
-  background: var(--panel); border-top: 1px solid var(--line); color: var(--text); font-size: 14px;
+  position: fixed; z-index: 30; left: var(--bar-gap); right: var(--bar-gap); bottom: var(--bar-gap); height: 88px; margin: 0;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr); align-items: center; gap: 16px; padding: 0 18px 0 14px;
+  border-radius: 26px; color: var(--text); font-size: 14px;
 }
+/* The app's player glass (its "Float" preset): the page behind blurred and bent
+   at the rim, under the cover's own colour at about a quarter (--tint, from
+   js/wp-app.js; clear glass with no cover), denser here than the app's so the
+   page cannot read through the controls. A crisp rim lit from the top left,
+   a cool fill at the bottom right, no line inside the bevel, a still glint,
+   and a shadow dropped 8px. Nothing moves across it. */
+.wp-bar { --tint: 126 182 255; --tint-a: 0; }
+.wp-bar[style*="--tint"] { --tint-a: 0.32; }
+[data-design="white"] .wp-bar[style*="--tint"] { --tint-a: 0.24; }
+.wp-bar.glass {
+  --glass-blur: 12px; --glass-bend: 24;
+  background: linear-gradient(rgb(var(--tint) / var(--tint-a)), rgb(var(--tint) / var(--tint-a))), color-mix(in srgb, var(--bg) 62%, transparent);
+  -webkit-backdrop-filter: blur(12px) saturate(170%);
+          backdrop-filter: blur(12px) saturate(170%);
+  box-shadow:
+    0 8px 26px rgba(0, 0, 0, 0.6),
+    inset 0 -12px 20px -14px rgba(5, 6, 8, 0.7),
+    inset 0 0 22px -6px rgba(210, 225, 255, 0.10);
+}
+[data-design="white"] .wp-bar.glass {
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.22), inset 0 -12px 20px -14px rgba(5, 6, 8, 0.18), inset 0 0 22px -6px rgba(255, 255, 255, 0.5);
+}
+.lens .wp-bar.glass[data-lens] {
+  -webkit-backdrop-filter: var(--lens) saturate(170%);
+          backdrop-filter: var(--lens) saturate(170%);
+}
+.wp-bar.glass::before {
+  padding: 1px; opacity: 1;
+  background: linear-gradient(162deg, rgba(255, 247, 235, 0.95) 0%, rgba(209, 224, 255, 0.55) 16%, rgba(209, 224, 255, 0.08) 40%,
+    transparent 62%, rgba(166, 209, 255, 0.18) 85%, rgba(166, 209, 255, 0.45) 100%);
+}
+.wp-bar.glass::after {
+  background: radial-gradient(90px 22px at 14% 0%, rgba(255, 255, 255, 0.55), transparent 70%);
+  mix-blend-mode: normal; opacity: 0.55;
+}
+
+/* The play button: the same glass in a disc, the cover's colour stronger, and
+   a squeeze to 92% on a spring when pressed. */
+.wp-bar .wp-play {
+  position: relative; color: var(--text);
+  background: radial-gradient(120% 90% at 30% 10%, rgba(255, 255, 255, 0.28), transparent 55%), rgb(var(--tint) / calc(var(--tint-a) * 1.6 + 0.08));
+  box-shadow:
+    inset 0 1px 1px rgba(255, 247, 235, 0.85),
+    inset 0 -1px 1px rgba(166, 209, 255, 0.35),
+    inset 0 -8px 12px -6px rgba(5, 6, 8, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 8px 18px -6px rgba(0, 0, 0, 0.55);
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.3s;
+}
+[data-design="white"] .wp-bar .wp-play {
+  box-shadow: inset 0 1px 1px #fff, inset 0 -1px 1px rgba(120, 160, 220, 0.3), inset 0 -8px 12px -6px rgba(5, 6, 8, 0.16),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.08), 0 8px 18px -6px rgba(0, 0, 0, 0.25);
+}
+.wp-bar .wp-play:hover { background: radial-gradient(120% 90% at 30% 10%, rgba(255, 255, 255, 0.36), transparent 55%), rgb(var(--tint) / calc(var(--tint-a) * 1.6 + 0.14)); opacity: 1; }
+.wp-bar .wp-play:active { transform: scale(0.92); transition-duration: 0.12s; }
+
+/* The timeline: the app's glass tube (drawn by js/wp-app.js), the real range
+   input on top of it, unseen, its thumb as wide as the swelling. */
+.wp-tube-wrap { position: relative; flex: 1; height: 24px; min-width: 0; }
+.wp-tube { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.wp-tube-rest { fill: color-mix(in srgb, var(--text) 22%, transparent); }
+.wp-tube-played { fill: rgb(var(--tint) / 0.6); }
+.wp-tube-core { fill: rgb(var(--tint) / 0.8); }
+.wp-tube-rim { stroke-width: 1; }
+[data-design="white"] .wp-tube-rest { fill: color-mix(in srgb, var(--text) 14%, transparent); }
+[data-design="white"] .wp-tube-played { fill: rgb(var(--tint) / 0.75); }
+[data-design="white"] .wp-tube-core { fill: rgb(var(--tint) / 0.9); }
+.wp-seek .wp-tube-wrap input {
+  position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer;
+  -webkit-appearance: none; appearance: none; background: none;
+}
+.wp-tube-wrap input::-webkit-slider-runnable-track { height: 24px; background: none; }
+.wp-tube-wrap input::-webkit-slider-thumb { -webkit-appearance: none; width: 44px; height: 24px; }
+.wp-tube-wrap input::-moz-range-track { height: 24px; background: none; }
+.wp-tube-wrap input::-moz-range-thumb { width: 44px; height: 24px; border: 0; border-radius: 0; }
+.wp-tube-wrap:has(input:focus-visible) { outline: 2px solid var(--text); outline-offset: 2px; border-radius: 12px; }
 .wp-bar-song { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .wp-cover { width: 52px; height: 52px; border-radius: 10px; object-fit: cover; flex: 0 0 auto; }
 .wp-bar-text { display: grid; min-width: 0; }
@@ -237,14 +316,14 @@
 .wp-seek { display: flex; align-items: center; gap: 10px; width: 100%; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .wp-seek input { flex: 1; accent-color: var(--accent); }
 .wp-bar-end { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
-.wp-bar-end input { width: 110px; accent-color: var(--accent); }
+.wp-bar-end input { width: 110px; accent-color: rgb(var(--tint)); }
 .wp-badge { font-size: 12px; color: var(--accent-2); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
 
 /* ── Tryptify Connect ── */
 .wp-icon.lit { color: var(--ok); }
 .wp-elsewhere {
-  position: fixed; z-index: 29; left: 0; right: 0; bottom: var(--bar-h); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px;
-  padding: 8px 18px 10px; background: var(--ok); color: #0a0a0a; font-size: 14px; overflow: hidden;
+  position: fixed; z-index: 29; left: var(--bar-gap); right: var(--bar-gap); bottom: calc(var(--bar-h) + 6px); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px;
+  padding: 8px 18px 10px; background: var(--ok); color: #0a0a0a; font-size: 14px; overflow: hidden; border-radius: 18px;
 }
 [data-design="white"] .wp-elsewhere { color: #fff; }
 .wp-elsewhere .wp-icon { color: inherit; width: 40px; height: 40px; }
@@ -294,7 +373,7 @@ body.has-elsewhere .wp-main { padding-bottom: calc(var(--bar-h) + 110px); }
   .wp-track-album { display: none; }
 }
 @media (max-width: 820px) {
-  .wp { --bar-h: 132px; --top-h: 60px; }
+  .wp { --bar-gap: 8px; --bar-h: 150px; --top-h: 60px; }
   .wp-top { gap: 8px; padding: 0 12px; }
   .wp-top .wordmark, .wp-tag, .wp-search kbd, .wp-pill { display: none; }
   .wp-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
@@ -305,7 +384,7 @@ body.has-elsewhere .wp-main { padding-bottom: calc(var(--bar-h) + 110px); }
   .wp-side a { flex: 0 0 auto; padding: 9px 12px; white-space: nowrap; }
   .wp-side .langs { display: none; }
   .wp-main { padding: 20px 16px calc(var(--bar-h) + 30px); }
-  .wp-bar { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; gap: 4px 10px; padding: 10px 12px; height: auto; }
+  .wp-bar { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; gap: 4px 10px; padding: 10px 14px; height: auto; border-radius: 24px; }
   .wp-bar-mid { grid-column: 1 / -1; grid-row: 2; }
   .wp-bar-end input, .wp-badge, #bar-mute { display: none; }
   .wp-now-cover { width: 120px; height: 120px; }

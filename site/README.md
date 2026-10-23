@@ -78,6 +78,27 @@ below 620 px What's new, so the menu stays on one line in every language.
 Coming back to a page the browser kept (Back), the pill is put back on that
 page's tab.
 
+The glass itself (the lens, and the glint that follows the pointer) is
+`js/glass.js`, shared with the web player. Its bend map is drawn in the
+glass's own pixels; sized as a percentage, it took the filter's larger area
+and the rim smeared colour across the middle of the bar.
+
+The web player's bar is the app's player glass (its Float preset, read from
+`ui/player/LiquidGlass.kt` and `LiveGlassLens.kt`): it floats 12 px from the
+edges (8 on a phone) with 26 px corners, the page blurred and bent under it,
+tinted with the cover's vibrant colour (`TryptifyGlass.vibrant`, the same pick
+the full-screen player makes; clear glass with no cover or a grey one) over
+more of the page colour than the app uses, so nothing reads through the
+controls. A crisp rim lit from the top left, a cool fill at the bottom right,
+a still glint, a shadow dropped 8 px; nothing moves across it. The play button
+is the same glass in a disc and squeezes to 92% on a spring. The timeline is
+the app's glass tube: one outline that swells around the playhead (a raised
+cosine, 44 px long), tinted up to it, swelling more while dragged; the range
+input stays on top, unseen, its thumb as wide as the swelling so its travel
+matches the drawing. `--bar-h` on the player is the room kept under the
+pages, the bar's measured height plus its gap. The player loads no
+`site.js`, so `theme-boot.js` leaves `.motion` off there.
+
 There are two colour designs, Black (`dark`) and White (`white`), set as
 `<html data-design>` by each page's head script: the one last picked with the
 sun/moon button at the end of the nav bar (`localStorage` key

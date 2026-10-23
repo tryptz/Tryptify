@@ -311,6 +311,20 @@
       play.setAttribute("aria-label", r.playing ? T("Pause on {name}", { name: nameOf(r.device, r.name) }) : T("Play on {name}", { name: nameOf(r.device, r.name) }));
       badge.hidden = true;
     }
+    tintBar(img.hidden ? null : img.getAttribute("src"));
+  }
+  // The bar's glass takes the cover's colour, as the app's player glass takes
+  // the album's; with no cover, or a grey one, it is clear glass.
+  let tintFor = null;
+  function tintBar(url) {
+    if (url === tintFor) return;
+    tintFor = url;
+    const bar = $("wp-bar");
+    if (!url || !window.TryptifyGlass) { bar.style.removeProperty("--tint"); return; }
+    TryptifyGlass.vibrant(url).then((c) => {
+      if (tintFor !== url) return;
+      if (c) bar.style.setProperty("--tint", c.join(" ")); else bar.style.removeProperty("--tint");
+    });
   }
   function markRows() {
     for (const li of document.querySelectorAll(".wp-track")) li.classList.toggle("is-current", !!current && li.dataset.key === current.key);
@@ -1243,6 +1257,87 @@
     if (e.key === " " && !e.target.closest("button, a")) { e.preventDefault(); current ? Eng.toggle().catch(fail) : playFirst(); }
     else if (e.key === "/") { e.preventDefault(); $("wp-q").focus(); }
   });
+
+  // ── The bar's glass ─────────────────────────────────────────────────
+  // The lens from js/glass.js, as on the site's menu (no glint: the app's
+  // glass holds still). The room kept
+  // free under the pages (--bar-h) follows the bar's real height, which on a
+  // phone depends on its content, plus the gap it floats in.
+  (() => {
+    const bar = $("wp-bar"), shell = document.querySelector(".wp");
+    if (window.TryptifyGlass) TryptifyGlass.giveLens(bar);
+    const room = () => shell.style.setProperty("--bar-h", `${bar.offsetHeight + (parseFloat(getComputedStyle(bar).bottom) || 0)}px`);
+    new ResizeObserver(room).observe(bar);
+    addEventListener("resize", room);
+    room();
+  })();
+
+  // ── The timeline: the app's glass tube ─────────────────────────────
+  // One outline, not a track and a thumb: a thin tube that swells smoothly
+  // around the playhead (a raised cosine), tinted up to it, with a glass rim
+  // lit from the top left. The range input stays on top, unseen, so the mouse,
+  // touch, keys and screen readers work as before; its thumb is as wide as the
+  // swelling, so the input's own travel matches where the swelling is drawn.
+  // Dragging swells it further on a bouncy spring, as in the app.
+  (() => {
+    const input = $("bar-seek");
+    const NS = "http://www.w3.org/2000/svg";
+    const TUBE = 2.6, REACH = 22, REST = 8, HELD = 10.5, H = 24;
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("class", "wp-tube");
+    svg.setAttribute("aria-hidden", "true");
+    svg.innerHTML =
+      '<defs><clipPath id="wp-tube-played"><rect x="0" y="0" width="0" height="' + H + '"/></clipPath>' +
+      '<linearGradient id="wp-tube-rim" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="#fff" stop-opacity="0.95"/><stop offset="0.45" stop-color="#d1e0ff" stop-opacity="0.25"/>' +
+      '<stop offset="0.7" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#a6d1ff" stop-opacity="0.45"/></linearGradient></defs>' +
+      '<path class="wp-tube-rest"/><path class="wp-tube-played" clip-path="url(#wp-tube-played)"/>' +
+      '<circle class="wp-tube-core"/><path class="wp-tube-rim" fill="none" stroke="url(#wp-tube-rim)"/>';
+    const wrap = document.createElement("span");
+    wrap.className = "wp-tube-wrap";
+    input.replaceWith(wrap);
+    wrap.append(svg, input);
+    const [clip] = svg.getElementsByTagName("rect");
+    const paths = svg.querySelectorAll("path"), core = svg.querySelector("circle");
+    let bulge = REST, speed = 0, target = REST, raf = 0, queued = false;
+    const draw = () => {
+      queued = false;
+      const w = wrap.clientWidth;
+      if (!w) return;
+      svg.setAttribute("viewBox", `0 0 ${w} ${H}`);
+      const max = Number(input.max) || 0, frac = max > 0 ? Math.min(1, Math.max(0, Number(input.value) / max)) : 0;
+      const inset = Math.min(REACH, w / 4), px = inset + (w - 2 * inset) * frac, cy = H / 2;
+      const half = (x) => { const d = Math.abs(x - px); return d >= REACH ? TUBE : TUBE + (bulge - TUBE) * 0.5 * (1 + Math.cos(Math.PI * d / REACH)); };
+      const top = [], bottom = [];
+      for (let x = TUBE; x <= w - TUBE; x += 1) { const h = half(x); top.push(`${x.toFixed(1)},${(cy - h).toFixed(2)}`); bottom.push(`${x.toFixed(1)},${(cy + h).toFixed(2)}`); }
+      const d = `M${top.join("L")}A${TUBE},${TUBE} 0 0 1 ${bottom[bottom.length - 1]}L${bottom.reverse().join("L")}A${TUBE},${TUBE} 0 0 1 ${top[0]}Z`;
+      for (const p of paths) p.setAttribute("d", d);
+      clip.setAttribute("width", px.toFixed(1));
+      core.setAttribute("cx", px.toFixed(1)); core.setAttribute("cy", cy);
+      core.setAttribute("r", (TUBE + (bulge - TUBE) * 0.6).toFixed(2));
+    };
+    const schedule = () => { if (!queued) { queued = true; requestAnimationFrame(draw); } };
+    // The swelling's spring: bouncy (damping 0.6), as the app's.
+    const spring = () => {
+      const dt = 1 / 60, k = 420, c = 2 * 0.6 * Math.sqrt(k);
+      speed += (k * (target - bulge) - c * speed) * dt;
+      bulge += speed * dt;
+      draw();
+      if (Math.abs(target - bulge) > 0.01 || Math.abs(speed) > 0.01) raf = requestAnimationFrame(spring); else { bulge = target; raf = 0; draw(); }
+    };
+    const hold = (on) => { target = on ? HELD : REST; if (!raf) raf = requestAnimationFrame(spring); };
+    input.addEventListener("pointerdown", () => hold(true));
+    for (const ev of ["pointerup", "pointercancel", "change", "blur"]) input.addEventListener(ev, () => hold(false));
+    input.addEventListener("input", schedule);
+    // The player sets value and max from code (playing, following another
+    // device), which fires no event: redraw on those too.
+    for (const key of ["value", "max"]) {
+      const own = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, key);
+      Object.defineProperty(input, key, { configurable: true, get() { return own.get.call(this); }, set(v) { own.set.call(this, v); schedule(); } });
+    }
+    new ResizeObserver(schedule).observe(wrap);
+    draw();
+  })();
 
   // ── Start ───────────────────────────────────────────────────────────
   initAutoEq();

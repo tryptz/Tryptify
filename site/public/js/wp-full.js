@@ -46,10 +46,11 @@
     stopWaterfall();
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   }
-  // The bar stays below, with its controls: on a phone it is taller than its CSS height says.
+  // The bar stays below, with its controls: on a phone it is taller than its
+  // CSS height says. It floats, so the gap under it counts too.
   function fitAboveBar() {
     const bar = $("wp-bar");
-    if (bar) view.style.setProperty("--full-bottom", `${bar.offsetHeight}px`);
+    if (bar) view.style.setProperty("--full-bottom", `${bar.offsetHeight + (parseFloat(getComputedStyle(bar).bottom) || 0)}px`);
   }
   addEventListener("resize", () => { if (open) { fitAboveBar(); sizeWaterfall(); } });
   $("full-close").addEventListener("click", hide);
@@ -358,37 +359,12 @@
     g.globalAlpha = 1;
   }
 
-  // The cover's own colour, as the app takes it from the album (its vibrant
-  // swatch): the most colourful bright pixel of a small copy. A cover from a
-  // server that sends no CORS cannot be read, and keeps the app's fallback blue.
-  const colours = new Map();
+  // The cover's own colour, as the app takes it from the album (js/glass.js);
+  // a grey cover, or one that cannot be read, keeps the app's fallback blue.
   function coverColour(url) {
-    if (!url) { colour = [126, 182, 255]; return; }
-    if (colours.has(url)) { colour = colours.get(url); return; }
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      try {
-        const n = 24, cv = document.createElement("canvas");
-        cv.width = n; cv.height = n;
-        const x = cv.getContext("2d", { willReadFrequently: true });
-        x.drawImage(img, 0, 0, n, n);
-        const d = x.getImageData(0, 0, n, n).data;
-        let best = null, score = -1;
-        for (let i = 0; i < d.length; i += 4) {
-          const R = d[i], G = d[i + 1], B = d[i + 2], max = Math.max(R, G, B), min = Math.min(R, G, B);
-          const sat = max ? (max - min) / max : 0, val = max / 255;
-          const sc = sat * 0.7 + val * 0.3 - (val < 0.35 ? 1 : 0);
-          if (sc > score) { score = sc; best = [R, G, B]; }
-        }
-        // Too grey to be a colour: the app's fallback reads better than a muddy line.
-        const c = best && score > 0.35 ? best : [126, 182, 255];
-        colours.set(url, c);
-        if (shownCover === url) colour = c;
-      } catch (_) { colours.set(url, [126, 182, 255]); }
-    };
-    img.onerror = () => colours.set(url, [126, 182, 255]);
-    img.src = url;
+    const G = window.TryptifyGlass;
+    if (!url || !G) { colour = [126, 182, 255]; return; }
+    G.vibrant(url).then((c) => { if (shownCover === url) colour = c || [126, 182, 255]; });
   }
   let shownCover = null;
 
