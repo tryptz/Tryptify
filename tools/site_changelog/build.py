@@ -233,7 +233,7 @@ def main():
       </header>
       <div class="cl-layout">
         <nav class="cl-index" aria-label="Versions"><ol>{''.join(index)}</ol></nav>
-        <div class="cl-notes">
+        <div class="cl-notes" translate="no">
 {chr(10).join(sections)}
         </div>
       </div>

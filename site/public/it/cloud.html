@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tryptify Cloud: archivio musicale personale per uno streaming veloce</title>
+  <meta name="description" content="Tryptify Cloud è il tuo archivio musicale personale con API Subsonic, pensato per uno streaming veloce. Carica la tua musica una volta e ascoltala ovunque in Tryptify. Da $3.99 al mese per 100 GB, con 7 giorni di prova gratuita.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/js/theme-boot.js"></script>
+  <script src="/js/l10n/it.js"></script>
+  <!-- l10n:alternates -->
+  <link rel="alternate" hreflang="en" href="https://tryptify.com/cloud">
+  <link rel="alternate" hreflang="zh-CN" href="https://tryptify.com/zh/cloud">
+  <link rel="alternate" hreflang="ja" href="https://tryptify.com/ja/cloud">
+  <link rel="alternate" hreflang="fr" href="https://tryptify.com/fr/cloud">
+  <link rel="alternate" hreflang="es" href="https://tryptify.com/es/cloud">
+  <link rel="alternate" hreflang="tr" href="https://tryptify.com/tr/cloud">
+  <link rel="alternate" hreflang="de" href="https://tryptify.com/de/cloud">
+  <link rel="alternate" hreflang="it" href="https://tryptify.com/it/cloud">
+  <link rel="alternate" hreflang="x-default" href="https://tryptify.com/cloud">
+  <!-- /l10n -->
+</head>
+<body>
+  <header class="top">
+    <div class="wrap glass">
+      <a class="brand" href="/it" aria-label="Home di Tryptify"><svg class="mark" viewBox="17 17 74 74" aria-hidden="true"><rect x="18" y="18" width="72" height="72" rx="16" fill="#000" class="mark-tile"/><path d="M34,36 L34,72 M44,30 L44,78 M54,26 L54,82 M64,30 L64,78 M74,36 L74,72" stroke="#fff" stroke-width="4" fill="none"/></svg><span class="wordmark">Tryptify</span></a>
+      <nav class="nav" aria-label="Principale">
+        <a href="/it">App</a>
+        <a href="/it/autoeq">AutoEQ</a>
+        <a href="/it/cloud" aria-current="page">Cloud</a>
+        <a href="/it/player">Player</a>
+        <a href="/it/account">Account</a>
+        <a href="/it/changelog" class="nav-wide">Novità</a>
+        <a href="/it/contact">Contatti</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <p class="eyebrow">Tryptify Cloud</p>
+      <h1>Il tuo archivio musicale personale con API Subsonic, pensato per uno streaming veloce.</h1>
+      <p class="lead">Carica la tua musica una volta e ascoltala ovunque in Tryptify: niente computer acceso a casa, niente server da configurare, niente port forwarding.</p>
+      <div class="buttons">
+        <a class="btn primary" href="#pricing">Vedi i piani</a>
+        <a class="btn" href="/it/download">Scarica l'app</a>
+      </div>
+    </section>
+
+    <section>
+      <h2>Come funziona</h2>
+      <ol class="steps">
+        <li><strong>Accedi a Tryptify</strong> e apri Impostazioni › Connessioni › Tryptify Cloud.</li>
+        <li><strong>Scegli un piano o avvia la prova gratuita.</strong> Il pagamento si apre nel browser.</li>
+        <li><strong>Carica i brani</strong> dall'app: apri il menu di un brano in Libreria › Locale e tocca Carica su Tryptify Cloud.</li>
+        <li><strong>Ascoltali ovunque</strong> in Libreria › Il mio server e in Cerca, nella qualità originale.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Cosa include</h2>
+      <div class="grid">
+        <div class="card"><h3>Basato sull'API Subsonic</h3><p>La tua libreria risponde all'API aperta Subsonic, la stessa di Navidrome, quindi la navigazione e i salti nel brano funzionano come con un server di casa.</p></div>
+        <div class="card"><h3>Solo per te</h3><p>Solo il tuo account può vedere o riprodurre la tua libreria. Ogni dispositivo accede con una propria password casuale, mai con la password del tuo account.</p></div>
+        <div class="card"><h3>Formati</h3><p>FLAC, ALAC, MP3, AAC/M4A, Ogg Vorbis, Opus, WAV, AIFF, APE e WMA, fino a 2 GB per file, con copertina.</p></div>
+      </div>
+    </section>
+
+    <section id="pricing">
+      <h2>Prezzi</h2>
+      <p class="muted">Prezzi in dollari statunitensi. L'imposta sulle vendite o l'IVA viene aggiunta al momento del pagamento, dove prevista.</p>
+      <div class="period" role="group" aria-label="Periodo di fatturazione" hidden>
+        <button type="button" data-period="monthly" aria-pressed="true">Mensile</button>
+        <button type="button" data-period="yearly" aria-pressed="false">Annuale <span class="save">Risparmia il 16%</span></button>
+        <span class="period-pill" aria-hidden="true"></span>
+      </div>
+      <div class="plans">
+        <div class="plan">
+          <div class="name">Lite</div>
+          <div class="size">100 GB</div>
+          <div class="price"><span class="amount" data-monthly="3.99" data-yearly="39.99">$3.99</span> <small class="per" data-monthly="/ mese" data-yearly="/ anno">/ mese</small></div>
+          <div class="year" data-monthly="oppure $39.99 / anno" data-yearly="$3.33 al mese, con fatturazione annuale">oppure $39.99 / anno</div>
+        </div>
+        <div class="plan featured">
+          <div class="name">Plus</div>
+          <div class="size">250 GB</div>
+          <div class="price"><span class="amount" data-monthly="9.99" data-yearly="99.99">$9.99</span> <small class="per" data-monthly="/ mese" data-yearly="/ anno">/ mese</small></div>
+          <div class="year" data-monthly="oppure $99.99 / anno" data-yearly="$8.33 al mese, con fatturazione annuale">oppure $99.99 / anno</div>
+        </div>
+        <div class="plan">
+          <div class="name">Max</div>
+          <div class="size">500 GB</div>
+          <div class="price"><span class="amount" data-monthly="19.99" data-yearly="199.99">$19.99</span> <small class="per" data-monthly="/ mese" data-yearly="/ anno">/ mese</small></div>
+          <div class="year" data-monthly="oppure $199.99 / anno" data-yearly="$16.67 al mese, con fatturazione annuale">oppure $199.99 / anno</div>
+        </div>
+      </div>
+      <div class="trial">
+        <strong>7 giorni di prova gratuita con 20 GB</strong> su qualsiasi piano mensile, una sola volta per account. Per attivarla serve una carta. Se annulli prima della fine dei 7 giorni non paghi nulla; altrimenti parte il piano che hai scelto e ti viene addebitato.
+      </div>
+      <ul class="ticks muted">
+        <li>Gli abbonamenti si rinnovano automaticamente finché non li annulli. Puoi annullare quando vuoi nell'app (Gestisci o annulla l'abbonamento) e mantieni il piano fino alla fine del periodo già pagato.</li>
+        <li>Se un piano termina, la tua musica resta riproducibile e scaricabile per 7 giorni, poi viene eliminata.</li>
+        <li>Superare lo spazio disponibile non costa mai di più: i caricamenti si fermano finché non liberi spazio o cambi piano.</li>
+        <li>Nessun contenuto per adulti o NSFW di alcun tipo: niente contenuti sessualmente espliciti, nudità o materiale per adulti (<a href="/it/terms#no-adult-content">Termini, sezione 8</a>).</li>
+        <li>I pagamenti sono gestiti da <a href="https://www.creem.io">Creem</a>, il nostro merchant of record. Consulta la <a href="/it/refunds">Politica di rimborso</a> e i <a href="/it/terms">Termini di servizio</a>.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div>© 2026 tryptz · Tryptify · <a href="mailto:support@tryptify.com">support@tryptify.com</a></div>
+      <nav>
+        <a href="/it/download">Download</a>
+        <a href="/it/changelog">Cronologia versioni</a>
+        <a href="/it/player">Web player</a>
+        <a href="/it/autoeq">Classifica AutoEQ</a>
+        <a href="/it">App</a>
+        <a href="/it/terms">Termini di servizio</a>
+        <a href="/it/privacy">Informativa sulla privacy</a>
+        <a href="/it/refunds">Politica di rimborso</a>
+        <a href="/it/contact">Contatti</a>
+      </nav>
+      <nav class="langs" aria-label="Language" translate="no"><a href="/cloud" hreflang="en" lang="en" data-lang="en">English</a><a href="/zh/cloud" hreflang="zh-CN" lang="zh-CN" data-lang="zh">简体中文</a><a href="/ja/cloud" hreflang="ja" lang="ja" data-lang="ja">日本語</a><a href="/fr/cloud" hreflang="fr" lang="fr" data-lang="fr">Français</a><a href="/es/cloud" hreflang="es" lang="es" data-lang="es">Español</a><a href="/tr/cloud" hreflang="tr" lang="tr" data-lang="tr">Türkçe</a><a href="/de/cloud" hreflang="de" lang="de" data-lang="de">Deutsch</a><a href="/it/cloud" hreflang="it" lang="it" data-lang="it" aria-current="true">Italiano</a></nav>
+    </div>
+  </footer>
+  <script src="/js/motion-12.23.12.js"></script>
+  <script src="/js/site.js"></script>
+</body>
+</html>

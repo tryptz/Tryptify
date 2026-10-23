@@ -33,21 +33,21 @@
   const clock = (s) => (s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}` : "");
 
   const ERRORS = {
-    signed_out: "Your session ended. Sign in again.",
-    no_plan: "You need a plan to upload.",
-    read_only: "Your plan has ended, so nothing new can be uploaded.",
-    over_quota: "Not enough space left in your plan.",
-    not_audio: "That file type can't be stored.",
-    file_too_big: "The file is too big (2 GB at most).",
-    cover_too_big: "The cover is too big.",
-    trial_used: "This account has already had its free trial.",
-    too_many_uploads: "Too many uploads at once. Try again in a moment.",
-    no_subscription: "There is no subscription to manage yet.",
-    billing_not_set_up: "Payments aren't available right now.",
-    not_set_up: "Tryptify Cloud isn't available right now.",
+    signed_out: T("Your session ended. Sign in again."),
+    no_plan: T("You need a plan to upload."),
+    read_only: T("Your plan has ended, so nothing new can be uploaded."),
+    over_quota: T("Not enough space left in your plan."),
+    not_audio: T("That file type can't be stored."),
+    file_too_big: T("The file is too big (2 GB at most)."),
+    cover_too_big: T("The cover is too big."),
+    trial_used: T("This account has already had its free trial."),
+    too_many_uploads: T("Too many uploads at once. Try again in a moment."),
+    no_subscription: T("There is no subscription to manage yet."),
+    billing_not_set_up: T("Payments aren't available right now."),
+    not_set_up: T("Tryptify Cloud isn't available right now."),
   };
   class ApiError extends Error {
-    constructor(status, code) { super(ERRORS[code] || `Tryptify Cloud said: ${code || status}`); this.code = code; this.status = status; }
+    constructor(status, code) { super(ERRORS[code] || T("Tryptify Cloud said: {code}", { code: code || status })); this.code = code; this.status = status; }
   }
 
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
@@ -82,29 +82,29 @@
   $("auth-switch").addEventListener("click", (e) => {
     e.preventDefault();
     creating = !creating;
-    $("auth-title").textContent = creating ? "Create an account" : "Sign in";
-    $("auth-submit").textContent = creating ? "Create account" : "Sign in";
-    $("auth-switch").textContent = creating ? "Have an account? Sign in" : "No account yet? Create one";
+    $("auth-title").textContent = creating ? T("Create an account") : T("Sign in");
+    $("auth-submit").textContent = creating ? T("Create account") : T("Sign in");
+    $("auth-switch").textContent = creating ? T("Have an account? Sign in") : T("No account yet? Create one");
     $("auth-form").password.autocomplete = creating ? "new-password" : "current-password";
   });
   $("auth-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = e.target;
-    say("auth-msg", creating ? "Creating your account…" : "Signing in…");
+    say("auth-msg", creating ? T("Creating your account…") : T("Signing in…"));
     const creds = { email: f.email.value.trim(), password: f.password.value };
     const { data, error } = creating
       ? await sb.auth.signUp({ ...creds, options: { emailRedirectTo: location.origin + "/account" } })
       : await sb.auth.signInWithPassword(creds);
     if (error) return say("auth-msg", error.message, true);
-    if (creating && !data.session) say("auth-msg", "Check your email to confirm your account, then sign in here.");
+    if (creating && !data.session) say("auth-msg", T("Check your email to confirm your account, then sign in here."));
     else say("auth-msg", "");
   });
   $("auth-reset").addEventListener("click", async (e) => {
     e.preventDefault();
     const email = $("auth-form").email.value.trim();
-    if (!email) return say("auth-msg", "Type your email above first.", true);
+    if (!email) return say("auth-msg", T("Type your email above first."), true);
     const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + "/account" });
-    say("auth-msg", error ? error.message : "If that email has an account, a reset link is on its way.", !!error);
+    say("auth-msg", error ? error.message : T("If that email has an account, a reset link is on its way."), !!error);
   });
   $("google").addEventListener("click", () =>
     sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + "/account" } }));
@@ -137,8 +137,8 @@
   let shownFor; // undefined until the first answer, so "signed out" is shown too
   sb.auth.onAuthStateChange((event, session) => {
     if (event === "PASSWORD_RECOVERY") {
-      const pw = prompt("Choose a new password (6 characters or more):");
-      if (pw) sb.auth.updateUser({ password: pw }).then(({ error }) => alert(error ? error.message : "Password changed."));
+      const pw = prompt(T("Choose a new password (6 characters or more):"));
+      if (pw) sb.auth.updateUser({ password: pw }).then(({ error }) => alert(error ? error.message : T("Password changed.")));
     }
     const id = session?.user?.id || null;
     if (id === shownFor) return;
@@ -147,7 +147,7 @@
     $("signed-in").hidden = !id;
     if (!id) player.stop();
     if (id) {
-      $("who").textContent = session.user.email || "your account";
+      $("who").textContent = session.user.email || T("your account");
       if (moving) M.animate("#signed-in > section", { opacity: [0, 1], y: [20, 0] }, { delay: M.stagger(0.08), duration: 0.5 });
       loadAll();
     }
@@ -167,29 +167,29 @@
       card.textContent = "";
       const name = a.plan ? a.plan[0].toUpperCase() + a.plan.slice(1) : null;
       const title = el("h3", null,
-        a.unlimited ? "Unlimited storage"
-        : a.access === "none" ? "No plan yet"
-          : a.trial ? `Free trial until ${date(a.paidUntil)}`
-            : `${name} plan, paid until ${date(a.paidUntil)}`);
+        a.unlimited ? T("Unlimited storage")
+        : a.access === "none" ? T("No plan yet")
+          : a.trial ? T("Free trial until {date}", { date: date(a.paidUntil) })
+            : T("{plan} plan, paid until {date}", { plan: name, date: date(a.paidUntil) }));
       card.append(title);
       if (a.unlimited) {
         // Given, not sold: no quota to fill and no subscription to manage.
-        card.append(el("p", "muted small", `${gb(a.usedBytes)} used · no limit, no end date`));
+        card.append(el("p", "muted small", T("{used} used · no limit, no end date", { used: gb(a.usedBytes) })));
       } else if (a.access !== "none") {
         const frac = a.quotaBytes ? Math.min(1, a.usedBytes / a.quotaBytes) : 0;
         const bar = el("div", "meter");
         const fill = el("i");
         bar.append(fill);
-        card.append(bar, el("p", "muted small", `${gb(a.usedBytes)} of ${gb(a.quotaBytes)} used`));
+        card.append(bar, el("p", "muted small", T("{used} of {quota} used", { used: gb(a.usedBytes), quota: gb(a.quotaBytes) })));
         if (moving) M.animate(fill, { scaleX: [0, frac] }, { type: "spring", stiffness: 90, damping: 18 });
         else fill.style.transform = `scaleX(${frac})`;
       }
       if (a.access === "read_only") {
-        card.append(el("p", "bad", `Your plan has ended. Your music can still be played and downloaded until ${date(a.deleteAfter)}, then it is deleted. Pick a plan to keep it.`));
+        card.append(el("p", "bad", T("Your plan has ended. Your music can still be played and downloaded until {date}, then it is deleted. Pick a plan to keep it.", { date: date(a.deleteAfter) })));
       }
       const buttons = el("div", "buttons");
       if (a.plan && !a.unlimited) {
-        const manage = el("button", "btn", "Manage or cancel subscription");
+        const manage = el("button", "btn", T("Manage or cancel subscription"));
         manage.type = "button";
         manage.addEventListener("click", () => act("plan-msg", async () => {
           location.href = (await api("POST", "/billing-portal")).url;
@@ -208,8 +208,8 @@
 
   function drawPicker(trialAvailable) {
     $("plan-note").textContent = trialAvailable
-      ? `Try any plan free for ${plans.trial.days} days with ${plans.trial.storageGb} GB. A card is needed; cancel before the trial ends and you pay nothing.`
-      : "Pick a plan:";
+      ? T("Try any plan free for {days} days with {size} GB. A card is needed; cancel before the trial ends and you pay nothing.", { days: plans.trial.days, size: plans.trial.storageGb })
+      : T("Pick a plan:");
     const list = $("plan-list");
     list.textContent = "";
     for (const p of plans.plans) {
@@ -217,7 +217,7 @@
       card.append(
         el("div", "name", p.id[0].toUpperCase() + p.id.slice(1)),
         el("div", "size", `${p.storageGb} GB`),
-        el("div", "year", `$${p.monthly.toFixed(2)} a month or $${p.yearly.toFixed(2)} a year`),
+        el("div", "year", T("{monthly} a month or {yearly} a year", { monthly: `$${p.monthly.toFixed(2)}`, yearly: `$${p.yearly.toFixed(2)}` })),
       );
       const row = el("div", "buttons");
       const choice = (label, period, trial) => {
@@ -228,16 +228,16 @@
         }));
         row.append(b);
       };
-      if (trialAvailable) choice("Start free trial", "monthly", true);
-      else choice("Monthly", "monthly", false);
-      choice("Yearly", "yearly", false);
+      if (trialAvailable) choice(T("Start free trial"), "monthly", true);
+      else choice(T("Monthly"), "monthly", false);
+      choice(T("Yearly"), "yearly", false);
       card.append(row);
       list.append(card);
     }
   }
 
   async function act(msgId, fn) {
-    say(msgId, "One moment…");
+    say(msgId, T("One moment…"));
     try {
       await fn();
     } catch (e) {
@@ -258,7 +258,7 @@
     for (const file of files) {
       const li = el("li", "q-item");
       const name = el("span", "q-name", file.name);
-      const status = el("span", "q-status muted small", "Waiting");
+      const status = el("span", "q-status muted small", T("Waiting"));
       const bar = el("div", "meter small");
       const fill = el("i");
       bar.append(fill);
@@ -277,11 +277,11 @@
     busy = true;
     try {
       await upload(job);
-      job.status.textContent = "Done";
+      job.status.textContent = T("Done");
       job.li.classList.add("done");
       loadSongs(true);
     } catch (e) {
-      job.status.textContent = e.message || "Failed";
+      job.status.textContent = e.message || T("Failed");
       job.li.classList.add("failed");
     }
     busy = false;
@@ -292,7 +292,7 @@
 
   async function upload(job) {
     const { file } = job;
-    job.status.textContent = "Reading tags…";
+    job.status.textContent = T("Reading tags…");
     const tags = await readTags(file);
     const duration = await readDuration(file);
     const suffix = (file.name.split(".").pop() || "").toLowerCase();
@@ -310,12 +310,12 @@
         const chunk = file.slice((n - 1) * start.partSize, Math.min(file.size, n * start.partSize));
         const part = await sendPart(start.id, n, chunk, (loaded) => {
           progress(job, (sent + loaded) / file.size);
-          job.status.textContent = `Uploading ${Math.round(((sent + loaded) / file.size) * 100)}%`;
+          job.status.textContent = T("Uploading {percent}%", { percent: Math.round(((sent + loaded) / file.size) * 100) });
         });
         sent += chunk.size;
         parts.push(part);
       }
-      job.status.textContent = "Finishing…";
+      job.status.textContent = T("Finishing…");
       const song = await api("POST", `/uploads/${start.id}/complete`, { parts });
       if (tags.picture) {
         const cover = await coverOf(tags.picture).catch(() => null);
@@ -351,7 +351,7 @@
           x.send(chunk);
         });
       } catch (e) {
-        if (e instanceof ApiError || attempt >= 4) throw e.message === "network" ? new Error("The connection dropped.") : e;
+        if (e instanceof ApiError || attempt >= 4) throw e.message === "network" ? new Error(T("The connection dropped.")) : e;
         await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
       }
     }
@@ -443,8 +443,8 @@
       const r = await api("GET", `/songs?offset=${offset}${query ? `&q=${encodeURIComponent(query)}` : ""}`);
       const list = $("songs");
       if (reset) { list.textContent = ""; songs = []; }
-      $("lib-count").textContent = r.total ? `${r.total} song${r.total === 1 ? "" : "s"}` : "";
-      if (!r.total && reset) list.append(el("li", "muted", query ? "Nothing matches that." : "Nothing here yet. Upload some music above, or from the app."));
+      $("lib-count").textContent = r.total ? (r.total === 1 ? T("{count} song", { count: r.total }) : T("{count} songs", { count: r.total })) : "";
+      if (!r.total && reset) list.append(el("li", "muted", query ? T("Nothing matches that.") : T("Nothing here yet. Upload some music above, or from the app.")));
       for (const s of r.songs) { songs.push(s); list.append(songRow(s)); }
       offset += r.songs.length;
       if (!reset) player.extend(songs);
@@ -474,7 +474,7 @@
     const play = el("button", "song-play");
     play.type = "button";
     const canPlay = player.playable(s);
-    play.setAttribute("aria-label", canPlay ? `Play ${s.title}` : `${s.title} plays in the app only`);
+    play.setAttribute("aria-label", canPlay ? T("Play {title}", { title: s.title }) : T("{title} plays in the app only", { title: s.title }));
     play.disabled = !canPlay;
     play.append(img, el("span", "song-play-icon"));
     const start = () => {
@@ -485,15 +485,15 @@
     play.addEventListener("click", start);
     text.addEventListener("click", start);
     if (canPlay) text.classList.add("is-clickable");
-    else text.append(el("span", "app-only small", "App only"));
+    else text.append(el("span", "app-only small", T("App only")));
     const facts = el("span", "song-facts muted small",
       [clock(s.duration), (s.suffix || "").toUpperCase(), s.bitDepth && s.sampleRate ? `${s.bitDepth}/${(s.sampleRate / 1000).toFixed(1).replace(/\.0$/, "")}` : null, gb(s.size)]
         .filter(Boolean).join(" · "));
-    const del = el("button", "icon-btn", "Delete");
+    const del = el("button", "icon-btn", T("Delete"));
     del.type = "button";
-    del.setAttribute("aria-label", `Delete ${s.title}`);
+    del.setAttribute("aria-label", T("Delete {title}", { title: s.title }));
     del.addEventListener("click", async () => {
-      if (!confirm(`Delete "${s.title}" from Tryptify Cloud? This can't be undone.`)) return;
+      if (!confirm(T('Delete "{title}" from Tryptify Cloud? This can\'t be undone.', { title: s.title }))) return;
       try {
         await api("DELETE", `/songs/${s.id}`);
         if (moving) await M.animate(li, { opacity: 0, x: 40 }, { duration: 0.25 });
@@ -518,15 +518,15 @@
       $("srv-user").textContent = r.username;
       const list = $("devices");
       list.textContent = "";
-      if (!r.devices.length) list.append(el("li", "muted", "No apps or devices signed in yet."));
+      if (!r.devices.length) list.append(el("li", "muted", T("No apps or devices signed in yet.")));
       for (const d of r.devices) {
         const li = el("li", "device");
-        li.append(el("span", null, d.label || "Unnamed device"), el("span", "muted small", `since ${date(d.createdAt)}`));
-        const out = el("button", "icon-btn", "Sign out");
+        li.append(el("span", null, d.label || T("Unnamed device")), el("span", "muted small", T("since {date}", { date: date(d.createdAt) })));
+        const out = el("button", "icon-btn", T("Sign out"));
         out.type = "button";
         out.addEventListener("click", () => act("server-msg", async () => {
           await api("DELETE", `/subsonic-keys/${d.id}`);
-          say("server-msg", `${d.label || "That device"} is signed out.`);
+          say("server-msg", d.label ? T("{name} is signed out.", { name: d.label }) : T("That device is signed out."));
           loadServer();
         }));
         li.append(out);
@@ -543,15 +543,15 @@
       $("key-pass").textContent = r.password;
       $("new-key").hidden = false;
       e.target.reset();
-      say("server-msg", "Use the address, username and this password in the app. It is shown once.");
+      say("server-msg", T("Use the address, username and this password in the app. It is shown once."));
       loadServer();
     });
   });
   $("sign-out-all").addEventListener("click", () => {
-    if (!confirm("Sign out every app and device, including the Tryptify app? Each will need to connect again.")) return;
+    if (!confirm(T("Sign out every app and device, including the Tryptify app? Each will need to connect again."))) return;
     act("server-msg", async () => {
       await api("DELETE", "/subsonic-keys");
-      say("server-msg", "Every app and device is signed out.");
+      say("server-msg", T("Every app and device is signed out."));
       loadServer();
     });
   });
@@ -559,8 +559,8 @@
     const b = e.target.closest(".copy");
     if (!b) return;
     navigator.clipboard?.writeText($(b.dataset.copy).textContent).then(() => {
-      b.textContent = "Copied";
-      setTimeout(() => { b.textContent = "Copy"; }, 1400);
+      b.textContent = T("Copied");
+      setTimeout(() => { b.textContent = T("Copy"); }, 1400);
     });
   });
 })();

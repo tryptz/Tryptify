@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tryptify：Android 向けハイファイ音楽プレーヤー</title>
+  <meta name="description" content="Tryptify は Android 向けの無料ハイファイ音楽プレーヤーです。DSP コンソール、ヘッドホン用 AutoEQ、ビットパーフェクトな USB DAC 出力、ビジュアライザを備えています。Tryptify Cloud は、高速ストリーミングのために作られた有料の個人用音楽ストレージです。">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/js/theme-boot.js"></script>
+  <script src="/js/l10n/ja.js"></script>
+  <!-- l10n:alternates -->
+  <link rel="alternate" hreflang="en" href="https://tryptify.com/">
+  <link rel="alternate" hreflang="zh-CN" href="https://tryptify.com/zh">
+  <link rel="alternate" hreflang="ja" href="https://tryptify.com/ja">
+  <link rel="alternate" hreflang="fr" href="https://tryptify.com/fr">
+  <link rel="alternate" hreflang="es" href="https://tryptify.com/es">
+  <link rel="alternate" hreflang="tr" href="https://tryptify.com/tr">
+  <link rel="alternate" hreflang="de" href="https://tryptify.com/de">
+  <link rel="alternate" hreflang="it" href="https://tryptify.com/it">
+  <link rel="alternate" hreflang="x-default" href="https://tryptify.com/">
+  <!-- /l10n -->
+</head>
+<body>
+  <header class="top">
+    <div class="wrap glass">
+      <a class="brand" href="/ja" aria-label="Tryptify ホーム"><svg class="mark" viewBox="17 17 74 74" aria-hidden="true"><rect x="18" y="18" width="72" height="72" rx="16" fill="#000" class="mark-tile"/><path d="M34,36 L34,72 M44,30 L44,78 M54,26 L54,82 M64,30 L64,78 M74,36 L74,72" stroke="#fff" stroke-width="4" fill="none"/></svg><span class="wordmark">Tryptify</span></a>
+      <nav class="nav" aria-label="メイン">
+        <a href="/ja" aria-current="page">アプリ</a>
+        <a href="/ja/autoeq">AutoEQ</a>
+        <a href="/ja/cloud">Cloud</a>
+        <a href="/ja/player">プレーヤー</a>
+        <a href="/ja/account">アカウント</a>
+        <a href="/ja/changelog" class="nav-wide">更新情報</a>
+        <a href="/ja/contact">お問い合わせ</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <p class="eyebrow">Android 版・無料 · バージョン 1.9.5</p>
+      <h1>耳でも目でも楽しめる、ハイファイプレーヤー。</h1>
+      <p class="lead">本格的な DSP コンソール、実測データに基づくヘッドホン補正、ビットパーフェクトな USB DAC 出力、同期歌詞、リアルタイムのビジュアライザ。手持ちの音楽にも、ストリーミングにも。</p>
+      <div class="buttons">
+        <a class="btn primary" href="/ja/download">Android 版をダウンロード</a>
+        <a class="btn" href="/ja/cloud">Tryptify Cloud</a>
+      </div>
+    </section>
+
+    <section class="showcase-wrap" aria-label="スクリーンショット">
+      <div class="showcase">
+        <div class="spectrum-slot" aria-hidden="true"></div>
+        <div class="shots fan">
+          <figure><img src="/img/home-nav-bar.webp" width="540" height="1112" alt="ミニプレーヤーとガラスのナビゲーションバーがあるホーム画面。"><figcaption>ホーム</figcaption></figure>
+          <figure><img src="/img/player-glass-spectrum.webp" width="540" height="1112" alt="カバーの上にガラスのスペクトラムを重ねた再生画面。"><figcaption>ガラスのスペクトラム</figcaption></figure>
+          <figure><img src="/img/mixer-buses.webp" width="540" height="1112" alt="フェーダー、メーター、ラウドネス表示を備えたミキサーのバス。"><figcaption>ミキサー</figcaption></figure>
+          <figure><img src="/img/autoeq.webp" width="540" height="1131" alt="ヘッドホン AutoEQ の補正カーブ。"><figcaption>AutoEQ</figcaption></figure>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <p class="eyebrow">主な機能</p>
+      <h2>スタジオの道具を、ポケットに。</h2>
+      <div class="grid">
+        <div class="card"><h3>DSP コンソール</h3><p>バス、エフェクトチェーン、プラグインを備えたネイティブ C++ ミキサー。EQ、ダイナミクス、リバーブなどを、LUFS で計測しながら使えます。</p></div>
+        <div class="card"><h3>ヘッドホン AutoEQ</h3><p>実際のヘッドホン測定データから作った補正カーブを、仕上がったミックスにかけます。<a href="/ja/autoeq">ランキングを見る</a>。</p></div>
+        <div class="card"><h3>ビットパーフェクト USB DAC</h3><p>Android のミキサーを通さず、音源本来のサンプルレートのまま USB DAC へ直接送ります。</p></div>
+        <div class="card"><h3>ビジュアライザと歌詞</h3><p>スペクトラム、ウォーターフォール、MilkDrop 風のビジュアル。歌詞は時間同期で表示します。</p></div>
+        <div class="card"><h3>自分のサーバー</h3><p>Navidrome、Gonic などの Subsonic 互換サーバーや、Tryptify Cloud から再生できます。</p></div>
+        <div class="card"><h3>リスニングパーティー</h3><p>友だちと同期して、いっしょに聴けます。参加はアプリからでもウェブブラウザからでも。キューの共有、スキップ投票、チャットにも対応しています。</p></div>
+        <div class="card"><h3>マルチプレイ対応のリズムゲーム</h3><p>Trypt Mania のルームでは、ホストが選んだ譜面を全員が同時にプレイ。スコアボードはリアルタイムで更新されます。</p></div>
+        <div class="card"><h3>8 言語に対応</h3><p>英語、ドイツ語、スペイン語、フランス語、イタリア語、日本語、トルコ語、簡体字中国語。</p></div>
+      </div>
+    </section>
+
+    <section class="stats" aria-label="数字で見る Tryptify">
+      <div class="stat"><b data-count="36">36</b><span>ミキサープラグイン（6 グループ）</span></div>
+      <div class="stat"><b data-count="9795">9,795</b><span>ビジュアライザプリセット。すべてクラッシュテスト済み</span></div>
+      <div class="stat"><b data-count="9951">9,951</b><span>補正できるヘッドホン。一覧は <a href="/ja/autoeq#tryout">AutoEQ ブラウザで</a></span></div>
+      <div class="stat"><b data-count="8">8</b><span>対応言語。いちばん新しいのはイタリア語</span></div>
+    </section>
+
+    <section class="flow-section">
+      <p class="eyebrow">音の流れ</p>
+      <h2>ファイルから耳まで、ひとつの経路で。</h2>
+      <p class="section-lead">どの曲も、アプリ内の同じ経路をたどります。各段階をオンにするか、調整するか、そのままにするかは自由です。</p>
+      <ol class="flow">
+        <li><span class="flow-icon" aria-hidden="true">♪</span><strong>あなたの音楽</strong><small>端末内のファイル、自分の Subsonic サーバー、Tryptify Cloud、またはストリーミング。</small></li>
+        <li><span class="flow-icon" aria-hidden="true">≋</span><strong>フル解像度</strong><small>24-bit や 32-bit のファイルも、最後まで浮動小数点のまま処理します。</small></li>
+        <li><span class="flow-icon" aria-hidden="true">⫶</span><strong>DSP コンソール</strong><small>バスと、36 種類のプラグインを使えるエフェクトチェーン。LUFS で計測します。</small></li>
+        <li><span class="flow-icon" aria-hidden="true">◠</span><strong>ヘッドホン EQ</strong><small>お使いの機種に合わせた AutoEQ のあとに、自分で作るパラメトリック EQ。その音がスペクトラムとビジュアルにも反映されます。</small></li>
+        <li><span class="flow-icon" aria-hidden="true">⇄</span><strong>速度とピッチ</strong><small>倍率、半音、BPM で、速くも遅くもできます。</small></li>
+        <li><span class="flow-icon" aria-hidden="true">◉</span><strong>出力</strong><small>曲本来のサンプルレートのまま USB DAC へ直接。または Android を経由して Bluetooth やスピーカーへ。</small></li>
+      </ol>
+    </section>
+
+    <section class="tour">
+      <div class="tour-text">
+        <p class="eyebrow">歌詞</p>
+        <h2>ゴッドレイに照らされる歌詞。</h2>
+        <p>時間同期の歌詞をガラスの文字で表示し、歌われている行から光が差し込みます。Sunburst から Sea Glass まで 9 種類のルックから選ぶことも、光を自分で操ることもできます。歌っている単語を追わせたり、ダスト、ビートに合わせたフレア、ゆっくりした周回を加えたり。</p>
+      </div>
+      <div class="tour-media collage">
+        <figure class="phone"><img src="/img/lyrics.webp" width="540" height="1112" alt="アルバムの色の上に、温かみのある金色のガラス文字で表示された同期歌詞。" loading="lazy" decoding="async"><figcaption>同期歌詞</figcaption></figure>
+        <figure class="wide"><img src="/img/god-rays-violet.webp" width="1000" height="665" alt="歌われている行から、ガラスの歌詞文字を通して差し込む紫のゴッドレイ。" loading="lazy" decoding="async"><figcaption>紫の光</figcaption></figure>
+        <figure class="wide"><img src="/img/god-rays-pink.webp" width="1000" height="665" alt="歌われている行の後ろにピンクのゴッドレイ。前後の行はすりガラス風。" loading="lazy" decoding="async"><figcaption>ピンクの光</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="tour flip">
+      <div class="tour-text">
+        <p class="eyebrow">見つける</p>
+        <h2>ライブラリを、銀河に。</h2>
+        <p>「見つける」は、ジャンルの地図の中を飛び回れる画面です。「ライブラリ銀河」では、端末内のすべてのアーティストが、そのジャンルのそばに星として並びます。どんな名前でも検索でき、「dnb」と入力すればドラムンベースが見つかります。</p>
+      </div>
+      <div class="tour-media collage">
+        <figure class="phone"><img src="/img/galaxy-genre.webp" width="540" height="1071" alt="ジャンルが光る星団として並ぶジャンル銀河と、下のミニプレーヤー。" loading="lazy" decoding="async"><figcaption>ジャンル銀河</figcaption></figure>
+        <figure class="wide"><img src="/img/library-galaxy-system.webp" width="1000" height="1113" alt="アルバムを惑星として描いた、アーティストの恒星系。" loading="lazy" decoding="async"><figcaption>アーティストに近づく</figcaption></figure>
+        <figure class="wide"><img src="/img/galaxy-planet.webp" width="1000" height="387" alt="惑星として表示された 1 枚のアルバム。" loading="lazy" decoding="async"><figcaption>惑星になったアルバム</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="tour">
+      <div class="tour-text">
+        <p class="eyebrow">ミキサー</p>
+        <h2>プリセット一覧ではなく、ミキシングデスク。</h2>
+        <p>6 グループ・36 種類のプラグインから、バスとエフェクトチェーンを組めます。グループは EQ とフィルター、ダイナミクス、ディストーション、モジュレーション、空間系、ユーティリティ。ノブはすべて実際に効き、チェーンはどれも保存できます。</p>
+      </div>
+      <div class="tour-media duo">
+        <figure class="phone"><img src="/img/mixer-add-plugin.webp" width="540" height="1122" alt="「プラグインを追加」の一覧：ゲイン、ステレオ、フィルター、EQ、ダイナミクス。" loading="lazy" decoding="async"><figcaption>プラグインを追加</figcaption></figure>
+        <figure class="phone"><img src="/img/fx-chain-reverb.webp" width="540" height="1128" alt="エフェクトチェーン内のリバーブ。ディケイカーブとノブ付き。" loading="lazy" decoding="async"><figcaption>エフェクトチェーン</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="tour flip">
+      <div class="tour-text">
+        <p class="eyebrow">ビジュアル</p>
+        <h2>聴いている音を、目で見る。</h2>
+        <p>カバーに重なるガラスのスペクトラム、曲の直前の数秒を描く稜線、ウォーターフォール、そして projectM 上でリアルタイムに動く 9,795 個の MilkDrop プリセット。</p>
+      </div>
+      <div class="tour-media duo">
+        <figure class="phone"><img src="/img/player-ridgeline-ambient.webp" width="540" height="1112" alt="アルバムアートの上に、直前の数秒を稜線で描いたプレーヤー。" loading="lazy" decoding="async"><figcaption>稜線</figcaption></figure>
+        <figure class="phone"><img src="/img/player-waterfall.webp" width="540" height="1112" alt="アルバムアートの上に、スペクトラムのウォーターフォールを表示したプレーヤー。" loading="lazy" decoding="async"><figcaption>ウォーターフォール</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="tour">
+      <div class="tour-text">
+        <p class="eyebrow">速度とピッチ</p>
+        <h2>テンポも、ピッチも、思いのままに。</h2>
+        <p>速度は倍率、半音単位、または BPM の直接指定で変えられます。ピッチはそのまま保つことも、ターンテーブルのように速度に連動させることもできます。</p>
+      </div>
+      <div class="tour-media solo">
+        <figure class="phone"><img src="/img/speed-pitch.webp" width="540" height="1112" alt="151 BPM に設定した速度パネル。「ピッチを維持」とピッチ調整付き。" loading="lazy" decoding="async"><figcaption>BPM で速度を指定</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="tour flip">
+      <div class="tour-text">
+        <p class="eyebrow">リスニングパーティー</p>
+        <h2>同じ瞬間を、いっしょに聴く。</h2>
+        <p>パーティーを始めて、コードかリンクを送るだけ。友だちはアプリから、またはウェブブラウザから直接参加でき、全員が同じ曲の同じ瞬間を聴けます。再生中は、共有の「次に再生」に曲を追加したり、スキップに投票したり、チャットしたりできます。端末内の曲は、キューに入っている間だけ持っていない人にストリーミングされ、誰の手元にも残りません。</p>
+      </div>
+      <div class="tour-media overlap">
+        <figure class="wide"><img src="/img/party-web.webp" width="1000" height="705" alt="ウェブブラウザでパーティーに参加しているゲストの画面：ホストの速度で再生中の曲、「スキップに投票」「曲を追加」「次に再生」と、参加者一覧、パーティーのチャット。" loading="lazy" decoding="async"><figcaption>ウェブブラウザのゲスト画面。参加者一覧とチャット付き</figcaption></figure>
+        <figure class="phone"><img src="/img/party-app.webp" width="540" height="1091" alt="アプリ内のパーティー：ホストのコード、参加者、「同期中」、再生中の曲、「スキップ」と「次に再生」。" loading="lazy" decoding="async"><figcaption>アプリ内</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="tour">
+      <div class="tour-text">
+        <p class="eyebrow">Trypt Mania · ベータ版</p>
+        <h2>自分の音楽で遊べるリズムゲーム。</h2>
+        <p>Trypt Mania では、ライブラリの曲で StepMania 形式の譜面をプレイできます。パックを持ち込むことも、マップエディターで自作することもできます。専用のプレーヤーを使うので、プレイしてもキュー、スクロブル、ステータスには一切影響しません。</p>
+      </div>
+      <div class="tour-media trio">
+        <figure class="phone"><img src="/img/trypt-mania-menu.webp" width="540" height="1177" alt="Trypt Mania のメニュー：Play、Map editor、Packs、Settings。" loading="lazy" decoding="async"><figcaption>メニュー</figcaption></figure>
+        <figure class="phone"><video poster="/video/trypt-mania-play.webp" width="540" height="1176" autoplay loop muted playsinline preload="metadata" aria-label="Trypt Mania being played: arrows scrolling to the receptors, Flawless judgements and the combo climbing, over the song's blurred cover."><source src="/video/trypt-mania-play.webm" type="video/webm"><source src="/video/trypt-mania-play.mp4" type="video/mp4"></video><figcaption>プレイ中</figcaption></figure>
+        <figure class="phone"><img src="/img/trypt-mania-wheel.webp" width="540" height="1177" alt="譜面レーダー、BPM、難易度を表示した曲選択ホイール。" loading="lazy" decoding="async"><figcaption>曲選択ホイール</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="tour flip">
+      <div class="tour-text">
+        <p class="eyebrow">Trypt Mania のマルチプレイ</p>
+        <h2>StepMania 形式で、真っ向勝負。</h2>
+        <p>ルームを作るか、コードで参加します。チャット欄もあります。ホストが譜面を選ぶと全員が同時にプレイし、画面の端には全員のスコアとコンボがリアルタイムで並びます。曲を持っていない人がいても、ホストがルームに共有すれば、タップひとつで参加できます。</p>
+      </div>
+      <div class="tour-media">
+        <figure class="diagram multi" role="img" aria-label="Trypt Mania のルームの図：ノーツが降ってくる 4 本の矢印レーンと、スコア順に並んだ 4 人のプレイヤーのリアルタイムボード。">
+          <div class="mp-play" aria-hidden="true">
+            <div class="mp-lane"><span class="mp-target">←</span><i style="--d:0s"></i><i style="--d:-1.1s"></i></div>
+            <div class="mp-lane"><span class="mp-target">↓</span><i style="--d:-0.4s"></i><i style="--d:-1.6s"></i></div>
+            <div class="mp-lane"><span class="mp-target">↑</span><i style="--d:-0.8s"></i></div>
+            <div class="mp-lane"><span class="mp-target">→</span><i style="--d:-0.2s"></i><i style="--d:-1.3s"></i></div>
+          </div>
+          <div class="mp-side">
+            <p class="mp-room"><b>ルーム 9QX2</b><small>ホストの選曲 · Hard 9</small></p>
+            <ol class="mp-board">
+              <li class="you"><span>1</span><b>あなた</b><em>コンボ 212</em><strong>1,204,330</strong></li>
+              <li><span>2</span><b>プレイヤー 2</b><em>コンボ 187</em><strong>1,156,900</strong></li>
+              <li><span>3</span><b>プレイヤー 3</b><em>コンボ 96</em><strong>998,410</strong></li>
+              <li><span>4</span><b>プレイヤー 4</b><em>コンボ 41</em><strong>871,050</strong></li>
+            </ol>
+          </div>
+        </figure>
+      </div>
+    </section>
+
+    <section class="tour">
+      <div class="tour-text">
+        <p class="eyebrow">リキッドグラス</p>
+        <h2>光を曲げるガラス。</h2>
+        <p>ナビゲーションバー、ミニプレーヤー、検索バー、パネルは、本物のガラスのように縁で背後の景色を曲げ、再生中の曲に合わせて色づきます。ガラスのルックは Float から Holo まで 20 種類以上。</p>
+      </div>
+      <div class="tour-media stack">
+        <figure class="wide"><img src="/img/tab-bar-teal.webp" width="1000" height="428" alt="アルバムに合わせてティールに色づいた、ガラスのナビゲーションバーとミニプレーヤー。" loading="lazy" decoding="async"><figcaption>ティール</figcaption></figure>
+        <figure class="wide"><img src="/img/tab-bar-violet.webp" width="1000" height="370" alt="アルバムに合わせて紫に色づいた、ガラスのナビゲーションバーとミニプレーヤー。" loading="lazy" decoding="async"><figcaption>バイオレット</figcaption></figure>
+        <figure class="wide"><img src="/img/glass-mini-player-nav-bar.webp" width="1000" height="389" alt="リキッドグラスのミニプレーヤーとナビゲーションバー。縁で背後の文字が曲がって見えます。" loading="lazy" decoding="async"><figcaption>背後の文字が曲がる</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="tour flip">
+      <div class="tour-text">
+        <p class="eyebrow">テーマとフォント</p>
+        <h2>自分好みに仕上げて、共有する。</h2>
+        <p>15 種類のテキストスタイルに、それぞれフォント、ウェイト、サイズ、幅を設定できます。見た目一式は、含める項目を選んで 1 つのテーマにまとめ、テーマストアやコードで共有できます。ほかの人のテーマも、保存する前にその場で試せます。フォントファイル、Bluetooth の遅延、音質の設定が端末の外に出ることはありません。</p>
+      </div>
+      <div class="tour-media trio">
+        <figure class="phone"><img src="/img/typography.webp" width="540" height="1091" alt="タイポグラフィの表：Display L から Body M までの各テキストスタイルと、そのウェイト、サイズ、幅。" loading="lazy" decoding="async"><figcaption>タイポグラフィ</figcaption></figure>
+        <figure class="phone"><img src="/img/theme-store.webp" width="540" height="1091" alt="テーマストア：「自分の外観を共有」「コードをお持ちですか？」と、歌詞・プレーヤー・ナビゲーションバーの見た目で並ぶテーマ。" loading="lazy" decoding="async"><figcaption>テーマストア</figcaption></figure>
+        <figure class="phone"><img src="/img/share-my-look.webp" width="540" height="1091" alt="「自分の外観を共有」：色から CRT エフェクトまで、テーマのパーツごとのスイッチと「ストアに表示する」。" loading="lazy" decoding="async"><figcaption>自分の外観を共有</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="tour">
+      <div class="tour-text">
+        <p class="eyebrow">ミュージックリンク</p>
+        <h2>どんな設定も、音楽と連動。</h2>
+        <p>スライダーの横の ♪ をタップするか長押しすると、その設定が曲に合わせて動きます。キック、ボーカル、スネア、ハイハット、または自分で選んだ帯域に合わせて。ビジュアルも、ガラスも、歌詞の光も、ミキサーのノブまでも。すべてのリンクは 1 つのページにまとまっていて、一時停止、変更、削除ができます。</p>
+      </div>
+      <div class="tour-media solo">
+        <figure class="phone"><video poster="/video/crt-music-links.webp" width="540" height="1176" autoplay loop muted playsinline preload="metadata" aria-label="Settings › Appearance with several sliders linked to the music, each moving with the song and the screen moving with them."><source src="/video/crt-music-links.webm" type="video/webm"><source src="/video/crt-music-links.mp4" type="video/mp4"></video><figcaption>音楽とリンクした設定</figcaption></figure>
+      </div>
+    </section>
+
+    <section>
+      <div class="card">
+        <p class="eyebrow">Tryptify Cloud</p>
+        <h2>サーバーを自分で動かしたくない方に。</h2>
+        <p>Tryptify Cloud は、高速ストリーミングのために作られた、あなた専用の Subsonic API 音楽ストレージです。アプリから一度アップロードすれば、どこでも再生できます。料金は 100 GB で月額 $3.99 から。7 日間の無料トライアル付きです。</p>
+        <div class="buttons" style="margin-top:16px">
+          <a class="btn primary" href="/ja/cloud">Tryptify Cloud を見る</a>
+          <a class="btn" href="/ja/cloud#pricing">料金</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div>© 2026 tryptz · Tryptify · <a href="mailto:support@tryptify.com">support@tryptify.com</a></div>
+      <nav>
+        <a href="/ja/download">ダウンロード</a>
+        <a href="/ja/changelog">変更履歴</a>
+        <a href="/ja/player">ウェブプレーヤー</a>
+        <a href="/ja/autoeq">AutoEQ ランキング</a>
+        <a href="/ja/cloud">Tryptify Cloud</a>
+        <a href="/ja/terms">利用規約</a>
+        <a href="/ja/privacy">プライバシーポリシー</a>
+        <a href="/ja/refunds">返金ポリシー</a>
+        <a href="/ja/contact">お問い合わせ</a>
+        <a href="https://github.com/tryptz/Tryptify">ソースコード</a>
+      </nav>
+      <nav class="langs" aria-label="Language" translate="no"><a href="/" hreflang="en" lang="en" data-lang="en">English</a><a href="/zh" hreflang="zh-CN" lang="zh-CN" data-lang="zh">简体中文</a><a href="/ja" hreflang="ja" lang="ja" data-lang="ja" aria-current="true">日本語</a><a href="/fr" hreflang="fr" lang="fr" data-lang="fr">Français</a><a href="/es" hreflang="es" lang="es" data-lang="es">Español</a><a href="/tr" hreflang="tr" lang="tr" data-lang="tr">Türkçe</a><a href="/de" hreflang="de" lang="de" data-lang="de">Deutsch</a><a href="/it" hreflang="it" lang="it" data-lang="it">Italiano</a></nav>
+    </div>
+  </footer>
+  <script src="/js/motion-12.23.12.js"></script>
+  <script src="/js/site.js"></script>
+</body>
+</html>

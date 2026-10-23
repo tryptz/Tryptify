@@ -165,7 +165,7 @@
   const showTheme = () => {
     const dark = root.dataset.design !== "white";
     toggle.innerHTML = dark ? SUN : MOON;
-    toggle.title = dark ? "Switch to white" : "Switch to black";
+    toggle.title = dark ? T("Switch to white") : T("Switch to black");
     toggle.setAttribute("aria-label", toggle.title);
   };
   const setTheme = (name) => {
@@ -199,17 +199,38 @@
     nav.prepend(bubble);
     const links = $$("a", nav);
     const here = links.find((a) => a.getAttribute("aria-current") === "page");
-    const springy = { type: "spring", stiffness: 380, damping: 30 };
-    let at = null;
+    // The pill is two edges on springs of their own. Moving on, the edge in
+    // front is quick and the one behind follows, so the pill stretches toward
+    // the tab and settles onto it, a drop of liquid rather than a box sliding.
+    // Its height and round ends never change, so the glass keeps its shape.
+    const lead = { type: "spring", stiffness: 560, damping: 42, mass: 0.9 };
+    const trail = { type: "spring", stiffness: 260, damping: 30, mass: 0.9 };
+    const left = M ? M.motionValue(0) : null;
+    const right = M ? M.motionValue(0) : null;
+    let top = 0, tall = 0, shown = false, at = null;
+    const draw = () => {
+      const l = left.get(), r = right.get();
+      bubble.style.translate = `${l}px ${top}px`;  // translate, so the press's scale (transform) stays its own
+      bubble.style.width = Math.max(0, r - l) + "px";
+      bubble.style.height = tall + "px";
+    };
+    if (M) { left.on("change", draw); right.on("change", draw); }
+    const edgesOf = (a) => ({ l: a.offsetLeft, r: a.offsetLeft + a.offsetWidth });
     const moveTo = (a, instant) => {
-      if (!a) { if (M) M.animate(bubble, { opacity: 0 }, { duration: 0.2 }); else bubble.style.opacity = "0"; at = null; return; }
-      const box = { x: a.offsetLeft, y: a.offsetTop, width: a.offsetWidth, height: a.offsetHeight, opacity: 1 };
-      if (M) {
-        M.animate(bubble, box, moving && !instant ? springy : { duration: 0 });
-        // Liquid: the bubble flattens a little as it slides, and swells back.
-        if (moving && !instant && at && at !== a) M.animate(bubble, { scaleY: [1, 0.82, 1], scaleX: [1, 1.08, 1] }, { duration: 0.45, ease: "easeOut" });
-      } else Object.assign(bubble.style, { transform: `translate(${box.x}px, ${box.y}px)`, width: box.width + "px", height: box.height + "px", opacity: "1" });
-      at = a;
+      if (!a) { if (M) M.animate(bubble, { opacity: 0 }, { duration: 0.2 }); else bubble.style.opacity = "0"; shown = false; at = null; return; }
+      const { l, r } = edgesOf(a);
+      top = a.offsetTop; tall = a.offsetHeight;
+      if (!M) {
+        Object.assign(bubble.style, { translate: `${l}px ${top}px`, width: r - l + "px", height: tall + "px", opacity: "1" });
+      } else if (!moving || instant || !shown) {
+        left.jump(l); right.jump(r); draw();
+        M.animate(bubble, { opacity: 1 }, { duration: moving && !instant ? 0.2 : 0 });
+      } else if (a !== at) {
+        const forward = l > left.get();
+        M.animate(left, l, forward ? trail : lead);
+        M.animate(right, r, forward ? lead : trail);
+      }
+      shown = true; at = a;
     };
     links.forEach((a) => {
       a.addEventListener("pointerenter", () => moveTo(a));
@@ -217,8 +238,8 @@
     });
     nav.addEventListener("pointerleave", () => moveTo(here));
     if (M && moving) M.press(nav, () => {
-      M.animate(bubble, { scale: 0.92 }, { type: "spring", stiffness: 600, damping: 22 });
-      return () => M.animate(bubble, { scale: 1 }, { type: "spring", stiffness: 500, damping: 14 });
+      M.animate(bubble, { scale: 0.94 }, { type: "spring", stiffness: 600, damping: 26 });
+      return () => M.animate(bubble, { scale: 1 }, { type: "spring", stiffness: 500, damping: 18 });
     });
     // On phones the menu is its own floating tab bar at the bottom, so it
     // leaves the header: a fixed bar inside glass would be pinned to the glass.
@@ -228,11 +249,30 @@
       if (!phone.matches && headerGlass && nav.parentElement !== headerGlass) { headerGlass.insertBefore(nav, toggle); nav.classList.remove("glass"); }
       moveTo(here, true);
     };
+    // A tap on a tab leaves where the pill stood, so the next page can slide
+    // it on from there instead of showing it already sitting on its tab.
+    const KEY = "tryptify-pill";
+    const mode = () => (phone.matches ? "phone" : "wide") + ":" + root.lang;
+    links.forEach((a) => a.addEventListener("click", (e) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || !M) return;
+      try { sessionStorage.setItem(KEY, JSON.stringify({ mode: mode(), l: left.get(), r: right.get(), t: Date.now() })); } catch (_) {}
+    }));
+    let came = null;
+    try { came = JSON.parse(sessionStorage.getItem(KEY) || "null"); sessionStorage.removeItem(KEY); } catch (_) {}
+    if (!came || came.mode !== mode() || Date.now() - came.t > 5000 || !here) came = null;
+    const arrived = !!came;
     place();
     phone.addEventListener("change", place);
     addEventListener("resize", () => moveTo(here, true));
-    document.fonts && document.fonts.ready.then(() => moveTo(here, true));
-    if (moving && phone.matches) M.animate(nav, { y: [80, 0], opacity: [0, 1] }, { type: "spring", stiffness: 220, damping: 22, delay: 0.3 });
+    const settle = () => {
+      if (!came || !moving) { moveTo(here, true); return; }
+      const from = came; came = null;
+      left.jump(from.l); right.jump(from.r); draw(); shown = true; at = null;
+      requestAnimationFrame(() => moveTo(here));
+    };
+    if (document.fonts) document.fonts.ready.then(settle); else settle();
+    // The tab bar rises in on arrival, not again on every page it leads to.
+    if (moving && phone.matches && !arrived) M.animate(nav, { y: [80, 0], opacity: [0, 1] }, { type: "spring", stiffness: 220, damping: 22, delay: 0.3 });
   }
 
   if (!moving) {
@@ -258,12 +298,26 @@
   if (hero) {
     const h1 = $("h1", hero);
     if (h1) {
-      const words = h1.textContent.trim().split(/\s+/);
+      // Words as the page's language divides them: Chinese and Japanese have
+      // no spaces, and one span for a whole title would run off the screen.
+      // Spaces and punctuation stay on the word before them, opening marks
+      // (¿ 「 “ «) on the word after, so no line ends on one.
+      const text = h1.textContent.trim().replace(/\s+/g, " ");
+      const words = [];
+      if (window.Intl && Intl.Segmenter) {
+        let open = "";
+        for (const g of new Intl.Segmenter(root.lang || "en", { granularity: "word" }).segment(text)) {
+          if (g.isWordLike) { words.push(open + g.segment); open = ""; }
+          else if (/^[¿¡「『（(“‘«„[]+$/.test(g.segment) || !words.length) open += g.segment;
+          else words[words.length - 1] += g.segment;
+        }
+        if (open) words.push(open);
+      } else words.push(...text.split(" ").map((w, i, all) => w + (i < all.length - 1 ? " " : "")));
       h1.textContent = "";
-      words.forEach((w, i) => {
+      words.forEach((w) => {
         const span = document.createElement("span");
         span.className = "word";
-        span.textContent = w + (i < words.length - 1 ? " " : "");
+        span.textContent = w;
         h1.append(span);
       });
       h1.style.opacity = "1";

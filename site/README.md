@@ -51,7 +51,12 @@ repeat the app, so check them when it changes:
 words arriving one by one, sections sliding in, screenshots dealt and tilted,
 the pricing switch counting, springy buttons. All of it is decoration: with
 "reduce motion" on, without JavaScript, or if Motion fails to load, the pages
-are the same, standing still.
+are the same, standing still. Motion is switched on by `js/theme-boot.js`,
+which adds `.motion` to `<html>` unless "reduce motion" is set; `site.js` does
+nothing without it. (Moving the head script into that file once dropped this
+line, and every page stood still until it was put back.) The hero's words are
+split with `Intl.Segmenter` in the page's language, since Chinese and Japanese
+put no spaces between words.
 
 The menu is liquid glass after the app's tab bar. Where Chromium allows
 `backdrop-filter: url()` (`.lens`), each piece of glass gets its own SVG lens:
@@ -60,8 +65,16 @@ middle and bending harder toward the rim, with red, green and blue bent by
 slightly different amounts. Elsewhere it is the same glass without the bend.
 Over it: a rim lit at two corners, a soft shade inside the bottom edge, a
 sheen, a glint under the pointer, and a glass bubble that springs to the
-current page or the hovered link, flattening a little as it slides. On phones
-the menu leaves the header for a floating tab bar at the bottom.
+current page or the hovered link. Its two ends are separate springs, the one in
+front quicker, so it stretches toward the link and settles onto it; its height
+and round ends never change, so the glass keeps its shape. A tap on a link
+leaves where the bubble stood (`sessionStorage` key `tryptify-pill`), and the
+next page slides it on from there. On phones the menu leaves the header for a
+floating tab bar at the bottom, which rises in on arrival but not again on the
+pages it leads to. Its tabs are as wide as their words, so a long one
+(Reproductor, プレーヤー) takes room from short ones. Between phone and desktop
+(561 to 900 px) What's new leaves the menu too, and below 700 px the wordmark,
+so the menu stays on one line in every language.
 
 There are two colour designs, Black (`dark`) and White (`white`), set as
 `<html data-design>` by each page's head script: the one last picked with the
@@ -88,6 +101,52 @@ them, relatively (`1.9.5/connect-app.jpg`) or by their raw.githubusercontent
 address. Run it after changing a note, and commit what it writes. The menu's
 What's new link is hidden on a phone, where six fill the tab bar; the footer
 and the Download page link it there.
+
+## Languages
+
+The site is in the app's eight languages: English at `/`, and Simplified
+Chinese, Japanese, French, Spanish, Turkish, German and Italian under `/zh`,
+`/ja`, `/fr`, `/es`, `/tr`, `/de` and `/it`. The English pages are the source;
+the others are built from them and never edited by hand:
+
+```
+python3 tools/site_l10n/site_l10n.py extract   # English text to site/l10n/source.json and source-js.json
+python3 tools/site_l10n/site_l10n.py check     # every language complete, markup and {blanks} intact
+python3 tools/site_l10n/site_l10n.py build     # writes public/<lang>/*.html and public/js/l10n/<lang>.js
+```
+
+- **Pages:** `extract` takes each page's text (headings, paragraphs, links,
+  `alt`, `title`, `aria-label`, `placeholder`, the pricing switch's
+  `data-monthly`/`data-yearly`, the description and Open Graph text) into
+  `site/l10n/source.json`, keyed by a hash of the English. Each language is
+  `site/l10n/<lang>.json` with the same keys; inline tags (`<strong>`, `<a>`)
+  stay in the translation, and `check` fails when they differ.
+- **Scripts:** text the scripts write is wrapped in `T("…")` (defined in
+  `js/theme-boot.js`), with `{name}` blanks for anything filled in. `extract`
+  collects every `T()` call's string into `source-js.json`, translated in
+  `site/l10n/js-<lang>.json`, and `build` turns those into
+  `public/js/l10n/<lang>.js`, loaded ahead of the scripts on that language's
+  pages. A string passed to `T()` must be a plain literal, a whole sentence;
+  a count that can be 1 gets a pair of strings.
+- **Left in English:** the changelog's release notes (`translate="no"`),
+  brand names, and the 404 page.
+- **Picking a language:** the footer lists all eight (in the player, the
+  sidebar's foot; not on a phone). The first visit to an English page goes to
+  the browser's language when the site has it; picking one from the list is
+  kept (`localStorage` key `tryptify-lang`), English included. A sign-in
+  coming back (`?code=`) is never moved. Each page links its other languages
+  with `hreflang`.
+- **Legal pages:** Terms, Privacy and Refunds say in each translation that the
+  English version applies if the two differ (`data-l10n-only`).
+- **Words:** the app's own (`app/l10n/strings.tsv`, `GLOSSARY.md`) for every
+  setting, button and screen the site names, so the site and the app agree.
+  Prices stay in US dollars as written; counts are written the language's way.
+
+After changing an English page or a script's text: `extract`, translate the
+new keys in all seven languages, `check`, `build`, and commit the lot. The
+generated folders are committed, like `changelog.html`; run
+`tools/site_changelog/build.py` before `build`, since the changelog is a source
+page too.
 
 ## Pages with code
 

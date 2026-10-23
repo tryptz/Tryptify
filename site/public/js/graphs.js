@@ -14,12 +14,12 @@
   const W = 1000, PAD = { l: 44, r: 14, t: 14, b: 30 };
 
   const SERIES = [
-    { key: "target", name: "SEAP target", cls: "s-target", on: true },
-    { key: "raw", name: "Truthear Nova, no EQ", cls: "s-raw", on: false, fr: true },
-    { key: "ts", name: "Tryptify Shelf ends", cls: "s-ts", on: true },
-    { key: "tp", name: "Tryptify Peaking", cls: "s-tp", on: true },
-    { key: "ap", name: "AutoEq peaking", cls: "s-ap", on: true },
-    { key: "as", name: "AutoEq shelves", cls: "s-as", on: true },
+    { key: "target", name: T("SEAP target"), cls: "s-target", on: true },
+    { key: "raw", name: T("Truthear Nova, no EQ"), cls: "s-raw", on: false, fr: true },
+    { key: "ts", name: T("Tryptify Shelf ends"), cls: "s-ts", on: true },
+    { key: "tp", name: T("Tryptify Peaking"), cls: "s-tp", on: true },
+    { key: "ap", name: T("AutoEq peaking"), cls: "s-ap", on: true },
+    { key: "as", name: T("AutoEq shelves"), cls: "s-as", on: true },
     { key: "sq", name: "squig.link (PEQdB)", cls: "s-sq", on: true },
   ];
   const TICKS = [20, 30, 40, 50, 60, 80, 100, 150, 200, 300, 400, 500, 800, 1000, 1500, 2000, 3000, 4000, 5000, 6000, 8000, 10000, 20000];
@@ -39,7 +39,7 @@
   };
 
   function makeChart(box, kind, height) {
-    const svg = el("svg", { viewBox: `0 0 ${W} ${height}`, class: "graph", role: "img", "aria-label": kind === "fr" ? "Frequency response graph" : "EQ curves graph" });
+    const svg = el("svg", { viewBox: `0 0 ${W} ${height}`, class: "graph", role: "img", "aria-label": kind === "fr" ? T("Frequency response graph") : T("EQ curves graph") });
     box.append(svg);
     const grid = el("g", { class: "g-grid" }, svg);
     const lines = el("g", { class: "g-lines" }, svg);
@@ -160,8 +160,10 @@
 
   function caption() {
     const n = view.bands === "avg" ? "10" : view.bands;
-    const lim = view.limit === "default" ? "app defaults" : `up to ${+view.limit / 1000} kHz`;
-    document.getElementById("graph-caption").textContent = `${n} bands · ${lim}${view.bands === "avg" ? " (the Avg view shows the 10-band fits)" : ""}`;
+    const lim = view.limit === "default" ? T("app defaults") : T("up to {khz} kHz", { khz: +view.limit / 1000 });
+    document.getElementById("graph-caption").textContent = view.bands === "avg"
+      ? T("{bands} bands · {limit} (the Avg view shows the 10-band fits)", { bands: n, limit: lim })
+      : T("{bands} bands · {limit}", { bands: n, limit: lim });
   }
 
   document.addEventListener("rank-change", (e) => {
@@ -187,7 +189,7 @@
         let t;
         addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => charts.forEach((c) => draw(c, false)), 150); });
       })
-      .catch(() => { document.getElementById("graph-caption").textContent = "The graphs could not load."; });
+      .catch(() => { document.getElementById("graph-caption").textContent = T("The graphs could not load."); });
   };
   if ("IntersectionObserver" in window) {
     const io = new IntersectionObserver((en) => { if (en.some((x) => x.isIntersecting)) { io.disconnect(); start(); } }, { rootMargin: "400px" });

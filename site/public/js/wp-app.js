@@ -17,7 +17,7 @@
     const m = Math.floor(s / 60);
     return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
   };
-  const SRC = { local: "Files", cloud: "Tryptify Cloud", hifi: "Trypt HiFi", subsonic: "Music server" };
+  const SRC = { local: T("Files"), cloud: "Tryptify Cloud", hifi: "Trypt HiFi", subsonic: T("Music server") };
 
   const ICON = {
     play: '<svg viewBox="0 0 24 24"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.6-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" fill="currentColor"/></svg>',
@@ -57,7 +57,8 @@
   /** el.append, skipping the empty slots of optional parts (append itself would print "null"). */
   const put = (el, ...kids) => el.append(...kids.flat().filter((k) => k != null && k !== false));
   const setIcon = (btn, name) => { if (btn.dataset.icon !== name) { btn.innerHTML = ICON[name]; btn.dataset.icon = name; } };
-  const songs = (n) => `${n} song${n === 1 ? "" : "s"}`;
+  const songs = (n) => (n === 1 ? T("{count} song", { count: n }) : T("{count} songs", { count: n }));
+  const bandsOf = (n) => (n === 1 ? T("{count} band", { count: n }) : T("{count} bands", { count: n }));
   // A cover that will not load (a server without one) becomes the plain square.
   document.addEventListener("error", (e) => {
     const img = e.target;
@@ -110,7 +111,7 @@
     const i = queue.length - 1;
     if (pos < 0) { order = [i]; pos = 0; start(); return; }
     order.splice(pos + 1, 0, i);
-    toast(`“${track.title}” plays next.`);
+    toast(T("“{title}” plays next.", { title: track.title }));
     renderQueue(); renderNext(); preloadNext();
   }
   async function start(autoplay = true, startAt = 0) {
@@ -136,8 +137,8 @@
   }
   function fail(e) {
     if (!current) return;
-    const why = e && e.name === "NotAllowedError" ? "the browser wants a tap first." : (e && e.message) || "it would not load.";
-    toast(`Could not play “${current.title}”: ${why}`, true);
+    const why = e && e.name === "NotAllowedError" ? T("the browser wants a tap first.") : (e && e.message) || T("it would not load.");
+    toast(T("Could not play “{title}”: {reason}", { title: current.title, reason: why }), true);
     renderBar();
     if (e && e.name === "NotAllowedError") return;
     if (++failures < 3 && pos + 1 < order.length) { pos++; start(); }
@@ -183,7 +184,7 @@
   }
 
   Eng.on("ended", () => next(true));
-  Eng.on("error", () => fail(new Error("this browser cannot play that file.")));
+  Eng.on("error", () => fail(new Error(T("this browser cannot play that file."))));
   Eng.on("play", () => { if (C) playSince = C.serverNow(); renderBar(); renderNow(); publish(); renderConnect(); if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing"; });
   Eng.on("pause", () => { renderBar(); renderNow(); publish(); renderConnect(); if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; });
   // Waiting on the network: the other devices stop the clock until sound comes back.
@@ -269,7 +270,7 @@
     vol.value = String(v);
     Eng.setVolume(v);
     setIcon($("bar-mute"), v > 0 ? "volume" : "mute");
-    $("bar-mute").setAttribute("aria-label", v > 0 ? "Mute" : "Unmute");
+    $("bar-mute").setAttribute("aria-label", v > 0 ? T("Mute") : T("Unmute"));
     renderPath();
   }
   vol.addEventListener("input", () => setVolume(Number(vol.value)));
@@ -278,7 +279,7 @@
 
   function renderBar() {
     const t = current;
-    $("bar-title").textContent = t ? t.title : "Nothing playing";
+    $("bar-title").textContent = t ? t.title : T("Nothing playing");
     $("bar-artist").textContent = t ? [t.artist, t.album].filter(Boolean).join(" · ") : "";
     const img = $("bar-cover");
     const cover = t && t.cover && img.dataset.failed !== t.cover ? t.cover : null;
@@ -287,27 +288,27 @@
     if (cover && img.getAttribute("src") !== cover) img.src = cover;
     const play = $("bar-play");
     setIcon(play, Eng.paused ? "play" : "pause");
-    play.setAttribute("aria-label", Eng.paused ? "Play" : "Pause");
+    play.setAttribute("aria-label", Eng.paused ? T("Play") : T("Pause"));
     $("bar-shuffle").setAttribute("aria-pressed", String(settings.shuffle));
     const rep = $("bar-repeat");
     rep.setAttribute("aria-pressed", String(settings.repeat !== "off"));
-    rep.setAttribute("aria-label", `Repeat: ${settings.repeat === "off" ? "off" : settings.repeat === "all" ? "all" : "this song"}`);
+    rep.setAttribute("aria-label", settings.repeat === "off" ? T("Repeat: off") : settings.repeat === "all" ? T("Repeat: all") : T("Repeat: this song"));
     setIcon(rep, settings.repeat === "one" ? "repeatOne" : "repeat");
     const badge = $("bar-badge");
     badge.hidden = !t;
     if (t) badge.textContent = [t.quality, eqActive() ? "AutoEQ" : null].filter(Boolean).join(" · ");
-    document.title = t && !Eng.paused ? `${t.title} · Tryptify` : "Player · Tryptify";
+    document.title = t && !Eng.paused ? `${t.title} · Tryptify` : T("Player · Tryptify");
     // Following another device: its song, and its play state on the button.
     const r = remoteNow();
     if (r) {
-      $("bar-title").textContent = r.track.title || "Untitled";
-      $("bar-artist").textContent = `${[r.track.artist, r.track.album].filter(Boolean).join(" · ")} · on ${nameOf(r.device, r.name)}`;
+      $("bar-title").textContent = r.track.title || T("Untitled");
+      $("bar-artist").textContent = T("{meta} · on {name}", { meta: [r.track.artist, r.track.album].filter(Boolean).join(" · "), name: nameOf(r.device, r.name) });
       const rc = r.track.cover && img.dataset.failed !== r.track.cover ? r.track.cover : null;
       img.hidden = !rc;
       $("bar-cover-none").hidden = !!rc;
       if (rc && img.getAttribute("src") !== rc) img.src = rc;
       setIcon(play, r.playing ? "pause" : "play");
-      play.setAttribute("aria-label", r.playing ? `Pause on ${nameOf(r.device, r.name)}` : `Play on ${nameOf(r.device, r.name)}`);
+      play.setAttribute("aria-label", r.playing ? T("Pause on {name}", { name: nameOf(r.device, r.name) }) : T("Play on {name}", { name: nameOf(r.device, r.name) }));
       badge.hidden = true;
     }
   }
@@ -327,14 +328,14 @@
     if ($("wp-queue").hidden) return;
     const ol = $("wp-queue-list");
     ol.textContent = "";
-    if (!order.length) { ol.append(h("li", { class: "muted", text: "Nothing in the queue yet." })); return; }
+    if (!order.length) { ol.append(h("li", { class: "muted", text: T("Nothing in the queue yet.") })); return; }
     order.forEach((qi, j) => {
       if (j < pos) return;
       const t = queue[qi];
       ol.append(h("li", { class: j === pos ? "is-current" : null },
         h("button", { type: "button", class: "wp-queue-song", onclick: () => { pos = j; start(); } },
           h("strong", { text: t.title }), h("span", { class: "muted", text: [t.artist, SRC[t.src]].filter(Boolean).join(" · ") })),
-        j === pos ? null : h("button", { type: "button", class: "wp-icon", icon: "close", "aria-label": `Remove ${t.title}`,
+        j === pos ? null : h("button", { type: "button", class: "wp-icon", icon: "close", "aria-label": T("Remove {title}", { title: t.title }),
           onclick: () => { order.splice(j, 1); renderQueue(); renderNext(); preloadNext(); } })));
     });
   }
@@ -350,13 +351,13 @@
           album ? h("span", { class: "wp-track-album muted", text: t.album || "" }) : null,
           h("span", { class: "wp-track-q", text: t.quality || "" }),
           h("span", { class: "wp-track-len muted", text: t.duration ? clock(t.duration) : "" })),
-        h("button", { type: "button", class: "wp-icon wp-track-add", icon: "plus", "aria-label": `Play ${t.title} next`, title: "Play next", onclick: () => enqueue(t) })));
+        h("button", { type: "button", class: "wp-icon wp-track-add", icon: "plus", "aria-label": T("Play {title} next", { title: t.title }), title: T("Play next"), onclick: () => enqueue(t) })));
     });
     return ol;
   }
   const playButtons = (tracks) => h("div", { class: "buttons" },
-    h("button", { type: "button", class: "btn primary", text: "Play", onclick: () => { settings.shuffle && setShuffle(false); playList(tracks); } }),
-    h("button", { type: "button", class: "btn", text: "Shuffle", onclick: () => { setShuffle(true); playList(tracks, Math.floor(Math.random() * tracks.length)); } }));
+    h("button", { type: "button", class: "btn primary", text: T("Play"), onclick: () => { settings.shuffle && setShuffle(false); playList(tracks); } }),
+    h("button", { type: "button", class: "btn", text: T("Shuffle"), onclick: () => { setShuffle(true); playList(tracks, Math.floor(Math.random() * tracks.length)); } }));
 
   // ── Files ───────────────────────────────────────────────────────────
   function pickButton(label) {
@@ -368,7 +369,7 @@
     return h("label", { class: "btn primary" }, label, input);
   }
   function reconnectButton() {
-    return h("button", { type: "button", class: "btn primary", text: `Open “${Local.pending.name}” again`,
+    return h("button", { type: "button", class: "btn primary", text: T("Open “{name}” again", { name: Local.pending.name }),
       onclick: async () => { if (await Local.reconnect()) { localChanged(); route(); } } });
   }
   function localChanged() {
@@ -378,17 +379,17 @@
   function renderFiles(path) {
     const v = $("view-files");
     v.textContent = "";
-    v.append(head("Files", "Your music folder, read right here in the browser. Nothing is uploaded."));
+    v.append(head(T("Files"), T("Your music folder, read right here in the browser. Nothing is uploaded.")));
     if (!Local.tree) {
       v.append(h("div", { class: "card wp-empty" },
-        h("p", { text: Local.pending ? "Your browser asks before Tryptify reads the folder again." : "Choose the folder your music is in. The folders inside it become your library." }),
-        Local.pending ? reconnectButton() : pickButton("Choose your music folder"),
-        Local.canKeep ? null : h("p", { class: "muted small", text: "This browser picks the folder again on each visit. Chrome and Edge remember it." })));
+        h("p", { text: Local.pending ? T("Your browser asks before Tryptify reads the folder again.") : T("Choose the folder your music is in. The folders inside it become your library.") }),
+        Local.pending ? reconnectButton() : pickButton(T("Choose your music folder")),
+        Local.canKeep ? null : h("p", { class: "muted small", text: T("This browser picks the folder again on each visit. Chrome and Edge remember it.") })));
       return;
     }
     let node = Local.tree;
     for (const p of path) { const d = node.byName.get(p); if (!d) break; node = d; }
-    const crumbs = h("nav", { class: "wp-crumbs", "aria-label": "Folder" }, h("a", { href: "#/files", text: Local.tree.name }));
+    const crumbs = h("nav", { class: "wp-crumbs", "aria-label": T("Folder") }, h("a", { href: "#/files", text: Local.tree.name }));
     node.path.forEach((p, i) => crumbs.append(h("span", { "aria-hidden": "true", text: "/" }),
       h("a", { href: "#/files/" + node.path.slice(0, i + 1).map(encodeURIComponent).join("/"), text: p, "aria-current": i === node.path.length - 1 ? "page" : null })));
     const all = S.util.allFiles(node);
@@ -407,7 +408,7 @@
     if (node.files.length) v.append(trackList(node.files, { album: false, numbered: true }));
   }
   function pickButtonSmall() {
-    const b = pickButton("Change folder");
+    const b = pickButton(T("Change folder"));
     b.className = "btn";
     return b;
   }
@@ -417,16 +418,16 @@
   async function renderCloud() {
     const v = $("view-cloud");
     v.textContent = "";
-    v.append(head("Tryptify Cloud", "Your Cloud library, played straight from storage, through your AutoEQ."));
+    v.append(head("Tryptify Cloud", T("Your Cloud library, played straight from storage, through your AutoEQ.")));
     if (!(await Cloud.signedIn().catch(() => false))) {
-      v.append(h("div", { class: "card wp-empty" }, h("p", { text: "Sign in with the same account as the app, then come back." }),
-        h("a", { class: "btn primary", href: "/account", text: "Sign in" })));
+      v.append(h("div", { class: "card wp-empty" }, h("p", { text: T("Sign in with the same account as the app, then come back.") }),
+        h("a", { class: "btn primary", href: "/account", text: T("Sign in") })));
       return;
     }
-    const input = h("input", { type: "search", class: "wp-input", placeholder: "Search your Cloud", value: cloud.q, "aria-label": "Search your Cloud" });
-    const form = h("form", { class: "wp-row", role: "search" }, input, h("button", { type: "submit", class: "btn", text: "Search" }));
+    const input = h("input", { type: "search", class: "wp-input", placeholder: T("Search your Cloud"), value: cloud.q, "aria-label": T("Search your Cloud") });
+    const form = h("form", { class: "wp-row", role: "search" }, input, h("button", { type: "submit", class: "btn", text: T("Search") }));
     const list = h("div");
-    const more = h("button", { type: "button", class: "btn", text: "More", hidden: true });
+    const more = h("button", { type: "button", class: "btn", text: T("More"), hidden: true });
     v.append(form, list, more);
     const load = async (reset) => {
       try {
@@ -435,7 +436,7 @@
         cloud.tracks.push(...r.tracks);
         cloud.total = r.total;
         list.textContent = "";
-        list.append(cloud.tracks.length ? trackList(cloud.tracks) : h("p", { class: "muted", text: cloud.q ? "Nothing matches that." : "Nothing here yet. Upload music on the Account page or from the app." }));
+        list.append(cloud.tracks.length ? trackList(cloud.tracks) : h("p", { class: "muted", text: cloud.q ? T("Nothing matches that.") : T("Nothing here yet. Upload music on the Account page or from the app.") }));
         more.hidden = cloud.tracks.length >= cloud.total;
       } catch (e) { list.textContent = ""; list.append(h("p", { class: "bad", text: e.message })); }
     };
@@ -448,39 +449,39 @@
   const hifi = { q: "", result: null };
   function hifiForm() {
     const addr = h("input", { type: "url", class: "wp-input", id: "hifi-addr", placeholder: "https://your-trypt-hifi-server", value: HiFi.base || "", autocomplete: "off", spellcheck: "false" });
-    const key = h("input", { type: "password", class: "wp-input", id: "hifi-key", placeholder: "If the server asks for one", value: HiFi.password, autocomplete: "current-password" });
+    const key = h("input", { type: "password", class: "wp-input", id: "hifi-key", placeholder: T("If the server asks for one"), value: HiFi.password, autocomplete: "current-password" });
     const qual = h("select", { class: "wp-input", id: "hifi-quality" });
-    for (const [v, l] of [["HI_RES_LOSSLESS", "Hi-Res Lossless (24-bit)"], ["LOSSLESS", "Lossless (16-bit)"], ["HIGH", "AAC 320"], ["LOW", "AAC 96"]])
+    for (const [v, l] of [["HI_RES_LOSSLESS", T("Hi-Res Lossless (24-bit)")], ["LOSSLESS", T("Lossless (16-bit)")], ["HIGH", "AAC 320"], ["LOW", "AAC 96"]])
       qual.append(h("option", { value: v, text: l, selected: HiFi.quality === v }));
     qual.addEventListener("change", () => { HiFi.quality = qual.value; renderPath(); });
     const msg = h("p", { class: "small muted", role: "status" });
     const unlocked = !!HiFi.base;
     const form = h("form", { class: "wp-form" },
-      h("label", { for: "hifi-addr", text: "API URL" }), addr,
-      h("label", { for: "hifi-key", text: "Password" }), key,
-      unlocked ? [h("label", { for: "hifi-quality", text: "Stream quality" }), qual] : null,
-      h("div", { class: "buttons" }, h("button", { type: "submit", class: "btn primary", text: unlocked ? "Save" : "Unlock" }),
-        unlocked ? h("button", { type: "button", class: "btn", text: "Remove", onclick: () => {
-          HiFi.base = null; HiFi.password = null; paintUnlock(); pill(); toast("Trypt HiFi removed."); location.hash = "#/"; route();
+      h("label", { for: "hifi-addr", text: T("API URL") }), addr,
+      h("label", { for: "hifi-key", text: T("Password") }), key,
+      unlocked ? [h("label", { for: "hifi-quality", text: T("Stream quality") }), qual] : null,
+      h("div", { class: "buttons" }, h("button", { type: "submit", class: "btn primary", text: unlocked ? T("Save") : T("Unlock") }),
+        unlocked ? h("button", { type: "button", class: "btn", text: T("Remove"), onclick: () => {
+          HiFi.base = null; HiFi.password = null; paintUnlock(); pill(); toast(T("Trypt HiFi removed.")); location.hash = "#/"; route();
         } }) : null),
       msg);
     // A URL is kept only once it answers, so a typo never unlocks an empty Trypt HiFi.
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const base = S.util.normalizeBase(addr.value);
-      if (!base) { msg.textContent = "That is not a URL."; return; }
-      if (base.startsWith("http://") && !/^http:\/\/(localhost|127\.|\[::1\])/.test(base)) { msg.textContent = "Use https://: this page is secure, so the browser blocks http:// addresses."; return; }
-      msg.textContent = "Checking…";
+      if (!base) { msg.textContent = T("That is not a URL."); return; }
+      if (base.startsWith("http://") && !/^http:\/\/(localhost|127\.|\[::1\])/.test(base)) { msg.textContent = T("Use https://: this page is secure, so the browser blocks http:// addresses."); return; }
+      msg.textContent = T("Checking…");
       try {
         const ms = await HiFi.test(base, key.value);
         HiFi.base = base;
         HiFi.password = key.value;
         pill(`Trypt HiFi · ${ms} ms`, true);
         paintUnlock();
-        if (unlocked) msg.textContent = `Saved. Answered in ${ms} ms.`;
-        else { toast("Trypt HiFi unlocked."); route(); }
+        if (unlocked) msg.textContent = T("Saved. Answered in {ms} ms.", { ms });
+        else { toast(T("Trypt HiFi unlocked.")); route(); }
       } catch (err) {
-        msg.textContent = err.message === "Failed to fetch" ? "No answer from that URL. Check it, and that the server is running." : err.message;
+        msg.textContent = err.message === "Failed to fetch" ? T("No answer from that URL. Check it, and that the server is running.") : err.message;
       }
     });
     return form;
@@ -489,18 +490,18 @@
     try {
       const ms = await HiFi.test();
       pill(`Trypt HiFi · ${ms} ms`, true);
-      if (msg) msg.textContent = `Connected in ${ms} ms.`;
+      if (msg) msg.textContent = T("Connected in {ms} ms.", { ms });
       return true;
     } catch (e) {
-      pill("Trypt HiFi unreachable", false);
-      if (msg) msg.textContent = e.message === "Failed to fetch" ? "No answer. Check the address, and that the server is running." : e.message;
+      pill(T("Trypt HiFi unreachable"), false);
+      if (msg) msg.textContent = e.message === "Failed to fetch" ? T("No answer. Check the address, and that the server is running.") : e.message;
       return false;
     }
   }
   /** Trypt HiFi shows nowhere until its API URL is in. */
   function paintUnlock() {
     $("wp-side-hifi").hidden = !HiFi.base;
-    $("wp-q").placeholder = HiFi.base ? "Search your music and Trypt HiFi" : "Search your music";
+    $("wp-q").placeholder = HiFi.base ? T("Search your music and Trypt HiFi") : T("Search your music");
   }
   function pill(text, ok) {
     const p = $("wp-hifi-pill");
@@ -517,87 +518,91 @@
   function renderHifi() {
     const v = $("view-hifi");
     v.textContent = "";
-    v.append(head("Trypt HiFi", "Streams from your own Trypt HiFi server, through your AutoEQ."));
+    v.append(head("Trypt HiFi", T("Streams from your own Trypt HiFi server, through your AutoEQ.")));
     if (!HiFi.base) { v.append(h("div", { class: "card" }, hifiForm())); return; }
-    const input = h("input", { type: "search", class: "wp-input", placeholder: "Search Trypt HiFi", value: hifi.q, "aria-label": "Search Trypt HiFi" });
-    const form = h("form", { class: "wp-row", role: "search" }, input, h("button", { type: "submit", class: "btn", text: "Search" }));
+    const input = h("input", { type: "search", class: "wp-input", placeholder: T("Search Trypt HiFi"), value: hifi.q, "aria-label": T("Search Trypt HiFi") });
+    const form = h("form", { class: "wp-row", role: "search" }, input, h("button", { type: "submit", class: "btn", text: T("Search") }));
     const out = h("div");
     v.append(form, out);
     const show = () => {
       out.textContent = "";
       if (!hifi.result) return;
       const { albums, tracks } = hifi.result;
-      if (!albums.length && !tracks.length) { out.append(h("p", { class: "muted", text: "Nothing matches that." })); return; }
-      if (tracks.length) out.append(h("h2", { text: "Songs" }), trackList(tracks));
-      if (albums.length) out.append(h("h2", { text: "Albums" }), albumGrid(albums));
+      if (!albums.length && !tracks.length) { out.append(h("p", { class: "muted", text: T("Nothing matches that.") })); return; }
+      if (tracks.length) out.append(h("h2", { text: T("Songs") }), trackList(tracks));
+      if (albums.length) out.append(h("h2", { text: T("Albums") }), albumGrid(albums));
     };
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       hifi.q = input.value.trim();
       if (!hifi.q) return;
       out.textContent = "";
-      out.append(h("p", { class: "muted", text: "Searching…" }));
+      out.append(h("p", { class: "muted", text: T("Searching…") }));
       try { hifi.result = await HiFi.search(hifi.q); show(); } catch (err) { out.textContent = ""; out.append(h("p", { class: "bad", text: err.message })); }
     });
     show();
-    v.append(h("details", { class: "card wp-details" }, h("summary", { text: "Server and quality" }), hifiForm()));
+    v.append(h("details", { class: "card wp-details" }, h("summary", { text: T("Server and quality") }), hifiForm()));
   }
   async function renderHifiAlbum(id) {
     const v = $("view-hifi");
     v.textContent = "";
-    v.append(h("p", { class: "muted", text: "Loading the album…" }));
+    v.append(h("p", { class: "muted", text: T("Loading the album…") }));
     try {
       const { album, tracks } = await HiFi.album(id);
       v.textContent = "";
       v.append(h("div", { class: "wp-album-head" },
         album.cover ? h("img", { src: album.cover, alt: "", width: 200, height: 200 }) : h("span", { class: "wp-cover-none" }),
-        h("div", null, h("p", { class: "eyebrow", text: `Album · Trypt HiFi${album.hires ? " · Hi-Res" : ""}` }), h("h1", { text: album.title }),
+        h("div", null, h("p", { class: "eyebrow", text: T("Album · Trypt HiFi") + (album.hires ? " · Hi-Res" : "") }), h("h1", { text: album.title }),
           h("p", { class: "muted", text: [album.artist, album.year, songs(tracks.length)].filter(Boolean).join(" · ") }), playButtons(tracks))),
       trackList(tracks, { album: false, numbered: true }));
     } catch (e) { v.textContent = ""; v.append(h("p", { class: "bad", text: e.message })); }
   }
 
   // ── The account's liked songs and playlists ─────────────────────────
-  const signInCard = (what) => h("div", { class: "card wp-empty" },
-    h("p", { text: `Sign in with the same account as the app to see your ${what}.` }), h("a", { class: "btn primary", href: "/account", text: "Sign in" }));
-  const needsHifi = () => (HiFi.base ? null : h("p", { class: "card wp-note" },
-    "These songs need an API URL to play. Add one under Sources, on ", h("a", { href: "#/", text: "the dashboard" }), "."));
+  const signInCard = (text) => h("div", { class: "card wp-empty" },
+    h("p", { text }), h("a", { class: "btn primary", href: "/account", text: T("Sign in") }));
+  const needsHifi = () => {
+    if (HiFi.base) return null;
+    // {link} is where the link to the dashboard goes.
+    const [before, after] = T("These songs need an API URL to play. Add one under Sources, on {link}.").split("{link}");
+    return h("p", { class: "card wp-note" }, before, h("a", { href: "#/", text: T("the dashboard") }), after || "");
+  };
   const library = { liked: null, playlists: null };
   async function renderLiked() {
     const v = $("view-liked");
     v.textContent = "";
-    v.append(head("Liked songs", "The songs you liked in the app, kept in your account."));
-    if (!(await Cloud.signedIn().catch(() => false))) { v.append(signInCard("liked songs")); return; }
-    const box = h("div", null, h("p", { class: "muted", text: "Loading…" }));
+    v.append(head(T("Liked songs"), T("The songs you liked in the app, kept in your account.")));
+    if (!(await Cloud.signedIn().catch(() => false))) { v.append(signInCard(T("Sign in with the same account as the app to see your liked songs."))); return; }
+    const box = h("div", null, h("p", { class: "muted", text: T("Loading…") }));
     v.append(needsHifi() || "", box);
     try {
       library.liked = await Library.liked();
       $("wp-count-liked").textContent = library.liked.length ? String(library.liked.length) : "";
       box.textContent = "";
-      box.append(...(library.liked.length ? [playButtons(library.liked), trackList(library.liked)] : [h("p", { class: "muted", text: "No liked songs yet. Tap the heart on a song in the app." })]));
+      box.append(...(library.liked.length ? [playButtons(library.liked), trackList(library.liked)] : [h("p", { class: "muted", text: T("No liked songs yet. Tap the heart on a song in the app.") })]));
     } catch (e) { box.textContent = ""; box.append(h("p", { class: "bad", text: e.message })); }
   }
   async function renderPlaylists(id) {
     const v = $("view-playlists");
     v.textContent = "";
-    if (!(await Cloud.signedIn().catch(() => false))) { v.append(head("Playlists", null), signInCard("playlists")); return; }
-    const box = h("div", null, h("p", { class: "muted", text: "Loading…" }));
+    if (!(await Cloud.signedIn().catch(() => false))) { v.append(head(T("Playlists"), null), signInCard(T("Sign in with the same account as the app to see your playlists."))); return; }
+    const box = h("div", null, h("p", { class: "muted", text: T("Loading…") }));
     if (id) {
       v.append(box);
       try {
         const p = await Library.playlist(id);
         box.textContent = "";
         box.append(head(p.name, p.description || songs(p.tracks.length)), needsHifi() || "",
-          ...(p.tracks.length ? [playButtons(p.tracks), trackList(p.tracks)] : [h("p", { class: "muted", text: "This playlist is empty." })]));
+          ...(p.tracks.length ? [playButtons(p.tracks), trackList(p.tracks)] : [h("p", { class: "muted", text: T("This playlist is empty.") })]));
       } catch (e) { box.textContent = ""; box.append(h("p", { class: "bad", text: e.message })); }
       return;
     }
-    v.append(head("Playlists", "The playlists you made in the app, kept in your account."), box);
+    v.append(head(T("Playlists"), T("The playlists you made in the app, kept in your account.")), box);
     try {
       library.playlists = await Library.playlists();
       $("wp-count-playlists").textContent = library.playlists.length ? String(library.playlists.length) : "";
       box.textContent = "";
-      if (!library.playlists.length) { box.append(h("p", { class: "muted", text: "No playlists yet. Make one in the app." })); return; }
+      if (!library.playlists.length) { box.append(h("p", { class: "muted", text: T("No playlists yet. Make one in the app.") })); return; }
       const ul = h("ul", { class: "wp-folders" });
       for (const p of library.playlists) ul.append(h("li", null, h("a", { href: `#/playlists/${encodeURIComponent(p.id)}` },
         h("strong", { text: p.name }), h("small", { class: "muted", text: String(p.count) }))));
@@ -611,26 +616,26 @@
     const url = h("input", { type: "url", class: "wp-input", id: "sub-url", placeholder: "https://music.example.com", value: srv ? srv.url : "", autocomplete: "off", spellcheck: "false" });
     const user = h("input", { type: "text", class: "wp-input", id: "sub-user", value: srv ? srv.user : "", autocomplete: "username", spellcheck: "false" });
     const pass = h("input", { type: "password", class: "wp-input", id: "sub-pass", autocomplete: "current-password" });
-    const msg = h("p", { class: "small muted", role: "status", text: "Navidrome, Gonic, Airsonic and other Subsonic servers. Your password is not kept: only a token made from it." });
+    const msg = h("p", { class: "small muted", role: "status", text: T("Navidrome, Gonic, Airsonic and other Subsonic servers. Your password is not kept: only a token made from it.") });
     const form = h("form", { class: "wp-form" },
-      h("label", { for: "sub-url", text: "Server address" }), url,
-      h("label", { for: "sub-user", text: "Username" }), user,
-      h("label", { for: "sub-pass", text: "Password" }), pass,
-      h("div", { class: "buttons" }, h("button", { type: "submit", class: "btn primary", text: srv ? "Sign in again" : "Connect" }),
-        srv ? h("button", { type: "button", class: "btn", text: "Remove", onclick: () => { Subsonic.server = null; route(); } }) : null),
+      h("label", { for: "sub-url", text: T("Server address") }), url,
+      h("label", { for: "sub-user", text: T("Username") }), user,
+      h("label", { for: "sub-pass", text: T("Password") }), pass,
+      h("div", { class: "buttons" }, h("button", { type: "submit", class: "btn primary", text: srv ? T("Sign in again") : T("Connect") }),
+        srv ? h("button", { type: "button", class: "btn", text: T("Remove"), onclick: () => { Subsonic.server = null; route(); } }) : null),
       msg);
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const base = S.util.normalizeBase(url.value);
-      if (base && base.startsWith("http://") && !/^http:\/\/(localhost|127\.|\[::1\])/.test(base)) { msg.textContent = "Use https://: this page is secure, so the browser blocks http:// servers."; return; }
-      msg.textContent = "Connecting…";
+      if (base && base.startsWith("http://") && !/^http:\/\/(localhost|127\.|\[::1\])/.test(base)) { msg.textContent = T("Use https://: this page is secure, so the browser blocks http:// servers."); return; }
+      msg.textContent = T("Connecting…");
       try {
         await Subsonic.connect(url.value, user.value.trim(), pass.value);
         pass.value = "";
-        msg.textContent = "Connected.";
+        msg.textContent = T("Connected.");
         route();
       } catch (err) {
-        msg.textContent = err.message === "Failed to fetch" ? "No answer. Check the address, and that the server allows this site (CORS)." : err.message;
+        msg.textContent = err.message === "Failed to fetch" ? T("No answer. Check the address, and that the server allows this site (CORS).") : err.message;
       }
     });
     return form;
@@ -640,49 +645,49 @@
     const v = $("view-subsonic");
     v.textContent = "";
     if (!Subsonic.server) {
-      v.append(head("Music server", "Your own Navidrome or other Subsonic server, through your AutoEQ."), h("div", { class: "card" }, subsonicForm()));
+      v.append(head(T("Music server"), T("Your own Navidrome or other Subsonic server, through your AutoEQ.")), h("div", { class: "card" }, subsonicForm()));
       return;
     }
-    const box = h("div", null, h("p", { class: "muted", text: "Loading…" }));
+    const box = h("div", null, h("p", { class: "muted", text: T("Loading…") }));
     const fill = (...kids) => { box.textContent = ""; box.append(...kids); };
     const failed = (e) => fill(h("p", { class: "bad", text: e.message }));
     if (kind === "album" && id) {
       v.append(box);
       Subsonic.album(id).then(({ album, tracks }) => fill(h("div", { class: "wp-album-head" },
         album.cover ? h("img", { src: album.cover, alt: "", width: 200, height: 200 }) : h("span", { class: "wp-cover-none" }),
-        h("div", null, h("p", { class: "eyebrow", text: "Album · Music server" }), h("h1", { text: album.title }),
+        h("div", null, h("p", { class: "eyebrow", text: T("Album · Music server") }), h("h1", { text: album.title }),
           h("p", { class: "muted", text: [album.artist, album.year, songs(tracks.length)].filter(Boolean).join(" · ") }), playButtons(tracks))),
         trackList(tracks, { album: false, numbered: true }))).catch(failed);
       return;
     }
     if (kind === "playlist" && id) {
       v.append(box);
-      Subsonic.playlist(id).then((p) => fill(head(p.name, songs(p.tracks.length)), ...(p.tracks.length ? [playButtons(p.tracks), trackList(p.tracks)] : [h("p", { class: "muted", text: "This playlist is empty." })]))).catch(failed);
+      Subsonic.playlist(id).then((p) => fill(head(p.name, songs(p.tracks.length)), ...(p.tracks.length ? [playButtons(p.tracks), trackList(p.tracks)] : [h("p", { class: "muted", text: T("This playlist is empty.") })]))).catch(failed);
       return;
     }
-    v.append(head("Music server", new URL(Subsonic.server.url).host));
-    const input = h("input", { type: "search", class: "wp-input", placeholder: "Search your server", value: subsonic.q, "aria-label": "Search your server" });
-    const form = h("form", { class: "wp-row", role: "search" }, input, h("button", { type: "submit", class: "btn", text: "Search" }));
-    const tabs = h("div", { class: "chips wp-tabs", role: "group", "aria-label": "Show" });
-    for (const [t, label] of [["albums", "New albums"], ["recent", "Played lately"], ["starred", "Starred"], ["playlists", "Playlists"]])
+    v.append(head(T("Music server"), new URL(Subsonic.server.url).host));
+    const input = h("input", { type: "search", class: "wp-input", placeholder: T("Search your server"), value: subsonic.q, "aria-label": T("Search your server") });
+    const form = h("form", { class: "wp-row", role: "search" }, input, h("button", { type: "submit", class: "btn", text: T("Search") }));
+    const tabs = h("div", { class: "chips wp-tabs", role: "group", "aria-label": T("Show") });
+    for (const [t, label] of [["albums", T("New albums")], ["recent", T("Played lately")], ["starred", T("Starred")], ["playlists", T("Playlists")]])
       tabs.append(h("button", { type: "button", "aria-pressed": String(subsonic.tab === t), text: label, onclick: () => { subsonic.tab = t; subsonic.q = ""; renderSubsonic(); } }));
-    v.append(form, tabs, box, h("details", { class: "card wp-details" }, h("summary", { text: "Server and sign-in" }), subsonicForm()));
+    v.append(form, tabs, box, h("details", { class: "card wp-details" }, h("summary", { text: T("Server and sign-in") }), subsonicForm()));
     form.addEventListener("submit", (e) => { e.preventDefault(); subsonic.q = input.value.trim(); renderSubsonic(); });
     if (subsonic.q) {
       Subsonic.search(subsonic.q).then((r) => fill(...(r.tracks.length || r.albums.length
-        ? [r.tracks.length ? [h("h2", { text: "Songs" }), trackList(r.tracks)] : [], r.albums.length ? [h("h2", { text: "Albums" }), albumGrid(r.albums, "#/subsonic/album/")] : []].flat()
-        : [h("p", { class: "muted", text: "Nothing matches that." })]))).catch(failed);
+        ? [r.tracks.length ? [h("h2", { text: T("Songs") }), trackList(r.tracks)] : [], r.albums.length ? [h("h2", { text: T("Albums") }), albumGrid(r.albums, "#/subsonic/album/")] : []].flat()
+        : [h("p", { class: "muted", text: T("Nothing matches that.") })]))).catch(failed);
     } else if (subsonic.tab === "starred") {
-      Subsonic.starred().then((t) => fill(...(t.length ? [playButtons(t), trackList(t)] : [h("p", { class: "muted", text: "No starred songs on this server." })]))).catch(failed);
+      Subsonic.starred().then((t) => fill(...(t.length ? [playButtons(t), trackList(t)] : [h("p", { class: "muted", text: T("No starred songs on this server.") })]))).catch(failed);
     } else if (subsonic.tab === "playlists") {
       Subsonic.playlists().then((ps) => {
-        if (!ps.length) return fill(h("p", { class: "muted", text: "No playlists on this server." }));
+        if (!ps.length) return fill(h("p", { class: "muted", text: T("No playlists on this server.") }));
         const ul = h("ul", { class: "wp-folders" });
         for (const p of ps) ul.append(h("li", null, h("a", { href: `#/subsonic/playlist/${encodeURIComponent(p.id)}` }, h("strong", { text: p.name }), h("small", { class: "muted", text: String(p.count) }))));
         fill(ul);
       }).catch(failed);
     } else {
-      Subsonic.albums(subsonic.tab === "recent" ? "recent" : "newest").then((a) => fill(a.length ? albumGrid(a, "#/subsonic/album/") : h("p", { class: "muted", text: "No albums yet." }))).catch(failed);
+      Subsonic.albums(subsonic.tab === "recent" ? "recent" : "newest").then((a) => fill(a.length ? albumGrid(a, "#/subsonic/album/") : h("p", { class: "muted", text: T("No albums yet.") }))).catch(failed);
     }
   }
 
@@ -698,21 +703,21 @@
         const hay = `${t.title} ${t.artist} ${t.album} ${t.file}`.toLowerCase();
         return words.every((w) => hay.includes(w));
       }).slice(0, 50);
-      v.append(h("h2", { text: "Files" }), hits.length ? trackList(hits) : h("p", { class: "muted", text: "Nothing in your folder." }));
+      v.append(h("h2", { text: T("Files") }), hits.length ? trackList(hits) : h("p", { class: "muted", text: T("Nothing in your folder.") }));
     }
-    const section = (title) => { const box = h("div", null, h("h2", { text: title }), h("p", { class: "muted", text: "Searching…" })); v.append(box); return box; };
+    const section = (title) => { const box = h("div", null, h("h2", { text: title }), h("p", { class: "muted", text: T("Searching…") })); v.append(box); return box; };
     if (await Cloud.signedIn().catch(() => false)) {
       const box = section("Tryptify Cloud");
-      Cloud.songs(0, q).then((r) => { box.lastChild.replaceWith(r.tracks.length ? trackList(r.tracks.slice(0, 20)) : h("p", { class: "muted", text: "Nothing in your Cloud." })); })
+      Cloud.songs(0, q).then((r) => { box.lastChild.replaceWith(r.tracks.length ? trackList(r.tracks.slice(0, 20)) : h("p", { class: "muted", text: T("Nothing in your Cloud.") })); })
         .catch((e) => box.lastChild.replaceWith(h("p", { class: "bad", text: e.message })));
     }
     if (Subsonic.server) {
-      const box = section("Music server");
+      const box = section(T("Music server"));
       Subsonic.search(q).then((r) => {
         const kids = [];
         if (r.tracks.length) kids.push(trackList(r.tracks));
         if (r.albums.length) kids.push(albumGrid(r.albums, "#/subsonic/album/"));
-        box.lastChild.replaceWith(...(kids.length ? kids : [h("p", { class: "muted", text: "Nothing on your server." })]));
+        box.lastChild.replaceWith(...(kids.length ? kids : [h("p", { class: "muted", text: T("Nothing on your server.") })]));
       }).catch((e) => box.lastChild.replaceWith(h("p", { class: "bad", text: e.message })));
     }
     if (HiFi.base) {
@@ -721,7 +726,7 @@
         const kids = [];
         if (r.tracks.length) kids.push(trackList(r.tracks));
         if (r.albums.length) kids.push(albumGrid(r.albums));
-        box.lastChild.replaceWith(...(kids.length ? kids : [h("p", { class: "muted", text: "Nothing on Trypt HiFi." })]));
+        box.lastChild.replaceWith(...(kids.length ? kids : [h("p", { class: "muted", text: T("Nothing on Trypt HiFi.") })]));
       }).catch((e) => box.lastChild.replaceWith(h("p", { class: "bad", text: e.message })));
     }
   }
@@ -746,92 +751,95 @@
     const t = current;
     $("tile-now").classList.toggle("is-empty", !t);
     if (!t) {
-      tile("tile-now", null, h("p", { class: "eyebrow", text: "Now playing" }), h("p", { class: "wp-now-title", text: "Nothing yet" }),
-        h("p", { class: "muted", text: "Start with your music folder, your Cloud or your music server." }),
-        h("div", { class: "buttons" }, h("a", { class: "btn primary", href: "#/files", text: "Files" }),
-          h("a", { class: "btn", href: "#/cloud", text: "Tryptify Cloud" }), h("a", { class: "btn", href: "#/subsonic", text: "Music server" }),
+      tile("tile-now", null, h("p", { class: "eyebrow", text: T("Now playing") }), h("p", { class: "wp-now-title", text: T("Nothing yet") }),
+        h("p", { class: "muted", text: T("Start with your music folder, your Cloud or your music server.") }),
+        h("div", { class: "buttons" }, h("a", { class: "btn primary", href: "#/files", text: T("Files") }),
+          h("a", { class: "btn", href: "#/cloud", text: "Tryptify Cloud" }), h("a", { class: "btn", href: "#/subsonic", text: T("Music server") }),
           HiFi.base ? h("a", { class: "btn", href: "#/hifi", text: "Trypt HiFi" }) : null));
       return;
     }
-    const playBtn = h("button", { type: "button", class: "wp-icon wp-play", "data-act": "toggle", "aria-label": Eng.paused ? "Play" : "Pause", icon: Eng.paused ? "play" : "pause" });
+    const playBtn = h("button", { type: "button", class: "wp-icon wp-play", "data-act": "toggle", "aria-label": Eng.paused ? T("Play") : T("Pause"), icon: Eng.paused ? "play" : "pause" });
     tile("tile-now", null,
       t.cover ? h("img", { class: "wp-now-cover", src: t.cover, alt: "", width: 200, height: 200 }) : h("span", { class: "wp-now-cover wp-cover-none" }),
       h("div", { class: "wp-now-text" },
-        h("div", { class: "wp-badges" }, ...[t.quality, `from ${SRC[t.src]}`, eqActive() ? `AutoEQ · ${eq.name}` : null].filter(Boolean).map((x) => h("span", { text: x }))),
+        h("div", { class: "wp-badges" }, ...[t.quality, T("from {source}", { source: SRC[t.src] }), eqActive() ? `AutoEQ · ${eq.name}` : null].filter(Boolean).map((x) => h("span", { text: x }))),
         h("p", { class: "wp-now-title", text: t.title }),
         h("p", { class: "muted", text: [t.artist, t.album].filter(Boolean).join(" · ") }),
         h("div", { class: "wp-progress" }, h("span", { id: "now-bar", style: `width: ${Eng.duration ? (Eng.time / Eng.duration) * 100 : 0}%` })),
         h("div", { class: "wp-controls" },
-          h("button", { type: "button", class: "wp-icon", "data-act": "prev", "aria-label": "Previous", icon: "prev" }), playBtn,
-          h("button", { type: "button", class: "wp-icon", "data-act": "next", "aria-label": "Next", icon: "next" }))));
+          h("button", { type: "button", class: "wp-icon", "data-act": "prev", "aria-label": T("Previous"), icon: "prev" }), playBtn,
+          h("button", { type: "button", class: "wp-icon", "data-act": "next", "aria-label": T("Next"), icon: "next" }))));
   }
   function renderEqTile() {
     if ($("view-home").hidden) return;
-    const sw = h("label", { class: "wp-switch" }, h("input", { type: "checkbox", checked: eq.on, disabled: !eq.bands.length, onchange: (e) => setEqOn(e.target.checked) }), h("span", { text: "On" }));
+    const sw = h("label", { class: "wp-switch" }, h("input", { type: "checkbox", checked: eq.on, disabled: !eq.bands.length, onchange: (e) => setEqOn(e.target.checked) }), h("span", { text: T("On") }));
     if (!eq.bands.length) {
-      tile("tile-eq", "AutoEQ", h("p", { class: "muted", text: "Pick your headphone once and everything plays corrected, with the same engine as the app." }),
-        h("a", { class: "btn primary", href: "#/autoeq", text: "Pick a headphone" }));
+      tile("tile-eq", "AutoEQ", h("p", { class: "muted", text: T("Pick your headphone once and everything plays corrected, with the same engine as the app.") }),
+        h("a", { class: "btn primary", href: "#/autoeq", text: T("Pick a headphone") }));
       return;
     }
     const graph = h("div", { class: "wp-mini-graph" });
     drawEq(graph, eq.bands, { W: 1000, H: 260, labels: false });
     tile("tile-eq", "AutoEQ", h("div", { class: "wp-row" }, h("strong", { text: `${eq.name} → ${eq.target}` }), h("span", { class: "wp-grow" }), sw),
-      h("p", { class: "muted small", text: `${eq.bands.length} bands · preamp −${eq.preamp.toFixed(1)} dB` }), graph,
-      h("a", { class: "btn", href: "#/autoeq", text: "Change" }));
+      h("p", { class: "muted small", text: T("{bands} · preamp −{db} dB", { bands: bandsOf(eq.bands.length), db: eq.preamp.toFixed(1) }) }), graph,
+      h("a", { class: "btn", href: "#/autoeq", text: T("Change") }));
   }
   function renderPath() {
     if ($("view-home").hidden) return;
     const on = (x) => (x ? "on" : "");
     const rows = [
-      ["Source", current ? SRC[current.src] : "—", !!current],
-      ["File", current ? current.quality || "—" : "—", !!current],
-      ["AutoEQ", eqActive() ? `${eq.bands.length} bands` : "off", eqActive()],
-      ["Preamp", eqActive() ? `−${eq.preamp.toFixed(1)} dB` : "0 dB", eqActive()],
-      ["Mono", settings.mono ? "on" : "off", settings.mono],
-      ["Speed", `${settings.speed.toFixed(2)}×${settings.speed !== 1 && settings.preservePitch ? " · pitch kept" : ""}`, settings.speed !== 1],
-      ["Volume", `${Math.round(settings.volume * 100)} %`, true],
-      ["Output", Eng.rate ? `${+(Eng.rate / 1000).toFixed(1)} kHz · this browser` : "this browser", true],
+      [T("Source"), current ? SRC[current.src] : "—", !!current],
+      [T("File"), current ? current.quality || "—" : "—", !!current],
+      ["AutoEQ", eqActive() ? bandsOf(eq.bands.length) : T("off"), eqActive()],
+      [T("Preamp"), eqActive() ? `−${eq.preamp.toFixed(1)} dB` : "0 dB", eqActive()],
+      [T("Mono"), settings.mono ? T("on") : T("off"), settings.mono],
+      [T("Speed"), settings.speed !== 1 && settings.preservePitch ? T("{speed}× · pitch kept", { speed: settings.speed.toFixed(2) }) : `${settings.speed.toFixed(2)}×`, settings.speed !== 1],
+      [T("Volume"), `${Math.round(settings.volume * 100)} %`, true],
+      [T("Output"), Eng.rate ? T("{rate} kHz · this browser", { rate: +(Eng.rate / 1000).toFixed(1) }) : T("this browser"), true],
     ];
-    tile("tile-path", "Signal path", h("ol", { class: "wp-path" }, ...rows.map(([k, val, lit]) =>
+    tile("tile-path", T("Signal path"), h("ol", { class: "wp-path" }, ...rows.map(([k, val, lit]) =>
       h("li", { class: on(lit) }, h("span", { class: "wp-dot", "aria-hidden": "true" }), h("span", { text: k }), h("span", { class: "muted", text: val })))));
   }
   function renderSources() {
     if ($("view-home").hidden) return;
-    const local = h("li", null, h("div", null, h("strong", { text: "Files" }),
-      h("span", { class: "muted small", text: Local.tree ? `${Local.count} songs in “${Local.tree.name}” · read in the browser, never uploaded` : Local.pending ? `“${Local.pending.name}” · needs a tap to open again` : "No folder chosen" })),
-      Local.pending && !Local.tree ? reconnectButton() : Local.tree ? h("a", { class: "btn", href: "#/files", text: "Open" }) : pickButton("Choose folder"));
-    const cloudLi = h("li", null, h("div", null, h("strong", { text: "Tryptify Cloud" }), h("span", { class: "muted small", text: "Checking…" })), h("a", { class: "btn", href: "#/cloud", text: "Open" }));
-    Cloud.signedIn().then((s) => { cloudLi.querySelector(".small").textContent = s ? "Signed in" : "Signed out · sign in on the Account page"; }).catch(() => {});
-    const subLi = h("li", null, h("div", null, h("strong", { text: "Music server" }),
-      h("span", { class: "muted small", text: Subsonic.server ? `${Subsonic.server.user} on ${new URL(Subsonic.server.url).host}` : "Navidrome or another Subsonic server" })),
-      h("a", { class: Subsonic.server ? "btn" : "btn primary", href: "#/subsonic", text: Subsonic.server ? "Open" : "Connect" }));
+    const folder = Local.tree && { count: Local.count, name: Local.tree.name };
+    const local = h("li", null, h("div", null, h("strong", { text: T("Files") }),
+      h("span", { class: "muted small", text: Local.tree
+        ? (Local.count === 1 ? T("{count} song in “{name}” · read in the browser, never uploaded", folder) : T("{count} songs in “{name}” · read in the browser, never uploaded", folder))
+        : Local.pending ? T("“{name}” · needs a tap to open again", { name: Local.pending.name }) : T("No folder chosen") })),
+      Local.pending && !Local.tree ? reconnectButton() : Local.tree ? h("a", { class: "btn", href: "#/files", text: T("Open") }) : pickButton(T("Choose folder")));
+    const cloudLi = h("li", null, h("div", null, h("strong", { text: "Tryptify Cloud" }), h("span", { class: "muted small", text: T("Checking…") })), h("a", { class: "btn", href: "#/cloud", text: T("Open") }));
+    Cloud.signedIn().then((s) => { cloudLi.querySelector(".small").textContent = s ? T("Signed in") : T("Signed out · sign in on the Account page"); }).catch(() => {});
+    const subLi = h("li", null, h("div", null, h("strong", { text: T("Music server") }),
+      h("span", { class: "muted small", text: Subsonic.server ? T("{user} on {host}", { user: Subsonic.server.user, host: new URL(Subsonic.server.url).host }) : T("Navidrome or another Subsonic server") })),
+      h("a", { class: Subsonic.server ? "btn" : "btn primary", href: "#/subsonic", text: Subsonic.server ? T("Open") : T("Connect") }));
     const hifiLi = HiFi.base
       ? h("li", { class: "wp-src-hifi" }, h("div", null, h("strong", { text: "Trypt HiFi" }), h("span", { class: "muted small", text: new URL(HiFi.base).host })), hifiForm())
-      : h("li", { class: "wp-src-hifi" }, h("details", { class: "wp-unlock" }, h("summary", { text: "Add an API URL" }), hifiForm()));
-    tile("tile-sources", "Sources", h("ul", { class: "wp-sources" }, local, cloudLi, subLi, hifiLi));
+      : h("li", { class: "wp-src-hifi" }, h("details", { class: "wp-unlock" }, h("summary", { text: T("Add an API URL") }), hifiForm()));
+    tile("tile-sources", T("Sources"), h("ul", { class: "wp-sources" }, local, cloudLi, subLi, hifiLi));
   }
   function renderPlayback() {
     if ($("view-home").hidden) return;
     const toggle = (label, key, fn, hint) => h("label", { class: "wp-set" }, h("span", null, label, hint ? h("small", { class: "muted", text: hint }) : null),
       h("input", { type: "checkbox", checked: settings[key], onchange: (e) => { settings[key] = e.target.checked; saveSettings(); fn && fn(settings[key]); renderPath(); } }));
     const speedVal = h("span", { class: "wp-mono", text: `${settings.speed.toFixed(2)}×` });
-    const speed = h("input", { type: "range", min: 0.25, max: 4, step: 0.05, value: settings.speed, "aria-label": "Speed" });
+    const speed = h("input", { type: "range", min: 0.25, max: 4, step: 0.05, value: settings.speed, "aria-label": T("Speed") });
     speed.addEventListener("input", () => { settings.speed = Number(speed.value); speedVal.textContent = `${settings.speed.toFixed(2)}×`; Eng.setSpeed(settings.speed); });
     speed.addEventListener("change", () => { saveSettings(); position(); renderPath(); publish(); });
-    tile("tile-playback", "Playback",
-      toggle("Gapless", "gapless", (on) => on && preloadNext(), "Loads the next song early so it starts right away"),
-      toggle("Mono", "mono", (on) => Eng.setMono(on)),
-      toggle("Keep pitch when the speed changes", "preservePitch", (on) => Eng.setPreservePitch(on)),
-      h("label", { class: "wp-set" }, h("span", { text: "Speed" }), speed, speedVal,
+    tile("tile-playback", T("Playback"),
+      toggle(T("Gapless"), "gapless", (on) => on && preloadNext(), T("Loads the next song early so it starts right away")),
+      toggle(T("Mono"), "mono", (on) => Eng.setMono(on)),
+      toggle(T("Keep pitch when the speed changes"), "preservePitch", (on) => Eng.setPreservePitch(on)),
+      h("label", { class: "wp-set" }, h("span", { text: T("Speed") }), speed, speedVal,
         h("button", { type: "button", class: "btn wp-small", text: "1×", onclick: () => { settings.speed = 1; Eng.setSpeed(1); saveSettings(); renderPlayback(); renderPath(); } })));
   }
   function renderNext() {
     if ($("view-home").hidden) return;
     const list = upcoming().slice(0, 5);
-    tile("tile-next", "Up next", list.length
+    tile("tile-next", T("Up next"), list.length
       ? h("ol", { class: "wp-next" }, ...list.map((t) => h("li", null, h("strong", { text: t.title }), h("span", { class: "muted small", text: [t.artist, SRC[t.src], t.quality].filter(Boolean).join(" · ") }))))
-      : h("p", { class: "muted", text: "Nothing after this song." }),
-      h("button", { type: "button", class: "btn", "data-act": "queue", text: "Show the queue" }));
+      : h("p", { class: "muted", text: T("Nothing after this song.") }),
+      h("button", { type: "button", class: "btn", "data-act": "queue", text: T("Show the queue") }));
   }
   function renderHome() { renderNow(); renderConnectTile(); renderEqTile(); renderPath(); renderSources(); renderPlayback(); renderNext(); }
 
@@ -852,7 +860,7 @@
     for (let i = 0; i < N; i++) freqs.push(20 * Math.pow(1000, i / (N - 1)));
     const vals = E.eqCurve(bands, freqs);
     const lo = Math.min(-5, Math.floor((Math.min(...vals) - 1) / 5) * 5), hi = Math.max(10, Math.ceil((Math.max(...vals) + 1) / 5) * 5);
-    const svg = svgNode("svg", { viewBox: `0 0 ${W} ${H}`, class: "graph", role: "img", "aria-label": "The EQ curve, without preamp" }, host);
+    const svg = svgNode("svg", { viewBox: `0 0 ${W} ${H}`, class: "graph", role: "img", "aria-label": T("The EQ curve, without preamp") }, host);
     const x = (f) => P.l + ((Math.log10(f) - Math.log10(20)) / 3) * (W - P.l - P.r);
     const y = (db) => P.t + ((hi - db) / (hi - lo)) * (H - P.t - P.b);
     for (let v = lo; v <= hi; v += 5) {
@@ -866,7 +874,7 @@
     svgNode("line", { x1: P.l, x2: W - P.r, y1: y(0), y2: y(0), class: "g-zero" }, svg);
     svgNode("path", { d: freqs.map((f, i) => `${i ? "L" : "M"}${x(f).toFixed(1)},${y(vals[i]).toFixed(1)}`).join(""), class: "g-line s-sq" }, svg);
   }
-  const BAND_NAMES = { PEAKING: "Peak", LOWSHELF: "Low shelf", HIGHSHELF: "High shelf" };
+  const BAND_NAMES = { PEAKING: T("Peak"), LOWSHELF: T("Low shelf"), HIGHSHELF: T("High shelf") };
   function bandTable(bands) {
     const body = $("try-table").querySelector("tbody");
     body.textContent = "";
@@ -884,15 +892,16 @@
     const has = eq.bands.length > 0;
     $("wp-eq-on").checked = eqActive();
     $("wp-eq-on").disabled = !has;
-    $("wp-eq-side").textContent = eqActive() ? "On" : "";
+    $("wp-eq-side").textContent = eqActive() ? T("On") : "";
+    const fit = has && { name: eq.name, target: eq.target, bands: bandsOf(eq.bands.length), db: eq.preamp.toFixed(1) };
     $("wp-eq-active").textContent = has
-      ? `${eq.on ? "Playing everything through" : "Off. Saved:"} ${eq.name} → ${eq.target}, ${eq.bands.length} bands, preamp −${eq.preamp.toFixed(1)} dB.`
-      : "Pick a headphone and Tryptify fits an EQ to it with the app's own engine, then plays everything through it.";
+      ? (eq.on ? T("Playing everything through {name} → {target}, {bands}, preamp −{db} dB.", fit) : T("Off. Saved: {name} → {target}, {bands}, preamp −{db} dB.", fit))
+      : T("Pick a headphone and Tryptify fits an EQ to it with the app's own engine, then plays everything through it.");
     $("wp-eq-card").hidden = !has;
     $("wp-bands").hidden = !has;
     if (has) { drawEq($("wp-eq-graph"), eq.bands); bandTable(eq.bands); }
     const o = eq.opts;
-    $("wp-fr-caption").textContent = o ? `${eq.bands.length} bands · up to ${o.maxFrequency / 1000} kHz · ${o.algorithm === "SHELF_ENDS" ? "shelf ends" : "peaking"}` : "";
+    $("wp-fr-caption").textContent = o ? T("{bands} · up to {khz} kHz · {method}", { bands: bandsOf(eq.bands.length), khz: o.maxFrequency / 1000, method: o.algorithm === "SHELF_ENDS" ? T("shelf ends") : T("peaking") }) : "";
     renderBar();
     renderEqTile();
     renderPath();
@@ -901,7 +910,7 @@
   const chipSync = [];
   function initAutoEq() {
     const host = $("wp-chips");
-    for (const [id, label] of [["hp-max", "Highest EQ frequency"], ["hp-bands", "Band count"], ["hp-alg", "Method"]]) {
+    for (const [id, label] of [["hp-max", T("Highest EQ frequency")], ["hp-bands", T("Band count")], ["hp-alg", T("Method")]]) {
       const sel = $(id);
       if (!sel) continue;
       const chips = h("div", { class: "chips", role: "group", "aria-label": label });
@@ -956,10 +965,10 @@
     if (d.src === "local" && Local.tree) return S.util.allFiles(Local.tree).find((t) => t.key === d.id) || null;
     return null;
   }
-  const whyNot = (d, from) => (d.src === "local" ? `“${d.title}” is a file on ${from}, so it stays there.`
-    : d.src === "hifi" ? `“${d.title}” needs an API URL in this browser first.`
-    : d.src === "subsonic" ? `“${d.title}” is on a music server this browser is not signed in to.` : `“${d.title}” cannot play here.`);
-  const nameOf = (id, fallback) => ((C && C.devices.find((d) => d.id === id)) || {}).name || fallback || "your other device";
+  const whyNot = (d, from) => (d.src === "local" ? T("“{title}” is a file on {name}, so it stays there.", { title: d.title, name: from })
+    : d.src === "hifi" ? T("“{title}” needs an API URL in this browser first.", { title: d.title })
+    : d.src === "subsonic" ? T("“{title}” is on a music server this browser is not signed in to.", { title: d.title }) : T("“{title}” cannot play here.", { title: d.title }));
+  const nameOf = (id, fallback) => ((C && C.devices.find((d) => d.id === id)) || {}).name || fallback || T("your other device");
 
   let playSince = 0; // when this browser last started playing, by the server's clock
   function publish() {
@@ -974,10 +983,10 @@
   function playOn(id) {
     const n = C.now;
     const holder = n && C.online(n.device) ? n.device : null;
-    if (!C.transfer(id, !holder)) { toast("Tryptify Connect is not connected.", true); return; }
+    if (!C.transfer(id, !holder)) { toast(T("Tryptify Connect is not connected."), true); return; }
     toggleDevices(false);
     clearTimeout(transferTimer);
-    transferTimer = setTimeout(() => toast(`No answer from ${nameOf(holder || id)}. It may be asleep; try again.`, true), 7000);
+    transferTimer = setTimeout(() => toast(T("No answer from {name}. It may be asleep; try again.", { name: nameOf(holder || id) }), true), 7000);
   }
   function remote(action, value) {
     const n = C && C.elsewhere();
@@ -1043,7 +1052,7 @@
       const r = remoteNow();
       if (r) {
         const t = r.track;
-        return { key: `${t.src}:${t.id}`, title: t.title || "Untitled", artist: t.artist || "", album: t.album || "", duration: t.duration || 0,
+        return { key: `${t.src}:${t.id}`, title: t.title || T("Untitled"), artist: t.artist || "", album: t.album || "", duration: t.duration || 0,
           cover: t.cover || null, position: seekHold ? seekHold.value : C.positionOf(r), playing: r.playing, local: false, on: nameOf(r.device, r.name) };
       }
       if (!current) return null;
@@ -1062,21 +1071,21 @@
     C.on("release", (m) => {
       C.handoff(m.to, current ? { playing: !Eng.paused, track: descriptor(current), position: Eng.time, rate: settings.speed, since: playSince } : null,
         upcoming().slice(0, 100).map(descriptor));
-      if (current && !Eng.paused) { Eng.pause(); toast(`Now playing on ${m.toName || nameOf(m.to)}.`); }
+      if (current && !Eng.paused) { Eng.pause(); toast(T("Now playing on {name}.", { name: m.toName || nameOf(m.to) })); }
       clearTimeout(transferTimer);
     });
     // Handed it: carry on from that second.
     C.on("takeover", (m) => {
       clearTimeout(transferTimer);
       const n = m.now, from = nameOf(m.from, n && n.name);
-      if (!n || !n.track) { toast("Nothing was playing there."); return; }
+      if (!n || !n.track) { toast(T("Nothing was playing there.")); return; }
       const first = trackFrom(n.track);
       if (!first) { toast(whyNot(n.track, from), true); return; }
       queue = [first, ...(m.queue || []).map(trackFrom).filter(Boolean)];
       order = [...queue.keys()];
       pos = 0;
       start(n.playing, C.positionOf(n));
-      toast(`Playing here, from ${from}.`);
+      toast(T("Playing here, from {name}.", { name: from }));
     });
     // Steered from another device.
     C.on("command", (m) => {
@@ -1089,7 +1098,7 @@
     // Another device started playing: this one makes way, as Spotify does.
     C.on("now", (n) => {
       // Only for a device that started after this one did: a late message from an earlier start does not count.
-      if (n && n.playing && n.device !== C.id && current && !Eng.paused && (n.since || n.at) >= playSince) { Eng.pause(); toast(`${nameOf(n.device, n.name)} started playing, so this browser paused.`); }
+      if (n && n.playing && n.device !== C.id && current && !Eng.paused && (n.since || n.at) >= playSince) { Eng.pause(); toast(T("{name} started playing, so this browser paused.", { name: nameOf(n.device, n.name) })); }
       seekHold = null; // the device answered with where it is
       renderConnect();
       renderBar();
@@ -1097,7 +1106,7 @@
     });
     C.on("devices", renderConnect);
     C.on("status", renderConnect);
-    C.on("error", (m) => { clearTimeout(transferTimer); toast(m.message || "Tryptify Connect said no.", true); });
+    C.on("error", (m) => { clearTimeout(transferTimer); toast(m.message || T("Tryptify Connect said no."), true); });
   }
 
   /** The strip over the bar ("Playing on Pixel 8"), the Devices button and its list. */
@@ -1105,7 +1114,7 @@
     if (!C) return;
     const btn = $("bar-devices"), others = C.devices.filter((d) => d.id !== C.id);
     btn.classList.toggle("lit", others.length > 0);
-    btn.setAttribute("aria-label", others.length ? `Devices: ${others.length} other online` : "Devices");
+    btn.setAttribute("aria-label", others.length === 1 ? T("Devices: {count} other online", { count: 1 }) : others.length ? T("Devices: {count} others online", { count: others.length }) : T("Devices"));
     const strip = $("wp-elsewhere"), n = C.elsewhere();
     const show = !!n && (Eng.paused || !current);
     strip.hidden = !show;
@@ -1120,14 +1129,14 @@
       put(strip,
         h("span", { class: "wp-i", icon: "phone", "aria-hidden": "true" }),
         h("div", { class: "wp-elsewhere-text" },
-          h("strong", { text: `${playing ? "Playing" : "Last played"} on ${name}` }),
+          h("strong", { text: playing ? T("Playing on {name}", { name }) : T("Last played on {name}", { name }) }),
           h("span", { text: [n.track.title, n.track.artist].filter(Boolean).join(" · ") })),
         h("span", { class: "wp-elsewhere-time", id: "wp-elsewhere-time", text: timeOf(n, at) }),
         online ? h("div", { class: "wp-controls" },
-          h("button", { type: "button", class: "wp-icon", icon: "prev", "aria-label": `Previous on ${name}`, onclick: () => remote("prev") }),
-          h("button", { type: "button", class: "wp-icon", icon: n.playing ? "pause" : "play", "aria-label": `${n.playing ? "Pause" : "Play"} on ${name}`, onclick: () => remote(n.playing ? "pause" : "play") }),
-          h("button", { type: "button", class: "wp-icon", icon: "next", "aria-label": `Next on ${name}`, onclick: () => remote("next") })) : null,
-        h("button", { type: "button", class: "btn wp-small", text: "Play here", onclick: () => playOn(C.id) }),
+          h("button", { type: "button", class: "wp-icon", icon: "prev", "aria-label": T("Previous on {name}", { name }), onclick: () => remote("prev") }),
+          h("button", { type: "button", class: "wp-icon", icon: n.playing ? "pause" : "play", "aria-label": n.playing ? T("Pause on {name}", { name }) : T("Play on {name}", { name }), onclick: () => remote(n.playing ? "pause" : "play") }),
+          h("button", { type: "button", class: "wp-icon", icon: "next", "aria-label": T("Next on {name}", { name }), onclick: () => remote("next") })) : null,
+        h("button", { type: "button", class: "btn wp-small", text: T("Play here"), onclick: () => playOn(C.id) }),
         dur ? h("div", { class: "wp-elsewhere-bar", "aria-hidden": "true" }, bar) : null);
     }
     if (!$("wp-devices").hidden) renderDevices();
@@ -1149,17 +1158,17 @@
     if (n && C.status === "on") {
       const online = C.online(n.device), name = nameOf(n.device, n.name);
       card = h("div", { class: "wp-connect-card" },
-        h("p", { class: "eyebrow", text: `${online && n.playing ? "Playing" : "Last played"} on ${name}` }),
-        h("strong", { text: n.track.title || "Untitled" }),
+        h("p", { class: "eyebrow", text: online && n.playing ? T("Playing on {name}", { name }) : T("Last played on {name}", { name }) }),
+        h("strong", { text: n.track.title || T("Untitled") }),
         h("span", { class: "muted small", text: [n.track.artist, n.track.quality].filter(Boolean).join(" · ") }),
         progressOf(n),
         h("div", { class: "wp-row" },
           online ? h("div", { class: "wp-controls" },
-            h("button", { type: "button", class: "wp-icon", icon: "prev", "aria-label": `Previous on ${name}`, onclick: () => remote("prev") }),
-            h("button", { type: "button", class: "wp-icon", icon: n.playing ? "pause" : "play", "aria-label": `${n.playing ? "Pause" : "Play"} on ${name}`, onclick: () => remote(n.playing ? "pause" : "play") }),
-            h("button", { type: "button", class: "wp-icon", icon: "next", "aria-label": `Next on ${name}`, onclick: () => remote("next") })) : null,
+            h("button", { type: "button", class: "wp-icon", icon: "prev", "aria-label": T("Previous on {name}", { name }), onclick: () => remote("prev") }),
+            h("button", { type: "button", class: "wp-icon", icon: n.playing ? "pause" : "play", "aria-label": n.playing ? T("Pause on {name}", { name }) : T("Play on {name}", { name }), onclick: () => remote(n.playing ? "pause" : "play") }),
+            h("button", { type: "button", class: "wp-icon", icon: "next", "aria-label": T("Next on {name}", { name }), onclick: () => remote("next") })) : null,
           h("span", { class: "wp-grow" }),
-          h("button", { type: "button", class: "btn primary wp-small", text: "Play here", onclick: () => playOn(C.id) })));
+          h("button", { type: "button", class: "btn primary wp-small", text: T("Play here"), onclick: () => playOn(C.id) })));
     }
     devicesInto(box);
     tile("tile-connect", "Tryptify Connect", card, box);
@@ -1175,9 +1184,9 @@
   function devicesInto(box) {
     box.textContent = "";
     const st = C ? C.status : "off";
-    if (st === "signed-out") { box.append(h("p", { class: "muted", text: "Sign in to see your other devices and move music between them." }), h("a", { class: "btn primary", href: "/account", text: "Sign in" })); return; }
-    if (st === "replaced") { box.append(h("p", { class: "muted", text: "Tryptify Connect is on in another tab of this browser." }), h("button", { type: "button", class: "btn", text: "Use it in this tab", onclick: () => C.reconnect() })); return; }
-    if (st !== "on") { box.append(h("p", { class: "muted", text: "Connecting…" })); return; }
+    if (st === "signed-out") { box.append(h("p", { class: "muted", text: T("Sign in to see your other devices and move music between them.") }), h("a", { class: "btn primary", href: "/account", text: T("Sign in") })); return; }
+    if (st === "replaced") { box.append(h("p", { class: "muted", text: T("Tryptify Connect is on in another tab of this browser.") }), h("button", { type: "button", class: "btn", text: T("Use it in this tab"), onclick: () => C.reconnect() })); return; }
+    if (st !== "on") { box.append(h("p", { class: "muted", text: T("Connecting…") })); return; }
     // The device playing counts only while it is online; a song left on one that is gone can still be resumed here.
     const n = C.now, holder = n && n.playing && C.online(n.device) ? n.device : null;
     const list = [...C.devices].sort((a, b) => (a.id === C.id ? -1 : b.id === C.id ? 1 : a.name.localeCompare(b.name)));
@@ -1185,14 +1194,14 @@
     for (const d of list) {
       const here = d.id === C.id, active = d.id === holder;
       const can = here ? !!(n && n.track && n.device !== C.id) : !active && (!!holder || !!current);
-      const detail = [here ? "This browser" : d.kind === "android" ? "Tryptify app" : "tryptify.com", active ? "Playing" : null].filter(Boolean).join(" · ");
+      const detail = [here ? T("This browser") : d.kind === "android" ? T("Tryptify app") : "tryptify.com", active ? T("Playing") : null].filter(Boolean).join(" · ");
       ul.append(h("li", null, h("button", { type: "button", class: "wp-device" + (active ? " is-active" : ""), disabled: !can,
         onclick: () => playOn(d.id) },
         h("span", { class: "wp-i", icon: d.kind === "android" ? "phone" : "devices", "aria-hidden": "true" }),
         h("span", { class: "wp-device-text" }, h("strong", { text: d.name }), h("small", { class: "muted", text: detail })),
-        active ? null : h("span", { class: "wp-device-go", text: here ? "Play here" : "Play there" }))));
+        active ? null : h("span", { class: "wp-device-go", text: here ? T("Play here") : T("Play there") }))));
     }
-    put(box, ul, list.length < 2 ? h("p", { class: "muted small", text: "Open Tryptify on another device, signed in to the same account, and it shows up here." }) : null);
+    put(box, ul, list.length < 2 ? h("p", { class: "muted small", text: T("Open Tryptify on another device, signed in to the same account, and it shows up here.") }) : null);
   }
 
   // ── Pages ───────────────────────────────────────────────────────────
@@ -1202,7 +1211,7 @@
     const asked = ROUTES.includes(parts[0]) ? parts[0] : "home";
     const view = asked === "hifi" && !HiFi.base ? "home" : asked;
     for (const r of ROUTES) $("view-" + r).hidden = r !== view;
-    for (const a of document.querySelectorAll(".wp-side a")) {
+    for (const a of document.querySelectorAll(".wp-side a[data-route]")) {
       if (a.dataset.route === view) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     }
     if (view === "home") renderHome();

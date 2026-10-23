@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AutoEQ 排名 · Tryptify</title>
+  <meta name="description" content="Tryptify 的 AutoEQ 与 AutoEq（autoeq.app 背后的引擎）和 squig.link 的优化器同台排名，全部用同一套代码评分。可以看基准案例的排名，也可以给你自己的耳机排名。">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/js/theme-boot.js"></script>
+  <script src="/js/l10n/zh.js"></script>
+  <!-- l10n:alternates -->
+  <link rel="alternate" hreflang="en" href="https://tryptify.com/autoeq">
+  <link rel="alternate" hreflang="zh-CN" href="https://tryptify.com/zh/autoeq">
+  <link rel="alternate" hreflang="ja" href="https://tryptify.com/ja/autoeq">
+  <link rel="alternate" hreflang="fr" href="https://tryptify.com/fr/autoeq">
+  <link rel="alternate" hreflang="es" href="https://tryptify.com/es/autoeq">
+  <link rel="alternate" hreflang="tr" href="https://tryptify.com/tr/autoeq">
+  <link rel="alternate" hreflang="de" href="https://tryptify.com/de/autoeq">
+  <link rel="alternate" hreflang="it" href="https://tryptify.com/it/autoeq">
+  <link rel="alternate" hreflang="x-default" href="https://tryptify.com/autoeq">
+  <!-- /l10n -->
+</head>
+<body>
+  <header class="top">
+    <div class="wrap glass">
+      <a class="brand" href="/zh" aria-label="Tryptify 首页"><svg class="mark" viewBox="17 17 74 74" aria-hidden="true"><rect x="18" y="18" width="72" height="72" rx="16" fill="#000" class="mark-tile"/><path d="M34,36 L34,72 M44,30 L44,78 M54,26 L54,82 M64,30 L64,78 M74,36 L74,72" stroke="#fff" stroke-width="4" fill="none"/></svg><span class="wordmark">Tryptify</span></a>
+      <nav class="nav" aria-label="主导航">
+        <a href="/zh">应用</a>
+        <a href="/zh/autoeq" aria-current="page">AutoEQ</a>
+        <a href="/zh/cloud">云端</a>
+        <a href="/zh/player">播放器</a>
+        <a href="/zh/account">账号</a>
+        <a href="/zh/changelog" class="nav-wide">更新内容</a>
+        <a href="/zh/contact">联系</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero" style="padding-bottom:20px">
+      <p class="eyebrow">Truthear Nova → SEAP 目标曲线 · 48 kHz</p>
+      <h1>AutoEQ 排名</h1>
+      <p class="lead">Tryptify 的 AutoEQ 对比 AutoEq（autoeq.app 背后的引擎）和 squig.link 的优化器：把同一副耳机拟合到同一条目标曲线，全部用同一套代码评分。</p>
+    </section>
+
+    <section class="ranking" id="ranking" style="padding-top:0">
+      <div class="rank-controls">
+        <div class="rank-group">
+          <span class="rank-label">EQ 最高频率</span>
+          <div class="chips" data-control="limit" role="group" aria-label="EQ 最高频率">
+            <button type="button" data-value="default" aria-pressed="true">默认</button>
+            <button type="button" data-value="10000" aria-pressed="false">10 kHz</button>
+            <button type="button" data-value="14000" aria-pressed="false">14 kHz</button>
+            <button type="button" data-value="16000" aria-pressed="false">16 kHz</button>
+            <button type="button" data-value="20000" aria-pressed="false">20 kHz</button>
+          </div>
+        </div>
+        <div class="rank-group">
+          <span class="rank-label">频段数</span>
+          <div class="chips" data-control="bands" role="group" aria-label="频段数">
+            <button type="button" data-value="avg" aria-pressed="true">平均</button>
+            <button type="button" data-value="5" aria-pressed="false">5</button>
+            <button type="button" data-value="8" aria-pressed="false">8</button>
+            <button type="button" data-value="10" aria-pressed="false">10</button>
+            <button type="button" data-value="16" aria-pressed="false">16</button>
+            <button type="button" data-value="20" aria-pressed="false">20</button>
+            <button type="button" data-value="31" aria-pressed="false">31</button>
+          </div>
+        </div>
+        <div class="rank-group">
+          <label class="rank-label" for="rank-by">排序依据</label>
+          <select id="rank-by" class="rank-select">
+            <option value="rmse">Fit error (RMSE)</option>
+            <option value="harman">Preference score</option>
+            <option value="maxerr">Worst error, 20 Hz–10 kHz</option>
+            <option value="headroom">Headroom lost</option>
+            <option value="drift">Sample-rate drift</option>
+            <option value="ring">Ringing above 300 Hz</option>
+            <option value="stack">Largest stacked boost</option>
+          </select>
+        </div>
+      </div>
+      <div class="explain card" id="explain" aria-live="polite">
+        <div class="explain-visual" id="explain-visual"></div>
+        <div class="explain-text">
+          <p class="explain-kicker" id="explain-kicker"></p>
+          <h3 id="explain-title"></h3>
+          <p id="explain-what"></p>
+          <p class="muted" id="explain-why"></p>
+          <p class="explain-good" id="explain-good"></p>
+          <div class="explain-tryptify">
+            <p class="explain-kicker">Tryptify 为何排在这里</p>
+            <p class="explain-place" id="explain-place"></p>
+            <p id="explain-tryptify"></p>
+            <p class="muted" id="explain-loses"></p>
+          </div>
+        </div>
+      </div>
+      <p class="rank-desc muted" id="rank-desc" hidden></p>
+      <ol class="rank-list" id="rank-list" aria-live="polite"><li class="muted">正在加载排名…</li></ol>
+      <p class="muted small" id="rank-baseline"></p>
+      <p class="muted small">基准结果来自 <a href="https://seapengine.lol/">SeapEngine</a>，它运行的是每个引擎的真实代码：Tryptify 的代码由应用的 Kotlin 编译而来，AutoEq 用它自己的 Python，squig.link 用它自己的优化器。想给你自己的耳机排名？<a href="https://seapengine.lol/" target="_blank" rel="noopener">在 SeapEngine 中排名</a>；文件只留在你的浏览器里。</p>
+    </section>
+
+    <section id="tryout">
+      <p class="eyebrow">试一试</p>
+      <h2>用 Tryptify 的 AutoEQ 校正你的耳机。</h2>
+      <p class="muted">在 AutoEq 和十二个 squig.link 数据库的一万多款耳机中搜索，或载入你自己的测量数据。EQ 就在你的浏览器里计算，用的是和应用相同的引擎。</p>
+      <div class="card try">
+        <div class="try-search">
+          <label class="rank-label" for="hp-search">耳机</label>
+          <input type="search" id="hp-search" placeholder="搜索，例如 HD 600、Blessing 2、Truthear Nova" autocomplete="off" spellcheck="false">
+          <ul class="hp-results" id="hp-results" role="listbox" hidden></ul>
+          <p class="small muted">或 <label class="link" for="hp-file">载入测量文件</label> （squig.link、REW 或 AutoEq 导出文件：每行一个频率和 dB 值）<input type="file" id="hp-file" accept=".txt,.csv,text/plain,text/csv" hidden></p>
+        </div>
+        <div class="try-controls" id="try-controls">
+          <label>测量数据 <select id="hp-source"></select></label>
+          <label>目标曲线 <select id="hp-target"></select></label>
+          <label>频段 <select id="hp-bands"><option>5</option><option>8</option><option selected>10</option><option>16</option><option>20</option><option>31</option></select></label>
+          <label>最高 <select id="hp-max"><option value="10000">10 kHz</option><option value="14000">14 kHz</option><option value="16000" selected>16 kHz</option><option value="20000">20 kHz</option></select></label>
+          <label>方式 <select id="hp-alg"><option value="PEAKING">Peaking</option><option value="SHELF_ENDS">Shelf ends</option></select></label>
+          <label>平滑 <select id="hp-smooth"><option value="0" selected>Off</option><option value="5">5 %</option><option value="10">10 %</option><option value="20">20 %</option><option value="30">30 %</option></select></label>
+        </div>
+        <p class="acct-msg small" id="try-msg" role="status">选择一款耳机开始。</p>
+        <div id="try-result" hidden>
+          <div class="try-stats" id="try-stats"></div>
+          <div class="g-legend try-legend"><span class="g-key s-target"><i></i>目标曲线</span><span class="g-key s-raw"><i></i>耳机（无 EQ）</span><span class="g-key s-ts"><i></i>使用 Tryptify 的 EQ</span><span class="g-key s-sq"><i></i>EQ 本身</span></div>
+          <div class="g-box" id="try-graph"></div>
+          <div class="try-bands">
+            <table id="try-table"><thead><tr><th>#</th><th>类型</th><th>频率</th><th>增益</th><th>Q</th></tr></thead><tbody></tbody></table>
+            <div class="buttons">
+              <button type="button" class="btn primary" id="try-copy">复制为 Equalizer APO 格式</button>
+              <button type="button" class="btn" id="try-download">下载 .txt</button>
+            </div>
+            <p class="muted small">应用的 AutoEQ 里能找到同样的耳机，并由应用直接播放校正后的声音。测量数据取自 GitHub 上的 AutoEq，以及发布这些数据的 squig.link 站点。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="graphs">
+      <p class="eyebrow">Truthear Nova → SEAP 目标曲线</p>
+      <h2>曲线对比。</h2>
+      <p class="muted">每个引擎施加 EQ 后的结果，以及它所用的 EQ。曲线遵循上方设定的频率上限和频段数。点按名称可隐藏或显示；指向图表可读取数值。各曲线在 20 Hz 到 16 kHz 范围内与目标曲线做了电平匹配。</p>
+      <div class="g-legend" id="graph-legend"></div>
+      <div class="g-card">
+        <div class="g-head"><h3>频率响应</h3><span class="muted small" id="graph-caption"></span></div>
+        <div class="g-box" id="graph-fr"></div>
+      </div>
+      <div class="g-card">
+        <div class="g-head"><h3>EQ 曲线（不含前置增益）</h3><span class="muted small">仅 EQ</span></div>
+        <div class="g-box" id="graph-eq"></div>
+      </div>
+    </section>
+
+    <section id="measures">
+      <p class="eyebrow">七项指标</p>
+      <h2>每项得分的含义。</h2>
+      <p class="muted">EQ 可能在平均上贴合目标，听起来却依然不对。每项指标捕捉一种不同的偏差。点按任一指标即可按它排名。</p>
+      <div class="measures" id="measure-cards"></div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div>© 2026 tryptz · Tryptify · <a href="mailto:support@tryptify.com">support@tryptify.com</a></div>
+      <nav>
+        <a href="/zh/download">下载</a>
+        <a href="/zh/changelog">更新日志</a>
+        <a href="/zh/player">网页播放器</a>
+        <a href="/zh">应用</a>
+        <a href="/zh/autoeq">AutoEQ 排名</a>
+        <a href="/zh/cloud">Tryptify Cloud</a>
+        <a href="/zh/terms">服务条款</a>
+        <a href="/zh/privacy">隐私政策</a>
+        <a href="/zh/refunds">退款政策</a>
+        <a href="/zh/contact">联系</a>
+      </nav>
+      <nav class="langs" aria-label="Language" translate="no"><a href="/autoeq" hreflang="en" lang="en" data-lang="en">English</a><a href="/zh/autoeq" hreflang="zh-CN" lang="zh-CN" data-lang="zh" aria-current="true">简体中文</a><a href="/ja/autoeq" hreflang="ja" lang="ja" data-lang="ja">日本語</a><a href="/fr/autoeq" hreflang="fr" lang="fr" data-lang="fr">Français</a><a href="/es/autoeq" hreflang="es" lang="es" data-lang="es">Español</a><a href="/tr/autoeq" hreflang="tr" lang="tr" data-lang="tr">Türkçe</a><a href="/de/autoeq" hreflang="de" lang="de" data-lang="de">Deutsch</a><a href="/it/autoeq" hreflang="it" lang="it" data-lang="it">Italiano</a></nav>
+    </div>
+  </footer>
+  <script src="/js/motion-12.23.12.js"></script>
+  <script src="/js/site.js"></script>
+  <script src="/js/measures.js"></script>
+  <script src="/js/autoeq.js"></script>
+  <script src="/js/graphs.js"></script>
+  <script src="/js/autoeq-engine.js"></script>
+  <script src="/js/tryout.js"></script>
+</body>
+</html>

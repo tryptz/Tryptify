@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>プライバシーポリシー · Tryptify</title>
+  <meta name="description" content="Tryptify と Tryptify Cloud が収集する情報、その目的、削除を依頼する方法。">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/js/theme-boot.js"></script>
+  <script src="/js/l10n/ja.js"></script>
+  <!-- l10n:alternates -->
+  <link rel="alternate" hreflang="en" href="https://tryptify.com/privacy">
+  <link rel="alternate" hreflang="zh-CN" href="https://tryptify.com/zh/privacy">
+  <link rel="alternate" hreflang="ja" href="https://tryptify.com/ja/privacy">
+  <link rel="alternate" hreflang="fr" href="https://tryptify.com/fr/privacy">
+  <link rel="alternate" hreflang="es" href="https://tryptify.com/es/privacy">
+  <link rel="alternate" hreflang="tr" href="https://tryptify.com/tr/privacy">
+  <link rel="alternate" hreflang="de" href="https://tryptify.com/de/privacy">
+  <link rel="alternate" hreflang="it" href="https://tryptify.com/it/privacy">
+  <link rel="alternate" hreflang="x-default" href="https://tryptify.com/privacy">
+  <!-- /l10n -->
+</head>
+<body>
+  <header class="top">
+    <div class="wrap glass">
+      <a class="brand" href="/ja" aria-label="Tryptify ホーム"><svg class="mark" viewBox="17 17 74 74" aria-hidden="true"><rect x="18" y="18" width="72" height="72" rx="16" fill="#000" class="mark-tile"/><path d="M34,36 L34,72 M44,30 L44,78 M54,26 L54,82 M64,30 L64,78 M74,36 L74,72" stroke="#fff" stroke-width="4" fill="none"/></svg><span class="wordmark">Tryptify</span></a>
+      <nav class="nav" aria-label="メイン">
+        <a href="/ja">アプリ</a>
+        <a href="/ja/autoeq">AutoEQ</a>
+        <a href="/ja/cloud">Cloud</a>
+        <a href="/ja/player">プレーヤー</a>
+        <a href="/ja/account">アカウント</a>
+        <a href="/ja/changelog" class="nav-wide">更新情報</a>
+        <a href="/ja/contact">お問い合わせ</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <article class="doc">
+      <h1>プライバシーポリシー</h1>
+      <p class="l10n-note" data-l10n-only>この翻訳は便宜のために提供しています。英語版と内容が異なる場合は、英語版が優先されます。</p>
+      <p class="updated">最終更新日：2026年10月21日</p>
+      <p>本ポリシーは、お客様が Tryptify アプリ、Tryptify アカウントおよび Tryptify Cloud を利用する際に tryptz（以下「当方」）が収集する情報と、その取り扱いについて説明するものです。当方はお客様のデータを販売せず、広告も表示しません。</p>
+
+      <h2>アプリ</h2>
+      <p>Tryptify アプリは、ライブラリ、設定、再生履歴をお客様の端末内に保存します。データが外部に送信されるのは、お客様がオンにした機能を使う場合に限られます。具体的には、お気に入りやプレイリストを同期するためのサインイン、Last.fm または ListenBrainz へのスクロブル、再生中の曲の Discord への表示、お客様ご自身の音楽サーバーへの接続、Tryptify Cloud の利用です。これらの各サービスが受け取るのは、その機能に必要な情報だけです。</p>
+
+      <h2>Tryptify アカウント</h2>
+      <p>サインイン時に、当方はお客様のメールアドレスとアカウント ID を受け取ります。Google でサインインした場合は、お名前とプロフィール画像も受け取ります。アカウントは Supabase で運用しています。</p>
+
+      <h2>Tryptify Cloud</h2>
+      <ul>
+        <li><strong>音楽：</strong>お客様がアップロードしたファイル、そのタグ（曲名、アーティスト、アルバムなど）およびカバー。お客様にストリーミングするために保存します。</li>
+        <li><strong>プラン：</strong>ご利用中のプラン、支払い済みの期限、容量の使用量、および決済事業者が発行する顧客 ID とサブスクリプション ID。</li>
+        <li><strong>デバイスのサインイン情報：</strong>ライブラリを再生するデバイスごとのランダムなパスワードと、そのデバイスの名前（機種名など）。</li>
+        <li><strong>技術ログ：</strong>サービスの稼働と安全を維持するため、ホスティング事業者が短期間のリクエストログ（IP アドレスや時刻など）を保持します。</li>
+      </ul>
+      <p>ファイルとライブラリのデータは Cloudflare（R2 ストレージと D1 データベース）に保存されます。</p>
+
+      <h2>支払い</h2>
+      <p>支払いは、当方の販売事業者（Merchant of Record）である Creem（creem.io）が、Creem 自身のプライバシーポリシーに基づいて処理します。当方がお客様のカード番号を閲覧または保存することはありません。Creem から当方に伝えられるのは、支払いの有無、対象のプラン、有効期限のみです。</p>
+
+      <h2>保存期間</h2>
+      <p>音楽とライブラリは、プランの終了から 7 日後（返金またはチャージバックの場合は 2 日後）に削除されます。お客様からご依頼があれば、それより早く削除します。請求記録は、税法で定められた期間保管します。アカウントは、お客様から削除のご依頼があるまで保持します。</p>
+
+      <h2>お客様の権利</h2>
+      <p><a href="mailto:support@tryptify.com">support@tryptify.com</a> までご連絡いただくことで、データのコピー、訂正または削除を請求できます。お住まいの地域（EU、英国、カリフォルニア州など）によっては、データ保護機関へ苦情を申し立てる権利を含め、さらに権利が認められる場合があります。</p>
+
+      <h2>お子様について</h2>
+      <p>Tryptify Cloud は 16 歳未満の方を対象としておらず、当方が 16 歳未満の方のデータを故意に収集することはありません。</p>
+
+      <h2>変更</h2>
+      <p>本ポリシーを重要な点で変更する場合は、適用前にアプリ内またはメールでお知らせします。</p>
+
+      <h2>お問い合わせ</h2>
+      <p>tryptz · <a href="mailto:support@tryptify.com">support@tryptify.com</a></p>
+    </article>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div>© 2026 tryptz · Tryptify · <a href="mailto:support@tryptify.com">support@tryptify.com</a></div>
+      <nav>
+        <a href="/ja/download">ダウンロード</a>
+        <a href="/ja/changelog">変更履歴</a>
+        <a href="/ja/player">ウェブプレーヤー</a>
+        <a href="/ja/autoeq">AutoEQ ランキング</a>
+        <a href="/ja">アプリ</a>
+        <a href="/ja/cloud">Tryptify Cloud</a>
+        <a href="/ja/terms">利用規約</a>
+        <a href="/ja/privacy">プライバシーポリシー</a>
+        <a href="/ja/refunds">返金ポリシー</a>
+        <a href="/ja/contact">お問い合わせ</a>
+      </nav>
+      <nav class="langs" aria-label="Language" translate="no"><a href="/privacy" hreflang="en" lang="en" data-lang="en">English</a><a href="/zh/privacy" hreflang="zh-CN" lang="zh-CN" data-lang="zh">简体中文</a><a href="/ja/privacy" hreflang="ja" lang="ja" data-lang="ja" aria-current="true">日本語</a><a href="/fr/privacy" hreflang="fr" lang="fr" data-lang="fr">Français</a><a href="/es/privacy" hreflang="es" lang="es" data-lang="es">Español</a><a href="/tr/privacy" hreflang="tr" lang="tr" data-lang="tr">Türkçe</a><a href="/de/privacy" hreflang="de" lang="de" data-lang="de">Deutsch</a><a href="/it/privacy" hreflang="it" lang="it" data-lang="it">Italiano</a></nav>
+    </div>
+  </footer>
+  <script src="/js/motion-12.23.12.js"></script>
+  <script src="/js/site.js"></script>
+</body>
+</html>

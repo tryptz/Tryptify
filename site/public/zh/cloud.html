@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tryptify Cloud：为快速串流打造的个人音乐存储</title>
+  <meta name="description" content="Tryptify Cloud 是基于 Subsonic API 的个人音乐存储，专为快速串流打造。音乐只需上传一次，就能在 Tryptify 里随处播放。100 GB 每月 $3.99 起，提供 7 天免费试用。">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/js/theme-boot.js"></script>
+  <script src="/js/l10n/zh.js"></script>
+  <!-- l10n:alternates -->
+  <link rel="alternate" hreflang="en" href="https://tryptify.com/cloud">
+  <link rel="alternate" hreflang="zh-CN" href="https://tryptify.com/zh/cloud">
+  <link rel="alternate" hreflang="ja" href="https://tryptify.com/ja/cloud">
+  <link rel="alternate" hreflang="fr" href="https://tryptify.com/fr/cloud">
+  <link rel="alternate" hreflang="es" href="https://tryptify.com/es/cloud">
+  <link rel="alternate" hreflang="tr" href="https://tryptify.com/tr/cloud">
+  <link rel="alternate" hreflang="de" href="https://tryptify.com/de/cloud">
+  <link rel="alternate" hreflang="it" href="https://tryptify.com/it/cloud">
+  <link rel="alternate" hreflang="x-default" href="https://tryptify.com/cloud">
+  <!-- /l10n -->
+</head>
+<body>
+  <header class="top">
+    <div class="wrap glass">
+      <a class="brand" href="/zh" aria-label="Tryptify 首页"><svg class="mark" viewBox="17 17 74 74" aria-hidden="true"><rect x="18" y="18" width="72" height="72" rx="16" fill="#000" class="mark-tile"/><path d="M34,36 L34,72 M44,30 L44,78 M54,26 L54,82 M64,30 L64,78 M74,36 L74,72" stroke="#fff" stroke-width="4" fill="none"/></svg><span class="wordmark">Tryptify</span></a>
+      <nav class="nav" aria-label="主导航">
+        <a href="/zh">应用</a>
+        <a href="/zh/autoeq">AutoEQ</a>
+        <a href="/zh/cloud" aria-current="page">云端</a>
+        <a href="/zh/player">播放器</a>
+        <a href="/zh/account">账号</a>
+        <a href="/zh/changelog" class="nav-wide">更新内容</a>
+        <a href="/zh/contact">联系</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <p class="eyebrow">Tryptify Cloud</p>
+      <h1>基于 Subsonic API 的个人音乐存储，专为快速串流打造。</h1>
+      <p class="lead">自己的音乐上传一次，就能在 Tryptify 里随处播放：不用在家开着电脑，不用搭服务器，也不用设置端口转发。</p>
+      <div class="buttons">
+        <a class="btn primary" href="#pricing">查看套餐</a>
+        <a class="btn" href="/zh/download">下载应用</a>
+      </div>
+    </section>
+
+    <section>
+      <h2>使用方法</h2>
+      <ol class="steps">
+        <li><strong>登录 Tryptify</strong>，打开“设置 › 连接 › Tryptify Cloud”。</li>
+        <li><strong>选择套餐或开始免费试用。</strong>付款页面会在浏览器中打开。</li>
+        <li><strong>上传歌曲</strong>：在应用的“音乐库 › 本地”中打开歌曲菜单，点按“上传到 Tryptify Cloud”。</li>
+        <li><strong>随处播放</strong>：在“音乐库 › 我的服务器”和搜索中都能找到，保持原始音质。</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>服务内容</h2>
+      <div class="grid">
+        <div class="card"><h3>基于 Subsonic API</h3><p>你的音乐库使用开放的 Subsonic API，和 Navidrome 是同一套接口，所以浏览和拖动进度都和家用服务器一样。</p></div>
+        <div class="card"><h3>仅你可见</h3><p>只有你的账号能查看或播放你的音乐库。每台设备都用各自的随机密码登录，绝不使用你的账号密码。</p></div>
+        <div class="card"><h3>格式</h3><p>FLAC、ALAC、MP3、AAC/M4A、Ogg Vorbis、Opus、WAV、AIFF、APE 和 WMA，每个文件最大 2 GB，支持封面。</p></div>
+      </div>
+    </section>
+
+    <section id="pricing">
+      <h2>价格</h2>
+      <p class="muted">价格以美元计。如适用，结账时将另加销售税或增值税。</p>
+      <div class="period" role="group" aria-label="计费周期" hidden>
+        <button type="button" data-period="monthly" aria-pressed="true">按月</button>
+        <button type="button" data-period="yearly" aria-pressed="false">按年 <span class="save">省 16%</span></button>
+        <span class="period-pill" aria-hidden="true"></span>
+      </div>
+      <div class="plans">
+        <div class="plan">
+          <div class="name">Lite</div>
+          <div class="size">100 GB</div>
+          <div class="price"><span class="amount" data-monthly="3.99" data-yearly="39.99">$3.99</span> <small class="per" data-monthly="/ 月" data-yearly="/ 年">/ 月</small></div>
+          <div class="year" data-monthly="或 $39.99 / 年" data-yearly="每月 $3.33，按年计费">或 $39.99 / 年</div>
+        </div>
+        <div class="plan featured">
+          <div class="name">Plus</div>
+          <div class="size">250 GB</div>
+          <div class="price"><span class="amount" data-monthly="9.99" data-yearly="99.99">$9.99</span> <small class="per" data-monthly="/ 月" data-yearly="/ 年">/ 月</small></div>
+          <div class="year" data-monthly="或 $99.99 / 年" data-yearly="每月 $8.33，按年计费">或 $99.99 / 年</div>
+        </div>
+        <div class="plan">
+          <div class="name">Max</div>
+          <div class="size">500 GB</div>
+          <div class="price"><span class="amount" data-monthly="19.99" data-yearly="199.99">$19.99</span> <small class="per" data-monthly="/ 月" data-yearly="/ 年">/ 月</small></div>
+          <div class="year" data-monthly="或 $199.99 / 年" data-yearly="每月 $16.67，按年计费">或 $199.99 / 年</div>
+        </div>
+      </div>
+      <div class="trial">
+        <strong>7 天免费试用，含 20 GB</strong>，适用于任意月付套餐，每个账号限一次。开始试用需要绑定银行卡。在 7 天结束前取消则无需付费；否则你选择的套餐将开始生效并扣费。
+      </div>
+      <ul class="ticks muted">
+        <li>订阅会自动续订，直至你取消。你可以随时在应用中取消（管理或取消订阅），套餐在已付费的周期结束前仍然有效。</li>
+        <li>套餐终止后，你的音乐在 7 天内仍可播放和下载，之后将被删除。</li>
+        <li>超出存储空间绝不会额外收费：上传会暂停，直到你释放空间或更换套餐。</li>
+        <li>不允许任何形式的成人或 NSFW 内容：禁止露骨的色情内容、裸露内容或成人内容（<a href="/zh/terms#no-adult-content">服务条款第 8 条</a>）。</li>
+        <li>付款由我们的记录商户（merchant of record）<a href="https://www.creem.io">Creem</a> 处理。请参阅<a href="/zh/refunds">退款政策</a>和<a href="/zh/terms">服务条款</a>。</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div>© 2026 tryptz · Tryptify · <a href="mailto:support@tryptify.com">support@tryptify.com</a></div>
+      <nav>
+        <a href="/zh/download">下载</a>
+        <a href="/zh/changelog">更新日志</a>
+        <a href="/zh/player">网页播放器</a>
+        <a href="/zh/autoeq">AutoEQ 排名</a>
+        <a href="/zh">应用</a>
+        <a href="/zh/terms">服务条款</a>
+        <a href="/zh/privacy">隐私政策</a>
+        <a href="/zh/refunds">退款政策</a>
+        <a href="/zh/contact">联系</a>
+      </nav>
+      <nav class="langs" aria-label="Language" translate="no"><a href="/cloud" hreflang="en" lang="en" data-lang="en">English</a><a href="/zh/cloud" hreflang="zh-CN" lang="zh-CN" data-lang="zh" aria-current="true">简体中文</a><a href="/ja/cloud" hreflang="ja" lang="ja" data-lang="ja">日本語</a><a href="/fr/cloud" hreflang="fr" lang="fr" data-lang="fr">Français</a><a href="/es/cloud" hreflang="es" lang="es" data-lang="es">Español</a><a href="/tr/cloud" hreflang="tr" lang="tr" data-lang="tr">Türkçe</a><a href="/de/cloud" hreflang="de" lang="de" data-lang="de">Deutsch</a><a href="/it/cloud" hreflang="it" lang="it" data-lang="it">Italiano</a></nav>
+    </div>
+  </footer>
+  <script src="/js/motion-12.23.12.js"></script>
+  <script src="/js/site.js"></script>
+</body>
+</html>

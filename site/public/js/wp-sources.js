@@ -109,7 +109,7 @@
     const hires = !r.audio_quality || /HI_RES/.test(r.audio_quality);
     const q = quality === "HI_RES_LOSSLESS" && !hires ? "LOSSLESS" : quality;
     return {
-      key: `hifi:${id}`, src: "hifi", title: r.title || "Untitled", artist: r.artist_name || "",
+      key: `hifi:${id}`, src: "hifi", title: r.title || T("Untitled"), artist: r.artist_name || "",
       album: r.album_title || "", n: r.track_number || null, duration: r.duration || null,
       quality: HIFI_LABEL[q] || "", cover: coverUrl(r.album_cover),
       ref: { id: String(id), albumId: r.album_id ? String(r.album_id) : null, hires },
@@ -121,7 +121,7 @@
     const suffix = (s.suffix || "").toUpperCase();
     const rate = s.sampleRate ? `/${+(s.sampleRate / 1000).toFixed(1)}` : "";
     return {
-      key: `cloud:${s.id}`, src: "cloud", title: s.title || "Untitled", artist: s.artist || s.albumArtist || "",
+      key: `cloud:${s.id}`, src: "cloud", title: s.title || T("Untitled"), artist: s.artist || s.albumArtist || "",
       album: s.album || "", n: s.track || null, duration: s.duration || null,
       quality: s.bitDepth ? `${suffix} ${s.bitDepth}${rate}` : suffix, cover: null, ref: s,
     };
@@ -197,7 +197,7 @@
         const name = parts.pop();
         if (isAudio(name)) entries.push({ parents: parts.slice(1), name, get: async () => f, root: parts[0] });
       }
-      return this.fromEntries(entries, entries[0] ? entries[0].root : "Music");
+      return this.fromEntries(entries, entries[0] ? entries[0].root : T("Music"));
     },
     fromEntries(entries, rootName) {
       const items = entries.map((e) => {
@@ -271,17 +271,17 @@
     },
     async api(path) {
       const c = client();
-      if (!c) throw new Error("Tryptify Cloud could not load.");
+      if (!c) throw new Error(T("Tryptify Cloud could not load."));
       const go = (t) => fetch(CLOUD + "/v1" + path, { headers: { authorization: `Bearer ${t}` } });
       let t = (await c.auth.getSession()).data.session?.access_token;
-      if (!t) throw new Error("Sign in on the Account page first.");
+      if (!t) throw new Error(T("Sign in on the Account page first."));
       let res = await go(t);
       if (res.status === 401) {
         const { data } = await c.auth.refreshSession();
-        if (!data.session) throw new Error("Sign in on the Account page first.");
+        if (!data.session) throw new Error(T("Sign in on the Account page first."));
         res = await go(data.session.access_token);
       }
-      if (!res.ok) throw new Error(`Tryptify Cloud said: ${(await res.json().catch(() => ({}))).error || res.status}`);
+      if (!res.ok) throw new Error(T("Tryptify Cloud said: {code}", { code: (await res.json().catch(() => ({}))).error || res.status }));
       return res;
     },
     async songs(offset = 0, q = "") {
@@ -313,12 +313,12 @@
     get password() { return recall("tryptify-player-hifi-key") || ""; },
     set password(v) { remember("tryptify-player-hifi-key", v || null); },
     async get(path, params, base = this.base, password = this.password) {
-      if (!base) throw new Error("Add the Trypt HiFi API URL first.");
+      if (!base) throw new Error(T("Add the Trypt HiFi API URL first."));
       const qs = new URLSearchParams(params).toString();
       const res = await fetch(`${base}${path}?${qs}`, password ? { headers: { "X-Access-Key": password } } : undefined);
-      if (res.status === 401) throw new Error(password ? "That password isn’t right for this server." : "This server asks for a password.");
+      if (res.status === 401) throw new Error(password ? T("That password isn’t right for this server.") : T("This server asks for a password."));
       const j = await res.json().catch(() => null);
-      if (!res.ok || !j || !j.success) throw new Error((j && typeof j.error === "string" && j.error) || `Trypt HiFi answered ${res.status}.`);
+      if (!res.ok || !j || !j.success) throw new Error((j && typeof j.error === "string" && j.error) || T("Trypt HiFi answered {status}.", { status: res.status }));
       return j.data;
     },
     /** Round-trip time in ms to [base] (the saved one by default), or throws with the reason. */
@@ -339,7 +339,7 @@
       return { album: hifiAlbum(a), tracks: ((a.tracks && a.tracks.items) || []).map((t) => hifiTrack(t, a, this.quality)) };
     },
     url(track) {
-      if (!this.base) throw new Error("it needs an API URL: add one under Sources, on the dashboard.");
+      if (!this.base) throw new Error(T("it needs an API URL: add one under Sources, on the dashboard."));
       const q = this.quality === "HI_RES_LOSSLESS" && !track.ref.hires ? "LOSSLESS" : this.quality;
       // An <audio> element sends no headers: the password rides in the link.
       const key = this.password ? `&access_key=${encodeURIComponent(this.password)}` : "";
@@ -383,7 +383,7 @@
     const rate = s.samplingRate ? `/${+(s.samplingRate / 1000).toFixed(1)}` : "";
     const quality = s.bitDepth ? `${suffix} ${s.bitDepth}${rate}` : s.bitRate && !/FLAC|WAV|ALAC|AIFF?/.test(suffix) ? `${suffix} ${s.bitRate}` : suffix;
     return {
-      key: `subsonic:${s.id}`, src: "subsonic", title: s.title || "Untitled", artist: s.artist || "",
+      key: `subsonic:${s.id}`, src: "subsonic", title: s.title || T("Untitled"), artist: s.artist || "",
       album: s.album || "", n: s.track || null, duration: s.duration || null, quality, cover: null,
       ref: { id: String(s.id), coverArt: s.coverArt || null },
     };
@@ -410,18 +410,18 @@
       return `${srv.url}/rest/${view}?${p}`;
     },
     async get(view, params, srv = this.server) {
-      if (!srv) throw new Error("Add your music server first.");
+      if (!srv) throw new Error(T("Add your music server first."));
       const res = await fetch(this.link(view, params, srv));
       const j = await res.json().catch(() => null);
       const r = j && j["subsonic-response"];
-      if (!r) throw new Error(`The server answered ${res.status}, not Subsonic.`);
-      if (r.status !== "ok") { const e = new Error((r.error && r.error.message) || "The server said no."); e.code = r.error && r.error.code; throw e; }
+      if (!r) throw new Error(T("The server answered {status}, not Subsonic.", { status: res.status }));
+      if (r.status !== "ok") { const e = new Error((r.error && r.error.message) || T("The server said no.")); e.code = r.error && r.error.code; throw e; }
       return r;
     },
     /** Signs in with a token; if the server refuses tokens, with the password's hex. Never keeps the password itself. */
     async connect(url, user, password) {
       const base = normalizeBase(url);
-      if (!base) throw new Error("That is not an address.");
+      if (!base) throw new Error(T("That is not an address."));
       const salt = [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(16).padStart(2, "0")).join("");
       let srv = { url: base, user, salt, token: md5(password + salt) };
       try { await this.get("ping.view", null, srv); } catch (e) {
@@ -443,11 +443,11 @@
       return { album: { ...subsonicAlbum(a), cover: this.cover(a.coverArt) }, tracks: list(a.song).map(subsonicTrack).map((t) => this.withCover(t)) };
     },
     async playlists() {
-      return list(((await this.get("getPlaylists.view")).playlists || {}).playlist).map((p) => ({ id: String(p.id), name: p.name || "Untitled", count: p.songCount || 0 }));
+      return list(((await this.get("getPlaylists.view")).playlists || {}).playlist).map((p) => ({ id: String(p.id), name: p.name || T("Untitled"), count: p.songCount || 0 }));
     },
     async playlist(id) {
       const p = (await this.get("getPlaylist.view", { id })).playlist || {};
-      return { name: p.name || "Playlist", tracks: list(p.entry).map(subsonicTrack).map((t) => this.withCover(t)) };
+      return { name: p.name || T("Playlist"), tracks: list(p.entry).map(subsonicTrack).map((t) => this.withCover(t)) };
     },
     async starred() { return list(((await this.get("getStarred2.view")).starred2 || {}).song).map(subsonicTrack).map((t) => this.withCover(t)); },
     async search(q) {
@@ -458,7 +458,7 @@
       };
     },
     /** The file as it is (format=raw): no transcoding, so lossless stays lossless. */
-    url(track) { if (!this.server) throw new Error("connect your music server to play this."); return this.link("stream.view", { id: track.ref.id, format: "raw" }); },
+    url(track) { if (!this.server) throw new Error(T("connect your music server to play this.")); return this.link("stream.view", { id: track.ref.id, format: "raw" }); },
   };
 
   // ── The account's liked songs and playlists (Supabase) ──────────────
@@ -466,7 +466,7 @@
     /** Every row a query gives, a thousand at a time (PostgREST's page). */
     async rows(table, columns, shape) {
       const c = client();
-      if (!c) throw new Error("Your account could not load.");
+      if (!c) throw new Error(T("Your account could not load."));
       const out = [];
       for (let from = 0; ; from += 1000) {
         const { data, error } = await shape(c.from(table).select(columns)).range(from, from + 999);
@@ -480,13 +480,13 @@
     },
     async playlists() {
       const rows = await this.rows("user_playlists", "id,name,description,updated_at,playlist_tracks(count)", (q) => q.order("updated_at", { ascending: false }));
-      return rows.map((p) => ({ id: p.id, name: p.name || "Untitled", description: p.description || "",
+      return rows.map((p) => ({ id: p.id, name: p.name || T("Untitled"), description: p.description || "",
         count: (p.playlist_tracks && p.playlist_tracks[0] && p.playlist_tracks[0].count) || 0 }));
     },
     async playlist(id) {
       const [meta] = await this.rows("user_playlists", "id,name,description", (q) => q.eq("id", id));
       const rows = await this.rows("playlist_tracks", "*", (q) => q.eq("playlist_id", id).order("position"));
-      return { name: meta ? meta.name : "Playlist", description: (meta && meta.description) || "", tracks: rows.map((r) => savedTrack(r, HiFi.quality)) };
+      return { name: meta ? meta.name : T("Playlist"), description: (meta && meta.description) || "", tracks: rows.map((r) => savedTrack(r, HiFi.quality)) };
     },
   };
 

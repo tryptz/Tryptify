@@ -7,8 +7,8 @@
   fetch("/data/apk.json", { cache: "no-cache" })
     .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
     .then((a) => {
-      info.textContent = `Version ${a.version} · ${Math.round(a.size / 1e6)} MB · Android ${a.minAndroid} and newer.`;
+      info.textContent = T("Version {version} · {size} MB · Android {android} and newer.", { version: a.version, size: Math.round(a.size / 1e6), android: a.minAndroid });
       sha.textContent = a.sha256;
     })
-    .catch(() => { sha.textContent = "Unavailable right now."; });
+    .catch(() => { sha.textContent = T("Unavailable right now."); });
 })();

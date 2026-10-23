@@ -374,6 +374,13 @@ pricing, Terms, Privacy, Refunds, Contact), static files on Cloudflare. Its
 prices and grace periods repeat `server/cloud/src/rules.ts`: change both
 together.
 
+The site is in the app's eight languages. The English pages are the source;
+`/zh`, `/ja`, `/fr`, `/es`, `/tr`, `/de` and `/it` are built from them by
+`tools/site_l10n/site_l10n.py` with the translations in `site/l10n/`, and are
+never edited by hand. After changing an English page or a script's text, run
+its `extract`, translate the new keys in every language, `check`, then `build`
+(see the site README's Languages section).
+
 ## Commits
 
 Author as `tryptz`. No co-author trailers and no tool attribution in commit

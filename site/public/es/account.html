@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tu Cloud · Tryptify</title>
+  <meta name="description" content="Gestiona tu Tryptify Cloud: plan, almacenamiento, subidas, biblioteca y los dispositivos con sesión iniciada en tu servidor.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/js/theme-boot.js"></script>
+  <script src="/js/l10n/es.js"></script>
+  <!-- l10n:alternates -->
+  <link rel="alternate" hreflang="en" href="https://tryptify.com/account">
+  <link rel="alternate" hreflang="zh-CN" href="https://tryptify.com/zh/account">
+  <link rel="alternate" hreflang="ja" href="https://tryptify.com/ja/account">
+  <link rel="alternate" hreflang="fr" href="https://tryptify.com/fr/account">
+  <link rel="alternate" hreflang="es" href="https://tryptify.com/es/account">
+  <link rel="alternate" hreflang="tr" href="https://tryptify.com/tr/account">
+  <link rel="alternate" hreflang="de" href="https://tryptify.com/de/account">
+  <link rel="alternate" hreflang="it" href="https://tryptify.com/it/account">
+  <link rel="alternate" hreflang="x-default" href="https://tryptify.com/account">
+  <!-- /l10n -->
+</head>
+<body>
+  <header class="top">
+    <div class="wrap glass">
+      <a class="brand" href="/es" aria-label="Inicio de Tryptify"><svg class="mark" viewBox="17 17 74 74" aria-hidden="true"><rect x="18" y="18" width="72" height="72" rx="16" fill="#000" class="mark-tile"/><path d="M34,36 L34,72 M44,30 L44,78 M54,26 L54,82 M64,30 L64,78 M74,36 L74,72" stroke="#fff" stroke-width="4" fill="none"/></svg><span class="wordmark">Tryptify</span></a>
+      <nav class="nav" aria-label="Principal">
+        <a href="/es">App</a>
+        <a href="/es/autoeq">AutoEQ</a>
+        <a href="/es/cloud">Cloud</a>
+        <a href="/es/player">Reproductor</a>
+        <a href="/es/account" aria-current="page">Cuenta</a>
+        <a href="/es/changelog" class="nav-wide">Novedades</a>
+        <a href="/es/contact">Contacto</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero" style="padding-bottom:12px">
+      <p class="eyebrow">Tryptify Cloud</p>
+      <h1>Tu Cloud</h1>
+      <p class="lead" id="acct-lead">Tu plan, tu almacenamiento, tu música y las apps con sesión iniciada en tu servidor, desde cualquier navegador.</p>
+    </section>
+
+    <!-- Signed out -->
+    <section id="signed-out" hidden>
+      <div class="card acct-auth">
+        <h2 id="auth-title">Iniciar sesión</h2>
+        <p class="muted">Usa la misma cuenta de Tryptify que en la app.</p>
+        <button type="button" class="btn" id="google">Continuar con Google</button>
+        <button type="button" class="btn" id="discord">Continuar con Discord</button>
+        <p class="muted small acct-or">o con tu correo</p>
+        <form id="auth-form" class="acct-form">
+          <label>Correo electrónico <input type="email" name="email" autocomplete="email" required></label>
+          <label>Contraseña <input type="password" name="password" autocomplete="current-password" minlength="6" required></label>
+          <button type="submit" class="btn primary" id="auth-submit">Iniciar sesión</button>
+        </form>
+        <p class="small"><a href="#" id="auth-switch">¿Aún no tienes cuenta? Crea una</a> · <a href="#" id="auth-reset">¿Olvidaste tu contraseña?</a></p>
+        <p class="acct-msg small" id="auth-msg" role="status"></p>
+      </div>
+    </section>
+
+    <!-- Signed in -->
+    <div id="signed-in" hidden>
+      <section class="acct-bar">
+        <span class="muted small">Sesión iniciada como <strong id="who"></strong></span>
+        <button type="button" class="btn" id="sign-out">Cerrar sesión</button>
+      </section>
+
+      <section id="plan">
+        <h2>Plan y almacenamiento</h2>
+        <div class="card" id="plan-card"><p class="muted">Cargando…</p></div>
+        <div id="plan-picker" hidden>
+          <p class="muted" id="plan-note"></p>
+          <div class="plan-grid" id="plan-list"></div>
+          <p class="muted small">El pago se abre en Creem, nuestro comerciante registrado, y después vuelve aquí. Consulta los <a href="/es/terms">Términos del servicio</a> y la <a href="/es/refunds">Política de reembolsos</a>.</p>
+        </div>
+        <p class="acct-msg small" id="plan-msg" role="status"></p>
+      </section>
+
+      <section id="upload" hidden>
+        <h2>Subir música</h2>
+        <label class="drop" id="drop">
+          <input type="file" id="files" multiple accept="audio/*,.flac,.alac,.m4a,.ogg,.oga,.opus,.wav,.aif,.aiff,.ape,.wma,.mp3,.aac">
+          <strong>Suelta aquí tus archivos de música</strong>
+          <span class="muted small">o toca para elegir · FLAC, ALAC, MP3, AAC, Ogg, Opus, WAV, AIFF, APE, WMA · hasta 2 GB cada uno</span>
+          <span class="muted small">Solo música que tengas derecho a guardar, y nada de contenido adulto o NSFW, portadas incluidas (<a href="/es/terms#no-adult-content">Términos, sección 8</a>).</span>
+        </label>
+        <ul class="queue" id="queue"></ul>
+      </section>
+
+      <section id="library">
+        <div class="acct-head">
+          <h2>Tu música <span class="muted small" id="lib-count"></span></h2>
+          <input type="search" id="lib-search" placeholder="Buscar título, artista o álbum" aria-label="Busca en tu música">
+        </div>
+        <div class="buttons lib-play" id="lib-play" hidden>
+          <button type="button" class="btn primary" id="play-all">Reproducir todo</button>
+          <button type="button" class="btn" id="shuffle-all">Aleatorio</button>
+          <a class="btn" href="/es/player">Abrir el reproductor web</a>
+        </div>
+        <p class="muted small">El <a href="/es/player">reproductor web</a> también reproduce esta música, con tu AutoEQ, las canciones que te gustan, tus playlists, tus archivos y tus otros dispositivos.</p>
+        <ul class="songs" id="songs"></ul>
+        <button type="button" class="btn" id="lib-more" hidden>Mostrar más</button>
+      </section>
+
+      <section id="server">
+        <h2>Tu servidor</h2>
+        <p class="muted">Tryptify Cloud es un servidor Subsonic. La app Tryptify se conecta sola; cualquier otra app de Subsonic (Symfonium, Feishin, Substreamer, Tempo…) se conecta con estos datos.</p>
+        <div class="grid">
+          <div class="card">
+            <h3>Dirección y nombre de usuario</h3>
+            <p class="mono small"><span id="srv-url">…</span> <button type="button" class="copy" data-copy="srv-url">Copiar</button></p>
+            <p class="mono small"><span id="srv-user">…</span> <button type="button" class="copy" data-copy="srv-user">Copiar</button></p>
+          </div>
+          <div class="card">
+            <h3>Conectar otra app</h3>
+            <form id="key-form" class="acct-form">
+              <label>Nombre de la app o del dispositivo <input type="text" name="label" maxlength="60" placeholder="p. ej. Feishin en mi portátil" required></label>
+              <button type="submit" class="btn primary">Crear su contraseña</button>
+            </form>
+            <div id="new-key" hidden>
+              <p class="small">Su contraseña, que solo se muestra una vez:</p>
+              <p class="mono small"><span id="key-pass"></span> <button type="button" class="copy" data-copy="key-pass">Copiar</button></p>
+            </div>
+          </div>
+        </div>
+        <h3 style="margin-top:22px">Apps y dispositivos con sesión iniciada</h3>
+        <ul class="devices" id="devices"></ul>
+        <button type="button" class="btn" id="sign-out-all">Cerrar sesión en todas las apps y dispositivos</button>
+        <p class="acct-msg small" id="server-msg" role="status"></p>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div>© 2026 tryptz · Tryptify · <a href="mailto:support@tryptify.com">support@tryptify.com</a></div>
+      <nav>
+        <a href="/es/download">Descargar</a>
+        <a href="/es/changelog">Registro de cambios</a>
+        <a href="/es/player">Reproductor web</a>
+        <a href="/es/autoeq">Clasificación AutoEQ</a>
+        <a href="/es">App</a>
+        <a href="/es/cloud">Tryptify Cloud</a>
+        <a href="/es/terms">Términos del servicio</a>
+        <a href="/es/privacy">Política de privacidad</a>
+        <a href="/es/refunds">Política de reembolsos</a>
+        <a href="/es/contact">Contacto</a>
+      </nav>
+      <nav class="langs" aria-label="Language" translate="no"><a href="/account" hreflang="en" lang="en" data-lang="en">English</a><a href="/zh/account" hreflang="zh-CN" lang="zh-CN" data-lang="zh">简体中文</a><a href="/ja/account" hreflang="ja" lang="ja" data-lang="ja">日本語</a><a href="/fr/account" hreflang="fr" lang="fr" data-lang="fr">Français</a><a href="/es/account" hreflang="es" lang="es" data-lang="es" aria-current="true">Español</a><a href="/tr/account" hreflang="tr" lang="tr" data-lang="tr">Türkçe</a><a href="/de/account" hreflang="de" lang="de" data-lang="de">Deutsch</a><a href="/it/account" hreflang="it" lang="it" data-lang="it">Italiano</a></nav>
+    </div>
+  </footer>
+  <script src="/js/motion-12.23.12.js"></script>
+  <script src="/js/site.js"></script>
+  <script src="/js/vendor/supabase-2.117.3.js"></script>
+  <script src="/js/vendor/jsmediatags-3.9.7.min.js"></script>
+  <script src="/js/player.js"></script>
+  <script src="/js/account.js"></script>
+</body>
+</html>

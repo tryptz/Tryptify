@@ -373,6 +373,17 @@ button.btn { cursor: pointer; }
 
 main { padding-top: 12px; }
 
+/* Between phone and desktop the menu stays on one line in every language: What's
+   new moves to the footer, as on phones, and below 700px the wordmark gives way. */
+@media (min-width: 561px) and (max-width: 900px) {
+  .nav a { padding: 8px 9px; font-size: 13.5px; }
+  .nav a.nav-wide { display: none; }
+}
+@media (min-width: 561px) and (max-width: 700px) {
+  .brand .wordmark { display: none; }
+  .nav a { padding: 8px 7px; }
+  html:lang(ja) .nav a { font-size: 12.5px; padding: 8px 6px; }
+}
 @media (max-width: 560px) {
   .top .wrap.glass { height: 54px; padding: 0 6px 0 18px; flex-wrap: nowrap; margin: 0 12px; width: auto; justify-content: space-between; }
   .theme-toggle { width: 40px; height: 40px; }
@@ -381,7 +392,9 @@ main { padding-top: 12px; }
     position: fixed; z-index: 25; left: 12px; right: 12px; bottom: 14px; margin: 0;
     display: flex; justify-content: space-between; flex-wrap: nowrap; gap: 0; padding: 6px;
   }
-  .nav a { flex: 1 1 0; min-width: 0; text-align: center; padding: 11px 2px; font-size: 12px; letter-spacing: 0; white-space: nowrap; }
+  /* Each tab as wide as its word, so a long one (Reproductor, プレーヤー) takes room from short ones. */
+  .nav a { flex: 1 1 auto; min-width: 0; text-align: center; padding: 11px 3px; font-size: 12px; letter-spacing: 0; white-space: nowrap; }
+  html:lang(ja) .nav a { font-size: 11px; padding: 11px 2px; }
   /* Six fit the floating tab bar; What's new is in the footer and on Download there. */
   .nav a.nav-wide { display: none; }
   .nav a { color: color-mix(in srgb, var(--text) 78%, transparent); }
@@ -1122,3 +1135,10 @@ body.has-player main { padding-bottom: 120px; }
   .cl-release td { display: inline-block; width: calc(50% - 6px); margin: 0 4px 8px 0; }
   .cl-release td img, .cl-release td video { width: 100%; }
 }
+
+/* ── Languages (tools/site_l10n): the list in every footer, the legal pages' note ── */
+footer .langs { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+footer .langs a { color: var(--muted); text-decoration: none; }
+footer .langs a:hover { color: var(--text); text-decoration: underline; }
+footer .langs a[aria-current] { color: var(--text); font-weight: 600; }
+.l10n-note { font-size: 13.5px; color: var(--muted); border-left: 2px solid var(--line); padding-left: 12px; }

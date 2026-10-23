@@ -77,7 +77,7 @@
   function build() {
     bar = document.createElement("section");
     bar.className = "player glass";
-    bar.setAttribute("aria-label", "Player");
+    bar.setAttribute("aria-label", T("Player"));
     bar.hidden = true;
     bar.innerHTML = `
       <div class="pl-now">
@@ -86,22 +86,22 @@
       </div>
       <div class="pl-middle">
         <div class="pl-buttons">
-          <button type="button" class="pl-btn pl-shuffle" aria-pressed="false" title="Shuffle" aria-label="Shuffle">${ICON.shuffle}</button>
-          <button type="button" class="pl-btn pl-prev" title="Previous" aria-label="Previous">${ICON.prev}</button>
-          <button type="button" class="pl-btn pl-play" title="Play" aria-label="Play">${ICON.play}</button>
-          <button type="button" class="pl-btn pl-next" title="Next" aria-label="Next">${ICON.next}</button>
-          <button type="button" class="pl-btn pl-repeat" aria-pressed="false" title="Repeat: off" aria-label="Repeat: off">${ICON.repeat}<i class="pl-one">1</i></button>
+          <button type="button" class="pl-btn pl-shuffle" aria-pressed="false" title="${T("Shuffle")}" aria-label="${T("Shuffle")}">${ICON.shuffle}</button>
+          <button type="button" class="pl-btn pl-prev" title="${T("Previous")}" aria-label="${T("Previous")}">${ICON.prev}</button>
+          <button type="button" class="pl-btn pl-play" title="${T("Play")}" aria-label="${T("Play")}">${ICON.play}</button>
+          <button type="button" class="pl-btn pl-next" title="${T("Next")}" aria-label="${T("Next")}">${ICON.next}</button>
+          <button type="button" class="pl-btn pl-repeat" aria-pressed="false" title="${T("Repeat: off")}" aria-label="${T("Repeat: off")}">${ICON.repeat}<i class="pl-one">1</i></button>
         </div>
         <div class="pl-seek">
           <span class="pl-time pl-at">0:00</span>
-          <input type="range" class="pl-range" min="0" max="1000" value="0" step="1" aria-label="Seek">
+          <input type="range" class="pl-range" min="0" max="1000" value="0" step="1" aria-label="${T("Seek")}">
           <span class="pl-time pl-length">0:00</span>
         </div>
       </div>
       <div class="pl-right">
         <canvas class="pl-spectrum" width="120" height="36" aria-hidden="true"></canvas>
-        <button type="button" class="pl-btn pl-mute" title="Mute" aria-label="Mute">${ICON.volume}</button>
-        <input type="range" class="pl-volume" min="0" max="100" value="100" aria-label="Volume">
+        <button type="button" class="pl-btn pl-mute" title="${T("Mute")}" aria-label="${T("Mute")}">${ICON.volume}</button>
+        <input type="range" class="pl-volume" min="0" max="100" value="100" aria-label="${T("Volume")}">
       </div>
       <p class="pl-msg" role="status" hidden></p>`;
     document.body.append(bar);
@@ -149,14 +149,14 @@
     audio.addEventListener("volumechange", () => {
       const off = audio.muted || audio.volume === 0;
       q(".pl-mute").innerHTML = off ? ICON.mute : ICON.volume;
-      q(".pl-mute").setAttribute("aria-label", off ? "Unmute" : "Mute");
+      q(".pl-mute").setAttribute("aria-label", off ? T("Unmute") : T("Mute"));
     });
 
     const playing = paint = () => {
       const on = !audio.paused && !audio.error;
       q(".pl-play").innerHTML = on ? ICON.pause : ICON.play;
-      q(".pl-play").setAttribute("aria-label", on ? "Pause" : "Play");
-      q(".pl-play").title = on ? "Pause" : "Play";
+      q(".pl-play").setAttribute("aria-label", on ? T("Pause") : T("Play"));
+      q(".pl-play").title = on ? T("Pause") : T("Play");
       bar.classList.toggle("is-playing", on);
       if (navigator.mediaSession) navigator.mediaSession.playbackState = on ? "playing" : "paused";
       notify();
@@ -245,7 +245,7 @@
     if (!song) return;
     bar.hidden = false;
     const q = (c) => bar.querySelector(c);
-    q(".pl-title").textContent = song.title || "Untitled";
+    q(".pl-title").textContent = song.title || T("Untitled");
     q(".pl-artist").textContent = [song.artist, song.album].filter(Boolean).join(" · ");
     q(".pl-at").textContent = "0:00";
     q(".pl-length").textContent = clock(song.duration);
@@ -255,7 +255,9 @@
     img.hidden = true;
     img.removeAttribute("src");
     if (!playable(song)) {
-      say(`"${song.title}" is ${String(song.suffix || "this format").toUpperCase()}, which plays in the app but not in this browser. Skipping.`);
+      say(song.suffix
+        ? T('"{title}" is {format}, which plays in the app but not in this browser. Skipping.', { title: song.title, format: String(song.suffix).toUpperCase() })
+        : T('"{title}" is in a format that plays in the app but not in this browser. Skipping.', { title: song.title }));
       if (++skipped >= state.order.length) { skipped = 0; audio.pause(); return notify(); }
       return next(false, true);
     }
@@ -281,7 +283,7 @@
     } catch (e) {
       if (e && e.name === "AbortError") return; // another song was picked first
       if (e && e.name === "NotAllowedError") return; // the browser wants a tap first
-      say(e && e.message ? e.message : "This song couldn't be played.");
+      say(e && e.message ? e.message : T("This song couldn't be played."));
     }
   }
 
@@ -310,7 +312,7 @@
         return;
       } catch (_) { /* fall through */ }
     }
-    say(`"${song.title}" couldn't be played here. Skipping.`);
+    say(T('"{title}" couldn\'t be played here. Skipping.', { title: song.title }));
     audio.pause();
     paint();
     if (++skipped >= state.order.length) { skipped = 0; return; }
@@ -360,7 +362,7 @@
     state.pos = playing === undefined ? -1 : state.order.indexOf(playing);
     const b = bar.querySelector(".pl-shuffle");
     b.setAttribute("aria-pressed", String(on));
-    b.title = on ? "Shuffle: on" : "Shuffle: off";
+    b.title = on ? T("Shuffle: on") : T("Shuffle: off");
   }
 
   function setRepeat(mode) {
@@ -368,7 +370,7 @@
     const b = bar.querySelector(".pl-repeat");
     b.setAttribute("aria-pressed", String(mode !== "off"));
     b.classList.toggle("is-one", mode === "one");
-    const label = { off: "Repeat: off", all: "Repeat: all", one: "Repeat: this song" }[mode];
+    const label = { off: T("Repeat: off"), all: T("Repeat: all"), one: T("Repeat: this song") }[mode];
     b.title = label;
     b.setAttribute("aria-label", label);
   }

@@ -10,7 +10,9 @@ import vm from "node:vm";
 import { createHash } from "node:crypto";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const ctx = { window: {}, Math, Number, Float64Array, Set, Map, URL, URLSearchParams, TextEncoder, Uint8Array, Uint32Array, localStorage: { getItem: () => null, setItem() {}, removeItem() {} } };
+// T() is theme-boot.js's, loaded ahead of every script on the page: here, the English with its blanks filled.
+const T = (s, vars) => (vars ? s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m)) : s);
+const ctx = { window: {}, T, Math, Number, Float64Array, Set, Map, URL, URLSearchParams, TextEncoder, Uint8Array, Uint32Array, localStorage: { getItem: () => null, setItem() {}, removeItem() {} } };
 vm.runInNewContext(readFileSync(join(here, "../public/js/autoeq-engine.js"), "utf8"), ctx);
 vm.runInNewContext(readFileSync(join(here, "../public/js/wp-sources.js"), "utf8"), ctx);
 const E = ctx.window.TryptifyAutoEq;

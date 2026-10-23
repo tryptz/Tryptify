@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tryptify Cloud: hızlı akış için kişisel müzik depolama</title>
+  <meta name="description" content="Tryptify Cloud, hızlı akış için tasarlanmış, Subsonic API’li kişisel müzik depolama alanınızdır. Müziğinizi bir kez yükleyin, Tryptify’da her yerde çalın. 100 GB için aylık $3.99’dan başlayan fiyatlarla, 7 günlük ücretsiz deneme.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/js/theme-boot.js"></script>
+  <script src="/js/l10n/tr.js"></script>
+  <!-- l10n:alternates -->
+  <link rel="alternate" hreflang="en" href="https://tryptify.com/cloud">
+  <link rel="alternate" hreflang="zh-CN" href="https://tryptify.com/zh/cloud">
+  <link rel="alternate" hreflang="ja" href="https://tryptify.com/ja/cloud">
+  <link rel="alternate" hreflang="fr" href="https://tryptify.com/fr/cloud">
+  <link rel="alternate" hreflang="es" href="https://tryptify.com/es/cloud">
+  <link rel="alternate" hreflang="tr" href="https://tryptify.com/tr/cloud">
+  <link rel="alternate" hreflang="de" href="https://tryptify.com/de/cloud">
+  <link rel="alternate" hreflang="it" href="https://tryptify.com/it/cloud">
+  <link rel="alternate" hreflang="x-default" href="https://tryptify.com/cloud">
+  <!-- /l10n -->
+</head>
+<body>
+  <header class="top">
+    <div class="wrap glass">
+      <a class="brand" href="/tr" aria-label="Tryptify ana sayfası"><svg class="mark" viewBox="17 17 74 74" aria-hidden="true"><rect x="18" y="18" width="72" height="72" rx="16" fill="#000" class="mark-tile"/><path d="M34,36 L34,72 M44,30 L44,78 M54,26 L54,82 M64,30 L64,78 M74,36 L74,72" stroke="#fff" stroke-width="4" fill="none"/></svg><span class="wordmark">Tryptify</span></a>
+      <nav class="nav" aria-label="Ana gezinme">
+        <a href="/tr">Uygulama</a>
+        <a href="/tr/autoeq">AutoEQ</a>
+        <a href="/tr/cloud" aria-current="page">Cloud</a>
+        <a href="/tr/player">Oynatıcı</a>
+        <a href="/tr/account">Hesap</a>
+        <a href="/tr/changelog" class="nav-wide">Yenilikler</a>
+        <a href="/tr/contact">İletişim</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <p class="eyebrow">Tryptify Cloud</p>
+      <h1>Hızlı akış için tasarlanmış, Subsonic API’li kişisel müzik depolama alanınız.</h1>
+      <p class="lead">Kendi müziğinizi bir kez yükleyin, Tryptify’da her yerde çalın: evde açık bırakılan bilgisayar yok, kurulacak sunucu yok, port yönlendirme yok.</p>
+      <div class="buttons">
+        <a class="btn primary" href="#pricing">Planları gör</a>
+        <a class="btn" href="/tr/download">Uygulamayı indir</a>
+      </div>
+    </section>
+
+    <section>
+      <h2>Nasıl çalışır</h2>
+      <ol class="steps">
+        <li><strong>Tryptify’da oturum açın</strong> ve Ayarlar › Bağlantılar › Tryptify Cloud bölümünü açın.</li>
+        <li><strong>Bir plan seçin ya da ücretsiz denemeyi başlatın.</strong> Ödeme sayfası tarayıcınızda açılır.</li>
+        <li><strong>Şarkıları uygulamadan yükleyin</strong>: Kitaplık › Cihazda altında bir şarkının menüsünü açın ve “Tryptify Cloud’a yükle” seçeneğine dokunun.</li>
+        <li><strong>Her yerde çalın</strong>: Kitaplık › Sunucum altında ve Ara’da, orijinal kalitesiyle.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Neler sunuyor</h2>
+      <div class="grid">
+        <div class="card"><h3>Subsonic API üzerine kurulu</h3><p>Kitaplığınız, Navidrome’un da kullandığı açık Subsonic API’siyle çalışır; bu yüzden göz atma ve şarkı içinde ileri geri sarma bir ev sunucusundaki gibidir.</p></div>
+        <div class="card"><h3>Yalnızca size özel</h3><p>Kitaplığınızı yalnızca sizin hesabınız görebilir ve çalabilir. Her cihaz kendi rastgele şifresiyle oturum açar; hesap şifreniz hiçbir zaman kullanılmaz.</p></div>
+        <div class="card"><h3>Biçimler</h3><p>FLAC, ALAC, MP3, AAC/M4A, Ogg Vorbis, Opus, WAV, AIFF, APE ve WMA; dosya başına 2 GB’a kadar, kapak görseliyle birlikte.</p></div>
+      </div>
+    </section>
+
+    <section id="pricing">
+      <h2>Fiyatlar</h2>
+      <p class="muted">Fiyatlar ABD doları cinsindendir. Geçerli olduğu yerlerde satış vergisi veya KDV ödeme sırasında eklenir.</p>
+      <div class="period" role="group" aria-label="Faturalandırma dönemi" hidden>
+        <button type="button" data-period="monthly" aria-pressed="true">Aylık</button>
+        <button type="button" data-period="yearly" aria-pressed="false">Yıllık <span class="save">%16 tasarruf</span></button>
+        <span class="period-pill" aria-hidden="true"></span>
+      </div>
+      <div class="plans">
+        <div class="plan">
+          <div class="name">Lite</div>
+          <div class="size">100 GB</div>
+          <div class="price"><span class="amount" data-monthly="3.99" data-yearly="39.99">$3.99</span> <small class="per" data-monthly="/ ay" data-yearly="/ yıl">/ ay</small></div>
+          <div class="year" data-monthly="ya da $39.99 / yıl" data-yearly="Yıllık faturalandırmayla aylık $3.33">ya da $39.99 / yıl</div>
+        </div>
+        <div class="plan featured">
+          <div class="name">Plus</div>
+          <div class="size">250 GB</div>
+          <div class="price"><span class="amount" data-monthly="9.99" data-yearly="99.99">$9.99</span> <small class="per" data-monthly="/ ay" data-yearly="/ yıl">/ ay</small></div>
+          <div class="year" data-monthly="ya da $99.99 / yıl" data-yearly="Yıllık faturalandırmayla aylık $8.33">ya da $99.99 / yıl</div>
+        </div>
+        <div class="plan">
+          <div class="name">Max</div>
+          <div class="size">500 GB</div>
+          <div class="price"><span class="amount" data-monthly="19.99" data-yearly="199.99">$19.99</span> <small class="per" data-monthly="/ ay" data-yearly="/ yıl">/ ay</small></div>
+          <div class="year" data-monthly="ya da $199.99 / yıl" data-yearly="Yıllık faturalandırmayla aylık $16.67">ya da $199.99 / yıl</div>
+        </div>
+      </div>
+      <div class="trial">
+        <strong>20 GB ile 7 günlük ücretsiz deneme</strong>: tüm aylık planlarda, hesap başına bir kez. Başlatmak için kart gerekir. 7 gün dolmadan iptal ederseniz hiçbir ücret ödemezsiniz; aksi hâlde seçtiğiniz plan başlar ve ücreti tahsil edilir.
+      </div>
+      <ul class="ticks muted">
+        <li>Abonelikler siz iptal edene kadar otomatik olarak yenilenir. İstediğiniz zaman uygulamadan iptal edebilirsiniz (Aboneliği yönet veya iptal et); planınız, ödediğiniz dönemin sonuna kadar devam eder.</li>
+        <li>Bir plan sona ererse müziğiniz 7 gün boyunca çalınabilir ve indirilebilir kalır, ardından silinir.</li>
+        <li>Depolama sınırını aşmak hiçbir zaman ek ücrete yol açmaz: yer açana veya plan değiştirene kadar yalnızca yüklemeler durur.</li>
+        <li>Hiçbir türde yetişkin veya NSFW içeriğe izin verilmez: cinsel içerik, çıplaklık ya da yetişkinlere yönelik materyal yasaktır (<a href="/tr/terms#no-adult-content">Koşullar, madde 8</a>).</li>
+        <li>Ödemeler, kayıtlı satıcımız (merchant of record) <a href="https://www.creem.io">Creem</a> tarafından yürütülür. Ayrıntılar için <a href="/tr/refunds">İade Politikası</a>’na ve <a href="/tr/terms">Hizmet Koşulları</a>’na bakın.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div>© 2026 tryptz · Tryptify · <a href="mailto:support@tryptify.com">support@tryptify.com</a></div>
+      <nav>
+        <a href="/tr/download">İndir</a>
+        <a href="/tr/changelog">Değişiklik günlüğü</a>
+        <a href="/tr/player">Web oynatıcı</a>
+        <a href="/tr/autoeq">AutoEQ sıralaması</a>
+        <a href="/tr">Uygulama</a>
+        <a href="/tr/terms">Hizmet Koşulları</a>
+        <a href="/tr/privacy">Gizlilik Politikası</a>
+        <a href="/tr/refunds">İade Politikası</a>
+        <a href="/tr/contact">İletişim</a>
+      </nav>
+      <nav class="langs" aria-label="Language" translate="no"><a href="/cloud" hreflang="en" lang="en" data-lang="en">English</a><a href="/zh/cloud" hreflang="zh-CN" lang="zh-CN" data-lang="zh">简体中文</a><a href="/ja/cloud" hreflang="ja" lang="ja" data-lang="ja">日本語</a><a href="/fr/cloud" hreflang="fr" lang="fr" data-lang="fr">Français</a><a href="/es/cloud" hreflang="es" lang="es" data-lang="es">Español</a><a href="/tr/cloud" hreflang="tr" lang="tr" data-lang="tr" aria-current="true">Türkçe</a><a href="/de/cloud" hreflang="de" lang="de" data-lang="de">Deutsch</a><a href="/it/cloud" hreflang="it" lang="it" data-lang="it">Italiano</a></nav>
+    </div>
+  </footer>
+  <script src="/js/motion-12.23.12.js"></script>
+  <script src="/js/site.js"></script>
+</body>
+</html>

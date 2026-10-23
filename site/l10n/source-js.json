@@ -1,0 +1,2497 @@
+{
+ "cc87705116d5": {
+  "en": "Your session ended. Sign in again.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "518aa21cd163": {
+  "en": "You need a plan to upload.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "a56987cf8133": {
+  "en": "Your plan has ended, so nothing new can be uploaded.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "d5a3f2641dee": {
+  "en": "Not enough space left in your plan.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "90a29de92cd2": {
+  "en": "That file type can't be stored.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "1b29aaa399ff": {
+  "en": "The file is too big (2 GB at most).",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "24b46392274b": {
+  "en": "The cover is too big.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "25f3d899bde6": {
+  "en": "This account has already had its free trial.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "30ca304f738e": {
+  "en": "Too many uploads at once. Try again in a moment.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "0a4b002921d9": {
+  "en": "There is no subscription to manage yet.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "c0614517e292": {
+  "en": "Payments aren't available right now.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "81b65a5b67fa": {
+  "en": "Tryptify Cloud isn't available right now.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "4e19b9742e1a": {
+  "en": "Tryptify Cloud said: {code}",
+  "files": [
+   "js/account.js",
+   "js/wp-sources.js"
+  ]
+ },
+ "3f4f547d7364": {
+  "en": "Create an account",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "ada2e9e96fa9": {
+  "en": "Sign in",
+  "files": [
+   "js/account.js",
+   "js/wp-app.js"
+  ]
+ },
+ "aaf374479756": {
+  "en": "Create account",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "64d8814b3b7c": {
+  "en": "Have an account? Sign in",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "23691e9816a5": {
+  "en": "No account yet? Create one",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "0a1d899a7590": {
+  "en": "Creating your account…",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "c66b2adcc5fc": {
+  "en": "Signing in…",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "209b0dd68196": {
+  "en": "Check your email to confirm your account, then sign in here.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "cd7bff155789": {
+  "en": "Type your email above first.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "3eca579e7087": {
+  "en": "If that email has an account, a reset link is on its way.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "c953bc1883b3": {
+  "en": "Choose a new password (6 characters or more):",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "47fa528931b5": {
+  "en": "Password changed.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "637395c6af30": {
+  "en": "your account",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "d15abfd3a61e": {
+  "en": "Unlimited storage",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "5f3dfcb5cc20": {
+  "en": "No plan yet",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "dc660b918ace": {
+  "en": "Free trial until {date}",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "1353d50527f4": {
+  "en": "{plan} plan, paid until {date}",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "4f8bcdbf9c12": {
+  "en": "{used} used · no limit, no end date",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "d4ce5843d5e2": {
+  "en": "{used} of {quota} used",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "c3f986cc9069": {
+  "en": "Your plan has ended. Your music can still be played and downloaded until {date}, then it is deleted. Pick a plan to keep it.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "f6755ae15e61": {
+  "en": "Manage or cancel subscription",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "19366e9cb2cb": {
+  "en": "Try any plan free for {days} days with {size} GB. A card is needed; cancel before the trial ends and you pay nothing.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "a4b74c99054a": {
+  "en": "Pick a plan:",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "bcbb36eaf820": {
+  "en": "{monthly} a month or {yearly} a year",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "a1db3a807034": {
+  "en": "Start free trial",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "d31edb7b8a94": {
+  "en": "Monthly",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "7622eb5aa42d": {
+  "en": "Yearly",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "ad5d75607ae2": {
+  "en": "One moment…",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "33d30632848d": {
+  "en": "Waiting",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "e9b450d14bc2": {
+  "en": "Done",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "09fef5d8d9a3": {
+  "en": "Failed",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "e3c17b5f7161": {
+  "en": "Reading tags…",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "fb249146847e": {
+  "en": "Uploading {percent}%",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "90218af7b57c": {
+  "en": "Finishing…",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "d18ec3169889": {
+  "en": "The connection dropped.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "84ff58a6f66f": {
+  "en": "{count} song",
+  "files": [
+   "js/account.js",
+   "js/wp-app.js"
+  ]
+ },
+ "e84413926f98": {
+  "en": "{count} songs",
+  "files": [
+   "js/account.js",
+   "js/wp-app.js"
+  ]
+ },
+ "926409cb3489": {
+  "en": "Nothing matches that.",
+  "files": [
+   "js/account.js",
+   "js/wp-app.js"
+  ]
+ },
+ "9be96fba4fe4": {
+  "en": "Nothing here yet. Upload some music above, or from the app.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "645a580eed83": {
+  "en": "Play {title}",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "b846cf9c282b": {
+  "en": "{title} plays in the app only",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "e0151f7a098c": {
+  "en": "App only",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "f6fdbe48dc54": {
+  "en": "Delete",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "bbc98cac8e5e": {
+  "en": "Delete {title}",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "a1dc98028626": {
+  "en": "Delete \"{title}\" from Tryptify Cloud? This can't be undone.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "e034511871c8": {
+  "en": "No apps or devices signed in yet.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "f1da6ab77a83": {
+  "en": "Unnamed device",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "55e194ff0442": {
+  "en": "since {date}",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "dc1649a16c14": {
+  "en": "Sign out",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "10b49b940260": {
+  "en": "{name} is signed out.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "205657afc457": {
+  "en": "That device is signed out.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "6a73b2e8a28c": {
+  "en": "Use the address, username and this password in the app. It is shown once.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "4745aabed288": {
+  "en": "Sign out every app and device, including the Tryptify app? Each will need to connect again.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "c501b7201a1b": {
+  "en": "Every app and device is signed out.",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "8e3df45a49db": {
+  "en": "Copied",
+  "files": [
+   "js/account.js",
+   "js/tryout.js"
+  ]
+ },
+ "af74f7c5362a": {
+  "en": "Copy",
+  "files": [
+   "js/account.js"
+  ]
+ },
+ "8d7492ad03f0": {
+  "en": "Tryptify Shelf ends",
+  "files": [
+   "js/autoeq.js",
+   "js/graphs.js"
+  ]
+ },
+ "6b3873bb866c": {
+  "en": "Tryptify Peaking",
+  "files": [
+   "js/autoeq.js",
+   "js/graphs.js"
+  ]
+ },
+ "59a704bf4aa9": {
+  "en": "AutoEq peaking",
+  "files": [
+   "js/autoeq.js",
+   "js/graphs.js"
+  ]
+ },
+ "57235468ea44": {
+  "en": "AutoEq shelves",
+  "files": [
+   "js/autoeq.js",
+   "js/graphs.js"
+  ]
+ },
+ "f28914c5fe57": {
+  "en": "Fit error",
+  "files": [
+   "js/autoeq.js"
+  ]
+ },
+ "86faa070cfad": {
+  "en": "How far measurement + EQ lands from the target, 20 Hz to 16 kHz. Lower is better.",
+  "files": [
+   "js/autoeq.js"
+  ]
+ },
+ "c3e95653181c": {
+  "en": "Preference score",
+  "files": [
+   "js/autoeq.js",
+   "js/measures.js"
+  ]
+ },
+ "4abdfc6d463e": {
+  "en": "pts",
+  "files": [
+   "js/autoeq.js"
+  ]
+ },
+ "80713ad7935b": {
+  "en": "Olive in-ear preference model (AutoEq's implementation) against this target. Higher is better.",
+  "files": [
+   "js/autoeq.js"
+  ]
+ },
+ "e2d6ee8057a6": {
+  "en": "Worst error",
+  "files": [
+   "js/autoeq.js"
+  ]
+ },
+ "1d4c66e56bb9": {
+  "en": "The single biggest miss below 10 kHz. Lower is better.",
+  "files": [
+   "js/autoeq.js"
+  ]
+ },
+ "4ddbfb7b738c": {
+  "en": "Headroom lost",
+  "files": [
+   "js/autoeq.js",
+   "js/measures.js"
+  ]
+ },
+ "b1e98794f577": {
+  "en": "Auto-preamp needed to avoid clipping, which is lost loudness. Lower is better.",
+  "files": [
+   "js/autoeq.js"
+  ]
+ },
+ "e4a89c50d9c7": {
+  "en": "Sample-rate drift",
+  "files": [
+   "js/autoeq.js",
+   "js/measures.js"
+  ]
+ },
+ "fbe3b9c17593": {
+  "en": "Fitted at 48 kHz, played at 44.1 or 96 kHz: the worst change in the curve. Lower is better.",
+  "files": [
+   "js/autoeq.js"
+  ]
+ },
+ "483f90bd2e4b": {
+  "en": "Ringing above 300 Hz",
+  "files": [
+   "js/autoeq.js",
+   "js/measures.js"
+  ]
+ },
+ "d2dc2338ca3a": {
+  "en": "Time for bands at 300 Hz and up to decay by 60 dB. Smears transients. Lower is better.",
+  "files": [
+   "js/autoeq.js"
+  ]
+ },
+ "dddaf9525353": {
+  "en": "Largest stacked boost",
+  "files": [
+   "js/autoeq.js",
+   "js/measures.js"
+  ]
+ },
+ "568b670d0a56": {
+  "en": "Biggest total boost piled on one frequency by bands within 1/12 octave. Lower is better.",
+  "files": [
+   "js/autoeq.js"
+  ]
+ },
+ "0c400a2b61d1": {
+  "en": "In this view: {first} is #1, and {second} #2.",
+  "files": [
+   "js/autoeq.js"
+  ]
+ },
+ "41b74da6e599": {
+  "en": "In this view: {first} is #1.",
+  "files": [
+   "js/autoeq.js"
+  ]
+ },
+ "03bc9df09e30": {
+  "en": "In this view: {first} leads; the best Tryptify fit is #{place}.",
+  "files": [
+   "js/autoeq.js"
+  ]
+ },
+ "f00b357367d6": {
+  "en": "Ranking by · {better}",
+  "files": [
+   "js/autoeq.js"
+  ]
+ },
+ "45ce706cb792": {
+  "en": "Where it doesn't win: {text}",
+  "files": [
+   "js/autoeq.js"
+  ]
+ },
+ "b0b8fe8484dd": {
+  "en": "For scale: {headphone} with no EQ at all has a fit error of {rmse} dB, a preference score of {harman} pts and a worst error of {maxerr} dB.",
+  "files": [
+   "js/autoeq.js"
+  ]
+ },
+ "3225fc4345f3": {
+  "en": "The ranking could not load.",
+  "files": [
+   "js/autoeq.js"
+  ]
+ },
+ "5fd08aec7750": {
+  "en": "See it in SeapEngine",
+  "files": [
+   "js/autoeq.js"
+  ]
+ },
+ "9f46c48489f1": {
+  "en": "Version {version} · {size} MB · Android {android} and newer.",
+  "files": [
+   "js/download.js"
+  ]
+ },
+ "8c584785fdbb": {
+  "en": "Unavailable right now.",
+  "files": [
+   "js/download.js"
+  ]
+ },
+ "0f9893c85eaa": {
+  "en": "SEAP target",
+  "files": [
+   "js/graphs.js",
+   "js/tryout.js"
+  ]
+ },
+ "8b61c6f1caf0": {
+  "en": "Truthear Nova, no EQ",
+  "files": [
+   "js/graphs.js"
+  ]
+ },
+ "3d00e6c96ec6": {
+  "en": "Frequency response graph",
+  "files": [
+   "js/graphs.js"
+  ]
+ },
+ "5b871fee4a49": {
+  "en": "EQ curves graph",
+  "files": [
+   "js/graphs.js"
+  ]
+ },
+ "b183463e0180": {
+  "en": "app defaults",
+  "files": [
+   "js/graphs.js"
+  ]
+ },
+ "4247a33618f4": {
+  "en": "up to {khz} kHz",
+  "files": [
+   "js/graphs.js"
+  ]
+ },
+ "a332fef96f05": {
+  "en": "{bands} bands · {limit} (the Avg view shows the 10-band fits)",
+  "files": [
+   "js/graphs.js"
+  ]
+ },
+ "385e8c7645ec": {
+  "en": "{bands} bands · {limit}",
+  "files": [
+   "js/graphs.js"
+  ]
+ },
+ "ab9b61f3f050": {
+  "en": "The graphs could not load.",
+  "files": [
+   "js/graphs.js"
+  ]
+ },
+ "0e8a3ad980ec": {
+  "en": "target",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "314ef29ea19d": {
+  "en": "the shaded gap, averaged",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "280c51fc5edf": {
+  "en": "no EQ ≈ 76",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "44bdaa2fbe2b": {
+  "en": "good EQ ≈ 97",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "116a5734b684": {
+  "en": "not counted",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "c0792c1a434c": {
+  "en": "the single biggest miss",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "26aa936153e2": {
+  "en": "0 dB: louder clips",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "7b4221f658f8": {
+  "en": "an EQ boost over the top",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "2368dc3b6016": {
+  "en": "preamp turns it all down\n= volume you lose",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "e89dfb9451b6": {
+  "en": "fitted at 48 kHz",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "238616f4d1f3": {
+  "en": "played at 44.1 kHz",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "bfb71bab72bd": {
+  "en": "the treble shifts",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "44fcc6025195": {
+  "en": "a click",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "208499077440": {
+  "en": "time →",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "78f89f5201cd": {
+  "en": "short ring: crisp",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "5a24ead4e0e6": {
+  "en": "long ring: smeared",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "bdbcf28ba11b": {
+  "en": "three boosts, one note",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "bf6b1a0e7cec": {
+  "en": "bands within\n1/12 octave add up",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "5b9f1f7db397": {
+  "en": "Tryptify doesn't stop at its first guess. It places bands one at a time on the biggest remaining error, then goes back over all of them several times: each band is re-fitted against what the others leave, moving its frequency by up to half an octave, changing its width, and solving its gain exactly. The bands end up working together instead of each fixing its own spot, and that's what closes the gap. It also weighs bass and mids above the top octave, where measurements are least reliable.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "3b4fcc6f9051": {
+  "en": "With the limit at 10 kHz it can't reach this headphone's dip at 10–13 kHz, and squig.link comes out closer there.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "0cabdaa676ce": {
+  "en": "Fit error (RMSE)",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "cf052bad14d7": {
+  "en": "Lower is better",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "5c7a3470957c": {
+  "en": "How far, on average, the headphone with EQ lands from the target curve, from 20 Hz to 16 kHz. Picture the gap between the two lines, averaged out.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "7aa8728ba6e6": {
+  "en": "The smaller the gap, the closer the headphone sounds to the tuning you chose.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "e9068350dd01": {
+  "en": "Under 1 dB is a very close match. This headphone with no EQ is 2.92 dB off.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "044702d79db3": {
+  "en": "The preference model punishes broad tilts in the bass and in the overall balance far more than narrow wiggles. Tryptify weighs bass errors 1.5 times as much as the rest, and its Shelf ends method fixes the broad tilts first, with a low shelf at 105 Hz and a high shelf at 10 kHz, one smooth filter each. That's where the model looks, so that's where the points come from.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "09296f0fd8c0": {
+  "en": "With only 5 bands it trails squig.link and AutoEq here: its weighting spends a short band budget on the bass and the biggest misses first, not on the overall balance this model scores. At the 10 kHz limit squig.link leads too.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "7aab10488c30": {
+  "en": "Higher is better",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "b90d642b7808": {
+  "en": "A prediction of how much listeners would like the sound, from Harman's research into what people prefer (AutoEq's version of the in-ear model), scored against this target.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "3e384ce1f0d5": {
+  "en": "An average hides where the errors are. This weighs the ones people actually notice, like a tilted bass or treble.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "26a9697008ce": {
+  "en": "About 76 with no EQ; the mid-90s and up is excellent.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "b54d312b5e6b": {
+  "en": "Tryptify's band search always goes after the largest deviation first, averaged over three neighbouring points so one noisy point can't win. Its refinement then minimises squared error, which punishes one big miss far more than many small ones. So the biggest peak below 10 kHz is the first thing fixed and never the one left standing.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "e51aa8fbf9c5": {
+  "en": "At the 10 kHz limit squig.link gets the worst miss lower.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "34c9fd39b31a": {
+  "en": "Worst error, 20 Hz–10 kHz",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "294d0c38fa4a": {
+  "en": "The single biggest miss below 10 kHz: the one frequency where the headphone with EQ is furthest from the target.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "f285c34f7551": {
+  "en": "A good average can hide one sharp peak, and one peak is enough to sound harsh or boomy. Above 10 kHz isn't counted: measurements there change from ear to ear.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "e4946bc11054": {
+  "en": "Under 2 dB keeps every note in place. With no EQ it's 8 dB here.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "456b77932a04": {
+  "en": "This is the one Tryptify trades away. It fixes dips as well as peaks, with boosts of up to 12 dB in the bass, 6 dB up to 6 kHz and 3 dB above, because filling a dip is part of matching the target. A fit that leaves dips alone, or caps its boosts lower, needs less preamp: AutoEq's fits need about 3–5 dB less here. Nothing clips either way, because the app sets its preamp from the real summed response; you just turn the volume up a little.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "13f3dcdc73ec": {
+  "en": "AutoEq leads here at every limit.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "b8b84ed35ec9": {
+  "en": "EQ boosts would push loud music past 0 dB, where it clips and distorts. So a preamp turns everything down by about the biggest boost, and that's volume you lose.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "c2289d98b8f9": {
+  "en": "Less headroom lost means more volume left, which matters with a weak phone output or a small dongle.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "fa02c39114f6": {
+  "en": "A few dB is normal. Fits that chase every detail usually cost more.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "e215f44daedb": {
+  "en": "Narrow treble filters are the ones that change shape most when the same settings play at 44.1 or 96 kHz. Above 5 kHz Tryptify never uses a band narrower than Q 3, and never narrower than Q 2 for a boost, so its treble stays put. In the app its filters are also built with matched-Z coefficients (Vicanek), which keep their intended shape near the top of the band at any sample rate.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "985969ae9d77": {
+  "en": "EQ filters are worked out for one sample rate, here 48 kHz. Play a CD-quality (44.1 kHz) or hi-res (96 kHz) file and the same filters land slightly differently, mostly in the treble. Drift is the worst change.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "a9e9abf92b52": {
+  "en": "Low drift means the same sound whatever the file's sample rate.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "b628a74b863f": {
+  "en": "A few tenths of a dB or less is very small.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "cb0d65c7a506": {
+  "en": "A band rings longer the narrower it is (the higher its Q) and the lower its frequency. Tryptify caps Q at 5 everywhere, at 3 above 5 kHz and at 2 for every boost, and its Shelf ends method handles the broad ends with shelves instead of stacks of narrow bells. Fewer narrow bands means bands that stop vibrating sooner.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "efe6c7b24453": {
+  "en": "Every EQ band keeps vibrating for a moment after a sound stops, like a struck bell. This is how long bands from 300 Hz up take to fade away (by 60 dB). Narrow, sharp bands ring longest.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "fbc099ea9bf0": {
+  "en": "Long ringing smears transients: drum hits and plucked strings lose their snap.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "64b20636d301": {
+  "en": "Measured in milliseconds; shorter keeps attacks crisp.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "c7b87c93620d": {
+  "en": "When Tryptify re-fits a band, it first takes that band's own effect out, then fits it to what all the others leave. That makes two bands less likely to chase the same peak. A band that ends up under 0.2 dB is dropped instead of piling on, and boosts are capped by frequency.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "98ef860d82bf": {
+  "en": "When several bands boost nearly the same frequency (within 1/12 octave), their boosts add up. This is the biggest pile-up.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "c9bc7d7eaea4": {
+  "en": "Stacked boosts are a sign the fit is fighting itself. They cost headroom and can make one note stick out.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "5b99d0c3aa6e": {
+  "en": "A few dB is fine; big stacks are a warning sign.",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "67137ad23ab1": {
+  "en": "{title} diagram",
+  "files": [
+   "js/measures.js"
+  ]
+ },
+ "e53407cfe1a5": {
+  "en": "Player",
+  "files": [
+   "js/player.js"
+  ]
+ },
+ "5b772b7bfd0a": {
+  "en": "Shuffle",
+  "files": [
+   "js/player.js",
+   "js/wp-app.js"
+  ]
+ },
+ "50f94286ba30": {
+  "en": "Previous",
+  "files": [
+   "js/player.js",
+   "js/wp-app.js"
+  ]
+ },
+ "5d12bd53552c": {
+  "en": "Play",
+  "files": [
+   "js/player.js",
+   "js/wp-app.js"
+  ]
+ },
+ "bc981983e7f5": {
+  "en": "Next",
+  "files": [
+   "js/player.js",
+   "js/wp-app.js"
+  ]
+ },
+ "ae73bea0c2ce": {
+  "en": "Repeat: off",
+  "files": [
+   "js/player.js",
+   "js/wp-app.js"
+  ]
+ },
+ "1ad08a39c583": {
+  "en": "Seek",
+  "files": [
+   "js/player.js"
+  ]
+ },
+ "0f0973483d91": {
+  "en": "Mute",
+  "files": [
+   "js/player.js",
+   "js/wp-app.js"
+  ]
+ },
+ "3b18e8e33250": {
+  "en": "Volume",
+  "files": [
+   "js/player.js",
+   "js/wp-app.js"
+  ]
+ },
+ "7044c3104095": {
+  "en": "Unmute",
+  "files": [
+   "js/player.js",
+   "js/wp-app.js"
+  ]
+ },
+ "781961bc81c2": {
+  "en": "Pause",
+  "files": [
+   "js/player.js",
+   "js/wp-app.js"
+  ]
+ },
+ "621521f9a878": {
+  "en": "Untitled",
+  "files": [
+   "js/player.js",
+   "js/wp-app.js",
+   "js/wp-sources.js"
+  ]
+ },
+ "25509197bb8d": {
+  "en": "\"{title}\" is {format}, which plays in the app but not in this browser. Skipping.",
+  "files": [
+   "js/player.js"
+  ]
+ },
+ "7ad054bfb99b": {
+  "en": "\"{title}\" is in a format that plays in the app but not in this browser. Skipping.",
+  "files": [
+   "js/player.js"
+  ]
+ },
+ "9e06b10617f3": {
+  "en": "This song couldn't be played.",
+  "files": [
+   "js/player.js"
+  ]
+ },
+ "6e6d59397ac5": {
+  "en": "\"{title}\" couldn't be played here. Skipping.",
+  "files": [
+   "js/player.js"
+  ]
+ },
+ "9832ca73779d": {
+  "en": "Shuffle: on",
+  "files": [
+   "js/player.js"
+  ]
+ },
+ "504a635dfbb1": {
+  "en": "Shuffle: off",
+  "files": [
+   "js/player.js"
+  ]
+ },
+ "3c154d55dc0e": {
+  "en": "Repeat: all",
+  "files": [
+   "js/player.js",
+   "js/wp-app.js"
+  ]
+ },
+ "edda8053f5e8": {
+  "en": "Repeat: this song",
+  "files": [
+   "js/player.js",
+   "js/wp-app.js"
+  ]
+ },
+ "8c909edecf63": {
+  "en": "Switch to white",
+  "files": [
+   "js/site.js"
+  ]
+ },
+ "a5e8faaffb92": {
+  "en": "Switch to black",
+  "files": [
+   "js/site.js"
+  ]
+ },
+ "55949ee3b332": {
+  "en": "Harman over-ear 2018",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "7541586f4592": {
+  "en": "Harman in-ear 2019",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "8e3217733206": {
+  "en": "SEAP bass boost",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "a7e307a774b1": {
+  "en": "Diffuse field",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "89088b769736": {
+  "en": "Flat (calibration)",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "ca7545ef83db": {
+  "en": "The target could not load.",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "d5a7b1e324a2": {
+  "en": "The headphone list could not load.",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "5bc50e52805a": {
+  "en": "No headphone matches that.",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "864f3b6be307": {
+  "en": "{kind} · {count} measurement",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "e51614c5cb34": {
+  "en": "{kind} · {count} measurements",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "594cae967f3e": {
+  "en": "Loading {name}…",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "5e527bffa5f9": {
+  "en": "That measurement could not be loaded. Try another one from the list.",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "9da54b01544d": {
+  "en": "That file has no frequency and dB columns this can read.",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "72c74ee704da": {
+  "en": "Your file",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "13811fd70ee2": {
+  "en": "{name} → {target}: {count} band, fitted in {ms} ms.",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "789cbb1f1840": {
+  "en": "{name} → {target}: {count} bands, fitted in {ms} ms.",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "6406f978e721": {
+  "en": "Fit error, no EQ",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "706e8f36815d": {
+  "en": "Fit error, with EQ",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "f516029f0b19": {
+  "en": "lower is closer",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "fa89ca59c385": {
+  "en": "Preamp",
+  "files": [
+   "js/tryout.js",
+   "js/wp-app.js"
+  ]
+ },
+ "c35ff37b6084": {
+  "en": "headroom kept",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "e62ce9c19ce3": {
+  "en": "Measurement, target and result",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "c83dbbd3e607": {
+  "en": "Peak",
+  "files": [
+   "js/tryout.js",
+   "js/wp-app.js"
+  ]
+ },
+ "168827a1a319": {
+  "en": "Low shelf",
+  "files": [
+   "js/tryout.js",
+   "js/wp-app.js"
+  ]
+ },
+ "871e7f2f29f8": {
+  "en": "High shelf",
+  "files": [
+   "js/tryout.js",
+   "js/wp-app.js"
+  ]
+ },
+ "de9a652ad5ba": {
+  "en": "Copy for Equalizer APO",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "83d6f58c20ca": {
+  "en": "Copying was blocked; use Download instead.",
+  "files": [
+   "js/tryout.js"
+  ]
+ },
+ "6ce6c512ea43": {
+  "en": "Files",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "ef30b4022023": {
+  "en": "Music server",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "0a23e398a161": {
+  "en": "{count} band",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "26512a7d733a": {
+  "en": "{count} bands",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "d8a542556818": {
+  "en": "“{title}” plays next.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "44e95c97a917": {
+  "en": "the browser wants a tap first.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "5610f810204f": {
+  "en": "it would not load.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "ea989bb94184": {
+  "en": "Could not play “{title}”: {reason}",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "8305b195c3da": {
+  "en": "this browser cannot play that file.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "13ae374e9d0e": {
+  "en": "Nothing playing",
+  "files": [
+   "js/wp-app.js",
+   "js/wp-full.js"
+  ]
+ },
+ "5969748ce410": {
+  "en": "Player · Tryptify",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "d312758fed5f": {
+  "en": "{meta} · on {name}",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "018bf5a203b6": {
+  "en": "Pause on {name}",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "d7bc2ad22510": {
+  "en": "Play on {name}",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "209d456d2069": {
+  "en": "Nothing in the queue yet.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "846aee9f674b": {
+  "en": "Remove {title}",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "35282c85a2f7": {
+  "en": "Play {title} next",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "40d33c87c5e5": {
+  "en": "Play next",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "6962c8aae899": {
+  "en": "Open “{name}” again",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "37c1b9559f7a": {
+  "en": "Your music folder, read right here in the browser. Nothing is uploaded.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "64d3bf16249e": {
+  "en": "Your browser asks before Tryptify reads the folder again.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "f8df334f698c": {
+  "en": "Choose the folder your music is in. The folders inside it become your library.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "b9165d55bba1": {
+  "en": "Choose your music folder",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "1ade93bc3336": {
+  "en": "This browser picks the folder again on each visit. Chrome and Edge remember it.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "30baa24967e0": {
+  "en": "Folder",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "2de7d62297ad": {
+  "en": "Change folder",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "8a8779e12d0a": {
+  "en": "Your Cloud library, played straight from storage, through your AutoEQ.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "e0326eda586f": {
+  "en": "Sign in with the same account as the app, then come back.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "d0ad52974315": {
+  "en": "Search your Cloud",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "bce06414177f": {
+  "en": "Search",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "4bab2d8fe13f": {
+  "en": "More",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "0dc99a32b9c9": {
+  "en": "Nothing here yet. Upload music on the Account page or from the app.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "3289cdbd166e": {
+  "en": "If the server asks for one",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "6042522baeb7": {
+  "en": "Hi-Res Lossless (24-bit)",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "f473bce543a6": {
+  "en": "Lossless (16-bit)",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "b4172363144c": {
+  "en": "API URL",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "8be3c943b160": {
+  "en": "Password",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "68b0ab5b1850": {
+  "en": "Stream quality",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "efc007a393f6": {
+  "en": "Save",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "1526a17ee757": {
+  "en": "Unlock",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "e963907dac5c": {
+  "en": "Remove",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "6b167794509d": {
+  "en": "Trypt HiFi removed.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "9aaaa531e698": {
+  "en": "That is not a URL.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "d7de65268655": {
+  "en": "Use https://: this page is secure, so the browser blocks http:// addresses.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "820d6004b037": {
+  "en": "Checking…",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "8f557673289a": {
+  "en": "Saved. Answered in {ms} ms.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "d970eb82d54b": {
+  "en": "Trypt HiFi unlocked.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "0b4688d2578b": {
+  "en": "No answer from that URL. Check it, and that the server is running.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "bcc501b060a2": {
+  "en": "Connected in {ms} ms.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "40f1195540a3": {
+  "en": "Trypt HiFi unreachable",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "4279abcaec07": {
+  "en": "No answer. Check the address, and that the server is running.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "446f91c1b8ce": {
+  "en": "Search your music and Trypt HiFi",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "a708650ab60c": {
+  "en": "Search your music",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "794052bd384e": {
+  "en": "Streams from your own Trypt HiFi server, through your AutoEQ.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "a53438ee667d": {
+  "en": "Search Trypt HiFi",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "e1404b4267e4": {
+  "en": "Songs",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "4c45e72e850c": {
+  "en": "Albums",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "1a6a5ba8c23d": {
+  "en": "Searching…",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "6b0badbc7be4": {
+  "en": "Server and quality",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "00caa106958b": {
+  "en": "Loading the album…",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "d5525ecacf49": {
+  "en": "Album · Trypt HiFi",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "abaf48c94636": {
+  "en": "These songs need an API URL to play. Add one under Sources, on {link}.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "9321bfc1a61e": {
+  "en": "the dashboard",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "3cd2d8ccb14d": {
+  "en": "Liked songs",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "2b95a031c403": {
+  "en": "The songs you liked in the app, kept in your account.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "297ecfb131cf": {
+  "en": "Sign in with the same account as the app to see your liked songs.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "33ce417454bf": {
+  "en": "Loading…",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "e4dd45f51a8c": {
+  "en": "No liked songs yet. Tap the heart on a song in the app.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "77b69f32c878": {
+  "en": "Playlists",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "289206d9d31d": {
+  "en": "Sign in with the same account as the app to see your playlists.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "4c4846d34afd": {
+  "en": "This playlist is empty.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "34a2932acb09": {
+  "en": "The playlists you made in the app, kept in your account.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "7deb62283c95": {
+  "en": "No playlists yet. Make one in the app.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "029c01f9d57f": {
+  "en": "Navidrome, Gonic, Airsonic and other Subsonic servers. Your password is not kept: only a token made from it.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "b06792894d44": {
+  "en": "Server address",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "84c29015de33": {
+  "en": "Username",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "7842ff560609": {
+  "en": "Sign in again",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "b65463cb6a42": {
+  "en": "Connect",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "387c3a89cdbd": {
+  "en": "Use https://: this page is secure, so the browser blocks http:// servers.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "fd3e79699426": {
+  "en": "Connecting…",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "26287caf41de": {
+  "en": "Connected.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "3ee6109fa605": {
+  "en": "No answer. Check the address, and that the server allows this site (CORS).",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "e827654484e2": {
+  "en": "Your own Navidrome or other Subsonic server, through your AutoEQ.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "79ee77548511": {
+  "en": "Album · Music server",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "9a8260afa8ff": {
+  "en": "Search your server",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "d97d1ee339e4": {
+  "en": "Show",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "3adb61a5a88c": {
+  "en": "New albums",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "d47edd5f43f7": {
+  "en": "Played lately",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "e61561a80e64": {
+  "en": "Starred",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "1a86f21029f9": {
+  "en": "Server and sign-in",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "76d507077114": {
+  "en": "No starred songs on this server.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "9e23e9628255": {
+  "en": "No playlists on this server.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "48c09496ab5b": {
+  "en": "No albums yet.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "89c1e3f3a607": {
+  "en": "Nothing in your folder.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "54513685f724": {
+  "en": "Nothing in your Cloud.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "5c902ca94210": {
+  "en": "Nothing on your server.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "dcb7a1f84ddf": {
+  "en": "Nothing on Trypt HiFi.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "1c388f146f59": {
+  "en": "Now playing",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "76eb7251c0ac": {
+  "en": "Nothing yet",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "0e14888c3e6b": {
+  "en": "Start with your music folder, your Cloud or your music server.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "23958c8d04bd": {
+  "en": "from {source}",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "e0049a66519c": {
+  "en": "On",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "e606203311de": {
+  "en": "Pick your headphone once and everything plays corrected, with the same engine as the app.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "29cf115f8a77": {
+  "en": "Pick a headphone",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "d3dfa164a9d4": {
+  "en": "{bands} · preamp −{db} dB",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "64fbd995d3b6": {
+  "en": "Change",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "6da13addb000": {
+  "en": "Source",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "2c3cafa4db3f": {
+  "en": "File",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "da7a68734367": {
+  "en": "off",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "c5c5533844c5": {
+  "en": "Mono",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "db3d405b1067": {
+  "en": "on",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "2d2cb022bc3d": {
+  "en": "Speed",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "4188449d124c": {
+  "en": "{speed}× · pitch kept",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "4bed336194a9": {
+  "en": "Output",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "399906db3058": {
+  "en": "{rate} kHz · this browser",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "a1cac7d8d6b7": {
+  "en": "this browser",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "8fdd769e7d71": {
+  "en": "Signal path",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "6c280d47dc69": {
+  "en": "{count} song in “{name}” · read in the browser, never uploaded",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "e33ab9f2471c": {
+  "en": "{count} songs in “{name}” · read in the browser, never uploaded",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "4f3f8fd3df4e": {
+  "en": "“{name}” · needs a tap to open again",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "d18681863b7d": {
+  "en": "No folder chosen",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "cf9b77061f7b": {
+  "en": "Open",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "1838a4158f39": {
+  "en": "Choose folder",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "1b6c524ffb71": {
+  "en": "Signed in",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "4efbd3cff080": {
+  "en": "Signed out · sign in on the Account page",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "b0fbc4c108bc": {
+  "en": "{user} on {host}",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "98902dd15e00": {
+  "en": "Navidrome or another Subsonic server",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "9957202add4a": {
+  "en": "Add an API URL",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "2eb56be3c2d9": {
+  "en": "Sources",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "c8e308704911": {
+  "en": "Playback",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "78246d831f6a": {
+  "en": "Gapless",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "673bed93145e": {
+  "en": "Loads the next song early so it starts right away",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "7d594eddda9e": {
+  "en": "Keep pitch when the speed changes",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "567bfc4dad37": {
+  "en": "Up next",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "6bfe6083ab45": {
+  "en": "Nothing after this song.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "901357402b52": {
+  "en": "Show the queue",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "02d392ae96cf": {
+  "en": "The EQ curve, without preamp",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "4f9569447a4b": {
+  "en": "Playing everything through {name} → {target}, {bands}, preamp −{db} dB.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "d9dc34fb02f0": {
+  "en": "Off. Saved: {name} → {target}, {bands}, preamp −{db} dB.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "e6147b95fdf5": {
+  "en": "Pick a headphone and Tryptify fits an EQ to it with the app's own engine, then plays everything through it.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "5f032350284c": {
+  "en": "{bands} · up to {khz} kHz · {method}",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "308edd4c91af": {
+  "en": "shelf ends",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "62c6822e5f74": {
+  "en": "peaking",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "15983622f312": {
+  "en": "Highest EQ frequency",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "6a026a01e84a": {
+  "en": "Band count",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "88306943fea7": {
+  "en": "Method",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "136e3dc37c02": {
+  "en": "“{title}” is a file on {name}, so it stays there.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "4ba3fb624a6f": {
+  "en": "“{title}” needs an API URL in this browser first.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "76037a8714e0": {
+  "en": "“{title}” is on a music server this browser is not signed in to.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "ec584ba47b7c": {
+  "en": "“{title}” cannot play here.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "bdaa80dac134": {
+  "en": "your other device",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "4436fbb44701": {
+  "en": "Tryptify Connect is not connected.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "ec4fcf56196c": {
+  "en": "No answer from {name}. It may be asleep; try again.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "3988ce9ad9b6": {
+  "en": "Now playing on {name}.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "2285b98509ba": {
+  "en": "Nothing was playing there.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "9a82afbbb17a": {
+  "en": "Playing here, from {name}.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "03ddddaac520": {
+  "en": "{name} started playing, so this browser paused.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "a1be1809d483": {
+  "en": "Tryptify Connect said no.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "f204bba3035a": {
+  "en": "Devices: {count} other online",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "869df20c885c": {
+  "en": "Devices: {count} others online",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "df485c871329": {
+  "en": "Devices",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "f2e99ee3c425": {
+  "en": "Playing on {name}",
+  "files": [
+   "js/wp-app.js",
+   "js/wp-full.js"
+  ]
+ },
+ "08caa86f17f5": {
+  "en": "Last played on {name}",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "2adbd8cc4cde": {
+  "en": "Previous on {name}",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "cd1e7e4f969d": {
+  "en": "Next on {name}",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "49df29fca7a2": {
+  "en": "Play here",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "a2370809d99a": {
+  "en": "Sign in to see your other devices and move music between them.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "f1b6b737a498": {
+  "en": "Tryptify Connect is on in another tab of this browser.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "414a74476059": {
+  "en": "Use it in this tab",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "345929da4348": {
+  "en": "This browser",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "6e4d28d8ba61": {
+  "en": "Tryptify app",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "298c39056151": {
+  "en": "Playing",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "c38678c00702": {
+  "en": "Play there",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "a7a281ead4ec": {
+  "en": "Open Tryptify on another device, signed in to the same account, and it shows up here.",
+  "files": [
+   "js/wp-app.js"
+  ]
+ },
+ "fc61e74cd918": {
+  "en": "Leave full screen",
+  "files": [
+   "js/wp-full.js"
+  ]
+ },
+ "c79fc444078b": {
+  "en": "Fill the screen",
+  "files": [
+   "js/wp-full.js"
+  ]
+ },
+ "3650debd6daa": {
+  "en": "Finding the lyrics…",
+  "files": [
+   "js/wp-full.js"
+  ]
+ },
+ "f0c9b43934a7": {
+  "en": "Couldn’t reach the lyrics. Check the connection.",
+  "files": [
+   "js/wp-full.js"
+  ]
+ },
+ "4175ee41e906": {
+  "en": "No lyrics found for this song.",
+  "files": [
+   "js/wp-full.js"
+  ]
+ },
+ "9eac2dad0403": {
+  "en": "An instrumental.",
+  "files": [
+   "js/wp-full.js"
+  ]
+ },
+ "4f8d66259cda": {
+  "en": "These lyrics aren’t timed.",
+  "files": [
+   "js/wp-full.js"
+  ]
+ },
+ "aece23a5921f": {
+  "en": "Play a song to see its waterfall.",
+  "files": [
+   "js/wp-full.js"
+  ]
+ },
+ "df61a92a080b": {
+  "en": "The waterfall draws the sound playing here. This song plays on {name}.",
+  "files": [
+   "js/wp-full.js"
+  ]
+ },
+ "55cf9f799d6c": {
+  "en": "Press play to start the waterfall.",
+  "files": [
+   "js/wp-full.js"
+  ]
+ },
+ "131260cbfbb0": {
+  "en": "Music",
+  "files": [
+   "js/wp-sources.js"
+  ]
+ },
+ "913d9cbdf51d": {
+  "en": "Tryptify Cloud could not load.",
+  "files": [
+   "js/wp-sources.js"
+  ]
+ },
+ "93680b195d93": {
+  "en": "Sign in on the Account page first.",
+  "files": [
+   "js/wp-sources.js"
+  ]
+ },
+ "a0a94d933e8f": {
+  "en": "Add the Trypt HiFi API URL first.",
+  "files": [
+   "js/wp-sources.js"
+  ]
+ },
+ "9b1244f1776d": {
+  "en": "That password isn’t right for this server.",
+  "files": [
+   "js/wp-sources.js"
+  ]
+ },
+ "3865d4096d27": {
+  "en": "This server asks for a password.",
+  "files": [
+   "js/wp-sources.js"
+  ]
+ },
+ "a4198541cb8e": {
+  "en": "Trypt HiFi answered {status}.",
+  "files": [
+   "js/wp-sources.js"
+  ]
+ },
+ "451bc6609a18": {
+  "en": "it needs an API URL: add one under Sources, on the dashboard.",
+  "files": [
+   "js/wp-sources.js"
+  ]
+ },
+ "8c819f16ee6e": {
+  "en": "Add your music server first.",
+  "files": [
+   "js/wp-sources.js"
+  ]
+ },
+ "145d2feed7d6": {
+  "en": "The server answered {status}, not Subsonic.",
+  "files": [
+   "js/wp-sources.js"
+  ]
+ },
+ "3c2903c308a9": {
+  "en": "The server said no.",
+  "files": [
+   "js/wp-sources.js"
+  ]
+ },
+ "ed88dfa262c7": {
+  "en": "That is not an address.",
+  "files": [
+   "js/wp-sources.js"
+  ]
+ },
+ "cd95b41f85dd": {
+  "en": "Playlist",
+  "files": [
+   "js/wp-sources.js"
+  ]
+ },
+ "d97bfea2b075": {
+  "en": "connect your music server to play this.",
+  "files": [
+   "js/wp-sources.js"
+  ]
+ },
+ "cc19af5ae5a2": {
+  "en": "Your account could not load.",
+  "files": [
+   "js/wp-sources.js"
+  ]
+ }
+}

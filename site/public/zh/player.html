@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>播放器 · Tryptify</title>
+  <meta name="description" content="Tryptify 网页播放器：你的音乐文件夹、Tryptify Cloud 和 Trypt HiFi，都经过与应用相同的 AutoEQ。">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/player.css">
+  <script src="/js/theme-boot.js"></script>
+  <script src="/js/l10n/zh.js"></script>
+  <!-- l10n:alternates -->
+  <link rel="alternate" hreflang="en" href="https://tryptify.com/player">
+  <link rel="alternate" hreflang="zh-CN" href="https://tryptify.com/zh/player">
+  <link rel="alternate" hreflang="ja" href="https://tryptify.com/ja/player">
+  <link rel="alternate" hreflang="fr" href="https://tryptify.com/fr/player">
+  <link rel="alternate" hreflang="es" href="https://tryptify.com/es/player">
+  <link rel="alternate" hreflang="tr" href="https://tryptify.com/tr/player">
+  <link rel="alternate" hreflang="de" href="https://tryptify.com/de/player">
+  <link rel="alternate" hreflang="it" href="https://tryptify.com/it/player">
+  <link rel="alternate" hreflang="x-default" href="https://tryptify.com/player">
+  <!-- /l10n -->
+</head>
+<body class="wp">
+  <a class="wp-skip" href="#wp-main">跳到音乐</a>
+  <header class="wp-top">
+    <a class="brand" href="/zh" aria-label="Tryptify 首页"><svg class="mark" viewBox="17 17 74 74" aria-hidden="true"><rect x="18" y="18" width="72" height="72" rx="16" fill="#000" class="mark-tile"/><path d="M34,36 L34,72 M44,30 L44,78 M54,26 L54,82 M64,30 L64,78 M74,36 L74,72" stroke="#fff" stroke-width="4" fill="none"/></svg><span class="wordmark">Tryptify</span></a>
+    <span class="wp-tag">播放器</span>
+    <form class="wp-search" id="wp-search" role="search">
+      <label class="sr" for="wp-q">搜索</label>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+      <input id="wp-q" type="search" placeholder="搜索你的音乐" autocomplete="off" spellcheck="false">
+      <kbd aria-hidden="true">/</kbd>
+    </form>
+    <div class="wp-top-end">
+      <span class="wp-pill" id="wp-hifi-pill" hidden></span>
+      <button type="button" class="wp-icon" id="wp-theme" aria-label="在黑色与白色之间切换"></button>
+    </div>
+  </header>
+
+  <div class="wp-shell">
+    <nav class="wp-side" aria-label="播放器">
+      <a href="#/" data-route="home"><span>概览</span></a>
+      <a href="#/liked" data-route="liked"><span>喜欢的歌曲</span><small id="wp-count-liked"></small></a>
+      <a href="#/playlists" data-route="playlists"><span>歌单</span><small id="wp-count-playlists"></small></a>
+      <a href="#/files" data-route="files"><span>文件</span><small id="wp-count-local"></small></a>
+      <a href="#/cloud" data-route="cloud"><span>Tryptify Cloud</span></a>
+      <a href="#/hifi" data-route="hifi" id="wp-side-hifi" hidden><span>Trypt HiFi</span></a>
+      <a href="#/subsonic" data-route="subsonic"><span>音乐服务器</span></a>
+      <a href="#/autoeq" data-route="autoeq"><span>AutoEQ</span><small id="wp-eq-side"></small></a>
+      <nav class="langs" aria-label="Language" translate="no"><a href="/player" hreflang="en" lang="en" data-lang="en">English</a><a href="/zh/player" hreflang="zh-CN" lang="zh-CN" data-lang="zh" aria-current="true">简体中文</a><a href="/ja/player" hreflang="ja" lang="ja" data-lang="ja">日本語</a><a href="/fr/player" hreflang="fr" lang="fr" data-lang="fr">Français</a><a href="/es/player" hreflang="es" lang="es" data-lang="es">Español</a><a href="/tr/player" hreflang="tr" lang="tr" data-lang="tr">Türkçe</a><a href="/de/player" hreflang="de" lang="de" data-lang="de">Deutsch</a><a href="/it/player" hreflang="it" lang="it" data-lang="it">Italiano</a></nav>
+    </nav>
+
+    <main class="wp-main" id="wp-main" tabindex="-1">
+      <p class="wp-toast" id="wp-toast" role="status" hidden></p>
+
+      <!-- Dashboard -->
+      <div class="wp-view" id="view-home" hidden>
+        <div class="wp-tiles">
+          <div class="wp-tile wp-now" id="tile-now"></div>
+          <div class="wp-tile" id="tile-connect"></div>
+          <div class="wp-tile" id="tile-eq"></div>
+          <div class="wp-tile" id="tile-path"></div>
+          <div class="wp-tile" id="tile-sources"></div>
+          <div class="wp-tile" id="tile-playback"></div>
+          <div class="wp-tile" id="tile-next"></div>
+        </div>
+      </div>
+
+      <!-- The account's liked songs and playlists -->
+      <div class="wp-view" id="view-liked" hidden></div>
+      <div class="wp-view" id="view-playlists" hidden></div>
+
+      <!-- Files -->
+      <div class="wp-view" id="view-files" hidden></div>
+
+      <!-- Tryptify Cloud -->
+      <div class="wp-view" id="view-cloud" hidden></div>
+
+      <!-- Trypt HiFi -->
+      <div class="wp-view" id="view-hifi" hidden></div>
+
+      <!-- Music server: Navidrome and other Subsonic servers -->
+      <div class="wp-view" id="view-subsonic" hidden></div>
+
+      <!-- Search -->
+      <div class="wp-view" id="view-search" hidden></div>
+
+      <!-- AutoEQ: the AutoEQ page's try-out (js/tryout.js), full length -->
+      <div class="wp-view" id="view-autoeq" hidden>
+        <div class="wp-head">
+          <div>
+            <p class="eyebrow">AutoEQ</p>
+            <h1>校正你的耳机。</h1>
+            <p class="muted" id="wp-eq-active">选择一款耳机，Tryptify 会用应用自己的引擎为它拟合 EQ，然后让所有音乐都经过这个 EQ 播放。</p>
+          </div>
+          <label class="wp-switch"><input type="checkbox" id="wp-eq-on"><span>AutoEQ 已开启</span></label>
+        </div>
+        <section id="tryout">
+          <div class="card try">
+            <div class="try-search">
+              <label class="rank-label" for="hp-search">耳机</label>
+              <input type="search" id="hp-search" placeholder="搜索，例如 HD 600、Blessing 2、Truthear Nova" autocomplete="off" spellcheck="false">
+              <ul class="hp-results" id="hp-results" role="listbox" hidden></ul>
+              <p class="small muted">或 <label class="link" for="hp-file">载入测量文件</label> （squig.link、REW 或 AutoEq 导出文件：每行一个频率和 dB 值）<input type="file" id="hp-file" accept=".txt,.csv,text/plain,text/csv" hidden></p>
+            </div>
+            <div class="try-controls" id="try-controls">
+              <label>测量数据 <select id="hp-source"></select></label>
+              <label>目标曲线 <select id="hp-target"></select></label>
+              <label class="wp-chipped">频段 <select id="hp-bands"><option>5</option><option>8</option><option selected>10</option><option>16</option><option>20</option><option>31</option></select></label>
+              <label class="wp-chipped">最高 <select id="hp-max"><option value="10000">10 kHz</option><option value="14000">14 kHz</option><option value="16000" selected>16 kHz</option><option value="20000">20 kHz</option></select></label>
+              <label class="wp-chipped">方式 <select id="hp-alg"><option value="PEAKING">Peaking</option><option value="SHELF_ENDS">Shelf ends</option></select></label>
+              <label>平滑 <select id="hp-smooth"><option value="0" selected>Off</option><option value="5">5 %</option><option value="10">10 %</option><option value="20">20 %</option><option value="30">30 %</option></select></label>
+            </div>
+            <div class="rank-controls wp-chips" id="wp-chips"></div>
+            <p class="acct-msg small" id="try-msg" role="status">选择一款耳机开始。</p>
+            <div id="try-result" hidden>
+              <div class="try-stats" id="try-stats"></div>
+              <div class="g-legend try-legend"><span class="g-key s-target"><i></i>目标曲线</span><span class="g-key s-raw"><i></i>耳机（无 EQ）</span><span class="g-key s-ts"><i></i>使用 Tryptify 的 EQ</span><span class="g-key s-sq"><i></i>EQ 本身</span></div>
+              <div class="g-card">
+                <div class="g-head"><h3>频率响应</h3><span class="muted small" id="wp-fr-caption"></span></div>
+                <div class="g-box" id="try-graph"></div>
+              </div>
+            </div>
+            <div class="g-card" id="wp-eq-card" hidden>
+              <div class="g-head"><h3>EQ 曲线（不含前置增益）</h3><span class="muted small">仅 EQ</span></div>
+              <div class="g-box" id="wp-eq-graph"></div>
+            </div>
+            <div class="try-bands" id="wp-bands" hidden>
+              <table id="try-table"><thead><tr><th>#</th><th>类型</th><th>频率</th><th>增益</th><th>Q</th></tr></thead><tbody></tbody></table>
+              <div class="buttons">
+                <button type="button" class="btn primary" id="try-copy">复制为 Equalizer APO 格式</button>
+                <button type="button" class="btn" id="try-download">下载 .txt</button>
+              </div>
+              <p class="muted small">测量数据取自 GitHub 上的 AutoEq，以及发布这些数据的 squig.link 站点。EQ 就在你的浏览器里计算和播放。</p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <aside class="wp-queue" id="wp-queue" aria-label="播放队列" hidden>
+    <div class="wp-queue-head"><h2>播放队列</h2><button type="button" class="wp-icon" data-act="queue" aria-label="关闭播放队列"></button></div>
+    <ol id="wp-queue-list"></ol>
+  </aside>
+
+  <!-- Tryptify Connect: another device is playing -->
+  <div class="wp-elsewhere" id="wp-elsewhere" role="region" aria-label="正在其他设备上播放" hidden></div>
+  <div class="wp-devices" id="wp-devices" role="dialog" aria-label="Tryptify Connect" hidden>
+    <h2>Tryptify Connect</h2>
+    <div id="wp-devices-list"></div>
+  </div>
+
+  <!-- The full-screen player (js/wp-full.js): the song's art and lyrics, or its spectrum as a waterfall -->
+  <section class="wp-full" id="wp-full" role="dialog" aria-modal="false" aria-label="全屏播放器" hidden>
+    <div class="wp-full-bg" id="full-bg" aria-hidden="true"></div>
+    <header class="wp-full-top">
+      <div class="wp-full-modes" role="tablist" aria-label="显示">
+        <button type="button" role="tab" class="wp-full-mode" data-mode="lyrics" id="full-tab-lyrics" aria-selected="true">歌词</button>
+        <button type="button" role="tab" class="wp-full-mode" data-mode="waterfall" id="full-tab-waterfall" aria-selected="false">瀑布图</button>
+      </div>
+      <span class="wp-grow"></span>
+      <button type="button" class="wp-icon" id="full-screen" aria-label="全屏" aria-pressed="false"></button>
+      <button type="button" class="wp-icon" id="full-close" aria-label="关闭全屏播放器"></button>
+    </header>
+    <div class="wp-full-body">
+      <div class="wp-full-lyrics" id="full-lyrics" role="tabpanel" aria-labelledby="full-tab-lyrics">
+        <figure class="wp-full-art">
+          <img id="full-cover" alt="" hidden>
+          <span class="wp-full-cover-none" id="full-cover-none" aria-hidden="true"></span>
+          <figcaption><strong id="full-title"></strong><span id="full-artist"></span><span id="full-on" class="wp-full-on"></span></figcaption>
+        </figure>
+        <div class="wp-full-lines-box" id="full-lines-box">
+          <ol class="wp-full-lines" id="full-lines"></ol>
+          <p class="wp-full-note" id="full-lyrics-note" role="status"></p>
+        </div>
+      </div>
+      <div class="wp-full-wf" id="full-waterfall" role="tabpanel" aria-labelledby="full-tab-waterfall" hidden>
+        <canvas id="full-wf-canvas"></canvas>
+        <p class="wp-full-note" id="full-wf-note" role="status"></p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="wp-bar" id="wp-bar">
+    <div class="wp-bar-song">
+      <img class="wp-cover" id="bar-cover" alt="" width="52" height="52" hidden>
+      <span class="wp-cover wp-cover-none" id="bar-cover-none" aria-hidden="true"></span>
+      <div class="wp-bar-text"><strong id="bar-title">没有在播放</strong><span id="bar-artist" class="muted"></span></div>
+    </div>
+    <div class="wp-bar-mid">
+      <div class="wp-controls">
+        <button type="button" class="wp-icon" data-act="shuffle" id="bar-shuffle" aria-label="随机播放" aria-pressed="false"></button>
+        <button type="button" class="wp-icon" data-act="prev" aria-label="上一首"></button>
+        <button type="button" class="wp-icon wp-play" data-act="toggle" id="bar-play" aria-label="播放"></button>
+        <button type="button" class="wp-icon" data-act="next" aria-label="下一首"></button>
+        <button type="button" class="wp-icon" data-act="repeat" id="bar-repeat" aria-label="循环：关" aria-pressed="false"></button>
+      </div>
+      <div class="wp-seek">
+        <span id="bar-time">0:00</span>
+        <input type="range" id="bar-seek" min="0" max="0" step="0.1" value="0" aria-label="播放进度">
+        <span id="bar-dur">0:00</span>
+      </div>
+    </div>
+    <div class="wp-bar-end">
+      <a href="#/autoeq" class="wp-badge" id="bar-badge" hidden></a>
+      <button type="button" class="wp-icon" data-act="full" id="bar-full" aria-label="全屏播放器"></button>
+      <button type="button" class="wp-icon" data-act="devices" id="bar-devices" aria-label="设备" aria-expanded="false"></button>
+      <button type="button" class="wp-icon" data-act="queue" id="bar-queue" aria-label="播放队列" aria-expanded="false"></button>
+      <button type="button" class="wp-icon" data-act="mute" id="bar-mute" aria-label="静音"></button>
+      <input type="range" id="bar-volume" min="0" max="1" step="0.01" aria-label="音量">
+    </div>
+  </footer>
+
+  <script src="/js/vendor/supabase-2.117.3.js" defer></script>
+  <script src="/js/autoeq-engine.js" defer></script>
+  <script src="/js/tryout.js" defer></script>
+  <script src="/js/wp-engine.js" defer></script>
+  <script src="/js/wp-sources.js" defer></script>
+  <script src="/js/wp-connect.js" defer></script>
+  <script src="/js/wp-app.js" defer></script>
+  <script src="/js/wp-full.js" defer></script>
+</body>
+</html>

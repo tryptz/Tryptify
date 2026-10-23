@@ -13,18 +13,18 @@
   const $ = (id) => document.getElementById(id);
 
   const TARGETS = [
-    ["Harman_OE_2018", "Harman over-ear 2018", "over-ear"],
-    ["Harman_IE_2019", "Harman in-ear 2019", "in-ear"],
-    ["SEAP", "SEAP target", null],
-    ["SEAP_Bass", "SEAP bass boost", null],
-    ["Diffuse_Field", "Diffuse field", null],
+    ["Harman_OE_2018", T("Harman over-ear 2018"), "over-ear"],
+    ["Harman_IE_2019", T("Harman in-ear 2019"), "in-ear"],
+    ["SEAP", T("SEAP target"), null],
+    ["SEAP_Bass", T("SEAP bass boost"), null],
+    ["Diffuse_Field", T("Diffuse field"), null],
     ["Knowles", "Knowles", null],
     ["Moondrop_VDSF", "Moondrop VDSF", null],
     ["HiFiEndgame_2026", "HiFi Endgame 2026", null],
     ["HiFiEndgame_MKIII", "HiFi Endgame MKIII", null],
     ["PEQdB_Ultra", "PEQdB Ultra", null],
     ["PEQdB_Diamond", "PEQdB Diamond", null],
-    ["Flat_Line", "Flat (calibration)", null],
+    ["Flat_Line", T("Flat (calibration)"), null],
   ];
   const targetCache = new Map();
   let index = null, indexing = null;
@@ -44,7 +44,7 @@
   async function target(id) {
     if (!targetCache.has(id)) {
       const r = await fetch(`/data/targets/${id}.txt`);
-      if (!r.ok) throw new Error("The target could not load.");
+      if (!r.ok) throw new Error(T("The target could not load."));
       targetCache.set(id, E.parse(await r.text()));
     }
     return targetCache.get(id);
@@ -60,7 +60,7 @@
       for (const p of d.phones) p.k = p.n.toLowerCase().replace(/[^a-z0-9]+/g, " ");
       return d;
     }));
-  input.addEventListener("focus", () => loadIndex().catch(() => say("The headphone list could not load.", true)), { once: true });
+  input.addEventListener("focus", () => loadIndex().catch(() => say(T("The headphone list could not load."), true)), { once: true });
 
   let active = -1, shown = [];
   const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -83,7 +83,7 @@
     if (!shown.length) {
       const li = document.createElement("li");
       li.className = "muted";
-      li.textContent = "No headphone matches that.";
+      li.textContent = T("No headphone matches that.");
       results.append(li);
     }
     shown.forEach((p, i) => {
@@ -94,7 +94,9 @@
       n.textContent = p.n;
       const meta = document.createElement("span");
       meta.className = "muted small";
-      meta.textContent = `${p.t} · ${p.m.length} measurement${p.m.length === 1 ? "" : "s"}`;
+      meta.textContent = p.m.length === 1
+        ? T("{kind} · {count} measurement", { kind: p.t, count: p.m.length })
+        : T("{kind} · {count} measurements", { kind: p.t, count: p.m.length });
       li.append(n, meta);
       li.addEventListener("mousedown", (e) => { e.preventDefault(); choose(p); });
       results.append(li);
@@ -140,7 +142,7 @@
     if (!phone || phone.own) return fit();
     const [src, file] = phone.m[Number($("hp-source").value) || 0];
     const s = index.sources[src];
-    say(`Loading ${phone.n}…`);
+    say(T("Loading {name}…", { name: phone.n }));
     measurement = null;
     try {
       let text = null;
@@ -159,7 +161,7 @@
       if (measurement.length < 20) throw new Error("too few points");
       fit();
     } catch (_) {
-      say("That measurement could not be loaded. Try another one from the list.", true);
+      say(T("That measurement could not be loaded. Try another one from the list."), true);
     }
   }
 
@@ -168,11 +170,11 @@
     if (!f) return;
     const pts = E.parse(await f.text());
     e.target.value = "";
-    if (pts.length < 20) return say("That file has no frequency and dB columns this can read.", true);
+    if (pts.length < 20) return say(T("That file has no frequency and dB columns this can read."), true);
     phone = { n: f.name.replace(/\.[^.]+$/, ""), own: true };
     measurement = pts;
     input.value = phone.n;
-    $("hp-source").innerHTML = "<option>Your file</option>";
+    $("hp-source").innerHTML = "<option>" + T("Your file") + "</option>";
     fit();
   });
 
@@ -206,13 +208,14 @@
     lastFit = { bands, preamp, name: phone.n, target: tSel.options[tSel.selectedIndex].text, opts };
     const before = rmse(smoothed, offset, null, tgt), after = rmse(smoothed, offset, eqAt, tgt);
     $("try-result").hidden = false;
-    say(`${phone.n} → ${lastFit.target}: ${bands.length} bands, fitted in ${ms} ms.`);
+    const done = { name: phone.n, target: lastFit.target, count: bands.length, ms };
+    say(bands.length === 1 ? T("{name} → {target}: {count} band, fitted in {ms} ms.", done) : T("{name} → {target}: {count} bands, fitted in {ms} ms.", done));
     const stats = $("try-stats");
     stats.innerHTML = "";
     for (const [label, value, note] of [
-      ["Fit error, no EQ", `${before.toFixed(2)} dB`, "20 Hz–16 kHz"],
-      ["Fit error, with EQ", `${after.toFixed(2)} dB`, "lower is closer"],
-      ["Preamp", `−${preamp.toFixed(1)} dB`, "headroom kept"],
+      [T("Fit error, no EQ"), `${before.toFixed(2)} dB`, "20 Hz–16 kHz"],
+      [T("Fit error, with EQ"), `${after.toFixed(2)} dB`, T("lower is closer")],
+      [T("Preamp"), `−${preamp.toFixed(1)} dB`, T("headroom kept")],
     ]) {
       const d = document.createElement("div");
       d.innerHTML = `<span class="muted small"></span><strong></strong><span class="muted small"></span>`;
@@ -240,7 +243,7 @@
   function draw(meas, offset, eqAt, tgt) {
     const host = $("try-graph");
     host.textContent = "";
-    const svg = node("svg", { viewBox: `0 0 ${W} ${H}`, class: "graph", role: "img", "aria-label": "Measurement, target and result" }, host);
+    const svg = node("svg", { viewBox: `0 0 ${W} ${H}`, class: "graph", role: "img", "aria-label": T("Measurement, target and result") }, host);
     const lx0 = Math.log10(20), lx1 = Math.log10(20000);
     const x = (f) => P.l + ((Math.log10(f) - lx0) / (lx1 - lx0)) * (W - P.l - P.r);
     const raw = meas.map((p) => p.gain + offset);
@@ -280,7 +283,7 @@
   function table(bands) {
     const body = $("try-table").querySelector("tbody");
     body.textContent = "";
-    const names = { PEAKING: "Peak", LOWSHELF: "Low shelf", HIGHSHELF: "High shelf" };
+    const names = { PEAKING: T("Peak"), LOWSHELF: T("Low shelf"), HIGHSHELF: T("High shelf") };
     bands.forEach((b, i) => {
       const tr = document.createElement("tr");
       for (const v of [i + 1, names[b.type], b.freq >= 1000 ? `${(b.freq / 1000).toFixed(2)} kHz` : `${Math.round(b.freq)} Hz`,
@@ -323,9 +326,9 @@
     if (!lastFit) return;
     try {
       await navigator.clipboard.writeText(apo());
-      e.target.textContent = "Copied";
-      setTimeout(() => { e.target.textContent = "Copy for Equalizer APO"; }, 1500);
-    } catch (_) { say("Copying was blocked; use Download instead.", true); }
+      e.target.textContent = T("Copied");
+      setTimeout(() => { e.target.textContent = T("Copy for Equalizer APO"); }, 1500);
+    } catch (_) { say(T("Copying was blocked; use Download instead."), true); }
   });
   $("try-download").addEventListener("click", () => {
     if (!lastFit) return;

@@ -51,8 +51,8 @@
       el("path", { d: band(eq, target, 0, 0.82), class: "gap" }, svg);
       el("path", { d: curve(target), class: "line target" }, svg);
       el("path", { d: curve(eq, 0, 0.82), class: "line main draw" }, svg);
-      text(svg, X(0.84), Y(target(0.84)) - 8, "target", "lbl muted");
-      text(svg, X(0.22), Y(0.98), "the shaded gap, averaged", "lbl");
+      text(svg, X(0.84), Y(target(0.84)) - 8, T("target"), "lbl muted");
+      text(svg, X(0.22), Y(0.98), T("the shaded gap, averaged"), "lbl");
       el("line", { x1: X(0.82), y1: TOP + 20, x2: X(0.82), y2: BOT, class: "edge" }, svg);
       text(svg, X(0.82), TOP + 14, "16 kHz", "tick", "middle");
     },
@@ -72,34 +72,35 @@
       needle.dataset.pivot = `${cx} ${cy}`;
       text(svg, cx - r, cy + 18, "0", "tick", "middle");
       text(svg, cx + r, cy + 18, "100", "tick", "middle");
-      text(svg, cx - 78, cy - 66, "no EQ ≈ 76", "lbl muted", "end");
-      text(svg, cx + 70, cy - 76, "good EQ ≈ 97", "lbl");
+      text(svg, cx - 78, cy - 66, T("no EQ ≈ 76"), "lbl muted", "end");
+      text(svg, cx + 70, cy - 76, T("good EQ ≈ 97"), "lbl");
     },
     maxerr(svg) {
       axis(svg);
       const bump = (x) => 0.2 * Math.exp(-((x - 0.5) ** 2) / 0.0012);
       const eq = (x) => target(x) + 0.03 * Math.sin(x * 29) + bump(x);
       el("rect", { x: X(0.72), y: TOP, width: R - X(0.72), height: BOT - TOP, class: "zone" }, svg);
-      text(svg, X(0.86), TOP + 12, "not counted", "tick", "middle");
+      text(svg, X(0.86), TOP + 12, T("not counted"), "tick", "middle");
       text(svg, X(0.72) - 4, TOP + 12, "10 kHz", "tick", "end");
       el("path", { d: curve(target), class: "line target" }, svg);
       el("path", { d: curve(eq, 0, 0.72), class: "line main draw" }, svg);
       const x = X(0.5), y1 = Y(target(0.5)), y2 = Y(eq(0.5));
       el("line", { x1: x + 12, y1, x2: x + 12, y2, class: "arrow pop" }, svg);
-      text(svg, x + 18, (y1 + y2) / 2 + 4, "the single biggest miss", "lbl pop");
+      text(svg, x + 18, (y1 + y2) / 2 + 4, T("the single biggest miss"), "lbl pop");
     },
     headroom(svg) {
       el("line", { x1: L, y1: Y(0.62), x2: R, y2: Y(0.62), class: "ceiling" }, svg);
-      text(svg, R, Y(0.62) + 13, "0 dB: louder clips", "tick", "end");
+      text(svg, R, Y(0.62) + 13, T("0 dB: louder clips"), "tick", "end");
       const boosted = (x) => 0.48 + 0.3 * Math.exp(-((x - 0.3) ** 2) / 0.006) + 0.04 * Math.sin(x * 12);
       const lowered = (x) => boosted(x) - 0.2;
       el("path", { d: curve(boosted), class: "line target" }, svg);
       el("path", { d: curve(lowered), class: "line main draw" }, svg);
       const x = X(0.3);
       el("line", { x1: x, y1: Y(boosted(0.3)), x2: x, y2: Y(lowered(0.3)), class: "arrow pop" }, svg);
-      text(svg, x + 16, Y(0.95), "an EQ boost over the top", "lbl muted");
-      text(svg, X(0.44), Y(0.13), "preamp turns it all down", "lbl pop");
-      text(svg, X(0.44), Y(0.13) + 14, "= volume you lose", "lbl pop");
+      text(svg, x + 16, Y(0.95), T("an EQ boost over the top"), "lbl muted");
+      const [down, lose] = T("preamp turns it all down\n= volume you lose").split("\n");
+      text(svg, X(0.44), Y(0.13), down, "lbl pop");
+      text(svg, X(0.44), Y(0.13) + 14, lose || "", "lbl pop");
     },
     drift(svg) {
       axis(svg);
@@ -108,20 +109,20 @@
       el("path", { d: band(at48, at44, 0.6, 1), class: "gap" }, svg);
       el("path", { d: curve(at48), class: "line main" }, svg);
       el("path", { d: curve(at44), class: "line alt draw" }, svg);
-      text(svg, X(0.05), Y(0.62), "fitted at 48 kHz", "lbl");
-      text(svg, X(0.05), Y(0.5) + 14, "played at 44.1 kHz", "lbl muted");
-      text(svg, X(0.62), TOP + 6, "the treble shifts", "lbl pop");
+      text(svg, X(0.05), Y(0.62), T("fitted at 48 kHz"), "lbl");
+      text(svg, X(0.05), Y(0.5) + 14, T("played at 44.1 kHz"), "lbl muted");
+      text(svg, X(0.62), TOP + 6, T("the treble shifts"), "lbl pop");
     },
     ring(svg) {
       el("line", { x1: L, y1: Y(0.5), x2: R, y2: Y(0.5), class: "axis" }, svg);
-      text(svg, L, BOT + 16, "a click", "tick");
-      text(svg, R, BOT + 16, "time →", "tick", "end");
+      text(svg, L, BOT + 16, T("a click"), "tick");
+      text(svg, R, BOT + 16, T("time →"), "tick", "end");
       const short = (x) => 0.5 + 0.42 * Math.exp(-x / 0.05) * Math.sin(x * 140);
       const long = (x) => 0.5 + 0.42 * Math.exp(-x / 0.28) * Math.sin(x * 140);
       el("path", { d: curve(long, 0, 1, 400), class: "line target" }, svg);
       el("path", { d: curve(short, 0, 1, 400), class: "line main draw" }, svg);
-      text(svg, X(0.18), TOP + 4, "short ring: crisp", "lbl");
-      text(svg, X(0.55), TOP + 4, "long ring: smeared", "lbl muted");
+      text(svg, X(0.18), TOP + 4, T("short ring: crisp"), "lbl");
+      text(svg, X(0.55), TOP + 4, T("long ring: smeared"), "lbl muted");
     },
     stack(svg) {
       axis(svg);
@@ -131,75 +132,76 @@
       bells.forEach((b) => el("path", { d: curve((x) => base + b(x)), class: "line target" }, svg));
       const sum = (x) => base + bells.reduce((a, b) => a + b(x), 0);
       el("path", { d: curve(sum), class: "line main draw" }, svg);
-      text(svg, X(0.5) + 14, Y(sum(0.5)) + 6, "three boosts, one note", "lbl pop");
-      text(svg, X(0.06), Y(0.42), "bands within", "lbl muted");
-      text(svg, X(0.06), Y(0.42) + 14, "1/12 octave add up", "lbl muted");
+      text(svg, X(0.5) + 14, Y(sum(0.5)) + 6, T("three boosts, one note"), "lbl pop");
+      const [within, addUp] = T("bands within\n1/12 octave add up").split("\n");
+      text(svg, X(0.06), Y(0.42), within, "lbl muted");
+      text(svg, X(0.06), Y(0.42) + 14, addUp || "", "lbl muted");
     },
   };
 
   const TEXT = {
     rmse: {
-      tryptify: "Tryptify doesn't stop at its first guess. It places bands one at a time on the biggest remaining error, then goes back over all of them several times: each band is re-fitted against what the others leave, moving its frequency by up to half an octave, changing its width, and solving its gain exactly. The bands end up working together instead of each fixing its own spot, and that's what closes the gap. It also weighs bass and mids above the top octave, where measurements are least reliable.",
-      loses: "With the limit at 10 kHz it can't reach this headphone's dip at 10–13 kHz, and squig.link comes out closer there.",
-      title: "Fit error (RMSE)", better: "Lower is better",
-      what: "How far, on average, the headphone with EQ lands from the target curve, from 20 Hz to 16 kHz. Picture the gap between the two lines, averaged out.",
-      why: "The smaller the gap, the closer the headphone sounds to the tuning you chose.",
-      good: "Under 1 dB is a very close match. This headphone with no EQ is 2.92 dB off.",
+      tryptify: T("Tryptify doesn't stop at its first guess. It places bands one at a time on the biggest remaining error, then goes back over all of them several times: each band is re-fitted against what the others leave, moving its frequency by up to half an octave, changing its width, and solving its gain exactly. The bands end up working together instead of each fixing its own spot, and that's what closes the gap. It also weighs bass and mids above the top octave, where measurements are least reliable."),
+      loses: T("With the limit at 10 kHz it can't reach this headphone's dip at 10–13 kHz, and squig.link comes out closer there."),
+      title: T("Fit error (RMSE)"), better: T("Lower is better"),
+      what: T("How far, on average, the headphone with EQ lands from the target curve, from 20 Hz to 16 kHz. Picture the gap between the two lines, averaged out."),
+      why: T("The smaller the gap, the closer the headphone sounds to the tuning you chose."),
+      good: T("Under 1 dB is a very close match. This headphone with no EQ is 2.92 dB off."),
     },
     harman: {
-      tryptify: "The preference model punishes broad tilts in the bass and in the overall balance far more than narrow wiggles. Tryptify weighs bass errors 1.5 times as much as the rest, and its Shelf ends method fixes the broad tilts first, with a low shelf at 105 Hz and a high shelf at 10 kHz, one smooth filter each. That's where the model looks, so that's where the points come from.",
-      loses: "With only 5 bands it trails squig.link and AutoEq here: its weighting spends a short band budget on the bass and the biggest misses first, not on the overall balance this model scores. At the 10 kHz limit squig.link leads too.",
-      title: "Preference score", better: "Higher is better",
-      what: "A prediction of how much listeners would like the sound, from Harman's research into what people prefer (AutoEq's version of the in-ear model), scored against this target.",
-      why: "An average hides where the errors are. This weighs the ones people actually notice, like a tilted bass or treble.",
-      good: "About 76 with no EQ; the mid-90s and up is excellent.",
+      tryptify: T("The preference model punishes broad tilts in the bass and in the overall balance far more than narrow wiggles. Tryptify weighs bass errors 1.5 times as much as the rest, and its Shelf ends method fixes the broad tilts first, with a low shelf at 105 Hz and a high shelf at 10 kHz, one smooth filter each. That's where the model looks, so that's where the points come from."),
+      loses: T("With only 5 bands it trails squig.link and AutoEq here: its weighting spends a short band budget on the bass and the biggest misses first, not on the overall balance this model scores. At the 10 kHz limit squig.link leads too."),
+      title: T("Preference score"), better: T("Higher is better"),
+      what: T("A prediction of how much listeners would like the sound, from Harman's research into what people prefer (AutoEq's version of the in-ear model), scored against this target."),
+      why: T("An average hides where the errors are. This weighs the ones people actually notice, like a tilted bass or treble."),
+      good: T("About 76 with no EQ; the mid-90s and up is excellent."),
     },
     maxerr: {
-      tryptify: "Tryptify's band search always goes after the largest deviation first, averaged over three neighbouring points so one noisy point can't win. Its refinement then minimises squared error, which punishes one big miss far more than many small ones. So the biggest peak below 10 kHz is the first thing fixed and never the one left standing.",
-      loses: "At the 10 kHz limit squig.link gets the worst miss lower.",
-      title: "Worst error, 20 Hz–10 kHz", better: "Lower is better",
-      what: "The single biggest miss below 10 kHz: the one frequency where the headphone with EQ is furthest from the target.",
-      why: "A good average can hide one sharp peak, and one peak is enough to sound harsh or boomy. Above 10 kHz isn't counted: measurements there change from ear to ear.",
-      good: "Under 2 dB keeps every note in place. With no EQ it's 8 dB here.",
+      tryptify: T("Tryptify's band search always goes after the largest deviation first, averaged over three neighbouring points so one noisy point can't win. Its refinement then minimises squared error, which punishes one big miss far more than many small ones. So the biggest peak below 10 kHz is the first thing fixed and never the one left standing."),
+      loses: T("At the 10 kHz limit squig.link gets the worst miss lower."),
+      title: T("Worst error, 20 Hz–10 kHz"), better: T("Lower is better"),
+      what: T("The single biggest miss below 10 kHz: the one frequency where the headphone with EQ is furthest from the target."),
+      why: T("A good average can hide one sharp peak, and one peak is enough to sound harsh or boomy. Above 10 kHz isn't counted: measurements there change from ear to ear."),
+      good: T("Under 2 dB keeps every note in place. With no EQ it's 8 dB here."),
     },
     headroom: {
-      tryptify: "This is the one Tryptify trades away. It fixes dips as well as peaks, with boosts of up to 12 dB in the bass, 6 dB up to 6 kHz and 3 dB above, because filling a dip is part of matching the target. A fit that leaves dips alone, or caps its boosts lower, needs less preamp: AutoEq's fits need about 3–5 dB less here. Nothing clips either way, because the app sets its preamp from the real summed response; you just turn the volume up a little.",
-      loses: "AutoEq leads here at every limit.",
-      title: "Headroom lost", better: "Lower is better",
-      what: "EQ boosts would push loud music past 0 dB, where it clips and distorts. So a preamp turns everything down by about the biggest boost, and that's volume you lose.",
-      why: "Less headroom lost means more volume left, which matters with a weak phone output or a small dongle.",
-      good: "A few dB is normal. Fits that chase every detail usually cost more.",
+      tryptify: T("This is the one Tryptify trades away. It fixes dips as well as peaks, with boosts of up to 12 dB in the bass, 6 dB up to 6 kHz and 3 dB above, because filling a dip is part of matching the target. A fit that leaves dips alone, or caps its boosts lower, needs less preamp: AutoEq's fits need about 3–5 dB less here. Nothing clips either way, because the app sets its preamp from the real summed response; you just turn the volume up a little."),
+      loses: T("AutoEq leads here at every limit."),
+      title: T("Headroom lost"), better: T("Lower is better"),
+      what: T("EQ boosts would push loud music past 0 dB, where it clips and distorts. So a preamp turns everything down by about the biggest boost, and that's volume you lose."),
+      why: T("Less headroom lost means more volume left, which matters with a weak phone output or a small dongle."),
+      good: T("A few dB is normal. Fits that chase every detail usually cost more."),
     },
     drift: {
-      tryptify: "Narrow treble filters are the ones that change shape most when the same settings play at 44.1 or 96 kHz. Above 5 kHz Tryptify never uses a band narrower than Q 3, and never narrower than Q 2 for a boost, so its treble stays put. In the app its filters are also built with matched-Z coefficients (Vicanek), which keep their intended shape near the top of the band at any sample rate.",
+      tryptify: T("Narrow treble filters are the ones that change shape most when the same settings play at 44.1 or 96 kHz. Above 5 kHz Tryptify never uses a band narrower than Q 3, and never narrower than Q 2 for a boost, so its treble stays put. In the app its filters are also built with matched-Z coefficients (Vicanek), which keep their intended shape near the top of the band at any sample rate."),
       loses: "",
-      title: "Sample-rate drift", better: "Lower is better",
-      what: "EQ filters are worked out for one sample rate, here 48 kHz. Play a CD-quality (44.1 kHz) or hi-res (96 kHz) file and the same filters land slightly differently, mostly in the treble. Drift is the worst change.",
-      why: "Low drift means the same sound whatever the file's sample rate.",
-      good: "A few tenths of a dB or less is very small.",
+      title: T("Sample-rate drift"), better: T("Lower is better"),
+      what: T("EQ filters are worked out for one sample rate, here 48 kHz. Play a CD-quality (44.1 kHz) or hi-res (96 kHz) file and the same filters land slightly differently, mostly in the treble. Drift is the worst change."),
+      why: T("Low drift means the same sound whatever the file's sample rate."),
+      good: T("A few tenths of a dB or less is very small."),
     },
     ring: {
-      tryptify: "A band rings longer the narrower it is (the higher its Q) and the lower its frequency. Tryptify caps Q at 5 everywhere, at 3 above 5 kHz and at 2 for every boost, and its Shelf ends method handles the broad ends with shelves instead of stacks of narrow bells. Fewer narrow bands means bands that stop vibrating sooner.",
+      tryptify: T("A band rings longer the narrower it is (the higher its Q) and the lower its frequency. Tryptify caps Q at 5 everywhere, at 3 above 5 kHz and at 2 for every boost, and its Shelf ends method handles the broad ends with shelves instead of stacks of narrow bells. Fewer narrow bands means bands that stop vibrating sooner."),
       loses: "",
-      title: "Ringing above 300 Hz", better: "Lower is better",
-      what: "Every EQ band keeps vibrating for a moment after a sound stops, like a struck bell. This is how long bands from 300 Hz up take to fade away (by 60 dB). Narrow, sharp bands ring longest.",
-      why: "Long ringing smears transients: drum hits and plucked strings lose their snap.",
-      good: "Measured in milliseconds; shorter keeps attacks crisp.",
+      title: T("Ringing above 300 Hz"), better: T("Lower is better"),
+      what: T("Every EQ band keeps vibrating for a moment after a sound stops, like a struck bell. This is how long bands from 300 Hz up take to fade away (by 60 dB). Narrow, sharp bands ring longest."),
+      why: T("Long ringing smears transients: drum hits and plucked strings lose their snap."),
+      good: T("Measured in milliseconds; shorter keeps attacks crisp."),
     },
     stack: {
-      tryptify: "When Tryptify re-fits a band, it first takes that band's own effect out, then fits it to what all the others leave. That makes two bands less likely to chase the same peak. A band that ends up under 0.2 dB is dropped instead of piling on, and boosts are capped by frequency.",
+      tryptify: T("When Tryptify re-fits a band, it first takes that band's own effect out, then fits it to what all the others leave. That makes two bands less likely to chase the same peak. A band that ends up under 0.2 dB is dropped instead of piling on, and boosts are capped by frequency."),
       loses: "",
-      title: "Largest stacked boost", better: "Lower is better",
-      what: "When several bands boost nearly the same frequency (within 1/12 octave), their boosts add up. This is the biggest pile-up.",
-      why: "Stacked boosts are a sign the fit is fighting itself. They cost headroom and can make one note stick out.",
-      good: "A few dB is fine; big stacks are a warning sign.",
+      title: T("Largest stacked boost"), better: T("Lower is better"),
+      what: T("When several bands boost nearly the same frequency (within 1/12 octave), their boosts add up. This is the biggest pile-up."),
+      why: T("Stacked boosts are a sign the fit is fighting itself. They cost headroom and can make one note stick out."),
+      good: T("A few dB is fine; big stacks are a warning sign."),
     },
   };
 
   /** Draws measure [key] into [box]; animates it in when [M] (Motion) is given. */
   function draw(key, box, M) {
     box.textContent = "";
-    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, class: "mviz", role: "img", "aria-label": `${TEXT[key].title} diagram` });
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, class: "mviz", role: "img", "aria-label": T("{title} diagram", { title: TEXT[key].title }) });
     DRAW[key](svg);
     box.append(svg);
     if (!M) {

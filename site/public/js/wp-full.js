@@ -65,7 +65,7 @@
     const b = $("full-screen");
     b.innerHTML = on ? ICON.unfill : ICON.fill;
     b.setAttribute("aria-pressed", String(on));
-    b.setAttribute("aria-label", on ? "Leave full screen" : "Fill the screen");
+    b.setAttribute("aria-label", on ? T("Leave full screen") : T("Fill the screen"));
     setTimeout(() => { fitAboveBar(); sizeWaterfall(); }, 100);
   });
   document.addEventListener("visibilitychange", () => {
@@ -90,9 +90,9 @@
     const key = s ? s.key : null;
     if (key === shownKey) return;
     shownKey = key;
-    $("full-title").textContent = s ? s.title : "Nothing playing";
+    $("full-title").textContent = s ? s.title : T("Nothing playing");
     $("full-artist").textContent = s ? [s.artist, s.album].filter(Boolean).join(" · ") : "";
-    $("full-on").textContent = s && s.on ? `Playing on ${s.on}` : "";
+    $("full-on").textContent = s && s.on ? T("Playing on {name}", { name: s.on }) : "";
     const img = $("full-cover");
     img.hidden = !(s && s.cover);
     $("full-cover-none").hidden = !!(s && s.cover);
@@ -149,18 +149,18 @@
     lyrics = null; nowLine = -1;
     box.textContent = "";
     if (!s) { note.textContent = ""; return; }
-    note.textContent = "Finding the lyrics…";
+    note.textContent = T("Finding the lyrics…");
     let found = cache.get(s.key);
     if (found === undefined) {
       try { found = await fetchLyrics(s); } catch (_) { found = undefined; }
       if (found !== undefined) cache.set(s.key, found);
     }
     if (lyricsFor !== s.key) return; // the song moved on while they came
-    if (found === undefined) { note.textContent = "Couldn’t reach the lyrics. Check the connection."; return; }
-    if (!found || (!found.lines.length && !found.instrumental)) { note.textContent = "No lyrics found for this song."; return; }
-    if (found.instrumental) { note.textContent = "An instrumental."; return; }
+    if (found === undefined) { note.textContent = T("Couldn’t reach the lyrics. Check the connection."); return; }
+    if (!found || (!found.lines.length && !found.instrumental)) { note.textContent = T("No lyrics found for this song."); return; }
+    if (found.instrumental) { note.textContent = T("An instrumental."); return; }
     lyrics = found;
-    note.textContent = found.timed ? "" : "These lyrics aren’t timed.";
+    note.textContent = found.timed ? "" : T("These lyrics aren’t timed.");
     for (const [i, l] of found.lines.entries()) {
       const li = document.createElement("li");
       li.textContent = l.text || "♪";
@@ -301,9 +301,9 @@
     const g = c.getContext("2d");
     if (!s || !s.local || !Eng.webAudio) {
       g.clearRect(0, 0, c.width, c.height);
-      note.textContent = !s ? "Play a song to see its waterfall."
-        : !s.local ? `The waterfall draws the sound playing here. This song plays on ${s.on}.`
-        : "Press play to start the waterfall.";
+      note.textContent = !s ? T("Play a song to see its waterfall.")
+        : !s.local ? T("The waterfall draws the sound playing here. This song plays on {name}.", { name: s.on })
+        : T("Press play to start the waterfall.");
       return;
     }
     note.textContent = "";

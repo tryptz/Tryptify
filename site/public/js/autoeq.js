@@ -9,21 +9,21 @@
   if (!list) return;
 
   const ENGINES = {
-    ts: ["Tryptify Shelf ends", "Tryptify"],
-    tp: ["Tryptify Peaking", "Tryptify"],
-    ap: ["AutoEq peaking", "autoeq.app"],
-    as: ["AutoEq shelves", "autoeq.app"],
+    ts: [T("Tryptify Shelf ends"), "Tryptify"],
+    tp: [T("Tryptify Peaking"), "Tryptify"],
+    ap: [T("AutoEq peaking"), "autoeq.app"],
+    as: [T("AutoEq shelves"), "autoeq.app"],
     sq: ["squig.link (PEQdB)", "squig.link"],
   };
   // name, unit, decimals, higher is better, description (SeapEngine's words)
   const MEASURES = {
-    rmse: ["Fit error", "dB", 2, false, "How far measurement + EQ lands from the target, 20 Hz to 16 kHz. Lower is better."],
-    harman: ["Preference score", "pts", 1, true, "Olive in-ear preference model (AutoEq's implementation) against this target. Higher is better."],
-    maxerr: ["Worst error", "dB", 2, false, "The single biggest miss below 10 kHz. Lower is better."],
-    headroom: ["Headroom lost", "dB", 1, false, "Auto-preamp needed to avoid clipping, which is lost loudness. Lower is better."],
-    drift: ["Sample-rate drift", "dB", 2, false, "Fitted at 48 kHz, played at 44.1 or 96 kHz: the worst change in the curve. Lower is better."],
-    ring: ["Ringing above 300 Hz", "ms", 2, false, "Time for bands at 300 Hz and up to decay by 60 dB. Smears transients. Lower is better."],
-    stack: ["Largest stacked boost", "dB", 2, false, "Biggest total boost piled on one frequency by bands within 1/12 octave. Lower is better."],
+    rmse: [T("Fit error"), "dB", 2, false, T("How far measurement + EQ lands from the target, 20 Hz to 16 kHz. Lower is better.")],
+    harman: [T("Preference score"), T("pts"), 1, true, T("Olive in-ear preference model (AutoEq's implementation) against this target. Higher is better.")],
+    maxerr: [T("Worst error"), "dB", 2, false, T("The single biggest miss below 10 kHz. Lower is better.")],
+    headroom: [T("Headroom lost"), "dB", 1, false, T("Auto-preamp needed to avoid clipping, which is lost loudness. Lower is better.")],
+    drift: [T("Sample-rate drift"), "dB", 2, false, T("Fitted at 48 kHz, played at 44.1 or 96 kHz: the worst change in the curve. Lower is better.")],
+    ring: [T("Ringing above 300 Hz"), "ms", 2, false, T("Time for bands at 300 Hz and up to decay by 60 dB. Smears transients. Lower is better.")],
+    stack: [T("Largest stacked boost"), "dB", 2, false, T("Biggest total boost piled on one frequency by bands within 1/12 octave. Lower is better.")],
   };
   const SIDE = ["rmse", "harman", "headroom"];
 
@@ -76,8 +76,10 @@
         higher ? values[b][state.by] - values[a][state.by] : values[a][state.by] - values[b][state.by]);
       const best = ranked.findIndex((e) => ENGINES[e][1] === "Tryptify");
       place.textContent = best === 0
-        ? `In this view: ${ENGINES[ranked[0]][0]} is #1${ENGINES[ranked[1]][1] === "Tryptify" ? `, and ${ENGINES[ranked[1]][0]} #2` : ""}.`
-        : `In this view: ${ENGINES[ranked[0]][0]} leads; the best Tryptify fit is #${best + 1}.`;
+        ? (ENGINES[ranked[1]][1] === "Tryptify"
+          ? T("In this view: {first} is #1, and {second} #2.", { first: ENGINES[ranked[0]][0], second: ENGINES[ranked[1]][0] })
+          : T("In this view: {first} is #1.", { first: ENGINES[ranked[0]][0] }))
+        : T("In this view: {first} leads; the best Tryptify fit is #{place}.", { first: ENGINES[ranked[0]][0], place: best + 1 });
       place.classList.toggle("wins", best === 0);
     }
     const order = Object.keys(values).sort((a, b) =>
@@ -139,14 +141,14 @@
     if (!X || explained === state.by) return;
     explained = state.by;
     const t = X.TEXT[state.by];
-    document.getElementById("explain-kicker").textContent = `Ranking by · ${t.better}`;
+    document.getElementById("explain-kicker").textContent = T("Ranking by · {better}", { better: t.better });
     document.getElementById("explain-title").textContent = t.title;
     document.getElementById("explain-what").textContent = t.what;
     document.getElementById("explain-why").textContent = t.why;
     document.getElementById("explain-good").textContent = t.good;
     document.getElementById("explain-tryptify").textContent = t.tryptify || "";
     const loses = document.getElementById("explain-loses");
-    loses.textContent = t.loses ? `Where it doesn't win: ${t.loses}` : "";
+    loses.textContent = t.loses ? T("Where it doesn't win: {text}", { text: t.loses }) : "";
     loses.hidden = !t.loses;
     X.draw(state.by, document.getElementById("explain-visual"), moving ? M : null);
     if (moving) M.animate("#explain .explain-text > *", { opacity: [0, 1], y: [8, 0] }, { duration: 0.4, delay: M.stagger(0.05) });
@@ -196,10 +198,11 @@
       data = d;
       const n = d.noEq || {};
       document.getElementById("rank-baseline").textContent =
-        `For scale: ${d.headphone} with no EQ at all has a fit error of ${n.rmse} dB, a preference score of ${n.harman} pts and a worst error of ${n.maxerr} dB.`;
+        T("For scale: {headphone} with no EQ at all has a fit error of {rmse} dB, a preference score of {harman} pts and a worst error of {maxerr} dB.",
+          { headphone: d.headphone, rmse: n.rmse, harman: n.harman, maxerr: n.maxerr });
       render(true);
     })
     .catch(() => {
-      list.innerHTML = '<li class="muted">The ranking could not load. <a href="https://seapengine.lol/">See it in SeapEngine</a>.</li>';
+      list.innerHTML = '<li class="muted">' + T("The ranking could not load.") + ' <a href="https://seapengine.lol/">' + T("See it in SeapEngine") + '</a>.</li>';
     });
 })();

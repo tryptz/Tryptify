@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tryptify Cloud：高速ストリーミングのための個人用音楽ストレージ</title>
+  <meta name="description" content="Tryptify Cloud は、高速ストリーミングのために作られた、あなた専用の Subsonic API 音楽ストレージです。一度アップロードすれば、Tryptify でどこでも再生できます。100 GB で月額 $3.99 から、7 日間の無料トライアル付き。">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/js/theme-boot.js"></script>
+  <script src="/js/l10n/ja.js"></script>
+  <!-- l10n:alternates -->
+  <link rel="alternate" hreflang="en" href="https://tryptify.com/cloud">
+  <link rel="alternate" hreflang="zh-CN" href="https://tryptify.com/zh/cloud">
+  <link rel="alternate" hreflang="ja" href="https://tryptify.com/ja/cloud">
+  <link rel="alternate" hreflang="fr" href="https://tryptify.com/fr/cloud">
+  <link rel="alternate" hreflang="es" href="https://tryptify.com/es/cloud">
+  <link rel="alternate" hreflang="tr" href="https://tryptify.com/tr/cloud">
+  <link rel="alternate" hreflang="de" href="https://tryptify.com/de/cloud">
+  <link rel="alternate" hreflang="it" href="https://tryptify.com/it/cloud">
+  <link rel="alternate" hreflang="x-default" href="https://tryptify.com/cloud">
+  <!-- /l10n -->
+</head>
+<body>
+  <header class="top">
+    <div class="wrap glass">
+      <a class="brand" href="/ja" aria-label="Tryptify ホーム"><svg class="mark" viewBox="17 17 74 74" aria-hidden="true"><rect x="18" y="18" width="72" height="72" rx="16" fill="#000" class="mark-tile"/><path d="M34,36 L34,72 M44,30 L44,78 M54,26 L54,82 M64,30 L64,78 M74,36 L74,72" stroke="#fff" stroke-width="4" fill="none"/></svg><span class="wordmark">Tryptify</span></a>
+      <nav class="nav" aria-label="メイン">
+        <a href="/ja">アプリ</a>
+        <a href="/ja/autoeq">AutoEQ</a>
+        <a href="/ja/cloud" aria-current="page">Cloud</a>
+        <a href="/ja/player">プレーヤー</a>
+        <a href="/ja/account">アカウント</a>
+        <a href="/ja/changelog" class="nav-wide">更新情報</a>
+        <a href="/ja/contact">お問い合わせ</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <p class="eyebrow">Tryptify Cloud</p>
+      <h1>高速ストリーミングのために作られた、あなた専用の Subsonic API 音楽ストレージ。</h1>
+      <p class="lead">自分の音楽を一度アップロードすれば、Tryptify でどこでも再生できます。自宅のパソコンを付けっぱなしにする必要も、サーバーの設定も、ポート開放もいりません。</p>
+      <div class="buttons">
+        <a class="btn primary" href="#pricing">プランを見る</a>
+        <a class="btn" href="/ja/download">アプリを入手</a>
+      </div>
+    </section>
+
+    <section>
+      <h2>使い方</h2>
+      <ol class="steps">
+        <li><strong>Tryptify にサインイン</strong>し、「設定 › 接続 › Tryptify Cloud」を開きます。</li>
+        <li><strong>プランを選ぶか、無料トライアルを始めます。</strong>支払い画面はブラウザで開きます。</li>
+        <li><strong>曲をアップロード</strong>します。アプリの「ライブラリ › 端末内」で曲のメニューを開き、「Tryptify Cloud にアップロード」をタップします。</li>
+        <li><strong>どこでも再生</strong>できます。「ライブラリ › マイサーバー」と「検索」から、元の音質のまま聴けます。</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>主な特長</h2>
+      <div class="grid">
+        <div class="card"><h3>Subsonic API ベース</h3><p>ライブラリはオープンな Subsonic API（Navidrome と同じ API）で応答するので、自宅サーバーと同じ感覚でブラウズやシークができます。</p></div>
+        <div class="card"><h3>あなただけのライブラリ</h3><p>ライブラリを閲覧・再生できるのは、あなたのアカウントだけです。各デバイスはそれぞれ専用のランダムなパスワードでサインインし、アカウントのパスワードは使いません。</p></div>
+        <div class="card"><h3>対応フォーマット</h3><p>FLAC、ALAC、MP3、AAC/M4A、Ogg Vorbis、Opus、WAV、AIFF、APE、WMA に対応。1 ファイル最大 2 GB で、カバーアートも保存できます。</p></div>
+      </div>
+    </section>
+
+    <section id="pricing">
+      <h2>料金</h2>
+      <p class="muted">価格は米ドル表示です。売上税や VAT が適用される場合は、購入手続き時に加算されます。</p>
+      <div class="period" role="group" aria-label="請求期間" hidden>
+        <button type="button" data-period="monthly" aria-pressed="true">月払い</button>
+        <button type="button" data-period="yearly" aria-pressed="false">年払い <span class="save">16% お得</span></button>
+        <span class="period-pill" aria-hidden="true"></span>
+      </div>
+      <div class="plans">
+        <div class="plan">
+          <div class="name">Lite</div>
+          <div class="size">100 GB</div>
+          <div class="price"><span class="amount" data-monthly="3.99" data-yearly="39.99">$3.99</span> <small class="per" data-monthly="/ 月" data-yearly="/ 年">/ 月</small></div>
+          <div class="year" data-monthly="または $39.99 / 年" data-yearly="月あたり $3.33（年払い）">または $39.99 / 年</div>
+        </div>
+        <div class="plan featured">
+          <div class="name">Plus</div>
+          <div class="size">250 GB</div>
+          <div class="price"><span class="amount" data-monthly="9.99" data-yearly="99.99">$9.99</span> <small class="per" data-monthly="/ 月" data-yearly="/ 年">/ 月</small></div>
+          <div class="year" data-monthly="または $99.99 / 年" data-yearly="月あたり $8.33（年払い）">または $99.99 / 年</div>
+        </div>
+        <div class="plan">
+          <div class="name">Max</div>
+          <div class="size">500 GB</div>
+          <div class="price"><span class="amount" data-monthly="19.99" data-yearly="199.99">$19.99</span> <small class="per" data-monthly="/ 月" data-yearly="/ 年">/ 月</small></div>
+          <div class="year" data-monthly="または $199.99 / 年" data-yearly="月あたり $16.67（年払い）">または $199.99 / 年</div>
+        </div>
+      </div>
+      <div class="trial">
+        <strong>20 GB 付きの 7 日間無料トライアル</strong>は、どの月額プランでも、アカウントごとに 1 回だけ利用できます。開始にはカードが必要です。7 日間が終わる前に解約すれば料金はかかりません。解約しなかった場合は、選んだプランが始まり、料金が請求されます。
+      </div>
+      <ul class="ticks muted">
+        <li>サブスクリプションは、解約するまで自動で更新されます。解約はアプリ（「サブスクリプションの管理・解約」）からいつでもでき、支払い済みの期間が終わるまではプランをそのまま使えます。</li>
+        <li>プランが終了しても、音楽は 7 日間は再生・ダウンロードできます。その後、削除されます。</li>
+        <li>容量を超えても追加料金はかかりません。空き容量を作るかプランを変更するまで、アップロードが止まるだけです。</li>
+        <li>成人向け・NSFW コンテンツは一切禁止です。性的に露骨なコンテンツ、ヌード、アダルト素材は保存できません（<a href="/ja/terms#no-adult-content">利用規約 第8条</a>）。</li>
+        <li>支払いは、販売事業者（Merchant of Record）である <a href="https://www.creem.io">Creem</a> が処理します。<a href="/ja/refunds">返金ポリシー</a>と<a href="/ja/terms">利用規約</a>をご覧ください。</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div>© 2026 tryptz · Tryptify · <a href="mailto:support@tryptify.com">support@tryptify.com</a></div>
+      <nav>
+        <a href="/ja/download">ダウンロード</a>
+        <a href="/ja/changelog">変更履歴</a>
+        <a href="/ja/player">ウェブプレーヤー</a>
+        <a href="/ja/autoeq">AutoEQ ランキング</a>
+        <a href="/ja">アプリ</a>
+        <a href="/ja/terms">利用規約</a>
+        <a href="/ja/privacy">プライバシーポリシー</a>
+        <a href="/ja/refunds">返金ポリシー</a>
+        <a href="/ja/contact">お問い合わせ</a>
+      </nav>
+      <nav class="langs" aria-label="Language" translate="no"><a href="/cloud" hreflang="en" lang="en" data-lang="en">English</a><a href="/zh/cloud" hreflang="zh-CN" lang="zh-CN" data-lang="zh">简体中文</a><a href="/ja/cloud" hreflang="ja" lang="ja" data-lang="ja" aria-current="true">日本語</a><a href="/fr/cloud" hreflang="fr" lang="fr" data-lang="fr">Français</a><a href="/es/cloud" hreflang="es" lang="es" data-lang="es">Español</a><a href="/tr/cloud" hreflang="tr" lang="tr" data-lang="tr">Türkçe</a><a href="/de/cloud" hreflang="de" lang="de" data-lang="de">Deutsch</a><a href="/it/cloud" hreflang="it" lang="it" data-lang="it">Italiano</a></nav>
+    </div>
+  </footer>
+  <script src="/js/motion-12.23.12.js"></script>
+  <script src="/js/site.js"></script>
+</body>
+</html>
