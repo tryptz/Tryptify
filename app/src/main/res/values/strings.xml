@@ -592,6 +592,7 @@
     <string name="chart_none_detail">Windowed charts are drawn from global listening data, which thins out for smaller genres. Try a longer window, or All time.</string>
     <string name="chart_none_in_catalogue">None of this chart is in the catalogue</string>
     <string name="chart_partial">Playing %1$d of %2$d — the rest aren’t in the catalogue</string>
+    <string name="chart_found_partial">Found %1$d of %2$d — the rest aren’t in the catalogue</string>
     <string name="world_radio">World radio</string>
     <string name="search_stations">Search stations</string>
     <string name="outline_glow">Outline glow</string>

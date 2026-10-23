@@ -614,6 +614,7 @@
     <string name="chart_none_detail">Les classements par période reposent sur les écoutes mondiales, qui se raréfient pour les petits genres. Essayez une période plus longue, ou Depuis toujours.</string>
     <string name="chart_none_in_catalogue">Aucun titre de ce classement n’est au catalogue</string>
     <string name="chart_partial">Lecture de %1$d sur %2$d — les autres ne sont pas au catalogue</string>
+    <string name="chart_found_partial">%1$d sur %2$d trouvés — les autres ne sont pas au catalogue</string>
     <string name="world_radio">Radios du monde</string>
     <string name="search_stations">Rechercher des stations</string>
     <string name="outline_glow">Halo des contours</string>

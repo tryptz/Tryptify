@@ -2,7 +2,7 @@ package tf.monochrome.android.ui.discover
 
 import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,9 +37,12 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -89,6 +92,48 @@ fun GenreChartScreen(
     val messageContext = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(genreId) { viewModel.load(genreId) }
+
+    // Multi-select: a chart row has no preview and no menu, so holding it
+    // picks it. The picked rows are found in the catalogue only when the bar
+    // acts, the way Play the chart finds them.
+    val selection = tf.monochrome.android.ui.components.rememberTrackSelectionState<String>()
+    androidx.activity.compose.BackHandler(enabled = selection.active) { selection.clear() }
+    // A new window or a refresh is another list: its ranks are other songs.
+    LaunchedEffect(chart) { selection.clear() }
+    val selectedEntries = { chart?.entries.orEmpty().filter { it.selectionKey in selection.selectedIds } }
+    var addSelectionToPlaylist by remember { mutableStateOf(false) }
+    var createPlaylistForSelection by remember { mutableStateOf(false) }
+    if (addSelectionToPlaylist) {
+        val playlists by playerViewModel.playlists.collectAsStateWithLifecycle()
+        tf.monochrome.android.ui.components.AddToPlaylistSheet(
+            title = androidx.compose.ui.res.pluralStringResource(R.plurals.add_n_tracks_to_playlist, selection.count, selection.count),
+            playlists = playlists,
+            onDismiss = { addSelectionToPlaylist = false },
+            onPlaylistSelected = { playlist ->
+                viewModel.resolveAll(selectedEntries()) { tracks ->
+                    playerViewModel.addTracksToPlaylist(playlist.id, tracks.map { it.toLegacyTrack() })
+                }
+                addSelectionToPlaylist = false
+                selection.clear()
+            },
+            onCreateNew = {
+                addSelectionToPlaylist = false
+                createPlaylistForSelection = true
+            },
+        )
+    }
+    if (createPlaylistForSelection) {
+        tf.monochrome.android.ui.components.CreatePlaylistDialog(
+            onDismiss = { createPlaylistForSelection = false },
+            onSubmit = { name, description ->
+                viewModel.resolveAll(selectedEntries()) { tracks ->
+                    playerViewModel.createPlaylist(name, description, tracks.map { it.toLegacyTrack() })
+                }
+                createPlaylistForSelection = false
+                selection.clear()
+            },
+        )
+    }
     LaunchedEffect(message) {
         message?.let {
             snackbarHost.showSnackbar(it.resolve(messageContext))
@@ -123,6 +168,23 @@ fun GenreChartScreen(
                 selected = window,
                 onSelect = viewModel::selectWindow,
             )
+            androidx.compose.animation.AnimatedVisibility(visible = selection.active) {
+                tf.monochrome.android.ui.components.TrackSelectionBar(
+                    selectedCount = selection.count,
+                    onClose = { selection.clear() },
+                    onAddToQueue = {
+                        viewModel.resolveAll(selectedEntries()) { playerViewModel.addUnifiedToQueue(it) }
+                        selection.clear()
+                    },
+                    onAddToParty = tf.monochrome.android.ui.party.LocalPartyAdder.current?.let { party ->
+                        {
+                            viewModel.resolveAll(selectedEntries()) { party.unified(it) }
+                            selection.clear()
+                        }
+                    },
+                    onAddToPlaylist = { addSelectionToPlaylist = true },
+                )
+            }
 
             val entries = chart?.entries.orEmpty()
             when {
@@ -155,7 +217,13 @@ fun GenreChartScreen(
                     items(entries, key = { "${it.rank}:${it.matchKey}" }) { entry ->
                         ChartRow(
                             entry = entry,
-                            onPlay = { viewModel.play(entry, playerViewModel) },
+                            onPlay = {
+                                if (selection.active) selection.toggle(entry.selectionKey)
+                                else viewModel.play(entry, playerViewModel)
+                            },
+                            onLongClick = { selection.toggle(entry.selectionKey) },
+                            selectionMode = selection.active,
+                            selected = entry.selectionKey in selection.selectedIds,
                         )
                     }
                 }
@@ -255,14 +323,22 @@ private fun EmptyChart(chart: GenreChart?) {
 }
 
 @Composable
-private fun ChartRow(entry: ChartEntry, onPlay: () -> Unit) {
+private fun ChartRow(
+    entry: ChartEntry,
+    onPlay: () -> Unit,
+    onLongClick: () -> Unit,
+    selectionMode: Boolean,
+    selected: Boolean,
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onPlay)
+            .combinedClickable(onClick = onPlay, onLongClick = onLongClick)
+            .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent)
             .padding(horizontal = MonoDimens.spacingLg, vertical = MonoDimens.spacingSm),
     ) {
+        if (selectionMode) tf.monochrome.android.ui.components.SelectionCheck(selected)
         Text(
             text = entry.rank.toString(),
             style = MaterialTheme.typography.titleMedium,
@@ -338,3 +414,6 @@ private fun ChartWindow.lastRes(): Int = when (this) {
     ChartWindow.SIX_MONTHS -> R.string.chart_last_6m
     ChartWindow.ONE_YEAR, ChartWindow.ALL_TIME -> R.string.chart_last_1y
 }
+
+/** A row's key in a selection: its rank and record, as the list keys it. */
+private val ChartEntry.selectionKey: String get() = "${rank}:${matchKey}"

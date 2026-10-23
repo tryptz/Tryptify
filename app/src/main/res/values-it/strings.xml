@@ -614,6 +614,7 @@
     <string name="chart_none_detail">Le classifiche per periodo si basano sui dati di ascolto globali, che sono più scarsi per i generi minori. Prova un periodo più lungo o Di sempre.</string>
     <string name="chart_none_in_catalogue">Nessun brano di questa classifica è presente nel catalogo</string>
     <string name="chart_partial">Riproduzione di %1$d su %2$d — i restanti non sono nel catalogo</string>
+    <string name="chart_found_partial">Trovati %1$d su %2$d — i restanti non sono nel catalogo</string>
     <string name="world_radio">Radio dal mondo</string>
     <string name="search_stations">Cerca stazioni</string>
     <string name="outline_glow">Bagliore dei contorni</string>

@@ -239,6 +239,17 @@ fun SearchResultsContent(
         )
     }
 
+    // Songs on the phone or the listener's own server: the menu that keeps
+    // their album and artist links local (and with it, Select).
+    var menuUnified by remember { mutableStateOf<UnifiedTrack?>(null) }
+    tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost(
+        track = menuUnified,
+        onDismissRequest = { menuUnified = null },
+        navController = navController,
+        playerViewModel = playerViewModel,
+        onSelect = menuUnified?.let { t -> { selection.toggle(t.id) } },
+    )
+
     if (showCreatePlaylistDialog) {
         CreatePlaylistDialog(
             onDismiss = { showCreatePlaylistDialog = false },
@@ -483,7 +494,9 @@ fun SearchResultsContent(
                                     menuSelectId = track.id
                                     showContextMenuForTrack = track.toLegacyTrack()
                                 }
-                            } else null,
+                            } else {
+                                { menuUnified = track }
+                            },
                             isDownloaded = track.toLegacyTrack().id in downloadedTrackIds,
                             selectionMode = selection.active,
                             selected = track.id in selection.selectedIds

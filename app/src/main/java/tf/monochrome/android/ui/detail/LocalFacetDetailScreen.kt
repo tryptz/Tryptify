@@ -101,12 +101,15 @@ fun LocalFacetDetailScreen(
         sortedTracks.applyUnifiedSearchAndSort(listQuery, listSort)
     }
 
+    // Multi-select, begun from a song's menu ("Select").
+    val selection = tf.monochrome.android.ui.components.rememberUnifiedTrackSelection()
     var menuTrack by remember { mutableStateOf<UnifiedTrack?>(null) }
     UnifiedTrackContextMenuHost(
         track = menuTrack,
         onDismissRequest = { menuTrack = null },
         navController = navController,
         playerViewModel = playerViewModel,
+        onSelect = menuTrack?.let { t -> { selection.toggle(t) } },
     )
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -128,6 +131,11 @@ fun LocalFacetDetailScreen(
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = MaterialTheme.colorScheme.background
             )
+        )
+        tf.monochrome.android.ui.components.UnifiedTrackSelectionBar(
+            selection = selection,
+            playerViewModel = playerViewModel,
+            order = visibleTracks,
         )
 
         SearchOverlay(
@@ -226,10 +234,12 @@ fun LocalFacetDetailScreen(
                 items(visibleTracks, key = { it.id }) { track ->
                     FacetTrackRow(
                         track = track,
-                        onClick = { onPlayTrack(track, visibleTracks) },
+                        onClick = { if (selection.active) selection.toggle(track) else onPlayTrack(track, visibleTracks) },
                         onAddToQueue = { onAddToQueue(track) },
                         onMoreClick = { menuTrack = track },
-                        navController = navController
+                        navController = navController,
+                        selectionMode = selection.active,
+                        selected = selection.isSelected(track),
                     )
                 }
             }
@@ -244,7 +254,9 @@ private fun FacetTrackRow(
     onClick: () -> Unit,
     onAddToQueue: () -> Unit,
     onMoreClick: () -> Unit,
-    navController: NavController
+    navController: NavController,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
 ) {
     // Holding plays the song's preview until the finger lifts.
     val holdToPreview = rememberHoldToPreview(track)
@@ -255,7 +267,8 @@ private fun FacetTrackRow(
             .clip(MonoDimens.shapeMd)
             .combinedClickable(onClick = onClick, onLongClick = holdToPreview),
         shape = MonoDimens.shapeMd,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = MonoDimens.cardAlpha),
+        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = MonoDimens.cardAlpha),
     ) {
         Row(
             modifier = Modifier
@@ -266,6 +279,7 @@ private fun FacetTrackRow(
                 .padding(horizontal = MonoDimens.listItemPaddingH),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (selectionMode) tf.monochrome.android.ui.components.SelectionCheck(selected)
             if (track.artworkUri != null) {
                 AsyncImage(
                     model = track.artworkUri,
@@ -296,10 +310,11 @@ private fun FacetTrackRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                // While selecting, a tap anywhere on the row picks it.
                 TrackArtistAlbumLine(
                     track = track,
-                    onArtistClick = { ref -> ref.id?.let { navController.openArtist(track.sourceType, it) } },
-                    onAlbumClick = { navController.openAlbum(track.albumId) },
+                    onArtistClick = { ref -> if (!selectionMode) ref.id?.let { navController.openArtist(track.sourceType, it) } },
+                    onAlbumClick = { if (!selectionMode) navController.openAlbum(track.albumId) },
                 )
             }
             // Where it plays from — on this screen, the device.
@@ -330,21 +345,23 @@ private fun FacetTrackRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            IconButton(onClick = onAddToQueue, modifier = Modifier.size(32.dp)) {
-                Icon(
-                    Icons.AutoMirrored.Filled.PlaylistAdd,
-                    contentDescription = stringResource(R.string.action_add_to_queue),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            IconButton(onClick = onMoreClick, modifier = Modifier.size(32.dp)) {
-                Icon(
-                    Icons.Default.MoreVert,
-                    contentDescription = stringResource(R.string.action_more_options),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
+            if (!selectionMode) {
+                IconButton(onClick = onAddToQueue, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.PlaylistAdd,
+                        contentDescription = stringResource(R.string.action_add_to_queue),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                IconButton(onClick = onMoreClick, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        Icons.Default.MoreVert,
+                        contentDescription = stringResource(R.string.action_more_options),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
     }

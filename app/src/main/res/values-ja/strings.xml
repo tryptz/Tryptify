@@ -568,6 +568,7 @@
     <string name="chart_none_detail">期間別チャートは世界中の再生データから作られるため、小さなジャンルではデータが少なくなります。より長い期間か「全期間」をお試しください。</string>
     <string name="chart_none_in_catalogue">このチャートの曲はカタログにありません</string>
     <string name="chart_partial">%2$d 曲中 %1$d 曲を再生中 — 残りはカタログにありません</string>
+    <string name="chart_found_partial">%2$d 曲中 %1$d 曲が見つかりました — 残りはカタログにありません</string>
     <string name="world_radio">世界のラジオ</string>
     <string name="search_stations">局を検索</string>
     <string name="outline_glow">輪郭の光</string>

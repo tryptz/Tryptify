@@ -614,6 +614,7 @@
     <string name="chart_none_detail">Las listas por periodo salen de datos de escucha globales, que escasean en los géneros pequeños. Prueba un periodo más largo o Todo el tiempo.</string>
     <string name="chart_none_in_catalogue">Nada de esta lista está en el catálogo</string>
     <string name="chart_partial">Reproduciendo %1$d de %2$d: el resto no está en el catálogo</string>
+    <string name="chart_found_partial">Se encontraron %1$d de %2$d: el resto no está en el catálogo</string>
     <string name="world_radio">Radio mundial</string>
     <string name="search_stations">Buscar emisoras</string>
     <string name="outline_glow">Brillo del contorno</string>

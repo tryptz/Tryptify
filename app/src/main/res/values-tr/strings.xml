@@ -591,6 +591,7 @@
     <string name="chart_none_detail">Dönemlik listeler küresel dinleme verilerinden çıkarılır ve küçük türlerde bu veri azalır. Daha uzun bir dönem ya da Tüm zamanlar’ı deneyin.</string>
     <string name="chart_none_in_catalogue">Bu listedeki hiçbir parça katalogda yok</string>
     <string name="chart_partial">%2$d parçanın %1$d tanesi çalınıyor — diğerleri katalogda yok</string>
+    <string name="chart_found_partial">%2$d parçanın %1$d tanesi bulundu — diğerleri katalogda yok</string>
     <string name="world_radio">Dünya radyoları</string>
     <string name="search_stations">İstasyon ara</string>
     <string name="outline_glow">Kontur parlaması</string>

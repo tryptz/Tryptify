@@ -87,21 +87,28 @@ fun SubsonicLibraryTab(
     }
     LaunchedEffect(server) { server?.let(viewModel::onServer) }
 
+    // Multi-select over a song list, begun from a song's menu.
+    val selection = tf.monochrome.android.ui.components.rememberUnifiedTrackSelection()
     var menuTrack by remember { mutableStateOf<UnifiedTrack?>(null) }
     UnifiedTrackContextMenuHost(
         track = menuTrack,
         onDismissRequest = { menuTrack = null },
         navController = navController,
         playerViewModel = playerViewModel,
+        onSelect = menuTrack?.let { t -> { selection.toggle(t) } },
     )
 
     val stack by viewModel.view.collectAsStateWithLifecycle()
     // Back leaves an album or artist before it leaves the page. Registered
     // only while this page is composed, so it never swallows Back elsewhere.
     BackHandler(enabled = stack.size > 1) { viewModel.back() }
+    // A selection belongs to the list it was made in: leaving it ends it.
+    LaunchedEffect(stack.last()) { selection.clear() }
 
+    Column(Modifier.fillMaxSize()) {
+    tf.monochrome.android.ui.components.UnifiedTrackSelectionBar(selection = selection, playerViewModel = playerViewModel)
     when (val top = stack.last()) {
-        View.Index -> Index(viewModel, playerViewModel, navController, onMore = { menuTrack = it })
+        View.Index -> Index(viewModel, playerViewModel, navController, onMore = { menuTrack = it }, selection = selection)
         is View.Artist -> {
             val albums by viewModel.artistAlbums.collectAsStateWithLifecycle()
             Column(Modifier.fillMaxSize()) {
@@ -135,10 +142,12 @@ fun SubsonicLibraryTab(
                         onTrackClick = { track, queue -> playerViewModel.playUnifiedTrack(track, queue) },
                         onMoreClick = { menuTrack = it },
                         navController = navController,
+                        selection = selection,
                     )
                 }
             }
         }
+    }
     }
 }
 
@@ -148,6 +157,7 @@ private fun Index(
     playerViewModel: PlayerViewModel,
     navController: NavController,
     onMore: (UnifiedTrack) -> Unit,
+    selection: tf.monochrome.android.ui.components.UnifiedTrackSelection,
 ) {
     val section by viewModel.section.collectAsStateWithLifecycle()
     val albums by viewModel.albums.collectAsStateWithLifecycle()
@@ -159,7 +169,8 @@ private fun Index(
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     val closeSearch = { searchOpen = false; viewModel.setQuery("") }
     // Back closes the search before it leaves the page.
-    BackHandler(enabled = searchOpen) { closeSearch() }
+    BackHandler(enabled = searchOpen && !selection.active) { closeSearch() }
+    LaunchedEffect(section, searchOpen && query.isNotBlank()) { selection.clear() }
     val playSong = { track: UnifiedTrack, list: List<UnifiedTrack> ->
         playerViewModel.playUnifiedTrack(track, queueFrom(list, track))
     }
@@ -176,7 +187,7 @@ private fun Index(
     Column(Modifier.fillMaxSize().padding(top = searchTopInset)) {
         if (searchOpen && query.isNotBlank()) {
             LoadContent(results, onRetry = viewModel::retrySearch, empty = R.string.no_results) { list ->
-                SongList(tracks = list, onTrackClick = playSong, onMoreClick = onMore, navController = navController)
+                SongList(tracks = list, onTrackClick = playSong, onMoreClick = onMore, navController = navController, selection = selection)
             }
             return@Column
         }
@@ -222,7 +233,7 @@ private fun Index(
                 ArtistList(artists = list, onArtistClick = viewModel::openArtist)
             }
             Section.SONGS -> LoadContent(songs, onRetry = viewModel::reload) { list ->
-                SongList(tracks = list, onTrackClick = playSong, onMoreClick = onMore, navController = navController)
+                SongList(tracks = list, onTrackClick = playSong, onMoreClick = onMore, navController = navController, selection = selection)
             }
         }
     }

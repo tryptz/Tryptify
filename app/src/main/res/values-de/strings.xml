@@ -591,6 +591,7 @@
     <string name="chart_none_detail">Charts für Zeiträume stammen aus weltweiten Hördaten, die bei kleineren Genres dünn werden. Probier einen längeren Zeitraum oder „Gesamt“.</string>
     <string name="chart_none_in_catalogue">Nichts aus diesen Charts ist im Katalog</string>
     <string name="chart_partial">%1$d von %2$d werden gespielt – der Rest ist nicht im Katalog</string>
+    <string name="chart_found_partial">%1$d von %2$d gefunden – der Rest ist nicht im Katalog</string>
     <string name="world_radio">Weltradio</string>
     <string name="search_stations">Sender suchen</string>
     <string name="outline_glow">Konturleuchten</string>

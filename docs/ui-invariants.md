@@ -1004,6 +1004,25 @@ all. The listener's quality setting is untouched for real plays.
   every list that has a selection. Left out on purpose: the queue (hold there
   drags), Trypt Mania's wheel (it previews by itself) and Discover's cards.
 
+**Every song list has multi-select.** Begun from "Select" in a song's ⋮ menu;
+then a tap picks or unpicks a row and the bar acts on all of them. The lists
+over `UnifiedTrack` (the Local page's Songs and search, My server's songs,
+search and albums, and the local album, artist and genre/year pages) share
+`UnifiedTrackSelection` and `UnifiedTrackSelectionBar`, which keep the picked
+songs themselves: the Local page's Songs is paged, and a picked row that
+scrolls away is dropped from the page. A selection belongs to its list:
+changing category, section or search, or leaving an album, ends it. In
+selection mode a row shows its tick, hides ⋮ and its queue button, and its
+artist and album links pick the row instead of opening the page. Search
+results from the phone or the listener's server have a ⋮ too (the local
+menu), so a selection can start there. Two lists start it differently: a
+genre chart's row has no preview and no menu, so holding it picks it, and the
+picked rows are found in the catalogue when the bar acts; an artist's
+unreleased cards have no menu, so they join a selection begun from a top
+song. Left out: the queue (its own selection), Trypt Mania's wheel, the
+listening party's lists (Up next, and the add-song picker), the galaxy's
+moons and the genre map's chart panel.
+
 `SongPreviewTest` holds the start point, the fade and the fill's colours.
 
 ### My server (Subsonic)

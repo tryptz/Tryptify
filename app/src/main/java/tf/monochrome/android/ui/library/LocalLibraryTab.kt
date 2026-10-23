@@ -207,12 +207,15 @@ fun LocalLibraryTab(
         }
     }
 
+    // Multi-select over the songs and the search results, begun from a song's menu.
+    val selection = tf.monochrome.android.ui.components.rememberUnifiedTrackSelection()
     var menuTrack by remember { mutableStateOf<UnifiedTrack?>(null) }
     UnifiedTrackContextMenuHost(
         track = menuTrack,
         onDismissRequest = { menuTrack = null },
         navController = navController,
         playerViewModel = playerViewModel,
+        onSelect = menuTrack?.let { t -> { selection.toggle(t) } },
     )
 
     var folderToExclude by remember { mutableStateOf<FolderToExclude?>(null) }
@@ -284,12 +287,21 @@ fun LocalLibraryTab(
         // Results replace the browser while there is a query. An `if` rather
         // than the early `return@Column` this used to be: inside the overlay's
         // content lambda there is no Column to return from.
-        if (showSearch && searchQuery.isNotBlank()) {
+        val showingResults = showSearch && searchQuery.isNotBlank()
+        // A selection belongs to the list it was made in: leaving it ends it.
+        LaunchedEffect(showingResults, openCategory) { selection.clear() }
+        tf.monochrome.android.ui.components.UnifiedTrackSelectionBar(
+            selection = selection,
+            playerViewModel = playerViewModel,
+            order = if (showingResults) searchResults else null,
+        )
+        if (showingResults) {
             SongList(
                 tracks = searchResults,
                 onTrackClick = onTrackClick,
                 onMoreClick = { menuTrack = it },
                 navController = navController,
+                selection = selection,
             )
         } else if (!isScanning && trackCount == 0) {
             // The empty state used to be drawn *below* the pager, so a library
@@ -395,6 +407,7 @@ fun LocalLibraryTab(
                 },
                 onMoreClick = { menuTrack = it },
                 navController = navController,
+                selection = selection,
             )
 
             LibraryCategory.ALBUMS -> AlbumGrid(albums = sortedAlbums, onAlbumClick = onAlbumClick)
@@ -778,6 +791,8 @@ private fun SongRow(
     onClick: () -> Unit,
     onMoreClick: (UnifiedTrack) -> Unit,
     navController: NavController,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
 ) {
     // legacyId, not id: the queue holds legacy Tracks, so that is what
     // `currentTrack.id` — and therefore LocalNowPlayingTrackId — is.
@@ -792,8 +807,11 @@ private fun SongRow(
             .materialSurface(shape = MonoDimens.shapeMd)
             .songPreviewHold(SongPreview.keyOf(track), MonoDimens.shapeMd),
         shape = MonoDimens.shapeMd,
-        color = if (nowPlaying) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
-                else Color.Transparent,
+        color = when {
+            selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+            nowPlaying -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+            else -> Color.Transparent
+        },
     ) {
         Row(
             modifier = Modifier
@@ -802,6 +820,7 @@ private fun SongRow(
                 .padding(horizontal = MonoDimens.listItemPaddingH),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (selectionMode) tf.monochrome.android.ui.components.SelectionCheck(selected)
             // Music-note placeholder sits underneath the artwork: if the
             // cover loads (cached JPG, sidecar, or embedded art pulled on
             // demand by AudioFileCoverFetcher) it covers the icon; if the
@@ -837,10 +856,11 @@ private fun SongRow(
                     overflow = TextOverflow.Ellipsis
                 )
                 Row {
+                    // While selecting, a tap anywhere on the row picks it.
                     TrackArtistAlbumLine(
                         track = track,
-                        onArtistClick = { ref -> ref.id?.let { navController.openArtist(track.sourceType, it) } },
-                        onAlbumClick = { navController.openAlbum(track.albumId) },
+                        onArtistClick = { ref -> if (!selectionMode) ref.id?.let { navController.openArtist(track.sourceType, it) } },
+                        onAlbumClick = { if (!selectionMode) navController.openAlbum(track.albumId) },
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     val badges = tf.monochrome.android.ui.theme.rowBadges()
@@ -869,16 +889,18 @@ private fun SongRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            IconButton(
-                onClick = { onMoreClick(track) },
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    Icons.Default.MoreVert,
-                    contentDescription = stringResource(R.string.action_more_options),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
+            if (!selectionMode) {
+                IconButton(
+                    onClick = { onMoreClick(track) },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Default.MoreVert,
+                        contentDescription = stringResource(R.string.action_more_options),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
     }
@@ -899,6 +921,8 @@ fun SongList(
     onTrackClick: (UnifiedTrack) -> Unit,
     onMoreClick: (UnifiedTrack) -> Unit,
     navController: NavController,
+    /** While active, a tap picks the row instead of playing it. */
+    selection: tf.monochrome.android.ui.components.UnifiedTrackSelection? = null,
 ) {
     val state = rememberLazyListState()
     Box {
@@ -920,9 +944,11 @@ fun SongList(
                 } else {
                     SongRow(
                         track = track,
-                        onClick = { onTrackClick(track) },
+                        onClick = { if (selection?.active == true) selection.toggle(track) else onTrackClick(track) },
                         onMoreClick = onMoreClick,
                         navController = navController,
+                        selectionMode = selection?.active == true,
+                        selected = selection?.isSelected(track) == true,
                     )
                 }
             }
@@ -944,6 +970,8 @@ fun SongList(
     onTrackClick: (UnifiedTrack, List<UnifiedTrack>) -> Unit,
     onMoreClick: (UnifiedTrack) -> Unit,
     navController: NavController,
+    /** While active, a tap picks the row instead of playing it. */
+    selection: tf.monochrome.android.ui.components.UnifiedTrackSelection? = null,
 ) {
     val state = rememberLazyListState()
     Box {
@@ -954,9 +982,11 @@ fun SongList(
             items(tracks, key = { it.id }, contentType = { "track" }) { track ->
                 SongRow(
                     track = track,
-                    onClick = { onTrackClick(track, tracks) },
+                    onClick = { if (selection?.active == true) selection.toggle(track) else onTrackClick(track, tracks) },
                     onMoreClick = onMoreClick,
                     navController = navController,
+                    selectionMode = selection?.active == true,
+                    selected = selection?.isSelected(track) == true,
                 )
             }
         }
