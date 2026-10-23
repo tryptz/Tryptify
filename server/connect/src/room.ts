@@ -7,7 +7,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 import {
-  MAX_DEVICES, MAX_MESSAGE, cleanCommand, cleanQueue, cleanState, deviceFrom, positionAt,
+  MAX_DEVICES, MAX_MESSAGE, cleanCommand, cleanQueue, cleanState, deviceFrom, positionAt, stoppedAt,
   type Device, type Now,
 } from "./protocol";
 
@@ -121,7 +121,21 @@ export class Room extends DurableObject {
 
   async webSocketClose(ws: WebSocket, code: number) {
     try { ws.close(code === 1005 || code === 1006 ? 1000 : code, "bye"); } catch { /* already closed */ }
+    await this.gone(ws);
+  }
+  async webSocketError(ws: WebSocket) { await this.gone(ws); }
+
+  /** A device left: if it was playing, its song stops at the second it had reached. */
+  private async gone(ws: WebSocket) {
+    const id = this.me(ws)?.id;
+    const now = await this.now();
+    // Not when the same device is still here on a newer connection (it replaced this one).
+    const still = id ? ((this.ctx as any).getWebSockets(id) as WebSocket[]).some((s) => s !== ws) : false;
+    if (now && now.playing && id && now.device === id && !still) {
+      const stopped = { ...stoppedAt(now, Date.now()), name: now.name };
+      await this.ctx.storage.put("now", stopped);
+      for (const other of this.sockets()) if (other !== ws) this.send(other, { type: "now", now: stopped });
+    }
     await this.broadcastDevices(ws, ws);
   }
-  async webSocketError(ws: WebSocket) { await this.broadcastDevices(ws, ws); }
 }

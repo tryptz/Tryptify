@@ -211,6 +211,14 @@ fun MainPlayerRoute(
     var showConnectSheet by rememberSaveable { mutableStateOf(false) }
     val connectViewModel: ConnectViewModel = androidx.hilt.navigation.compose.hiltViewModel()
     val connectState by connectViewModel.state.collectAsStateWithLifecycle()
+    // Opened from the mini player while it shows another device's song: the
+    // Connect panel is that song's player here (its timeline and controls).
+    LaunchedEffect(Unit) {
+        val n = connectViewModel.state.value.now
+        val elsewhere = n != null && n.device != connectViewModel.myId && n.track != null && n.playing &&
+            connectViewModel.state.value.devices.any { it.id == n.device }
+        if (elsewhere && !playerViewModel.isPlaying.value) showConnectSheet = true
+    }
     // Overflow › "Add to playlist" and the create-playlist follow-up it opens.
     // Held as the pending track rather than a flag so the follow-up dialog
     // still knows what to add after the picker sheet is gone.

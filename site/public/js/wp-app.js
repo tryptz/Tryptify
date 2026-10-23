@@ -159,7 +159,7 @@
     start();
   }
   function prev() {
-    if (Eng.time > 3 || pos <= 0) { Eng.seek(0); return; }
+    if (Eng.time > 3 || pos <= 0) { Eng.seek(0); publish(); return; }
     pos--;
     start();
   }
@@ -185,7 +185,12 @@
   Eng.on("error", () => fail(new Error("this browser cannot play that file.")));
   Eng.on("play", () => { if (C) playSince = C.serverNow(); renderBar(); renderNow(); publish(); renderConnect(); if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing"; });
   Eng.on("pause", () => { renderBar(); renderNow(); publish(); renderConnect(); if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; });
+  // Waiting on the network: the other devices stop the clock until sound comes back.
+  let stalled = false;
+  Eng.on("waiting", () => { if (!Eng.paused) { stalled = true; publish(); } });
+  Eng.on("playing", () => { if (stalled) { stalled = false; publish(); } });
   Eng.on("durationchange", () => {
+    if (remoteNow()) return; // the bar is following another device
     const s = $("bar-seek");
     s.max = String(Eng.duration || 0);
     $("bar-dur").textContent = clock(Eng.duration);
@@ -193,7 +198,7 @@
   });
   let dragging = false;
   Eng.on("timeupdate", () => {
-    if (!dragging) { $("bar-seek").value = String(Eng.time); $("bar-time").textContent = clock(Eng.time); }
+    if (!dragging && !remoteNow()) { $("bar-seek").value = String(Eng.time); $("bar-time").textContent = clock(Eng.time); }
     const bar = $("now-bar");
     if (bar && Eng.duration) bar.style.width = `${(Eng.time / Eng.duration) * 100}%`;
   });
@@ -219,7 +224,7 @@
     set("pause", () => Eng.pause());
     set("previoustrack", prev);
     set("nexttrack", () => next(false));
-    set("seekto", (d) => { Eng.seek(d.seekTime); position(); });
+    set("seekto", (d) => { Eng.seek(d.seekTime); position(); publish(); });
   }
 
   // ── The bar ─────────────────────────────────────────────────────────
@@ -231,6 +236,9 @@
     const b = e.target.closest("[data-act]");
     if (!b) return;
     const act = b.dataset.act;
+    // Following another device, as Spotify does: the bar's buttons steer it.
+    const r = (act === "toggle" || act === "prev" || act === "next") && !b.closest("#wp-elsewhere") ? remoteNow() : null;
+    if (r) { remote(act === "toggle" ? (r.playing ? "pause" : "play") : act); return; }
     if (act === "toggle") current ? Eng.toggle().catch(fail) : playFirst();
     else if (act === "prev") prev();
     else if (act === "next") next(false);
@@ -246,7 +254,11 @@
   }
   const seek = $("bar-seek");
   seek.addEventListener("input", () => { dragging = true; $("bar-time").textContent = clock(Number(seek.value)); });
-  seek.addEventListener("change", () => { Eng.seek(Number(seek.value)); dragging = false; position(); publish(); });
+  seek.addEventListener("change", () => {
+    dragging = false;
+    if (remoteNow()) { seekRemote(Number(seek.value)); return; }
+    Eng.seek(Number(seek.value)); position(); publish();
+  });
   const vol = $("bar-volume");
   vol.value = String(settings.volume);
   function setVolume(v) {
@@ -283,6 +295,19 @@
     badge.hidden = !t;
     if (t) badge.textContent = [t.quality, eqActive() ? "AutoEQ" : null].filter(Boolean).join(" · ");
     document.title = t && !Eng.paused ? `${t.title} · Tryptify` : "Player · Tryptify";
+    // Following another device: its song, and its play state on the button.
+    const r = remoteNow();
+    if (r) {
+      $("bar-title").textContent = r.track.title || "Untitled";
+      $("bar-artist").textContent = `${[r.track.artist, r.track.album].filter(Boolean).join(" · ")} · on ${nameOf(r.device, r.name)}`;
+      const rc = r.track.cover && img.dataset.failed !== r.track.cover ? r.track.cover : null;
+      img.hidden = !rc;
+      $("bar-cover-none").hidden = !!rc;
+      if (rc && img.getAttribute("src") !== rc) img.src = rc;
+      setIcon(play, r.playing ? "pause" : "play");
+      play.setAttribute("aria-label", r.playing ? `Pause on ${nameOf(r.device, r.name)}` : `Play on ${nameOf(r.device, r.name)}`);
+      badge.hidden = true;
+    }
   }
   function markRows() {
     for (const li of document.querySelectorAll(".wp-track")) li.classList.toggle("is-current", !!current && li.dataset.key === current.key);
@@ -937,7 +962,10 @@
   let playSince = 0; // when this browser last started playing, by the server's clock
   function publish() {
     if (!C || !current) return;
-    C.publish({ playing: !Eng.paused, track: descriptor(current), position: Eng.time, rate: settings.speed, since: playSince });
+    // Read when it is sent (and again on reconnecting), so the second is the one at that moment.
+    C.publish(() => current
+      ? { playing: !Eng.paused && !stalled, track: descriptor(current), position: Eng.time, rate: settings.speed, since: playSince }
+      : null);
   }
   let transferTimer = 0;
   /** Plays what is playing on [id] instead (this browser included). */
@@ -949,10 +977,59 @@
     clearTimeout(transferTimer);
     transferTimer = setTimeout(() => toast(`No answer from ${nameOf(holder || id)}. It may be asleep; try again.`, true), 7000);
   }
-  function remote(action) {
+  function remote(action, value) {
     const n = C && C.elsewhere();
-    if (n && C.online(n.device)) C.command(n.device, action);
+    if (n && C.online(n.device)) C.command(n.device, action, value);
   }
+
+  // ── Following another device ────────────────────────────────────────
+  /**
+   * Another device's song while this browser plays nothing (or is paused):
+   * the bar shows it, its time runs in step, and the bar steers it, as
+   * Spotify's does. Null when this browser is the one playing.
+   */
+  function remoteNow() {
+    if (!C || (current && !Eng.paused)) return null;
+    const n = C.elsewhere();
+    return n && C.online(n.device) ? n : null;
+  }
+  let seekHold = null; // { value, until }: a seek just sent, shown until that device answers
+  function seekRemote(seconds) {
+    remote("seek", seconds);
+    seekHold = { value: seconds, until: Date.now() + 3000 };
+    followRemote();
+  }
+  let following = false;
+  /** Twice a second: the bar and the strip's clock, at the other device's second. */
+  function followRemote() {
+    const n = remoteNow();
+    if (!n) {
+      if (following) { following = false; restoreBar(); }
+      const strip = $("wp-elsewhere-time"), e = C && C.elsewhere();
+      if (strip && e) strip.textContent = timeOf(e);
+      return;
+    }
+    if (!following) { following = true; renderBar(); }
+    if (seekHold && Date.now() > seekHold.until) seekHold = null;
+    const dur = n.track.duration || 0, at = seekHold ? seekHold.value : C.positionOf(n);
+    const s = $("bar-seek");
+    s.max = String(dur);
+    if (!dragging) { s.value = String(at); $("bar-time").textContent = clock(at); }
+    $("bar-dur").textContent = clock(dur);
+    const strip = $("wp-elsewhere-time");
+    if (strip) strip.textContent = timeOf(n, at);
+  }
+  const timeOf = (n, at = C.positionOf(n)) => (n.track.duration ? `${clock(at)} / ${clock(n.track.duration)}` : clock(at));
+  /** Back to this browser's own song. */
+  function restoreBar() {
+    const s = $("bar-seek");
+    s.max = String(Eng.duration || 0);
+    s.value = String(Eng.time || 0);
+    $("bar-time").textContent = clock(Eng.time || 0);
+    $("bar-dur").textContent = clock(Eng.duration || 0);
+    renderBar();
+  }
+  if (C) setInterval(followRemote, 500);
 
   if (C) {
     // Asked to give it up: our place to the second, and what comes next.
@@ -987,7 +1064,10 @@
     C.on("now", (n) => {
       // Only for a device that started after this one did: a late message from an earlier start does not count.
       if (n && n.playing && n.device !== C.id && current && !Eng.paused && (n.since || n.at) >= playSince) { Eng.pause(); toast(`${nameOf(n.device, n.name)} started playing, so this browser paused.`); }
+      seekHold = null; // the device answered with where it is
       renderConnect();
+      renderBar();
+      followRemote();
     });
     C.on("devices", renderConnect);
     C.on("status", renderConnect);
@@ -1016,6 +1096,7 @@
         h("div", { class: "wp-elsewhere-text" },
           h("strong", { text: `${playing ? "Playing" : "Last played"} on ${name}` }),
           h("span", { text: [n.track.title, n.track.artist].filter(Boolean).join(" · ") })),
+        h("span", { class: "wp-elsewhere-time", id: "wp-elsewhere-time", text: timeOf(n, at) }),
         online ? h("div", { class: "wp-controls" },
           h("button", { type: "button", class: "wp-icon", icon: "prev", "aria-label": `Previous on ${name}`, onclick: () => remote("prev") }),
           h("button", { type: "button", class: "wp-icon", icon: n.playing ? "pause" : "play", "aria-label": `${n.playing ? "Pause" : "Play"} on ${name}`, onclick: () => remote(n.playing ? "pause" : "play") }),

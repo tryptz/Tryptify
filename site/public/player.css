@@ -245,6 +245,7 @@
 .wp-elsewhere .btn { background: rgba(0, 0, 0, 0.85); color: #fff; border-color: transparent; }
 .wp-elsewhere-text { display: grid; flex: 1 1 200px; min-width: 0; }
 .wp-elsewhere-text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.85; }
+.wp-elsewhere-time { font-variant-numeric: tabular-nums; font-size: 13px; opacity: 0.85; white-space: nowrap; }
 .wp-elsewhere-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(0, 0, 0, 0.18); }
 .wp-elsewhere-bar span {
   display: block; height: 100%; background: currentColor; width: var(--from, 0%);

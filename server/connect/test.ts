@@ -44,6 +44,14 @@ await test("state and where it is later", () => {
   assert.equal(P.cleanState({ since: 9e15 }, "d", 1000).since, 61_000); // not from the far future
 });
 
+await test("a device that leaves stops where it had got to", () => {
+  const now = P.cleanState({ playing: true, track: { src: "hifi", id: "1", duration: 100 }, position: 10, rate: 1 }, "dev", 1000);
+  const stopped = P.stoppedAt(now, 31_000);
+  assert.deepEqual([stopped.playing, stopped.position, stopped.at], [false, 40, 31_000]);
+  // Read later, it stays at that second instead of running to the end.
+  assert.equal(P.positionAt(stopped, 999_999), 40);
+});
+
 await test("commands", () => {
   assert.deepEqual(P.cleanCommand({ action: "seek", value: 42 }), { action: "seek", value: 42 });
   assert.deepEqual(P.cleanCommand({ action: "pause", value: 42 }), { action: "pause", value: null });

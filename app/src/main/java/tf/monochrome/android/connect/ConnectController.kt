@@ -249,12 +249,15 @@ class ConnectController @Inject constructor(
         scope.launch { if (!client.tell(ConnectProtocol.transfer(to, force = !holderOnline))) note(Note.Refused("")) }
     }
 
-    /** Steers the device playing elsewhere. */
-    fun remote(action: String) {
+    /** Steers the device playing elsewhere; [value] is the second for "seek". */
+    fun remote(action: String, value: Double? = null) {
         val now = client.state.value.now ?: return
         if (now.device == deviceId) return
-        scope.launch { client.tell(ConnectProtocol.command(now.device, action)) }
+        scope.launch { client.tell(ConnectProtocol.command(now.device, action, value)) }
     }
+
+    /** The server's clock as this phone reckons it, for where another device's song has got to. */
+    fun serverNowMs(): Long = client.serverNowMs()
 
     /** A song this phone can play, from the way another device described it; null for one it cannot. */
     private fun unifiedOf(t: ConnectTrack): UnifiedTrack? {

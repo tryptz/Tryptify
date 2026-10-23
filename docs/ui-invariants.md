@@ -2163,11 +2163,21 @@ of the listener's devices is online, `Devices` otherwise. It opens
 
 * Top to bottom: the grab handle and "Tryptify Connect"; when another device
   plays, "Playing on …" (or "Last played on …" once it is gone), the song, its
-  Previous, Play/Pause and Next, and Play here; then the devices, this phone
+  timeline (a Slider with the elapsed and total time, moving in step, a drag
+  seeks that device), its Previous, Play/Pause and Next, and Play here; then
+  the devices, this phone
   first, each a list row (`MonoDimens.listRowHeight`) with "Play here" or
   "Play there" when the music can move to it.
 * Its text and icons are the glass's ink (Text on glass): the playing device
   is said in words ("Playing"), never by an accent colour.
+* **The mini player follows another device, as Spotify's does.** While this
+  phone plays nothing (or is paused) and another of the listener's devices
+  plays, the bar shows that song, "Artist · Playing on …" on its artist line,
+  its progress line running in step (`rememberRemotePosition`: worked out from
+  that device's last word and the server's clock, nothing sent to keep it
+  moving), and its buttons and swipes steer that device. It keeps following
+  when that device is paused from here, and lets go when this phone plays or
+  that device goes. A tap opens the player with the Connect panel up.
 * What it says once ("Now playing on …", "Playing here, from …", "… started
   playing, so this phone paused") is a toast, and only while the app is on
   screen.

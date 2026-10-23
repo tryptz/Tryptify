@@ -169,6 +169,11 @@ up next), a menu on the left and the bar at the bottom.
   dashboard show what plays on another device, with its controls and **Play
   here**; the tile and the Devices button in the bar list them and moves the music to any of them, at the same second
   and with the queue. When another device starts playing, this one pauses.
+  While this browser plays nothing (or is paused) and another device plays,
+  the player bar follows it, as Spotify's does: its song, "on …", its second
+  moving in step (worked out from that device's last word and the server's
+  clock), a drag on the bar seeks that device and the bar's buttons steer it.
+  The strip shows the same elapsed and total time.
   One WebSocket, a message only on change, and no connection while the tab is
   hidden with nothing playing.
 

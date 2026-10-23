@@ -130,6 +130,13 @@ web.ws.send("ping");
 await web.next((m) => m === "pong");
 step("junk ignored; the room still answers");
 
-for (const d of [phone2, web, stranger]) d.ws.close(1000);
+// The device playing leaves: its song stops at the second it reached, not
+// "playing" on to the end of the song for everyone else.
+web.ws.close(1000);
+const stopped = (await phone2.next((m) => m.type === "now" && m.now.device === "webweb0001" && m.now.playing === false)).now;
+assert.ok(stopped.position >= 96.5 && stopped.position < 120, "stopped near where it was");
+step(`browser left while playing: stopped at ${stopped.position.toFixed(2)} s`);
+
+for (const d of [phone2, stranger]) d.ws.close(1000);
 console.log("connect e2e: all pass");
 process.exit(0);

@@ -76,6 +76,20 @@ playing there. Where it is later: `position + (t − at) / 1000 × rate` while
 | `{type:"takeover", from, now, queue}` | Start `now.track` at `now.position` (it was `at` server time), then the queue. |
 | `{type:"error", message}` | Something asked for could not be done. |
 
+When the device playing goes offline, the room stops its song at the second
+it had reached (`stoppedAt`) and tells the others with a `now`: a bar does not
+run on to the end of a song nobody hears, and a forced transfer starts from
+that second.
+
+Both players follow another device's timeline, as Spotify does: while they
+play nothing (or are paused), their bar shows the other device's song at its
+second (`position + (t − at) / 1000 × rate`), a drag sends `seek`, and their
+buttons send `play`, `pause`, `next` and `prev`. A device sends `state` on
+every change of its own: play, pause, a seek (the bar, the lock screen, a
+restart), a new song, the speed, and a stall (as paused until sound comes
+back); the position is read when the message goes, not when it was asked
+for.
+
 ## Running and testing
 
 ```

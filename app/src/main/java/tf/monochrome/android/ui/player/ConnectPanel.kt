@@ -47,6 +47,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -79,6 +80,8 @@ class ConnectViewModel @Inject constructor(private val connect: ConnectControlle
     val myId: String get() = connect.myId
     fun playOn(id: String) = connect.playOn(id)
     fun remote(action: String) = connect.remote(action)
+    fun seek(seconds: Double) = connect.remote("seek", seconds)
+    fun serverNowMs(): Long = connect.serverNowMs()
 }
 
 /**
@@ -152,7 +155,7 @@ internal fun BoxScope.ConnectPanel(
                         Spacer(Modifier.height(10.dp))
                         Text(stringResource(R.string.tryptify_connect), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     }
-                    ConnectContent(state, viewModel.myId, viewModel::playOn, viewModel::remote)
+                    ConnectContent(state, viewModel.myId, viewModel::playOn, viewModel::remote, viewModel::seek, viewModel::serverNowMs)
                 }
             }
         }
@@ -160,7 +163,14 @@ internal fun BoxScope.ConnectPanel(
 }
 
 @Composable
-private fun ConnectContent(state: ConnectState, myId: String, onPlayOn: (String) -> Unit, onRemote: (String) -> Unit) {
+private fun ConnectContent(
+    state: ConnectState,
+    myId: String,
+    onPlayOn: (String) -> Unit,
+    onRemote: (String) -> Unit,
+    onSeek: (Double) -> Unit,
+    serverNowMs: () -> Long,
+) {
     val dim = LocalContentColor.current.copy(alpha = 0.8f)
     when (state.status) {
         ConnectState.Status.SIGNED_OUT -> {
@@ -192,6 +202,8 @@ private fun ConnectContent(state: ConnectState, myId: String, onPlayOn: (String)
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        val duration = elsewhere.track?.duration ?: 0.0
+        if (duration > 0) RemoteTimeline(elsewhere, duration, online, onSeek, serverNowMs)
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (online) {
                 IconButton(onClick = { onRemote("prev") }) { Icon(Icons.Default.SkipPrevious, stringResource(R.string.action_previous)) }
@@ -247,6 +259,46 @@ private fun DeviceRow(d: ConnectDevice, isMe: Boolean, active: Boolean, canMove:
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
             )
+        }
+    }
+}
+
+/**
+ * The other device's timeline, as Spotify shows it: where its song is, moving
+ * in step, and a drag to send it to another second. After a seek the thumb
+ * stays where it was let go until that device answers with its new place
+ * (or three seconds pass), so it does not jump back while the word travels.
+ */
+@Composable
+private fun RemoteTimeline(
+    now: tf.monochrome.android.connect.ConnectNow,
+    duration: Double,
+    online: Boolean,
+    onSeek: (Double) -> Unit,
+    serverNowMs: () -> Long,
+) {
+    val live by rememberRemotePosition(now, serverNowMs)
+    var dragging by remember { mutableStateOf<Float?>(null) }
+    // Keyed on what the device last said: its answer to the seek clears it.
+    var held by remember(now) { mutableStateOf<Double?>(null) }
+    LaunchedEffect(held) { if (held != null) { kotlinx.coroutines.delay(3000); held = null } }
+    val shown = dragging?.toDouble() ?: held ?: live
+    Column {
+        androidx.compose.material3.Slider(
+            value = shown.toFloat().coerceIn(0f, duration.toFloat()),
+            onValueChange = { dragging = it },
+            onValueChangeFinished = {
+                dragging?.let { held = it.toDouble(); onSeek(it.toDouble()) }
+                dragging = null
+            },
+            valueRange = 0f..duration.toFloat(),
+            enabled = online,
+        )
+        Row {
+            val dim = LocalContentColor.current.copy(alpha = 0.8f)
+            Text(clockOf(shown), style = MaterialTheme.typography.labelSmall, color = dim)
+            Spacer(Modifier.weight(1f))
+            Text(clockOf(duration), style = MaterialTheme.typography.labelSmall, color = dim)
         }
     }
 }

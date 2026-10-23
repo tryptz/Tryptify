@@ -57,7 +57,9 @@
       setStatus("on");
       clearInterval(ping);
       ping = setInterval(() => { if (sock.readyState === 1) sock.send("ping"); }, 50_000);
-      if (last && last.playing) send({ type: "state", ...last });
+      // Back after a drop: where it is now, not where it was when last told.
+      const again = last && last();
+      if (again && again.playing) send({ type: "state", ...again });
     };
     sock.onmessage = (e) => {
       if (e.data === "pong") return;
@@ -120,12 +122,17 @@
     online: (id) => devices.some((d) => d.id === id),
     /** Another device's song, while it plays there (or last played there, if that device is gone). */
     elsewhere() { return now && now.device !== deviceId && now.track ? now : null; },
-    /** What plays here changed. Sent once things settle (a new song is a load and a play). */
-    publish(state) {
-      last = state;
+    /**
+     * What plays here changed. Sent once things settle (a new song is a load
+     * and a play). [read] gives the state when it goes, so the position is
+     * the one at sending, not 250 ms stale; null when nothing plays here.
+     */
+    publish(read) {
+      last = read;
       clearTimeout(publishTimer);
       publishTimer = setTimeout(() => {
-        if (send({ type: "state", ...last })) { now = { ...last, device: deviceId, at: Date.now() + offset }; emit("now", now); }
+        const state = last && last();
+        if (state && send({ type: "state", ...state })) { now = { ...state, device: deviceId, at: Date.now() + offset }; emit("now", now); }
       }, 250);
     },
     command(to, action, value) { return send({ type: "command", to, action, value }); },

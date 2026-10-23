@@ -76,6 +76,15 @@ export function positionAt(now: Now, t: number): number {
   return now.track && now.track.duration ? Math.min(p, now.track.duration) : p;
 }
 
+/**
+ * [now] stopped where it had got to at server time [t]: what the room keeps
+ * when the device playing goes offline, so nobody reads it as playing on (a
+ * bar running to the end) and a forced transfer starts from that second.
+ */
+export function stoppedAt(now: Now, t: number): Now {
+  return { ...now, playing: false, position: positionAt(now, t), at: t };
+}
+
 /** A command another device may send to the one playing. */
 export function cleanCommand(m: Record<string, unknown>): { action: string; value: number | null } | null {
   const action = str(m.action, 16);
