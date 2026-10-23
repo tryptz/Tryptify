@@ -2,7 +2,7 @@
 # assets), plus src/worker.js for the APK download. Deploy: npx wrangler deploy
 # (from this folder).
 name = "tryptify-site"
-# Only /download/tryptify.apk runs code (src/worker.js); every other path is a static file.
+# src/worker.js answers /download/tryptify.apk and /video/*, and adds a nonce to each page.
 main = "src/worker.js"
 compatibility_date = "2026-10-01"
 workers_dev = true
@@ -16,7 +16,9 @@ routes = [
 [assets]
 directory = "./public"
 binding = "ASSETS"
-run_worker_first = ["/download/tryptify.apk", "/video/*"]
+# Pages run the Worker too (it stamps each one's Content-Security-Policy with
+# a fresh nonce, see src/worker.js); scripts, styles, pictures and fonts don't.
+run_worker_first = ["/*", "!/js/*", "!/img/*", "!/fonts/*", "!/data/*", "!/*.css", "!/*.png", "!/*.svg"]
 # /cloud serves cloud.html, /terms serves terms.html, and so on.
 html_handling = "drop-trailing-slash"
 not_found_handling = "404-page"

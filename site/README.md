@@ -286,6 +286,12 @@ the coefficients the player hands to its filters give the engine's curve.
 site's own scripts run; no inline script, so the theme picker is
 `js/theme-boot.js`), no framing, `nosniff`, HSTS and a Permissions-Policy.
 A new script, font or picture from another site has to be added to the policy
-there, or the browser refuses it. After changing either, serve the site with
+there, or the browser refuses it. Cloudflare adds two scripts of its own to
+every page, both allowed: Web Analytics' beacon (`static.cloudflareinsights.com`,
+reporting to `/cdn-cgi/rum`) and the bot check, an inline script. That one is
+let through by a nonce: `src/worker.js` runs for every page (not for scripts,
+styles, pictures or fonts, see `run_worker_first` in `wrangler.toml`) and puts
+a fresh nonce in that page's copy of the policy, and Cloudflare marks its
+script with the nonce it finds there. After changing either, serve the site with
 `npx wrangler dev` and open every page with the browser console open: a
 refused resource is logged as a Content Security Policy error.

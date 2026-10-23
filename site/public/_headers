@@ -1,13 +1,17 @@
 # Security headers for every page and file (Workers static assets read this
 # file). The Content-Security-Policy lets the pages run only the site's own
-# scripts: no inline script (the theme picker is js/theme-boot.js for this
-# reason), nothing from another site. Inline style attributes stay allowed.
+# scripts: no inline script of its own (the theme picker is js/theme-boot.js for
+# this reason), nothing from another site. Inline style attributes stay allowed.
 # The web player reaches the listener's own servers: any https:// address,
 # and http:// only on this computer (a browser refuses other http:// from an
 # https:// page anyway). Tryptify Connect is wss://connect.tryptify.com.
+# Cloudflare adds two scripts to every page: Web Analytics' beacon (from
+# static.cloudflareinsights.com, reporting to this site's /cdn-cgi/rum) and its
+# bot check (an inline script, allowed by the nonce src/worker.js puts in each
+# page's copy of this policy, loading /cdn-cgi/challenge-platform/).
 # Change the policy here, then check every page still works (see README).
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; media-src 'self' blob: https: http://localhost:* http://127.0.0.1:*; connect-src 'self' https: wss://connect.tryptify.com http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; media-src 'self' blob: https: http://localhost:* http://127.0.0.1:*; connect-src 'self' https: wss://connect.tryptify.com http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin

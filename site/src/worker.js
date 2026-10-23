@@ -14,7 +14,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/video/")) return video(request, env);
-    if (url.pathname !== "/download/tryptify.apk") return env.ASSETS.fetch(request);
+    if (url.pathname !== "/download/tryptify.apk") return page(await env.ASSETS.fetch(request));
     if (request.method !== "GET" && request.method !== "HEAD") {
       return new Response("Method not allowed", { status: 405, headers: { allow: "GET, HEAD" } });
     }
@@ -44,6 +44,19 @@ export default {
     return new Response(object.body, { headers });
   },
 };
+
+// A page with a nonce of its own in its Content-Security-Policy (from
+// public/_headers). The site has no inline script; the nonce is for the ones
+// Cloudflare adds to every page (its bot check), which it marks with the
+// nonce it finds in this header. A fresh one each time, or it proves nothing.
+function page(res) {
+  const csp = res.headers.get("content-security-policy");
+  if (!csp || !(res.headers.get("content-type") || "").startsWith("text/html")) return res;
+  const nonce = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
+  const headers = new Headers(res.headers);
+  headers.set("content-security-policy", csp.replace(/script-src 'self'/, `script-src 'self' 'nonce-${nonce}'`));
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
 
 // A video from the static files, with byte ranges: "bytes=a-b", "bytes=a-"
 // or "bytes=-n". The clips are a megabyte or two, so the whole file is read
