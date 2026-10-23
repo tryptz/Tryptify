@@ -849,24 +849,33 @@ export class Hub extends DurableObject<Env> {
     for (const p of this.parties.values()) { item = p.itemFor(token, itemId) as Record<string, unknown> | null; if (item) break; }
     if (!item) return refuse({ status: 404, error: "no such song from the catalogue" });
     const text = (k: string) => (typeof item![k] === "string" ? (item![k] as string) : "");
-    const redirect = (url: string) => new Response(null, { status: 307, headers: { location: url, "cache-control": "no-store" } });
+    // Sent on to the file, or, when the file needs the catalogue's password
+    // (which never goes to a browser), fetched here and passed on.
+    const redirect = async (url: string): Promise<Response> => {
+      if (!catalog.needsKey(url)) return new Response(null, { status: 307, headers: { location: url, "cache-control": "no-store" } });
+      const r = await catalog.file(url);
+      if (!r.ok || !r.body) throw new Error(`HTTP ${r.status} for its file`);
+      const headers = new Headers({ "cache-control": "no-store" });
+      for (const k of ["content-type", "content-length"]) { const v = r.headers.get(k); if (v) headers.set(k, v); }
+      return new Response(r.body, { status: 200, headers });
+    };
     const catalogId = text("catalogId");
     const key = catalogKey(catalogId);
     if (key?.[0] === "qobuz") {
-      try { return redirect(await catalog.qobuzUrl(key[1])); } catch (e) { console.log(`catalogue: qobuz:${key[1]} has no file (${(e as Error).message}); looking for it by name`); }
+      try { return await redirect(await catalog.qobuzUrl(key[1])); } catch (e) { console.log(`catalogue: qobuz:${key[1]} has no file (${(e as Error).message}); looking for it by name`); }
     }
     if (key?.[0] === "deezer") {
-      try { return redirect(await catalog.deezerUrl(key[1])); } catch (e) { console.log(`catalogue: deezer:${key[1]} has no file (${(e as Error).message}); looking for it by name`); }
+      try { return await redirect(await catalog.deezerUrl(key[1])); } catch (e) { console.log(`catalogue: deezer:${key[1]} has no file (${(e as Error).message}); looking for it by name`); }
     }
     let known = tidalId(catalogId);
     // A TIDAL id that names another song is no id for this one.
     if (known !== null && (await catalog.isSong(known, text("title"))) === false) known = null;
     if (known !== null) {
-      try { return redirect(await catalog.streamUrl(known)); } catch (e) { console.log(`catalogue: tidal:${known} has no stream (${(e as Error).message}); looking for it by name`); }
+      try { return await redirect(await catalog.streamUrl(known)); } catch (e) { console.log(`catalogue: tidal:${known} has no stream (${(e as Error).message}); looking for it by name`); }
     }
     const found = await catalog.find(text("title"), text("artist"), Number(item.durationMs) || 0, text("isrc") || null);
     if (found !== null && found !== known) {
-      try { return redirect(await catalog.streamUrl(found)); } catch (e) { console.log(`catalogue: tidal:${found} has no stream either (${(e as Error).message})`); }
+      try { return await redirect(await catalog.streamUrl(found)); } catch (e) { console.log(`catalogue: tidal:${found} has no stream either (${(e as Error).message})`); }
     }
     return refuse({ status: 404, error: "the catalogue has no copy of that song" });
   }

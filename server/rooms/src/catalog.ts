@@ -122,6 +122,31 @@ export class Catalog {
   }
 
   /**
+   * Whether file address [url], as the catalogue handed it out, needs its
+   * password: its own routes do (TIDAL's assembled /api/tidal/stream-file),
+   * except the signed /api/file links. A browser sent there is refused, so
+   * the hub fetches such a file itself ([file]) and passes it on.
+   */
+  needsKey(url: string): boolean {
+    if (!this.#key) return false;
+    const u = new URL(url);
+    return u.origin === this.#origin && u.pathname !== "/api/file";
+  }
+
+  /**
+   * The file at [url] on the catalogue, with the password, whole (`whole=1`:
+   * an assembled TIDAL file then comes with its length, so the page can say
+   * how far its download has got). No time limit: a long song takes a while.
+   */
+  file(url: string): Promise<Response> {
+    const u = new URL(url);
+    u.searchParams.set("whole", "1");
+    const headers = new Headers();
+    if (this.#key && u.origin === this.#origin) headers.set("X-Access-Key", this.#key);
+    return this.#fetch(u.toString(), { headers });
+  }
+
+  /**
    * Whether TIDAL song [id] is the song called [title]: false when TIDAL
    * names another song, null when it could not be asked. A Qobuz song's id
    * sent as a TIDAL one played whatever TIDAL song has that number.

@@ -369,5 +369,20 @@ await test("the password is never in a log", async () => {
   assert.ok(!JSON.stringify(new Catalog(BASE, KEY)).includes(KEY));
 });
 
+await test("a file on the catalogue's own routes needs the password; a signed link or another host does not", async () => {
+  const locked = fakeFetch((_, call) => call.headers.get("x-access-key") === KEY ? new Response("song", { headers: { "content-length": "4" } }) : json({ error: "locked" }, 401));
+  const catalog = new Catalog(BASE, KEY, locked.fetchImpl);
+  assert.equal(catalog.needsKey(`${BASE}/api/tidal/stream-file?track_id=1&quality=HIGH`), true);
+  assert.equal(catalog.needsKey(`${BASE}/api/file?u=x&sig=y`), false);
+  assert.equal(catalog.needsKey("https://cdn.example/song.m4a"), false);
+  assert.equal(new Catalog(BASE, undefined, locked.fetchImpl).needsKey(`${BASE}/api/tidal/stream-file?track_id=1`), false);
+  const r = await catalog.file(`${BASE}/api/tidal/stream-file?track_id=1&quality=HIGH`);
+  assert.equal(await r.text(), "song");
+  const call = locked.calls[0];
+  assert.equal(call.headers.get("x-access-key"), KEY);
+  assert.equal(call.url.searchParams.get("whole"), "1");
+  assert.ok(!call.url.toString().includes(KEY));
+});
+
 console.log(`catalog: ${passed} passed${failed ? `, ${failed} failed` : ""}`);
 if (failed) process.exit(1);
