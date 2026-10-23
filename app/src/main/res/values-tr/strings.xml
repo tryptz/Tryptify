@@ -2859,6 +2859,7 @@
     <string name="tm_mp_no_song">Şarkı onda yok</string>
     <string name="tm_mp_share_song">Şarkıyı odayla paylaş</string>
     <string name="tm_mp_sharing_song">Şarkı paylaşılıyor… %%%1$d</string>
+    <string name="tm_mp_shrinking_song">Şarkı paylaşım için küçültülüyor… %%%1$d</string>
     <string name="tm_mp_song_shared">Şarkı odayla paylaşıldı</string>
     <string name="tm_mp_get_song">Şarkıyı al (%1$s)</string>
     <string name="tm_mp_getting_song">Şarkı alınıyor… %%%1$d</string>
@@ -2984,6 +2985,7 @@
     <string name="party_nothing_queued">Sıra boş.</string>
     <string name="party_shared">Paylaşıldı</string>
     <string name="party_uploading">Yükleniyor %%%1$d</string>
+    <string name="party_shrinking">Küçültülüyor %%%1$d</string>
     <string name="party_share_songs">Parçaları paylaş</string>
     <string name="party_share_songs_desc">Bu telefondaki dosyalardan veya indirilenlerden eklediğiniz parçalar, sırada oldukları sürece onlara sahip olmayanlara aktarılır. Kimse saklayamaz.</string>
     <string name="party_notify_title">Bildirim al</string>

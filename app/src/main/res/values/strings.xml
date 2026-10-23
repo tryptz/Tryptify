@@ -2861,6 +2861,7 @@
     <string name="tm_mp_no_song">Does not have the song</string>
     <string name="tm_mp_share_song">Share the song with the room</string>
     <string name="tm_mp_sharing_song">Sharing the song… %1$d%%</string>
+    <string name="tm_mp_shrinking_song">Making the song smaller to share… %1$d%%</string>
     <string name="tm_mp_song_shared">The song is shared with the room</string>
     <string name="tm_mp_get_song">Get the song (%1$s)</string>
     <string name="tm_mp_getting_song">Getting the song… %1$d%%</string>
@@ -2986,6 +2987,7 @@
     <string name="party_nothing_queued">Nothing queued.</string>
     <string name="party_shared">Shared</string>
     <string name="party_uploading">Uploading %1$d%%</string>
+    <string name="party_shrinking">Making it smaller %1$d%%</string>
     <string name="party_share_songs">Share songs</string>
     <string name="party_share_songs_desc">Songs you add from files on this phone or your downloads are streamed to those without them while they\'re in the queue. Nobody keeps them.</string>
     <string name="party_notify_title">Notify me of</string>

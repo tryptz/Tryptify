@@ -2927,6 +2927,7 @@
     <string name="tm_mp_no_song">N\'a pas le morceau</string>
     <string name="tm_mp_share_song">Partager le morceau avec la salle</string>
     <string name="tm_mp_sharing_song">Partage du morceau… %1$d %%</string>
+    <string name="tm_mp_shrinking_song">Réduction du morceau pour le partage… %1$d %%</string>
     <string name="tm_mp_song_shared">Le morceau est partagé avec la salle</string>
     <string name="tm_mp_get_song">Récupérer le morceau (%1$s)</string>
     <string name="tm_mp_getting_song">Récupération du morceau… %1$d %%</string>
@@ -3055,6 +3056,7 @@
     <string name="party_nothing_queued">La file d’attente est vide.</string>
     <string name="party_shared">Partagé</string>
     <string name="party_uploading">Envoi : %1$d %%</string>
+    <string name="party_shrinking">Réduction : %1$d %%</string>
     <string name="party_share_songs">Partager les titres</string>
     <string name="party_share_songs_desc">Les titres que vous ajoutez depuis les fichiers de ce téléphone ou vos téléchargements sont diffusés à ceux qui ne les ont pas, tant qu’ils sont dans la file d’attente. Personne ne les garde.</string>
     <string name="party_notify_title">Me prévenir pour</string>

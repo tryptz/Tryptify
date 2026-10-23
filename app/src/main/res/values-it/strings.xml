@@ -2927,6 +2927,7 @@
     <string name="tm_mp_no_song">Non ha il brano</string>
     <string name="tm_mp_share_song">Condividi il brano con la stanza</string>
     <string name="tm_mp_sharing_song">Condivisione del brano… %1$d%%</string>
+    <string name="tm_mp_shrinking_song">Riduzione del brano per condividerlo… %1$d%%</string>
     <string name="tm_mp_song_shared">Il brano è condiviso con la stanza</string>
     <string name="tm_mp_get_song">Ottieni il brano (%1$s)</string>
     <string name="tm_mp_getting_song">Download del brano… %1$d%%</string>
@@ -3055,6 +3056,7 @@
     <string name="party_nothing_queued">La coda è vuota.</string>
     <string name="party_shared">Condiviso</string>
     <string name="party_uploading">Caricamento %1$d%%</string>
+    <string name="party_shrinking">Riduzione %1$d%%</string>
     <string name="party_share_songs">Condividi brani</string>
     <string name="party_share_songs_desc">I brani che aggiungi dai file di questo telefono o dai tuoi download vengono trasmessi in streaming a chi non li ha, finché sono in coda. Nessuno li conserva.</string>
     <string name="party_notify_title">Avvisami per</string>

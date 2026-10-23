@@ -2791,6 +2791,7 @@
     <string name="tm_mp_no_song">没有这首歌</string>
     <string name="tm_mp_share_song">把这首歌分享给房间</string>
     <string name="tm_mp_sharing_song">正在分享歌曲… %1$d%%</string>
+    <string name="tm_mp_shrinking_song">正在压缩歌曲以便分享… %1$d%%</string>
     <string name="tm_mp_song_shared">歌曲已分享给房间</string>
     <string name="tm_mp_get_song">获取这首歌（%1$s）</string>
     <string name="tm_mp_getting_song">正在获取歌曲… %1$d%%</string>
@@ -2913,6 +2914,7 @@
     <string name="party_nothing_queued">播放队列是空的。</string>
     <string name="party_shared">已共享</string>
     <string name="party_uploading">正在上传 %1$d%%</string>
+    <string name="party_shrinking">正在压缩 %1$d%%</string>
     <string name="party_share_songs">共享歌曲</string>
     <string name="party_share_songs_desc">你从本机文件或下载中添加的歌曲，在播放队列中时会传给没有这首歌的人。没有人能保留它们。</string>
     <string name="party_notify_title">通知我</string>

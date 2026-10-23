@@ -2927,6 +2927,7 @@
     <string name="tm_mp_no_song">No tiene la canción</string>
     <string name="tm_mp_share_song">Compartir la canción con la sala</string>
     <string name="tm_mp_sharing_song">Compartiendo la canción… %1$d %%</string>
+    <string name="tm_mp_shrinking_song">Reduciendo la canción para compartirla… %1$d %%</string>
     <string name="tm_mp_song_shared">La canción está compartida con la sala</string>
     <string name="tm_mp_get_song">Obtener la canción (%1$s)</string>
     <string name="tm_mp_getting_song">Obteniendo la canción… %1$d %%</string>
@@ -3055,6 +3056,7 @@
     <string name="party_nothing_queued">La cola está vacía.</string>
     <string name="party_shared">Compartida</string>
     <string name="party_uploading">Subiendo: %1$d %%</string>
+    <string name="party_shrinking">Reduciendo: %1$d %%</string>
     <string name="party_share_songs">Compartir canciones</string>
     <string name="party_share_songs_desc">Las canciones que añades desde archivos de este teléfono o tus descargas se transmiten a quien no las tiene mientras están en la cola. Nadie las conserva.</string>
     <string name="party_notify_title">Avisarme de</string>

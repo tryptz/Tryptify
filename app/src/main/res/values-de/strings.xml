@@ -2859,6 +2859,7 @@
     <string name="tm_mp_no_song">Hat den Song nicht</string>
     <string name="tm_mp_share_song">Song mit dem Raum teilen</string>
     <string name="tm_mp_sharing_song">Song wird geteilt… %1$d %%</string>
+    <string name="tm_mp_shrinking_song">Song wird zum Teilen verkleinert… %1$d %%</string>
     <string name="tm_mp_song_shared">Der Song ist mit dem Raum geteilt</string>
     <string name="tm_mp_get_song">Song holen (%1$s)</string>
     <string name="tm_mp_getting_song">Song wird geholt… %1$d %%</string>
@@ -2984,6 +2985,7 @@
     <string name="party_nothing_queued">Die Warteschlange ist leer.</string>
     <string name="party_shared">Geteilt</string>
     <string name="party_uploading">Wird hochgeladen: %1$d %%</string>
+    <string name="party_shrinking">Wird verkleinert: %1$d %%</string>
     <string name="party_share_songs">Titel teilen</string>
     <string name="party_share_songs_desc">Titel, die du aus Dateien auf diesem Handy oder deinen Downloads hinzufügst, werden an alle ohne sie gestreamt, solange sie in der Warteschlange sind. Niemand behält sie.</string>
     <string name="party_notify_title">Benachrichtige mich bei</string>

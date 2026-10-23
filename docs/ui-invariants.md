@@ -2117,7 +2117,12 @@ Ready, the host's Start, Leave, and a line of chat.
   that can: its welcome hands the phone a key, and without one nothing of
   this shows. While someone is without the song the host has Share the song
   with the room, which uploads its file as it is (`RoomClient.shareSong`);
-  once it is up, a player without it has Get the song with its size, which
+  a file bigger than the server takes (its info's `maxSongBytes`, 99 MB)
+  goes up as an Opus copy at 320 kbps (`ShareSize`, `ShareShrinker`, the
+  owner's rule), its making shown as Making the song smaller to share with
+  its own percentage before the upload's; with no Opus encoder (before
+  Android 10), or a copy still too big, the file goes up as it is and the
+  server's refusal shows, as before. Once it is up, a player without it has Get the song with its size, which
   fetches it (`fetchSong`) into the cache, plays from that file and readies
   them in one tap (`haveAndReady`, in that order on the socket, since the
   server refuses a ready without the song). Until the host shares, they are
@@ -2195,7 +2200,8 @@ that says how this phone is doing (In sync, Catching up, Paused by the host,
 …); the cover large, the title, the artist and who added it, the progress
 (a Slider for the host, who seeks for everyone; a bar for the rest); the
 host's Play/Pause for everyone and Skip, everyone else's Vote skip with the
-count; Up next with who added each song and Shared or Uploading N%, and
+count; Up next with who added each song and Shared, Uploading N% or (this
+phone's own, too big to go up as it is) Making it smaller N%, and
 Add song; the switches for this phone (Share songs, and which goings-on are
 notified); Leave the party, and for the host End the party for everyone.
 The chat is a panel of the page right under Up next: every line, newest at
@@ -2252,7 +2258,11 @@ the bottom, and the field to say something.
   (`PartyController.addAll`), one after another, never racing each other.
 * Anyone at the party with the app shares their own songs that are files on
   their phone (Share songs, on by default): one upload at a time, in queue
-  order, tried three times. A song that came from search says which
+  order, tried three times. A file bigger than the server takes, or than
+  what is left of the party's room, goes up as an Opus copy at 320 kbps,
+  made once before the tries and deleted after; where none can be made, or
+  it is still too big, it goes up as it is and the server refuses it (not
+  shared), as before. A song that came from search says which
   catalogue song it is (`PartyMatch.catalogId(source)`) and carries its
   cover, so other phones and the website find that very recording. Away
   longer than the seat is kept, a phone joins its party again by its code;

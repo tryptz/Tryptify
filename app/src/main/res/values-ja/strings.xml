@@ -2791,6 +2791,7 @@
     <string name="tm_mp_no_song">曲を持っていません</string>
     <string name="tm_mp_share_song">曲をルームに共有</string>
     <string name="tm_mp_sharing_song">曲を共有中… %1$d%%</string>
+    <string name="tm_mp_shrinking_song">共有できるよう曲を小さくしています… %1$d%%</string>
     <string name="tm_mp_song_shared">曲はルームに共有されています</string>
     <string name="tm_mp_get_song">曲を入手（%1$s）</string>
     <string name="tm_mp_getting_song">曲を入手中… %1$d%%</string>
@@ -2913,6 +2914,7 @@
     <string name="party_nothing_queued">キューは空です。</string>
     <string name="party_shared">共有済み</string>
     <string name="party_uploading">アップロード中 %1$d%%</string>
+    <string name="party_shrinking">縮小中 %1$d%%</string>
     <string name="party_share_songs">曲を共有</string>
     <string name="party_share_songs_desc">この端末のファイルやダウンロードから追加した曲は、キューにある間だけ、持っていない人に配信されます。誰にも保存されません。</string>
     <string name="party_notify_title">通知する内容</string>

@@ -146,6 +146,8 @@ data class GlyphMultiplayerUi(
     val startAtMs: Long? = null,
     /** The room's song going up (host) or coming down (player), 0 to 1; null when neither. */
     val songTransfer: Float? = null,
+    /** The host's song is too big to share as it is, and [songTransfer] is its smaller copy being made. */
+    val songShrinking: Boolean = false,
     /** Why the last share or fetch failed, when it did. */
     val transferError: RoomTransferError? = null,
 ) {

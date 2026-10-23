@@ -360,6 +360,10 @@ dependencies {
     implementation(libs.media3.session)
     implementation(libs.media3.ui)
     implementation(libs.media3.cast)
+    // Turns a song too big for the rooms server into Opus before it is shared.
+    implementation(libs.media3.transformer)
+    // Its MP4 muxer: the only one of Media3's that writes Opus into an .m4a.
+    implementation(libs.media3.muxer)
     // Prebuilt FFmpeg audio decoder wired as FfmpegAudioRenderer. Drops in
     // support for DSD/DSF, APE, TAK, WavPack, Musepack, TrueHD/MLP, DTS, AC-3,
     // and a long tail of codecs the platform MediaCodec can't handle.

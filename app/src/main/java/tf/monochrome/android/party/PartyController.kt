@@ -4,6 +4,7 @@ package tf.monochrome.android.party
 
 import android.content.ComponentName
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -33,6 +34,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -40,6 +42,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import tf.monochrome.android.audio.share.ShareShrinker
+import tf.monochrome.android.audio.share.ShareSize
 import tf.monochrome.android.data.auth.SupabaseAuthManager
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.player.SpeedOverride
@@ -98,6 +102,8 @@ data class PartyUi(
     val shareSongs: Boolean = true,
     /** Covers this phone has for songs the party carries none for (a file's own picture), by item id. */
     val covers: Map<String, String> = emptyMap(),
+    /** This phone's songs being made smaller to share (too big as they are), 0 to 1, by item id. */
+    val shrinking: Map<String, Float> = emptyMap(),
 ) {
     /** The cover to show for [item]: the party's, else this phone's own copy's. */
     fun coverFor(item: PartyItem): String? = item.cover ?: covers[item.id]
@@ -143,6 +149,7 @@ class PartyController @Inject constructor(
     private val notifier: PartyNotifier,
     private val preferences: PreferencesManager,
     private val speedOverride: SpeedOverride,
+    private val shrinker: ShareShrinker,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val hearing = MutableStateFlow(PartyHearing.IDLE)
@@ -150,6 +157,9 @@ class PartyController @Inject constructor(
 
     /** Each song's cover as this phone has it (its own copy's), by item id, for songs the party sends none for. */
     private val covers = MutableStateFlow<Map<String, String>>(emptyMap())
+
+    /** This phone's songs being made smaller before they go up, by item id. */
+    private val shrinking = MutableStateFlow<Map<String, Float>>(emptyMap())
 
     /** When to move a drifting player, and how far ahead a seek must aim. */
     private val drift = PartyDrift()
@@ -159,7 +169,9 @@ class PartyController @Inject constructor(
     private var lastAnchor: PartyPlayback? = null
 
     val state: StateFlow<PartyUi> =
-        combine(client.state, hearing, fetching, prefs.shareSongs, covers) { c, h, f, share, art -> PartyUi(c, h, f, share, art) }
+        combine(client.state, hearing, fetching, prefs.shareSongs, combine(covers, shrinking, ::Pair)) { c, h, f, share, (art, shrink) ->
+            PartyUi(c, h, f, share, art, shrink)
+        }
             .stateIn(scope, SharingStarted.Eagerly, PartyUi())
 
     /** Whether a party is on: the song menus offer "Add to party" only then. */
@@ -605,17 +617,46 @@ class PartyController @Inject constructor(
      * every song together, the playing one starved by the rest), and tried
      * up to three times: a dropped connection used to leave it "Uploading"
      * for good. A song no longer in the queue is not uploaded at all.
+     *
+     * A file bigger than the server takes (its `maxSongBytes`, or what is
+     * left of the party's room) goes up as an Opus copy at 320 kbps
+     * ([ShareSize], [ShareShrinker]), made once before the tries and deleted
+     * after them. Where no copy can be made, or it is still too big, nothing
+     * goes up but an empty upload ([PartyClient.giveUpUpload]), and the song
+     * shows as not shared: Cloudflare refuses a body over 100 MB before the
+     * server sees it, which left the song "Uploading" for good.
      */
     private fun share(itemId: String, file: File) {
         scope.launch {
             uploads.withLock {
-                repeat(UPLOAD_TRIES) { attempt ->
-                    val party = client.state.value.party ?: return@withLock
-                    if (party.now?.id != itemId && party.queue.none { it.id == itemId }) return@withLock
-                    val done = client.upload(itemId, file, RoomProtocol.songExt(file.name)) { }
-                        .onFailure { Log.w(TAG, "share, try ${attempt + 1}: ${it.message}") }
-                    if (done.isSuccess) return@withLock
-                    delay(2_000L shl attempt)
+                val party = client.state.value.party ?: return@withLock
+                val item = party.now?.takeIf { it.id == itemId } ?: party.queue.firstOrNull { it.id == itemId } ?: return@withLock
+                val limit = ShareSize.limit(client.maxSongBytes, party.sharedLimit, party.sharedBytes)
+                val prepared = try {
+                    withContext(Dispatchers.IO) {
+                        ShareSize.prepare(
+                            shrinker, Uri.fromFile(file).toString(), file.length(), RoomProtocol.songExt(file.name), limit,
+                            durationMs = item.durationMs.takeIf { it > 0 },
+                        ) { p -> shrinking.update { it + (itemId to p.coerceIn(0f, 1f)) } }
+                    }
+                } finally {
+                    shrinking.update { it - itemId }
+                }
+                if (prepared.shrunk == null && file.length() > limit) {
+                    client.giveUpUpload(itemId, prepared.ext)
+                    return@withLock
+                }
+                try {
+                    repeat(UPLOAD_TRIES) { attempt ->
+                        val now = client.state.value.party ?: return@withLock
+                        if (now.now?.id != itemId && now.queue.none { it.id == itemId }) return@withLock
+                        val done = client.upload(itemId, prepared.shrunk ?: file, prepared.ext) { }
+                            .onFailure { Log.w(TAG, "share, try ${attempt + 1}: ${it.message}") }
+                        if (done.isSuccess) return@withLock
+                        delay(2_000L shl attempt)
+                    }
+                } finally {
+                    prepared.discard()
                 }
             }
         }

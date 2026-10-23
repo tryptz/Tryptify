@@ -342,7 +342,11 @@ private fun RoomSongShare(
             Spacer(Modifier.height(MonoDimens.spacingSm))
             Text(
                 stringResource(
-                    if (isHost) R.string.tm_mp_sharing_song else R.string.tm_mp_getting_song,
+                    when {
+                        !isHost -> R.string.tm_mp_getting_song
+                        mp.songShrinking -> R.string.tm_mp_shrinking_song
+                        else -> R.string.tm_mp_sharing_song
+                    },
                     kotlin.math.round(progress * 100f).toInt(),
                 ),
                 style = MaterialTheme.typography.bodySmall,
