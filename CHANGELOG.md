@@ -2,14 +2,35 @@
 
 ## [Unreleased]
 
+## [1.9.5]
+
 ### Added
 
 #### Tryptify Connect
+- **Follow the other device, as Spotify does.** While the phone plays nothing (or is paused) and another of your devices plays, the mini player shows that song, "Artist · Playing on …" on its artist line, its progress running in step, and its buttons and swipes steer that device. A tap opens the player with the Connect panel up.
+- **The Connect panel has the song's timeline**: a seek bar with the elapsed and total time, moving in step, that sends the other device to the second you let go.
+- **The same on tryptify.com/player**: while the browser plays nothing, its bar shows the other device's song at its second, a drag seeks it and the buttons steer it.
+- **A device that goes offline stops where it was**, so its song no longer runs to the end on everyone else's screen, and moving the music from it starts at that second.
 - **Your devices, together.** Signed in, the phone and tryptify.com/player see each other: the player's Devices button lists every device online and which one is playing.
 - **Move the music** to any of them with a tap, at the same second, the queue coming too; or take it from another device with Play here.
 - **Steer the other device** from the panel: play, pause, previous and next.
 - **One plays at a time.** When another device starts playing, this one pauses, as Spotify does.
 - **Next to no battery.** Connected only while the app is on screen or playing, and a message only when something changes.
+
+#### Select on every song list
+- **Select, in a song's ⋮ menu, works on every song list**: the Local page's Songs and its search, My server's songs, search and albums, local albums, artists and genres, and search results from the phone or your own server, which now have a ⋮ menu too. Then a tap picks or unpicks a row, and the bar adds them all to the queue, the party or a playlist.
+- **A selection on the Local page's Songs keeps its songs** when you scroll far away from them.
+- **Genre charts**: hold a row to pick it (chart rows have no preview); the picked rows are found in the catalogue when the bar acts, and a message says how many were.
+- **An artist's unreleased songs** join a selection begun from one of their top songs.
+
+#### Upload a selection to Tryptify Cloud
+- **The selection bar has Upload to Tryptify Cloud** wherever the picked songs include files on the phone. Only those files go up. One message says they're queued and one says how many went up; a song that fails is told at once.
+
+#### My server's songs and search
+- **Library › My server has a Songs chip** beside Albums and Artists, loaded a page of 500 at a time, and a **search** that asks your server as you type. A tap in a long list plays that song and queues the next 999.
+
+#### A password for your server
+- **A TrypT HiFi server can ask for a password** (its `ACCESS_PASSWORD`). Give it under the address in Settings › Connections › Add API; adding a listed server again with a password changes it. It goes with every request and stream to that server and nowhere else, stays on the phone and is never synced. A missing or wrong one says so instead of failing quietly.
 
 #### Listening parties
 - **Listen together, in sync.** Start a party from your profile or join one with its code; Invite shares a link that opens in the app. Everyone hears the same moment of the same song, and the party page shows who's listening and whether you're in sync.
@@ -87,6 +108,20 @@
 - **Taps follow the zoom**, as they follow the curve. Your looks and saved presets keep their size: anything saved before reads as 100%.
 
 ### Changed
+
+#### No chart server built in
+- **Trypt Mania's chart server is no longer in the app**: charts, and lyrics timed by ear, use a server you add under Settings › Connections. The multiplayer rooms server stays built in.
+
+#### Safer with your sign-ins
+- **Plain http:// goes only to servers on your own network** (private addresses, Tailscale, `.local` and `.lan` names), for the API client, the player, previews and covers. A Subsonic password never goes over plain http://.
+- **Logs, the shared debug log and crash files hide sign-ins**: tokens, codes, keys and the rooms server's secret path.
+- **Android backup and device transfer leave every sign-in out**, and settings sync no longer carries the built-in rooms server's address.
+
+#### Tryptify Cloud folds under its title
+- **In Settings › Connections, Tryptify Cloud starts folded**: tap its title to open the plans or storage and the uploads. Folded, it no longer asks the server on every visit.
+
+#### Theme Store cards show the lyrics and player
+- **A card crops its picture to the lyrics and the player**, so more than two fit a screen. A theme's own page still shows the picture whole.
 
 #### APIs in two groups
 - **Settings › Connections › APIs lists Streaming and Trypt Mania apart.** The servers that search and play (TIDAL, Qobuz, Apple Music, Deezer) are under Streaming; the ones that only chart, time lyrics or run rooms for Trypt Mania are under Trypt Mania. ↑ moves a server above the one before it in its own group, which is the order that decides which server is used.

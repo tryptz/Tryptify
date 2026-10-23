@@ -149,8 +149,86 @@ object WhatsNew {
     /** How late each output plays, and everything that waits for it. */
     private const val BLUETOOTH_SYNC = "Bluetooth sync"
 
+    /** The listener's devices: what plays where, and moving it between them. */
+    private const val CONNECT = "Tryptify Connect"
+
+    /** The paid music storage, under Settings › Connections. */
+    private const val CLOUD = "Tryptify Cloud"
+
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
+        WhatsNewRelease(
+            versionCode = 195,
+            versionName = "1.9.5",
+            entries = listOf(
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = CONNECT,
+                    title = "Your devices, together",
+                    body = "Signed in, your phone and tryptify.com/player see each other. The Devices button in the player lists them, and a tap moves the music there at the same second, queue and all.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = CONNECT,
+                    title = "Follow the other device",
+                    body = "While your phone is quiet and another device plays, the mini player shows that song with its progress running in step, and its buttons steer it. The Connect panel has a seek bar.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = CONNECT,
+                    title = "One plays at a time",
+                    body = "When another of your devices starts playing, this one pauses, as Spotify does.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "Select on every song list",
+                    body = "Select, in a song's ⋮ menu, now works on the Local page, My server, local albums, artists and genres, and search results from your phone or server. On a genre chart, hold a row.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "My server's songs, and its search",
+                    body = "Library › My server has a Songs chip beside Albums and Artists, and a search that asks your server as you type.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = CLOUD,
+                    title = "Upload a whole selection",
+                    body = "Select songs that are files on your phone, then the cloud button on the selection bar sends them all to Tryptify Cloud: one message when they're queued, one when they're done.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = CONNECTIONS,
+                    title = "A password for your server",
+                    body = "A TrypT HiFi server can ask for a password. Give it under the address in Settings › Connections › Add API. It stays on this phone and is never synced.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = TRYPT_MANIA,
+                    title = "Add a chart server",
+                    body = "No chart server is built in any more. Trypt Mania's charts, and lyrics timed by ear, use a server you add under Settings › Connections.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = CLOUD,
+                    title = "Tryptify Cloud folds under its title",
+                    body = "In Settings › Connections, tap Tryptify Cloud to open its plans, storage and uploads.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = THEME_STORE,
+                    title = "Store cards show the lyrics and player",
+                    body = "A card in the Theme Store shows the lyrics and the player from a theme's picture. The theme's own page still shows it whole.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = APP,
+                    title = "Safer with your sign-ins",
+                    body = "Plain http:// goes only to servers on your own network, logs hide sign-ins, and Android backups leave every sign-in out.",
+                ),
+            ),
+        ),
         WhatsNewRelease(
             versionCode = 194,
             versionName = "1.9.4",
