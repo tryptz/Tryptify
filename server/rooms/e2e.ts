@@ -142,6 +142,26 @@ await step("the host queues and shares a song; the guest fetches it by range", a
   assert.equal(nobody.status, 404);
 });
 
+if (process.env.ALAC) await step("a song no browser plays reaches the website as AAC (ffmpeg)", async () => {
+  const alac = new Uint8Array(await Bun.file(process.env.ALAC!).arrayBuffer());
+  host.say({ t: "queueAdd", ref: "r2", item: { title: "Lossless", artist: "Test", album: "", durationMs: 20_000, share: true } });
+  const id = (await host.wait((m) => m.t === "added" && m.ref === "r2", "added r2")).itemId;
+  const put = await fetch(`${BASE}/api/party/song?item=${id}&ext=m4a`, { method: "PUT", headers: { "x-room-key": hostKey, "content-length": String(alac.length) }, body: alac });
+  assert.equal(put.status, 200, await put.clone().text());
+  const web = await fetch(`${BASE}/api/party/song?item=${id}&token=${token}&web=1`);
+  assert.equal(web.status, 200, await web.clone().text());
+  assert.equal(web.headers.get("x-song-ext"), "m4a");
+  const bytes = new Uint8Array(await web.arrayBuffer());
+  assert.notDeepEqual(bytes.length, alac.length);
+  await Bun.write(process.env.ALAC + ".web.m4a", bytes);
+  // The phones still get the original.
+  const phone = await fetch(`${BASE}/api/party/song?item=${id}&token=${token}`);
+  assert.equal((await phone.arrayBuffer()).byteLength, alac.length);
+  // An mp3 a browser plays goes as it is.
+  const again = await fetch(`${BASE}/api/party/song?item=${itemId}&token=${token}&web=1`);
+  assert.equal(again.headers.get("content-type"), "audio/flac");
+});
+
 await step("the host pauses and seeks; everyone gets the clock", async () => {
   host.say({ t: "pause" });
   const paused = await guest.wait((m) => m.t === "party" && m.party.playback.paused === true, "paused");

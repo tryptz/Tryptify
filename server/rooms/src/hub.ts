@@ -13,6 +13,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 import { Catalog, catalogKey, tidalId } from "./catalog";
+import { webKey } from "./ffmpeg";
 import { Party, RESUME_MS, PARTY_QUOTA_BYTES, type MemberIn, type Out as PartyOut } from "./party";
 import { audioType, byteRange, cleanExt, parseClient, randomHex, type ClientMsg } from "./protocol";
 import * as R from "./room";
@@ -20,6 +21,7 @@ import * as R from "./room";
 export interface Env {
   HUB: DurableObjectNamespace<Hub>;
   SONGS: R2Bucket;
+  FFMPEG: DurableObjectNamespace;
   SUPABASE_URL?: string;
   SUPABASE_ANON_KEY?: string;
   TRYPT_HIFI_URL?: string;
@@ -88,6 +90,8 @@ export class Hub extends DurableObject<Env> {
   nextId = 1;
   nextSocket = 1;
   resumeMs = RESUME_MS;
+  /** Per shared song: its website copy's key once made, null when the original plays in a browser, or the making of it. */
+  webCopies = new Map<string, string | null | Promise<string | null>>();
   catalog: Catalog | null;
   heartbeat: ReturnType<typeof setInterval> | null = null;
 
@@ -108,7 +112,9 @@ export class Hub extends DurableObject<Env> {
   }
 
   deleteFiles(keys: Iterable<string>) {
-    const list = [...keys].filter(Boolean);
+    // And the website's copy of each, where one was made.
+    const list = [...keys].filter(Boolean).flatMap((k) => [k, webKey(k)]);
+    for (const k of list) this.webCopies.delete(k);
     if (list.length) this.ctx.waitUntil(this.env.SONGS.delete(list).catch(() => {}));
   }
 
@@ -132,7 +138,7 @@ export class Hub extends DurableObject<Env> {
     if (path === "/api/party/song") {
       if (!q.has("item")) return new Response("Failed to deserialize query string: missing field `item`", { status: 400 });
       if (m === "PUT") return this.partySongPut(request, q.get("item")!, cleanExt(q.get("ext") ?? ""));
-      if (m === "GET" || m === "HEAD") return this.partySongGet(request, q.get("item")!, (q.get("token") ?? "").trim());
+      if (m === "GET" || m === "HEAD") return this.partySongGet(request, q.get("item")!, (q.get("token") ?? "").trim(), q.get("web") === "1");
     }
     if (m === "GET" && path === "/api/party/cover") return this.partyCover((q.get("token") ?? "").trim(), q.get("item") ?? "");
     if (m === "GET" && path === "/api/party/search") return this.partySearch((q.get("token") ?? "").trim(), q.get("q") ?? "");
@@ -706,7 +712,7 @@ export class Hub extends DurableObject<Env> {
   }
 
   /** A shared song to a member (by key, or by the website's token), all of it or the range asked for. */
-  async partySongGet(request: Request, item: string, token: string): Promise<Response> {
+  async partySongGet(request: Request, item: string, token: string, web = false): Promise<Response> {
     const key = roomKey(request);
     let found: { song: { bytes: number; ext: string }; path: string } | null = null;
     if (key) {
@@ -717,10 +723,54 @@ export class Hub extends DurableObject<Env> {
       for (const p of this.parties.values()) { found = p.songFor(token, item); if (found) break; }
     }
     if (!found) return refuse({ status: 404, error: "that song is not shared with this party" });
-    // A browser plays only some codecs; the Rust server turned the rest into
-    // AAC with ffmpeg (web=1). A Worker has no ffmpeg, so the original goes,
-    // and a file the browser cannot play is played from the catalogue.
+    // The website gets a file its browser plays (web=1): the original, or an
+    // AAC copy of one in a codec no browser does, made by ffmpeg (src/ffmpeg.ts).
+    if (web) {
+      const copy = await this.webCopy(found.path);
+      if (copy) return this.sendFile(request, copy, "m4a", item);
+    }
     return this.sendFile(request, found.path, found.song.ext, item);
+  }
+
+  /**
+   * The website's copy of shared song `file`: null when the original plays in
+   * a browser (or ffmpeg could not help, and the page then plays the
+   * catalogue's copy), else the key of its AAC copy, made the first time it
+   * is asked for, once, however many ask at the same time.
+   */
+  async webCopy(file: string): Promise<string | null> {
+    const known = this.webCopies.get(file);
+    if (known !== undefined) return known;
+    const making = (async (): Promise<string | null> => {
+      const key = webKey(file);
+      if (await this.env.SONGS.head(key)) return key;
+      const object = await this.env.SONGS.get(file);
+      if (!object) return null;
+      try {
+        const ffmpeg = this.env.FFMPEG.get(this.env.FFMPEG.idFromName("ffmpeg"));
+        const r = await ffmpeg.fetch("http://ffmpeg/web", {
+          method: "POST",
+          headers: { "content-length": String(object.size), "content-type": "application/octet-stream" },
+          body: object.body,
+        });
+        if (r.status === 204) return null;
+        if (!r.ok || !r.body) { console.log(`ffmpeg: ${r.status} for ${file}: ${await r.text()}`); return null; }
+        const size = Number(r.headers.get("content-length"));
+        if (!(size > 0)) return null;
+        const sized = new FixedLengthStream(size);
+        await Promise.all([r.body.pipeTo(sized.writable), this.env.SONGS.put(key, sized.readable, { httpMetadata: { contentType: "audio/mp4" } })]);
+        return key;
+      } catch (e) {
+        console.log(`ffmpeg: could not convert ${file}: ${(e as Error).message}`);
+        return null;
+      }
+    })();
+    this.webCopies.set(file, making);
+    const done = await making;
+    // Forgotten if the song left meanwhile (deleteFiles), and its copy with it.
+    if (this.webCopies.get(file) === making) this.webCopies.set(file, done);
+    else if (done) this.deleteFiles([done]);
+    return done;
   }
 
   async sendFile(request: Request, file: string, ext: string, name: string): Promise<Response> {

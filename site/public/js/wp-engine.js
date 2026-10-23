@@ -132,6 +132,16 @@
     pause() { el().pause(); },
     toggle() { return el().paused ? this.play() : this.pause(); },
     seek(t) { const a = el(); if (Number.isFinite(a.duration)) a.currentTime = Math.max(0, Math.min(a.duration, t)); },
+    /**
+     * Whether [t] seconds can be reached in the playing file as it is. A song
+     * still being put together by its server (TrypT HiFi's TIDAL streams, sent
+     * as they arrive) says it cannot be sought in until it is whole.
+     */
+    canSeek(t) {
+      const a = el(), r = a.seekable;
+      for (let i = 0; i < r.length; i++) if (t >= r.start(i) && t <= r.end(i) + 0.5) return true;
+      return false;
+    },
     stop() { for (const a of els) { a.pause(); a.removeAttribute("src"); a.load(); } nextKey = null; },
     get time() { return el().currentTime || 0; },
     get duration() { const d = el().duration; return Number.isFinite(d) ? d : 0; },

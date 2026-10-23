@@ -194,8 +194,10 @@
   Eng.on("durationchange", () => {
     if (remoteNow()) return; // the bar is following another device
     const s = $("bar-seek");
-    s.max = String(Eng.duration || 0);
-    $("bar-dur").textContent = clock(Eng.duration);
+    // A song still arriving has no length in the browser yet: the catalogue's stands in.
+    const length = Eng.duration || (current && current.duration) || 0;
+    s.max = String(length);
+    $("bar-dur").textContent = clock(length);
     position();
   });
   let dragging = false;
@@ -226,7 +228,7 @@
     set("pause", () => Eng.pause());
     set("previoustrack", prev);
     set("nexttrack", () => next(false));
-    set("seekto", (d) => { Eng.seek(d.seekTime); position(); publish(); });
+    set("seekto", (d) => { seekTo(d.seekTime); });
   }
 
   // ── The bar ─────────────────────────────────────────────────────────
@@ -260,8 +262,26 @@
   seek.addEventListener("change", () => {
     dragging = false;
     if (remoteNow()) { seekRemote(Number(seek.value)); return; }
-    Eng.seek(Number(seek.value)); position(); publish();
+    seekTo(Number(seek.value));
   });
+  /**
+   * The playing song to [t] seconds. One its server is still putting
+   * together (a TrypT HiFi stream, sent as it arrives) cannot be sought in,
+   * so it is loaded again, whole this time (`whole=1`: the server answers
+   * once the file is complete, with its length and ranges), from [t].
+   */
+  async function seekTo(t) {
+    if (!current) return;
+    if (Eng.canSeek(t)) { Eng.seek(t); position(); publish(); return; }
+    const t0 = current, playing = !Eng.paused;
+    try {
+      let url = await S.url(t0);
+      if (t0 !== current) return;
+      if (t0.src === "hifi") url += (url.includes("?") ? "&" : "?") + "whole=1";
+      await Eng.load(url, null, playing, t);
+    } catch (e) { if (t0 === current) fail(e); return; }
+    position(); publish();
+  }
   const vol = $("bar-volume");
   vol.value = String(settings.volume);
   function setVolume(v) {
@@ -1075,8 +1095,7 @@
     },
     seek(t) {
       if (remoteNow()) { seekRemote(t); return; }
-      if (!current) return;
-      Eng.seek(t); position(); publish();
+      seekTo(t);
     },
   };
 
@@ -1107,7 +1126,7 @@
       else if (m.action === "pause") Eng.pause();
       else if (m.action === "next") next(false);
       else if (m.action === "prev") prev();
-      else if (m.action === "seek" && m.value != null) { Eng.seek(m.value); publish(); }
+      else if (m.action === "seek" && m.value != null) seekTo(m.value);
     });
     // Another device started playing: this one makes way, as Spotify does.
     C.on("now", (n) => {

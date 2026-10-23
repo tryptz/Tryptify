@@ -32,6 +32,22 @@ class_name = "Hub"
 tag = "v1"
 new_sqlite_classes = ["Hub"]
 
+# ffmpeg, for shared songs no browser plays (src/ffmpeg.ts, ffmpeg/): asleep
+# until a web guest asks for one.
+[[containers]]
+class_name = "Ffmpeg"
+image = "./ffmpeg/Dockerfile"
+instance_type = "standard-2"
+max_instances = 2
+
+[[durable_objects.bindings]]
+name = "FFMPEG"
+class_name = "Ffmpeg"
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Ffmpeg"]
+
 # Shared songs, while their room or party wants them.
 [[r2_buckets]]
 binding = "SONGS"

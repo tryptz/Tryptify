@@ -47,9 +47,14 @@ token the party gave it, never a cookie, so they answer CORS for any origin.
 - **Shared songs are at most 99 MB**, not 128 MiB: a Worker takes a request
   body of at most 100 MB on this zone's plan. An upload must say its length
   (`Content-Length`), as the phones do.
-- **No ffmpeg.** The Rust server turned a shared song in a codec no browser
-  plays (ALAC, WMA, APE, AIFF, DSD) into AAC for the website; here the
-  original goes, and the page plays that song from the catalogue instead.
+- **ffmpeg runs in a Container.** As the Rust server did, a shared song in a
+  codec no browser plays (ALAC, WMA, APE, AIFF, DSD) reaches the website as
+  AAC 256k. A Worker cannot run ffmpeg, so `src/ffmpeg.ts` is a Cloudflare
+  Container (`ffmpeg/Dockerfile`, `ffmpeg/server.py`): the hub sends it the
+  song once, the first time a browser asks (`web=1`), and keeps the copy in
+  R2 next to the original (`<file>.web.m4a`), deleted with it. A song a
+  browser plays already comes back 204 and is sent as it is. Phones always
+  get the original. The container sleeps after three minutes idle.
 - **No address secret.** The Railway server lived under `/<secret>/`; this one
   is at the root, since the website talks to it. Sign-in is what keeps rooms
   to accounts: a phone's hello carries its Supabase access token, checked
@@ -66,7 +71,20 @@ token the party gave it, never a cookie, so they answer CORS for any origin.
 bun run test                    # protocol, party, room and catalogue rules
 npx wrangler dev --port 8799 --var SUPABASE_URL: --var TRYPT_HIFI_URL:
 bun run e2e.ts                  # a party and a game over real sockets, in workerd
-npx wrangler deploy
+ALAC=song.m4a bun run e2e.ts    # also: an ALAC share reaches the website as AAC
+npx wrangler deploy             # builds and pushes the ffmpeg image too
+```
+
+`wrangler dev` and `deploy` build the container image, so they need Docker
+running. Test the converter alone with:
+
+```
+docker build -t tryptify-ffmpeg ffmpeg && docker run --rm -p 8080:8080 tryptify-ffmpeg
+curl -s --data-binary @song.m4a localhost:8080/web -o out.m4a -w '%{http_code}\n'
+```
+
+```
+npx wrangler secret put TRYPT_HIFI_KEY   # TrypT HiFi's ACCESS_PASSWORD, for Add songs
 npx wrangler secret put TRYPT_HIFI_KEY   # TrypT HiFi's ACCESS_PASSWORD, for Add songs
 ```
 
