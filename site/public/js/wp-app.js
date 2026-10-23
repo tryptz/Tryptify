@@ -1279,22 +1279,23 @@
   // touch, keys and screen readers work as before; its thumb is as wide as the
   // swelling, so the input's own travel matches where the swelling is drawn.
   // Dragging swells it further on a bouncy spring, as in the app.
-  (() => {
-    const input = $("bar-seek");
-    const NS = "http://www.w3.org/2000/svg";
-    const TUBE = 2.6, REACH = 22, REST = 8, HELD = 10.5, H = 24;
+  // The volume is the same tube, smaller, so its swelling leaves it room to move.
+  function glassTube(input, { tube: TUBE, reach: REACH, rest: REST, held: HELD, height: H }) {
+    const NS = "http://www.w3.org/2000/svg", id = input.id;
     const svg = document.createElementNS(NS, "svg");
     svg.setAttribute("class", "wp-tube");
     svg.setAttribute("aria-hidden", "true");
     svg.innerHTML =
-      '<defs><clipPath id="wp-tube-played"><rect x="0" y="0" width="0" height="' + H + '"/></clipPath>' +
-      '<linearGradient id="wp-tube-rim" x1="0" y1="0" x2="0" y2="1">' +
+      '<defs><clipPath id="' + id + '-played"><rect x="0" y="0" width="0" height="' + H + '"/></clipPath>' +
+      '<linearGradient id="' + id + '-rim" x1="0" y1="0" x2="0" y2="1">' +
       '<stop offset="0" stop-color="#fff" stop-opacity="0.95"/><stop offset="0.45" stop-color="#d1e0ff" stop-opacity="0.25"/>' +
       '<stop offset="0.7" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#a6d1ff" stop-opacity="0.45"/></linearGradient></defs>' +
-      '<path class="wp-tube-rest"/><path class="wp-tube-played" clip-path="url(#wp-tube-played)"/>' +
-      '<circle class="wp-tube-core"/><path class="wp-tube-rim" fill="none" stroke="url(#wp-tube-rim)"/>';
+      '<path class="wp-tube-rest"/><path class="wp-tube-played" clip-path="url(#' + id + '-played)"/>' +
+      '<circle class="wp-tube-core"/><path class="wp-tube-rim" fill="none" stroke="url(#' + id + '-rim)"/>';
     const wrap = document.createElement("span");
     wrap.className = "wp-tube-wrap";
+    wrap.style.setProperty("--tube-h", `${H}px`);
+    wrap.style.setProperty("--tube-thumb", `${2 * REACH}px`);
     input.replaceWith(wrap);
     wrap.append(svg, input);
     const [clip] = svg.getElementsByTagName("rect");
@@ -1337,7 +1338,9 @@
     }
     new ResizeObserver(schedule).observe(wrap);
     draw();
-  })();
+  }
+  glassTube($("bar-seek"), { tube: 2.6, reach: 22, rest: 8, held: 10.5, height: 24 });
+  glassTube($("bar-volume"), { tube: 2.2, reach: 13, rest: 6.5, held: 8.5, height: 20 });
 
   // ── Start ───────────────────────────────────────────────────────────
   initAutoEq();

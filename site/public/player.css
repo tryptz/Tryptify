@@ -304,9 +304,10 @@
 .wp-bar .wp-play:hover { background: radial-gradient(120% 90% at 30% 10%, rgba(255, 255, 255, 0.36), transparent 55%), rgb(var(--tint) / calc(var(--tint-a) * 1.6 + 0.14)); opacity: 1; }
 .wp-bar .wp-play:active { transform: scale(0.92); transition-duration: 0.12s; }
 
-/* The timeline: the app's glass tube (drawn by js/wp-app.js), the real range
-   input on top of it, unseen, its thumb as wide as the swelling. */
-.wp-tube-wrap { position: relative; flex: 1; height: 24px; min-width: 0; }
+/* The timeline and the volume: the app's glass tube (drawn by js/wp-app.js),
+   the real range input on top of it, unseen, its thumb as wide as the swelling. */
+.wp-tube-wrap { position: relative; flex: 1; height: var(--tube-h, 24px); min-width: 0; }
+.wp-bar-end .wp-tube-wrap { flex: 0 0 110px; }
 .wp-tube { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .wp-tube-rest { fill: color-mix(in srgb, var(--text) 22%, transparent); }
 .wp-tube-played { fill: rgb(var(--tint) / 0.6); }
@@ -315,14 +316,14 @@
 [data-design="white"] .wp-tube-rest { fill: color-mix(in srgb, var(--text) 14%, transparent); }
 [data-design="white"] .wp-tube-played { fill: rgb(var(--tint) / 0.75); }
 [data-design="white"] .wp-tube-core { fill: rgb(var(--tint) / 0.9); }
-.wp-seek .wp-tube-wrap input {
+.wp-bar .wp-tube-wrap input {
   position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer;
   -webkit-appearance: none; appearance: none; background: none;
 }
-.wp-tube-wrap input::-webkit-slider-runnable-track { height: 24px; background: none; }
-.wp-tube-wrap input::-webkit-slider-thumb { -webkit-appearance: none; width: 44px; height: 24px; }
-.wp-tube-wrap input::-moz-range-track { height: 24px; background: none; }
-.wp-tube-wrap input::-moz-range-thumb { width: 44px; height: 24px; border: 0; border-radius: 0; }
+.wp-tube-wrap input::-webkit-slider-runnable-track { height: var(--tube-h, 24px); background: none; }
+.wp-tube-wrap input::-webkit-slider-thumb { -webkit-appearance: none; width: var(--tube-thumb, 44px); height: var(--tube-h, 24px); }
+.wp-tube-wrap input::-moz-range-track { height: var(--tube-h, 24px); background: none; }
+.wp-tube-wrap input::-moz-range-thumb { width: var(--tube-thumb, 44px); height: var(--tube-h, 24px); border: 0; border-radius: 0; }
 .wp-tube-wrap:has(input:focus-visible) { outline: 2px solid var(--text); outline-offset: 2px; border-radius: 12px; }
 .wp-bar-song { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .wp-cover { width: 52px; height: 52px; border-radius: 10px; object-fit: cover; flex: 0 0 auto; }
@@ -334,7 +335,6 @@
 .wp-seek { display: flex; align-items: center; gap: 10px; width: 100%; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .wp-seek input { flex: 1; accent-color: var(--accent); }
 .wp-bar-end { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
-.wp-bar-end input { width: 110px; accent-color: rgb(var(--tint)); }
 .wp-badge { font-size: 12px; color: var(--accent-2); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
 
 /* ── Tryptify Connect ── */
@@ -404,7 +404,7 @@ body.has-elsewhere .wp-main { padding-bottom: calc(var(--bar-h) + 110px); }
   .wp-main { padding: 20px 16px calc(var(--bar-h) + 30px); }
   .wp-bar { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; gap: 4px 10px; padding: 10px 14px; height: auto; border-radius: 24px; }
   .wp-bar-mid { grid-column: 1 / -1; grid-row: 2; }
-  .wp-bar-end input, .wp-badge, #bar-mute { display: none; }
+  .wp-bar-end input, .wp-bar-end .wp-tube-wrap, .wp-badge, #bar-mute { display: none; }
   .wp-now-cover { width: 120px; height: 120px; }
   .wp-now-title { font-size: 24px; }
   .wp-track-play { grid-template-columns: 28px minmax(0, 1fr) 44px; gap: 8px; padding: 9px 6px; }

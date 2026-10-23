@@ -98,7 +98,8 @@ is the same glass in a disc and squeezes to 92% on a spring. The timeline is
 the app's glass tube: one outline that swells around the playhead (a raised
 cosine, 44 px long), tinted up to it, swelling more while dragged; the range
 input stays on top, unseen, its thumb as wide as the swelling so its travel
-matches the drawing. `--bar-h` on the player is the room kept under the
+matches the drawing. The volume is the same tube, smaller (a 26 px
+swelling), hidden on a phone as the slider was. `--bar-h` on the player is the room kept under the
 pages, the bar's measured height plus its gap. The player loads no
 `site.js`, so `theme-boot.js` leaves `.motion` off there.
 
