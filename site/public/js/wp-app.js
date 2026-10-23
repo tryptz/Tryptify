@@ -36,6 +36,7 @@
     moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg>',
     devices: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="11" height="9" rx="1.5"/><path d="M6 17h5"/><rect x="16" y="7" width="5" height="12" rx="1.5"/></svg>',
     phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 17.5h2"/></svg>',
+    expand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>',
     folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2h8.5A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/></svg>',
   };
 
@@ -229,7 +230,7 @@
 
   // ── The bar ─────────────────────────────────────────────────────────
   for (const b of document.querySelectorAll("[data-act]")) {
-    const name = { toggle: "play", prev: "prev", next: "next", shuffle: "shuffle", repeat: "repeat", queue: "queue", mute: "volume", devices: "devices" }[b.dataset.act];
+    const name = { toggle: "play", prev: "prev", next: "next", shuffle: "shuffle", repeat: "repeat", queue: "queue", mute: "volume", devices: "devices", full: "expand" }[b.dataset.act];
     if (name) setIcon(b, b.closest(".wp-queue") ? "close" : name);
   }
   document.addEventListener("click", (e) => {
@@ -246,6 +247,7 @@
     else if (act === "repeat") cycleRepeat();
     else if (act === "queue") toggleQueue();
     else if (act === "devices") toggleDevices();
+    else if (act === "full") window.TryptifyFull && window.TryptifyFull.open();
     else if (act === "mute") { setVolume(settings.volume > 0 ? 0 : settings.lastVolume || 0.8); }
   });
   function playFirst() {
@@ -1030,6 +1032,30 @@
     renderBar();
   }
   if (C) setInterval(followRemote, 500);
+
+  // The bar's cover opens the full-screen player too.
+  for (const id of ["bar-cover", "bar-cover-none"]) $(id).addEventListener("click", () => window.TryptifyFull && window.TryptifyFull.open());
+
+  /** For the full-screen player (wp-full.js): what the bar shows, and seeking it. */
+  window.TryptifyPlayer = {
+    /** This browser's song, or the other device's it follows; null with neither. */
+    shown() {
+      const r = remoteNow();
+      if (r) {
+        const t = r.track;
+        return { key: `${t.src}:${t.id}`, title: t.title || "Untitled", artist: t.artist || "", album: t.album || "", duration: t.duration || 0,
+          cover: t.cover || null, position: seekHold ? seekHold.value : C.positionOf(r), playing: r.playing, local: false, on: nameOf(r.device, r.name) };
+      }
+      if (!current) return null;
+      return { key: current.key, title: current.title, artist: current.artist || "", album: current.album || "", duration: Eng.duration || current.duration || 0,
+        cover: current.cover || null, position: Eng.time, playing: !Eng.paused, local: true, on: null };
+    },
+    seek(t) {
+      if (remoteNow()) { seekRemote(t); return; }
+      if (!current) return;
+      Eng.seek(t); position(); publish();
+    },
+  };
 
   if (C) {
     // Asked to give it up: our place to the second, and what comes next.

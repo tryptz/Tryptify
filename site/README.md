@@ -177,6 +177,26 @@ up next), a menu on the left and the bar at the bottom.
   One WebSocket, a message only on change, and no connection while the tab is
   hidden with nothing playing.
 
+- **The full-screen player** (`wp-full.js`): the bar's expand button or its
+  cover opens it over the page, under the bar, which keeps its controls. It
+  shows what the bar shows, this browser's song or the one another device
+  plays while the bar follows it. Two views:
+  - **Lyrics**: the cover, large, on its own art blurred, and the lyrics from
+    LRCLIB (`/api/get` by title, artist, album and length, then `/api/search`
+    within 8 s of the length). Timed lyrics light the line being sung, scroll
+    it to a third of the way down (held for 4 s after a scroll by hand), and a
+    tap on a line jumps there. Untimed ones are shown as they are.
+  - **Waterfall**: the app's spectrum waterfall at its defaults (Lines), from
+    an analyser on the music before the EQ and volume (`TryptifyEngine.analyser`):
+    a log axis from 20 Hz, +4 dB an octave around 1 kHz, centred on the
+    200 Hz–2 kHz mean, the app's smoothing, a line every 2.5/48 s, 48 lines
+    and the live one in perspective, full strength for 0.75 s then fading,
+    in the cover's own colour (or the app's #7EB6FF when it cannot be read)
+    lightening toward the top. It needs the sound, so it draws only what
+    plays in this browser.
+  Fill the screen uses the Fullscreen API; Esc or ✕ closes it. Nothing runs
+  while it is shut or the tab is hidden.
+
 `node site/tests/webplayer.mjs` checks the pure parts: file names into a
 library, the sources' rows into tracks, cover ids, addresses, MD5, and that
 the coefficients the player hands to its filters give the engine's curve.

@@ -34,6 +34,9 @@
 
   // ── The chain ───────────────────────────────────────────────────────
   let ctx = null, input = null, preamp = null, monoNode = null, volume = null, filters = [];
+  // A branch off the input, before the EQ and the volume, for the visualizers
+  // (wp-full.js): they see the music as it is, whatever the knobs say.
+  let tap = null;
   /** Builds the graph on the first play (browsers only start audio after a tap). */
   function graph() {
     if (ctx || !window.AudioContext) return;
@@ -44,6 +47,7 @@
       preamp = ctx.createGain();
       monoNode = ctx.createGain();
       volume = ctx.createGain();
+      tap = ctx.createGain();
       wire();
     } catch (_) { ctx = null; } // no Web Audio: the elements play straight out, without EQ
   }
@@ -52,6 +56,7 @@
   function wire() {
     if (!ctx) { for (const a of els) a.volume = state.volume * state.volume; return; }
     for (const n of [input, preamp, ...filters, monoNode]) n.disconnect();
+    input.connect(tap); // disconnect() above cut it too
     filters = [];
     const eq = state.eq;
     if (eq.on && E) {
@@ -134,6 +139,17 @@
     get rate() { return ctx ? ctx.sampleRate : null; },
     /** Whether the Web Audio chain is running (false before the first play, or without Web Audio). */
     get webAudio() { return !!ctx; },
+    /** An AnalyserNode on the music before the EQ and volume, or null before the first play. */
+    analyser(fftSize = 2048) {
+      if (!ctx) return null;
+      const a = ctx.createAnalyser();
+      a.fftSize = fftSize;
+      a.smoothingTimeConstant = 0;
+      tap.connect(a);
+      return a;
+    },
+    /** Lets go of an analyser from [analyser]. */
+    release(a) { try { tap && tap.disconnect(a); } catch (_) {} },
 
     settings() { return JSON.parse(JSON.stringify(state)); },
     setVolume(v) { state.volume = Math.max(0, Math.min(1, v)); if (volume) volume.gain.value = state.volume * state.volume; else wire(); },

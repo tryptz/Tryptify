@@ -141,6 +141,37 @@
     <div id="wp-devices-list"></div>
   </div>
 
+  <!-- The full-screen player (js/wp-full.js): the song's art and lyrics, or its spectrum as a waterfall -->
+  <section class="wp-full" id="wp-full" role="dialog" aria-modal="false" aria-label="Full-screen player" hidden>
+    <div class="wp-full-bg" id="full-bg" aria-hidden="true"></div>
+    <header class="wp-full-top">
+      <div class="wp-full-modes" role="tablist" aria-label="Show">
+        <button type="button" role="tab" class="wp-full-mode" data-mode="lyrics" id="full-tab-lyrics" aria-selected="true">Lyrics</button>
+        <button type="button" role="tab" class="wp-full-mode" data-mode="waterfall" id="full-tab-waterfall" aria-selected="false">Waterfall</button>
+      </div>
+      <span class="wp-grow"></span>
+      <button type="button" class="wp-icon" id="full-screen" aria-label="Fill the screen" aria-pressed="false"></button>
+      <button type="button" class="wp-icon" id="full-close" aria-label="Close the full-screen player"></button>
+    </header>
+    <div class="wp-full-body">
+      <div class="wp-full-lyrics" id="full-lyrics" role="tabpanel" aria-labelledby="full-tab-lyrics">
+        <figure class="wp-full-art">
+          <img id="full-cover" alt="" hidden>
+          <span class="wp-full-cover-none" id="full-cover-none" aria-hidden="true"></span>
+          <figcaption><strong id="full-title"></strong><span id="full-artist"></span><span id="full-on" class="wp-full-on"></span></figcaption>
+        </figure>
+        <div class="wp-full-lines-box" id="full-lines-box">
+          <ol class="wp-full-lines" id="full-lines"></ol>
+          <p class="wp-full-note" id="full-lyrics-note" role="status"></p>
+        </div>
+      </div>
+      <div class="wp-full-wf" id="full-waterfall" role="tabpanel" aria-labelledby="full-tab-waterfall" hidden>
+        <canvas id="full-wf-canvas"></canvas>
+        <p class="wp-full-note" id="full-wf-note" role="status"></p>
+      </div>
+    </div>
+  </section>
+
   <footer class="wp-bar" id="wp-bar">
     <div class="wp-bar-song">
       <img class="wp-cover" id="bar-cover" alt="" width="52" height="52" hidden>
@@ -163,6 +194,7 @@
     </div>
     <div class="wp-bar-end">
       <a href="#/autoeq" class="wp-badge" id="bar-badge" hidden></a>
+      <button type="button" class="wp-icon" data-act="full" id="bar-full" aria-label="Full-screen player"></button>
       <button type="button" class="wp-icon" data-act="devices" id="bar-devices" aria-label="Devices" aria-expanded="false"></button>
       <button type="button" class="wp-icon" data-act="queue" id="bar-queue" aria-label="Queue" aria-expanded="false"></button>
       <button type="button" class="wp-icon" data-act="mute" id="bar-mute" aria-label="Mute"></button>
@@ -177,5 +209,6 @@
   <script src="/js/wp-sources.js" defer></script>
   <script src="/js/wp-connect.js" defer></script>
   <script src="/js/wp-app.js" defer></script>
+  <script src="/js/wp-full.js" defer></script>
 </body>
 </html>
