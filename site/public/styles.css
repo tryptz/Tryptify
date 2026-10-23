@@ -373,10 +373,13 @@ button.btn { cursor: pointer; }
 
 main { padding-top: 12px; }
 
-/* Between phone and desktop the menu stays on one line in every language: What's
-   new moves to the footer, as on phones, and below 700px the wordmark gives way. */
+/* Between phone and desktop the menu stays on one line in every language: the
+   tabs tighten, below 700px the wordmark gives way, and below 620px What's new
+   moves to the footer. */
 @media (min-width: 561px) and (max-width: 900px) {
   .nav a { padding: 8px 9px; font-size: 13.5px; }
+}
+@media (min-width: 561px) and (max-width: 620px) {
   .nav a.nav-wide { display: none; }
 }
 @media (min-width: 561px) and (max-width: 700px) {
@@ -395,8 +398,13 @@ main { padding-top: 12px; }
   /* Each tab as wide as its word, so a long one (Reproductor, プレーヤー) takes room from short ones. */
   .nav a { flex: 1 1 auto; min-width: 0; text-align: center; padding: 11px 3px; font-size: 12px; letter-spacing: 0; white-space: nowrap; }
   html:lang(ja) .nav a { font-size: 11px; padding: 11px 2px; }
-  /* Six fit the floating tab bar; What's new is in the footer and on Download there. */
+  /* Six fit the floating tab bar, but not on the narrowest phones in every
+     language; What's new is in the footer and on Download there. */
+}
+@media (max-width: 380px) {
   .nav a.nav-wide { display: none; }
+}
+@media (max-width: 560px) {
   .nav a { color: color-mix(in srgb, var(--text) 78%, transparent); }
   .nav a[aria-current="page"] { color: var(--text); }
   footer { padding-bottom: 110px; }

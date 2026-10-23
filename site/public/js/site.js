@@ -264,6 +264,9 @@
     place();
     phone.addEventListener("change", place);
     addEventListener("resize", () => moveTo(here, true));
+    // Back to a page the browser kept as it was: the pill is wherever the tap
+    // that left it put it, so put it back on this page's tab.
+    addEventListener("pageshow", (e) => { if (e.persisted) moveTo(here, true); });
     const settle = () => {
       if (!came || !moving) { moveTo(here, true); return; }
       const from = came; came = null;

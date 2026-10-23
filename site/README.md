@@ -73,8 +73,10 @@ next page slides it on from there. On phones the menu leaves the header for a
 floating tab bar at the bottom, which rises in on arrival but not again on the
 pages it leads to. Its tabs are as wide as their words, so a long one
 (Reproductor, プレーヤー) takes room from short ones. Between phone and desktop
-(561 to 900 px) What's new leaves the menu too, and below 700 px the wordmark,
-so the menu stays on one line in every language.
+(561 to 900 px) the tabs tighten, below 700 px the wordmark gives way and
+below 620 px What's new, so the menu stays on one line in every language.
+Coming back to a page the browser kept (Back), the pill is put back on that
+page's tab.
 
 There are two colour designs, Black (`dark`) and White (`white`), set as
 `<html data-design>` by each page's head script: the one last picked with the
@@ -99,8 +101,8 @@ under `public/video/releases/<version>/` (served with ranges by `src/worker.js`,
 like the other clips). A note's pictures can be addressed as GitHub reads
 them, relatively (`1.9.5/connect-app.jpg`) or by their raw.githubusercontent
 address. Run it after changing a note, and commit what it writes. The menu's
-What's new link is hidden on a phone, where six fill the tab bar; the footer
-and the Download page link it there.
+What's new link is hidden on the narrowest phones (380 px and under) and
+between 561 and 620 px; the footer and the Download page link it there.
 
 ## Languages
 
@@ -164,7 +166,7 @@ page too.
   AIFF in Chrome, APE, WMA) is marked "App only", or skipped if it fails. Google sign-in needs
   `https://tryptify.com/account` in Supabase's Auth › URL Configuration ›
   Redirect URLs.
-- `/autoeq` (`js/autoeq.js`, `js/measures.js`, `js/graphs.js`): the AutoEQ ranking, the measures explained, and the frequency-response and EQ graphs (curves in `data/autoeq-curves.json`), from a snapshot of
+- `/autoeq` (`js/autoeq.js`, `js/measures.js`, `js/graphs.js`), linked only from the footer (AutoEQ ranking), not the menu or the home page: the AutoEQ ranking, the measures explained, and the frequency-response and EQ graphs (curves in `data/autoeq-curves.json`), from a snapshot of
   SeapEngine's bench results in `data/autoeq-bench.json` (SeapEngine sends no
   CORS header, so it cannot be read live). Refresh it from
   `https://seapengine.lol/rankings/bench.json` keeping only the metrics.

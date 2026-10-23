@@ -79,23 +79,6 @@
    "changelog"
   ]
  },
- "ccb204d7a427": {
-  "en": "AutoEQ",
-  "kind": "text",
-  "pages": [
-   "index",
-   "cloud",
-   "autoeq",
-   "player",
-   "account",
-   "contact",
-   "download",
-   "terms",
-   "privacy",
-   "refunds",
-   "changelog"
-  ]
- },
  "b2efeaa1a7d6": {
   "en": "Cloud",
   "kind": "text",
@@ -277,6 +260,14 @@
    "index"
   ]
  },
+ "ccb204d7a427": {
+  "en": "AutoEQ",
+  "kind": "html",
+  "pages": [
+   "index",
+   "player"
+  ]
+ },
  "eac83dc024d3": {
   "en": "What's inside",
   "kind": "html",
@@ -312,8 +303,8 @@
    "index"
   ]
  },
- "133d1df02530": {
-  "en": "Correction curves built from real headphone measurements, applied to the finished mix. <a href=\"/autoeq\">See how it ranks</a>.",
+ "66325b5e6ad0": {
+  "en": "Correction curves built from real headphone measurements, applied to the finished mix.",
   "kind": "html",
   "pages": [
    "index"
@@ -424,15 +415,8 @@
    "index"
   ]
  },
- "fd42e52dede8": {
-  "en": "headphones to correct, in the",
-  "kind": "text",
-  "pages": [
-   "index"
-  ]
- },
- "55819484eb12": {
-  "en": "AutoEQ browser",
+ "4c411add9b48": {
+  "en": "headphones to correct",
   "kind": "text",
   "pages": [
    "index"
