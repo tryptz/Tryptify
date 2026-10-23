@@ -69,6 +69,26 @@ sun/moon button at the end of the nav bar (`localStorage` key
 `tryptify-theme`), else the device's own light or dark setting, which the page
 follows live until the button is used.
 
+## The changelog
+
+`/changelog` is every release's notes from `docs/releases/<version>.md`, newest
+first, with a version list to jump between them and a label on each New,
+Changed, Removed and Fixed line. It is built, not written:
+
+```
+python3 tools/site_changelog/build.py
+```
+
+That rewrites `public/changelog.html` (header and footer from `refunds.html`)
+and moves the notes' pictures to the site: a JPG or PNG becomes a WebP under
+`public/img/releases/<version>/`, a GIF a silent looping MP4 with a WebP poster
+under `public/video/releases/<version>/` (served with ranges by `src/worker.js`,
+like the other clips). A note's pictures can be addressed as GitHub reads
+them, relatively (`1.9.5/connect-app.jpg`) or by their raw.githubusercontent
+address. Run it after changing a note, and commit what it writes. The menu's
+What's new link is hidden on a phone, where six fill the tab bar; the footer
+and the Download page link it there.
+
 ## Pages with code
 
 - `/account` (`js/account.js`): Your Cloud, the web app. Signs in with the
