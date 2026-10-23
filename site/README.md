@@ -83,17 +83,14 @@ The glass itself (the lens, and the glint that follows the pointer) is
 glass's own pixels; sized as a percentage, it took the filter's larger area
 and the rim smeared colour across the middle of the bar.
 
-The web player's bar is the app's player glass (its Float preset, read from
-`ui/player/LiquidGlass.kt` and `LiveGlassLens.kt`): it floats 12 px from the
-edges (8 on a phone) with 26 px corners, the page blurred and bent under it,
-tinted with the cover's vibrant colour (`TryptifyGlass.vibrant`, the same pick
-the full-screen player makes; clear glass with no cover or a grey one) over
-more of the page colour than the app uses, so nothing reads through the
-controls (in Black, clear glass instead: little of the page colour, a 28 px
-blur, light falling in from the top and a brighter edge, since a dense dark
-pane over a black page read as a grey slab). Each lens is drawn again when the
-design changes, as the two ask for different blurs. A crisp rim lit from the top left, a cool fill at the bottom right,
-a still glint, a shadow dropped 8 px; nothing moves across it. The play button
+The web player's bar is the menu's glass (`.glass` in `styles.css`, with its
+lens and its glint from `js/glass.js`): the page lightly blurred and bent at
+the rim, a little of the page colour under it, a rim lit at two corners, a
+sheen and a glint that follows the pointer. Only its shape is its own: it
+floats 12 px from the edges (8 on a phone) with 26 px corners. The cover's
+vibrant colour (`TryptifyGlass.vibrant`, the same pick the full-screen player
+makes) is on the play button and the timeline, not on the glass. Each lens is
+drawn again when the design changes. The play button
 is the same glass in a disc and squeezes to 92% on a spring. The timeline is
 the app's glass tube: one outline that swells around the playhead (a raised
 cosine, 44 px long), tinted up to it, swelling more while dragged; the range

@@ -333,8 +333,8 @@
     }
     tintBar(img.hidden ? null : img.getAttribute("src"));
   }
-  // The bar's glass takes the cover's colour, as the app's player glass takes
-  // the album's; with no cover, or a grey one, it is clear glass.
+  // The cover's colour, for the bar's play button and timeline (the glass
+  // itself is the menu's, untinted); with no cover, or a grey one, none.
   let tintFor = null;
   function tintBar(url) {
     if (url === tintFor) return;
@@ -1278,13 +1278,12 @@
   });
 
   // ── The bar's glass ─────────────────────────────────────────────────
-  // The lens from js/glass.js, as on the site's menu (no glint: the app's
-  // glass holds still). The room kept
+  // The lens and the glint from js/glass.js: the site's menu glass. The room kept
   // free under the pages (--bar-h) follows the bar's real height, which on a
   // phone depends on its content, plus the gap it floats in.
   (() => {
     const bar = $("wp-bar"), shell = document.querySelector(".wp");
-    if (window.TryptifyGlass) TryptifyGlass.giveLens(bar);
+    if (window.TryptifyGlass) { TryptifyGlass.glint(bar); TryptifyGlass.giveLens(bar); }
     const room = () => shell.style.setProperty("--bar-h", `${bar.offsetHeight + (parseFloat(getComputedStyle(bar).bottom) || 0)}px`);
     new ResizeObserver(room).observe(bar);
     addEventListener("resize", room);

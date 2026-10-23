@@ -230,59 +230,14 @@
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr); align-items: center; gap: 16px; padding: 0 18px 0 14px;
   border-radius: 26px; color: var(--text); font-size: 14px;
 }
-/* The app's player glass (its "Float" preset): the page behind blurred and bent
-   at the rim, under the cover's own colour at about a quarter (--tint, from
-   js/wp-app.js; clear glass with no cover), denser here than the app's so the
-   page cannot read through the controls. A crisp rim lit from the top left,
-   a cool fill at the bottom right, no line inside the bevel, a still glint,
-   and a shadow dropped 8px. Nothing moves across it. */
+/* The menu's glass (styles.css, .glass): the page behind lightly blurred and
+   bent at the rim (js/glass.js), a little of the page colour under it, a rim
+   lit at two corners, a sheen and a glint that follows the pointer. Only the
+   shape is the bar's own. The cover's colour (--tint, from js/wp-app.js) is
+   on the play button and the timeline, not on the glass, as the menu has none. */
 .wp-bar { --tint: 126 182 255; --tint-a: 0; }
 .wp-bar[style*="--tint"] { --tint-a: 0.32; }
 [data-design="white"] .wp-bar[style*="--tint"] { --tint-a: 0.24; }
-.wp-bar.glass {
-  --glass-blur: 12px; --glass-bend: 24;
-  background: linear-gradient(rgb(var(--tint) / var(--tint-a)), rgb(var(--tint) / var(--tint-a))), color-mix(in srgb, var(--bg) 62%, transparent);
-  -webkit-backdrop-filter: blur(12px) saturate(170%);
-          backdrop-filter: blur(12px) saturate(170%);
-  box-shadow:
-    0 8px 26px rgba(0, 0, 0, 0.6),
-    inset 0 -12px 20px -14px rgba(5, 6, 8, 0.7),
-    inset 0 0 22px -6px rgba(210, 225, 255, 0.10);
-}
-/* Black: clear glass, not a dark slab. Little of the page colour, a stronger
-   blur so the page still cannot be read, light falling in from the top and a
-   brighter edge, so it reads as glass over a black page as the white one does
-   over a white one. */
-[data-design="dark"] .wp-bar.glass {
-  --glass-blur: 28px;
-  background:
-    linear-gradient(rgb(var(--tint) / calc(var(--tint-a) * 0.7)), rgb(var(--tint) / calc(var(--tint-a) * 0.7))),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 40%, rgba(255, 255, 255, 0.02)),
-    color-mix(in srgb, var(--bg) 18%, transparent);
-  -webkit-backdrop-filter: blur(28px) saturate(170%);
-          backdrop-filter: blur(28px) saturate(170%);
-  box-shadow:
-    0 8px 26px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    inset 0 -10px 18px -12px rgba(5, 6, 8, 0.4),
-    inset 0 0 30px -2px rgba(210, 225, 255, 0.2);
-}
-[data-design="white"] .wp-bar.glass {
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.22), inset 0 -12px 20px -14px rgba(5, 6, 8, 0.18), inset 0 0 22px -6px rgba(255, 255, 255, 0.5);
-}
-.lens .wp-bar.glass[data-lens] {
-  -webkit-backdrop-filter: var(--lens) saturate(170%);
-          backdrop-filter: var(--lens) saturate(170%);
-}
-.wp-bar.glass::before {
-  padding: 1px; opacity: 1;
-  background: linear-gradient(162deg, rgba(255, 247, 235, 0.95) 0%, rgba(209, 224, 255, 0.55) 16%, rgba(209, 224, 255, 0.08) 40%,
-    transparent 62%, rgba(166, 209, 255, 0.18) 85%, rgba(166, 209, 255, 0.45) 100%);
-}
-.wp-bar.glass::after {
-  background: radial-gradient(90px 22px at 14% 0%, rgba(255, 255, 255, 0.55), transparent 70%);
-  mix-blend-mode: normal; opacity: 0.55;
-}
 
 /* The play button: the same glass in a disc, the cover's colour stronger, and
    a squeeze to 92% on a spring when pressed. */
