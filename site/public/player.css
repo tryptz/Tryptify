@@ -6,6 +6,21 @@
 /* --bar-h is the room kept free at the bottom: the floating bar and the gap under it
    (js/wp-app.js keeps it to the bar's real height). */
 .wp { --bar-gap: 12px; --bar-h: 100px; --top-h: 64px; min-height: 100vh; }
+
+/* ── Dynamic colours (js/wp-app.js, paintCover): the playing song's cover
+   gives the accent, made legible on the design's background, and a wash of
+   its dominant colour at the top of the page, as the app's player. The
+   backgrounds and text stay the design's. Registered as colours so a new
+   song's colours fade in rather than snap. ── */
+@property --dyn-accent { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --dyn-accent-2 { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --dyn-wash { syntax: "<color>"; inherits: true; initial-value: transparent; }
+.wp { transition: --dyn-accent 0.6s, --dyn-accent-2 0.6s, --dyn-wash 0.9s; }
+.wp.dyn { --accent: var(--dyn-accent); --accent-2: var(--dyn-accent-2); --on-accent: var(--dyn-on-accent); }
+.wp::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(140% 75% at 50% -12%, var(--dyn-wash), transparent 72%);
+}
 .wp .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .wp-skip { position: absolute; left: -9999px; top: 8px; z-index: 50; background: var(--accent); color: var(--on-accent); padding: 10px 14px; border-radius: 10px; }
 .wp-skip:focus { left: 8px; }
@@ -235,6 +250,18 @@
    lit at two corners, a sheen and a glint that follows the pointer. Only the
    shape is the bar's own. The cover's colour (--tint, from js/wp-app.js) is
    on the play button and the timeline, not on the glass, as the menu has none. */
+/* Glyph holes (js/wp-app.js, punchHoles), as the app's mini player: the tint
+   is a layer of its own with the icons cut out of it, and through them the
+   frosted page shows, lit in each icon's colour. The glass's blur and bend
+   stay on the bar, so the holes are frosted too, not clear. */
+.wp-bar.glass.holed { background: none; }
+.wp-bar-tint, .wp-bar-holes { position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; }
+.wp-bar-tint {
+  background: var(--glass-tint);
+  -webkit-mask-size: 100% 100%; mask-size: 100% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+}
+.wp-bar-holes { background-size: 100% 100%; background-repeat: no-repeat; opacity: 0.62; }
+.wp-bar.holed .wp-icon:not(.wp-play) svg { opacity: 0; }
 .wp-bar { --tint: 126 182 255; --tint-a: 0; }
 .wp-bar[style*="--tint"] { --tint-a: 0.32; }
 [data-design="white"] .wp-bar[style*="--tint"] { --tint-a: 0.24; }
@@ -294,20 +321,24 @@
 
 /* ── Tryptify Connect ── */
 .wp-icon.lit { color: var(--ok); }
+/* Playing on another device: the menu's glass (styles.css, .glass, its lens
+   from js/wp-app.js), floating over the bar, with Connect's green kept as the
+   accent: the phone, the other device's progress and Play here. */
 .wp-elsewhere {
   position: fixed; z-index: 29; left: var(--bar-gap); right: var(--bar-gap); bottom: calc(var(--bar-h) + 6px); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px;
-  padding: 8px 18px 10px; background: var(--ok); color: #0a0a0a; font-size: 14px; overflow: hidden; border-radius: 18px;
+  padding: 8px 18px 10px; color: var(--text); font-size: 14px; overflow: hidden; border-radius: 18px;
 }
-[data-design="white"] .wp-elsewhere { color: #fff; }
+.wp-elsewhere > .wp-i { color: var(--ok); }
 .wp-elsewhere .wp-icon { color: inherit; width: 40px; height: 40px; }
-.wp-elsewhere .wp-icon:hover { background: rgba(0, 0, 0, 0.12); }
-.wp-elsewhere .btn { background: rgba(0, 0, 0, 0.85); color: #fff; border-color: transparent; }
+.wp-elsewhere .wp-icon:hover { background: color-mix(in srgb, var(--text) 10%, transparent); }
+.wp-elsewhere .btn { background: var(--ok); color: #0a0a0a; border-color: transparent; }
+[data-design="white"] .wp-elsewhere .btn { color: #fff; }
 .wp-elsewhere-text { display: grid; flex: 1 1 200px; min-width: 0; }
 .wp-elsewhere-text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.85; }
 .wp-elsewhere-time { font-variant-numeric: tabular-nums; font-size: 13px; opacity: 0.85; white-space: nowrap; }
-.wp-elsewhere-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(0, 0, 0, 0.18); }
+.wp-elsewhere-bar { position: absolute; left: 18px; right: 18px; bottom: 0; height: 3px; border-radius: 2px; background: color-mix(in srgb, var(--text) 14%, transparent); }
 .wp-elsewhere-bar span {
-  display: block; height: 100%; background: currentColor; width: var(--from, 0%);
+  display: block; height: 100%; border-radius: inherit; background: var(--ok); width: var(--from, 0%);
   animation: wp-run var(--left, 1s) linear forwards; animation-play-state: var(--state, paused);
 }
 @keyframes wp-run { from { width: var(--from, 0%); } to { width: 100%; } }

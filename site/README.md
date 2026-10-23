@@ -90,7 +90,23 @@ sheen and a glint that follows the pointer. Only its shape is its own: it
 floats 12 px from the edges (8 on a phone) with 26 px corners. The cover's
 vibrant colour (`TryptifyGlass.vibrant`, the same pick the full-screen player
 makes) is on the play button and the timeline, not on the glass. Each lens is
-drawn again when the design changes. The play button
+drawn again when the design changes. Its icons are glyph holes, as in the
+app's mini player (`punchHoles` in `js/wp-app.js`): the tint is a layer of
+its own with each icon's shape masked out, and through the holes the frosted
+page shows, lit in the icon's colour (the green of shuffle or repeat when on);
+the play disc keeps its drawn icon. The holes are drawn again when an icon
+changes, the bar is resized, or the design switches (after its 0.35 s fade).
+The strip for a song playing on another device (Tryptify Connect) is the same
+glass, floating over the bar, with Connect's green kept for its phone, its
+progress line and Play here.
+
+The player takes its colours from the playing song's cover, as the app's
+Dynamic Colors do (`paintCover`): the cover's vibrant colour is the accent,
+moved toward white on Black or black on White just until text in it reads at
+4.5:1, a quieter one for links, and its dominant colour washes the top of the
+page (`TryptifyGlass.palette`). Backgrounds and text stay the design's; with no
+cover, or one that cannot be read, the design's own colours. The colours are
+registered with `@property`, so a new song's fade in. The play button
 is the same glass in a disc and squeezes to 92% on a spring. The timeline is
 the app's glass tube: one outline that swells around the playhead (a raised
 cosine, 44 px long), tinted up to it, swelling more while dragged; the range

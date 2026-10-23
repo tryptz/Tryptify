@@ -125,13 +125,17 @@
     el.style.setProperty("--gy", `${((e.clientY - r.top) / r.height) * 100}%`);
   });
 
-  // The cover's own colour, as the app tints its glass with the album's vibrant
-  // swatch: the most colourful bright pixel of a small copy. Null for a grey
-  // cover, or one from a server that sends no CORS (it cannot be read).
-  const vibrants = new Map();
-  const vibrant = (url) => {
-    if (!url) return Promise.resolve(null);
-    if (!vibrants.has(url)) vibrants.set(url, new Promise((done) => {
+  // What a cover is made of, read from a small copy of it: its vibrant colour,
+  // the most colourful bright pixel, as the app takes the album's vibrant
+  // swatch for its accent; and its dominant colour, the most present one, as
+  // the app takes for its player wash. Either is null where the cover has none
+  // (a grey cover has no vibrant colour) or cannot be read (a server that
+  // sends no CORS).
+  const palettes = new Map();
+  const palette = (url) => {
+    if (!url) return Promise.resolve({ vibrant: null, dominant: null });
+    if (!palettes.has(url)) palettes.set(url, new Promise((done) => {
+      const none = { vibrant: null, dominant: null };
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.onload = () => {
@@ -142,20 +146,34 @@
           x.drawImage(img, 0, 0, n, n);
           const d = x.getImageData(0, 0, n, n).data;
           let best = null, score = -1;
+          // The dominant colour: the fullest of a coarse grid of colour boxes,
+          // its pixels averaged, leaving out near black and near white.
+          const boxes = new Map();
           for (let i = 0; i < d.length; i += 4) {
             const R = d[i], G = d[i + 1], B = d[i + 2], max = Math.max(R, G, B), min = Math.min(R, G, B);
             const sat = max ? (max - min) / max : 0, val = max / 255;
             const sc = sat * 0.7 + val * 0.3 - (val < 0.35 ? 1 : 0);
             if (sc > score) { score = sc; best = [R, G, B]; }
+            if (val < 0.08 || (min > 235)) continue;
+            const key = (R >> 5) * 64 + (G >> 5) * 8 + (B >> 5);
+            const box = boxes.get(key) || [0, 0, 0, 0];
+            box[0] += R; box[1] += G; box[2] += B; box[3]++;
+            boxes.set(key, box);
           }
-          done(best && score > 0.35 ? best : null);
-        } catch (_) { done(null); }
+          let full = null;
+          for (const box of boxes.values()) if (!full || box[3] > full[3]) full = box;
+          done({
+            vibrant: best && score > 0.35 ? best : null,
+            dominant: full ? [0, 1, 2].map((k) => Math.round(full[k] / full[3])) : null,
+          });
+        } catch (_) { done(none); }
       };
-      img.onerror = () => done(null);
+      img.onerror = () => done(none);
       img.src = url;
     }));
-    return vibrants.get(url);
+    return palettes.get(url);
   };
+  const vibrant = (url) => palette(url).then((p) => p.vibrant);
 
-  window.TryptifyGlass = { giveLens, glint, lensOn, vibrant };
+  window.TryptifyGlass = { giveLens, glint, lensOn, vibrant, palette };
 })();

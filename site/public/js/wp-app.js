@@ -333,19 +333,73 @@
     }
     tintBar(img.hidden ? null : img.getAttribute("src"));
   }
-  // The cover's colour, for the bar's play button and timeline (the glass
-  // itself is the menu's, untinted); with no cover, or a grey one, none.
-  let tintFor = null;
+  // Dynamic colours, as the app's: the playing song's cover colours the
+  // player. Its vibrant colour is the accent (buttons, links, the bar's play
+  // button and timeline), made legible on the page's own background, and its
+  // dominant colour a wash at the top of the page, as the app washes its
+  // player with the album's. The page's backgrounds and text stay the
+  // design's. No cover, or one that cannot be read: the design's own colours.
+  let tintFor = null, coverColours = null;
   function tintBar(url) {
     if (url === tintFor) return;
     tintFor = url;
-    const bar = $("wp-bar");
-    if (!url || !window.TryptifyGlass) { bar.style.removeProperty("--tint"); return; }
-    TryptifyGlass.vibrant(url).then((c) => {
+    if (!url || !window.TryptifyGlass) { coverColours = null; paintCover(); return; }
+    TryptifyGlass.palette(url).then((p) => {
       if (tintFor !== url) return;
-      if (c) bar.style.setProperty("--tint", c.join(" ")); else bar.style.removeProperty("--tint");
+      coverColours = p.vibrant || p.dominant ? p : null;
+      paintCover();
     });
   }
+  const lum = (c) => {
+    const f = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+  };
+  const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const mixRgb = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * k));
+  // [c] moved toward white on a dark page, black on a light one, just until
+  // text in it reads at 4.5:1 on [ground].
+  const legible = (c, ground, dark) => {
+    const toward = dark ? [255, 255, 255] : [0, 0, 0];
+    for (let k = 0; k <= 1.0001; k += 0.04) {
+      const m = mixRgb(c, toward, Math.min(1, k));
+      if (contrast(m, ground) >= 4.5) return m;
+    }
+    return toward;
+  };
+  // A CSS colour as written in the design ("#0a0a0a", "#fff", "rgb(…)"); null if neither.
+  const rgbOf = (css) => {
+    const s = css.trim();
+    if (s[0] === "#") {
+      const hex = s.length === 4 ? [...s.slice(1)].map((c) => c + c).join("") : s.slice(1, 7);
+      return [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    }
+    const m = s.match(/\d+(\.\d+)?/g);
+    return m && m.length >= 3 ? m.slice(0, 3).map(Number) : null;
+  };
+  function paintCover() {
+    const page = document.body, bar = $("wp-bar");
+    const p = coverColours;
+    if (p && p.vibrant) bar.style.setProperty("--tint", p.vibrant.join(" ")); else bar.style.removeProperty("--tint");
+    page.classList.toggle("dyn", !!p);
+    if (!p) {
+      for (const k of ["--dyn-accent", "--dyn-accent-2", "--dyn-on-accent", "--dyn-wash"]) page.style.removeProperty(k);
+      return;
+    }
+    const dark = document.documentElement.dataset.design !== "white";
+    const ground = rgbOf(getComputedStyle(page).getPropertyValue("--bg")) || (dark ? [10, 10, 10] : [255, 255, 255]);
+    const accent = legible(p.vibrant || p.dominant, ground, dark);
+    // The quieter accent of links and labels: the accent a third of the way to grey.
+    const quiet = legible(mixRgb(accent, dark ? [189, 189, 189] : [85, 85, 79], 0.35), ground, dark);
+    const on = contrast(accent, [10, 10, 10]) >= contrast(accent, [255, 255, 255]) ? [10, 10, 10] : [255, 255, 255];
+    const wash = p.dominant || p.vibrant;
+    page.style.setProperty("--dyn-accent", `rgb(${accent.join(" ")})`);
+    page.style.setProperty("--dyn-accent-2", `rgb(${quiet.join(" ")})`);
+    page.style.setProperty("--dyn-on-accent", `rgb(${on.join(" ")})`);
+    page.style.setProperty("--dyn-wash", `rgb(${wash.join(" ")} / ${dark ? 0.34 : 0.22})`);
+  }
+  // Black and white make different accents legible: painted again on a switch.
+  new MutationObserver(() => requestAnimationFrame(paintCover))
+    .observe(document.documentElement, { attributes: true, attributeFilter: ["data-design"] });
   function markRows() {
     for (const li of document.querySelectorAll(".wp-track")) li.classList.toggle("is-current", !!current && li.dataset.key === current.key);
   }
@@ -1277,13 +1331,78 @@
     else if (e.key === "/") { e.preventDefault(); $("wp-q").focus(); }
   });
 
+  // ── Glyph holes, as the app's mini player ───────────────────────────
+  // The bar's icons are cut out of its glass: its tint is a layer of its own
+  // (.wp-bar-tint) with each icon's shape masked out of it, so through the
+  // icon shows the frosted page under the glass, lit in the icon's own colour
+  // (.wp-bar-holes, the green of a shuffle that is on). The play disc keeps
+  // its drawn icon, as it is glass of its own. The real icons stay in their
+  // buttons, unseen, for the buttons' size and for screen readers' sake.
+  function punchHoles(bar) {
+    const tint = h("div", { class: "wp-bar-tint", "aria-hidden": "true" });
+    const lit = h("div", { class: "wp-bar-holes", "aria-hidden": "true" });
+    bar.prepend(tint, lit);
+    bar.classList.add("holed");
+    const url = (svg) => `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+    const ATTRS = ["fill", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin"];
+    // One icon, its colour set, placed where it is drawn on the bar.
+    const icon = (svg, colour, x, y, w, ht) => {
+      const attrs = ATTRS.filter((a) => svg.hasAttribute(a))
+        .map((a) => ` ${a}="${svg.getAttribute(a).replace(/currentColor/g, colour)}"`).join("");
+      return `<svg x="${x}" y="${y}" width="${w}" height="${ht}" viewBox="${svg.getAttribute("viewBox") || "0 0 24 24"}"${attrs}>` +
+        `${svg.innerHTML.replace(/currentColor/g, colour)}</svg>`;
+    };
+    const draw = () => {
+      const r = bar.getBoundingClientRect();
+      const W = Math.round(r.width), H = Math.round(r.height);
+      if (!W || !H) return;
+      let cut = "", glow = "";
+      for (const b of bar.querySelectorAll(".wp-icon:not(.wp-play)")) {
+        const svg = b.querySelector("svg");
+        const s = svg && svg.getBoundingClientRect();
+        if (!s || !s.width) continue;
+        const x = (s.left - r.left).toFixed(2), y = (s.top - r.top).toFixed(2), w = s.width.toFixed(2), ht = s.height.toFixed(2);
+        cut += icon(svg, "#000", x, y, w, ht);
+        glow += icon(svg, getComputedStyle(b).color, x, y, w, ht);
+      }
+      const box = `xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"`;
+      const mask = url(`<svg ${box}><defs><mask id="m"><rect width="${W}" height="${H}" fill="#fff"/>${cut}</mask></defs>` +
+        `<rect width="${W}" height="${H}" fill="#fff" mask="url(#m)"/></svg>`);
+      tint.style.webkitMaskImage = mask;
+      tint.style.maskImage = mask;
+      lit.style.backgroundImage = url(`<svg ${box}>${glow}</svg>`);
+    };
+    let queued = false;
+    const later = () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => { queued = false; draw(); });
+    };
+    new ResizeObserver(later).observe(bar);
+    // An icon swapped (mute), switched on (shuffle, repeat) or hidden moves a hole.
+    new MutationObserver(later).observe(bar, { subtree: true, childList: true, attributes: true, attributeFilter: ["aria-pressed", "hidden", "data-icon"] });
+    // A switch of design fades the icons' colour over 0.35 s (styles.css,
+    // .theme-fade): drawn again once it has, or the holes keep the old colour.
+    new MutationObserver(() => { later(); setTimeout(later, 450); })
+      .observe(document.documentElement, { attributes: true, attributeFilter: ["data-design"] });
+    addEventListener("resize", later);
+    if (document.fonts) document.fonts.ready.then(later);
+    later();
+  }
+
   // ── The bar's glass ─────────────────────────────────────────────────
   // The lens and the glint from js/glass.js: the site's menu glass. The room kept
   // free under the pages (--bar-h) follows the bar's real height, which on a
   // phone depends on its content, plus the gap it floats in.
   (() => {
     const bar = $("wp-bar"), shell = document.querySelector(".wp");
-    if (window.TryptifyGlass) { TryptifyGlass.glint(bar); TryptifyGlass.giveLens(bar); }
+    if (window.TryptifyGlass) {
+      TryptifyGlass.glint(bar); TryptifyGlass.giveLens(bar);
+      // Playing on another device: the same glass, over the bar.
+      const strip = $("wp-elsewhere");
+      TryptifyGlass.glint(strip); TryptifyGlass.giveLens(strip);
+    }
+    punchHoles(bar);
     const room = () => shell.style.setProperty("--bar-h", `${bar.offsetHeight + (parseFloat(getComputedStyle(bar).bottom) || 0)}px`);
     new ResizeObserver(room).observe(bar);
     addEventListener("resize", room);
