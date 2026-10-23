@@ -20,7 +20,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
-import android.widget.FrameLayout
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -176,7 +175,9 @@ class MainActivity : ComponentActivity() {
 
         // Root container wrapping the Compose content. (Real glass blur is
         // handled by Haze in-Compose; no native BlurView wrapper is needed.)
-        val rootContainer = FrameLayout(this)
+        // Holds every redraw to Settings › System › Performance › Frame rate
+        // limit; a plain FrameLayout at Max.
+        val rootContainer = tf.monochrome.android.performance.FrameLimitedLayout(this)
         val composeView = androidx.compose.ui.platform.ComposeView(this)
         rootContainer.addView(composeView, ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT

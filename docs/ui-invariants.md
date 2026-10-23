@@ -2349,6 +2349,18 @@ on that frame. Each kept frame books the next one interval on, so a limit the
 panel does not divide (90 on 120 Hz) averages out to it, and a stall starts
 afresh rather than catching up. Touch input still arrives every vsync.
 
+**Every redraw is held to the limit at the root, whoever asks for it.** The
+clock and the refresh-rate vote were still not enough on device: things that
+ask for a frame outside the clock (a value read while drawing and written from
+an audio tap or the player, a TextureView's new frame, a library's own layer)
+kept the window drawing on every refresh. The activity's root view is a
+`FrameLimitedLayout`: a child's request to be drawn again reaches the window
+through it, and one that comes before the next frame the limit allows
+(`FramePacer`, the clock's own pacing) is held and passed on in that frame's
+animation pass, so it is drawn there with everything asked for meanwhile. At
+Max it passes everything at once. A plain FrameLayout there brings the
+120 fps at "30" back.
+
 **Nothing that keeps time counts frames.** Every animation measures the time
 between its frames, so a slower clock moves things further a frame at the same
 speed. The kick pulse was the one that counted frames, its decay and cooldown
