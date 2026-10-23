@@ -320,8 +320,6 @@
  "c956d73d4556": "Pour toute aide concernant Tryptify Cloud, la facturation, les remboursements, vos données ou autre chose :",
  "3af6c7046d4f": "<a href=\"mailto:support@tryptify.com\">support@tryptify.com</a>",
  "675d5263c397": "Nous répondons sous 3 jours ouvrés. Pour une question de facturation, indiquez l’adresse e-mail utilisée lors du paiement.",
- "8a3cd3617293": "Bugs et idées pour l’app",
- "2327788fe29a": "Ouvrez un ticket sur <a href=\"https://github.com/tryptz/Tryptify/issues\">GitHub</a>.",
  "4758080b25c0": "Signalements de droits d’auteur",
  "94fcc25cd311": "Pour signaler un contenu stocké sur Tryptify Cloud qui enfreint vos droits d’auteur, écrivez à la même adresse en précisant l’œuvre et le contenu concernés.",
  "cdab446359f1": "Qui sommes-nous",
@@ -452,5 +450,8 @@
  "bbfa773e5a63": "Fermer",
  "5ea7aa75c627": "Rechercher un titre",
  "3c55ae6feeda": "Rechercher des titres ou des artistes",
- "2a64d5a493a2": "Trouvez un titre et ajoutez-le à la file d’attente pour tout le monde."
+ "2a64d5a493a2": "Trouvez un titre et ajoutez-le à la file d’attente pour tout le monde.",
+ "d8d3c69b65d5": "Signaler un bug ou contribuer à Tryptify",
+ "908a090c7b4e": "<strong>Vous avez trouvé un bug ?</strong> <a href=\"https://github.com/tryptz/Tryptify/issues/new\">Ouvrez un ticket sur GitHub</a>. Dites ce que vous avez fait, ce que vous attendiez et ce qui s’est passé à la place, en ajoutant votre téléphone, sa version d’Android et la version de l’app (Paramètres › À propos).",
+ "f11439a41eb6": "<strong>Envie de participer ?</strong> Tryptify est open source. Écrivez à <a href=\"mailto:support@tryptify.com\">support@tryptify.com</a> en disant sur quoi vous aimeriez travailler, par exemple le code, les traductions, les thèmes ou les tests, ou choisissez un <a href=\"https://github.com/tryptz/Tryptify/issues\">ticket ouvert sur GitHub</a>."
 }

@@ -320,8 +320,6 @@
  "c956d73d4556": "Tryptify Cloud, faturalandırma, iadeler, verileriniz veya başka herhangi bir konuda yardım için:",
  "3af6c7046d4f": "<a href=\"mailto:support@tryptify.com\">support@tryptify.com</a>",
  "675d5263c397": "3 iş günü içinde yanıt veririz. Faturalandırma sorularında, ödeme sırasında kullandığınız e-posta adresini de belirtin.",
- "8a3cd3617293": "Uygulamayla ilgili hatalar ve fikirler",
- "2327788fe29a": "<a href=\"https://github.com/tryptz/Tryptify/issues\">GitHub</a>’da bir issue açın.",
  "4758080b25c0": "Telif hakkı bildirimleri",
  "94fcc25cd311": "Tryptify Cloud’da saklanan ve telif hakkınızı ihlal eden bir içeriği bildirmek için, eserin ve ilgili içeriğin ayrıntılarıyla aynı adrese yazın.",
  "cdab446359f1": "Biz kimiz",
@@ -452,5 +450,8 @@
  "bbfa773e5a63": "Kapat",
  "5ea7aa75c627": "Şarkı ara",
  "3c55ae6feeda": "Şarkı veya sanatçı ara",
- "2a64d5a493a2": "Bir şarkı bulun ve herkes için sıraya ekleyin."
+ "2a64d5a493a2": "Bir şarkı bulun ve herkes için sıraya ekleyin.",
+ "d8d3c69b65d5": "Hata bildirin veya Tryptify’ı birlikte geliştirin",
+ "908a090c7b4e": "<strong>Bir hata mı buldunuz?</strong> <a href=\"https://github.com/tryptz/Tryptify/issues/new\">GitHub’da bir issue açın</a>. Ne yaptığınızı, ne beklediğinizi ve bunun yerine ne olduğunu yazın; telefonunuzu, Android sürümünü ve uygulama sürümünü (Ayarlar › Hakkında) de ekleyin.",
+ "f11439a41eb6": "<strong>Geliştirmeye katkıda bulunmak mı istiyorsunuz?</strong> Tryptify açık kaynaklıdır. Kod, çeviri, tema veya test gibi üzerinde çalışmak istediğiniz şeyi <a href=\"mailto:support@tryptify.com\">support@tryptify.com</a> adresine yazın ya da <a href=\"https://github.com/tryptz/Tryptify/issues\">GitHub’daki açık bir issue</a> ile başlayın."
 }

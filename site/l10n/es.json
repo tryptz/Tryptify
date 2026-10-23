@@ -320,8 +320,6 @@
  "c956d73d4556": "Para obtener ayuda con Tryptify Cloud, la facturación, los reembolsos, tus datos o cualquier otra cosa:",
  "3af6c7046d4f": "<a href=\"mailto:support@tryptify.com\">support@tryptify.com</a>",
  "675d5263c397": "Respondemos en un plazo de 3 días hábiles. Si tu pregunta es sobre facturación, incluye el correo que usaste al pagar.",
- "8a3cd3617293": "Errores e ideas para la app",
- "2327788fe29a": "Abre un issue en <a href=\"https://github.com/tryptz/Tryptify/issues\">GitHub</a>.",
  "4758080b25c0": "Avisos de derechos de autor",
  "94fcc25cd311": "Para denunciar contenido almacenado en Tryptify Cloud que infrinja tus derechos de autor, escribe a la misma dirección con los datos de la obra y del contenido en cuestión.",
  "cdab446359f1": "Quiénes somos",
@@ -452,5 +450,8 @@
  "bbfa773e5a63": "Cerrar",
  "5ea7aa75c627": "Buscar una canción",
  "3c55ae6feeda": "Buscar canciones o artistas",
- "2a64d5a493a2": "Encuentra una canción y añádela a la cola para todos."
+ "2a64d5a493a2": "Encuentra una canción y añádela a la cola para todos.",
+ "d8d3c69b65d5": "Informa de un error o ayuda a crear Tryptify",
+ "908a090c7b4e": "<strong>¿Has encontrado un error?</strong> <a href=\"https://github.com/tryptz/Tryptify/issues/new\">Abre un issue en GitHub</a>. Cuenta qué hiciste, qué esperabas y qué pasó en su lugar, e incluye tu teléfono, su versión de Android y la versión de la app (Ajustes › Acerca de).",
+ "f11439a41eb6": "<strong>¿Quieres ayudar a crearla?</strong> Tryptify es de código abierto. Escribe a <a href=\"mailto:support@tryptify.com\">support@tryptify.com</a> contando en qué te gustaría trabajar, como código, traducciones, temas o pruebas, o elige un <a href=\"https://github.com/tryptz/Tryptify/issues\">issue abierto en GitHub</a>."
 }

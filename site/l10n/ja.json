@@ -320,8 +320,6 @@
  "c956d73d4556": "Tryptify Cloud、請求、返金、データの扱いなど、どんなことでもこちらへ：",
  "3af6c7046d4f": "<a href=\"mailto:support@tryptify.com\">support@tryptify.com</a>",
  "675d5263c397": "3 営業日以内にお返事します。請求に関するお問い合わせには、購入時に使ったメールアドレスを書き添えてください。",
- "8a3cd3617293": "アプリの不具合やアイデア",
- "2327788fe29a": "<a href=\"https://github.com/tryptz/Tryptify/issues\">GitHub</a> で Issue を作成してください。",
  "4758080b25c0": "著作権侵害の通知",
  "94fcc25cd311": "Tryptify Cloud に保存されたコンテンツがあなたの著作権を侵害している場合は、対象の著作物と該当コンテンツの詳細を添えて、同じアドレスまでご連絡ください。",
  "cdab446359f1": "運営者",
@@ -452,5 +450,8 @@
  "bbfa773e5a63": "閉じる",
  "5ea7aa75c627": "曲を検索",
  "3c55ae6feeda": "曲やアーティストを検索",
- "2a64d5a493a2": "曲を探して、みんなのキューに追加しましょう。"
+ "2a64d5a493a2": "曲を探して、みんなのキューに追加しましょう。",
+ "d8d3c69b65d5": "不具合の報告・開発への参加",
+ "908a090c7b4e": "<strong>不具合を見つけたら</strong><a href=\"https://github.com/tryptz/Tryptify/issues/new\">GitHub で Issue を作成</a>してください。何をしたか、どうなるはずだったか、実際に何が起きたかに加えて、端末名、Android のバージョン、アプリのバージョン（設定 › 情報）を書いてください。",
+ "f11439a41eb6": "<strong>開発に参加したい方へ</strong>Tryptify はオープンソースです。コード、翻訳、テーマ、テストなど、取り組みたいことを <a href=\"mailto:support@tryptify.com\">support@tryptify.com</a> までお知らせいただくか、<a href=\"https://github.com/tryptz/Tryptify/issues\">GitHub の未解決の Issue</a> から始めてください。"
 }

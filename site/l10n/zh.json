@@ -320,8 +320,6 @@
  "c956d73d4556": "如需 Tryptify Cloud、账单、退款、个人数据或其他任何方面的帮助：",
  "3af6c7046d4f": "<a href=\"mailto:support@tryptify.com\">support@tryptify.com</a>",
  "675d5263c397": "我们会在 3 个工作日内回复。账单问题请附上你结账时使用的电子邮件地址。",
- "8a3cd3617293": "应用的问题反馈与建议",
- "2327788fe29a": "请在 <a href=\"https://github.com/tryptz/Tryptify/issues\">GitHub</a> 上提交 issue。",
  "4758080b25c0": "版权通知",
  "94fcc25cd311": "如需举报存储在 Tryptify Cloud 中侵犯你版权的内容，请写信至同一地址，并附上作品及相关内容的详细信息。",
  "cdab446359f1": "关于我们",
@@ -452,5 +450,8 @@
  "bbfa773e5a63": "关闭",
  "5ea7aa75c627": "搜索歌曲",
  "3c55ae6feeda": "搜索歌曲或艺人",
- "2a64d5a493a2": "找到一首歌，把它加入所有人的播放队列。"
+ "2a64d5a493a2": "找到一首歌，把它加入所有人的播放队列。",
+ "d8d3c69b65d5": "报告问题或参与开发 Tryptify",
+ "908a090c7b4e": "<strong>发现了问题？</strong><a href=\"https://github.com/tryptz/Tryptify/issues/new\">在 GitHub 上提交 issue</a>。请写明你做了什么、预期的结果和实际发生的情况，并附上你的手机型号、Android 版本和应用版本（设置 › 关于）。",
+ "f11439a41eb6": "<strong>想参与开发？</strong>Tryptify 是开源的。发送邮件至 <a href=\"mailto:support@tryptify.com\">support@tryptify.com</a>，说说你想参与的内容，比如代码、翻译、主题或测试；也可以直接认领 <a href=\"https://github.com/tryptz/Tryptify/issues\">GitHub 上的待解决 issue</a>。"
 }

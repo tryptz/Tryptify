@@ -320,8 +320,6 @@
  "c956d73d4556": "Bei Fragen zu Tryptify Cloud, zur Abrechnung, zu Erstattungen, zu deinen Daten oder zu allem anderen:",
  "3af6c7046d4f": "<a href=\"mailto:support@tryptify.com\">support@tryptify.com</a>",
  "675d5263c397": "Wir antworten innerhalb von 3 Werktagen. Gib bei Fragen zur Abrechnung die E-Mail-Adresse an, die du beim Bezahlen verwendet hast.",
- "8a3cd3617293": "Fehler und Ideen für die App",
- "2327788fe29a": "Erstelle ein Issue auf <a href=\"https://github.com/tryptz/Tryptify/issues\">GitHub</a>.",
  "4758080b25c0": "Urheberrechtsverletzungen melden",
  "94fcc25cd311": "Um Inhalte in Tryptify Cloud zu melden, die dein Urheberrecht verletzen, schreib an dieselbe Adresse und nenne das betroffene Werk und die beanstandeten Inhalte.",
  "cdab446359f1": "Wer wir sind",
@@ -452,5 +450,8 @@
  "bbfa773e5a63": "Schließen",
  "5ea7aa75c627": "Titel suchen",
  "3c55ae6feeda": "Titel oder Künstler suchen",
- "2a64d5a493a2": "Such einen Titel und füge ihn für alle zur Warteschlange hinzu."
+ "2a64d5a493a2": "Such einen Titel und füge ihn für alle zur Warteschlange hinzu.",
+ "d8d3c69b65d5": "Fehler melden oder an Tryptify mitarbeiten",
+ "908a090c7b4e": "<strong>Einen Fehler gefunden?</strong> <a href=\"https://github.com/tryptz/Tryptify/issues/new\">Erstelle ein Issue auf GitHub</a>. Schreib, was du gemacht hast, was du erwartet hast und was stattdessen passiert ist, und gib dein Handy, seine Android-Version und die App-Version an (Einstellungen › Info).",
+ "f11439a41eb6": "<strong>Lust, mitzuentwickeln?</strong> Tryptify ist Open Source. Schreib an <a href=\"mailto:support@tryptify.com\">support@tryptify.com</a>, woran du gern arbeiten würdest, etwa Code, Übersetzungen, Themes oder Tests, oder schnapp dir ein <a href=\"https://github.com/tryptz/Tryptify/issues\">offenes Issue auf GitHub</a>."
 }

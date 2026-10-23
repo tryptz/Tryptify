@@ -2469,15 +2469,22 @@
    "contact"
   ]
  },
- "8a3cd3617293": {
-  "en": "Bugs and ideas for the app",
+ "d8d3c69b65d5": {
+  "en": "Report a bug or help build Tryptify",
   "kind": "html",
   "pages": [
    "contact"
   ]
  },
- "2327788fe29a": {
-  "en": "Open an issue on <a href=\"https://github.com/tryptz/Tryptify/issues\">GitHub</a>.",
+ "908a090c7b4e": {
+  "en": "<strong>Found a bug?</strong> <a href=\"https://github.com/tryptz/Tryptify/issues/new\">Open an issue on GitHub</a>. Say what you did, what you expected and what happened instead, and add your phone, its Android version and the app version (Settings › About).",
+  "kind": "html",
+  "pages": [
+   "contact"
+  ]
+ },
+ "f11439a41eb6": {
+  "en": "<strong>Want to help build it?</strong> Tryptify is open source. Write to <a href=\"mailto:support@tryptify.com\">support@tryptify.com</a> with what you would like to work on, such as code, translations, themes or testing, or pick up an <a href=\"https://github.com/tryptz/Tryptify/issues\">open issue on GitHub</a>.",
   "kind": "html",
   "pages": [
    "contact"
