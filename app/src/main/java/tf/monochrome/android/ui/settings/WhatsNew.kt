@@ -193,6 +193,12 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "Your StepMania packs, as songs",
+                    body = "Settings › Library › Music folders › Add StepMania packs: songs of packs linked from a folder play like any other, with their chart's title, artist and picture, each pack an album. Trypt Mania lists each once, charted.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = CLOUD,
                     title = "Upload a whole selection",
                     body = "Select songs that are files on your phone, then the cloud button on the selection bar sends them all to Tryptify Cloud: one message when they're queued, one when they're done.",
@@ -202,6 +208,24 @@ object WhatsNew {
                     section = CONNECTIONS,
                     title = "A password for your server",
                     body = "A TrypT HiFi server can ask for a password. Give it under the address in Settings › Connections › Add API. It stays on this phone and is never synced.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = APP,
+                    title = "A frame rate limit",
+                    body = "Settings › System › Performance › Frame rate limit: Max, 30, 45, 60, 90 or 120 frames a second for the app, its animations, Trypt Mania and the visualizer. Lower saves battery and heat.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = APP,
+                    title = "An FPS counter",
+                    body = "In the same place: the frames drawn each second, the display's refresh rate and the limit, in the top corner over everything.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = TRYPT_MANIA,
+                    title = "A song too big to share goes smaller",
+                    body = "In a room or a party, a song over the server's limit is turned into Opus at 320 kbps before it goes up, with its progress on the queue row.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
@@ -226,6 +250,24 @@ object WhatsNew {
                     section = APP,
                     title = "Safer with your sign-ins",
                     body = "Plain http:// goes only to servers on your own network, logs hide sign-ins, and Android backups leave every sign-in out.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = CRT_EFFECT,
+                    title = "The CRT effect is lighter",
+                    body = "Its CRT look does about half the work for the same picture, so it no longer drops frames over the app or Trypt Mania.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LYRICS,
+                    title = "The letter wave moves under the CRT",
+                    body = "With the CRT effect over the whole app, the sung line's letter wave froze, and its speed did nothing. It moves again, linked to the music or not.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = VISUALIZER,
+                    title = "The visualizer keeps drawing",
+                    body = "Leaving the player and coming back left the visualizer frozen, or showing the cover alone. It carries on now, paused or playing.",
                 ),
             ),
         ),

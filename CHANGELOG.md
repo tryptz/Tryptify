@@ -107,6 +107,30 @@
 - **Zoom in to fill the corners.** Over 100% the picture fills the dark corners a curve leaves. It stops at 120% so the tab bar stays on screen.
 - **Taps follow the zoom**, as they follow the curve. Your looks and saved presets keep their size: anything saved before reads as 100%.
 
+#### A frame rate limit and an FPS counter
+- **Settings › System › Performance › Frame rate limit**: Max, 30, 45, 60, 90 or 120. The app, every animation in it, Trypt Mania's playfield and the visualizer draw no more than that many frames a second; lower saves battery and heat. Max draws on every refresh, as before.
+- **It holds whatever asks for a frame**: the app's animations move on a slower clock, every redraw is held to the limit at the app's root, the visualizer's render threads wait out the same interval with vsync on or off, and the screen is asked for the slowest refresh rate that fits (only while a limit is set; never a resolution).
+- **Pick a limit your screen divides** for even frames: 60 or 30 on a 120 Hz screen. Any other averages out to the limit.
+- **Trypt Mania's timing never follows the frames**: notes and judgements come from the song's own clock, so a limit costs the playfield frames of animation, never a judgement.
+- **An FPS counter**, in the same place: the frames drawn each second, in brackets the frames the app's animations moved on, the display's refresh rate and the limit, in the top corner over everything (the CRT effect included).
+- **The kick pulse on the cover keeps time**: it decayed per frame, so it punched faster on a 120 Hz screen and would have slowed under a limit.
+
+#### Your StepMania packs in your library
+- **Settings › Library › Music folders › Add StepMania packs** adds the folders Trypt Mania's linked packs are read from to your music folders (a whole-phone library holds them already) and scans them in.
+- **Each pack song shows its chart's title and artist**, not the file's tags (StepMania music is often an untagged OGG), the pack as its album, its album artist the pack's one artist or Various Artists, and the song's own picture.
+- **Listed once in Trypt Mania, with its chart.** A library song whose file is a pack song's music is that pack song: no second entry with No chart, and never counted in Chart every song without one, so a hand-made chart's song is never sent to the chart server. Play in Trypt Mania from the library opens it.
+- **Trypt Mania's own pack folder is left out of the library**: every chart made in the app is written there with a copy of its music, which doubled the song.
+- Packs imported as a ZIP live in the app's own storage and stay out of the library.
+
+#### A song too big to share goes smaller
+- **A song over the rooms server's limit** (99 MB a song, or what is left of a party's 1 GB) is turned into Opus at 320 kbps before it's shared, in listening parties and Trypt Mania rooms alike. Your queue row shows "Making it smaller" with its progress. It needs Android 10 and an Opus encoder.
+
+#### On tryptify.com
+- **The site in the app's eight languages**, under /zh, /ja, /fr, /es, /tr, /de and /it, with a language list in every footer and the player's sidebar. The first visit follows the browser's language.
+- **Listening parties on tryptify.com**: invites are tryptify.com/party/<code> links, which open in the app where it's installed; anyone else joins in the browser, listens in sync, chats, votes to skip and adds songs. The rooms server moved to Cloudflare.
+- **The web player takes its colours from the song's cover**, as the app's Dynamic Colors: the cover's colour is the accent, made readable on the page, and its main colour washes the top of the page. They fade between songs.
+- **Report a bug or help build Tryptify**, on the Contact page.
+
 ### Changed
 
 #### No chart server built in
@@ -156,7 +180,17 @@
 - **The ambient visualizer stays in the player.** It can only run on one screen at a time, and the game's music does not feed it.
 - **Trypt Mania takes the colour of the song you pick.** Choose a song on the wheel and the app's dynamic colours fade to its album colour within half a second, whatever your "Blend between tracks" length is (a shorter one is kept). The whole app follows that one song while the mode is open, tab bar and "Tint the menus too" included, so two songs never colour the screen at once; when you leave, the playing track takes over again. The colours stay readable on every menu.
 
+#### The CRT effect is lighter
+- **Its CRT look reads each TV pixel once**: the glow and the sharp picture shared one read of each line's pixels, and the weights are worked out once a pixel. Thirty-one reads a pixel with the glow on instead of forty-two, about half the work for the same picture, so it no longer drops frames over the app or Trypt Mania.
+
+#### The web player's bar is the site's glass
+- **The bar is the menu's glass**: the page lightly blurred and bent at the rim, with a wider colour split there, a rim lit at two corners and a glint that follows the pointer. Its icons are cut out of the glass, as in the app's mini player, the green of shuffle or repeat when on. The volume is a glass tube like the timeline.
+- **Another device's song shows on the same glass**, with Connect's green on its phone, its progress and Play here.
+
 ### Fixed
+- **The lyrics' letter wave moves under the CRT effect.** With the CRT over the whole app, the sung line froze mid-wave and its speed, linked or not, did nothing.
+- **The visualizer keeps drawing after you leave the player and come back.** It stayed frozen, or showed the cover alone: the new view never told the engine it was playing, and a paused engine froze before its first frame.
+- **The web player seeks TrypT HiFi's TIDAL songs** again, and the party page plays the catalogue songs TrypT HiFi assembles.
 - **Golden Ears and the Quality card agree on what Hi-Res is.** The achievement counted "HI-RES" or "HI RES" tags the card called lossy, and missed "HIRES", which the card counted.
 - **Night means one thing in your stats: 9 pm to 5 am.** The Night owl listening type, the share of night listening, the clock chart's Night row and the Night Owl achievement used four different windows, so a 4 am peak made you an "Early bird". Night Owl now counts plays from midnight to 5 am.
 
