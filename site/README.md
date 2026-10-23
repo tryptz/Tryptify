@@ -89,7 +89,10 @@ edges (8 on a phone) with 26 px corners, the page blurred and bent under it,
 tinted with the cover's vibrant colour (`TryptifyGlass.vibrant`, the same pick
 the full-screen player makes; clear glass with no cover or a grey one) over
 more of the page colour than the app uses, so nothing reads through the
-controls. A crisp rim lit from the top left, a cool fill at the bottom right,
+controls (in Black, clear glass instead: little of the page colour, a 28 px
+blur, light falling in from the top and a brighter edge, since a dense dark
+pane over a black page read as a grey slab). Each lens is drawn again when the
+design changes, as the two ask for different blurs. A crisp rim lit from the top left, a cool fill at the bottom right,
 a still glint, a shadow dropped 8 px; nothing moves across it. The play button
 is the same glass in a disc and squeezes to 92% on a spring. The timeline is
 the app's glass tube: one outline that swells around the playhead (a raised

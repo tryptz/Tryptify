@@ -61,6 +61,11 @@
   };
 
   let lenses = 0;
+  // Black and white can ask for different glass: every lens is drawn again
+  // when the design changes.
+  const redraws = [];
+  new MutationObserver(() => requestAnimationFrame(() => redraws.forEach((d) => d())))
+    .observe(root, { attributes: true, attributeFilter: ["data-design"] });
   const giveLens = (el) => {
     if (!lensOn || el.dataset.lens) return;
     const id = `glass-lens-${lenses++}`;
@@ -79,13 +84,18 @@
     let size = "";
     const draw = () => {
       const w = Math.round(el.offsetWidth), h = Math.round(el.offsetHeight);
-      if (!w || !h || `${w}x${h}` === size) return;
-      size = `${w}x${h}`;
-      const r = Math.min(parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0, h / 2, w / 2);
+      if (!w || !h) return;
+      const css = getComputedStyle(el);
+      const r = Math.min(parseFloat(css.borderTopLeftRadius) || 0, h / 2, w / 2);
       // How far the rim bends: --glass-bend if the glass sets one.
-      const s = Math.round(parseFloat(getComputedStyle(el).getPropertyValue("--glass-bend")) || Math.min(40, h * 0.62));
+      const s = Math.round(parseFloat(css.getPropertyValue("--glass-bend")) || Math.min(40, h * 0.62));
       // The blur is part of the lens, so the bend and the blur always go together.
-      const blur = parseFloat(getComputedStyle(el).getPropertyValue("--glass-blur")) || 6;
+      const blur = parseFloat(css.getPropertyValue("--glass-blur")) || 6;
+      // Drawn again only when something it is drawn from changed (a design can
+      // ask for a different blur).
+      const key = `${w}x${h}x${r}x${s}x${blur}`;
+      if (key === size) return;
+      size = key;
       filter.innerHTML =
         `<feGaussianBlur in="SourceGraphic" stdDeviation="${blur / 2}" edgeMode="duplicate" result="soft"/>` +
         // The map in the glass's own pixels: as a percentage it took the size of the
@@ -95,6 +105,7 @@
         `<feBlend in="R" in2="G" mode="screen" result="RG"/><feBlend in="RG" in2="B" mode="screen"/>`;
     };
     draw();
+    redraws.push(draw);
     el.style.setProperty("--lens", `url(#${id})`);
     el.dataset.lens = id;
     let queued = false;
