@@ -38,7 +38,7 @@ NAMES = {"en": "English", "zh": "简体中文", "ja": "日本語", "fr": "Franç
          "tr": "Türkçe", "de": "Deutsch", "it": "Italiano"}
 # 404.html is served for every missing address, whatever the language, so it stays one page.
 PAGES = ["index", "cloud", "autoeq", "player", "account", "contact", "download",
-         "terms", "privacy", "refunds", "changelog"]
+         "terms", "privacy", "refunds", "changelog", "party"]
 INLINE = {"a", "strong", "em", "b", "i", "code", "br", "span", "small", "abbr", "kbd", "sup", "sub", "time", "mark"}
 VOID = {"br", "img", "input", "meta", "link", "hr", "source", "wbr", "area", "col", "embed", "track", "param", "base"}
 SKIP = {"script", "style", "svg", "template", "noscript", "canvas", "video", "audio", "select", "textarea"}

@@ -2230,7 +2230,8 @@ the bottom, and the field to say something.
   only opens a panel saying what it does, with End it and Cancel. Neither is
   a dialog (a dialog is another window and opaque; see Glass), and ending a
   party is never one tap.
-* An invite link (`https://<rooms server>/<secret>/party/<code>`) opens the
+* An invite link (`https://tryptify.com/party/<code>`, a translated page's
+  `/de/party/<code>`, or an older app's link on the rooms server) opens the
   party screen, which joins the code at once when this phone is at no party.
   At another party it asks first, in place at the top of the room ("You're
   invited to party …", Join and Not now), never a dialog and never by

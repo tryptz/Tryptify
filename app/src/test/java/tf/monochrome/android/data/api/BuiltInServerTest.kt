@@ -91,6 +91,28 @@ class BuiltInServerTest {
     }
 
     @Test
+    fun theRoomsServerOlderBuildsHadIsTakenOutOnceItMoved() {
+        val rooms = "https://rooms.tryptify.com"
+        val old = BuiltInServer.entry("https://rooms-production.up.railway.app/0123456789abcdef0123456789abcdef", setOf(ApiService.MULTIPLAYER))
+        // A rooms server someone added by hand, without a secret, stays; so
+        // does one under a short path, and any server that serves more.
+        val own = BuiltInServer.entry("https://my-rooms.example/", setOf(ApiService.MULTIPLAYER))
+        val short = BuiltInServer.entry("https://other.example/rooms", setOf(ApiService.MULTIPLAYER))
+        val mixed = ApiServer(url = "https://mixed.example/0123456789abcdef0123456789abcdef", services = setOf(ApiService.MULTIPLAYER, ApiService.STEMS))
+        val list = listOf(tidal, old, own, short, mixed)
+        assertEquals(listOf(tidal, own, short, mixed), BuiltInServer.withoutOldRooms(list, rooms))
+        // Then the new one goes in, and is the one a party or a game picks.
+        val after = BuiltInServer.ensureAll(BuiltInServer.withoutOldRooms(list, rooms)!!, rooms)!!
+        assertEquals(rooms, after.last().url)
+        // Nothing to take out, or no rooms server in the build: no change.
+        assertNull(BuiltInServer.withoutOldRooms(listOf(tidal, own), rooms))
+        assertNull(BuiltInServer.withoutOldRooms(list, ""))
+        // The new server on the same host is not the old one.
+        val sameHost = BuiltInServer.entry("https://rooms.tryptify.com/0123456789abcdef0123456789abcdef", setOf(ApiService.MULTIPLAYER))
+        assertNull(BuiltInServer.withoutOldRooms(listOf(sameHost), rooms))
+    }
+
+    @Test
     fun settingsSyncCarriesTheListWithoutIt() {
         val listed = BuiltInServer.ensureAll(listOf(tidal), built)!!
         assertEquals(listOf(tidal), BuiltInServer.withoutBuiltIn(listed, built))

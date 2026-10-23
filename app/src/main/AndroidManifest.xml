@@ -122,19 +122,23 @@
                     android:host="lastfm-callback" />
             </intent-filter>
 
-            <!-- Listening party invites: https://<rooms server>/<secret>/party/<code>.
-                 The host is the built-in rooms server's (build.gradle.kts), and
-                 its /.well-known/assetlinks.json lets Android open the links
-                 here without asking. Only the code is taken (PartyInvites),
-                 and joined on this phone's own rooms server. -->
+            <!-- Listening party invites: https://tryptify.com/party/<code> (or a
+                 translated page's /de/party/<code>), and an older app's
+                 https://<rooms server>/<secret>/party/<code>, whose host is the
+                 built-in rooms server's (build.gradle.kts). Each host's
+                 /.well-known/assetlinks.json lets Android open the links here
+                 without asking. Only the code is taken (PartyInvites), and
+                 joined on this phone's own rooms server. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
                     android:scheme="https"
-                    android:host="${partyLinkHost}"
+                    android:host="tryptify.com"
                     android:pathPattern="/party/.*" />
+                <data android:host="www.tryptify.com" />
+                <data android:host="${partyLinkHost}" />
                 <data android:pathPattern="/.*/party/.*" />
             </intent-filter>
 

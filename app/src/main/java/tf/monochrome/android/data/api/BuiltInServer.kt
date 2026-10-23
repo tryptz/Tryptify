@@ -10,6 +10,10 @@ package tf.monochrome.android.data.api
  * cannot be removed: [ensure] puts it back on every read and every save. It
  * can still be moved and checked again.
  *
+ * The rooms server moved (from Railway to Cloudflare, rooms.tryptify.com).
+ * The one older builds put in the list sat ahead of the new one, so it would
+ * still be the one picked; [withoutOldRooms] takes it out once.
+ *
  * The TryptMania Parser chart server is never built in (the owner's rule).
  * Builds before did put it in the list, so [withoutRetired] takes that entry
  * out once, recognised by its host's SHA-256 alone
@@ -46,6 +50,24 @@ object BuiltInServer {
         val kept = servers.filterNot { sha256(hostOf(it.url)) == retiredHostSha256.lowercase() }
         return kept.takeIf { it.size != servers.size }
     }
+
+    /**
+     * [servers] without an older build's rooms server, now that [roomsServer]
+     * is another host; null when there is none, or the build ships none.
+     * Recognised by the shape that build gave it: a rooms server and nothing
+     * else, its address a long hex secret path on another host
+     * (`https://host/<32 hex>`). The new server has no secret.
+     */
+    fun withoutOldRooms(servers: List<ApiServer>, roomsServer: String): List<ApiServer>? {
+        val url = ApiServers.normalizeUrl(roomsServer) ?: return null
+        val host = hostOf(url)
+        val kept = servers.filterNot { s ->
+            s.services == ROOMS_SERVICES && hostOf(s.url) != host && OLD_SECRET_PATH.matches(s.url.substringAfter("://").substringAfter('/', ""))
+        }
+        return kept.takeIf { it.size != servers.size }
+    }
+
+    private val OLD_SECRET_PATH = Regex("[0-9a-fA-F]{24,}/?")
 
     /**
      * [servers] without the build's own entry, for settings sync: its address

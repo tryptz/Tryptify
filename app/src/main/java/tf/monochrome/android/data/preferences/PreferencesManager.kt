@@ -137,6 +137,7 @@ class PreferencesManager @Inject constructor(
         private val SHUFFLE_ENABLED = booleanPreferencesKey("shuffle_enabled")
         // Device-local, like the list it edits: whether the retired built-in chart server was taken out.
         private val RETIRED_CPU_SERVER_REMOVED = booleanPreferencesKey("retired_cpu_server_removed")
+        private val OLD_ROOMS_SERVER_REMOVED = booleanPreferencesKey("old_rooms_server_removed")
         private val REPEAT_MODE = intPreferencesKey("repeat_mode")
         private val VOLUME = doublePreferencesKey("volume")
 
@@ -1057,7 +1058,8 @@ class PreferencesManager @Inject constructor(
     /**
      * Writes the build's rooms server into the saved list, once a launch, and
      * the first time takes out the chart server older builds put there
-     * (BuiltInServer.withoutRetired): once only, so one added again stays.
+     * (BuiltInServer.withoutRetired) and the rooms server they had before it
+     * moved (BuiltInServer.withoutOldRooms): once only, so one added again stays.
      */
     suspend fun seedBuiltInServer(roomsServer: String, retiredCpuHostSha256: String = "") {
         dataStore.edit { prefs ->
@@ -1066,6 +1068,10 @@ class PreferencesManager @Inject constructor(
             if (prefs[RETIRED_CPU_SERVER_REMOVED] != true && retiredCpuHostSha256.isNotBlank()) {
                 tf.monochrome.android.data.api.BuiltInServer.withoutRetired(saved, retiredCpuHostSha256)?.let { saved = it; changed = true }
                 prefs[RETIRED_CPU_SERVER_REMOVED] = true
+            }
+            if (prefs[OLD_ROOMS_SERVER_REMOVED] != true && roomsServer.isNotBlank()) {
+                tf.monochrome.android.data.api.BuiltInServer.withoutOldRooms(saved, roomsServer)?.let { saved = it; changed = true }
+                prefs[OLD_ROOMS_SERVER_REMOVED] = true
             }
             tf.monochrome.android.data.api.BuiltInServer.ensureAll(saved, roomsServer)?.let { saved = it; changed = true }
             if (changed) prefs[API_SERVERS] = json.encodeToString(saved)

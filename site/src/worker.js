@@ -1,5 +1,6 @@
 // The website is static files (public/), served by Workers static assets.
-// This script answers /download/tryptify.apk and /video/*. The APK is too big for a
+// This script answers /download/tryptify.apk, /video/* and the listening
+// party's invite links (/party/<code>, served party.html). The APK is too big for a
 // static asset (25 MiB at most), so it lives in the R2 bucket
 // tryptify-downloads, uploaded with its file name (and so its version) as its
 // Content-Disposition; its version, size and SHA-256 are also published in
@@ -9,11 +10,26 @@
 // else is a static file.
 
 const APK = "tryptify.apk";
+const ASSET_LINKS = [{
+  relation: ["delegate_permission/common.handle_all_urls"],
+  target: {
+    namespace: "android_app",
+    package_name: "tf.monotrypt.android",
+    sha256_cert_fingerprints: ["70:96:05:04:EE:8A:2E:06:06:7F:7D:8E:72:9A:74:D5:F1:1B:F0:18:AB:80:3F:5C:C7:D6:80:87:CA:EF:02:DC"],
+  },
+}];
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/video/")) return video(request, env);
+    // Lets the Android app open this site's party invites: its package and
+    // its release certificate's SHA-256, as the rooms server serves them too.
+    if (url.pathname === "/.well-known/assetlinks.json") return Response.json(ASSET_LINKS);
+    // An invite, /party/<code> (or /<lang>/party/<code>): the party page, the
+    // address kept, so js/party.js reads the code from it.
+    const invite = /^(\/(?:zh|ja|fr|es|tr|de|it))?\/party\/[A-Za-z0-9]{1,16}\/?$/.exec(url.pathname);
+    if (invite) return page(await env.ASSETS.fetch(new Request(new URL((invite[1] || "") + "/party", url), request)));
     if (url.pathname !== "/download/tryptify.apk") return page(await env.ASSETS.fetch(request));
     if (request.method !== "GET" && request.method !== "HEAD") {
       return new Response("Method not allowed", { status: 405, headers: { allow: "GET, HEAD" } });

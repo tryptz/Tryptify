@@ -23,7 +23,7 @@
 // English from the list stops it. A sign-in coming back (?code=) is left alone.
 (function () {
   var LANGS = ["zh", "ja", "fr", "es", "tr", "de", "it"];
-  var PAGES = ["/", "/cloud", "/autoeq", "/player", "/account", "/contact", "/download", "/terms", "/privacy", "/refunds", "/changelog"];
+  var PAGES = ["/", "/cloud", "/autoeq", "/player", "/account", "/contact", "/download", "/terms", "/privacy", "/refunds", "/changelog", "/party"];
   document.addEventListener("click", function (e) {
     var a = e.target && e.target.closest ? e.target.closest("a[data-lang]") : null;
     if (!a) return;
@@ -31,7 +31,8 @@
     if (location.hash && a.href.indexOf("#") < 0) a.href += location.hash;  // the player keeps its view
   });
   var path = location.pathname.replace(/\.html$/, "").replace(/(.)\/$/, "$1");
-  if (/^\/(zh|ja|fr|es|tr|de|it)(\/|$)/.test(path) || PAGES.indexOf(path) < 0) return;
+  // A party invite (/party/<code>) goes to its language with its code.
+  if (/^\/(zh|ja|fr|es|tr|de|it)(\/|$)/.test(path) || PAGES.indexOf(path.replace(/^\/party\/[A-Za-z0-9]+$/, "/party")) < 0) return;
   if (/[?&#](code|error|access_token)=/.test(location.search + location.hash)) return;
   var want = null;
   try { want = localStorage.getItem("tryptify-lang"); } catch (_) {}

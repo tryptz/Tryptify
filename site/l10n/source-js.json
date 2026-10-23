@@ -274,7 +274,8 @@
  "fb249146847e": {
   "en": "Uploading {percent}%",
   "files": [
-   "js/account.js"
+   "js/account.js",
+   "js/party.js"
   ]
  },
  "90218af7b57c": {
@@ -987,6 +988,421 @@
    "js/measures.js"
   ]
  },
+ "4b8988d0a576": {
+  "en": "In the Tryptify app? Join with code {code} to share songs from your phone.",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "9809b70ff8b5": {
+  "en": "Want to add songs too? Open the Tryptify app and join with code {code}.",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "f44c1e425996": {
+  "en": "Joining…",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "5b955dbef18d": {
+  "en": "Joining lets this page play sound. Add songs from the catalogue, or listen to what the app shares.",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "4e54410450e5": {
+  "en": "Cover of {title}",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "ae105234c7aa": {
+  "en": "Couldn't reach the party server. Check your connection and try again.",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "9d80f91f7fd0": {
+  "en": "Reconnecting",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "57dd43602d0b": {
+  "en": "Slow down a little.",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "1ed0a0f6aab0": {
+  "en": "This party is full.",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "e363a09cc085": {
+  "en": "Up next is full.",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "4db862254d97": {
+  "en": "You're already at this party.",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "30b80f67a44e": {
+  "en": "From the web, you can add songs from the catalogue only.",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "2485ad879e91": {
+  "en": "The party server said: {message}",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "b68734c25910": {
+  "en": "Added",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "4bd9a6fe3190": {
+  "en": "The host took you out of the party",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "00178d3390e0": {
+  "en": "The host ended the party",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "3bc334248377": {
+  "en": "You left the party",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "2b2ff97074d3": {
+  "en": "The party ended",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "9664b0701890": {
+  "en": "This party has ended, or the link is wrong.",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "eb977c7c3b4e": {
+  "en": "There's no party with that code. Check it and try again.",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "61cc55aa0453": {
+  "en": "Add",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "4099556ed77f": {
+  "en": "No messages yet. Say hello.",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "343d5281d70e": {
+  "en": "{name} joined from the web",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "6b6917eb558e": {
+  "en": "{name} joined",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "24ca5e65f1e6": {
+  "en": "{name} left",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "60772099eec4": {
+  "en": "{name} added {song}",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "6752dc989c83": {
+  "en": "{name} skipped {song}",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "c8da46401765": {
+  "en": "Skipped {song}",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "c62bf807cc8a": {
+  "en": "{name} is now the host",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "5a24102340b6": {
+  "en": "Catalogue",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "0872bf81fdc2": {
+  "en": "Not shared",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "50d0d8dd11a9": {
+  "en": "Shared",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "de27240983ef": {
+  "en": "Uploading",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "9ce55c1434db": {
+  "en": "Added by you",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "19b77b48a1ea": {
+  "en": "Added by {name}",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "f5d35b784ede": {
+  "en": "{name} · Tryptify listening party",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "07af88900734": {
+  "en": "Hosted by {name}",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "037353d56760": {
+  "en": "Nothing playing yet",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "0c3323335150": {
+  "en": "Add a song to start the party.",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "01f804662fa9": {
+  "en": "Someone in the app adds the next song.",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "37db497905a1": {
+  "en": "Voted to skip {votes}/{needed}",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "8972942d314c": {
+  "en": "Vote skip {votes}/{needed}",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "283401ba50bb": {
+  "en": "{rate}× · vinyl",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "4181015fbcee": {
+  "en": "{rate}×",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "3960ec4ca5fb": {
+  "en": "Host",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "a8323a2a9b34": {
+  "en": "Web",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "4fae89296662": {
+  "en": "Away",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "26d4d69c81b9": {
+  "en": "{name} (you)",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "b3a16b2fe7e2": {
+  "en": "Waiting for a song",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "20bcbc048b96": {
+  "en": "Waiting for the upload",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "4ea43a003ec9": {
+  "en": "Not shared, skipped here",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "eac4a407c410": {
+  "en": "This song can't play here",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "e0dd2a3d106a": {
+  "en": "Downloading {percent}%",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "9b4592f9ae45": {
+  "en": "Downloading",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "8f26c6520d61": {
+  "en": "Loading",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "b210e0e012da": {
+  "en": "Paused by the host",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "a116b339b4c4": {
+  "en": "Tap anywhere to play",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "7534779ddd92": {
+  "en": "Catching up",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "e8d34757ddd4": {
+  "en": "Listening along · in sync",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "2a64d5a493a2": {
+  "en": "Find a song and add it to the queue for everyone.",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "1a6a5ba8c23d": {
+  "en": "Searching…",
+  "files": [
+   "js/party.js",
+   "js/wp-app.js"
+  ]
+ },
+ "07ba950a25a5": {
+  "en": "The search did not work. Try again.",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "8933ee7d514c": {
+  "en": "No songs found for “{query}”.",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "db95e1890c01": {
+  "en": "Explicit",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "75cb40de5670": {
+  "en": "Add {title} by {artist} to the queue",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "9b7de9b2c2e2": {
+  "en": "Add {title} to the queue",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "48a693c488b5": {
+  "en": "Adding",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "b331c49d774a": {
+  "en": "Enter the party's code.",
+  "files": [
+   "js/party.js"
+  ]
+ },
+ "ef3a1a251c21": {
+  "en": "Enter a name, so people know who's here.",
+  "files": [
+   "js/party.js"
+  ]
+ },
  "e53407cfe1a5": {
   "en": "Player",
   "files": [
@@ -1637,12 +2053,6 @@
  },
  "4c45e72e850c": {
   "en": "Albums",
-  "files": [
-   "js/wp-app.js"
-  ]
- },
- "1a6a5ba8c23d": {
-  "en": "Searching…",
   "files": [
    "js/wp-app.js"
   ]

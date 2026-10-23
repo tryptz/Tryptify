@@ -124,16 +124,18 @@ android {
             "RETIRED_CPU_HOST_SHA256",
             "\"${retiredCpuHost?.let { h -> MessageDigest.getInstance("SHA-256").digest(h.toByteArray()).joinToString("") { "%02x".format(it) } } ?: ""}\"",
         )
-        // The rooms server for Trypt Mania's multiplayer (TryptMania-Parser's
-        // multiplayer/ service on Railway), built in whenever local.properties
-        // `tryptmania.roomsServer` or TRYPTMANIA_ROOMS_SERVER is set.
+        // The rooms server for Trypt Mania's multiplayer and the listening
+        // parties (server/rooms, on Cloudflare), built in whenever
+        // local.properties `tryptmania.roomsServer` or TRYPTMANIA_ROOMS_SERVER
+        // is set.
         val roomsServer = (localProperties.getProperty("tryptmania.roomsServer") ?: System.getenv("TRYPTMANIA_ROOMS_SERVER") ?: "").trim()
         buildConfigField("String", "BUILT_IN_ROOMS_SERVER", "\"$roomsServer\"")
-        // Listening party invites (https://<rooms host>/…/party/<code>) open
-        // in the app: the manifest claims the built-in rooms server's host,
-        // and that server's /.well-known/assetlinks.json vouches for the app.
-        // Only the host goes in, never the secret path. Without a built-in
-        // server it claims a host that cannot exist.
+        // Listening party invites are tryptify.com/party/<code> (the manifest
+        // claims that host itself); an older app's invite pointed at the rooms
+        // server, so the manifest claims its host too, and that server's
+        // /.well-known/assetlinks.json vouches for the app. Only the host goes
+        // in, never a path. Without a built-in server it claims a host that
+        // cannot exist.
         manifestPlaceholders["partyLinkHost"] =
             runCatching { URI(roomsServer).host }.getOrNull()?.takeIf { it.isNotBlank() } ?: "party.invalid"
 

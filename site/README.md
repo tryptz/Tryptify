@@ -204,6 +204,17 @@ page too.
   is never built in, and the rooms server is when its key is set. Check it
   with the BuildConfig greps in AGENTS.md before upload.
 
+- `/party` (`party.html`, `party.css`, `js/party.js`), linked only from the
+  footer: the listening party for guests, moved here from the rooms server's
+  own page. `/party` asks for a code; an invite, `/party/<code>` (and
+  `/<lang>/party/<code>`), is served `party.html` by `src/worker.js` with the
+  address kept, and the script reads the code from it (or `?code=`). It talks
+  to the rooms server at `https://rooms.tryptify.com` (`wss://…/ws`, in the
+  policy's `connect-src`; its HTTP routes send CORS for tryptify.com and take
+  the song token as `?token=`). Served from `wrangler dev`, `?rooms=<url>`
+  points it at a test server. Songs are downloaded whole into the tab's
+  memory and played at the party's moment and speed, as the app plays them.
+
 ## The AutoEQ try-out
 
 `/autoeq`'s "Try it" runs the app's AutoEQ in the browser:

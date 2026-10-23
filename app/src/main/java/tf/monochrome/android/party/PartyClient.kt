@@ -351,9 +351,8 @@ class PartyClient @Inject constructor(
 
     /** The link a guest opens in a browser, for this party; null when not in one. */
     fun inviteLink(): String? {
-        val server = serverUrl ?: return null
         val code = _state.value.party?.code ?: return null
-        return PartyProtocol.inviteLink(server, code)
+        return PartyProtocol.inviteLink(code)
     }
 
     /**

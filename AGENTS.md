@@ -139,6 +139,16 @@ owner needs the rooms key. Without it there is no rooms server; with it,
 `BuiltInServer` puts it back in that list on every read, and the list shows
 only its host.
 
+The rooms server moved to Cloudflare (`server/rooms`, below) at
+`https://rooms.tryptify.com`, which a release build sets as
+`tryptmania.roomsServer`. That address has no secret path, since the website's
+party page talks to it as well; the old Railway server's address had one, and
+it stays a secret like the chart server's. The old entry sat ahead of the new
+one in the saved list and would still have been picked, so builds since take
+it out once (`BuiltInServer.withoutOldRooms`, `old_rooms_server_removed`),
+recognised by the shape older builds gave it: a rooms-only entry under a long
+hex path on another host.
+
 Never print, log or commit the values, and never write them into a document, a
 test, a commit message or a chat reply. Anyone with the APK can dig them out;
 the repository must not hand them out as well. To check without showing a
@@ -366,6 +376,20 @@ while signed in and on screen or playing).
 `bun run test.ts`, then `npm run dev` and `bun run e2e.ts` in Cloudflare's
 own runtime. `DEV_TOKENS` is for `wrangler dev` only, never the deployed
 Worker.
+
+## Rooms server
+
+[`server/rooms/`](server/rooms/README.md): Trypt Mania's multiplayer rooms and
+the listening parties, on Cloudflare at `rooms.tryptify.com`. It is the
+`tryptz/tryptify-party` Rust server moved over as it was: one Durable Object
+holds every room, party and socket (`src/hub.ts`), the party's rules are a
+port of its C++ (`src/party.ts`, checked byte for byte against it) and the
+game rooms' of its Rust (`src/room.ts`), shared songs live in R2. The wire
+format is unchanged, so the app's `PartyClient` and `RoomClient` need nothing
+new. Invites are `https://tryptify.com/party/<code>` (the site's party page,
+`site/public/party.html`), which open in the app where it is installed;
+both hosts serve `/.well-known/assetlinks.json`. `bun run test` for the rules,
+`bun run e2e.ts` against `wrangler dev` for the sockets.
 
 ## Website
 

@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Soirée d’écoute Tryptify : écoutez avec les autres dans votre navigateur</title>
+  <meta name="description" content="Vous êtes invité à une soirée d’écoute Tryptify. Entendez le même titre au même moment que tout le monde, directement dans votre navigateur, discutez et votez pour passer. Ni app ni compte nécessaires.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Tryptify">
+  <meta property="og:title" content="Rejoignez ma soirée d’écoute Tryptify">
+  <meta property="og:description" content="Écoutez avec les autres dans votre navigateur et discutez avec tout le monde. Ni app ni compte nécessaires.">
+  <meta property="og:image" content="https://tryptify.com/img/party-web.webp">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/party.css">
+  <script src="/js/theme-boot.js"></script>
+  <script src="/js/l10n/fr.js"></script>
+  <!-- l10n:alternates -->
+  <link rel="alternate" hreflang="en" href="https://tryptify.com/party">
+  <link rel="alternate" hreflang="zh-CN" href="https://tryptify.com/zh/party">
+  <link rel="alternate" hreflang="ja" href="https://tryptify.com/ja/party">
+  <link rel="alternate" hreflang="fr" href="https://tryptify.com/fr/party">
+  <link rel="alternate" hreflang="es" href="https://tryptify.com/es/party">
+  <link rel="alternate" hreflang="tr" href="https://tryptify.com/tr/party">
+  <link rel="alternate" hreflang="de" href="https://tryptify.com/de/party">
+  <link rel="alternate" hreflang="it" href="https://tryptify.com/it/party">
+  <link rel="alternate" hreflang="x-default" href="https://tryptify.com/party">
+  <!-- /l10n -->
+</head>
+<body class="party-page">
+  <div class="pt-ambient" aria-hidden="true"></div>
+  <header class="top">
+    <div class="wrap glass">
+      <a class="brand" href="/fr" aria-label="Accueil Tryptify"><svg class="mark" viewBox="17 17 74 74" aria-hidden="true"><rect x="18" y="18" width="72" height="72" rx="16" fill="#000" class="mark-tile"/><path d="M34,36 L34,72 M44,30 L44,78 M54,26 L54,82 M64,30 L64,78 M74,36 L74,72" stroke="#fff" stroke-width="4" fill="none"/></svg><span class="wordmark">Tryptify</span></a>
+      <nav class="nav" aria-label="Navigation principale">
+        <a href="/fr">Application</a>
+        <a href="/fr/cloud">Cloud</a>
+        <a href="/fr/player">Lecteur</a>
+        <a href="/fr/account">Compte</a>
+        <a href="/fr/changelog" class="nav-wide">Nouveautés</a>
+        <a href="/fr/contact">Contact</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero pt-hero" id="hero">
+      <p class="eyebrow">Soirée d’écoute Tryptify</p>
+      <h1>Écoutez ensemble</h1>
+      <p class="lead">Écoutez ce que joue la soirée, ici même dans votre navigateur, et discutez avec tout le monde. Ni app ni compte nécessaires.</p>
+    </section>
+
+    <div id="joinCard" class="pt-panel pt-join glass">
+      <p class="pt-label" id="invited" hidden>Vous êtes invité</p>
+      <h2 class="pt-join-title">Rejoindre la soirée</h2>
+      <form id="joinForm" class="pt-form" novalidate>
+        <p class="pt-codeline" id="codeLine" hidden>Code de la soirée <span class="pt-code" id="linkCode"></span></p>
+        <div class="pt-field" id="codeField">
+          <label for="codeInput">Code de la soirée</label>
+          <input id="codeInput" type="text" translate="no" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="next" placeholder="ABCD">
+          <span class="pt-hint">Les quatre lettres et chiffres partagés par l’hôte.</span>
+        </div>
+        <div class="pt-field">
+          <label for="guestName">Votre nom</label>
+          <input id="guestName" type="text" maxlength="24" autocomplete="nickname" enterkeyhint="go" placeholder="Comment voulez-vous qu’on vous appelle ?">
+        </div>
+        <button id="joinButton" class="btn primary pt-wide" type="submit">Rejoindre et écouter</button>
+      </form>
+      <p id="joinMsg" class="pt-msg" role="status" hidden></p>
+      <a id="openApp" class="btn pt-wide" hidden>Ouvrir dans l’app Tryptify</a>
+      <p id="joinFine" class="pt-fine">En rejoignant la soirée, vous autorisez cette page à jouer du son. Les titres ne sont lus ici que lorsque quelqu’un dans l’app les partage.</p>
+    </div>
+
+    <div id="room" class="pt-room" hidden>
+      <div class="pt-head">
+        <div class="pt-head-text">
+          <p class="eyebrow">Soirée d’écoute</p>
+          <h2 id="partyName" class="pt-name"></h2>
+          <p id="partyMeta" class="pt-meta"></p>
+        </div>
+        <span id="partyCode" class="pt-code pt-code-big" title="Code de la soirée"></span>
+      </div>
+
+      <div class="pt-grid">
+        <div class="pt-panel pt-stage glass">
+          <div class="pt-now">
+            <div class="pt-cover" id="coverBox">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>
+              <img id="cover" alt="" hidden>
+            </div>
+            <div class="pt-info">
+              <div id="state" class="pt-status" aria-live="polite"><i></i><span>Connexion</span></div>
+              <h3 id="songTitle" class="pt-song">Rien en lecture pour l’instant</h3>
+              <p id="songBy" class="pt-by">Quelqu’un dans l’app ajoute le premier titre.</p>
+              <div class="pt-track" aria-hidden="true"><div id="bar"></div></div>
+              <div class="pt-times"><span id="elapsed">0:00</span><span id="speed" class="pt-speed" hidden></span><span id="length">0:00</span></div>
+              <div class="pt-controls">
+                <div class="pt-volume">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+                  <label for="volume" class="pt-sr">Volume</label>
+                  <input id="volume" type="range" min="0" max="100" value="80">
+                </div>
+                <button id="vote" class="btn pt-iconbtn" type="button" aria-pressed="false" disabled>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4l10 8-10 8z"/><path d="M19 5v14"/></svg>
+                  <span id="voteText">Voter pour passer</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-next">
+            <div class="pt-next-head">
+              <h3 class="pt-label">À suivre</h3>
+              <button id="addSongs" class="btn pt-iconbtn pt-small" type="button" hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                <span>Ajouter des titres</span>
+              </button>
+            </div>
+            <ol id="upNext" class="pt-queue"></ol>
+            <p id="nothingNext" class="pt-empty">La file d’attente est vide.</p>
+          </div>
+        </div>
+
+        <aside class="pt-side">
+          <div class="pt-panel pt-who glass">
+            <h3 class="pt-label">Qui écoute</h3>
+            <ul id="people" class="pt-people"></ul>
+          </div>
+          <div class="pt-panel pt-chat glass">
+            <h3 class="pt-label">Chat</h3>
+            <div id="lines" class="pt-lines" aria-live="polite"></div>
+            <form id="sayForm" class="pt-say">
+              <label for="draft" class="pt-sr">Message</label>
+              <input id="draft" type="text" maxlength="300" autocomplete="off" enterkeyhint="send" placeholder="Dites quelque chose…">
+              <button class="btn primary" type="submit">Envoyer</button>
+            </form>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <p id="foot" class="pt-foot" hidden></p>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div>© 2026 tryptz · Tryptify · <a href="mailto:support@tryptify.com">support@tryptify.com</a></div>
+      <nav>
+        <a href="/fr/download">Télécharger</a>
+        <a href="/fr/changelog">Historique des versions</a>
+        <a href="/fr/player">Lecteur web</a>
+        <a href="/fr/party">Soirée d’écoute</a>
+        <a href="/fr/autoeq">Classement AutoEQ</a>
+        <a href="/fr">Application</a>
+        <a href="/fr/cloud">Tryptify Cloud</a>
+        <a href="/fr/terms">Conditions d’utilisation</a>
+        <a href="/fr/privacy">Politique de confidentialité</a>
+        <a href="/fr/refunds">Politique de remboursement</a>
+        <a href="/fr/contact">Contact</a>
+      </nav>
+      <nav class="langs" aria-label="Language" translate="no"><a href="/party" hreflang="en" lang="en" data-lang="en">English</a><a href="/zh/party" hreflang="zh-CN" lang="zh-CN" data-lang="zh">简体中文</a><a href="/ja/party" hreflang="ja" lang="ja" data-lang="ja">日本語</a><a href="/fr/party" hreflang="fr" lang="fr" data-lang="fr" aria-current="true">Français</a><a href="/es/party" hreflang="es" lang="es" data-lang="es">Español</a><a href="/tr/party" hreflang="tr" lang="tr" data-lang="tr">Türkçe</a><a href="/de/party" hreflang="de" lang="de" data-lang="de">Deutsch</a><a href="/it/party" hreflang="it" lang="it" data-lang="it">Italiano</a></nav>
+    </div>
+  </footer>
+
+  <div id="adding" class="pt-scrim" hidden>
+    <div class="pt-sheet pt-panel glass" role="dialog" aria-modal="true" aria-labelledby="addTitle">
+      <div class="pt-sheet-head">
+        <h2 id="addTitle">Ajouter des titres</h2>
+        <button id="closeAdd" class="pt-close" type="button" aria-label="Fermer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <form id="findForm" role="search">
+        <label for="find" class="pt-sr">Rechercher un titre</label>
+        <input id="find" type="text" maxlength="200" autocomplete="off" enterkeyhint="search" placeholder="Rechercher des titres ou des artistes">
+      </form>
+      <p id="findNote" class="pt-found-note">Trouvez un titre et ajoutez-le à la file d’attente pour tout le monde.</p>
+      <ul id="found" class="pt-found" aria-live="polite"></ul>
+    </div>
+  </div>
+  <div id="toast" class="pt-toast" role="status" hidden></div>
+  <audio id="audio" preload="auto"></audio>
+
+  <script src="/js/glass.js"></script>
+  <script src="/js/motion-12.23.12.js"></script>
+  <script src="/js/site.js"></script>
+  <script src="/js/party.js"></script>
+</body>
+</html>
