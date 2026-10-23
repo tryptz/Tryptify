@@ -17,9 +17,8 @@
 //   GET  /.well-known/assetlinks.json    lets the app open this host's invite links
 
 import { Hub, type Env } from "./hub";
-import { Ffmpeg } from "./ffmpeg";
 
-export { Hub, Ffmpeg };
+export { Hub };
 
 /**
  * The Android app invite links open in: its package and its release signing

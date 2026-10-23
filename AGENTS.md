@@ -388,7 +388,10 @@ game rooms' of its Rust (`src/room.ts`), shared songs live in R2. The wire
 format is unchanged, so the app's `PartyClient` and `RoomClient` need nothing
 new. Invites are `https://tryptify.com/party/<code>` (the site's party page,
 `site/public/party.html`), which open in the app where it is installed;
-both hosts serve `/.well-known/assetlinks.json`. `bun run test` for the rules,
+both hosts serve `/.well-known/assetlinks.json`. A shared song no browser
+plays reaches the website as AAC from a small ffmpeg service on Railway
+(`server/rooms/ffmpeg`, `FFMPEG_URL` and the secret `FFMPEG_KEY`); without
+it the original goes. `bun run test` for the rules,
 `bun run e2e.ts` against `wrangler dev` for the sockets.
 
 ## Website

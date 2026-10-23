@@ -47,14 +47,16 @@ token the party gave it, never a cookie, so they answer CORS for any origin.
 - **Shared songs are at most 99 MB**, not 128 MiB: a Worker takes a request
   body of at most 100 MB on this zone's plan. An upload must say its length
   (`Content-Length`), as the phones do.
-- **ffmpeg runs in a Container.** As the Rust server did, a shared song in a
+- **ffmpeg runs on Railway.** As the Rust server did, a shared song in a
   codec no browser plays (ALAC, WMA, APE, AIFF, DSD) reaches the website as
-  AAC 256k. A Worker cannot run ffmpeg, so `src/ffmpeg.ts` is a Cloudflare
-  Container (`ffmpeg/Dockerfile`, `ffmpeg/server.py`): the hub sends it the
-  song once, the first time a browser asks (`web=1`), and keeps the copy in
-  R2 next to the original (`<file>.web.m4a`), deleted with it. A song a
-  browser plays already comes back 204 and is sent as it is. Phones always
-  get the original. The container sleeps after three minutes idle.
+  AAC 256k. A Worker cannot run ffmpeg, so `ffmpeg/` is a small service on
+  Railway (`Dockerfile`, `server.py`, `railway.json`). The first time a
+  browser asks for such a song (`web=1`), the hub sends it there and keeps the
+  copy in R2 next to the original (`<file>.web.m4a`), deleted with it. An
+  mp3, flac, opus, ogg or wav never goes (`PLAYS_AS_IS`); an m4a does, since
+  only ffprobe can tell AAC from ALAC, and comes back 204 when it is AAC.
+  Phones always get the original, and so does the website while the service
+  is down or not set up.
 - **No address secret.** The Railway server lived under `/<secret>/`; this one
   is at the root, since the website talks to it. Sign-in is what keeps rooms
   to accounts: a phone's hello carries its Supabase access token, checked
@@ -71,22 +73,34 @@ token the party gave it, never a cookie, so they answer CORS for any origin.
 bun run test                    # protocol, party, room and catalogue rules
 npx wrangler dev --port 8799 --var SUPABASE_URL: --var TRYPT_HIFI_URL:
 bun run e2e.ts                  # a party and a game over real sockets, in workerd
-ALAC=song.m4a bun run e2e.ts    # also: an ALAC share reaches the website as AAC
-npx wrangler deploy             # builds and pushes the ffmpeg image too
+ALAC=song.m4a bun run e2e.ts    # also: an ALAC share reaches the website as AAC (needs ffmpeg, below)
+npx wrangler deploy
 ```
 
-`wrangler dev` and `deploy` build the container image, so they need Docker
-running. Test the converter alone with:
+For the ALAC step, run the converter locally and point `wrangler dev` at it
+(it needs `ffmpeg` and `ffprobe` installed):
 
 ```
-docker build -t tryptify-ffmpeg ffmpeg && docker run --rm -p 8080:8080 tryptify-ffmpeg
-curl -s --data-binary @song.m4a localhost:8080/web -o out.m4a -w '%{http_code}\n'
+FFMPEG_KEY=localtest PORT=8081 python3 ffmpeg/server.py
+npx wrangler dev --port 8799 --var SUPABASE_URL: --var TRYPT_HIFI_URL: \
+  --var FFMPEG_URL:http://localhost:8081 --var FFMPEG_KEY:localtest
 ```
 
 ```
 npx wrangler secret put TRYPT_HIFI_KEY   # TrypT HiFi's ACCESS_PASSWORD, for Add songs
 npx wrangler secret put TRYPT_HIFI_KEY   # TrypT HiFi's ACCESS_PASSWORD, for Add songs
+npx wrangler secret put FFMPEG_KEY       # the ffmpeg service's key
 ```
+
+### The ffmpeg service on Railway
+
+A Railway service from this repository with **Root Directory**
+`server/rooms/ffmpeg`; `railway.json` there builds the Dockerfile and checks
+`/health`. Give it the variable `FFMPEG_KEY` (a long random value; Railway's
+`${{secret(48)}}` makes one) and a public domain. Then the Worker needs the
+same key as its secret `FFMPEG_KEY`, and the domain as `FFMPEG_URL` in
+`wrangler.toml`. Without the key the service converts nothing (401), so it
+is no use to anyone who finds its address.
 
 The bucket (`tryptify-rooms-songs`) has two lifecycle rules: objects expire
 after two days, and unfinished uploads are aborted after one. A new hub also

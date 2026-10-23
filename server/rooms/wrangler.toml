@@ -10,6 +10,9 @@ routes = [{ pattern = "rooms.tryptify.com", custom_domain = true }]
 # The catalogue the website's Add songs searches (a TrypT HiFi server). Its
 # password, if it has one, is the secret TRYPT_HIFI_KEY (wrangler secret put).
 TRYPT_HIFI_URL = "https://trypt-hifi-production.up.railway.app"
+# ffmpeg, for shared songs no browser plays (ffmpeg/, on Railway). Its key is
+# the secret FFMPEG_KEY. Without both, the website gets the original.
+# FFMPEG_URL = "https://<the Railway service>.up.railway.app"
 # Sign-in: the phones say hello with their Supabase access token. The app's
 # project and its public key (as in ../connect): they identify it, they grant
 # nothing. Without them anyone gets in under the name they give.
@@ -32,21 +35,14 @@ class_name = "Hub"
 tag = "v1"
 new_sqlite_classes = ["Hub"]
 
-# ffmpeg, for shared songs no browser plays (src/ffmpeg.ts, ffmpeg/): asleep
-# until a web guest asks for one.
-[[containers]]
-class_name = "Ffmpeg"
-image = "./ffmpeg/Dockerfile"
-instance_type = "standard-2"
-max_instances = 2
-
-[[durable_objects.bindings]]
-name = "FFMPEG"
-class_name = "Ffmpeg"
-
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["Ffmpeg"]
+
+# ffmpeg left Cloudflare Containers for Railway (ffmpeg/, FFMPEG_URL below).
+[[migrations]]
+tag = "v3"
+deleted_classes = ["Ffmpeg"]
 
 # Shared songs, while their room or party wants them.
 [[r2_buckets]]

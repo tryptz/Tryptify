@@ -13,7 +13,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 import { Catalog, catalogKey, tidalId } from "./catalog";
-import { webKey } from "./ffmpeg";
+import { PLAYS_AS_IS, webKey } from "./ffmpeg";
 import { Party, RESUME_MS, PARTY_QUOTA_BYTES, type MemberIn, type Out as PartyOut } from "./party";
 import { audioType, byteRange, cleanExt, parseClient, randomHex, type ClientMsg } from "./protocol";
 import * as R from "./room";
@@ -21,11 +21,13 @@ import * as R from "./room";
 export interface Env {
   HUB: DurableObjectNamespace<Hub>;
   SONGS: R2Bucket;
-  FFMPEG: DurableObjectNamespace;
   SUPABASE_URL?: string;
   SUPABASE_ANON_KEY?: string;
   TRYPT_HIFI_URL?: string;
   TRYPT_HIFI_KEY?: string;
+  /** The ffmpeg service (ffmpeg/, on Railway) and its key. Without them the original goes. */
+  FFMPEG_URL?: string;
+  FFMPEG_KEY?: string;
 }
 
 export const VERSION = "0.2.0";
@@ -725,7 +727,7 @@ export class Hub extends DurableObject<Env> {
     if (!found) return refuse({ status: 404, error: "that song is not shared with this party" });
     // The website gets a file its browser plays (web=1): the original, or an
     // AAC copy of one in a codec no browser does, made by ffmpeg (src/ffmpeg.ts).
-    if (web) {
+    if (web && !PLAYS_AS_IS.has(found.song.ext)) {
       const copy = await this.webCopy(found.path);
       if (copy) return this.sendFile(request, copy, "m4a", item);
     }
@@ -744,13 +746,14 @@ export class Hub extends DurableObject<Env> {
     const making = (async (): Promise<string | null> => {
       const key = webKey(file);
       if (await this.env.SONGS.head(key)) return key;
+      const { FFMPEG_URL, FFMPEG_KEY } = this.env;
+      if (!FFMPEG_URL || !FFMPEG_KEY) return null;
       const object = await this.env.SONGS.get(file);
       if (!object) return null;
       try {
-        const ffmpeg = this.env.FFMPEG.get(this.env.FFMPEG.idFromName("ffmpeg"));
-        const r = await ffmpeg.fetch("http://ffmpeg/web", {
+        const r = await fetch(new URL("/web", FFMPEG_URL), {
           method: "POST",
-          headers: { "content-length": String(object.size), "content-type": "application/octet-stream" },
+          headers: { "content-length": String(object.size), "content-type": "application/octet-stream", "x-access-key": FFMPEG_KEY },
           body: object.body,
         });
         if (r.status === 204) return null;

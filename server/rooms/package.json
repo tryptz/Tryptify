@@ -9,8 +9,5 @@
   },
   "devDependencies": {
     "wrangler": "^4.148.0"
-  },
-  "dependencies": {
-    "@cloudflare/containers": "0.3.7"
   }
 }

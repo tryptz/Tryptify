@@ -1,14 +1,20 @@
 # The rooms server's ffmpeg: one song in, and either "a browser plays it as it
 # is" or the same song as AAC, for the website's listening party page. Only
-# the rooms hub talks to it (src/ffmpeg.ts); it has no internet.
+# the rooms hub talks to it (src/hub.ts, webCopy). It runs on Railway
+# (railway.json), on the port Railway gives it (PORT).
 #
 #   GET  /health   200
 #   POST /web      the song as the body (Content-Length); 204 when a browser
 #                  plays its codec as it is, else 200 with an AAC .m4a
 #
+# It is on the open internet, so /web wants the key the hub has
+# (X-Access-Key, the FFMPEG_KEY variable here and the Worker's secret of the
+# same name). Without a key set it converts nothing.
+#
 # The codecs and the ffmpeg settings are the Rust server's
 # (tryptz/tryptify-party, src/transcode.rs).
 
+import hmac
 import os
 import shutil
 import subprocess
@@ -20,6 +26,7 @@ BROWSER_PLAYS = {"mp3", "aac", "flac", "opus", "vorbis", "pcm_s16le", "pcm_s24le
 MAX_BYTES = 100_000_000
 # One song at a time: a song takes seconds, and the instance is small.
 ONE_AT_A_TIME = threading.Lock()
+KEY = os.environ.get("FFMPEG_KEY", "").encode()
 
 
 def codec_of(path):
@@ -57,6 +64,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path != "/web":
             return self.reply(404)
+        given = (self.headers.get("x-access-key") or "").encode()
+        if not KEY or not hmac.compare_digest(given, KEY):
+            self.close_connection = True
+            return self.reply(401, b"not without the key")
         length = int(self.headers.get("content-length") or 0)
         if length <= 0 or length > MAX_BYTES:
             return self.reply(413 if length else 411, b"say the song's length, at most 100 MB")
@@ -94,4 +105,4 @@ class Handler(BaseHTTPRequestHandler):
             shutil.rmtree(work, ignore_errors=True)
 
 
-ThreadingHTTPServer(("0.0.0.0", 8080), Handler).serve_forever()
+ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("PORT") or 8080)), Handler).serve_forever()
