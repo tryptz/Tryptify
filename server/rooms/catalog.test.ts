@@ -378,10 +378,17 @@ await test("a file on the catalogue's own routes needs the password; a signed li
   assert.equal(new Catalog(BASE, undefined, locked.fetchImpl).needsKey(`${BASE}/api/tidal/stream-file?track_id=1`), false);
   const r = await catalog.file(`${BASE}/api/tidal/stream-file?track_id=1&quality=HIGH`);
   assert.equal(await r.text(), "song");
-  const call = locked.calls[0];
-  assert.equal(call.headers.get("x-access-key"), KEY);
-  assert.equal(call.url.searchParams.get("whole"), "1");
-  assert.ok(!call.url.toString().includes(KEY));
+  // A HEAD first (answered once the file is assembled), then the GET.
+  assert.deepEqual(locked.calls.map((c) => c.init.method ?? "GET"), ["HEAD", "GET"]);
+  for (const call of locked.calls) {
+    assert.equal(call.headers.get("x-access-key"), KEY);
+    assert.equal(call.url.searchParams.get("whole"), "1");
+    assert.ok(!call.url.toString().includes(KEY));
+  }
+  // A HEAD the catalogue refuses is the answer: no GET after it.
+  const refusing = fakeFetch(() => json({ error: "no" }, 404));
+  assert.equal((await new Catalog(BASE, KEY, refusing.fetchImpl).file(`${BASE}/api/tidal/stream-file?track_id=1`)).status, 404);
+  assert.equal(refusing.calls.length, 1);
 });
 
 console.log(`catalog: ${passed} passed${failed ? `, ${failed} failed` : ""}`);

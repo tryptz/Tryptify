@@ -134,15 +134,20 @@ export class Catalog {
   }
 
   /**
-   * The file at [url] on the catalogue, with the password, whole (`whole=1`:
-   * an assembled TIDAL file then comes with its length, so the page can say
-   * how far its download has got). No time limit: a long song takes a while.
+   * The file at [url] on the catalogue, with the password, whole. A TIDAL
+   * file the catalogue is still assembling streams out unfinished, with no
+   * length, and that stream broke off on the way to the page; so a HEAD comes
+   * first, which the catalogue answers only once the file is done, and the
+   * GET then gets the finished file and its length (`whole=1` asks the same of
+   * a catalogue new enough to know it). No time limit: a long song takes a while.
    */
-  file(url: string): Promise<Response> {
+  async file(url: string): Promise<Response> {
     const u = new URL(url);
     u.searchParams.set("whole", "1");
     const headers = new Headers();
     if (this.#key && u.origin === this.#origin) headers.set("X-Access-Key", this.#key);
+    const ready = await this.#fetch(u.toString(), { method: "HEAD", headers });
+    if (!ready.ok) return ready;
     return this.#fetch(u.toString(), { headers });
   }
 
