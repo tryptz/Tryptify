@@ -9,8 +9,8 @@
   // where Chromium allows url() there (styles.css, .lens). Its displacement
   // map is drawn for the glass's own size and rounded outline: still in the
   // middle, bending harder toward the rim along the edge's normal, so a pill's
-  // round ends bend round. Red, green and blue bend by slightly different
-  // amounts, the little colour split real glass shows at its edge.
+  // round ends bend round. Red, green and blue bend by different amounts
+  // (115%, 88% and 60% of the bend), the colour split glass shows at its edge.
   const svgNS = "http://www.w3.org/2000/svg";
   const brands = (navigator.userAgentData && navigator.userAgentData.brands) || [];
   const lensOn = brands.some((b) => /Chromium/.test(b.brand));
@@ -101,7 +101,9 @@
         // The map in the glass's own pixels: as a percentage it took the size of the
         // filter's larger area, and the rim fell off the right and bottom edges.
         `<feImage href="${lensMap(w, h, r)}" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none" result="map"/>` +
-        channel("R", s) + channel("G", Math.round(s * 0.9)) + channel("B", Math.round(s * 0.8)) +
+        // Red bends furthest and blue least, a wider split than a lens of
+        // this size would show, so the colour fringe reads at the rim.
+        channel("R", Math.round(s * 1.15)) + channel("G", Math.round(s * 0.88)) + channel("B", Math.round(s * 0.6)) +
         `<feBlend in="R" in2="G" mode="screen" result="RG"/><feBlend in="RG" in2="B" mode="screen"/>`;
     };
     draw();
