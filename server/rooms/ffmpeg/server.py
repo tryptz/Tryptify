@@ -1,7 +1,7 @@
 # The rooms server's ffmpeg: one song in, and either "a browser plays it as it
 # is" or the same song as AAC, for the website's listening party page. Only
-# the rooms hub talks to it (src/hub.ts, webCopy). It runs on Railway
-# (railway.json), on the port Railway gives it (PORT).
+# the rooms hub talks to it (src/hub.ts, webCopy). It runs on Railway, on
+# the port in PORT (8080 there, where its domain points).
 #
 #   GET  /health   200
 #   POST /web      the song as the body (Content-Length); 204 when a browser

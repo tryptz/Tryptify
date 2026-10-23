@@ -12,7 +12,7 @@ routes = [{ pattern = "rooms.tryptify.com", custom_domain = true }]
 TRYPT_HIFI_URL = "https://trypt-hifi-production.up.railway.app"
 # ffmpeg, for shared songs no browser plays (ffmpeg/, on Railway). Its key is
 # the secret FFMPEG_KEY. Without both, the website gets the original.
-# FFMPEG_URL = "https://<the Railway service>.up.railway.app"
+FFMPEG_URL = "https://ffmpeg-production-1a5b.up.railway.app"
 # Sign-in: the phones say hello with their Supabase access token. The app's
 # project and its public key (as in ../connect): they identify it, they grant
 # nothing. Without them anyone gets in under the name they give.

@@ -162,6 +162,15 @@ if (process.env.ALAC) await step("a song no browser plays reaches the website as
   assert.equal(again.headers.get("content-type"), "audio/flac");
 });
 
+await step("an empty upload (the app's give-up for a song too big to send) shows it as not shared", async () => {
+  host.say({ t: "queueAdd", ref: "r3", item: { title: "Too big", artist: "Test", album: "", durationMs: 9_000_000, share: true } });
+  const id = (await host.wait((m) => m.t === "added" && m.ref === "r3", "added r3")).itemId;
+  const put = await fetch(`${BASE}/api/party/song?item=${id}&ext=flac`, { method: "PUT", headers: { "x-room-key": hostKey, "content-length": "0" }, body: new Uint8Array(0) });
+  assert.equal(put.status, 400, await put.clone().text());
+  const shown = await guest.wait((m) => m.t === "party" && m.party.queue.some((x: Msg) => x.id === id && !x.shared), "not shared");
+  assert.ok(shown);
+});
+
 await step("the host pauses and seeks; everyone gets the clock", async () => {
   host.say({ t: "pause" });
   const paused = await guest.wait((m) => m.t === "party" && m.party.playback.paused === true, "paused");

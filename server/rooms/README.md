@@ -50,7 +50,7 @@ token the party gave it, never a cookie, so they answer CORS for any origin.
 - **ffmpeg runs on Railway.** As the Rust server did, a shared song in a
   codec no browser plays (ALAC, WMA, APE, AIFF, DSD) reaches the website as
   AAC 256k. A Worker cannot run ffmpeg, so `ffmpeg/` is a small service on
-  Railway (`Dockerfile`, `server.py`, `railway.json`). The first time a
+  Railway (`Dockerfile`, `server.py`). The first time a
   browser asks for such a song (`web=1`), the hub sends it there and keeps the
   copy in R2 next to the original (`<file>.web.m4a`), deleted with it. An
   mp3, flac, opus, ogg or wav never goes (`PLAYS_AS_IS`); an m4a does, since
@@ -94,14 +94,13 @@ npx wrangler secret put FFMPEG_KEY       # the ffmpeg service's key
 
 ### The ffmpeg service on Railway
 
-A Railway service from this repository with **Root Directory**
-`server/rooms/ffmpeg`; `railway.json` there builds the Dockerfile and checks
-`/health`. Give it the variable `FFMPEG_KEY` (a long random value; Railway's
-`${{secret(48)}}` makes one) and a public domain. Then the Worker needs the
-same key as its secret `FFMPEG_KEY`, and the domain as `FFMPEG_URL` in
-`wrangler.toml`. Without the key the service converts nothing (401), so it
-is no use to anyone who finds its address.
-
-The bucket (`tryptify-rooms-songs`) has two lifecycle rules: objects expire
-after two days, and unfinished uploads are aborted after one. A new hub also
-clears the bucket when it starts, as the Rust server cleared its folder.
+Service `ffmpeg` in the Railway project `tryptmania-rooms`, built from this
+repository's `tryptz/tryptmania` branch with **Root Directory**
+`server/rooms/ffmpeg` (the Dockerfile there), health check `/health`,
+restart on failure, watch pattern `/server/rooms/ffmpeg/**`, and sleep when
+idle (it wakes on the next request in a few seconds). Its domain,
+`https://ffmpeg-production-1a5b.up.railway.app`, is `FFMPEG_URL` in
+`wrangler.toml` and routes to port 8080 (`PORT=8080`). Its variable
+`FFMPEG_KEY` was made by Railway (`${{secret(48)}}`); the Worker's secret
+`FFMPEG_KEY` must hold the same value. Without the key the service converts
+nothing (401), so it is no use to anyone who finds its address.
