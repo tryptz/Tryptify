@@ -327,6 +327,13 @@ every pixel, so the library screen alone ran the phone hot (seen on device).
 The tube and the mask hide a breath of glass anyway. Turning the CRT off
 brings the motion back.
 
+**The lyrics' letter wave keeps moving under it.** `rememberLetterWaveSeconds`
+stops for "Disable animations" only. It once stopped for the CRT too, as the
+glass does, and the sung line's letters froze mid-wave with their speed, linked
+or not, doing nothing (seen on device). The wave is the one sung line, while
+the lyrics show, never a screen the listener idles on; the god rays already
+redraw that screen every frame.
+
 ### Lyrics: letter glass and god rays
 
 **The lyric glass reads the same optics as the player's, and its defaults are
@@ -538,7 +545,8 @@ term the letters use. It was the app clock times the speed: the slider then
 threw the letters to a new pose at each step instead of speeding them up,
 looked dead while dragged, and a link on it would have shaken them every
 frame. One clock for the app, so every line rides the same wave; it stops
-with "Disable animations" and the CRT over the whole app, as the glass does.
+with "Disable animations", and unlike the glass it runs under the CRT over the
+whole app (see the CRT paragraph under glass).
 
 The knobs are the same rule in native code: the engine keeps each linked
 knob's own value (`Route::base`) and saves *that*, so a mix saved mid-song
