@@ -248,6 +248,12 @@ fun FolderBrowserScreen(
                         selection.clear()
                     }
                 },
+                onUploadToCloud = tf.monochrome.android.ui.components.LocalUploadToCloud.current?.let { upload ->
+                    {
+                        upload(selectedTracks().mapNotNull { (it.source as? tf.monochrome.android.domain.model.PlaybackSource.LocalFile)?.filePath })
+                        selection.clear()
+                    }
+                },
             )
         }
 

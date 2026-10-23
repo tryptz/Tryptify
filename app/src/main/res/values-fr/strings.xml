@@ -3191,6 +3191,16 @@
     <string name="cloud_upload_failed">Impossible d’envoyer %1$s : %2$s</string>
     <string name="cloud_upload_failed_toast">Impossible d’envoyer %1$s. Voir Paramètres › Connexions.</string>
     <string name="cloud_upload_queued">Ajouté à la file d’envoi vers Tryptify Cloud</string>
+    <plurals name="cloud_upload_queued_n">
+        <item quantity="one">%1$d titre en file d’attente pour Tryptify Cloud</item>
+        <item quantity="many">%1$d titres en file d’attente pour Tryptify Cloud</item>
+        <item quantity="other">%1$d titres en file d’attente pour Tryptify Cloud</item>
+    </plurals>
+    <plurals name="cloud_uploaded_n">
+        <item quantity="one">%1$d titre envoyé sur Tryptify Cloud</item>
+        <item quantity="many">%1$d titres envoyés sur Tryptify Cloud</item>
+        <item quantity="other">%1$d titres envoyés sur Tryptify Cloud</item>
+    </plurals>
     <string name="cloud_trial_offer">Essayez gratuitement n’importe quelle formule pendant %1$d jours avec %2$d Go. Une carte est nécessaire ; annulez avant la fin de l’essai et vous ne payez rien.</string>
     <string name="cloud_plan_terms">Le paiement s’ouvre dans votre navigateur. Si une formule prend fin, votre musique reste disponible %1$d jours avant d’être supprimée.</string>
     <string name="cloud_plan_storage">%1$s · %2$d Go</string>

@@ -3117,6 +3117,14 @@
     <string name="cloud_upload_failed">%1$s konnte nicht hochgeladen werden: %2$s</string>
     <string name="cloud_upload_failed_toast">%1$s konnte nicht hochgeladen werden. Siehe Einstellungen › Verbindungen.</string>
     <string name="cloud_upload_queued">Für Tryptify Cloud eingereiht</string>
+    <plurals name="cloud_upload_queued_n">
+        <item quantity="one">%1$d Song für Tryptify Cloud eingereiht</item>
+        <item quantity="other">%1$d Songs für Tryptify Cloud eingereiht</item>
+    </plurals>
+    <plurals name="cloud_uploaded_n">
+        <item quantity="one">%1$d Song in Tryptify Cloud hochgeladen</item>
+        <item quantity="other">%1$d Songs in Tryptify Cloud hochgeladen</item>
+    </plurals>
     <string name="cloud_trial_offer">Teste jeden Tarif %1$d Tage lang kostenlos mit %2$d GB. Eine Karte ist nötig; kündigst du vor Ende des Tests, zahlst du nichts.</string>
     <string name="cloud_plan_terms">Die Zahlung öffnet sich im Browser. Endet ein Tarif, bleibt deine Musik noch %1$d Tage abspielbar, bevor sie gelöscht wird.</string>
     <string name="cloud_plan_storage">%1$s · %2$d GB</string>

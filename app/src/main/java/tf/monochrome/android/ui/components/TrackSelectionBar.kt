@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.ImageSearch
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Icon
@@ -42,6 +43,8 @@ fun TrackSelectionBar(
     onFindAlbumArt: (() -> Unit)? = null,
     /** "Add to party" for the selected songs, while a listening party is on. */
     onAddToParty: (() -> Unit)? = null,
+    /** "Upload to Tryptify Cloud" for the selected songs, where they are files on the phone. */
+    onUploadToCloud: (() -> Unit)? = null,
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -95,6 +98,15 @@ fun TrackSelectionBar(
                     Icon(
                         imageVector = Icons.Default.ImageSearch,
                         contentDescription = stringResource(R.string.action_find_album_art),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+            if (onUploadToCloud != null) {
+                IconButton(onClick = onUploadToCloud) {
+                    Icon(
+                        imageVector = Icons.Default.CloudUpload,
+                        contentDescription = stringResource(R.string.action_upload_to_cloud),
                         tint = MaterialTheme.colorScheme.onSurface,
                     )
                 }

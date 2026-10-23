@@ -3043,6 +3043,12 @@
     <string name="cloud_upload_failed">%1$s をアップロードできませんでした：%2$s</string>
     <string name="cloud_upload_failed_toast">%1$s をアップロードできませんでした。「設定 › 接続」を確認してください。</string>
     <string name="cloud_upload_queued">Tryptify Cloud へのアップロード待ちに追加しました</string>
+    <plurals name="cloud_upload_queued_n">
+        <item quantity="other">%1$d 曲を Tryptify Cloud へのアップロードに追加しました</item>
+    </plurals>
+    <plurals name="cloud_uploaded_n">
+        <item quantity="other">%1$d 曲を Tryptify Cloud にアップロードしました</item>
+    </plurals>
     <string name="cloud_trial_offer">どのプランも %1$d 日間、%2$d GB で無料でお試しいただけます。カードの登録が必要です。トライアル終了前に解約すれば料金はかかりません。</string>
     <string name="cloud_plan_terms">お支払いはブラウザで開きます。プランが終了しても、削除されるまで %1$d 日間は音楽を再生できます。</string>
     <string name="cloud_plan_storage">%1$s · %2$d GB</string>

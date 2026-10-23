@@ -1023,6 +1023,13 @@ song. Left out: the queue (its own selection), Trypt Mania's wheel, the
 listening party's lists (Up next, and the add-song picker), the galaxy's
 moons and the genre map's chart panel.
 
+**Upload to Tryptify Cloud is on the selection bar** wherever the picked
+songs include files on the phone (the Local lists, the local album, artist
+and genre pages, folders, and search hits from the phone), and only those
+files go up. A batch says it was queued once, then once when it is done
+("Uploaded 12 songs"); a song that fails is told at once. There is no upload
+to a listener's own music server: the Subsonic API has none.
+
 `SongPreviewTest` holds the start point, the fade and the fill's colours.
 
 ### My server (Subsonic)

@@ -3043,6 +3043,12 @@
     <string name="cloud_upload_failed">无法上传 %1$s：%2$s</string>
     <string name="cloud_upload_failed_toast">无法上传 %1$s。请查看“设置 › 连接”。</string>
     <string name="cloud_upload_queued">已加入 Tryptify Cloud 上传队列</string>
+    <plurals name="cloud_upload_queued_n">
+        <item quantity="other">已将 %1$d 首歌曲加入 Tryptify Cloud 上传队列</item>
+    </plurals>
+    <plurals name="cloud_uploaded_n">
+        <item quantity="other">已上传 %1$d 首歌曲到 Tryptify Cloud</item>
+    </plurals>
     <string name="cloud_trial_offer">任选套餐免费试用 %1$d 天，含 %2$d GB 空间。需要绑定银行卡；在试用结束前取消即不收费。</string>
     <string name="cloud_plan_terms">付款将在浏览器中打开。套餐结束后，你的音乐在删除前仍可播放 %1$d 天。</string>
     <string name="cloud_plan_storage">%1$s · %2$d GB</string>

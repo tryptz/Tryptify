@@ -68,7 +68,8 @@ fun rememberUnifiedTrackSelection(): UnifiedTrackSelection = remember { UnifiedT
 /**
  * The bar over a [UnifiedTrackSelection] while it is active, with the
  * add-to-playlist and create-playlist follow-ups it opens, and Back to leave
- * the selection. Find album art shows when a picked song is a file on the phone.
+ * the selection. Find album art and Upload to Tryptify Cloud show when a picked
+ * song is a file on the phone, and act on those files.
  *
  * @param order the list on screen, so queue and playlist get its order.
  */
@@ -113,6 +114,7 @@ fun UnifiedTrackSelectionBar(
     }
 
     val findAlbumArt = LocalFindAlbumArt.current
+    val uploadToCloud = LocalUploadToCloud.current
     val party = LocalPartyAdder.current
     AnimatedVisibility(visible = selection.active, modifier = modifier) {
         val files = selected().mapNotNull { t ->
@@ -136,6 +138,13 @@ fun UnifiedTrackSelectionBar(
             onFindAlbumArt = findAlbumArt?.takeIf { files.isNotEmpty() }?.let { find ->
                 {
                     find(files)
+                    selection.clear()
+                }
+            },
+            // Only the files on the phone go up; a server or catalogue song has none here.
+            onUploadToCloud = uploadToCloud?.takeIf { files.isNotEmpty() }?.let { upload ->
+                {
+                    upload(files.map { it.filePath })
                     selection.clear()
                 }
             },

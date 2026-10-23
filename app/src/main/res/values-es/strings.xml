@@ -3191,6 +3191,16 @@
     <string name="cloud_upload_failed">No se pudo subir %1$s: %2$s</string>
     <string name="cloud_upload_failed_toast">No se pudo subir %1$s. Consulta Ajustes › Conexiones.</string>
     <string name="cloud_upload_queued">Añadida a la cola de Tryptify Cloud</string>
+    <plurals name="cloud_upload_queued_n">
+        <item quantity="one">%1$d canción en cola para Tryptify Cloud</item>
+        <item quantity="many">%1$d canciones en cola para Tryptify Cloud</item>
+        <item quantity="other">%1$d canciones en cola para Tryptify Cloud</item>
+    </plurals>
+    <plurals name="cloud_uploaded_n">
+        <item quantity="one">%1$d canción subida a Tryptify Cloud</item>
+        <item quantity="many">%1$d canciones subidas a Tryptify Cloud</item>
+        <item quantity="other">%1$d canciones subidas a Tryptify Cloud</item>
+    </plurals>
     <string name="cloud_trial_offer">Prueba cualquier plan gratis durante %1$d días con %2$d GB. Se necesita una tarjeta; cancela antes de que termine la prueba y no pagarás nada.</string>
     <string name="cloud_plan_terms">El pago se abre en tu navegador. Si un plan termina, tu música seguirá disponible %1$d días antes de eliminarse.</string>
     <string name="cloud_plan_storage">%1$s · %2$d GB</string>
