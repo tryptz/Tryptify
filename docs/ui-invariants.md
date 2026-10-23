@@ -2428,6 +2428,15 @@ buffer nothing drew into, and the visualizer flashed and vanished between real
 frames. When nothing new was drawn the overlay composites its last capture
 (`freshFrame = false`).
 
+**A new view tells the engine its playback, and a new surface draws once.**
+The engine outlives every view. Leaving the player told it "paused" through the
+ambient view that went; the next view started out "playing" and, seeing nothing
+change, never said otherwise, so the visualizer stayed frozen on coming back to
+the player (seen on device). `ProjectMOverlayView.updatePlayback` always sends
+its first answer (`playbackSent`). A re-initialised native instance is told the
+engine's paused state, and its first frame is drawn even while paused
+(`firstFrameOnSurface`): a new surface has no last frame to freeze on.
+
 **The app's frame rate limit caps the visualizer too, vsync on or off.**
 `effectiveFrameCap` is Target FPS with vsync off and Settings › System ›
 Performance › Frame rate limit either way, the lower when both apply. With vsync

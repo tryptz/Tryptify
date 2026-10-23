@@ -130,6 +130,13 @@ class ProjectMEngineRepository @Inject constructor(
     private var rotationSeconds: Int = 20
     private var playbackPaused: Boolean = false
 
+    /**
+     * Set when a new surface attaches: its first frame is drawn even while
+     * paused. A paused engine freezes on its last frame, but a new surface
+     * has none, so freezing there left it showing nothing, the cover alone.
+     */
+    private var firstFrameOnSurface: Boolean = false
+
     // Track whether there is an active GL surface. Only the most recent
     // onSurfaceAttached call owns the native bridge. All others become no-ops.
     private var attachedSurfaceCount: Int = 0
@@ -399,6 +406,10 @@ class ProjectMEngineRepository @Inject constructor(
             }
 
             nativeInitialized = true
+            // A new native instance starts playing; it is told what the
+            // engine already knows, and draws its first frame regardless.
+            nativeBridge.setPaused(playbackPaused)
+            firstFrameOnSurface = true
             nativeBridge.configureQuality(meshX, meshY)
             nativeBridge.configureTargetFps(targetFps)
             nativeBridge.setPresetShuffleEnabled(_rotationMode.value.isRotating)
@@ -499,8 +510,9 @@ class ProjectMEngineRepository @Inject constructor(
             // that has just been swapped in has never been drawn, so freezing
             // through it would leave the old one on screen -- the very bug this
             // is fixing, in a different disguise.
-            val freezeFrame = !appliedPendingWork &&
+            val freezeFrame = !appliedPendingWork && !firstFrameOnSurface &&
                 playbackPaused && (System.currentTimeMillis() - lastPcmTimestampMs) > 2_000L
+            firstFrameOnSurface = false
             if (!freezeFrame) {
                 nativeBridge.renderFrame(frameTimeNanos)
                 // Stamped where the frame is actually drawn, not where the cap
