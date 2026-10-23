@@ -65,6 +65,7 @@ class PlaybackService : MediaSessionService() {
 
     @Inject lateinit var queueManager: QueueManager
     @Inject lateinit var streamResolver: StreamResolver
+    @Inject lateinit var serverAccess: tf.monochrome.android.data.api.ApiServerAccess
     @Inject lateinit var preferences: PreferencesManager
     @Inject lateinit var speedOverride: SpeedOverride
     @Inject lateinit var libraryRepository: LibraryRepository
@@ -147,9 +148,10 @@ class PlaybackService : MediaSessionService() {
             .setConnectTimeoutMs(15_000)
             .setReadTimeoutMs(15_000)
         // A stream carrying a sign-in (a music server's) plays over http:// only at home (CleartextPolicy).
+        // A server's password goes along to its own streams (ApiServerAccess).
         val guarded = androidx.media3.datasource.ResolvingDataSource.Factory(http) { spec ->
             tf.monochrome.android.data.net.CleartextPolicy.requireForMedia(spec.uri.toString())
-            spec
+            serverAccess.withPassword(spec)
         }
         val default = androidx.media3.datasource.DefaultDataSource.Factory(this, guarded)
         val qobuz = tf.monochrome.android.data.cache.QobuzPartialDataSource.Factory(qobuzCache)
@@ -1367,7 +1369,13 @@ class PlaybackService : MediaSessionService() {
 
                 val streamUrl = trackStream?.streamUrl
                 if (streamUrl != null && streamUrl.isNotBlank()) {
-                    val dataSourceFactory = DefaultDataSource.Factory(this@PlaybackService)
+                    // A TrypT HiFi Atmos file (/api/tidal/atmos-file) needs its server's password.
+                    val dataSourceFactory = DefaultDataSource.Factory(
+                        this@PlaybackService,
+                        androidx.media3.datasource.ResolvingDataSource.Factory(
+                            androidx.media3.datasource.DefaultHttpDataSource.Factory(),
+                        ) { spec -> serverAccess.withPassword(spec) },
+                    )
 
                     val source = if (trackStream.isDash) {
                         // The MPD XML inline as a data: URI, or an .mpd link

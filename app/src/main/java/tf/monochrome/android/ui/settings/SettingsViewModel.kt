@@ -49,6 +49,7 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val preferences: PreferencesManager,
     private val apiServerProber: tf.monochrome.android.data.api.ApiServerProber,
+    private val serverAccess: tf.monochrome.android.data.api.ApiServerAccess,
     private val authRepository: AuthRepository,
     private val backupManager: BackupManager,
     private val projectMEngineRepository: ProjectMEngineRepository,
@@ -1002,19 +1003,42 @@ class SettingsViewModel @Inject constructor(
      * used would sit in the list looking configured. The dialog shows why each
      * service didn't answer instead, which is the part worth reading.
      */
-    fun addApi(raw: String) {
+    fun addApi(raw: String, password: String = "") {
         val url = tf.monochrome.android.data.api.ApiServers.normalizeUrl(raw)
         if (url == null) {
             _addApiState.value = AddApiState.Invalid
             return
         }
-        if (apiServers.value.any { it.url.equals(url, ignoreCase = true) }) {
+        val listed = apiServers.value.firstOrNull { it.url.equals(url, ignoreCase = true) }
+        // A listed server again, with a password: its password changed (or it
+        // gained one). Save it and check the server again under it.
+        if (listed != null && password.isNotBlank()) {
+            _addApiState.value = AddApiState.Checking(listed.url)
+            viewModelScope.launch {
+                serverAccess.set(listed.url, password)
+                val result = apiServerProber.probe(listed.url)
+                preferences.setApiServers(preferences.apiServers.first().map {
+                    if (it.url == listed.url) {
+                        it.copy(services = result.services, checkedAt = System.currentTimeMillis(), stemDevice = result.stemDevice)
+                    } else {
+                        it
+                    }
+                })
+                _addApiState.value = AddApiState.Done(result)
+            }
+            return
+        }
+        if (listed != null) {
             _addApiState.value = AddApiState.AlreadyAdded(url)
             return
         }
         _addApiState.value = AddApiState.Checking(url)
         viewModelScope.launch {
+            // Before the check, so the check is asked with it.
+            serverAccess.set(url, password)
             val result = apiServerProber.probe(url)
+            // Not added: no password of a server that is not in the list.
+            if (result.services.isEmpty()) serverAccess.set(url, null)
             if (result.services.isNotEmpty()) {
                 val current = preferences.apiServers.first()
                 preferences.setApiServers(
@@ -1056,6 +1080,7 @@ class SettingsViewModel @Inject constructor(
         if (tf.monochrome.android.data.api.BuiltInServer.isBuiltIn(url, tf.monochrome.android.BuildConfig.BUILT_IN_ROOMS_SERVER)) return
         viewModelScope.launch {
             preferences.setApiServers(preferences.apiServers.first().filterNot { it.url == url })
+            serverAccess.set(url, null)
         }
     }
 

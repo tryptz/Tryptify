@@ -73,6 +73,7 @@ class SongPreview @Inject constructor(
     private val resolver: StreamResolver,
     private val qobuzCache: QobuzStreamCacheManager,
     private val deezerCache: DeezerStreamCacheManager,
+    private val serverAccess: tf.monochrome.android.data.api.ApiServerAccess,
 ) {
     /** The song being previewed, by its row's key; [playing] once the sound has started. */
     data class State(val key: String, val playing: Boolean)
@@ -259,7 +260,7 @@ class SongPreview @Inject constructor(
             .setReadTimeoutMs(15_000)
         val guarded = androidx.media3.datasource.ResolvingDataSource.Factory(http) { spec ->
             tf.monochrome.android.data.net.CleartextPolicy.requireForMedia(spec.uri.toString())
-            spec
+            serverAccess.withPassword(spec)
         }
         val default = DefaultDataSource.Factory(context, guarded)
         val qobuz = QobuzPartialDataSource.Factory(qobuzCache)

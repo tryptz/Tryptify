@@ -259,6 +259,7 @@ private fun AddApiDialog(
 ) {
     val state by viewModel.addApiState.collectAsStateWithLifecycle()
     var input by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
     val busy = state is AddApiState.Checking
     val done = state as? AddApiState.Done
     val added = done != null && done.result.services.isNotEmpty()
@@ -276,8 +277,22 @@ private fun AddApiDialog(
                         placeholder = { Text("https://hifi.example.com") },
                         singleLine = true,
                         enabled = !busy,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { viewModel.addApi(input) }),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    // For a server that asks for one (a TrypT HiFi with a password set).
+                    // Kept on this phone only, never synced with the server list.
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it; if (state !is AddApiState.Checking) viewModel.resetAddApi() },
+                        label = { Text(stringResource(R.string.api_server_password)) },
+                        supportingText = { Text(stringResource(R.string.api_server_password_hint)) },
+                        singleLine = true,
+                        enabled = !busy,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { viewModel.addApi(input, password) }),
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(8.dp))
@@ -311,7 +326,7 @@ private fun AddApiDialog(
             when {
                 added -> TextButton(onClick = onDismiss) { Text(stringResource(R.string.api_done)) }
                 done != null -> TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
-                else -> TextButton(onClick = { viewModel.addApi(input) }, enabled = !busy && input.isNotBlank()) {
+                else -> TextButton(onClick = { viewModel.addApi(input, password) }, enabled = !busy && input.isNotBlank()) {
                     Text(stringResource(R.string.api_check_and_add))
                 }
             }

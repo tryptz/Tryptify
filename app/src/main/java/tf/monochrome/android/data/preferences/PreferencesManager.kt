@@ -203,6 +203,8 @@ class PreferencesManager @Inject constructor(
         private val APPLE_QUALITY = stringPreferencesKey("apple_quality")
         private val DEV_MODE_ENABLED = booleanPreferencesKey("dev_mode_enabled")
         private val API_SERVERS = stringPreferencesKey("api_servers")
+        // Device-local, like the Subsonic sign-in: never in SETTINGS_SYNC_KEYS.
+        private val API_SERVER_PASSWORDS = stringPreferencesKey("api_server_passwords")
 
         // Lyrics 3D appearance (legacy per-field keys, read for migration only)
         private val LYRICS_3D_ROTATION = floatPreferencesKey("lyrics_3d_rotation")
@@ -1090,6 +1092,28 @@ class PreferencesManager @Inject constructor(
                 ?.let { prefs[QOBUZ_INSTANCE_URL] = it } ?: prefs.remove(QOBUZ_INSTANCE_URL)
             urlFor(tf.monochrome.android.data.api.ApiService.APPLE)
                 ?.let { prefs[APPLE_INSTANCE_URL] = it } ?: prefs.remove(APPLE_INSTANCE_URL)
+        }
+    }
+
+    /**
+     * The passwords of servers that ask for one, by server URL: a device
+     * secret, kept apart from [apiServers], which settings sync uploads.
+     * Read through [tf.monochrome.android.data.api.ApiServerAccess].
+     */
+    val apiServerPasswords: Flow<Map<String, String>> = dataStore.data.map { prefs ->
+        prefs[API_SERVER_PASSWORDS]
+            ?.let { runCatching { json.decodeFromString<Map<String, String>>(it) }.getOrNull() }
+            .orEmpty()
+    }
+
+    /** Saves [url]'s password, or forgets it when null. */
+    suspend fun setApiServerPassword(url: String, password: String?) {
+        dataStore.edit { prefs ->
+            val current = prefs[API_SERVER_PASSWORDS]
+                ?.let { runCatching { json.decodeFromString<Map<String, String>>(it) }.getOrNull() }
+                .orEmpty()
+            val next = if (password == null) current - url else current + (url to password)
+            if (next.isEmpty()) prefs.remove(API_SERVER_PASSWORDS) else prefs[API_SERVER_PASSWORDS] = json.encodeToString(next)
         }
     }
 

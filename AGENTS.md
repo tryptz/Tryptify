@@ -197,6 +197,18 @@ is a `subsonic-cover://` reference resolved only by the app's own Coil
 (`SubsonicCoverMapper`). `SubsonicTest` checks that nothing mapped from a server
 contains the token or the password.
 
+## A server's password is a device secret
+
+A TrypT HiFi with `ACCESS_PASSWORD` set (trypt-hifi's `middleware.ts`) answers
+401 without it. The password is given under the address in Settings ›
+Connections › Add API (adding a listed server again with a password changes
+it), and kept by `ApiServerAccess` in the DataStore key `api_server_passwords`,
+by server URL, deliberately not in `SETTINGS_SYNC_KEYS`: the server list syncs,
+its passwords do not. It goes out as `X-Access-Key` on every request and
+stream to that server's origin only: the API client's network interceptor
+(`NetworkModule`, per redirect hop) and the players' data sources
+(`PlaybackService`, `SongPreview`). `ApiServerTest` holds the origin match.
+
 ## Tryptify Cloud
 
 The paid music storage. The server is `server/cloud` (a Cloudflare Worker with

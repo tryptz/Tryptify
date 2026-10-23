@@ -1378,6 +1378,8 @@
     <string name="api_checking">Denetleniyor…</string>
     <string name="api_serves_nothing_tryptify_can_use_right_now_check">Şu anda Tryptify’ın kullanabileceği bir şey sunmuyor. Sunucuyu kontrol edin, ardından ↻ simgesine dokunun.</string>
     <string name="api_server_address">Sunucu adresi</string>
+    <string name="api_server_password">Parola (isterse)</string>
+    <string name="api_server_password_hint">Bu telefonda kalır. Değiştirmek için listedeki sunucuyu yeniden ekleyin.</string>
     <string name="api_just_the_server_s_base_address_tryptify_checks">Yalnızca sunucunun temel adresi. Tryptify; TIDAL, Qobuz, Apple Music ve Deezer için denetler.</string>
     <string name="api_that_isn_t_a_web_address_try_something_like">Bu bir web adresi değil. https://hifi.example.com gibi bir şey deneyin.</string>
     <string name="api_done">Bitti</string>
