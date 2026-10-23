@@ -421,6 +421,7 @@
   const hifi = { q: "", result: null };
   function hifiForm() {
     const addr = h("input", { type: "url", class: "wp-input", id: "hifi-addr", placeholder: "https://your-trypt-hifi-server", value: HiFi.base || "", autocomplete: "off", spellcheck: "false" });
+    const key = h("input", { type: "password", class: "wp-input", id: "hifi-key", placeholder: "If the server asks for one", value: HiFi.password, autocomplete: "current-password" });
     const qual = h("select", { class: "wp-input", id: "hifi-quality" });
     for (const [v, l] of [["HI_RES_LOSSLESS", "Hi-Res Lossless (24-bit)"], ["LOSSLESS", "Lossless (16-bit)"], ["HIGH", "AAC 320"], ["LOW", "AAC 96"]])
       qual.append(h("option", { value: v, text: l, selected: HiFi.quality === v }));
@@ -429,10 +430,11 @@
     const unlocked = !!HiFi.base;
     const form = h("form", { class: "wp-form" },
       h("label", { for: "hifi-addr", text: "API URL" }), addr,
+      h("label", { for: "hifi-key", text: "Password" }), key,
       unlocked ? [h("label", { for: "hifi-quality", text: "Stream quality" }), qual] : null,
       h("div", { class: "buttons" }, h("button", { type: "submit", class: "btn primary", text: unlocked ? "Save" : "Unlock" }),
         unlocked ? h("button", { type: "button", class: "btn", text: "Remove", onclick: () => {
-          HiFi.base = null; paintUnlock(); pill(); toast("Trypt HiFi removed."); location.hash = "#/"; route();
+          HiFi.base = null; HiFi.password = null; paintUnlock(); pill(); toast("Trypt HiFi removed."); location.hash = "#/"; route();
         } }) : null),
       msg);
     // A URL is kept only once it answers, so a typo never unlocks an empty Trypt HiFi.
@@ -443,8 +445,9 @@
       if (base.startsWith("http://") && !/^http:\/\/(localhost|127\.|\[::1\])/.test(base)) { msg.textContent = "Use https://: this page is secure, so the browser blocks http:// addresses."; return; }
       msg.textContent = "Checking…";
       try {
-        const ms = await HiFi.test(base);
+        const ms = await HiFi.test(base, key.value);
         HiFi.base = base;
+        HiFi.password = key.value;
         pill(`Trypt HiFi · ${ms} ms`, true);
         paintUnlock();
         if (unlocked) msg.textContent = `Saved. Answered in ${ms} ms.`;

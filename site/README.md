@@ -146,6 +146,11 @@ up next), a menu on the left and the bar at the bottom.
     menu entry, search, pill or button; `#/hifi` opens the dashboard), only
     "Add an API URL" under Sources. A URL is kept only once it answers, and
     Remove locks it again.
+    A server with a password (trypt-hifi's `ACCESS_PASSWORD`) gets it from
+    the Password box beside the URL: `X-Access-Key` on the fetches, and
+    `access_key=` in the stream link, since `<audio>` sends no headers. It is
+    kept in this browser only (`tryptify-player-hifi-key`), never sent to
+    Connect, and Remove forgets it with the URL.
   - Music server: Navidrome or any Subsonic server, by `/rest/*.view` with
     `f=json`. Like the app's music server, a token and salt are kept (in
     localStorage), never the password, unless the server refuses tokens

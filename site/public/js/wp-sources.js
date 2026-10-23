@@ -308,18 +308,23 @@
     set base(v) { remember("tryptify-player-hifi", normalizeBase(v)); },
     get quality() { return recall("tryptify-player-hifi-quality") || "LOSSLESS"; },
     set quality(v) { remember("tryptify-player-hifi-quality", v); },
-    async get(path, params, base = this.base) {
+    // The server's password, when it has one (trypt-hifi's ACCESS_PASSWORD).
+    // This browser's alone, like the address: never sent to Connect or synced.
+    get password() { return recall("tryptify-player-hifi-key") || ""; },
+    set password(v) { remember("tryptify-player-hifi-key", v || null); },
+    async get(path, params, base = this.base, password = this.password) {
       if (!base) throw new Error("Add the Trypt HiFi API URL first.");
       const qs = new URLSearchParams(params).toString();
-      const res = await fetch(`${base}${path}?${qs}`);
+      const res = await fetch(`${base}${path}?${qs}`, password ? { headers: { "X-Access-Key": password } } : undefined);
+      if (res.status === 401) throw new Error(password ? "That password isn’t right for this server." : "This server asks for a password.");
       const j = await res.json().catch(() => null);
       if (!res.ok || !j || !j.success) throw new Error((j && typeof j.error === "string" && j.error) || `Trypt HiFi answered ${res.status}.`);
       return j.data;
     },
     /** Round-trip time in ms to [base] (the saved one by default), or throws with the reason. */
-    async test(base = this.base) {
+    async test(base = this.base, password = this.password) {
       const t0 = performance.now();
-      await this.get("/api/tidal/get-music", { q: "a", offset: 0 }, base);
+      await this.get("/api/tidal/get-music", { q: "a", offset: 0 }, base, password);
       return Math.round(performance.now() - t0);
     },
     async search(q) {
@@ -336,7 +341,9 @@
     url(track) {
       if (!this.base) throw new Error("it needs an API URL: add one under Sources, on the dashboard.");
       const q = this.quality === "HI_RES_LOSSLESS" && !track.ref.hires ? "LOSSLESS" : this.quality;
-      return `${this.base}/api/tidal/stream-file?track_id=${encodeURIComponent(track.ref.id)}&quality=${q}`;
+      // An <audio> element sends no headers: the password rides in the link.
+      const key = this.password ? `&access_key=${encodeURIComponent(this.password)}` : "";
+      return `${this.base}/api/tidal/stream-file?track_id=${encodeURIComponent(track.ref.id)}&quality=${q}${key}`;
     },
   };
 
