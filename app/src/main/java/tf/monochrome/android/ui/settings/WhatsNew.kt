@@ -177,7 +177,7 @@ object WhatsNew {
                     kind = WhatsNewKind.NEW,
                     section = CONNECT,
                     title = "One plays at a time",
-                    body = "When another of your devices starts playing, this one pauses, as Spotify does.",
+                    body = "When another of your devices starts playing, this one pauses.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,

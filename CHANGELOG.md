@@ -7,14 +7,14 @@
 ### Added
 
 #### Tryptify Connect
-- **Follow the other device, as Spotify does.** While the phone plays nothing (or is paused) and another of your devices plays, the mini player shows that song, "Artist · Playing on …" on its artist line, its progress running in step, and its buttons and swipes steer that device. A tap opens the player with the Connect panel up.
+- **Follow the other device.** While the phone plays nothing (or is paused) and another of your devices plays, the mini player shows that song, "Artist · Playing on …" on its artist line, its progress running in step, and its buttons and swipes steer that device. A tap opens the player with the Connect panel up.
 - **The Connect panel has the song's timeline**: a seek bar with the elapsed and total time, moving in step, that sends the other device to the second you let go.
 - **The same on tryptify.com/player**: while the browser plays nothing, its bar shows the other device's song at its second, a drag seeks it and the buttons steer it.
 - **A device that goes offline stops where it was**, so its song no longer runs to the end on everyone else's screen, and moving the music from it starts at that second.
 - **Your devices, together.** Signed in, the phone and tryptify.com/player see each other: the player's Devices button lists every device online and which one is playing.
 - **Move the music** to any of them with a tap, at the same second, the queue coming too; or take it from another device with Play here.
 - **Steer the other device** from the panel: play, pause, previous and next.
-- **One plays at a time.** When another device starts playing, this one pauses, as Spotify does.
+- **One plays at a time.** When another device starts playing, this one pauses.
 - **Next to no battery.** Connected only while the app is on screen or playing, and a message only when something changes.
 
 #### Select on every song list
