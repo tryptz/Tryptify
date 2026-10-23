@@ -3181,4 +3181,8 @@
     <string name="settings_fps_counter_desc">Show the frames drawn each second and the display’s refresh rate in the top corner</string>
     <string name="fps_counter_reading">%1$d fps · %2$d Hz</string>
     <string name="fps_counter_reading_limited">%1$d fps · %2$d Hz · limit %3$d</string>
+    <string name="settings_add_stepmania_packs">Add StepMania packs</string>
+    <string name="settings_add_stepmania_packs_desc">The packs Trypt Mania reads from a folder, as songs: each with its chart’s title, artist and picture, each pack an album. Trypt Mania still lists each song once, with its chart.</string>
+    <string name="settings_stepmania_packs_scanning">Adding your StepMania packs to the library…</string>
+    <string name="settings_stepmania_packs_none">No StepMania pack is linked from a folder yet. Link one in Trypt Mania › Packs.</string>
 </resources>

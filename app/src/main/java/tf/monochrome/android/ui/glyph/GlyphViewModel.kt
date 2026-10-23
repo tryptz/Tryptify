@@ -1189,7 +1189,12 @@ class GlyphViewModel @Inject constructor(
      * then by title, artist and length. Null, with why, when there is none.
      */
     private suspend fun findRequested(request: TryptManiaRequest, library: List<GlyphSong>): Pair<GlyphSong?, String?> {
-        fun pathOf(path: String) = path.removePrefix("file://")
+        // A linked pack song's music is a document; the menu knows its file.
+        fun pathOf(path: String) = if (path.startsWith("content:")) {
+            tf.monochrome.android.util.safDocumentUriToPath(android.net.Uri.parse(path)) ?: path
+        } else {
+            path.removePrefix("file://")
+        }
         fun byPath(path: String?) = path?.let { wanted -> library.firstOrNull { pathOf(it.filePath) == pathOf(wanted) } }
         byPath(request.filePath)?.let { return it to null }
         val local = runCatching {

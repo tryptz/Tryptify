@@ -50,6 +50,11 @@ class GlyphSongRepository @Inject constructor(
      * Every local MP3 or FLAC, each with whatever chart it already has, then
      * every song of every imported StepMania pack ([GlyphPackLibrary]).
      *
+     * A library song whose file is a pack song's music is that pack song, and
+     * is listed once, as the pack's: with the pack's chart, never as a second
+     * song with "No chart" for "Chart every song without one" to send off.
+     * That is what lets a linked pack's folder be in the library.
+     *
      * A flow because the library scanner writes into the same database and a
      * newly imported song should appear without the player leaving the screen;
      * an imported pack appears the same way.
@@ -58,8 +63,12 @@ class GlyphSongRepository @Inject constructor(
         localMedia.getAllTracks(),
         packs.songs.onStart { packs.ensureLoaded() },
     ) { tracks, packSongs ->
-        tracks.filter { it.isConvertible }.map { it.toGlyphSong() } + packSongs.map { it.withEditedChart() }
+        val packMusic = packSongs.mapNotNullTo(HashSet()) { packs.musicPath(it) }
+        tracks.filter { it.isConvertible && it.localPath() !in packMusic }.map { it.toGlyphSong() } +
+            packSongs.map { it.withEditedChart() }
     }
+
+    private fun UnifiedTrack.localPath(): String? = (source as? PlaybackSource.LocalFile)?.filePath?.removePrefix("file://")
 
     /** A pack song whose chart was edited here: what the list says comes from the edit. */
     private suspend fun GlyphSong.withEditedChart(): GlyphSong {

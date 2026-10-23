@@ -4040,6 +4040,24 @@ private fun MusicFolders(viewModel: SettingsViewModel) {
             }
         }
     }
+    // Trypt Mania's linked packs, as songs: their folders join the list above
+    // (or are already in a whole-phone library), and the scan shows each song
+    // with its chart's title, artist and picture, each pack as an album.
+    val scope = rememberCoroutineScope()
+    SettingItem(
+        title = stringResource(R.string.settings_add_stepmania_packs),
+        subtitle = stringResource(R.string.settings_add_stepmania_packs_desc),
+        onClick = {
+            scope.launch {
+                val added = viewModel.addStepManiaPacks()
+                android.widget.Toast.makeText(
+                    context,
+                    context.getString(if (added) R.string.settings_stepmania_packs_scanning else R.string.settings_stepmania_packs_none),
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+            }
+        },
+    )
 }
 
 /**

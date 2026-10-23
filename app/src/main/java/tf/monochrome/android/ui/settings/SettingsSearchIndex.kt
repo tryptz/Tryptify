@@ -237,6 +237,7 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     entry("Library sections", R.string.settings_library_sections, "Library", listOf("reorder", "order", "hide", "pages", "local", "playlists", "favorites", "downloads")),
     entry("Local folders", R.string.settings_local_media_scanning, "Library", listOf("storage", "saf", "sd card", "path")),
     entry("Music folders", R.string.settings_music_folders, "Library", listOf("add folder", "remove folder", "scan", "storage", "local", "path")),
+    entry("Add StepMania packs", R.string.settings_add_stepmania_packs, "Library", listOf("stepmania", "trypt mania", "pack", "simfile", "songs folder", "ssc")),
     entry("Titles from file names", R.string.settings_titles_from_file_names, "Library", listOf("filename", "file name", "title", "tags", "rename", "local")),
 
     // ── Downloads ───────────────────────────────────────────────────────

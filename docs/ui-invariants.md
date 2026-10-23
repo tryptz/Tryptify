@@ -795,6 +795,26 @@ from or there in the other at once. A second store of folders for Settings
 would be exactly the two switches above. An empty list scans the whole
 phone, and the row says so.
 
+**StepMania packs join the library through that same list, and are each one
+song.** Music folders › Add StepMania packs adds the folders Trypt Mania's
+linked packs are read from (`GlyphPackLibrary.linkedFolders`) to the user's
+folder roots, never a list of its own, and adds none to a whole-phone library,
+which holds them already. The scanner shows a linked pack song with its chart's
+title and artist over the file's tags (StepMania music is often an untagged
+OGG), the pack as its album, its album artist the pack's one artist or "Various
+Artists" so a pack is one album, and the song's picture
+(`GlyphPackLibrary.libraryTags`, `MediaScanner.withPackTags`); a row read before
+its pack was linked is read again for it (`needsPackRetag`). In Trypt Mania a
+library song whose file is a pack song's music is dropped for the pack's
+(`GlyphSongRepository.songs`), so it is listed once, with its chart, and never
+counted in "Chart every song without one", which would send a hand-made chart's
+song to the paid chart server. "Play in Trypt Mania" finds it by the file
+(`findRequested` reads a linked song's document as its path). Trypt Mania's own
+pack folder (`<chosen folder>/Tryptify`) is left out of every scan without
+touching the user's exclusions: each chart made in the app is written there
+with a copy of its music, and the copy was its song a second time. Copied (ZIP)
+packs live in the app's own storage and are not in the library.
+
 **Playlist Import in Settings is the link import.** No account needed: the
 link is looked up as it is pasted (`rememberSpotifyLinkPreview`,
 `LinkPreviewCard`, the same pieces as Library › Playlists › New playlist),

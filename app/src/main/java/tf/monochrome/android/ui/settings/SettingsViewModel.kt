@@ -64,6 +64,7 @@ class SettingsViewModel @Inject constructor(
     private val downloadDao: tf.monochrome.android.data.db.dao.DownloadDao,
     private val updateChecker: tf.monochrome.android.data.update.UpdateChecker,
     private val crashLogger: tf.monochrome.android.debug.CrashLogger,
+    private val glyphPacks: tf.monochrome.android.glyph.pack.GlyphPackLibrary,
     @ApplicationContext private val appContext: Context
 ) : ViewModel(), CrtEffectPrefs {
 
@@ -822,6 +823,25 @@ class SettingsViewModel @Inject constructor(
     fun addMusicFolder(path: String?) {
         if (path.isNullOrBlank()) scanCoordinator.requestFullScanAfterCurrent()
         else scanCoordinator.addFolderAndScan(path)
+    }
+
+    /**
+     * Music folders › Add StepMania packs: the folders Trypt Mania's linked
+     * packs are read from join the music folders, and a scan brings their
+     * songs in with their charts' titles, artists and pictures. With no folders
+     * chosen the library is the whole phone and holds them already; the scan
+     * then only retags them. False when no pack is linked from a folder.
+     */
+    suspend fun addStepManiaPacks(): Boolean {
+        val linked = glyphPacks.linkedFolders()
+        if (linked.isEmpty()) return false
+        val roots = preferences.userFolderRoots.first()
+        if (roots.isNotEmpty()) {
+            linked.filter { folder -> roots.none { folder == it || folder.startsWith("$it/") } }
+                .forEach { preferences.addUserFolderRoot(it) }
+        }
+        scanCoordinator.requestFullScanAfterCurrent()
+        return true
     }
 
     /** Takes a folder out of the library, as Library › Local's remove does. The files stay. */

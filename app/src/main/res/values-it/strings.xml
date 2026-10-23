@@ -3254,4 +3254,8 @@
     <string name="settings_fps_counter_desc">Mostra in alto a destra i fotogrammi disegnati ogni secondo e la frequenza di aggiornamento dello schermo</string>
     <string name="fps_counter_reading">%1$d fps · %2$d Hz</string>
     <string name="fps_counter_reading_limited">%1$d fps · %2$d Hz · limite %3$d</string>
+    <string name="settings_add_stepmania_packs">Aggiungi pacchetti StepMania</string>
+    <string name="settings_add_stepmania_packs_desc">I pacchetti che Trypt Mania legge da una cartella, come brani: ognuno con titolo, artista e immagine della sua chart, ogni pacchetto un album. Trypt Mania elenca comunque ogni brano una sola volta, con la sua chart.</string>
+    <string name="settings_stepmania_packs_scanning">Aggiunta dei tuoi pacchetti StepMania alla libreria…</string>
+    <string name="settings_stepmania_packs_none">Nessun pacchetto StepMania è ancora collegato da una cartella. Collegane uno in Trypt Mania › Packs.</string>
 </resources>
