@@ -387,7 +387,7 @@ port of its C++ (`src/party.ts`, checked byte for byte against it) and the
 game rooms' of its Rust (`src/room.ts`), shared songs live in R2. The wire
 format is unchanged, so the app's `PartyClient` and `RoomClient` need nothing
 new. Invites are `https://tryptify.com/party/<code>` (the site's party page,
-`site/public/party.html`), which open in the app where it is installed;
+`public/party.html` in the website repository), which open in the app where it is installed;
 both hosts serve `/.well-known/assetlinks.json`. A shared song no browser
 plays reaches the website as AAC from a small ffmpeg service on Railway
 (`server/rooms/ffmpeg`, `FFMPEG_URL` and the secret `FFMPEG_KEY`); without
@@ -396,17 +396,28 @@ it the original goes. `bun run test` for the rules,
 
 ## Website
 
-[`site/`](site/README.md) is the public site (app, Tryptify Cloud and its
-pricing, Terms, Privacy, Refunds, Contact), static files on Cloudflare. Its
-prices and grace periods repeat `server/cloud/src/rules.ts`: change both
-together.
+The public site (app, Tryptify Cloud and its pricing, Terms, Privacy,
+Refunds, Contact, the web player, the party page), static files on
+Cloudflare, lives in its own repository,
+[tryptz/tryptify.com](https://github.com/tryptz/tryptify.com), with the tools
+that build it (its eight languages, the changelog, the headphone list) and
+its README. It was `site/` here until it moved out with its history.
 
-The site is in the app's eight languages. The English pages are the source;
-`/zh`, `/ja`, `/fr`, `/es`, `/tr`, `/de` and `/it` are built from them by
-`tools/site_l10n/site_l10n.py` with the translations in `site/l10n/`, and are
-never edited by hand. After changing an English page or a script's text, run
-its `extract`, translate the new keys in every language, `check`, then `build`
-(see the site README's Languages section).
+What still ties the two together:
+
+- Its prices and grace periods repeat `server/cloud/src/rules.ts`: change
+  both together.
+- `/changelog` is built from `docs/releases/` here, by that repository's
+  `tools/site_changelog/build.py` pointed at a full (not shallow) checkout of
+  this one. Rebuild it after a release note changes.
+- Its web player speaks the same protocols as the app: Connect
+  (`server/connect`), the listening parties (`server/rooms`), TrypT HiFi, and
+  the Supabase tables the app syncs (`favorite_tracks.source` and the rest).
+  A change to one of those changes both repositories.
+- Its AutoEQ try-out ports `AutoEqEngine`; `WebAutoEqFixtureTest` holds the
+  engine to `app/src/test/resources/web-autoeq/`, a copy of that
+  repository's `tests/` fixtures. Rewrite them, copy them over, port the
+  change.
 
 ## Commits
 

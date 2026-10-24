@@ -38,7 +38,7 @@ GET  /.well-known/assetlinks.json    lets the app open this host's invite links
 ```
 
 The guests' page is the website's: `https://tryptify.com/party/<code>`
-(`site/public/party.html`, `js/party.js`), which is also the invite link the
+(`public/party.html` and `js/party.js` in [tryptz/tryptify.com](https://github.com/tryptz/tryptify.com)), which is also the invite link the
 app hands out. It calls the party routes from another origin with the song
 token the party gave it, never a cookie, so they answer CORS for any origin.
 

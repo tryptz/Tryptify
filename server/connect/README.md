@@ -2,7 +2,7 @@
 
 **Which of a listener's devices are online, what plays on which, and moving
 it from one to another**, like Spotify Connect. The web player
-(`site/public/js/wp-connect.js`) and the app (`app/…/connect/`) speak it.
+(`public/js/wp-connect.js` in [tryptz/tryptify.com](https://github.com/tryptz/tryptify.com)) and the app (`app/…/connect/`) speak it.
 
 **Live since 2026-10-22** at `wss://connect.tryptify.com/v1/connect`
 (Worker `tryptify-connect`; checked live: no sign-in, a bad or a dev token is
