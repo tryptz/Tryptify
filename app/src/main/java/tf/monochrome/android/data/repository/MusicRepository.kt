@@ -34,6 +34,7 @@ class MusicRepository @Inject constructor(
     private val lyricsResolver: LyricsResolver,
     private val serverLyrics: ServerLyricsEngine,
     private val localLyrics: LocalLyrics,
+    private val subsonic: tf.monochrome.android.data.subsonic.SubsonicRepository,
     private val preferences: PreferencesManager,
     @ApplicationContext private val context: Context
 ) {
@@ -165,12 +166,17 @@ class MusicRepository @Inject constructor(
 
     // --- Lyrics ---
 
-    /** [localFile] is the file the song plays from, when it plays from one: its own lyrics are read first. */
+    /**
+     * [localFile] is the file the song plays from, when it plays from one, and
+     * [subsonicSongId] the song's id on the listener's server, when it is one
+     * of its songs: either way its own lyrics are read first.
+     */
     suspend fun getLyrics(
         trackId: Long,
         track: Track? = null,
         skipTidal: Boolean = false,
         localFile: String? = null,
+        subsonicSongId: String? = null,
     ): Result<Lyrics?> = runCatching {
         val romajiEnabled = preferences.romajiLyrics.first()
         val wordProvider = preferences.lyricsWordProvider.first()
@@ -183,10 +189,17 @@ class MusicRepository @Inject constructor(
             return@runCatching timed
         }
 
-        // The song's own lyrics, beside or inside its file (or its download's).
-        // Word-timed ones were made for this recording (the editor, a lyrics
-        // server) and are final; otherwise they race first in line.
-        val own = localLyrics.find(trackId, localFile)?.let { if (romajiEnabled) LyricsText.romaji(it) else it }
+        // The song's own lyrics, beside or inside its file (or its download's),
+        // or kept by the listener's server for its song. Word-timed ones were
+        // made for this recording (the editor, a lyrics server) and are final;
+        // otherwise they race first in line.
+        val own = (
+            localLyrics.find(trackId, localFile)
+                ?: subsonicSongId?.let { id ->
+                    // A server that is away must not hold the catalogues up.
+                    kotlinx.coroutines.withTimeoutOrNull(OWN_SERVER_LYRICS_MS) { subsonic.lyrics(id, track?.displayArtist, track?.title) }
+                }
+            )?.let { if (romajiEnabled) LyricsText.romaji(it) else it }
         if (LyricsRace.tier(own) == 3) {
             synchronized(lyricsCache) { lyricsCache[cacheKey] = own!! }
             return@runCatching own
@@ -322,5 +335,6 @@ class MusicRepository @Inject constructor(
 
     private companion object {
         const val LYRICS_CACHE_SIZE = 32
+        const val OWN_SERVER_LYRICS_MS = 3_000L
     }
 }

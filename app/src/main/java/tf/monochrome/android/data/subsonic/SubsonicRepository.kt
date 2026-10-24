@@ -209,6 +209,57 @@ class SubsonicRepository @Inject constructor(
         }
     }
 
+    suspend fun playlists(): List<ServerPlaylist> {
+        val server = requireServer()
+        return client.playlists(server).map { it.toServerPlaylist() }
+    }
+
+    suspend fun playlistTracks(playlistId: String): List<UnifiedTrack> {
+        val server = requireServer()
+        return client.playlist(server, playlistId)?.entry.orEmpty().filterNot { it.isVideo }.map { it.toUnifiedTrack() }
+    }
+
+    /** The songs starred on the server, by this app's likes or any other client's. */
+    suspend fun starredSongs(): List<UnifiedTrack> {
+        val server = requireServer()
+        return client.starred(server).song.filterNot { it.isVideo }.map { it.toUnifiedTrack() }
+    }
+
+    /**
+     * Stars [songId] on the server, or unstars it, when it is liked or
+     * unliked here. Best effort, like [reportPlay]: the like is kept either way.
+     */
+    suspend fun setStarred(songId: String, starred: Boolean) {
+        val server = currentServer() ?: return
+        try {
+            client.setStarred(server, songId, starred)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Away or refused: the server misses this one.
+        }
+    }
+
+    /**
+     * The lyrics the server keeps for [songId]: OpenSubsonic's, timed when the
+     * server has them timed, else classic getLyrics by [artist] and [title]
+     * (plain text, or LRC some servers hand back as it is). Null on any failure.
+     */
+    suspend fun lyrics(songId: String, artist: String?, title: String?): tf.monochrome.android.domain.model.Lyrics? {
+        val server = currentServer() ?: return null
+        orNull { client.lyricsBySongId(server, songId) }?.let { pickLyrics(it) }?.let { return it }
+        if (artist.isNullOrBlank() || title.isNullOrBlank()) return null
+        return orNull { client.lyrics(server, artist, title) }?.let(tf.monochrome.android.data.repository.LocalLyrics::parse)
+    }
+
+    private suspend fun <T> orNull(block: suspend () -> T): T? = try {
+        block()
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        null
+    }
+
     suspend fun searchSongs(query: String, count: Int = 50): List<UnifiedTrack> {
         val server = currentServer() ?: return emptyList()
         if (query.isBlank()) return emptyList()
@@ -305,6 +356,36 @@ class SubsonicRepository @Inject constructor(
             sourceType = SourceType.SUBSONIC,
         )
 
+        fun SubsonicPlaylist.toServerPlaylist() = ServerPlaylist(
+            id = id,
+            name = name.ifBlank { id },
+            songCount = songCount,
+            artworkUri = Subsonic.coverArtRef(coverArt),
+        )
+
+        /** The first language's lyrics that are timed, else the first that has words. */
+        fun pickLyrics(all: List<SubsonicStructuredLyrics>): tf.monochrome.android.domain.model.Lyrics? =
+            all.sortedByDescending { it.synced }.firstNotNullOfOrNull { it.toLyrics() }
+
+        /**
+         * As the player shows them. Timed only when the server says so and
+         * some line starts past zero; a blank timed line (a pause) is no line,
+         * as in LRC. Untimed text keeps its blank lines between verses.
+         */
+        fun SubsonicStructuredLyrics.toLyrics(): tf.monochrome.android.domain.model.Lyrics? {
+            if (line.none { it.value.isNotBlank() }) return null
+            val timed = synced && line.any { (it.start ?: 0) > 0 }
+            val lines = if (timed) {
+                line.filter { it.value.isNotBlank() }
+                    .map { tf.monochrome.android.domain.model.LyricLine(((it.start ?: 0) - offset).coerceAtLeast(0), it.value.trim()) }
+                    .sortedBy { it.timeMs }
+            } else {
+                line.map { it.value.trimEnd() }.dropWhile { it.isBlank() }.dropLastWhile { it.isBlank() }
+                    .map { tf.monochrome.android.domain.model.LyricLine(0, it) }
+            }
+            return tf.monochrome.android.domain.model.Lyrics(lines = lines, isSynced = timed)
+        }
+
         fun SubsonicArtist.toUnifiedArtist() = UnifiedArtist(
             id = ARTIST_PREFIX + id,
             name = name,
@@ -314,6 +395,15 @@ class SubsonicRepository @Inject constructor(
         )
     }
 }
+
+/** A playlist on the listener's server, as the My server page lists it. */
+data class ServerPlaylist(
+    val id: String,
+    val name: String,
+    val songCount: Int,
+    /** A [Subsonic.coverArtRef], never a URL with the sign-in in it. */
+    val artworkUri: String?,
+)
 
 /** getAlbumList2's `type`s this app offers as album sorts. */
 enum class SubsonicAlbumSort(val apiType: String) {

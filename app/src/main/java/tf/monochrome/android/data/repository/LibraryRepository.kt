@@ -56,6 +56,7 @@ class LibraryRepository @Inject constructor(
     private val preferences: tf.monochrome.android.data.preferences.PreferencesManager,
     private val downloadManager: tf.monochrome.android.data.downloads.DownloadManager,
     private val localTrackLocator: tf.monochrome.android.player.LocalTrackLocator,
+    private val subsonic: tf.monochrome.android.data.subsonic.SubsonicRepository,
 ) {
     private val syncScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     // ignoreUnknownKeys lets older serialized rows survive forward-compatible
@@ -124,11 +125,23 @@ class LibraryRepository @Inject constructor(
         if (favoriteDao.isFavoriteTrack(track.id)) {
             favoriteDao.deleteFavoriteTrack(track.id)
             supabaseSync.queueChange(SyncKind.FAVORITE_TRACK, track.id.toString(), SyncOp.DELETE)
+            starOnServer(track.id, starred = false)
         } else {
             favoriteDao.insertFavoriteTrack(track.toFavoriteEntity().copy(source = sourceOf(track)))
             supabaseSync.queueChange(SyncKind.FAVORITE_TRACK, track.id.toString(), SyncOp.UPSERT)
             autoDownloadOnLike(track)
+            starOnServer(track.id, starred = true)
         }
+    }
+
+    /**
+     * A song on the listener's own server is starred there when liked here,
+     * and unstarred when unliked, so the server and its other clients agree.
+     * Detached, like [autoDownloadOnLike]: the like never waits on the server.
+     */
+    private fun starOnServer(trackId: Long, starred: Boolean) {
+        val songId = (unifiedTrackRegistry[trackId]?.source as? PlaybackSource.Subsonic)?.songId ?: return
+        syncScope.launch { subsonic.setStarred(songId, starred) }
     }
 
     /**
@@ -170,6 +183,7 @@ class LibraryRepository @Inject constructor(
         trackIds.forEach {
             favoriteDao.deleteFavoriteTrack(it)
             supabaseSync.queueChange(SyncKind.FAVORITE_TRACK, it.toString(), SyncOp.DELETE)
+            starOnServer(it, starred = false)
         }
     }
 

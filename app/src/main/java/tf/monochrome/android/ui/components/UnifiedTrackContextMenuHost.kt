@@ -75,7 +75,7 @@ fun UnifiedTrackContextMenuHost(
             onDismiss = onDismissRequest,
             onPlayNext = { playerViewModel.playNextUnified(track) },
             onAddToQueue = { playerViewModel.addUnifiedToQueue(listOf(track)) },
-            onToggleLike = { playerViewModel.toggleFavorite(legacy) },
+            onToggleLike = { playerViewModel.toggleFavoriteUnified(track) },
             onAddToPlaylist = { addToPlaylistFor = track },
             onRemoveFromPlaylist = onRemove,
             removeLabel = removeLabel,

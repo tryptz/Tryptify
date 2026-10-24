@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,10 +12,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Dns
@@ -40,6 +47,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,11 +57,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import coil3.compose.AsyncImage
 import tf.monochrome.android.R
+import tf.monochrome.android.data.subsonic.ServerPlaylist
 import tf.monochrome.android.data.subsonic.SubsonicAlbumSort
 import tf.monochrome.android.domain.model.UnifiedTrack
+import tf.monochrome.android.ui.components.FastScroller
 import tf.monochrome.android.ui.components.SearchOverlay
 import tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost
+import tf.monochrome.android.ui.components.bounceClick
 import tf.monochrome.android.ui.library.SubsonicLibraryViewModel.Load
 import tf.monochrome.android.ui.library.SubsonicLibraryViewModel.Section
 import tf.monochrome.android.ui.library.SubsonicLibraryViewModel.View
@@ -62,8 +76,9 @@ import tf.monochrome.android.ui.settings.settingsTabIndex
 import tf.monochrome.android.ui.theme.MonoDimens
 
 /**
- * The "My server" Library page: albums, artists and songs on the listener's
- * Subsonic server, an album's songs, and a search of the server's songs.
+ * The "My server" Library page: albums, artists, songs, playlists and liked
+ * (starred) songs on the listener's Subsonic server, an album's or a
+ * playlist's songs, and a search of the server's songs.
  *
  * Built from the Local page's own lists ([AlbumGrid], [ArtistList],
  * [SongList]) so the two read as one library: Material rows at the shared row
@@ -148,6 +163,35 @@ fun SubsonicLibraryTab(
                 }
             }
         }
+        is View.Playlist -> {
+            val tracks by viewModel.albumTracks.collectAsStateWithLifecycle()
+            Column(Modifier.fillMaxSize()) {
+                val loaded = (tracks as? Load.Loaded)?.value.orEmpty()
+                DetailHeader(
+                    title = top.playlist.name,
+                    subtitle = pluralStringResource(R.plurals.track_count, top.playlist.songCount, top.playlist.songCount),
+                    onBack = { viewModel.back() },
+                ) {
+                    if (loaded.isNotEmpty()) {
+                        IconButton(onClick = { playerViewModel.playUnifiedTrack(loaded.first(), queueFrom(loaded, loaded.first())) }) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = stringResource(R.string.action_play))
+                        }
+                        IconButton(onClick = { playerViewModel.shufflePlayUnified(loaded) }) {
+                            Icon(Icons.Default.Shuffle, contentDescription = stringResource(R.string.action_shuffle))
+                        }
+                    }
+                }
+                LoadContent(tracks, onRetry = { viewModel.back(); viewModel.openPlaylist(top.playlist) }) { list ->
+                    SongList(
+                        tracks = list,
+                        onTrackClick = { track, queue -> playerViewModel.playUnifiedTrack(track, queueFrom(queue, track)) },
+                        onMoreClick = { menuTrack = it },
+                        navController = navController,
+                        selection = selection,
+                    )
+                }
+            }
+        }
     }
     }
 }
@@ -164,6 +208,8 @@ private fun Index(
     val albums by viewModel.albums.collectAsStateWithLifecycle()
     val artists by viewModel.artists.collectAsStateWithLifecycle()
     val songs by viewModel.songs.collectAsStateWithLifecycle()
+    val playlists by viewModel.playlists.collectAsStateWithLifecycle()
+    val liked by viewModel.liked.collectAsStateWithLifecycle()
     val sort by viewModel.albumSort.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
@@ -203,7 +249,7 @@ private fun Index(
             modifier = Modifier.fillMaxWidth().padding(start = MonoDimens.spacingLg, end = MonoDimens.spacingSm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // The chips slide sideways when three of them and the buttons are
+            // The chips slide sideways when they and the buttons are
             // wider than the phone; the buttons stay put on the right.
             Row(
                 modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
@@ -213,6 +259,8 @@ private fun Index(
                     Section.ALBUMS to R.string.filter_albums,
                     Section.ARTISTS to R.string.filter_artists,
                     Section.SONGS to R.string.category_songs,
+                    Section.PLAYLISTS to R.string.filter_playlists,
+                    Section.LIKED to R.string.liked_songs,
                 )) {
                     tf.monochrome.android.ui.mixer.GlassChoiceChip(
                         label = stringResource(label),
@@ -243,6 +291,12 @@ private fun Index(
             Section.SONGS -> LoadContent(songs, onRetry = viewModel::reload, topInset = listInset) { list ->
                 SongList(tracks = list, onTrackClick = playSong, onMoreClick = onMore, navController = navController, selection = selection, topInset = listInset)
             }
+            Section.PLAYLISTS -> LoadContent(playlists, onRetry = viewModel::reload, topInset = listInset) { list ->
+                PlaylistList(playlists = list, onPlaylistClick = viewModel::openPlaylist, topInset = listInset)
+            }
+            Section.LIKED -> LoadContent(liked, onRetry = viewModel::reload, topInset = listInset) { list ->
+                SongList(tracks = list, onTrackClick = playSong, onMoreClick = onMore, navController = navController, selection = selection, topInset = listInset)
+            }
         }
     }
     }
@@ -260,6 +314,60 @@ private fun queueFrom(list: List<UnifiedTrack>, track: UnifiedTrack): List<Unifi
 }
 
 private const val QUEUE_FROM_LIST = 1_000
+
+/** The server's playlists, in the rows [ArtistList] draws: Material, the shared row height, never glass. */
+@Composable
+private fun PlaylistList(
+    playlists: List<ServerPlaylist>,
+    onPlaylistClick: (ServerPlaylist) -> Unit,
+    /** Room for a search bar floating over the list's top; rows still scroll up under it. */
+    topInset: Dp = 0.dp,
+) {
+    val state = rememberLazyListState()
+    Box {
+        LazyColumn(
+            state = state,
+            contentPadding = PaddingValues(top = topInset, bottom = tf.monochrome.android.ui.navigation.bottomChromePadding),
+        ) {
+            items(playlists, key = { it.id }) { playlist ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(MonoDimens.listRowHeight)
+                        .bounceClick(onClick = { onPlaylistClick(playlist) })
+                        .padding(horizontal = MonoDimens.listItemPaddingH),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (playlist.artworkUri != null) {
+                        AsyncImage(
+                            model = playlist.artworkUri,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(4.dp)),
+                        )
+                    } else {
+                        Icon(
+                            Icons.AutoMirrored.Filled.QueueMusic,
+                            contentDescription = null,
+                            modifier = Modifier.size(40.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.width(MonoDimens.spacingLg))
+                    Column(Modifier.weight(1f)) {
+                        Text(playlist.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            pluralStringResource(R.plurals.track_count, playlist.songCount, playlist.songCount),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+        FastScroller(state = state)
+    }
+}
 
 private val SubsonicAlbumSort.label: Int
     get() = when (this) {

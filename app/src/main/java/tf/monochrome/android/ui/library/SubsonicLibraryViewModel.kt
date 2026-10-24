@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.subsonic.SubsonicAlbumSort
 import tf.monochrome.android.data.subsonic.SubsonicRepository
+import tf.monochrome.android.data.subsonic.ServerPlaylist
 import tf.monochrome.android.data.subsonic.SubsonicServer
 import tf.monochrome.android.domain.model.UnifiedAlbum
 import tf.monochrome.android.domain.model.UnifiedArtist
@@ -39,12 +40,13 @@ class SubsonicLibraryViewModel @Inject constructor(
     private val repository: SubsonicRepository,
 ) : ViewModel() {
 
-    enum class Section { ALBUMS, ARTISTS, SONGS }
+    enum class Section { ALBUMS, ARTISTS, SONGS, PLAYLISTS, LIKED }
 
     sealed interface View {
         data object Index : View
         data class Artist(val artist: UnifiedArtist) : View
         data class Album(val album: UnifiedAlbum) : View
+        data class Playlist(val playlist: ServerPlaylist) : View
     }
 
     /** Something loading, loaded, or failed; [Failed] keeps the reason for the log. */
@@ -110,8 +112,16 @@ class SubsonicLibraryViewModel @Inject constructor(
     private val _detailAlbums = MutableStateFlow<Load<List<UnifiedAlbum>>>(Load.Loading)
     val artistAlbums: StateFlow<Load<List<UnifiedAlbum>>> = _detailAlbums.asStateFlow()
 
+    // The open album's songs, or the open playlist's: one is open at a time.
     private val _detailTracks = MutableStateFlow<Load<List<UnifiedTrack>>>(Load.Loading)
     val albumTracks: StateFlow<Load<List<UnifiedTrack>>> = _detailTracks.asStateFlow()
+
+    private val _playlists = MutableStateFlow<Load<List<ServerPlaylist>>>(Load.Loading)
+    val playlists: StateFlow<Load<List<ServerPlaylist>>> = _playlists.asStateFlow()
+
+    /** The songs starred on the server: liking a server song here stars it. */
+    private val _liked = MutableStateFlow<Load<List<UnifiedTrack>>>(Load.Loading)
+    val liked: StateFlow<Load<List<UnifiedTrack>>> = _liked.asStateFlow()
 
     private var albumsJob: Job? = null
     private var songsJob: Job? = null
@@ -134,11 +144,32 @@ class SubsonicLibraryViewModel @Inject constructor(
             songsJob?.cancel()
             _songs.value = Load.Loading
         }
+        loadPlaylists()
+        loadLiked()
     }
 
     fun selectSection(section: Section) {
         _section.value = section
         if (section == Section.SONGS && _songs.value !is Load.Loaded && songsJob?.isActive != true) loadSongs()
+        // Likes change while the page is open (a like stars on the server).
+        if (section == Section.LIKED) loadLiked()
+    }
+
+    private fun loadPlaylists() {
+        _playlists.value = Load.Loading
+        viewModelScope.launch { _playlists.value = runLoad { repository.playlists().sortedBy { it.name.lowercase() } } }
+    }
+
+    private fun loadLiked() {
+        // Kept on screen while it refreshes, rather than a spinner each visit.
+        if (_liked.value !is Load.Loaded) _liked.value = Load.Loading
+        viewModelScope.launch { _liked.value = runLoad { repository.starredSongs() } }
+    }
+
+    fun openPlaylist(playlist: ServerPlaylist) {
+        _stack.value = _stack.value + View.Playlist(playlist)
+        _detailTracks.value = Load.Loading
+        viewModelScope.launch { _detailTracks.value = runLoad { repository.playlistTracks(playlist.id) } }
     }
 
     fun setQuery(query: String) {

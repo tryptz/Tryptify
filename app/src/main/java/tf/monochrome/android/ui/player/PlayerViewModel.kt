@@ -642,6 +642,8 @@ class PlayerViewModel @Inject constructor(
                                     skipTidal = skipTidal,
                                     // A local file's own lyrics come first (a download's are found by id).
                                     localFile = (unified?.source as? tf.monochrome.android.domain.model.PlaybackSource.LocalFile)?.filePath,
+                                    // A song on the listener's server: the lyrics the server keeps for it.
+                                    subsonicSongId = (unified?.source as? tf.monochrome.android.domain.model.PlaybackSource.Subsonic)?.songId,
                                 ).getOrNull()
                                 _currentLyrics.value = found
                                 _isLyricsLoading.value = false
@@ -715,6 +717,17 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             libraryRepository.toggleFavoriteTrack(track)
         }
+    }
+
+    /**
+     * Likes or unlikes [track] from a list, where it may not have been played
+     * or queued yet. Registered first, as playing it would, so the like knows
+     * what it is: a song on the listener's server is starred there too.
+     */
+    fun toggleFavoriteUnified(track: UnifiedTrack) {
+        val legacy = track.toLegacyTrack()
+        unifiedTrackRegistry.put(legacy.id, track)
+        toggleFavorite(legacy)
     }
 
     private fun connectToService() {
