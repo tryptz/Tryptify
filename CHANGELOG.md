@@ -44,7 +44,7 @@
 - **It plays as your Tryptify account**, on the rooms server Trypt Mania's multiplayer uses. A rooms server from before parties says so instead.
 
 #### Tryptify Cloud
-- **Your music, stored for you.** Settings › Connections › Tryptify Cloud: plans from 100 GB, a 7-day free trial with 20 GB, and a storage meter. Upload to Tryptify Cloud from a song's menu; uploads carry on in the background with a progress notification.
+- **Your music, stored for you.** Settings › Connections › Tryptify Cloud: plans from 10 GB to 10 TB, a 7-day free trial with up to 20 GB, and a storage meter. Upload to Tryptify Cloud from a song's menu; uploads carry on in the background with a progress notification.
 - **It plays like your own server**: one tap connects it as the Subsonic server, with its own device password, and your library is in Library › My server.
 - **Files are kept as uploaded**: FLAC, ALAC and WAV stay lossless, with their covers.
 - **Manage or cancel the subscription** from the same page. Your library, devices and uploads are also at tryptify.com/account.
@@ -131,6 +131,10 @@
 - **The web player takes its colours from the song's cover**, as the app's Dynamic Colors: the cover's colour is the accent, made readable on the page, and its main colour washes the top of the page. They fade between songs.
 - **Report a bug or help build Tryptify**, on the Contact page.
 - **The web player says why a TrypT HiFi song won't play.** When one fails to load it asks the server why: a TIDAL song not offered in your subscription's country says "TIDAL does not offer this song in your subscription's country.", in the site's eight languages, and the player moves on.
+
+#### More Tryptify Cloud plans
+- **Seven plans, from 10 GB to 10 TB.** Mini, 10 GB for $0.99 a month or $9.99 a year, under Lite; and over Max, Pro (1 TB, $39.99 / $399.99), Ultra (3 TB, $119.99 / $1,199.99) and Xtra (10 TB, $399.99 / $3,999.99). The app, tryptify.com/cloud and the account page list them all, a terabyte and up in TB.
+- **The free trial gives up to 20 GB**: Mini's is its own 10 GB.
 
 #### Select all
 - **The selection bar has Select all** on playlists, albums, artists, Favorites, Downloads, folders, search, Discover shelves, genre charts and the local detail pages. It hides once every song is picked. Lists loaded a page at a time, like the Local page's Songs, don't have it.

@@ -6,7 +6,7 @@ import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { AuthUnreachable } from "./auth";
 import { hmacHex, sameHex, type Billing } from "./creem";
-import { accessOf, isPlan, mayStartTrial, PLANS, READ_ONLY_DAYS, TRIAL_DAYS, TRIAL_GB } from "./rules";
+import { accessOf, isPlan, mayStartTrial, PLANS, READ_ONLY_DAYS, TRIAL_DAYS, TRIAL_GB, trialGbOf, type PlanId } from "./rules";
 import { loadAccount, record, type Db } from "./store";
 import {
   abortUpload, completeUpload, deleteSong, getSong, LibraryError, MAX_COVER_BYTES, PART_SIZE, setCover, startUpload, uploadPart, usage,
@@ -79,7 +79,7 @@ export function createApp({ db, storage = null, billing, providers, personOf, pl
     c.json({
       readOnlyDays: READ_ONLY_DAYS,
       trial: { days: TRIAL_DAYS, storageGb: TRIAL_GB, periods: ["monthly"] },
-      plans: Object.entries(PLANS).map(([id, p]) => ({ id, ...p })),
+      plans: Object.entries(PLANS).map(([id, p]) => ({ id, ...p, trialStorageGb: trialGbOf(id as PlanId) })),
     }),
   );
 

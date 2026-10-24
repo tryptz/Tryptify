@@ -348,6 +348,23 @@ test("every plan is a profit in the worst case (the pricing check, kept)", async
   }
 });
 
+test("Mini's trial holds Mini's 10 GB, never the trial's 20", async () => {
+  const t = cloud.applyEvent(
+    { plan: null, paidUntil: null, usedBytes: 0 },
+    { kind: "paid", eventId: "tm", userId: A, plan: "mini", paidUntil: days(7), trial: true },
+    now,
+  );
+  assert.equal(cloud.accessOf(t, now).quotaBytes, 10 * GB);
+  assert.equal(cloud.mayUpload({ ...t, usedBytes: 9 * GB }, 2 * GB, now), false);
+});
+
+test("the big plans hold their terabytes, paid; a trial of one still 20 GB", async () => {
+  for (const [id, tb] of [["pro", 1], ["ultra", 3], ["xtra", 10]] as const) {
+    assert.equal(cloud.accessOf({ plan: id, paidUntil: days(10), usedBytes: 0 }, now).quotaBytes, tb * 1000 * GB);
+    assert.equal(cloud.accessOf({ plan: id, paidUntil: days(7), usedBytes: 0, trial: true }, now).quotaBytes, cloud.TRIAL_GB * GB);
+  }
+});
+
 test("a trial gets 20 GB until it ends, never the plan's full quota", async () => {
   const t = cloud.applyEvent(
     { plan: null, paidUntil: null, usedBytes: 0 },
@@ -409,7 +426,15 @@ test("health and plans answer without an account", async () => {
   assert.equal((await call("GET", "/health")).body.ok, true);
   assert.equal((await call("GET", "/health")).body.database, true);
   const plans = await call("GET", "/plans");
-  assert.deepEqual(plans.body.plans.map((p: { id: string }) => p.id), ["lite", "plus", "max"]);
+  assert.deepEqual(
+    plans.body.plans.map((p: { id: string }) => p.id),
+    ["mini", "lite", "plus", "max", "pro", "ultra", "xtra"],
+  );
+  // Each plan says what its trial holds: Mini's own 10 GB, the rest 20 GB.
+  const trialOf = (id: string) => plans.body.plans.find((p: { id: string }) => p.id === id).trialStorageGb;
+  assert.equal(trialOf("mini"), 10);
+  assert.equal(trialOf("lite"), cloud.TRIAL_GB);
+  assert.equal(trialOf("xtra"), cloud.TRIAL_GB);
 });
 
 test("the account needs a sign-in", async () => {

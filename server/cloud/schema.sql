@@ -3,7 +3,7 @@
 
 create table if not exists cloud_accounts (
   user_id          text    primary key,
-  plan             text    check (plan in ('lite', 'plus', 'max')),
+  plan             text    check (plan in ('mini', 'lite', 'plus', 'max', 'pro', 'ultra', 'xtra')),
   paid_until       text,                       -- ISO-8601 instant
   used_bytes       integer not null default 0 check (used_bytes >= 0),
   trial            integer not null default 0, -- 1 while paid_until is a trial's end

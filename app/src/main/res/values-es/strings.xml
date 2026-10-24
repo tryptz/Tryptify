@@ -3149,9 +3149,10 @@
         <item quantity="many">%1$d canciones subidas a Tryptify Cloud</item>
         <item quantity="other">%1$d canciones subidas a Tryptify Cloud</item>
     </plurals>
-    <string name="cloud_trial_offer">Prueba cualquier plan gratis durante %1$d días con %2$d GB. Se necesita una tarjeta; cancela antes de que termine la prueba y no pagarás nada.</string>
+    <string name="cloud_trial_offer">Prueba cualquier plan gratis durante %1$d días con hasta %2$d GB. Se necesita una tarjeta; cancela antes de que termine la prueba y no pagarás nada.</string>
     <string name="cloud_plan_terms">El pago se abre en tu navegador. Si un plan termina, tu música seguirá disponible %1$d días antes de eliminarse.</string>
     <string name="cloud_plan_storage">%1$s · %2$d GB</string>
+    <string name="cloud_plan_storage_tb">%1$s · %2$d TB</string>
     <string name="cloud_plan_prices">%1$s al mes o %2$s al año</string>
     <string name="cloud_start_trial">Empezar la prueba gratuita</string>
     <string name="cloud_monthly">Mensual</string>
@@ -3159,6 +3160,10 @@
     <string name="cloud_plan_lite">Lite</string>
     <string name="cloud_plan_plus">Plus</string>
     <string name="cloud_plan_max">Max</string>
+    <string name="cloud_plan_mini">Mini</string>
+    <string name="cloud_plan_pro">Pro</string>
+    <string name="cloud_plan_ultra">Ultra</string>
+    <string name="cloud_plan_xtra">Xtra</string>
     <string name="cloud_error_no_plan">Necesitas un plan para eso.</string>
     <string name="cloud_error_read_only">Tu plan ha terminado, así que no se puede subir nada nuevo.</string>
     <string name="cloud_error_over_quota">No queda espacio suficiente en tu plan.</string>

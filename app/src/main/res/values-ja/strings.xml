@@ -2997,9 +2997,10 @@
     <plurals name="cloud_uploaded_n">
         <item quantity="other">%1$d 曲を Tryptify Cloud にアップロードしました</item>
     </plurals>
-    <string name="cloud_trial_offer">どのプランも %1$d 日間、%2$d GB で無料でお試しいただけます。カードの登録が必要です。トライアル終了前に解約すれば料金はかかりません。</string>
+    <string name="cloud_trial_offer">どのプランも %1$d 日間、最大 %2$d GB で無料でお試しいただけます。カードの登録が必要です。トライアル終了前に解約すれば料金はかかりません。</string>
     <string name="cloud_plan_terms">お支払いはブラウザで開きます。プランが終了しても、削除されるまで %1$d 日間は音楽を再生できます。</string>
     <string name="cloud_plan_storage">%1$s · %2$d GB</string>
+    <string name="cloud_plan_storage_tb">%1$s · %2$d TB</string>
     <string name="cloud_plan_prices">月額 %1$s または年額 %2$s</string>
     <string name="cloud_start_trial">無料トライアルを開始</string>
     <string name="cloud_monthly">月額</string>
@@ -3007,6 +3008,10 @@
     <string name="cloud_plan_lite">Lite</string>
     <string name="cloud_plan_plus">Plus</string>
     <string name="cloud_plan_max">Max</string>
+    <string name="cloud_plan_mini">Mini</string>
+    <string name="cloud_plan_pro">Pro</string>
+    <string name="cloud_plan_ultra">Ultra</string>
+    <string name="cloud_plan_xtra">Xtra</string>
     <string name="cloud_error_no_plan">この操作にはプランが必要です。</string>
     <string name="cloud_error_read_only">プランが終了したため、新しくアップロードできません。</string>
     <string name="cloud_error_over_quota">プランの空き容量が足りません。</string>

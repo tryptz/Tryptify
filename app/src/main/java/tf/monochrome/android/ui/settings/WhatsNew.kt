@@ -211,6 +211,12 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
+                    section = CLOUD,
+                    title = "Plans from 10 GB to 10 TB",
+                    body = "Mini, 10 GB for \$0.99 a month, and Pro, Ultra and Xtra for 1, 3 and 10 TB, beside Lite, Plus and Max. The free trial gives up to 20 GB.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = CONNECTIONS,
                     title = "A password for your server",
                     body = "A TrypT HiFi server can ask for a password. Give it under the address in Settings › Connections › Add API. It stays on this phone and is never synced.",

@@ -88,13 +88,23 @@ The owner's rule: **a listener can never cost more than they pay.** Every
 plan's worst case is a profit, and the only cost not tied to a subscriber is
 Railway's plan fee.
 
-**$3.99 per 100 GB a month**, yearly at two months free:
+**$3.99 per 100 GB a month**, yearly at two months free. Mini, Pro, Ultra and
+Xtra were added on 2026-10-24 (owner's decision): the big three at the same
+rate, Mini at $0.99 for 10 GB.
 
 | Plan | Storage | Monthly | Yearly | Full-quota cost | Worst profit / month |
 |---|---|---|---|---|---|
+| Mini | 10 GB | $0.99 | $9.99 | $0.17 | +$0.02 (monthly) |
 | Lite | 100 GB | $3.99 | $39.99 | $1.72 | +$0.51 (yearly) |
 | Plus | 250 GB | $9.99 | $99.99 | $4.31 | +$1.26 (yearly) |
 | Max | 500 GB | $19.99 | $199.99 | $8.62 | +$2.53 (yearly) |
+| Pro | 1 TB | $39.99 | $399.99 | $17.25 | +$5.06 (yearly) |
+| Ultra | 3 TB | $119.99 | $1,199.99 | $51.75 | +$15.18 (yearly) |
+| Xtra | 10 TB | $399.99 | $3,999.99 | $172.50 | +$50.60 (yearly) |
+
+Mini is the one plan under the 20% rule below: a payment's fixed 50¢ is half
+of $0.99, so a full Mini earns about 2¢ a month in the worst case (12% of the
+net). It is still never a loss. Its free trial is held to its own 10 GB.
 
 How the numbers were made (research on 2026-10-21, sources in the session):
 

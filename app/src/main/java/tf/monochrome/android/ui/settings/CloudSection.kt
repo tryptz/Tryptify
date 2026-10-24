@@ -289,7 +289,12 @@ private fun PlanCard(plan: CloudPlan, trialAvailable: Boolean, busy: Boolean, on
     ) {
         Column(Modifier.fillMaxWidth().padding(12.dp)) {
             Text(
-                stringResource(R.string.cloud_plan_storage, planName(plan.id), plan.storageGb),
+                // 1 TB and up read in TB (1,000 GB each, as the server counts).
+                if (plan.storageGb >= 1000 && plan.storageGb % 1000 == 0) {
+                    stringResource(R.string.cloud_plan_storage_tb, planName(plan.id), plan.storageGb / 1000)
+                } else {
+                    stringResource(R.string.cloud_plan_storage, planName(plan.id), plan.storageGb)
+                },
                 style = MaterialTheme.typography.titleSmall,
             )
             Text(
@@ -327,9 +332,13 @@ private fun Note(text: String, error: Boolean = false) {
 
 @Composable
 private fun planName(id: String?): String = when (id) {
+    "mini" -> stringResource(R.string.cloud_plan_mini)
     "lite" -> stringResource(R.string.cloud_plan_lite)
     "plus" -> stringResource(R.string.cloud_plan_plus)
     "max" -> stringResource(R.string.cloud_plan_max)
+    "pro" -> stringResource(R.string.cloud_plan_pro)
+    "ultra" -> stringResource(R.string.cloud_plan_ultra)
+    "xtra" -> stringResource(R.string.cloud_plan_xtra)
     else -> id.orEmpty()
 }
 

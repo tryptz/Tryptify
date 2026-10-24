@@ -3149,9 +3149,10 @@
         <item quantity="many">%1$d titres envoyés sur Tryptify Cloud</item>
         <item quantity="other">%1$d titres envoyés sur Tryptify Cloud</item>
     </plurals>
-    <string name="cloud_trial_offer">Essayez gratuitement n’importe quelle formule pendant %1$d jours avec %2$d Go. Une carte est nécessaire ; annulez avant la fin de l’essai et vous ne payez rien.</string>
+    <string name="cloud_trial_offer">Essayez gratuitement n’importe quelle formule pendant %1$d jours avec jusqu’à %2$d Go. Une carte est nécessaire ; annulez avant la fin de l’essai et vous ne payez rien.</string>
     <string name="cloud_plan_terms">Le paiement s’ouvre dans votre navigateur. Si une formule prend fin, votre musique reste disponible %1$d jours avant d’être supprimée.</string>
     <string name="cloud_plan_storage">%1$s · %2$d Go</string>
+    <string name="cloud_plan_storage_tb">%1$s · %2$d To</string>
     <string name="cloud_plan_prices">%1$s par mois ou %2$s par an</string>
     <string name="cloud_start_trial">Commencer l’essai gratuit</string>
     <string name="cloud_monthly">Mensuel</string>
@@ -3159,6 +3160,10 @@
     <string name="cloud_plan_lite">Lite</string>
     <string name="cloud_plan_plus">Plus</string>
     <string name="cloud_plan_max">Max</string>
+    <string name="cloud_plan_mini">Mini</string>
+    <string name="cloud_plan_pro">Pro</string>
+    <string name="cloud_plan_ultra">Ultra</string>
+    <string name="cloud_plan_xtra">Xtra</string>
     <string name="cloud_error_no_plan">Il vous faut une formule pour cela.</string>
     <string name="cloud_error_read_only">Votre formule a pris fin : plus aucun envoi n’est possible.</string>
     <string name="cloud_error_over_quota">Plus assez d’espace dans votre formule.</string>

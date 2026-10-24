@@ -79,7 +79,7 @@
 | | |
 | --- | --- |
 | **Every source in one player** | Local FLAC, ALAC, WAV, MP3, AAC and Opus, plus TIDAL, Qobuz and Deezer from servers you add, your own Navidrome or other Subsonic server, and Tryptify Cloud. |
-| **Tryptify Cloud** | Your music stored for you, lossless files kept as uploaded, played like your own server. From $3.99 a month for 100 GB, with a 7-day free trial. |
+| **Tryptify Cloud** | Your music stored for you, lossless files kept as uploaded, played like your own server. From $0.99 a month for 10 GB up to 10 TB, with a 7-day free trial. |
 | **A spectrum you can read** | A C++ waterfall from a 16K-point FFT, in six styles, up to 120 fps. |
 | **DSP mixing console** | A C++17 engine with up to 48 buses, 36 processors and EBU R128 meters. |
 | **Headphone AutoEQ** | Correction from 4,000+ measurements against 10 targets, with target pills and a filter editor under the graph. |
