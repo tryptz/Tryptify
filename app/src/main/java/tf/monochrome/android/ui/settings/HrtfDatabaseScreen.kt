@@ -176,36 +176,43 @@ fun HrtfDatabaseScreen(
         val folders = listing?.folders.orEmpty().filter { q.isEmpty() || it.display.lowercase().contains(q) }
         val files = listing?.files.orEmpty().filter { q.isEmpty() || it.display.lowercase().contains(q) }
 
-        OutlinedTextField(
-            value = state.query,
-            onValueChange = viewModel::setQuery,
-            label = { Text(stringResource(R.string.hrtf_filter)) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        )
-
-        state.status?.let {
-            Text(
-                it.resolve(LocalContext.current),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            )
-        }
-
+        // A permanent floating bar, as every list search is: the databases
+        // scroll up under the glass instead of starting below an inline field.
+        // The status line hangs under the field in the same pane.
+        val status = state.status?.resolve(LocalContext.current)
+        tf.monochrome.android.ui.components.SearchOverlay(
+            open = true,
+            query = state.query,
+            onQueryChange = viewModel::setQuery,
+            placeholder = stringResource(R.string.hrtf_filter),
+            onClose = null,
+            autoFocus = false,
+            barContent = {
+                if (status != null) {
+                    Text(
+                        status,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                }
+            },
+        ) { searchTopInset ->
         when {
-            state.loading -> Box(Modifier.fillMaxWidth().padding(32.dp)) {
+            state.loading -> Box(Modifier.fillMaxWidth().padding(top = searchTopInset).padding(32.dp)) {
                 CircularProgressIndicator(Modifier.align(Alignment.Center))
             }
             state.error != null -> Text(
                 state.error!!.resolve(LocalContext.current),
                 color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(top = searchTopInset).padding(16.dp),
             )
             else -> LazyColumn(
                 Modifier.fillMaxSize(),
-                // The last databases clear the floating tab bar and mini player.
+                // Starts below the glass and scrolls up under it; the last
+                // databases clear the floating tab bar and mini player.
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                    top = searchTopInset,
                     bottom = tf.monochrome.android.ui.navigation.bottomChromePadding,
                 ),
             ) {
@@ -234,6 +241,7 @@ fun HrtfDatabaseScreen(
                     item { Text(stringResource(R.string.hrtf_nothing_here), modifier = Modifier.padding(16.dp)) }
                 }
             }
+        }
         }
     }
 }

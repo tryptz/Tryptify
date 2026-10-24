@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -184,14 +185,21 @@ private fun Index(
         placeholder = stringResource(R.string.subsonic_search_songs),
         onClose = closeSearch,
     ) { searchTopInset ->
-    Column(Modifier.fillMaxSize().padding(top = searchTopInset)) {
+    // Not padded by the bar's height: the lists take it as content padding,
+    // so rows start below the glass and scroll up under it, as on the Search
+    // tab. Padding this Column pushed the page down and clipped the list at a
+    // hard line under the bar.
+    Column(Modifier.fillMaxSize()) {
+        val listInset = if (searchOpen) searchTopInset else 0.dp
         if (searchOpen && query.isNotBlank()) {
-            LoadContent(results, onRetry = viewModel::retrySearch, empty = R.string.no_results) { list ->
-                SongList(tracks = list, onTrackClick = playSong, onMoreClick = onMore, navController = navController, selection = selection)
+            LoadContent(results, onRetry = viewModel::retrySearch, empty = R.string.no_results, topInset = listInset) { list ->
+                SongList(tracks = list, onTrackClick = playSong, onMoreClick = onMore, navController = navController, selection = selection, topInset = listInset)
             }
             return@Column
         }
-        Row(
+        // While the search is open the bar takes the header's place, as on
+        // Local: its own button closes it, and the list stays as it was.
+        if (!searchOpen) Row(
             modifier = Modifier.fillMaxWidth().padding(start = MonoDimens.spacingLg, end = MonoDimens.spacingSm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -226,14 +234,14 @@ private fun Index(
             }
         }
         when (section) {
-            Section.ALBUMS -> LoadContent(albums, onRetry = viewModel::reload) { list ->
-                AlbumGrid(albums = list, onAlbumClick = viewModel::openAlbum)
+            Section.ALBUMS -> LoadContent(albums, onRetry = viewModel::reload, topInset = listInset) { list ->
+                AlbumGrid(albums = list, onAlbumClick = viewModel::openAlbum, topInset = listInset)
             }
-            Section.ARTISTS -> LoadContent(artists, onRetry = viewModel::reload) { list ->
-                ArtistList(artists = list, onArtistClick = viewModel::openArtist)
+            Section.ARTISTS -> LoadContent(artists, onRetry = viewModel::reload, topInset = listInset) { list ->
+                ArtistList(artists = list, onArtistClick = viewModel::openArtist, topInset = listInset)
             }
-            Section.SONGS -> LoadContent(songs, onRetry = viewModel::reload) { list ->
-                SongList(tracks = list, onTrackClick = playSong, onMoreClick = onMore, navController = navController, selection = selection)
+            Section.SONGS -> LoadContent(songs, onRetry = viewModel::reload, topInset = listInset) { list ->
+                SongList(tracks = list, onTrackClick = playSong, onMoreClick = onMore, navController = navController, selection = selection, topInset = listInset)
             }
         }
     }
@@ -320,19 +328,26 @@ private fun <T> LoadContent(
     load: Load<List<T>>,
     onRetry: () -> Unit,
     empty: Int = R.string.subsonic_library_empty,
+    /**
+     * A search bar's height over the top. The list in [content] takes it as
+     * content padding; the states that do not scroll are simply moved below it.
+     */
+    topInset: Dp = 0.dp,
     content: @Composable (List<T>) -> Unit,
 ) {
     when (load) {
-        Load.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Load.Loading -> Box(Modifier.fillMaxSize().padding(top = topInset), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
         }
-        is Load.Failed -> Message(
-            text = stringResource(R.string.subsonic_load_failed),
-            action = stringResource(R.string.action_retry),
-            onAction = onRetry,
-        )
+        is Load.Failed -> Box(Modifier.padding(top = topInset)) {
+            Message(
+                text = stringResource(R.string.subsonic_load_failed),
+                action = stringResource(R.string.action_retry),
+                onAction = onRetry,
+            )
+        }
         is Load.Loaded -> if (load.value.isEmpty()) {
-            Message(text = stringResource(empty))
+            Box(Modifier.padding(top = topInset)) { Message(text = stringResource(empty)) }
         } else {
             content(load.value)
         }

@@ -113,11 +113,13 @@ fun SearchHistoryContent(
     history: List<String>,
     onSelect: (String) -> Unit,
     onClearHistory: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** The search bar's height: content padding, so the history scrolls up under the glass. */
+    topInset: Dp = 0.dp,
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = tf.monochrome.android.ui.navigation.bottomChromePadding)
+        contentPadding = PaddingValues(top = topInset, bottom = tf.monochrome.android.ui.navigation.bottomChromePadding)
     ) {
         item {
             Text(
@@ -194,7 +196,8 @@ fun SearchResultsContent(
     favoriteTrackIds: Set<Long>,
     libraryPlaylists: List<UserPlaylistEntity>,
     modifier: Modifier = Modifier,
-    emptyContent: @Composable (() -> Unit)? = null,
+    /** Shown for an empty query, handed [topInset] to use as its list's content padding. */
+    emptyContent: @Composable ((topInset: Dp) -> Unit)? = null,
     onLoadMore: (SearchViewModel.SearchPageType) -> Unit = {},
     isLoadingMore: Boolean = false,
     endReached: Boolean = false,
@@ -297,7 +300,7 @@ fun SearchResultsContent(
 
     when {
         query.isBlank() && emptyContent != null ->
-            Box(modifier = modifier.fillMaxSize().padding(top = topInset)) { emptyContent() }
+            Box(modifier = modifier.fillMaxSize()) { emptyContent(topInset) }
         // The pills stay up while a query runs. Swapping the whole list for a
         // spinner made them blink out on every keystroke, and hid the source
         // row just when someone reached for it.

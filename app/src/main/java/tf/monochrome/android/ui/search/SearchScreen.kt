@@ -115,11 +115,12 @@ fun SearchScreen(
             topInset = searchTopInset,
             albumSources = albumSources,
             artistSources = artistSources,
-            emptyContent = {
+            emptyContent = { inset ->
                 SearchHistoryContent(
                     history = searchHistory,
                     onSelect = viewModel::selectHistoryQuery,
-                    onClearHistory = viewModel::clearSearchHistory
+                    onClearHistory = viewModel::clearSearchHistory,
+                    topInset = inset,
                 )
             }
         )

@@ -723,6 +723,22 @@ behaviour and it is not negotiable:
   Discover's bar is the field alone, one row like every other: its "Browse the
   map" line made it twice their height, so the map and "no match" live in the
   genre row under it.
+- Library › Local and My server are pages of their own under the Library chips,
+  and they had the inset as `padding(top = …)` on their Column, so the bar sat
+  in a strip and the list clipped under it (seen on device, side by side with
+  the Search tab). Now, as on the Search tab, the open bar takes the header
+  row's place (its own button closes it) and the list under it gets the inset
+  as content padding: Local lists every song until something is typed, My
+  server keeps the section that was open. `SongList`, `AlbumGrid` and
+  `ArtistList` take a `topInset` for this. Local's selection bar is fixed
+  chrome inside the overlay, so while it shows it is moved below the glass and
+  the list takes no inset.
+- The Search tab's history (an empty query) takes the inset as content
+  padding too (`SearchHistoryContent(topInset)`); it was padded, and clipped
+  under the bar. The debug log's filter and the HRTF database's filter were
+  inline text fields above their lists; both are permanent `SearchOverlay`s
+  now, with the log's level chips and the database's status line in
+  `barContent`.
 - Settings' form runs full height under the bar, with the inset going to each
   tab's own `LazyColumn` via `LocalSettingsSearchInset`. Pushing the form down
   instead leaves an empty strip behind the glass, and glass with nothing behind

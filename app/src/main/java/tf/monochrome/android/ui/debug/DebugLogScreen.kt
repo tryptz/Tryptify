@@ -160,43 +160,44 @@ fun DebugLogScreen(
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
         )
 
-        OutlinedTextField(
-            value = query,
-            onValueChange = viewModel::setQuery,
-            label = { Text("Filter (tag or message)") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            singleLine = true,
-        )
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            LevelFilter.entries.forEach { option ->
-                tf.monochrome.android.ui.mixer.GlassChoiceChip(
-                    label = option.label,
-                    selected = levelFilter == option,
-                    accent = MaterialTheme.colorScheme.primary,
-                    onClick = { viewModel.setLevelFilter(option) },
-                )
-            }
-        }
-
+        // A permanent floating bar, as every list search is: the log scrolls
+        // up under the glass instead of starting below two inline rows.
+        tf.monochrome.android.ui.components.SearchOverlay(
+            open = true,
+            query = query,
+            onQueryChange = viewModel::setQuery,
+            placeholder = "Filter (tag or message)",
+            onClose = null,
+            autoFocus = false,
+            barContent = {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    LevelFilter.entries.forEach { option ->
+                        tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                            label = option.label,
+                            selected = levelFilter == option,
+                            accent = MaterialTheme.colorScheme.primary,
+                            onClick = { viewModel.setLevelFilter(option) },
+                        )
+                    }
+                }
+            },
+        ) { searchTopInset ->
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 12.dp),
-            contentPadding = PaddingValues(bottom = 80.dp + LocalBottomChromeInset.current),
+            contentPadding = PaddingValues(top = searchTopInset, bottom = 80.dp + LocalBottomChromeInset.current),
         ) {
             items(items = entries) { entry ->
                 LogRow(entry = entry)
             }
+        }
         }
     }
 }
