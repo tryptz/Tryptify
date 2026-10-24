@@ -16,15 +16,25 @@ import java.util.Locale
  */
 object LrcFormat {
 
-    private val TAG = Regex("""\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?]""")
+    // `[mm:ss.xx]`, or `[mm:ss.xx-mm:ss.xx]` with the line's end, which is read past.
+    private val TAG = Regex("""\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?(?:-\d{1,3}:\d{1,2}(?:[.:]\d{1,3})?)?]""")
     private val WORD = Regex("""<(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?>""")
     private val META = Regex("""^\[([a-zA-Z#]+):(.*)]$""")
 
-    /** The lyrics in [text], or null when no line carries a time. Any `[offset:]` is applied. */
+    // A stamp closing the line (`[00:12.00]words[00:15.00]`): when it ends, not words.
+    private val END_STAMP = Regex("""\s*\[\d{1,3}:\d{1,2}(?:[.:]\d{1,3})?]\s*$""")
+
+    /**
+     * The lyrics in [text], or null when no line carries a time. Any `[offset:]` is applied.
+     *
+     * A file whose every stamp is zero was never timed, only stamped: it comes
+     * back unsynced, rather than as lines that all light up at once.
+     */
     fun parse(text: String): Lyrics? {
         var offsetMs = 0L
         val lines = mutableListOf<LyricLine>()
-        for (raw in text.lineSequence()) {
+        // A byte order mark would hide the first line's stamp, and with it the line.
+        for (raw in text.removePrefix("﻿").lineSequence()) {
             val line = raw.trimEnd()
             if (line.isBlank()) continue
             META.matchEntire(line.trim())?.let { meta ->
@@ -45,11 +55,13 @@ object LrcFormat {
             }
             if (lead.isEmpty()) continue
             // A stamp with nothing after it clears a player's screen; it is no line.
-            val body = line.substring(position)
+            val body = line.substring(position).replace(END_STAMP, "")
             if (body.isBlank()) continue
             for (tag in lead) lines.add(lineOf(body, msOf(tag), offsetMs))
         }
         if (lines.isEmpty()) return null
+        val timed = lines.any { line -> line.timeMs > 0 || line.words.any { it.startMs > 0 } }
+        if (!timed) return Lyrics(lines = lines.map { it.copy(timeMs = 0, words = emptyList()) }, isSynced = false)
         return Lyrics(lines = lines.sortedBy { it.timeMs }, isSynced = true)
     }
 

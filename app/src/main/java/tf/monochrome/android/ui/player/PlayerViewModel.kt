@@ -640,6 +640,8 @@ class PlayerViewModel @Inject constructor(
                                     track.id,
                                     LyricsLookup.trackFor(track, unified),
                                     skipTidal = skipTidal,
+                                    // A local file's own lyrics come first (a download's are found by id).
+                                    localFile = (unified?.source as? tf.monochrome.android.domain.model.PlaybackSource.LocalFile)?.filePath,
                                 ).getOrNull()
                                 _currentLyrics.value = found
                                 _isLyricsLoading.value = false

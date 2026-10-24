@@ -195,7 +195,9 @@ internal object OggComments {
 
     private const val BUFFER_BYTES = 16 * 1024
     private const val PAGE_HEADER_BYTES = 27
-    private const val MAX_VALUE_BYTES = 4096L
+    // Room for a song's LYRICS (a synced one is often past 4 KiB); cover art,
+    // tens or hundreds of KiB, is still skipped.
+    private const val MAX_VALUE_BYTES = 64L * 1024
     private const val MAX_COMMENTS = 4096L
 
     // A comment header with several megabytes of cover art spans a few hundred

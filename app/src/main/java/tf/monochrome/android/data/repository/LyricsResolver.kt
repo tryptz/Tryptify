@@ -49,6 +49,8 @@ class LyricsResolver @Inject constructor(
         convertToRomaji: Boolean,
         mode: LyricsWordProvider,
         primary: (suspend () -> Lyrics?)? = null,
+        /** The song's own lyrics ([LocalLyrics]): first in line, so they win their timing level. */
+        own: Lyrics? = null,
     ): Lyrics? = coroutineScope {
         val primaryAnswer = primary?.let { fetch ->
             async {
@@ -90,6 +92,7 @@ class LyricsResolver @Inject constructor(
         fun cleaned(fetch: suspend () -> Lyrics?): suspend () -> Lyrics? = { fetch()?.let { LyricsText.clean(it, query) } }
 
         val entries = buildList {
+            if (own != null) add(LyricsRace.Entry("own") { own })
             if (primaryAnswer != null) add(LyricsRace.Entry("primary") { primaryAnswer.await() })
             if (all) {
                 add(LyricsRace.Entry("lrc.red", cleaned { lrcRed.lookup(query, convertToRomaji) }))
