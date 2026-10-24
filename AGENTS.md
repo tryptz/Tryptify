@@ -166,8 +166,8 @@ and `1` when it was left out; the second must print `0`. The cloud setup below w
 `>`, which replaces the file, so add these keys after it, not before. The CI
 workflow sets neither variable, so an APK it builds has no built-in servers.
 
-The other settings `local.properties` can override (`spotify.clientId`,
-`themeStore.url`, `lastfm.apiKey`) are public and have committed defaults.
+The other settings `local.properties` can override (`themeStore.url`,
+`lastfm.apiKey`) are public and have committed defaults.
 They are not secrets, but the rule for `local.properties` stays the same: it is
 never committed.
 

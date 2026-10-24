@@ -31,9 +31,7 @@ import androidx.compose.ui.res.stringResource
 /**
  * Optional streaming hookups. The catalog sources — TIDAL and Qobuz — both
  * resolve through the self-hosted servers added under
- * Settings → Connections → APIs. Spotify is a separate radio/recommendations connector
- * that runs the PKCE flow in a Custom Tab; its singleTop activity survives the
- * round-trip, so `isConnected` flips live when the callback lands.
+ * Settings → Connections → APIs.
  */
 @Composable
 fun StreamingStep(
@@ -41,10 +39,6 @@ fun StreamingStep(
     onQobuzSetup: () -> Unit,
 ) {
     val context = LocalContext.current
-    val spotifyConnected by viewModel.spotifyConnected.collectAsStateWithLifecycle()
-    val spotifyConnecting by viewModel.spotifyConnecting.collectAsStateWithLifecycle()
-    val spotifyUserName by viewModel.spotifyUserName.collectAsStateWithLifecycle()
-    val spotifyError by viewModel.spotifyError.collectAsStateWithLifecycle()
 
     OnboardingStepScaffold(
         title = stringResource(R.string.streaming),
@@ -75,21 +69,6 @@ fun StreamingStep(
             buttonEnabled = true,
             onButtonClick = onQobuzSetup,
             errorText = null
-        )
-        ServiceCard(
-            iconRes = R.drawable.logo_spotify,
-            title = "Spotify",
-            description = when {
-                spotifyConnected -> spotifyUserName?.let { stringResource(R.string.spotify_connected_as, it) }
-                    ?: stringResource(R.string.spotify_connected_plain)
-                spotifyConnecting -> stringResource(R.string.waiting_for_spotify)
-                else -> stringResource(R.string.spotify_service_detail)
-            },
-            connected = spotifyConnected,
-            buttonLabel = if (spotifyConnected) null else stringResource(R.string.connect_spotify),
-            buttonEnabled = !spotifyConnecting,
-            onButtonClick = { viewModel.connectSpotify(context) },
-            errorText = spotifyError
         )
     }
 }

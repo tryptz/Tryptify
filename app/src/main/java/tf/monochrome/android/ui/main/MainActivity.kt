@@ -62,7 +62,6 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var preferences: PreferencesManager
     @Inject lateinit var supabaseAuthManager: SupabaseAuthManager
-    @Inject lateinit var spotifyAuthManager: tf.monochrome.android.data.auth.SpotifyAuthManager
     @Inject lateinit var lastFmAuthManager: tf.monochrome.android.data.auth.LastFmAuthManager
     @Inject lateinit var queueManager: QueueManager
     @Inject lateinit var trackSourceResolver: tf.monochrome.android.ui.components.TrackSourceResolver
@@ -574,8 +573,7 @@ class MainActivity : ComponentActivity() {
     /**
      * Route what other apps send: an audio file opened with Tryptify, a
      * listening party invite (the rooms server's https link), and the
-     * auth callback deep-links, Spotify (tryptify://spotify-callback),
-     * Last.fm (tryptify://lastfm-callback) and Supabase
+     * auth callback deep-links, Last.fm (tryptify://lastfm-callback) and Supabase
      * (tf.monotrypt.android://login-callback). Handled from BOTH
      * onNewIntent (app already running) and onCreate (cold start after process
      * death, where the redirect delivers the callback as the launch intent —
@@ -600,9 +598,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         lifecycleScope.launch {
-            if (scheme == "tryptify" && uri.host == "spotify-callback") {
-                spotifyAuthManager.handleCallback(uri)
-            } else if (scheme == "tryptify" && uri.host == "lastfm-callback") {
+            if (scheme == "tryptify" && uri.host == "lastfm-callback") {
                 lastFmAuthManager.handleCallback(uri)
             } else if (scheme == "tf.monotrypt.android") {
                 supabaseAuthManager.handleDeepLink(uri)

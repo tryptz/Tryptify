@@ -60,15 +60,6 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Spotify PKCE OAuth — client ID is public by design (no secret needed for
-        // the authorization-code-with-PKCE flow). Overridable via local.properties.
-        buildConfigField(
-            "String",
-            "SPOTIFY_CLIENT_ID",
-            "\"${localProperties.getProperty("spotify.clientId") ?: "c9e571c8b81948feb6573014a3efdd2c"}\"",
-        )
-        buildConfigField("String", "SPOTIFY_REDIRECT_URI", "\"tryptify://spotify-callback\"")
-
         // The Theme Store's API (server/theme-store, a Railway Function). It
         // holds no secret: every call carries the listener's Supabase session,
         // which the server checks against the project's public keys.

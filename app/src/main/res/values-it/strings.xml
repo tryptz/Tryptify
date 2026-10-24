@@ -341,10 +341,6 @@
     <string name="dismiss_for_good">Chiudi definitivamente</string>
     <string name="dont_ask_again">Non chiedere più</string>
     <string name="dont_show_again">Non mostrare più</string>
-    <string name="spotify_import_title">Importa da Spotify</string>
-    <string name="spotify_strict_detail">Il nome dell\'album deve corrispondere ai metadati di Spotify</string>
-    <string name="spotify_liked_songs">Brani che ti piacciono</string>
-    <string name="spotify_liked_songs_detail">I tuoi brani salvati su Spotify</string>
     <string name="profile">Profilo</string>
     <string name="update_available">La versione %1$s è disponibile</string>
     <string name="update_available_detail">Tocca per vedere la release su GitHub</string>
@@ -737,11 +733,6 @@
     <string name="tidal_service_detail">Catalogo hi-res e lossless tramite la tua istanza TrypT HiFi — la sorgente predefinita, pronta non appena la tua istanza è connessa.</string>
     <string name="set_up_in_settings">Configura in Impostazioni</string>
     <string name="qobuz_service_detail">Streaming lossless e hi-res tramite la tua istanza TrypT HiFi. Aggiungilo in Impostazioni → Connessioni → API — questo completerà l’onboarding e ti porterà lì.</string>
-    <string name="spotify_connected_as">Connesso come %1$s — radio e raccomandazioni, abbinate ai brani che possiedi.</string>
-    <string name="spotify_connected_plain">Connesso — radio e raccomandazioni, abbinate ai brani che possiedi.</string>
-    <string name="waiting_for_spotify">In attesa di Spotify…</string>
-    <string name="spotify_service_detail">Radio e raccomandazioni, abbinate ai tuoi brani locali e Qobuz.</string>
-    <string name="connect_spotify">Connetti Spotify</string>
     <string name="connected">Connesso</string>
     <string name="welcome_tagline">Riproduzione bit-perfect e ad alta risoluzione — la tua libreria, a modo tuo.</string>
     <string name="get_started">Inizia</string>
@@ -752,7 +743,6 @@
     <string name="no_folders_picked">Nessuna cartella della libreria ancora selezionata</string>
     <string name="downloads_to_app_storage">Download → memoria dell’app</string>
     <string name="downloads_to_custom_folder">Download → cartella personalizzata</string>
-    <string name="spotify_connected">Spotify connesso</string>
     <plurals name="found_tracks_in_folder">
         <item quantity="one">Trovato %1$s brano in questa cartella</item>
         <item quantity="many">Trovati %1$s brani in questa cartella</item>
@@ -1063,8 +1053,6 @@
     <string name="settings_application_id_optional">ID applicazione (opzionale)</string>
     <string name="settings_album_art_needs_an_application_id_a_presence_set">La copertina dell\'album richiede un ID applicazione. Uno stato di presenza impostato in questo modo può mostrare solo immagini ospitate da Discord stesso, e un\'applicazione serve proprio a convertire l\'URL di una copertina in tale immagine. Senza di essa vedrai comunque brano, artista, album e barra di avanzamento.</string>
     <string name="settings_forget_token">Dimentica token</string>
-    <string name="settings_disconnect_spotify">Disconnetti Spotify</string>
-    <string name="settings_connect_your_spotify_account_to_import_playlists">Collega il tuo account Spotify per importare playlist dalla Libreria. Nota: solo gli account Spotify inseriti nella whitelist per questa app possono connettersi finché è in modalità di sviluppo.</string>
     <string name="settings_sign_out">Vuoi disconnetterti?</string>
     <string name="settings_you_ll_stop_syncing_favorites_and_playlists">La sincronizzazione di preferiti e playlist tra i dispositivi verrà interrotta finché non effettuerai nuovamente l\'accesso.</string>
     <string name="settings_sign_in_to_sync_favorites_and_playlists_across">Accedi per sincronizzare preferiti e playlist tra i dispositivi.</string>
@@ -1090,9 +1078,7 @@
     <string name="settings_the_order_of_the_switcher_at_the_top_of_library">L\'ordine del selettore in cima alla Libreria. Disattiva quelli che non usi per rimuoverli.</string>
     <string name="settings_playlist_import">Importazione playlist</string>
     <string name="settings_spotify_playlist_url">URL della playlist Spotify</string>
-    <string name="settings_connect_spotify_on_the_connections_tab_to_enable">Collega Spotify nella scheda Connessioni per abilitare l\'importazione tramite URL</string>
     <string name="settings_import_playlist">Importa playlist</string>
-    <string name="settings_browse_my_playlists">Sfoglia le mie playlist</string>
     <string name="settings_tab_appearance">Aspetto</string>
     <string name="settings_tab_visual_studio">Studio visivo</string>
     <string name="settings_tab_audio">Audio</string>
@@ -1204,7 +1190,6 @@
     <string name="settings_discord_on_waiting">Attivo. Si connette durante la riproduzione</string>
     <string name="settings_spectrum_circle">Disattivato. Lo spettro si trova nel cerchio piccolo</string>
     <string name="settings_posting_to_channel">Invio nel canale %1$s</string>
-    <string name="settings_connect_spotify">Connetti Spotify</string>
     <string name="settings_failed_to_read_file">Impossibile leggere il file</string>
     <string name="settings_backup_saved">Backup salvato</string>
     <string name="settings_failed_to_save_backup">Impossibile salvare il backup</string>
@@ -1887,10 +1872,8 @@
     <string name="import_youtube_unsupported">L\'importazione da YouTube Music non è ancora supportata — funzionano solo i link alle playlist di Spotify.</string>
     <string name="import_unrecognized_url">URL playlist non riconosciuto. Incolla un link a una playlist di Spotify come https://open.spotify.com/playlist/…</string>
     <string name="import_no_tracks">Questa playlist di Spotify non contiene brani importabili.</string>
-    <string name="import_liked_empty">La tua lista Brani che ti piacciono di Spotify è vuota.</string>
     <string name="import_default_playlist_name">Playlist Spotify</string>
     <string name="import_from_spotify">Importata da Spotify</string>
-    <string name="import_liked_name">Brani che ti piacciono (Spotify)</string>
     <string name="import_spotify_failed">Importazione da Spotify non riuscita</string>
     <string name="widget_nothing_playing">Nessun brano in riproduzione</string>
     <string name="widget_album_art">Copertina album</string>
@@ -3092,7 +3075,6 @@
     <string name="settings_music_folders_desc">Le cartelle da cui viene scansionata la tua libreria. Rimuoverne una toglie i suoi brani dalla libreria; i file restano sul telefono.</string>
     <string name="settings_music_folders_whole_phone">Nessuna cartella scelta, quindi viene scansionato tutto il telefono. Aggiungi una cartella per scansionare solo quelle che scegli.</string>
     <string name="settings_rescan_library_now">Riscansiona la libreria ora</string>
-    <string name="settings_spotify_browse_needs_connect">Per scegliere dalle tue playlist e dai Brani che ti piacciono, connetti Spotify nella scheda Connessioni.</string>
     <string name="settings_hide_unmatched">Nascondi brani senza corrispondenza</string>
     <string name="action_find_album_art">Trova copertina</string>
     <string name="art_looking">Ricerca della copertina…</string>

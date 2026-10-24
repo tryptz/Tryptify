@@ -818,9 +818,9 @@ packs live in the app's own storage and are not in the library.
 **Playlist Import in Settings is the link import.** No account needed: the
 link is looked up as it is pasted (`rememberSpotifyLinkPreview`,
 `LinkPreviewCard`, the same pieces as Library › Playlists › New playlist),
-and Import Playlist reads the public playlist when the account cannot.
-Browse My Playlists, for your own playlists and Liked Songs, shows only with
-Spotify connected; the field is never greyed out behind a sign-in again.
+and Import Playlist reads the public playlist (its first 100 songs). There is
+no Spotify account any more, and nothing here waits for one: the sign-in, the
+browse of your own playlists and Liked Songs went with it.
 
 **An imported font is a family, not a file.** Fonts arrive as a file per
 weight; the library groups the files that name the same family

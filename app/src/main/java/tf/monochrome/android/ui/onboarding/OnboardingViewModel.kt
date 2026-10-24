@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import tf.monochrome.android.audio.UsbAudioRouter
-import tf.monochrome.android.data.auth.SpotifyAuthManager
 import tf.monochrome.android.data.local.scanner.MediaStoreSource
 import tf.monochrome.android.data.local.scanner.ScanWorker
 import tf.monochrome.android.data.preferences.PreferencesManager
@@ -37,7 +36,7 @@ data class FolderEntry(
 
 /**
  * First-run wizard state. Everything the user picks (folders, download
- * location, bit-perfect, Spotify tokens) is persisted the moment it's
+ * location, bit-perfect) is persisted the moment it's
  * chosen, so backing out mid-flow or process death loses nothing; only
  * `onboarding_complete` itself is written when the user leaves the flow.
  */
@@ -46,7 +45,6 @@ class OnboardingViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val preferences: PreferencesManager,
     private val mediaStoreSource: MediaStoreSource,
-    private val spotifyAuthManager: SpotifyAuthManager,
     private val usbAudioRouter: UsbAudioRouter,
 ) : ViewModel() {
 
@@ -71,10 +69,6 @@ class OnboardingViewModel @Inject constructor(
     val folderError: StateFlow<tf.monochrome.android.ui.components.UiText?> = _folderError.asStateFlow()
 
     // Streaming / audio state passed straight through from the owning singletons.
-    val spotifyConnected: StateFlow<Boolean> = spotifyAuthManager.isConnected
-    val spotifyConnecting: StateFlow<Boolean> = spotifyAuthManager.isConnecting
-    val spotifyUserName: StateFlow<String?> = spotifyAuthManager.connectedUserName
-    val spotifyError: StateFlow<String?> = spotifyAuthManager.errorMessage
     val usbDevice = usbAudioRouter.usbOutputDevice
 
     val downloadFolderUri: StateFlow<String?> = preferences.downloadFolderUri
@@ -157,8 +151,6 @@ class OnboardingViewModel @Inject constructor(
     fun setDownloadFolder(uriString: String?) {
         viewModelScope.launch { preferences.setDownloadFolderUri(uriString) }
     }
-
-    fun connectSpotify(activityContext: Context) = spotifyAuthManager.connect(activityContext)
 
     fun usbDeviceLabel(device: android.media.AudioDeviceInfo): String =
         usbAudioRouter.describe(device)

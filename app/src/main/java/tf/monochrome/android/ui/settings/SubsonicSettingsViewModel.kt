@@ -16,7 +16,7 @@ import javax.inject.Inject
 
 /**
  * Settings › Connections › Music server. Its own view model rather than more
- * of SettingsViewModel, the way Spotify's account controls have theirs.
+ * of SettingsViewModel.
  */
 @HiltViewModel
 class SubsonicSettingsViewModel @Inject constructor(

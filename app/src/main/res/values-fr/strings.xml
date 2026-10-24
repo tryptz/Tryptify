@@ -341,10 +341,6 @@
     <string name="dismiss_for_good">Fermer définitivement</string>
     <string name="dont_ask_again">Ne plus demander</string>
     <string name="dont_show_again">Ne plus afficher</string>
-    <string name="spotify_import_title">Importer depuis Spotify</string>
-    <string name="spotify_strict_detail">Le nom de l’album doit correspondre aux métadonnées Spotify</string>
-    <string name="spotify_liked_songs">Titres likés</string>
-    <string name="spotify_liked_songs_detail">Vos titres enregistrés sur Spotify</string>
     <string name="profile">Profil</string>
     <string name="update_available">La version %1$s est disponible</string>
     <string name="update_available_detail">Touchez pour voir la version sur GitHub</string>
@@ -737,11 +733,6 @@
     <string name="tidal_service_detail">Catalogue hi-res et sans perte via votre instance TrypT HiFi — la source par défaut, prête dès que votre instance est connectée.</string>
     <string name="set_up_in_settings">Configurer dans les Paramètres</string>
     <string name="qobuz_service_detail">Streaming sans perte et hi-res via votre instance TrypT HiFi. Ajoutez-la dans Paramètres → Connexions → API — cela termine la configuration et vous y emmène.</string>
-    <string name="spotify_connected_as">Connecté en tant que %1$s — radio et recommandations ramenées à vos titres.</string>
-    <string name="spotify_connected_plain">Connecté — radio et recommandations ramenées à vos titres.</string>
-    <string name="waiting_for_spotify">En attente de Spotify…</string>
-    <string name="spotify_service_detail">Radio et recommandations, ramenées à vos titres locaux et Qobuz.</string>
-    <string name="connect_spotify">Connecter Spotify</string>
     <string name="connected">Connecté</string>
     <string name="welcome_tagline">Une lecture bit-perfect et haute résolution — votre bibliothèque, à votre façon.</string>
     <string name="get_started">Commencer</string>
@@ -752,7 +743,6 @@
     <string name="no_folders_picked">Aucun dossier de bibliothèque choisi pour l’instant</string>
     <string name="downloads_to_app_storage">Téléchargements → stockage de l’app</string>
     <string name="downloads_to_custom_folder">Téléchargements → dossier personnalisé</string>
-    <string name="spotify_connected">Spotify connecté</string>
     <plurals name="found_tracks_in_folder">
         <item quantity="one">%1$s titre trouvé dans ce dossier</item>
         <item quantity="many">%1$s titres trouvés dans ce dossier</item>
@@ -1063,8 +1053,6 @@
     <string name="settings_application_id_optional">Identifiant d’application (facultatif)</string>
     <string name="settings_album_art_needs_an_application_id_a_presence_set">La pochette nécessite un identifiant d’application. Un statut défini ainsi ne peut afficher qu’une image hébergée par Discord, et c’est l’application qui transforme l’URL d’une pochette en une telle image. Sans lui, vous avez quand même le titre, l’artiste, l’album et la barre de progression.</string>
     <string name="settings_forget_token">Oublier le jeton</string>
-    <string name="settings_disconnect_spotify">Déconnecter Spotify</string>
-    <string name="settings_connect_your_spotify_account_to_import_playlists">Connectez votre compte Spotify pour importer des playlists depuis la Bibliothèque. Remarque : tant que l’app est en mode développement, seuls les comptes Spotify autorisés pour elle peuvent se connecter.</string>
     <string name="settings_sign_out">Se déconnecter ?</string>
     <string name="settings_you_ll_stop_syncing_favorites_and_playlists">Vos favoris et playlists ne seront plus synchronisés entre vos appareils jusqu’à ce que vous vous reconnectiez.</string>
     <string name="settings_sign_in_to_sync_favorites_and_playlists_across">Connectez-vous pour synchroniser vos favoris et playlists entre vos appareils.</string>
@@ -1090,9 +1078,7 @@
     <string name="settings_the_order_of_the_switcher_at_the_top_of_library">L’ordre du sélecteur en haut de la Bibliothèque. Grisez ceux que vous n’utilisez pas et ils en disparaissent.</string>
     <string name="settings_playlist_import">Import de playlists</string>
     <string name="settings_spotify_playlist_url">URL de la playlist Spotify</string>
-    <string name="settings_connect_spotify_on_the_connections_tab_to_enable">Connectez Spotify dans l’onglet Connexions pour activer l’import par URL</string>
     <string name="settings_import_playlist">Importer la playlist</string>
-    <string name="settings_browse_my_playlists">Parcourir mes playlists</string>
     <string name="settings_tab_appearance">Apparence</string>
     <string name="settings_tab_visual_studio">Studio visuel</string>
     <string name="settings_tab_audio">Audio</string>
@@ -1204,7 +1190,6 @@
     <string name="settings_discord_on_waiting">Activé. Se connecte dès que quelque chose est lu</string>
     <string name="settings_spectrum_circle">Désactivé. Le spectre reste dans le petit cercle</string>
     <string name="settings_posting_to_channel">Publication dans le salon %1$s</string>
-    <string name="settings_connect_spotify">Connecter Spotify</string>
     <string name="settings_failed_to_read_file">Impossible de lire le fichier</string>
     <string name="settings_backup_saved">Sauvegarde enregistrée</string>
     <string name="settings_failed_to_save_backup">Impossible d’enregistrer la sauvegarde</string>
@@ -1887,10 +1872,8 @@
     <string name="import_youtube_unsupported">L’import depuis YouTube Music n’est pas encore pris en charge — seuls les liens de playlist Spotify fonctionnent.</string>
     <string name="import_unrecognized_url">URL de playlist non reconnue. Collez un lien de playlist Spotify comme https://open.spotify.com/playlist/…</string>
     <string name="import_no_tracks">Cette playlist Spotify ne contient aucun titre importable.</string>
-    <string name="import_liked_empty">Votre liste « Titres likés » sur Spotify est vide.</string>
     <string name="import_default_playlist_name">Playlist Spotify</string>
     <string name="import_from_spotify">Importée depuis Spotify</string>
-    <string name="import_liked_name">Titres likés (Spotify)</string>
     <string name="import_spotify_failed">Échec de l’import Spotify</string>
     <string name="widget_nothing_playing">Aucune lecture en cours</string>
     <string name="widget_album_art">Pochette</string>
@@ -3092,7 +3075,6 @@
     <string name="settings_music_folders_desc">Les dossiers d’où votre bibliothèque est analysée. En retirer un enlève ses titres de la bibliothèque ; les fichiers restent sur votre téléphone.</string>
     <string name="settings_music_folders_whole_phone">Aucun dossier choisi : tout le téléphone est analysé. Ajoutez un dossier pour n’analyser que ceux que vous choisissez.</string>
     <string name="settings_rescan_library_now">Réanalyser la bibliothèque</string>
-    <string name="settings_spotify_browse_needs_connect">Pour choisir parmi vos playlists et vos Titres likés, connectez Spotify dans l’onglet Connexions.</string>
     <string name="settings_hide_unmatched">Masquer les titres sans correspondance</string>
     <string name="action_find_album_art">Trouver la pochette</string>
     <string name="art_looking">Recherche de la pochette…</string>

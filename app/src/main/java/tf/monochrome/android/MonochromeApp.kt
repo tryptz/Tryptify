@@ -214,6 +214,8 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
         // out with the chart server older builds put there (never built in now).
         appScope.launch {
             runCatching { preferencesProvider.get().seedBuiltInServer(BuildConfig.BUILT_IN_ROOMS_SERVER, BuildConfig.RETIRED_CPU_HOST_SHA256) }
+            // The removed Spotify sign-in's tokens, gone from phones that had one.
+            runCatching { preferencesProvider.get().clearRetiredSpotifySignIn() }
         }
         // libusb gets the same off-thread warm-up so the dlopen + libusb_init
         // don't land on the audio thread the first time the user toggles

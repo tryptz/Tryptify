@@ -396,7 +396,8 @@ class PreferencesManager @Inject constructor(
         private val RADIO_WEIGHT_AVOID_RECENTLY_PLAYED = floatPreferencesKey("radio_weight_avoid_recently_played")
         private val RADIO_WEIGHT_DISCOVERY_DISTANCE = floatPreferencesKey("radio_weight_discovery_distance")
 
-        // Spotify (PKCE OAuth tokens for playlist import)
+        // The Spotify account the app no longer has: kept only to delete them
+        // from installs that signed in (clearRetiredSpotifySignIn).
         private val SPOTIFY_ACCESS_TOKEN = stringPreferencesKey("spotify_access_token")
         private val SPOTIFY_REFRESH_TOKEN = stringPreferencesKey("spotify_refresh_token")
         private val SPOTIFY_TOKEN_EXPIRES_AT = longPreferencesKey("spotify_token_expires_at")
@@ -1800,33 +1801,24 @@ class PreferencesManager @Inject constructor(
 
 
     // --- Spotify ---
-    val spotifyAccessToken: Flow<String?> = dataStore.data.map { it[SPOTIFY_ACCESS_TOKEN] }
-    val spotifyRefreshToken: Flow<String?> = dataStore.data.map { it[SPOTIFY_REFRESH_TOKEN] }
-    val spotifyTokenExpiresAt: Flow<Long> = dataStore.data.map { it[SPOTIFY_TOKEN_EXPIRES_AT] ?: 0L }
-    val spotifyUserName: Flow<String?> = dataStore.data.map { it[SPOTIFY_USER_NAME] }
-
-    suspend fun setSpotifyTokens(accessToken: String, refreshToken: String, expiresAtMillis: Long) {
+    /**
+     * The Spotify account sign-in was removed: playlist import reads a pasted
+     * link with no account. A phone that signed in still holds its tokens and
+     * the sign-in's half-finished state; they are deleted, once a launch, if
+     * there.
+     */
+    suspend fun clearRetiredSpotifySignIn() {
         dataStore.edit {
-            it[SPOTIFY_ACCESS_TOKEN] = accessToken
-            it[SPOTIFY_REFRESH_TOKEN] = refreshToken
-            it[SPOTIFY_TOKEN_EXPIRES_AT] = expiresAtMillis
+            if (it[SPOTIFY_ACCESS_TOKEN] != null || it[SPOTIFY_REFRESH_TOKEN] != null ||
+                it[SPOTIFY_TOKEN_EXPIRES_AT] != null || it[SPOTIFY_USER_NAME] != null
+            ) {
+                it.remove(SPOTIFY_ACCESS_TOKEN)
+                it.remove(SPOTIFY_REFRESH_TOKEN)
+                it.remove(SPOTIFY_TOKEN_EXPIRES_AT)
+                it.remove(SPOTIFY_USER_NAME)
+            }
         }
-    }
-
-    suspend fun setSpotifyUserName(name: String?) {
-        dataStore.edit {
-            if (name.isNullOrBlank()) it.remove(SPOTIFY_USER_NAME)
-            else it[SPOTIFY_USER_NAME] = name
-        }
-    }
-
-    suspend fun clearSpotifyTokens() {
-        dataStore.edit {
-            it.remove(SPOTIFY_ACCESS_TOKEN)
-            it.remove(SPOTIFY_REFRESH_TOKEN)
-            it.remove(SPOTIFY_TOKEN_EXPIRES_AT)
-            it.remove(SPOTIFY_USER_NAME)
-        }
+        runCatching { context.deleteSharedPreferences("spotify_pkce") }
     }
 
     // --- Onboarding ---

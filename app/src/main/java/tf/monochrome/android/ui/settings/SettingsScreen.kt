@@ -2512,9 +2512,8 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
 // ─── Tab 6: Connections ────────────────────────────────────────────────
 /**
  * Every account and endpoint in one place: which catalogs to search, the
- * self-hosted server URLs behind them, the two scrobblers, the Spotify link
- * that Library's playlist import rides on, and the app sign-in that syncs
- * favourites across devices.
+ * self-hosted server URLs behind them, the two scrobblers, and the app
+ * sign-in that syncs favourites across devices.
  *
  * Replaces the old Instances and Scrobbling tabs and absorbs System's
  * "Account & Sync" group. Each section is a `...Controls` function rather than
@@ -2724,58 +2723,7 @@ private fun ConnectionsTab(viewModel: SettingsViewModel) {
         Spacer(modifier = Modifier.height(20.dp))
         DiscordPresenceControls(viewModel)
         Spacer(modifier = Modifier.height(20.dp))
-        SpotifyAccountControls()
-        Spacer(modifier = Modifier.height(20.dp))
         AccountControls(viewModel)
-    }
-}
-
-/**
- * Spotify connect / disconnect. Only the account link lives here — the import
- * UI it feeds stays on Library, next to the playlists it creates. Both read the
- * same [SpotifyImportViewModel]: `hiltViewModel()` resolves against the Settings
- * NavBackStackEntry, which is shared by every tab, so connecting here is
- * immediately visible to the importer there.
- */
-@Composable
-private fun SpotifyAccountControls() {
-    val context = LocalContext.current
-    val spotifyViewModel: SpotifyImportViewModel = hiltViewModel()
-    val connected by spotifyViewModel.isConnected.collectAsStateWithLifecycle()
-    val userName by spotifyViewModel.userName.collectAsStateWithLifecycle()
-    val connecting by spotifyViewModel.isConnecting.collectAsStateWithLifecycle()
-    val authError by spotifyViewModel.authError.collectAsStateWithLifecycle()
-
-    SettingsGroupHeader("Spotify")
-    if (connected) {
-        SettingItem(
-            title = "Spotify",
-            subtitle = stringResource(R.string.settings_connected_as, userName ?: "…"),
-        )
-        OutlinedButton(onClick = { spotifyViewModel.disconnect() }) {
-            Text(stringResource(R.string.settings_disconnect_spotify))
-        }
-    } else {
-        Text(
-            stringResource(R.string.settings_connect_your_spotify_account_to_import_playlists),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        Button(
-            onClick = { spotifyViewModel.connect(context) },
-            enabled = !connecting
-        ) {
-            Text(if (connecting) stringResource(R.string.settings_connecting) else stringResource(R.string.settings_connect_spotify))
-        }
-    }
-    authError?.let { error ->
-        Text(
-            error,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.padding(top = 8.dp)
-        )
     }
 }
 
@@ -4062,8 +4010,8 @@ private fun MusicFolders(viewModel: SettingsViewModel) {
 }
 
 /**
- * Import a Spotify playlist from its link, with or without an account, and
- * with one, from your own playlists and Liked Songs.
+ * Import a Spotify playlist from its link, with no account: the public
+ * embed's first 100 songs, matched in the catalogue.
  *
  * Was a group on the System tab, between the app sign-in and the backup
  * controls. It produces playlists, so it belongs with the library — and
@@ -4076,11 +4024,8 @@ private fun PlaylistImportSection() {
         val context = LocalContext.current
         SettingsGroupHeader(stringResource(R.string.settings_playlist_import))
         val spotifyViewModel: SpotifyImportViewModel = hiltViewModel()
-        val spotifyConnected by spotifyViewModel.isConnected.collectAsStateWithLifecycle()
-        val spotifyUserName by spotifyViewModel.userName.collectAsStateWithLifecycle()
         val importProgress by spotifyViewModel.importProgress.collectAsStateWithLifecycle()
         val isImporting by spotifyViewModel.isImporting.collectAsStateWithLifecycle()
-        var showSpotifyPicker by remember { mutableStateOf(false) }
         var importUrl by remember { mutableStateOf("") }
 
         val onImportResult: (Boolean, UiText) -> Unit = { success, msg ->
@@ -4091,8 +4036,7 @@ private fun PlaylistImportSection() {
         // The link import, as Library › Playlists › New playlist has it: no
         // account needed, a public playlist read from its link, looked up as
         // it is pasted so its cover, name and length show before anything is
-        // imported. The account (Connections tab) adds browsing your own
-        // playlists and Liked Songs, and lists past the public 100 songs.
+        // imported.
         var strictAlbumMatch by remember { mutableStateOf(false) }
         val preview = tf.monochrome.android.ui.components.rememberSpotifyLinkPreview(importUrl.ifBlank { null })
         tf.monochrome.android.ui.components.SpotifyLinkField(link = importUrl, onLinkChange = { importUrl = it }) { trailing ->
@@ -4119,35 +4063,15 @@ private fun PlaylistImportSection() {
         val linkReady = preview is tf.monochrome.android.ui.components.LinkPreview.Found ||
             preview is tf.monochrome.android.ui.components.LinkPreview.Unreachable
         Spacer(modifier = Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                onClick = {
-                    val name = (preview as? tf.monochrome.android.ui.components.LinkPreview.Found)?.name
-                    spotifyViewModel.importByUrl(context, importUrl.trim(), strictAlbumMatch, name, onImportResult)
-                },
-                enabled = linkReady && !isImporting
-            ) {
-                Text(stringResource(R.string.settings_import_playlist))
-            }
-            if (spotifyConnected) {
-                OutlinedButton(
-                    onClick = {
-                        spotifyViewModel.loadMyPlaylists()
-                        showSpotifyPicker = true
-                    },
-                    enabled = !isImporting
-                ) {
-                    Text(stringResource(R.string.settings_browse_my_playlists))
-                }
-            }
+        Button(
+            onClick = {
+                val name = (preview as? tf.monochrome.android.ui.components.LinkPreview.Found)?.name
+                spotifyViewModel.importByUrl(context, importUrl.trim(), strictAlbumMatch, name, onImportResult)
+            },
+            enabled = linkReady && !isImporting
+        ) {
+            Text(stringResource(R.string.settings_import_playlist))
         }
-        Text(
-            if (spotifyConnected) stringResource(R.string.settings_connected_as, spotifyUserName ?: "…")
-            else stringResource(R.string.settings_spotify_browse_needs_connect),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp)
-        )
 
         when (val progress = importProgress) {
             is tf.monochrome.android.data.import_.ImportProgress.Fetching -> {
@@ -4209,25 +4133,6 @@ private fun PlaylistImportSection() {
             tf.monochrome.android.data.import_.ImportProgress.Idle -> {}
         }
 
-        if (showSpotifyPicker) {
-            val spotifyPlaylists by spotifyViewModel.myPlaylists.collectAsStateWithLifecycle()
-            val playlistsLoading by spotifyViewModel.playlistsLoading.collectAsStateWithLifecycle()
-            val playlistsError by spotifyViewModel.playlistsError.collectAsStateWithLifecycle()
-            tf.monochrome.android.ui.components.SpotifyPlaylistPickerDialog(
-                playlists = spotifyPlaylists,
-                isLoading = playlistsLoading,
-                error = playlistsError,
-                onPick = { playlistId, name, strict ->
-                    showSpotifyPicker = false
-                    spotifyViewModel.importPlaylist(context, playlistId, name, strict, onImportResult)
-                },
-                onPickLikedSongs = { strict ->
-                    showSpotifyPicker = false
-                    spotifyViewModel.importLikedSongs(context, strict, onImportResult)
-                },
-                onDismiss = { showSpotifyPicker = false }
-            )
-        }
 }
 
 /** One search hit: the setting, and where it lives. */

@@ -321,10 +321,6 @@
     <string name="dismiss_for_good">今後は表示しない</string>
     <string name="dont_ask_again">今後は確認しない</string>
     <string name="dont_show_again">今後は表示しない</string>
-    <string name="spotify_import_title">Spotify から読み込む</string>
-    <string name="spotify_strict_detail">アルバム名が Spotify のメタデータと一致する必要があります</string>
-    <string name="spotify_liked_songs">お気に入りの曲</string>
-    <string name="spotify_liked_songs_detail">Spotify で保存した曲</string>
     <string name="profile">プロフィール</string>
     <string name="update_available">バージョン %1$s が利用可能です</string>
     <string name="update_available_detail">タップして GitHub でリリースを表示</string>
@@ -681,11 +677,6 @@
     <string name="tidal_service_detail">TrypT HiFi インスタンス経由のハイレゾ・ロスレスカタログ。既定のソースで、インスタンスを接続すればすぐ使えます。</string>
     <string name="set_up_in_settings">「設定」で設定</string>
     <string name="qobuz_service_detail">TrypT HiFi インスタンス経由のロスレス・ハイレゾストリーミング。「設定 → 接続 → API」で追加します。セットアップを終えてその画面に移動します。</string>
-    <string name="spotify_connected_as">%1$s として接続済み — ラジオとおすすめを、持っている曲に結び付けます。</string>
-    <string name="spotify_connected_plain">接続済み — ラジオとおすすめを、持っている曲に結び付けます。</string>
-    <string name="waiting_for_spotify">Spotify を待っています…</string>
-    <string name="spotify_service_detail">ラジオとおすすめを、端末内と Qobuz の曲に結び付けます。</string>
-    <string name="connect_spotify">Spotify に接続</string>
     <string name="connected">接続済み</string>
     <string name="welcome_tagline">ビットパーフェクトのハイレゾ再生 — あなたのライブラリを、あなたらしく。</string>
     <string name="get_started">はじめる</string>
@@ -696,7 +687,6 @@
     <string name="no_folders_picked">ライブラリのフォルダはまだ選ばれていません</string>
     <string name="downloads_to_app_storage">ダウンロード → アプリのストレージ</string>
     <string name="downloads_to_custom_folder">ダウンロード → カスタムフォルダ</string>
-    <string name="spotify_connected">Spotify に接続済み</string>
     <plurals name="found_tracks_in_folder">
         <item quantity="other">このフォルダで %1$s 曲見つかりました</item>
     </plurals>
@@ -987,8 +977,6 @@
     <string name="settings_application_id_optional">アプリケーション ID（任意）</string>
     <string name="settings_album_art_needs_an_application_id_a_presence_set">アルバムアートにはアプリケーション ID が必要です。この方法で設定したプレゼンスは Discord 自身がホストする画像しか表示できず、カバーの URL をそうした画像に変えるのがアプリケーションです。なくても曲、アーティスト、アルバム、プログレスバーは表示されます。</string>
     <string name="settings_forget_token">トークンを削除</string>
-    <string name="settings_disconnect_spotify">Spotify との接続を解除</string>
-    <string name="settings_connect_your_spotify_account_to_import_playlists">Spotify アカウントを接続すると、ライブラリからプレイリストをインポートできます。注意：このアプリが開発モードの間は、許可リストに登録された Spotify アカウントしか接続できません。</string>
     <string name="settings_sign_out">サインアウトしますか？</string>
     <string name="settings_you_ll_stop_syncing_favorites_and_playlists">再びサインインするまで、お気に入りとプレイリストはデバイス間で同期されません。</string>
     <string name="settings_sign_in_to_sync_favorites_and_playlists_across">サインインすると、お気に入りとプレイリストをデバイス間で同期できます。</string>
@@ -1014,9 +1002,7 @@
     <string name="settings_the_order_of_the_switcher_at_the_top_of_library">ライブラリ上部の切り替えバーの並び順です。使わないものをグレーにすると、バーから外れます。</string>
     <string name="settings_playlist_import">プレイリストのインポート</string>
     <string name="settings_spotify_playlist_url">Spotify プレイリストの URL</string>
-    <string name="settings_connect_spotify_on_the_connections_tab_to_enable">「接続」タブで Spotify を接続すると、URL からインポートできます</string>
     <string name="settings_import_playlist">プレイリストをインポート</string>
-    <string name="settings_browse_my_playlists">自分のプレイリストを見る</string>
     <string name="settings_tab_appearance">外観</string>
     <string name="settings_tab_visual_studio">ビジュアルスタジオ</string>
     <string name="settings_tab_audio">オーディオ</string>
@@ -1128,7 +1114,6 @@
     <string name="settings_discord_on_waiting">オン。再生が始まると接続します</string>
     <string name="settings_spectrum_circle">オフ。スペクトラムは小さな円の中に表示されます</string>
     <string name="settings_posting_to_channel">チャンネル %1$s に投稿中</string>
-    <string name="settings_connect_spotify">Spotify を接続</string>
     <string name="settings_failed_to_read_file">ファイルを読み込めませんでした</string>
     <string name="settings_backup_saved">バックアップを保存しました</string>
     <string name="settings_failed_to_save_backup">バックアップを保存できませんでした</string>
@@ -1791,10 +1776,8 @@
     <string name="import_youtube_unsupported">YouTube Music のインポートにはまだ対応していません。使えるのは Spotify のプレイリストリンクだけです。</string>
     <string name="import_unrecognized_url">認識できないプレイリストの URL です。https://open.spotify.com/playlist/… のような Spotify のプレイリストリンクを貼り付けてください</string>
     <string name="import_no_tracks">この Spotify プレイリストにはインポートできる曲がありません。</string>
-    <string name="import_liked_empty">Spotify の「お気に入りの曲」は空です。</string>
     <string name="import_default_playlist_name">Spotify プレイリスト</string>
     <string name="import_from_spotify">Spotify からインポート</string>
-    <string name="import_liked_name">お気に入りの曲（Spotify）</string>
     <string name="import_spotify_failed">Spotify のインポートに失敗しました</string>
     <string name="widget_nothing_playing">再生中の曲はありません</string>
     <string name="widget_album_art">アルバムアート</string>
@@ -2950,7 +2933,6 @@
     <string name="settings_music_folders_desc">ライブラリはこれらのフォルダからスキャンされます。フォルダを削除すると曲はライブラリから外れますが、ファイルは端末に残ります。</string>
     <string name="settings_music_folders_whole_phone">フォルダが選ばれていないため、端末全体をスキャンします。フォルダを追加すると、選んだフォルダだけをスキャンします。</string>
     <string name="settings_rescan_library_now">今すぐライブラリを再スキャン</string>
-    <string name="settings_spotify_browse_needs_connect">自分のプレイリストや「お気に入りの曲」から選ぶには、「接続」タブで Spotify を接続してください。</string>
     <string name="settings_hide_unmatched">一致しなかった曲を隠す</string>
     <string name="action_find_album_art">アルバムアートを探す</string>
     <string name="art_looking">アルバムアートを探しています…</string>

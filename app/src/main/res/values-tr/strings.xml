@@ -331,10 +331,6 @@
     <string name="dismiss_for_good">Kalıcı olarak kapat</string>
     <string name="dont_ask_again">Bir daha sorma</string>
     <string name="dont_show_again">Bir daha gösterme</string>
-    <string name="spotify_import_title">Spotify’dan içe aktar</string>
-    <string name="spotify_strict_detail">Albüm adı Spotify meta verileriyle eşleşmelidir</string>
-    <string name="spotify_liked_songs">Beğenilen Şarkılar</string>
-    <string name="spotify_liked_songs_detail">Spotify’da kaydettiğiniz parçalar</string>
     <string name="profile">Profil</string>
     <string name="update_available">%1$s sürümü kullanıma sunuldu</string>
     <string name="update_available_detail">Sürümü GitHub’da görmek için dokunun</string>
@@ -709,11 +705,6 @@
     <string name="tidal_service_detail">TrypT HiFi örneğiniz üzerinden yüksek çözünürlüklü ve kayıpsız katalog — varsayılan kaynak; örneğiniz bağlanınca hazır.</string>
     <string name="set_up_in_settings">Ayarlar’da kur</string>
     <string name="qobuz_service_detail">TrypT HiFi örneğiniz üzerinden kayıpsız ve yüksek çözünürlüklü akış. Ayarlar → Bağlantılar → API’ler altından ekleyin — bu, kurulumu bitirip sizi oraya götürür.</string>
-    <string name="spotify_connected_as">%1$s olarak bağlandı — radyo ve öneriler sahip olduğunuz parçalara eşlenir.</string>
-    <string name="spotify_connected_plain">Bağlandı — radyo ve öneriler sahip olduğunuz parçalara eşlenir.</string>
-    <string name="waiting_for_spotify">Spotify bekleniyor…</string>
-    <string name="spotify_service_detail">Radyo ve öneriler, yerel ve Qobuz parçalarınıza eşlenir.</string>
-    <string name="connect_spotify">Spotify’ı bağla</string>
     <string name="connected">Bağlandı</string>
     <string name="welcome_tagline">Bit-perfect, yüksek çözünürlüklü çalma — kitaplığınız, sizin tarzınız.</string>
     <string name="get_started">Başlayın</string>
@@ -724,7 +715,6 @@
     <string name="no_folders_picked">Henüz kitaplık klasörü seçilmedi</string>
     <string name="downloads_to_app_storage">İndirilenler → uygulama depolaması</string>
     <string name="downloads_to_custom_folder">İndirilenler → özel klasör</string>
-    <string name="spotify_connected">Spotify bağlandı</string>
     <plurals name="found_tracks_in_folder">
         <item quantity="one">Bu klasörde %1$s parça bulundu</item>
         <item quantity="other">Bu klasörde %1$s parça bulundu</item>
@@ -1025,8 +1015,6 @@
     <string name="settings_application_id_optional">Uygulama ID’si (isteğe bağlı)</string>
     <string name="settings_album_art_needs_an_application_id_a_presence_set">Albüm kapağı için bir uygulama ID’si gerekir. Bu şekilde ayarlanan bir durum yalnızca Discord’un barındırdığı bir görseli gösterebilir; bir kapak URL’sini böyle bir görsele dönüştüren de uygulamadır. Onsuz da parça, sanatçı, albüm ve ilerleme çubuğu görünür.</string>
     <string name="settings_forget_token">Belirteci unut</string>
-    <string name="settings_disconnect_spotify">Spotify bağlantısını kes</string>
-    <string name="settings_connect_your_spotify_account_to_import_playlists">Kitaplık’tan çalma listesi içe aktarmak için Spotify hesabınızı bağlayın. Not: Bu uygulama geliştirme modundayken yalnızca izin listesindeki Spotify hesapları bağlanabilir.</string>
     <string name="settings_sign_out">Oturum kapatılsın mı?</string>
     <string name="settings_you_ll_stop_syncing_favorites_and_playlists">Yeniden oturum açana kadar favorileriniz ve çalma listeleriniz cihazlar arasında eşitlenmez.</string>
     <string name="settings_sign_in_to_sync_favorites_and_playlists_across">Favorileri ve çalma listelerini cihazlar arasında eşitlemek için oturum açın.</string>
@@ -1052,9 +1040,7 @@
     <string name="settings_the_order_of_the_switcher_at_the_top_of_library">Kitaplık’ın üstündeki geçiş çubuğunun sırası. Kullanmadıklarınızı grileştirin, çubuktan çıksınlar.</string>
     <string name="settings_playlist_import">Çalma listesi içe aktarma</string>
     <string name="settings_spotify_playlist_url">Spotify çalma listesi URL’si</string>
-    <string name="settings_connect_spotify_on_the_connections_tab_to_enable">URL ile içe aktarmayı etkinleştirmek için Bağlantılar sekmesinden Spotify’ı bağlayın</string>
     <string name="settings_import_playlist">Çalma listesini içe aktar</string>
-    <string name="settings_browse_my_playlists">Çalma listelerime göz at</string>
     <string name="settings_tab_appearance">Görünüm</string>
     <string name="settings_tab_visual_studio">Görsel Stüdyo</string>
     <string name="settings_tab_audio">Ses</string>
@@ -1166,7 +1152,6 @@
     <string name="settings_discord_on_waiting">Açık. Bir şey çaldığında bağlanır</string>
     <string name="settings_spectrum_circle">Kapalı. Spektrum küçük dairenin içinde durur</string>
     <string name="settings_posting_to_channel">%1$s kanalına gönderiliyor</string>
-    <string name="settings_connect_spotify">Spotify’ı bağla</string>
     <string name="settings_failed_to_read_file">Dosya okunamadı</string>
     <string name="settings_backup_saved">Yedek kaydedildi</string>
     <string name="settings_failed_to_save_backup">Yedek kaydedilemedi</string>
@@ -1839,10 +1824,8 @@
     <string name="import_youtube_unsupported">YouTube Music’ten içe aktarma henüz desteklenmiyor; yalnızca Spotify çalma listesi bağlantıları çalışır.</string>
     <string name="import_unrecognized_url">Tanınmayan çalma listesi URL’si. https://open.spotify.com/playlist/… gibi bir Spotify çalma listesi bağlantısı yapıştırın</string>
     <string name="import_no_tracks">Bu Spotify çalma listesinde içe aktarılabilir parça yok.</string>
-    <string name="import_liked_empty">Spotify’daki Beğenilen Şarkılar listeniz boş.</string>
     <string name="import_default_playlist_name">Spotify çalma listesi</string>
     <string name="import_from_spotify">Spotify’dan içe aktarıldı</string>
-    <string name="import_liked_name">Beğenilen Şarkılar (Spotify)</string>
     <string name="import_spotify_failed">Spotify içe aktarma başarısız</string>
     <string name="widget_nothing_playing">Çalan bir şey yok</string>
     <string name="widget_album_art">Albüm kapağı</string>
@@ -3021,7 +3004,6 @@
     <string name="settings_music_folders_desc">Kitaplığınızın tarandığı klasörler. Birini kaldırmak parçalarını kitaplıktan çıkarır; dosyalar telefonunuzda kalır.</string>
     <string name="settings_music_folders_whole_phone">Klasör seçilmedi, bu yüzden tüm telefon taranıyor. Yalnızca seçtiğiniz klasörleri taramak için bir klasör ekleyin.</string>
     <string name="settings_rescan_library_now">Kitaplığı şimdi yeniden tara</string>
-    <string name="settings_spotify_browse_needs_connect">Kendi çalma listelerinizden ve Beğenilen Şarkılar’dan seçmek için Bağlantılar sekmesinde Spotify’ı bağlayın.</string>
     <string name="settings_hide_unmatched">Eşleşmeyen parçaları gizle</string>
     <string name="action_find_album_art">Albüm kapağı bul</string>
     <string name="art_looking">Albüm kapağı aranıyor…</string>

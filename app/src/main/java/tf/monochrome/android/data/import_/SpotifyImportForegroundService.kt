@@ -77,12 +77,6 @@ class SpotifyImportForegroundService : Service() {
                 val description = intent.getStringExtra(EXTRA_DESCRIPTION)
                 ({ playlistImporter.importFromUrl(url, strict, name, description) })
             }
-            MODE_PLAYLIST -> {
-                val id = intent.getStringExtra(EXTRA_PLAYLIST_ID).orEmpty()
-                val name = intent.getStringExtra(EXTRA_NAME)
-                ({ playlistImporter.importSpotifyPlaylist(id, name, strict) })
-            }
-            MODE_LIKED -> ({ playlistImporter.importSpotifyLikedSongs(strict) })
             else -> {
                 stopSelf()
                 return START_NOT_STICKY
@@ -228,13 +222,10 @@ class SpotifyImportForegroundService : Service() {
         private const val ACTION_CANCEL = "tf.monochrome.android.import.CANCEL"
         private const val EXTRA_MODE = "mode"
         private const val EXTRA_URL = "url"
-        private const val EXTRA_PLAYLIST_ID = "playlist_id"
         private const val EXTRA_NAME = "name"
         private const val EXTRA_DESCRIPTION = "description"
         private const val EXTRA_STRICT = "strict"
         private const val MODE_URL = "url"
-        private const val MODE_PLAYLIST = "playlist"
-        private const val MODE_LIKED = "liked"
 
         /**
          * A pasted link. [name] and [description] are the Create playlist
@@ -253,20 +244,6 @@ class SpotifyImportForegroundService : Service() {
                 putExtra(EXTRA_STRICT, strictAlbumMatch)
                 name?.let { putExtra(EXTRA_NAME, it) }
                 description?.let { putExtra(EXTRA_DESCRIPTION, it) }
-            }
-
-        fun importPlaylist(context: Context, playlistId: String, name: String, strictAlbumMatch: Boolean) =
-            start(context) {
-                putExtra(EXTRA_MODE, MODE_PLAYLIST)
-                putExtra(EXTRA_PLAYLIST_ID, playlistId)
-                putExtra(EXTRA_NAME, name)
-                putExtra(EXTRA_STRICT, strictAlbumMatch)
-            }
-
-        fun importLikedSongs(context: Context, strictAlbumMatch: Boolean) =
-            start(context) {
-                putExtra(EXTRA_MODE, MODE_LIKED)
-                putExtra(EXTRA_STRICT, strictAlbumMatch)
             }
 
         private fun start(context: Context, configure: Intent.() -> Unit) {

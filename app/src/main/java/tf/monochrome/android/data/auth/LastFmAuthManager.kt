@@ -37,7 +37,7 @@ import javax.inject.Singleton
  * service used to sign with.
  *
  * The real flow is the same three steps every OAuth-shaped handshake has, and
- * mirrors [SpotifyAuthManager] deliberately so there is one pattern here:
+ * keeps them in that order:
  *
  *  1. [connect] opens last.fm/api/auth in a Custom Tab, carrying `cb` — the
  *     callback that brings the browser back to this app.
@@ -45,7 +45,7 @@ import javax.inject.Singleton
  *     MainActivity routes to [handleCallback].
  *  3. The token is traded for a session key via `auth.getSession`, signed with
  *     the shared secret, and the key is stored. Session keys do not expire, so
- *     unlike Spotify there is nothing to refresh — this runs once.
+ *     there is nothing to refresh — this runs once.
  *
  * The credentials it signs with are still the listener's own, registered at
  * last.fm/api/account/create. That is not an oversight: a shared secret shipped
@@ -164,7 +164,7 @@ class LastFmAuthManager @Inject constructor(
      *
      * Last.fm has no revocation endpoint — a session key is killed from the
      * account's own Applications page — so clearing it locally is the whole of
-     * disconnecting, the same as the Spotify flow.
+     * disconnecting.
      */
     suspend fun disconnect() {
         preferences.clearLastFmSession()

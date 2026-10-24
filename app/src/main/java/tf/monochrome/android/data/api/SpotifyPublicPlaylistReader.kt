@@ -33,7 +33,7 @@ class SpotifyPlaylistUnavailableException : Exception("Spotify playlist not foun
  *
  * Spotify's Web API serves a playlist's contents to an app like this one only
  * for playlists the signed-in user owns or collaborates on (the Feb 2026
- * restriction, see [SpotifyApiClient.getPlaylistTracks]), so an arbitrary
+ * restriction), so an arbitrary
  * link could not be imported without a CSV export from a third-party site.
  * The embed player — the page websites show a playlist in — is served to
  * anyone and carries the playlist's name and its tracks (title, artists,

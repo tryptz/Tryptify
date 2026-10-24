@@ -28,8 +28,8 @@ object LastFmSigning {
      *
      * A custom scheme rather than an https URL: there is no server in this app
      * to receive a redirect, and the token in the callback is single-use and
-     * useless without the shared secret that only this install holds. The same
-     * scheme the Spotify flow already claims, under its own host.
+     * useless without the shared secret that only this install holds. The app's
+     * own tryptify:// scheme, under its own host.
      */
     const val CALLBACK_URL = "tryptify://lastfm-callback"
 

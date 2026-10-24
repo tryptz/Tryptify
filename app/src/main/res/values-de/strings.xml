@@ -331,10 +331,6 @@
     <string name="dismiss_for_good">Dauerhaft ausblenden</string>
     <string name="dont_ask_again">Nicht mehr fragen</string>
     <string name="dont_show_again">Nicht mehr anzeigen</string>
-    <string name="spotify_import_title">Aus Spotify importieren</string>
-    <string name="spotify_strict_detail">Der Albumname muss mit den Spotify-Metadaten übereinstimmen</string>
-    <string name="spotify_liked_songs">Lieblingssongs</string>
-    <string name="spotify_liked_songs_detail">Deine gespeicherten Spotify-Titel</string>
     <string name="profile">Profil</string>
     <string name="update_available">Version %1$s ist verfügbar</string>
     <string name="update_available_detail">Tippe, um das Release auf GitHub zu sehen</string>
@@ -709,11 +705,6 @@
     <string name="tidal_service_detail">Hi-Res- und Lossless-Katalog über deine TrypT-HiFi-Instanz – die Standardquelle, bereit, sobald deine Instanz verbunden ist.</string>
     <string name="set_up_in_settings">In den Einstellungen einrichten</string>
     <string name="qobuz_service_detail">Lossless- und Hi-Res-Streaming über deine TrypT-HiFi-Instanz. Füge sie unter Einstellungen → Verbindungen → APIs hinzu – damit endet die Einrichtung und du landest dort.</string>
-    <string name="spotify_connected_as">Verbunden als %1$s – Radio und Empfehlungen, aufgelöst zu deinen Titeln.</string>
-    <string name="spotify_connected_plain">Verbunden – Radio und Empfehlungen, aufgelöst zu deinen Titeln.</string>
-    <string name="waiting_for_spotify">Warte auf Spotify …</string>
-    <string name="spotify_service_detail">Radio und Empfehlungen, aufgelöst zu deinen lokalen und Qobuz-Titeln.</string>
-    <string name="connect_spotify">Spotify verbinden</string>
     <string name="connected">Verbunden</string>
     <string name="welcome_tagline">Bit-perfekte Hi-Res-Wiedergabe – deine Bibliothek, wie du willst.</string>
     <string name="get_started">Los geht’s</string>
@@ -724,7 +715,6 @@
     <string name="no_folders_picked">Noch keine Bibliotheksordner gewählt</string>
     <string name="downloads_to_app_storage">Downloads → App-Speicher</string>
     <string name="downloads_to_custom_folder">Downloads → eigener Ordner</string>
-    <string name="spotify_connected">Spotify verbunden</string>
     <plurals name="found_tracks_in_folder">
         <item quantity="one">%1$s Titel in diesem Ordner gefunden</item>
         <item quantity="other">%1$s Titel in diesem Ordner gefunden</item>
@@ -1025,8 +1015,6 @@
     <string name="settings_application_id_optional">Anwendungs-ID (optional)</string>
     <string name="settings_album_art_needs_an_application_id_a_presence_set">Das Albumcover braucht eine Anwendungs-ID. Eine so gesetzte Präsenz kann nur Bilder zeigen, die Discord selbst hostet, und eine Anwendung macht aus einer Cover-URL ein solches Bild. Ohne sie siehst du trotzdem Titel, Künstler, Album und Fortschrittsbalken.</string>
     <string name="settings_forget_token">Token vergessen</string>
-    <string name="settings_disconnect_spotify">Spotify trennen</string>
-    <string name="settings_connect_your_spotify_account_to_import_playlists">Verbinde dein Spotify-Konto, um Playlists aus der Bibliothek zu importieren. Hinweis: Solange die App im Entwicklungsmodus ist, können sich nur dafür freigeschaltete Spotify-Konten verbinden.</string>
     <string name="settings_sign_out">Abmelden?</string>
     <string name="settings_you_ll_stop_syncing_favorites_and_playlists">Favoriten und Playlists werden nicht mehr zwischen Geräten synchronisiert, bis du dich wieder anmeldest.</string>
     <string name="settings_sign_in_to_sync_favorites_and_playlists_across">Melde dich an, um Favoriten und Playlists zwischen Geräten zu synchronisieren.</string>
@@ -1052,9 +1040,7 @@
     <string name="settings_the_order_of_the_switcher_at_the_top_of_library">Die Reihenfolge der Umschaltleiste oben in der Bibliothek. Graue die aus, die du nicht nutzt, dann verschwinden sie daraus.</string>
     <string name="settings_playlist_import">Playlist-Import</string>
     <string name="settings_spotify_playlist_url">Spotify-Playlist-URL</string>
-    <string name="settings_connect_spotify_on_the_connections_tab_to_enable">Verbinde Spotify im Tab „Verbindungen“, um den URL-Import zu aktivieren</string>
     <string name="settings_import_playlist">Playlist importieren</string>
-    <string name="settings_browse_my_playlists">Meine Playlists durchsuchen</string>
     <string name="settings_tab_appearance">Darstellung</string>
     <string name="settings_tab_visual_studio">Visual Studio</string>
     <string name="settings_tab_audio">Audio</string>
@@ -1166,7 +1152,6 @@
     <string name="settings_discord_on_waiting">An. Verbindet sich, sobald etwas läuft</string>
     <string name="settings_spectrum_circle">Aus. Das Spektrum sitzt im kleinen Kreis</string>
     <string name="settings_posting_to_channel">Postet in Kanal %1$s</string>
-    <string name="settings_connect_spotify">Spotify verbinden</string>
     <string name="settings_failed_to_read_file">Datei konnte nicht gelesen werden</string>
     <string name="settings_backup_saved">Sicherung gespeichert</string>
     <string name="settings_failed_to_save_backup">Sicherung konnte nicht gespeichert werden</string>
@@ -1839,10 +1824,8 @@
     <string name="import_youtube_unsupported">Import aus YouTube Music wird noch nicht unterstützt – nur Spotify-Playlist-Links funktionieren.</string>
     <string name="import_unrecognized_url">Unbekannte Playlist-URL. Füge einen Spotify-Playlist-Link wie https://open.spotify.com/playlist/… ein</string>
     <string name="import_no_tracks">Diese Spotify-Playlist enthält keine importierbaren Titel.</string>
-    <string name="import_liked_empty">Deine Spotify-Liste „Lieblingssongs“ ist leer.</string>
     <string name="import_default_playlist_name">Spotify-Playlist</string>
     <string name="import_from_spotify">Aus Spotify importiert</string>
-    <string name="import_liked_name">Lieblingssongs (Spotify)</string>
     <string name="import_spotify_failed">Spotify-Import fehlgeschlagen</string>
     <string name="widget_nothing_playing">Es läuft nichts</string>
     <string name="widget_album_art">Albumcover</string>
@@ -3021,7 +3004,6 @@
     <string name="settings_music_folders_desc">Die Ordner, aus denen deine Bibliothek gescannt wird. Entfernst du einen, verschwinden seine Titel aus der Bibliothek; die Dateien bleiben auf deinem Handy.</string>
     <string name="settings_music_folders_whole_phone">Kein Ordner gewählt, also wird das ganze Handy gescannt. Füge einen Ordner hinzu, um nur deine gewählten Ordner zu scannen.</string>
     <string name="settings_rescan_library_now">Bibliothek jetzt neu scannen</string>
-    <string name="settings_spotify_browse_needs_connect">Um aus deinen eigenen Playlists und Lieblingssongs zu wählen, verbinde Spotify im Tab „Verbindungen“.</string>
     <string name="settings_hide_unmatched">Titel ohne Treffer ausblenden</string>
     <string name="action_find_album_art">Albumcover suchen</string>
     <string name="art_looking">Albumcover wird gesucht…</string>

@@ -32,7 +32,6 @@ fun DoneStep(
 ) {
     val folders by viewModel.folders.collectAsStateWithLifecycle()
     val downloadUri by viewModel.downloadFolderUri.collectAsStateWithLifecycle()
-    val spotifyConnected by viewModel.spotifyConnected.collectAsStateWithLifecycle()
 
     val trackTotal = folders.mapNotNull { it.trackCount }.sum()
 
@@ -58,7 +57,6 @@ fun DoneStep(
             text = if (downloadUri == null) stringResource(R.string.downloads_to_app_storage)
             else stringResource(R.string.downloads_to_custom_folder)
         )
-        if (spotifyConnected) SummaryRow(text = stringResource(R.string.spotify_connected))
     }
 }
 

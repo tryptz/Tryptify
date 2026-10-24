@@ -321,10 +321,6 @@
     <string name="dismiss_for_good">不再显示</string>
     <string name="dont_ask_again">不再询问</string>
     <string name="dont_show_again">不再显示</string>
-    <string name="spotify_import_title">从 Spotify 导入</string>
-    <string name="spotify_strict_detail">专辑名称必须与 Spotify 元数据一致</string>
-    <string name="spotify_liked_songs">已点赞的歌曲</string>
-    <string name="spotify_liked_songs_detail">你在 Spotify 上收藏的歌曲</string>
     <string name="profile">个人资料</string>
     <string name="update_available">版本 %1$s 已推出</string>
     <string name="update_available_detail">点按在 GitHub 上查看此版本</string>
@@ -681,11 +677,6 @@
     <string name="tidal_service_detail">通过你的 TrypT HiFi 实例提供高解析度与无损曲库——默认来源，连接实例后即可使用。</string>
     <string name="set_up_in_settings">在“设置”中设置</string>
     <string name="qobuz_service_detail">通过你的 TrypT HiFi 实例提供无损与高解析度流媒体。请在“设置 → 连接 → API”中添加——这会结束引导并带你前往该页面。</string>
-    <string name="spotify_connected_as">已以 %1$s 身份连接——电台与推荐会匹配到你拥有的歌曲。</string>
-    <string name="spotify_connected_plain">已连接——电台与推荐会匹配到你拥有的歌曲。</string>
-    <string name="waiting_for_spotify">正在等待 Spotify…</string>
-    <string name="spotify_service_detail">电台与推荐，匹配到你的本地和 Qobuz 歌曲。</string>
-    <string name="connect_spotify">连接 Spotify</string>
     <string name="connected">已连接</string>
     <string name="welcome_tagline">比特级精确的高解析度播放——你的音乐库，由你做主。</string>
     <string name="get_started">开始使用</string>
@@ -696,7 +687,6 @@
     <string name="no_folders_picked">尚未选择音乐库文件夹</string>
     <string name="downloads_to_app_storage">下载 → 应用存储空间</string>
     <string name="downloads_to_custom_folder">下载 → 自定义文件夹</string>
-    <string name="spotify_connected">已连接 Spotify</string>
     <plurals name="found_tracks_in_folder">
         <item quantity="other">在此文件夹中找到 %1$s 首歌曲</item>
     </plurals>
@@ -987,8 +977,6 @@
     <string name="settings_application_id_optional">应用 ID（可选）</string>
     <string name="settings_album_art_needs_an_application_id_a_presence_set">显示专辑封面需要应用 ID。以这种方式设置的状态只能显示 Discord 自己托管的图片，而应用正是把封面 URL 变成这种图片的途径。没有它，你仍会看到歌曲、艺人、专辑和进度条。</string>
     <string name="settings_forget_token">移除令牌</string>
-    <string name="settings_disconnect_spotify">断开 Spotify</string>
-    <string name="settings_connect_your_spotify_account_to_import_playlists">连接你的 Spotify 账户，即可从音乐库导入歌单。注意：在开发模式下，只有被列入此应用许可名单的 Spotify 账户才能连接。</string>
     <string name="settings_sign_out">要退出登录吗？</string>
     <string name="settings_you_ll_stop_syncing_favorites_and_playlists">在你重新登录之前，收藏和歌单将不再在设备间同步。</string>
     <string name="settings_sign_in_to_sync_favorites_and_playlists_across">登录即可在设备间同步收藏和歌单。</string>
@@ -1014,9 +1002,7 @@
     <string name="settings_the_order_of_the_switcher_at_the_top_of_library">音乐库顶部切换栏的顺序。将不用的分区置灰，它们就会从切换栏中移除。</string>
     <string name="settings_playlist_import">歌单导入</string>
     <string name="settings_spotify_playlist_url">Spotify 歌单 URL</string>
-    <string name="settings_connect_spotify_on_the_connections_tab_to_enable">在“连接”标签页中连接 Spotify 以启用 URL 导入</string>
     <string name="settings_import_playlist">导入歌单</string>
-    <string name="settings_browse_my_playlists">浏览我的歌单</string>
     <string name="settings_tab_appearance">外观</string>
     <string name="settings_tab_visual_studio">视觉工作室</string>
     <string name="settings_tab_audio">音频</string>
@@ -1128,7 +1114,6 @@
     <string name="settings_discord_on_waiting">已开启。播放内容时连接</string>
     <string name="settings_spectrum_circle">关闭。频谱显示在小圆圈里</string>
     <string name="settings_posting_to_channel">正在发布到频道 %1$s</string>
-    <string name="settings_connect_spotify">连接 Spotify</string>
     <string name="settings_failed_to_read_file">无法读取文件</string>
     <string name="settings_backup_saved">备份已保存</string>
     <string name="settings_failed_to_save_backup">无法保存备份</string>
@@ -1791,10 +1776,8 @@
     <string name="import_youtube_unsupported">暂不支持导入 YouTube Music——目前只支持 Spotify 歌单链接。</string>
     <string name="import_unrecognized_url">无法识别的歌单 URL。请粘贴类似 https://open.spotify.com/playlist/… 的 Spotify 歌单链接</string>
     <string name="import_no_tracks">此 Spotify 歌单没有可导入的歌曲。</string>
-    <string name="import_liked_empty">你的 Spotify“已点赞的歌曲”列表为空。</string>
     <string name="import_default_playlist_name">Spotify 歌单</string>
     <string name="import_from_spotify">从 Spotify 导入</string>
-    <string name="import_liked_name">已点赞的歌曲（Spotify）</string>
     <string name="import_spotify_failed">Spotify 导入失败</string>
     <string name="widget_nothing_playing">没有正在播放的内容</string>
     <string name="widget_album_art">专辑封面</string>
@@ -2950,7 +2933,6 @@
     <string name="settings_music_folders_desc">音乐库从这些文件夹扫描。移除一个文件夹会把其中的歌曲移出音乐库，文件仍留在手机上。</string>
     <string name="settings_music_folders_whole_phone">尚未选择文件夹，因此会扫描整部手机。添加文件夹后只扫描你选择的文件夹。</string>
     <string name="settings_rescan_library_now">立即重新扫描音乐库</string>
-    <string name="settings_spotify_browse_needs_connect">要从你自己的歌单和“已点赞的歌曲”中选择，请在“连接”标签页连接 Spotify。</string>
     <string name="settings_hide_unmatched">隐藏没有匹配的歌曲</string>
     <string name="action_find_album_art">查找专辑封面</string>
     <string name="art_looking">正在查找专辑封面…</string>

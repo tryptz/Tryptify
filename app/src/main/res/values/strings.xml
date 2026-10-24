@@ -332,10 +332,6 @@
     <string name="dismiss_for_good">Dismiss for good</string>
     <string name="dont_ask_again">Don’t ask again</string>
     <string name="dont_show_again">Don’t show again</string>
-    <string name="spotify_import_title">Import from Spotify</string>
-    <string name="spotify_strict_detail">Album name must match Spotify metadata</string>
-    <string name="spotify_liked_songs">Liked Songs</string>
-    <string name="spotify_liked_songs_detail">Your saved Spotify tracks</string>
     <string name="profile">Profile</string>
     <string name="update_available">Version %1$s is available</string>
     <string name="update_available_detail">Tap to see the release on GitHub</string>
@@ -710,11 +706,6 @@
     <string name="tidal_service_detail">Hi-res &amp; lossless catalog through your TrypT HiFi instance — the default source, ready once your instance is connected.</string>
     <string name="set_up_in_settings">Set up in Settings</string>
     <string name="qobuz_service_detail">Lossless &amp; hi-res streaming through your TrypT HiFi instance. Add it under Settings → Connections → APIs — this finishes onboarding and takes you there.</string>
-    <string name="spotify_connected_as">Connected as %1$s — radio &amp; recommendations, resolved to tracks you own.</string>
-    <string name="spotify_connected_plain">Connected — radio &amp; recommendations, resolved to tracks you own.</string>
-    <string name="waiting_for_spotify">Waiting for Spotify…</string>
-    <string name="spotify_service_detail">Radio &amp; recommendations, resolved to your local and Qobuz tracks.</string>
-    <string name="connect_spotify">Connect Spotify</string>
     <string name="connected">Connected</string>
     <string name="welcome_tagline">Bit-perfect, high-res playback — your library, your way.</string>
     <string name="get_started">Get started</string>
@@ -725,7 +716,6 @@
     <string name="no_folders_picked">No library folders picked yet</string>
     <string name="downloads_to_app_storage">Downloads → app storage</string>
     <string name="downloads_to_custom_folder">Downloads → custom folder</string>
-    <string name="spotify_connected">Spotify connected</string>
     <plurals name="found_tracks_in_folder">
         <item quantity="one">Found %1$s track in this folder</item>
         <item quantity="other">Found %1$s tracks in this folder</item>
@@ -1026,8 +1016,6 @@
     <string name="settings_application_id_optional">Application ID (optional)</string>
     <string name="settings_album_art_needs_an_application_id_a_presence_set">Album art needs an application ID. A presence set this way can only show an image Discord itself hosts, and an application is what turns a cover URL into one. Without it you still get the track, artist, album and progress bar.</string>
     <string name="settings_forget_token">Forget token</string>
-    <string name="settings_disconnect_spotify">Disconnect Spotify</string>
-    <string name="settings_connect_your_spotify_account_to_import_playlists">Connect your Spotify account to import playlists from Library. Note: only Spotify accounts allowlisted for this app can connect while it is in Development mode.</string>
     <string name="settings_sign_out">Sign out?</string>
     <string name="settings_you_ll_stop_syncing_favorites_and_playlists">You\'ll stop syncing favorites and playlists across devices until you sign back in.</string>
     <string name="settings_sign_in_to_sync_favorites_and_playlists_across">Sign in to sync favorites and playlists across devices.</string>
@@ -1053,9 +1041,7 @@
     <string name="settings_the_order_of_the_switcher_at_the_top_of_library">The order of the switcher at the top of Library. Gray out the ones you don\'t use and they leave it.</string>
     <string name="settings_playlist_import">Playlist Import</string>
     <string name="settings_spotify_playlist_url">Spotify playlist URL</string>
-    <string name="settings_connect_spotify_on_the_connections_tab_to_enable">Connect Spotify on the Connections tab to enable URL import</string>
     <string name="settings_import_playlist">Import Playlist</string>
-    <string name="settings_browse_my_playlists">Browse My Playlists</string>
     <string name="settings_tab_appearance">Appearance</string>
     <string name="settings_tab_visual_studio">Visual Studio</string>
     <string name="settings_tab_audio">Audio</string>
@@ -1167,7 +1153,6 @@
     <string name="settings_discord_on_waiting">On. Connects when something plays</string>
     <string name="settings_spectrum_circle">Off. The spectrum sits in the small circle</string>
     <string name="settings_posting_to_channel">Posting to channel %1$s</string>
-    <string name="settings_connect_spotify">Connect Spotify</string>
     <string name="settings_failed_to_read_file">Failed to read file</string>
     <string name="settings_backup_saved">Backup saved</string>
     <string name="settings_failed_to_save_backup">Failed to save backup</string>
@@ -1840,10 +1825,8 @@
     <string name="import_youtube_unsupported">YouTube Music import is not supported yet — only Spotify playlist links work.</string>
     <string name="import_unrecognized_url">Unrecognized playlist URL. Paste a Spotify playlist link like https://open.spotify.com/playlist/…</string>
     <string name="import_no_tracks">This Spotify playlist has no importable tracks.</string>
-    <string name="import_liked_empty">Your Spotify Liked Songs list is empty.</string>
     <string name="import_default_playlist_name">Spotify Playlist</string>
     <string name="import_from_spotify">Imported from Spotify</string>
-    <string name="import_liked_name">Liked Songs (Spotify)</string>
     <string name="import_spotify_failed">Spotify import failed</string>
     <string name="widget_nothing_playing">Nothing playing</string>
     <string name="widget_album_art">Album art</string>
@@ -3023,7 +3006,6 @@
     <string name="settings_music_folders_desc">The folders your library is scanned from. Removing one takes its songs out of the library; the files stay on your phone.</string>
     <string name="settings_music_folders_whole_phone">No folder picked, so the whole phone is scanned. Add a folder to scan only the folders you pick.</string>
     <string name="settings_rescan_library_now">Rescan library now</string>
-    <string name="settings_spotify_browse_needs_connect">To pick from your own playlists and Liked Songs, connect Spotify on the Connections tab.</string>
     <string name="settings_hide_unmatched">Hide songs with no match</string>
     <string name="action_find_album_art">Find album art</string>
     <string name="art_looking">Looking for album art…</string>
