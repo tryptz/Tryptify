@@ -2,7 +2,7 @@
 // The HTTP API, built from its dependencies so the Worker and the tests run
 // exactly the same routes.
 
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { AuthUnreachable } from "./auth";
 import { hmacHex, sameHex, type Billing } from "./creem";
@@ -34,7 +34,14 @@ export interface Deps {
   db: Db | null;
   /** The music bucket (R2). */
   storage?: Bucket | null;
+  /** Where new checkouts go. */
   billing: Billing | null;
+  /**
+   * Every provider still taking webhooks and opening portals, [billing]
+   * included: one that took payments before keeps renewing the people who
+   * subscribed with it. Defaults to [billing] alone.
+   */
+  providers?: Billing[];
   personOf: (token: string) => Promise<string | null>;
   /** Signs the web player's song links (PLAY_KEY); without it the web player is off. */
   playKey?: string | null;
@@ -44,8 +51,10 @@ export interface Deps {
 const fail = (status: number, error: string) =>
   new Response(JSON.stringify({ error }), { status, headers: { "content-type": "application/json" } });
 
-export function createApp({ db, storage = null, billing, personOf, playKey = null, now = () => new Date() }: Deps) {
+export function createApp({ db, storage = null, billing, providers, personOf, playKey = null, now = () => new Date() }: Deps) {
   const app = new Hono<{ Variables: { uid: string } }>();
+  const all = providers ?? (billing ? [billing] : []);
+  const providerNamed = (name: string | null | undefined) => all.find((p) => p.name === name) ?? null;
 
   const health = (c: { json: (body: unknown) => Response }) =>
     c.json({ ok: true, service: "tryptify-cloud", database: db !== null, storage: storage !== null, billing: billing !== null });
@@ -124,27 +133,31 @@ export function createApp({ db, storage = null, billing, personOf, playKey = nul
 
   /**
    * The payment provider's customer portal for the signed-in person, where
-   * they change or cancel their plan. Creem requires that people can cancel
-   * from inside the product; this is how the app's "Manage subscription" does.
+   * they change or cancel their plan: the provider they pay with. Creem
+   * requires that people can cancel from inside the product; this is how the
+   * app's "Manage subscription" does.
    */
   app.post("/v1/billing-portal", async (c) => {
     if (!billing) return fail(503, "billing_not_set_up");
-    const row = await db!.prepare("select customer_id from cloud_accounts where user_id = ?1")
-      .bind(c.get("uid")).first<{ customer_id: string | null }>();
+    const row = await db!.prepare("select provider, customer_id from cloud_accounts where user_id = ?1")
+      .bind(c.get("uid")).first<{ provider: string | null; customer_id: string | null }>();
     if (!row?.customer_id) return fail(404, "no_subscription");
-    const url = await billing.portalUrl(row.customer_id);
+    const url = await (providerNamed(row.provider) ?? billing).portalUrl(row.customer_id);
     return url ? c.json({ url }) : fail(502, "billing_unreachable");
   });
 
-  /** The payment provider's webhook. Answers 2xx only once the event is safely recorded. */
-  app.post("/webhooks/billing", async (c) => {
-    if (!db || !billing) return fail(503, "not_set_up");
+  /** A payment provider's webhook. Answers 2xx only once the event is safely recorded. */
+  const webhook = (provider: Billing | null) => async (c: Context) => {
+    if (!db || !provider) return fail(503, "not_set_up");
     const raw = await c.req.text();
-    const events = await billing.parseWebhook(c.req.raw.headers, raw);
+    const events = await provider.parseWebhook(c.req.raw.headers, raw);
     if (events === null) return fail(401, "bad_signature");
-    for (const e of events) await record(db, billing.name, e, now);
+    for (const e of events) await record(db, provider.name, e, now);
     return c.json({ ok: true, applied: events.length });
-  });
+  };
+  // Creem's webhook was registered at this address before there was a second provider.
+  app.post("/webhooks/billing", (c) => webhook(providerNamed("creem") ?? billing)(c));
+  app.post("/webhooks/:provider", (c) => webhook(providerNamed(c.req.param("provider")))(c));
 
   // ── The library ──────────────────────────────────────────────────────────
 

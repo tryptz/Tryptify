@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Tryptify Cloud end to end: the Worker's own routes (src/app.ts) over a real
 // SQLite database (the engine D1 is), with stand-ins for Supabase Auth's
-// public keys and for Creem's API. Needs nothing else:
+// public keys and for Creem's and PayPal's APIs. Needs nothing else:
 //
 //   bun install && bun run test.ts
 //
@@ -13,6 +13,7 @@ import { SignJWT, exportJWK, generateKeyPair } from "jose";
 import { createApp } from "./src/app";
 import { supabaseAuth } from "./src/auth";
 import { creemBilling } from "./src/creem";
+import { addPeriod, paypalBilling } from "./src/paypal";
 import * as rules from "./src/rules";
 import type { Db, Stmt } from "./src/store";
 import type { Bucket, MultipartUpload, StoredObject } from "./src/library";
@@ -124,6 +125,8 @@ class MemBucket implements Bucket {
 }
 let bucket: MemBucket;
 let fetchCloud: (r: Request) => Promise<Response>;
+/** The Worker as deployed with both providers: PayPal for new checkouts, Creem still renewing. */
+let fetchBoth: (r: Request) => Promise<Response>;
 const cloud = rules;
 
 // A stand-in for Creem: what checkouts it was asked for, and its answer.
@@ -158,10 +161,15 @@ async function token(sub: string) {
     .sign(keys.privateKey);
 }
 
-async function call(method: string, path: string, who?: string, body?: unknown, headers: Record<string, string> = {}) {
+const call = (method: string, path: string, who?: string, body?: unknown, headers: Record<string, string> = {}) =>
+  callOn(fetchCloud, method, path, who, body, headers);
+
+async function callOn(
+  app: (r: Request) => Promise<Response>, method: string, path: string, who?: string, body?: unknown, headers: Record<string, string> = {},
+) {
   const h: Record<string, string> = { ...headers };
   if (who) h.authorization = `Bearer ${who}`;
-  const res = await fetchCloud(
+  const res = await app(
     new Request(`http://cloud.test${path}`, {
       method,
       headers: h,
@@ -205,13 +213,47 @@ async function setUp() {
       return Response.json({ id: "ch_1", checkout_url: `https://checkout.creem.test/ch_${checkouts.length}` });
     },
   });
+  const paypalApi = Bun.serve({
+    port: 0,
+    async fetch(req) {
+      const path = new URL(req.url).pathname;
+      if (path === "/v1/oauth2/token") {
+        return req.headers.get("authorization") === "Basic " + btoa("pp_id:pp_secret")
+          ? Response.json({ access_token: "pp_tok", expires_in: 3600 })
+          : new Response("no", { status: 401 });
+      }
+      if (req.headers.get("authorization") !== "Bearer pp_tok") return new Response("no", { status: 401 });
+      if (path === "/v1/billing/subscriptions" && req.method === "POST") {
+        pp.created.push(await req.json());
+        const n = pp.created.length;
+        return Response.json({ id: `I-NEW${n}`, status: "APPROVAL_PENDING", links: [{ rel: "approve", href: `https://paypal.test/approve/${n}` }] }, { status: 201 });
+      }
+      if (path === "/v1/notifications/verify-webhook-signature") {
+        const text = await req.text();
+        pp.verified.push(text);
+        const b = JSON.parse(text);
+        return Response.json({ verification_status: b.transmission_sig === "good" && b.webhook_id === "WH-test" ? "SUCCESS" : "FAILURE" });
+      }
+      const sub = path.match(/^\/v1\/billing\/subscriptions\/(.+)$/);
+      const sale = path.match(/^\/v1\/payments\/sale\/(.+)$/);
+      const found = sub ? pp.subs.get(decodeURIComponent(sub[1])) : sale ? pp.sales.get(decodeURIComponent(sale[1])) : null;
+      return found ? Response.json(found) : Response.json({ name: "RESOURCE_NOT_FOUND" }, { status: 404 });
+    },
+  });
   bucket = new MemBucket();
-  const app = createApp({
-    db: d1(sqlite),
-    storage: bucket,
-    personOf: supabaseAuth(`http://127.0.0.1:${supabase.port}/`, "test-anon-key"),
-    playKey: PLAY_KEY,
-    billing: creemBilling({
+  const personOf = supabaseAuth(`http://127.0.0.1:${supabase.port}/`, "test-anon-key");
+  const paypal = paypalBilling({
+    PAYPAL_CLIENT_ID: "pp_id",
+    PAYPAL_SECRET: "pp_secret",
+    PAYPAL_WEBHOOK_ID: "WH-test",
+    PAYPAL_API_BASE: `http://127.0.0.1:${paypalApi.port}`,
+    PAYPAL_PLAN_LITE_MONTHLY: "P-lite-m",
+    PAYPAL_PLAN_PLUS_YEARLY: "P-plus-y",
+    PAYPAL_PLAN_MAX_MONTHLY: "P-max-m",
+    PAYPAL_PLAN_LITE_MONTHLY_TRIAL: "P-lite-trial",
+    // MAX_YEARLY left unset on purpose, as for Creem.
+  })!;
+  const creemProvider = creemBilling({
       CREEM_API_KEY: "creem_test_key",
       CREEM_WEBHOOK_SECRET: SECRET,
       CREEM_API_BASE: `http://127.0.0.1:${creem.port}`,
@@ -222,9 +264,11 @@ async function setUp() {
       CREEM_PRODUCT_MAX_MONTHLY: "prod_max_m",
       CREEM_PRODUCT_LITE_MONTHLY_TRIAL: "prod_lite_trial",
       // MAX_YEARLY left unset on purpose: that checkout must say not set up.
-    }),
-  });
+  })!;
+  const app = createApp({ db: d1(sqlite), storage: bucket, personOf, playKey: PLAY_KEY, billing: creemProvider });
   fetchCloud = (r) => Promise.resolve(app.fetch(r));
+  const both = createApp({ db: d1(sqlite), storage: bucket, personOf, playKey: PLAY_KEY, billing: paypal, providers: [paypal, creemProvider] });
+  fetchBoth = (r) => Promise.resolve(both.fetch(r));
 }
 
 // ── The rule: nobody costs more than they pay ───────────────────────────────
@@ -956,6 +1000,162 @@ test("cleanup deletes libraries past their grace and abandoned uploads, nothing 
   assert.equal((sqlite.query("select count(*) as n from cloud_uploads where user_id = ?1").get(keep) as any).n, 0);
   // The deleted library is gone for the API too.
   assert.equal((await restJson("getAlbumList2", { type: "newest" })).error.code, 50);
+});
+
+// ── PayPal ───────────────────────────────────────────────────────────────────
+
+// A stand-in for PayPal: the subscriptions and sales it knows, what it was asked.
+const pp = { subs: new Map<string, any>(), sales: new Map<string, any>(), created: [] as any[], verified: [] as string[] };
+const ppUser = (n: number) => `55555555-5555-4555-8555-55555555555${n}`;
+async function ppWebhook(event: unknown, sig = "good", headers = true) {
+  const raw = JSON.stringify(event);
+  const h: Record<string, string> = headers
+    ? {
+        "paypal-auth-algo": "SHA256withRSA",
+        "paypal-cert-url": "https://api.paypal.com/v1/notifications/certs/CERT-test",
+        "paypal-transmission-id": "tx-1",
+        "paypal-transmission-sig": sig,
+        "paypal-transmission-time": new Date().toISOString(),
+      }
+    : {};
+  return callOn(fetchBoth, "POST", "/webhooks/paypal", undefined, raw, h);
+}
+const ppAccount = async (who: string) => (await callOn(fetchBoth, "GET", "/v1/account", await token(who))).body;
+const ppSubscription = (id: string, userId: string, plan: string, next: Date | null) =>
+  pp.subs.set(id, {
+    id, plan_id: plan, custom_id: userId, status: "ACTIVE", subscriber: { payer_id: "PAYER1" },
+    billing_info: next ? { next_billing_time: next.toISOString() } : {},
+  });
+/** A completed charge on [sub] at [at], as the webhook carries it (and PayPal keeps it). */
+const ppSale = (eventId: string, saleId: string, sub: string | null, at: Date, total = "3.99") => {
+  const sale = { id: saleId, state: "completed", amount: { total, currency: "USD" }, create_time: at.toISOString(), ...(sub ? { billing_agreement_id: sub } : {}) };
+  pp.sales.set(saleId, { ...sale });
+  return { id: eventId, event_type: "PAYMENT.SALE.COMPLETED", create_time: at.toISOString(), resource: sale };
+};
+const ppActivated = (eventId: string, sub: string, userId: string, plan: string, start: Date, next: Date) => ({
+  id: eventId,
+  event_type: "BILLING.SUBSCRIPTION.ACTIVATED",
+  create_time: start.toISOString(),
+  resource: {
+    id: sub, plan_id: plan, custom_id: userId, status: "ACTIVE", start_time: start.toISOString(),
+    subscriber: { payer_id: "PAYER1" }, billing_info: { next_billing_time: next.toISOString() },
+  },
+});
+
+test("PayPal checkout: a subscription to the plan, naming the person, opened at PayPal's approve link", async () => {
+  const P = ppUser(1);
+  const r = await callOn(fetchBoth, "POST", "/v1/checkout", await token(P), { plan: "plus", period: "yearly" });
+  assert.equal(r.status, 200);
+  assert.match(r.body.url, /^https:\/\/paypal\.test\/approve\//);
+  assert.equal(pp.created.at(-1).plan_id, "P-plus-y");
+  assert.equal(pp.created.at(-1).custom_id, P);
+  await callOn(fetchBoth, "POST", "/v1/checkout", await token(P), { plan: "lite", period: "monthly", trial: true });
+  assert.equal(pp.created.at(-1).plan_id, "P-lite-trial");
+  const missing = await callOn(fetchBoth, "POST", "/v1/checkout", await token(P), { plan: "max", period: "yearly" });
+  assert.equal(missing.status, 503);
+});
+
+test("a PayPal webhook PayPal does not vouch for, or with no signature, changes nothing", async () => {
+  const P = ppUser(2);
+  ppSubscription("I-SIG", P, "P-lite-m", future(30));
+  const e = ppSale("WH-sig", "S-sig", "I-SIG", new Date());
+  assert.equal((await ppWebhook(e, "forged")).status, 401);
+  assert.equal((await ppWebhook(e, "good", false)).status, 401);
+  assert.equal((await ppAccount(P)).plan, null);
+});
+
+test("PayPal is asked about the webhook byte for byte as it came", async () => {
+  const raw = '{"id":"WH-raw","event_type":"SOMETHING.ELSE","n":1.10,"t":"\\u00e9","resource":{}}';
+  await callOn(fetchBoth, "POST", "/webhooks/paypal", undefined, raw, {
+    "paypal-auth-algo": "a", "paypal-cert-url": "b", "paypal-transmission-id": "c", "paypal-transmission-sig": "good", "paypal-transmission-time": "d",
+  });
+  assert.ok(pp.verified.at(-1)!.endsWith(`"webhook_event":${raw}}`));
+});
+
+test("a PayPal payment grants its plan until PayPal's next billing date, once however often it comes", async () => {
+  const P = ppUser(3);
+  const paidAt = new Date(Date.now() - DAY);
+  const next = addPeriod(paidAt, "monthly");
+  ppSubscription("I-PAY", P, "P-lite-m", next);
+  const e = ppSale("WH-pay", "S-pay", "I-PAY", paidAt);
+  assert.equal((await ppWebhook(e)).status, 200);
+  assert.equal((await ppWebhook(e)).status, 200);
+  const a = await ppAccount(P);
+  assert.equal(a.plan, "lite");
+  assert.equal(a.access, "full");
+  assert.equal(a.trial, false);
+  assert.equal(a.paidUntil, next.toISOString());
+  const { n } = sqlite.query("select count(*) as n from cloud_billing_events where provider = 'paypal' and event_id = 'WH-pay'").get() as { n: number };
+  assert.equal(n, 1);
+});
+
+test("a PayPal payment never grants more than one period, whatever the next billing date says", async () => {
+  const P = ppUser(4);
+  const paidAt = new Date(Date.now() - DAY);
+  ppSubscription("I-FAR", P, "P-max-m", new Date(Date.now() + 5 * 365 * DAY));
+  await ppWebhook(ppSale("WH-far", "S-far", "I-FAR", paidAt, "19.99"));
+  // A cancelled subscription has no next billing date at all: one period too.
+  const Q = ppUser(5);
+  ppSubscription("I-NONE", Q, "P-lite-m", null);
+  await ppWebhook(ppSale("WH-none", "S-none", "I-NONE", paidAt));
+  assert.equal((await ppAccount(P)).paidUntil, addPeriod(paidAt, "monthly").toISOString());
+  assert.equal((await ppAccount(Q)).paidUntil, addPeriod(paidAt, "monthly").toISOString());
+});
+
+test("a PayPal trial grants the trial only, never past its days; other plans wait for their payment", async () => {
+  const T = ppUser(6);
+  const start = new Date();
+  await ppWebhook(ppActivated("WH-tr", "I-TR", T, "P-lite-trial", start, new Date(start.getTime() + 60 * DAY)));
+  const a = await ppAccount(T);
+  assert.equal(a.trial, true);
+  assert.equal(a.quotaBytes, rules.TRIAL_GB * GB);
+  assert.equal(a.paidUntil, new Date(start.getTime() + (rules.TRIAL_DAYS + 1) * DAY).toISOString());
+  const N = ppUser(7);
+  await ppWebhook(ppActivated("WH-act", "I-ACT", N, "P-lite-m", start, future(30)));
+  assert.equal((await ppAccount(N)).plan, null);
+});
+
+test("a full PayPal refund or a dispute ends access; a partial refund does not", async () => {
+  const P = ppUser(8);
+  ppSubscription("I-REF", P, "P-lite-m", future(30));
+  await ppWebhook(ppSale("WH-ref-pay", "S-ref", "I-REF", new Date()));
+  pp.sales.get("S-ref").state = "partially_refunded";
+  await ppWebhook({ id: "WH-ref-1", event_type: "PAYMENT.SALE.REFUNDED", resource: { id: "R-1", sale_id: "S-ref", amount: { total: "1.00" } } });
+  assert.equal((await ppAccount(P)).access, "full");
+  pp.sales.get("S-ref").state = "refunded";
+  await ppWebhook({ id: "WH-ref-2", event_type: "PAYMENT.SALE.REFUNDED", resource: { id: "R-2", sale_id: "S-ref", amount: { total: "2.99" } } });
+  assert.equal((await ppAccount(P)).access, "read_only");
+
+  const D = ppUser(9);
+  ppSubscription("I-DIS", D, "P-lite-m", future(30));
+  await ppWebhook(ppSale("WH-dis-pay", "S-dis", "I-DIS", new Date()));
+  await ppWebhook({
+    id: "WH-dis", event_type: "CUSTOMER.DISPUTE.CREATED",
+    resource: { dispute_id: "PP-D-1", disputed_transactions: [{ seller_transaction_id: "NOT-A-SALE" }, { seller_transaction_id: "S-dis" }] },
+  });
+  assert.equal((await ppAccount(D)).access, "read_only");
+});
+
+test("a PayPal payment that is not a known plan's subscription grants nothing", async () => {
+  const P = ppUser(0);
+  ppSubscription("I-ODD", P, "P-someone-elses", future(30));
+  await ppWebhook(ppSale("WH-odd", "S-odd", "I-ODD", new Date()));
+  await ppWebhook(ppSale("WH-oneoff", "S-oneoff", null, new Date()));
+  assert.equal((await ppAccount(P)).plan, null);
+});
+
+test("with PayPal added, Creem still renews its subscribers, and each person manages their plan where they pay", async () => {
+  const K = "66666666-6666-4666-8666-666666666666";
+  const raw = JSON.stringify(paidEvent("evt_both_creem", K, "prod_lite_m", future(30), "sub_k"));
+  const r = await callOn(fetchBoth, "POST", "/webhooks/billing", undefined, raw, { "creem-signature": sign(raw) });
+  assert.equal(r.status, 200);
+  assert.equal((await ppAccount(K)).plan, "lite");
+  const creemPortal = await callOn(fetchBoth, "POST", "/v1/billing-portal", await token(K));
+  assert.equal(creemPortal.body.url, "https://creem.test/portal/cust_1");
+  const paypalPortal = await callOn(fetchBoth, "POST", "/v1/billing-portal", await token(ppUser(3)));
+  assert.equal(paypalPortal.body.url, "https://www.paypal.com/myaccount/autopay/");
+  // A provider nobody set up has no webhook.
+  assert.equal((await callOn(fetchBoth, "POST", "/webhooks/stripe", undefined, "{}")).status, 503);
 });
 
 // ── Run ──────────────────────────────────────────────────────────────────────

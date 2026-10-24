@@ -1,6 +1,8 @@
 # Tryptify Cloud on Cloudflare Workers. Secrets are NOT here: set them with
 #   wrangler secret put CREEM_API_KEY
 #   wrangler secret put CREEM_WEBHOOK_SECRET
+#   wrangler secret put PAYPAL_CLIENT_ID
+#   wrangler secret put PAYPAL_SECRET
 name = "tryptify-cloud"
 main = "src/worker.ts"
 compatibility_date = "2026-10-01"
@@ -44,6 +46,14 @@ CREEM_PRODUCT_MAX_YEARLY = "prod_6G4ubzzqvCaJKaamWsnHMt"
 CREEM_PRODUCT_LITE_MONTHLY_TRIAL = "prod_56tTODaE022GeT50ruLqXj"
 CREEM_PRODUCT_PLUS_MONTHLY_TRIAL = "prod_OSmi11W9RYftN5oUWt9rz"
 CREEM_PRODUCT_MAX_MONTHLY_TRIAL = "prod_6dOHBryZ66HGZnk9wjwydV"
+
+# PayPal: new checkouts go to it once PAYPAL_CLIENT_ID, PAYPAL_SECRET and
+# PAYPAL_WEBHOOK_ID are all set; Creem above keeps renewing its subscribers.
+# Plan ids are not secrets. tools/paypal_setup in the site's repository makes
+# the plans and prints these lines; add them under [vars]:
+#   PAYPAL_WEBHOOK_ID = "…"                  (the webhook to /webhooks/paypal)
+#   PAYPAL_PLAN_LITE_MONTHLY = "P-…"   … PAYPAL_PLAN_MAX_YEARLY, and the three _TRIAL
+#   PAYPAL_API_BASE = "https://api-m.sandbox.paypal.com"   while testing only
 
 # The daily cleanup: lapsed libraries and abandoned uploads (src/cleanup.ts).
 [triggers]

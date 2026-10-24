@@ -6,6 +6,7 @@
 import { createApp } from "./app";
 import { supabaseAuth } from "./auth";
 import { creemBilling } from "./creem";
+import { paypalBilling } from "./paypal";
 import { cleanup } from "./cleanup";
 import type { Bucket } from "./library";
 import type { Db } from "./store";
@@ -33,10 +34,15 @@ export default {
       const strings = Object.fromEntries(
         Object.entries(env).filter(([, v]) => typeof v === "string"),
       ) as Record<string, string>;
+      // New checkouts go to PayPal once it is set up; Creem keeps renewing
+      // the people who subscribed with it.
+      const paypal = paypalBilling(strings);
+      const creem = creemBilling(strings);
       app = createApp({
         db: env.DB ?? null,
         storage: env.MUSIC ?? null,
-        billing: creemBilling(strings),
+        billing: paypal ?? creem,
+        providers: [paypal, creem].filter((p) => p !== null),
         personOf: supabaseAuth(env.SUPABASE_URL ?? DEFAULT_SUPABASE_URL, env.SUPABASE_ANON_KEY ?? DEFAULT_SUPABASE_ANON_KEY),
         playKey: strings.PLAY_KEY ?? null,
       });

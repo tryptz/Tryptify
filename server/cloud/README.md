@@ -39,10 +39,10 @@ webhook answer `billing_not_set_up`, and nobody can pay or be granted anything.
 | The API | Worker `tryptify-cloud` | `src/worker.ts`, config in `wrangler.toml` |
 | Accounts, billing events | D1 database `tryptify-cloud` | `b2b03937-98bd-4fec-a132-ce0d0b932454`, tables from `schema.sql` |
 | Music (phase 1) | R2 bucket `tryptify-cloud-music` | Binding `MUSIC`; enabled and checked 2026-10-21 (a 1 MB file written, read back identical, deleted). Empty until phase 1 |
-| Secrets | Worker secrets | `CREEM_API_KEY`, `CREEM_WEBHOOK_SECRET`, `PLAY_KEY` (signs the web player's links; random, set 2026-10-22); never in the repository |
+| Secrets | Worker secrets | `CREEM_API_KEY`, `CREEM_WEBHOOK_SECRET`, `PAYPAL_CLIENT_ID` and `PAYPAL_SECRET` (once PayPal is set up), `PLAY_KEY` (signs the web player's links; random, set 2026-10-22); never in the repository |
 
-Code: `src/rules.ts` (the money rules, pure), `src/creem.ts` (checkout and
-webhooks), `src/store.ts` (D1), `src/auth.ts` (Supabase sign-in),
+Code: `src/rules.ts` (the money rules, pure), `src/creem.ts` and
+`src/paypal.ts` (checkout and webhooks, one file per provider), `src/store.ts` (D1), `src/auth.ts` (Supabase sign-in),
 `src/app.ts` (routes), `src/worker.ts` (the entry point).
 
 D1 has no row locks, so a billing event is written optimistically
@@ -63,6 +63,51 @@ npx wrangler deploy                 # needs CLOUDFLARE_API_TOKEN (Workers edit)
 A schema change goes in `schema.sql` as `create … if not exists` / an added
 column, run once against D1 (`npx wrangler d1 execute tryptify-cloud --remote
 --file schema.sql`) before the deploy that uses it. Then check `/health`.
+
+## Payments: PayPal
+
+PayPal takes new checkouts once it is set up; Creem (below) keeps renewing,
+refunding and opening the portal for everyone who subscribed with it. Each
+account remembers its provider, so "Manage subscription" opens the right one.
+Unlike Creem, PayPal is **not** a merchant of record: tryptz is the seller and
+answers for sales tax, receipts and chargebacks.
+
+What the service does with it (`src/paypal.ts`):
+
+- **Checkout** creates a PayPal subscription to the plan with the signed-in
+  person's id in `custom_id`, and sends them to PayPal's approve link.
+- **`PAYMENT.SALE.COMPLETED`** on a subscription grants the plan. PayPal's
+  event names only the subscription, so the plan and the person are read back
+  from it. Paid until PayPal's next billing date, but never more than one
+  period (a month or a year) from when the charge was taken.
+- **`BILLING.SUBSCRIPTION.ACTIVATED`** on a trial plan grants the trial (no
+  money moves at its start), never longer than 7 days plus one. On other
+  plans it grants nothing: their first payment does.
+- **`PAYMENT.SALE.REFUNDED`** when the sale is fully refunded, and
+  **`PAYMENT.SALE.REVERSED`** or **`CUSTOMER.DISPUTE.CREATED`**, end access
+  with 2 days to export. A partial refund does not.
+- Cancelled, suspended, expired, a failed payment: nothing, as with Creem.
+- Every webhook is sent back to PayPal's `verify-webhook-signature`, byte for
+  byte as it came, before anything in it is read. One PayPal does not vouch
+  for gets 401. When PayPal cannot be reached, the webhook gets 500 and PayPal
+  sends it again.
+- "Manage subscription" opens PayPal's automatic payments page
+  (`paypal.com/myaccount/autopay`): PayPal has no portal per customer.
+
+### Setting it up (the owner, once)
+
+1. developer.paypal.com → Apps & Credentials → create a REST app (Sandbox
+   first, Live after). Keep its Client ID and Secret.
+2. Make the plans with the site repository's `tools/paypal_setup`, adding
+   `--webhook-url https://cloud.tryptify.com/webhooks/paypal`. It prints the
+   plan ids and the webhook id.
+3. Put the ids under `[vars]` in `wrangler.toml` (`PAYPAL_WEBHOOK_ID`,
+   `PAYPAL_PLAN_LITE_MONTHLY` … `PAYPAL_PLAN_MAX_YEARLY`, the three `_TRIAL`
+   ones, and `PAYPAL_API_BASE = "https://api-m.sandbox.paypal.com"` while
+   testing), then `wrangler secret put PAYPAL_CLIENT_ID` and `PAYPAL_SECRET`.
+4. Deploy. New checkouts now go to PayPal. Buy a plan with a sandbox buyer
+   account, see the account page show it, then repeat with the Live app and
+   remove `PAYPAL_API_BASE`.
 
 ## Payments: Creem
 
