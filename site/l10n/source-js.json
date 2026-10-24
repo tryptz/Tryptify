@@ -1759,7 +1759,8 @@
  "5610f810204f": {
   "en": "it would not load.",
   "files": [
-   "js/wp-app.js"
+   "js/wp-app.js",
+   "js/wp-sources.js"
   ]
  },
  "ea989bb94184": {
@@ -2864,6 +2865,12 @@
  },
  "451bc6609a18": {
   "en": "it needs an API URL: add one under Sources, on the dashboard.",
+  "files": [
+   "js/wp-sources.js"
+  ]
+ },
+ "b0fc0e85562f": {
+  "en": "Apple Music songs play only in the app.",
   "files": [
    "js/wp-sources.js"
   ]

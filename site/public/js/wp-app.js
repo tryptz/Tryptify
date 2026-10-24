@@ -304,7 +304,7 @@
     try {
       let url = await S.url(t0);
       if (t0 !== current) return;
-      if (t0.src === "hifi") url += (url.includes("?") ? "&" : "?") + "whole=1";
+      if (t0.src === "hifi" && (t0.ref.service || "tidal") === "tidal") url += (url.includes("?") ? "&" : "?") + "whole=1";
       await Eng.load(url, null, playing, t);
     } catch (e) { if (t0 === current) fail(e); return; }
     position(); publish();
@@ -1066,7 +1066,9 @@
   const shareable = (u) => (typeof u === "string" && /^https:\/\//.test(u) && !/[?&](t|s|p|u)=/.test(u) ? u : null);
   function descriptor(t) {
     return {
-      src: t.src, id: t.src === "local" ? t.key : String(t.ref.id), title: t.title, artist: t.artist || "", album: t.album || "",
+      // A Qobuz or Deezer song goes out as the app names it, so the other device plays it from there.
+      src: t.src === "hifi" && t.ref.service && t.ref.service !== "tidal" ? t.ref.service : t.src,
+      id: t.src === "local" ? t.key : String(t.ref.id), title: t.title, artist: t.artist || "", album: t.album || "",
       duration: t.duration || (t === current ? Eng.duration : 0) || null, quality: t.quality || "",
       cover: t.src === "subsonic" ? null : shareable(t.cover), coverArt: (t.ref && t.ref.coverArt) || null,
     };
@@ -1074,14 +1076,15 @@
   function trackFrom(d) {
     if (!d) return null;
     const base = { title: d.title || "Untitled", artist: d.artist || "", album: d.album || "", n: null, duration: d.duration || null, quality: d.quality || "", cover: d.cover || null };
-    if (d.src === "hifi") return HiFi.base ? { ...base, key: `hifi:${d.id}`, src: "hifi", ref: { id: d.id, hires: true } } : null;
+    if (d.src === "hifi") return HiFi.base ? { ...base, key: `hifi:${d.id}`, src: "hifi", ref: { id: d.id, hires: true, service: "tidal" } } : null;
+    if (d.src === "qobuz" || d.src === "deezer") return HiFi.base ? { ...base, key: `hifi:${d.src}:${d.id}`, src: "hifi", ref: { id: d.id, hires: true, service: d.src } } : null;
     if (d.src === "cloud") return { ...base, key: `cloud:${d.id}`, src: "cloud", cover: null, ref: { id: d.id, hasCover: true } };
     if (d.src === "subsonic") return Subsonic.server ? Subsonic.withCover({ ...base, key: `subsonic:${d.id}`, src: "subsonic", ref: { id: d.id, coverArt: d.coverArt } }) : null;
     if (d.src === "local" && Local.tree) return S.util.allFiles(Local.tree).find((t) => t.key === d.id) || null;
     return null;
   }
   const whyNot = (d, from) => (d.src === "local" ? T("“{title}” is a file on {name}, so it stays there.", { title: d.title, name: from })
-    : d.src === "hifi" ? T("“{title}” needs an API URL in this browser first.", { title: d.title })
+    : d.src === "hifi" || d.src === "qobuz" || d.src === "deezer" ? T("“{title}” needs an API URL in this browser first.", { title: d.title })
     : d.src === "subsonic" ? T("“{title}” is on a music server this browser is not signed in to.", { title: d.title }) : T("“{title}” cannot play here.", { title: d.title }));
   const nameOf = (id, fallback) => ((C && C.devices.find((d) => d.id === id)) || {}).name || fallback || T("your other device");
 

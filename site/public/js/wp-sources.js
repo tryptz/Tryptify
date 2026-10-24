@@ -102,17 +102,30 @@
   /** A TIDAL cover id as the app keeps it → its picture (Models.kt buildCoverUrl); a device path has none here. */
   const coverUrl = (c, size = 320) => (!c ? null : c.includes("://") ? c : c.startsWith("/") ? null
     : `https://resources.tidal.com/images/${c.replace(/-/g, "/")}/${size}x${size}.jpg`);
-  /** A favorite_tracks or playlist_tracks row → a queue track, played through Trypt HiFi. */
+  /**
+   * Which service a saved song is from. The app syncs each song as its
+   * service's own number, and Qobuz, Deezer and TIDAL numbers overlap, so a
+   * row says which only by its cover: each service's pictures are on its own
+   * host (a TIDAL cover is a bare id or resources.tidal.com). A row with a
+   * `source` (newer apps) says so outright.
+   */
+  function serviceOf(r) {
+    if (r.source) return String(r.source).toLowerCase();
+    const c = r.album_cover || "";
+    return /static\.qobuz\.com/.test(c) ? "qobuz" : /dzcdn\.net/.test(c) ? "deezer" : /mzstatic\.com/.test(c) ? "apple" : "tidal";
+  }
+  /** A favorite_tracks or playlist_tracks row → a queue track, played through Trypt HiFi from its own service. */
   function savedTrack(r, quality) {
     const id = r.id != null ? r.id : r.track_id;
+    const service = serviceOf(r);
     // Liked songs know their quality; playlist rows do not, so ask for the best and take what comes.
     const hires = !r.audio_quality || /HI_RES/.test(r.audio_quality);
     const q = quality === "HI_RES_LOSSLESS" && !hires ? "LOSSLESS" : quality;
     return {
-      key: `hifi:${id}`, src: "hifi", title: r.title || T("Untitled"), artist: r.artist_name || "",
+      key: service === "tidal" ? `hifi:${id}` : `hifi:${service}:${id}`, src: "hifi", title: r.title || T("Untitled"), artist: r.artist_name || "",
       album: r.album_title || "", n: r.track_number || null, duration: r.duration || null,
       quality: HIFI_LABEL[q] || "", cover: coverUrl(r.album_cover),
-      ref: { id: String(id), albumId: r.album_id ? String(r.album_id) : null, hires },
+      ref: { id: String(id), albumId: r.album_id ? String(r.album_id) : null, hires, service },
     };
   }
 
@@ -338,8 +351,23 @@
       const a = await this.get("/api/tidal/get-album", { album_id: id });
       return { album: hifiAlbum(a), tracks: ((a.tracks && a.tracks.items) || []).map((t) => hifiTrack(t, a, this.quality)) };
     },
-    url(track) {
+    async url(track) {
       if (!this.base) throw new Error(T("it needs an API URL: add one under Sources, on the dashboard."));
+      const service = track.ref.service || "tidal";
+      if (service === "apple") throw new Error(T("Apple Music songs play only in the app."));
+      if (service === "qobuz" || service === "deezer") {
+        // Qobuz's quality ids, which the server's Deezer route takes too:
+        // 27 hi-res, 6 CD lossless, 5 MP3 320. The link it hands back is a
+        // signed /api/file one, which needs no password and takes ranges;
+        // Deezer's is decrypted on the way, since a browser cannot.
+        const lossless = this.quality === "HI_RES_LOSSLESS" || this.quality === "LOSSLESS";
+        const quality = this.quality === "HI_RES_LOSSLESS" && track.ref.hires ? "27" : lossless ? "6" : "5";
+        const d = service === "qobuz"
+          ? await this.get("/api/download-music", { track_id: track.ref.id, quality })
+          : await this.get("/api/deezer/download-music", { track_id: track.ref.id, quality, decrypted: "1" });
+        if (!d || !d.url) throw new Error(T("it would not load."));
+        return d.url;
+      }
       const q = this.quality === "HI_RES_LOSSLESS" && !track.ref.hires ? "LOSSLESS" : this.quality;
       // An <audio> element sends no headers: the password rides in the link.
       const key = this.password ? `&access_key=${encodeURIComponent(this.password)}` : "";
