@@ -227,11 +227,6 @@
         { duration: 0.7, ease: easeOut, delay: stagger(0.045, { startDelay: 0.1 }) });
     }
     rise($$(":scope > :not(h1)", hero), { start: 0.3, gap: 0.08, y: 14 });
-    hero.addEventListener("pointermove", (e) => {
-      const r = hero.getBoundingClientRect();
-      hero.style.setProperty("--mx", `${e.clientX - r.left}px`);
-      hero.style.setProperty("--my", `${e.clientY - r.top}px`);
-    });
   }
 
   // ── The showcase: a live spectrum glowing under the app ─────────────
@@ -264,9 +259,6 @@
 
     let queued = null;
     const follow = (e) => {
-      const r = showcase.getBoundingClientRect();
-      showcase.style.setProperty("--mx", `${e.clientX - r.left}px`);
-      showcase.style.setProperty("--my", `${e.clientY - r.top}px`);
       const s = spectrum.getBoundingClientRect();
       bars.forEach((b, i) => {
         const x = s.left + (i + 0.5) * (s.width / bars.length);
@@ -395,15 +387,10 @@
       });
       btn.addEventListener("pointerleave", () => animate(btn, { x: 0, y: 0 }, { type: "spring", stiffness: 300, damping: 12 }));
     });
-    // Cards lift, and a light follows the pointer across them.
+    // Cards lift under the pointer.
     hover(".card, .plan", (el) => {
       animate(el, { y: -6 }, { type: "spring", stiffness: 300, damping: 18 });
       return () => animate(el, { y: 0 }, { type: "spring", stiffness: 300, damping: 18 });
     });
-    $$(".card, .plan").forEach((el) => el.addEventListener("pointermove", (e) => {
-      const r = el.getBoundingClientRect();
-      el.style.setProperty("--mx", `${e.clientX - r.left}px`);
-      el.style.setProperty("--my", `${e.clientY - r.top}px`);
-    }));
   }
 })();
