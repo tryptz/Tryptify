@@ -2737,9 +2737,9 @@ internal fun FxSlider(
             )
             // Within a ten-thousandth of the range counts as the default, so a
             // float that went through a slider and back still reads as one.
-            val atDefault = defaultValue == null ||
-                kotlin.math.abs(value - defaultValue) <= (range.endInclusive - range.start) * 1e-4f
-            if (!atDefault && defaultValue != null) {
+            if (defaultValue != null &&
+                kotlin.math.abs(value - defaultValue) > (range.endInclusive - range.start) * 1e-4f
+            ) {
                 val resetLabel = stringResource(R.string.action_reset)
                 Icon(
                     imageVector = Icons.Default.Restore,

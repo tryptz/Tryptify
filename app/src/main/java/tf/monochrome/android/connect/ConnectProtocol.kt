@@ -98,7 +98,7 @@ object ConnectProtocol {
     fun shareableCover(url: String?): String? {
         if (url.isNullOrBlank() || !url.startsWith("https://")) return null
         val query = url.substringAfter('?', "")
-        if (query.split('&').any { it.substringBefore('=') in setOf("t", "s", "p", "u") }) return null
+        if (query.split('&').any { it.substringBefore('=') in SIGN_IN_PARAMS }) return null
         return url
     }
 
@@ -134,5 +134,8 @@ object ConnectProtocol {
     data class StateOut(val playing: Boolean, val track: ConnectTrack?, val position: Double, val rate: Double, val since: Long)
 
     const val MAX_QUEUE = 100
+
+    /** A music server's sign-in in a cover's address: its user, token, salt and password. */
+    private val SIGN_IN_PARAMS = setOf("t", "s", "p", "u")
     val ACTIONS = setOf("play", "pause", "next", "prev", "seek")
 }

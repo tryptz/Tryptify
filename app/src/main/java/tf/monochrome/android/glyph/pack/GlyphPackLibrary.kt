@@ -105,8 +105,11 @@ class GlyphPackLibrary @Inject constructor(
      */
     private fun fillEmbeddedArt(listed: List<GlyphSong>) {
         val found = HashMap<String, String>()
+        // Read once: it lists the cache folder, and the library scan loads
+        // the packs, so a list of thousands read it once per song.
+        val noCover = noArt()
         for (song in listed) {
-            if (song.artworkUri != null || song.trackId in noArt()) continue
+            if (song.artworkUri != null || song.trackId in noCover) continue
             val music = if (song.filePath.startsWith("content:")) Uri.parse(song.filePath) else Uri.fromFile(File(song.filePath))
             val bytes = SongArt.embedded(context, music)
             if (bytes == null) {

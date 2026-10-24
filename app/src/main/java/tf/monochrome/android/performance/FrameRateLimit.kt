@@ -41,12 +41,18 @@ object FrameRateLimit {
      * raise it.
      */
     fun applyTo(window: Window, fps: Int) {
-        val display = window.decorView.display ?: return
-        val current = display.mode
-        val rates = display.supportedModes
-            .filter { it.physicalWidth == current.physicalWidth && it.physicalHeight == current.physicalHeight }
-            .map { it.refreshRate }
-        val wanted = refreshRateFor(fps, rates)
+        // Max wants nothing whatever the panel offers, so the display's modes
+        // are not asked for; this runs on each recomposition of the root.
+        val wanted = if (fps <= 0) {
+            0f
+        } else {
+            val display = window.decorView.display ?: return
+            val current = display.mode
+            val rates = display.supportedModes
+                .filter { it.physicalWidth == current.physicalWidth && it.physicalHeight == current.physicalHeight }
+                .map { it.refreshRate }
+            refreshRateFor(fps, rates)
+        }
         val attributes = window.attributes
         if (attributes.preferredRefreshRate == wanted) return
         attributes.preferredRefreshRate = wanted
@@ -107,16 +113,20 @@ internal class CappedFrameClock(private val display: MonotonicFrameClock) : Mono
     private val pacer = FramePacer()
 
     override suspend fun <R> withFrameNanos(onFrame: (frameTimeNanos: Long) -> R): R {
-        while (true) {
-            var ran = false
-            var result: R? = null
-            display.withFrameNanos { now ->
-                if (pacer.due(now, FrameRateLimit.fps)) {
-                    FrameRateLimit.composedFrames.incrementAndGet()
-                    ran = true
-                    result = onFrame(now)
-                }
+        var ran = false
+        var result: R? = null
+        // One callback for the whole wait: a frame not due leaves `ran` false
+        // and the same callback is handed to the display's next frame, rather
+        // than a new one (and its state) for every display frame the limit skips.
+        val onDisplayFrame: (Long) -> Unit = { now ->
+            if (pacer.due(now, FrameRateLimit.fps)) {
+                FrameRateLimit.composedFrames.incrementAndGet()
+                ran = true
+                result = onFrame(now)
             }
+        }
+        while (true) {
+            display.withFrameNanos(onDisplayFrame)
             @Suppress("UNCHECKED_CAST")
             if (ran) return result as R
         }

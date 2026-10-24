@@ -100,7 +100,9 @@ object ShareSize {
         onProgress: (Float) -> Unit = {},
     ): Prepared {
         val original = Prepared(null, ext)
-        if (!shouldShrink(size, limit, shrinker.available, durationMs)) return original
+        // Asked last: whether the phone has an Opus encoder is a codec-list
+        // query, wasted on the many songs that are small enough to go as they are.
+        if (!shouldShrink(size, limit, canShrink = true, durationMs) || !shrinker.available) return original
         val copy = try {
             shrinker.shrink(source, onProgress)
         } catch (e: CancellationException) {

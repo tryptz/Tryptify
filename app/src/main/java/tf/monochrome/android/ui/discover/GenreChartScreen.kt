@@ -172,7 +172,7 @@ fun GenreChartScreen(
                 tf.monochrome.android.ui.components.TrackSelectionBar(
                     selectedCount = selection.count,
                     onClose = { selection.clear() },
-                    onSelectAll = (chart?.entries.orEmpty().map { it.selectionKey }).let { all -> if (all.isNotEmpty() && !selection.selectedIds.containsAll(all)) ({ selection.selectAll(all) }) else null },
+                    onSelectAll = selection.selectAllOf(chart?.entries.orEmpty()) { it.selectionKey },
                     onAddToQueue = {
                         viewModel.resolveAll(selectedEntries()) { playerViewModel.addUnifiedToQueue(it) }
                         selection.clear()
@@ -215,16 +215,17 @@ fun GenreChartScreen(
                             Text(stringResource(R.string.play_the_chart))
                         }
                     }
-                    items(entries, key = { "${it.rank}:${it.matchKey}" }) { entry ->
+                    items(entries, key = { it.selectionKey }) { entry ->
+                        val key = entry.selectionKey
                         ChartRow(
                             entry = entry,
                             onPlay = {
-                                if (selection.active) selection.toggle(entry.selectionKey)
+                                if (selection.active) selection.toggle(key)
                                 else viewModel.play(entry, playerViewModel)
                             },
-                            onLongClick = { selection.toggle(entry.selectionKey) },
+                            onLongClick = { selection.toggle(key) },
                             selectionMode = selection.active,
-                            selected = entry.selectionKey in selection.selectedIds,
+                            selected = key in selection.selectedIds,
                         )
                     }
                 }

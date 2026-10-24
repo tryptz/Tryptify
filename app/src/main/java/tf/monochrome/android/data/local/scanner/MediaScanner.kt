@@ -132,10 +132,11 @@ class MediaScanner @Inject constructor(
             val addedCount = processFiles(
                 files = mediaStoreFiles,
                 shouldRead = {
+                    val existing = scanInfoByPath[it.absolutePath]
                     titleModeChanged ||
-                        needsPackRetag(scanInfoByPath[it.absolutePath], packTags[it.absolutePath]) ||
+                        needsPackRetag(existing, packTags[it.absolutePath]) ||
                         needsReRead(
-                            scanInfoByPath[it.absolutePath], it.dateModified,
+                            existing, it.dateModified,
                             titleFromFileName = titleFromFileName,
                             healNumbering = healNumbering,
                         )
@@ -212,8 +213,9 @@ class MediaScanner @Inject constructor(
             val known = localMediaDao.getAllTrackScanInfo().associateBy { it.filePath }
             val packTags = packTags()
             val changed = audio.filter {
-                needsIncrementalRead(known[it.absolutePath], it.dateModified) ||
-                    needsPackRetag(known[it.absolutePath], packTags[it.absolutePath])
+                val existing = known[it.absolutePath]
+                needsIncrementalRead(existing, it.dateModified) ||
+                    needsPackRetag(existing, packTags[it.absolutePath])
             }
 
             val addedCount = if (changed.isEmpty()) 0 else {

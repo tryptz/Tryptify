@@ -1059,7 +1059,8 @@ function encodeValue(v: unknown, key: string | null, inValue: boolean): string {
   if (typeof v === "boolean") return v ? "true" : "false";
   if (typeof v === "number") {
     if (!inValue && key !== null && F64_KEYS.has(key)) return formatF64(v);
-    return isIntegerLiteral(v) ? BigInt(v).toString() : formatF64(v);
+    // BigInt only past 2^53, where a number's own text is rounded (2^63 comes out ...776000).
+    return isIntegerLiteral(v) ? (Number.isSafeInteger(v) ? String(v) : BigInt(v).toString()) : formatF64(v);
   }
   if (Array.isArray(v)) return "[" + v.map((x) => encodeValue(x, null, inValue)).join(",") + "]";
   const o = v as Record<string, unknown>;

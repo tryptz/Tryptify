@@ -29,9 +29,11 @@ object LogRedactor {
         if (text.isEmpty()) return text
         var out = text
         for ((secret, shown) in secrets) if (secret.isNotEmpty()) out = out.replace(secret, shown)
-        out = jwt.replace(out, HIDDEN)
-        out = bearer.replace(out) { it.groupValues[1] + HIDDEN }
-        out = param.replace(out) { it.groupValues[1] + HIDDEN }
+        // Every log line comes through here, and nearly none has a sign-in in
+        // it: a plain substring test says so before a regex scans the line.
+        if ("eyJ" in out) out = jwt.replace(out, HIDDEN)
+        if (out.contains("bearer", ignoreCase = true)) out = bearer.replace(out) { it.groupValues[1] + HIDDEN }
+        if ('=' in out) out = param.replace(out) { it.groupValues[1] + HIDDEN }
         return out
     }
 

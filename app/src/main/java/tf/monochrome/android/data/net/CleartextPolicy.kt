@@ -43,7 +43,9 @@ object CleartextPolicy {
      * only an address that carries one (a server's token, password, key or
      * signature) is held to [refusal]'s rule.
      */
-    fun mediaRefusal(url: String): String? = if (carriesSignIn(url)) refusal(url) else null
+    fun mediaRefusal(url: String): String? =
+        // An https:// address is never refused, so most never get its query read.
+        if (url.startsWith("http://", ignoreCase = true) && carriesSignIn(url)) refusal(url) else null
 
     fun requireForMedia(url: String) {
         mediaRefusal(url)?.let { throw CleartextRefused(it) }

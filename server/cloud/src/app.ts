@@ -289,8 +289,9 @@ export function createApp({ db, storage = null, billing, personOf, playKey = nul
     if (!storage || !playKey) return fail(503, "not_set_up");
     const uid = c.get("uid");
     const id = c.req.param("id");
-    if (accessOf(await loadAccount(db!, uid), now()).access === "none") return fail(402, "no_plan");
-    const song = await getSong(db!, uid, id);
+    // Both asked at once; the plan is still judged first.
+    const [account, song] = await Promise.all([loadAccount(db!, uid), getSong(db!, uid, id)]);
+    if (accessOf(account, now()).access === "none") return fail(402, "no_plan");
     if (!song) return fail(404, "not_found");
     const expires = Math.floor(now().getTime() / 1000) + PLAY_LINK_SECONDS;
     const signature = await playSignature(playKey, uid, id, expires);
@@ -382,8 +383,10 @@ export function createApp({ db, storage = null, billing, personOf, playKey = nul
       return cors(fail(403, "bad_link"));
     }
     if (expires * 1000 < now().getTime()) return cors(fail(403, "link_expired"));
-    if (accessOf(await loadAccount(db, uid), now()).access === "none") return cors(fail(402, "no_plan"));
-    const song = await getSong(db, uid, id);
+    // The plan and the song are asked at once (the player seeks with many
+    // requests, each a round trip to D1); the plan is still judged first.
+    const [account, song] = await Promise.all([loadAccount(db, uid), getSong(db, uid, id)]);
+    if (accessOf(account, now()).access === "none") return cors(fail(402, "no_plan"));
     if (!song) return cors(fail(404, "not_found"));
     return cors(await streamSong(storage, song, c.req.header("range") ?? null, false));
   });

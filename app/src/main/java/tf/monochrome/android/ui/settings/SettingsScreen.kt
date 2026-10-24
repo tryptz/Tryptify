@@ -2509,6 +2509,10 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
     }
 }
 
+/** Max, then the limits the Frame rate limit chips offer. */
+private val FRAME_RATE_CHIPS =
+    listOf(tf.monochrome.android.performance.FrameRateLimit.MAX) + tf.monochrome.android.performance.FrameRateLimit.CHOICES
+
 // ─── Tab 6: Connections ────────────────────────────────────────────────
 /**
  * Every account and endpoint in one place: which catalogs to search, the
@@ -2976,9 +2980,7 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            val limits = listOf(tf.monochrome.android.performance.FrameRateLimit.MAX) +
-                tf.monochrome.android.performance.FrameRateLimit.CHOICES
-            limits.forEach { fps ->
+            FRAME_RATE_CHIPS.forEach { fps ->
                 val max = fps == tf.monochrome.android.performance.FrameRateLimit.MAX
                 tf.monochrome.android.ui.mixer.GlassChoiceChip(
                     label = if (max) stringResource(R.string.waterfall_max) else "$fps",

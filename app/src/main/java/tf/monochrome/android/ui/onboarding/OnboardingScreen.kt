@@ -611,7 +611,7 @@ private fun ReadyRows(viewModel: OnboardingViewModel) {
     val folders by viewModel.folders.collectAsStateWithLifecycle()
     val sources by viewModel.sources.collectAsStateWithLifecycle()
     val profile by viewModel.userProfile.collectAsStateWithLifecycle()
-    val total = folders.mapNotNull { it.trackCount }.sum()
+    val total = folders.sumOf { it.trackCount ?: 0 }
 
     SetupRow(
         icon = Icons.Default.Folder,

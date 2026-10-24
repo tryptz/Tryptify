@@ -33,6 +33,8 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import tf.monochrome.android.R
@@ -81,6 +83,9 @@ class ConnectController @Inject constructor(
     /** When this phone last started playing, by the server's clock: the later start wins. */
     @Volatile private var playSince = 0L
     private var controller: MediaController? = null
+
+    /** One controller is built at a time: a command and a pause for a later start can ask together. */
+    private val controllerLock = Mutex()
     private var started = false
 
     val state: StateFlow<ConnectState> get() = client.state
@@ -111,7 +116,7 @@ class ConnectController @Inject constructor(
             is Note.CannotPlayHere -> context.getString(R.string.connect_cannot_play, n.title)
             is Note.Refused -> n.message.ifBlank { context.getString(R.string.connect_not_connected) }
         }
-        scope.launch { Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
+        Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
     }
 
     /** Starts it, once, from the Application. */
@@ -139,7 +144,7 @@ class ConnectController @Inject constructor(
             } else {
                 delay(LINGER_MS)
                 client.close()
-                releaseController()
+                controllerLock.withLock { releaseController() }
             }
         }
     }
@@ -169,6 +174,8 @@ class ConnectController @Inject constructor(
     }
 
     private suspend fun send() {
+        // Signed out or offline there is no one to tell: skip describing the song and encoding it.
+        if (!client.canTell) return
         val out = stateOut() ?: return
         if (client.tell(ConnectProtocol.state(out))) {
             client.remember(ConnectNow(deviceId, deviceName(), out.playing, out.track, out.position, out.rate, client.serverNowMs(), out.since))
@@ -209,7 +216,9 @@ class ConnectController @Inject constructor(
     private suspend fun release(m: ConnectIncoming) {
         // Only to a device of this account that is in the room now.
         val to = m.to?.takeIf { id -> ConnectProtocol.isDeviceId(id) && client.state.value.devices.any { it.id == id } } ?: return
-        val upcoming = queueManager.queue.value.drop(queueManager.currentIndex.value + 1).take(ConnectProtocol.MAX_QUEUE).map(::descriptorOf)
+        // A sequence, so a long queue is not copied to send the next hundred.
+        val upcoming = queueManager.queue.value.asSequence().drop(queueManager.currentIndex.value + 1)
+            .take(ConnectProtocol.MAX_QUEUE).map(::descriptorOf).toList()
         client.tell(ConnectProtocol.handoff(to, stateOut(), upcoming))
         if (signals.change.value.playing) {
             withController { it.pause() }
@@ -221,11 +230,12 @@ class ConnectController @Inject constructor(
         val now = m.now ?: return
         val first = now.track ?: return
         val from = nameOf(m.from ?: now.device, now.name)
-        val tracks = (listOf(first) + m.queue.orEmpty()).mapNotNull(::unifiedOf)
-        if (tracks.isEmpty() || unifiedOf(first) == null) {
+        val head = unifiedOf(first)
+        if (head == null) {
             note(Note.CannotPlayHere(first.title))
             return
         }
+        val tracks = listOf(head) + m.queue.orEmpty().mapNotNull(::unifiedOf)
         val resolved = withContext(Dispatchers.IO) { runCatching { streamResolver.resolveUnifiedTrack(tracks.first()) }.getOrNull() }
         if (resolved == null || !resolved.isPlayable) {
             note(Note.CannotPlayHere(first.title))
@@ -317,7 +327,11 @@ class ConnectController @Inject constructor(
     // ── A controller, only to act ─────────────────────────────────────
 
     private suspend fun withController(block: (MediaController) -> Unit) {
-        val mc = controller ?: connectController()?.also { controller = it } ?: return
+        // A controller the service has dropped ignores every command: build another.
+        val mc = controllerLock.withLock {
+            controller?.takeIf { it.isConnected }
+                ?: run { releaseController(); connectController()?.also { controller = it } }
+        } ?: return
         runCatching { block(mc) }.onFailure { Log.w(TAG, "connect: ${it.message}") }
     }
 
@@ -327,6 +341,8 @@ class ConnectController @Inject constructor(
         return withTimeoutOrNull(CONTROLLER_TIMEOUT_MS) {
             suspendCancellableCoroutine { cont ->
                 future.addListener({ cont.resume(runCatching { future.get() }.getOrNull()) }, MoreExecutors.directExecutor())
+                // Timed out: let it go when it does connect, or it holds the service up for good.
+                cont.invokeOnCancellation { MediaController.releaseFuture(future) }
             }
         }
     }

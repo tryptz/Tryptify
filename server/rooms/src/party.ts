@@ -309,6 +309,7 @@ export class Party {
   private votes_ = new Set<string>();
   private chat_: Line[] = [];
   private nextItem = 1;
+  private rateOf: [number, number] | null = null;
 
   constructor(code: string, name: string, host: MemberIn, songLimit: number) {
     const h = newMember(host);
@@ -334,13 +335,20 @@ export class Party {
         positionMs: this.playback.positionMs,
         atServerMs: this.playback.atServerMs,
         paused: this.playback.paused,
-        rate: rateValue(this.playback.rate),
+        rate: this.rate(),
         keepPitch: this.playback.keepPitch,
       },
       skip: { votes: this.votes(), needed: this.votesNeeded() },
       sharedBytes: this.sharedBytes(),
       sharedLimit: this.quota,
     };
+  }
+
+  /** The speed as it goes on the wire; worked out once per speed, not per view (BigInt arithmetic). */
+  private rate(): number {
+    const rate = this.playback.rate;
+    if (this.rateOf?.[0] !== rate) this.rateOf = [rate, rateValue(rate)];
+    return this.rateOf[1];
   }
 
   member(id: string): Member | null {
@@ -417,15 +425,20 @@ export class Party {
     return toAll({ t: "line", line: lineJson(l) });
   }
 
-  /** What brings one member up to date: the song token, the chat, the party. */
-  welcomeBack(id: string): Out {
+  /**
+   * What brings one member up to date: the song token, the chat, the party.
+   * [withParty] false leaves the party off, for a join, which sends it to
+   * everyone in the same breath.
+   */
+  welcomeBack(id: string, withParty = true): Out {
     const m = this.member(id);
     if (!m) return [];
-    return [
+    const out = [
       toOne(id, { t: "joined", code: this.code, songToken: m.token }),
       toOne(id, { t: "history", lines: this.chat_.map(lineJson) }),
-      toOne(id, { t: "party", party: this.viewJson() }),
     ];
+    if (withParty) out.push(toOne(id, { t: "party", party: this.viewJson() }));
+    return out;
   }
 
   join(member: MemberIn, at: number): Result {
@@ -435,9 +448,8 @@ export class Party {
     // An app member takes the host's seat when only guests held the party.
     if (this.host === "" && !m.guest) this.host = m.id;
     this.members.push(m);
-    const out = this.welcomeBack(m.id);
     // Its own copy of the party goes out with everyone's below.
-    out.pop();
+    const out = this.welcomeBack(m.id, false);
     out.push(this.line("join", m.id, m.name, m.web ? "web" : "", at));
     out.push(...this.skipIfVoted(at));
     out.push(this.partyMsg());

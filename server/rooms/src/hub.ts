@@ -80,6 +80,8 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
 const refuse = ({ status, error }: Refusal) => json({ success: false, error }, status);
 const now = () => Date.now();
+/** A message as it goes on the wire: a game room's as serde wrote it (src/room.ts encode), everything else as JSON.stringify. */
+const wireOf = (msg: Msg, serde: boolean) => (serde ? R.encode(msg) : JSON.stringify(msg));
 
 export class Hub extends DurableObject<Env> {
   rooms = new Map<string, R.Room>();
@@ -206,7 +208,11 @@ export class Hub extends DurableObject<Env> {
    */
   push(ws: WebSocket | null, msg: Msg, serde = false) {
     if (!ws) return;
-    try { ws.send(serde ? R.encode(msg) : JSON.stringify(msg)); } catch { /* closed already */ }
+    try { ws.send(wireOf(msg, serde)); } catch { /* closed already */ }
+  }
+
+  pushText(ws: WebSocket, wire: string) {
+    try { ws.send(wire); } catch { /* closed already */ }
   }
 
   endSession(session: Session) {
@@ -287,7 +293,14 @@ export class Hub extends DurableObject<Env> {
     for (const { to, msg } of out) {
       if (to === "" || to === "all") {
         const ids = room ? room.players.map((p) => p.id) : this.parties.get(code)?.memberIds() ?? [];
-        for (const id of ids) this.send(id, msg, !!room);
+        // Everyone gets the same text: written once, not once per player (a
+        // game's live scores go round four times a second, a party's view of
+        // its whole queue on every move), and not at all when nobody is here.
+        let wire: string | undefined;
+        for (const id of ids) {
+          const ws = this.conns.get(id)?.ws;
+          if (ws) this.pushText(ws, (wire ??= wireOf(msg, !!room)));
+        }
       } else this.send(to, msg, !!room);
     }
   }
@@ -731,7 +744,7 @@ export class Hub extends DurableObject<Env> {
       const copy = await this.webCopy(found.path);
       if (copy) return this.sendFile(request, copy, "m4a", item);
     }
-    return this.sendFile(request, found.path, found.song.ext, item);
+    return this.sendFile(request, found.path, found.song.ext, item, found.song.bytes);
   }
 
   /**
@@ -744,13 +757,17 @@ export class Hub extends DurableObject<Env> {
     const known = this.webCopies.get(file);
     if (known !== undefined) return known;
     const making = (async (): Promise<string | null> => {
+      // No look in the bucket for a copy already there: the key is the song's
+      // own random file name plus a suffix, and a copy is made once, here
+      // (webCopies), so none exists that this hub does not know of.
       const key = webKey(file);
-      if (await this.env.SONGS.head(key)) return key;
       const { FFMPEG_URL, FFMPEG_KEY } = this.env;
       if (!FFMPEG_URL || !FFMPEG_KEY) return null;
-      const object = await this.env.SONGS.get(file);
-      if (!object) return null;
       try {
+        // Inside the try: a failed read must settle as "no copy", or the
+        // rejected promise stays in webCopies and every later ask rethrows.
+        const object = await this.env.SONGS.get(file);
+        if (!object) return null;
         const r = await fetch(new URL("/web", FFMPEG_URL), {
           method: "POST",
           headers: { "content-length": String(object.size), "content-type": "application/octet-stream", "x-access-key": FFMPEG_KEY },
@@ -776,31 +793,46 @@ export class Hub extends DurableObject<Env> {
     return done;
   }
 
-  async sendFile(request: Request, file: string, ext: string, name: string): Promise<Response> {
-    const head = await this.env.SONGS.head(file);
-    if (!head) return refuse({ status: 404, error: "that song is gone" });
-    const total = head.size;
-    const base: Record<string, string> = {
+  /**
+   * A shared song's bytes, all of it or the range asked for. [known] is its
+   * size where the party already holds it (an original, not a website copy),
+   * which saves asking the bucket for it on every range: a player seeking
+   * asks for many. A whole GET learns the size from the one read that
+   * fetches it.
+   */
+  async sendFile(request: Request, file: string, ext: string, name: string, known?: number): Promise<Response> {
+    const gone = () => refuse({ status: 404, error: "that song is gone" });
+    const base = (total: number): Record<string, string> => ({
       "content-type": audioType(ext),
       "accept-ranges": "bytes",
       etag: `"${name}-${total}"`,
       "cache-control": "private, no-store",
       "content-disposition": "inline",
       "x-song-ext": ext,
-    };
+    });
     const asked = request.headers.get("range");
-    if (!asked) {
-      const object = request.method === "HEAD" ? null : await this.env.SONGS.get(file);
-      return new Response(object?.body ?? null, { headers: { ...base, "content-length": String(total) } });
+    const headOnly = request.method === "HEAD";
+    if (!asked && !headOnly) {
+      const object = await this.env.SONGS.get(file);
+      if (!object) return gone();
+      return new Response(object.body, { headers: { ...base(object.size), "content-length": String(object.size) } });
     }
+    let total = headOnly ? undefined : known;
+    if (total === undefined) {
+      const head = await this.env.SONGS.head(file);
+      if (!head) return gone();
+      total = head.size;
+    }
+    if (!asked) return new Response(null, { headers: { ...base(total), "content-length": String(total) } });
     const range = byteRange(asked, total);
-    if (!range) return new Response(null, { status: 416, headers: { ...base, "content-range": `bytes */${total}` } });
+    if (!range) return new Response(null, { status: 416, headers: { ...base(total), "content-range": `bytes */${total}` } });
     const [first, last] = range;
     const length = last - first + 1;
-    const object = request.method === "HEAD" ? null : await this.env.SONGS.get(file, { range: { offset: first, length } });
+    const object = headOnly ? null : await this.env.SONGS.get(file, { range: { offset: first, length } });
+    if (!headOnly && !object) return gone();
     return new Response(object?.body ?? null, {
       status: 206,
-      headers: { ...base, "content-length": String(length), "content-range": `bytes ${first}-${last}/${total}` },
+      headers: { ...base(total), "content-length": String(length), "content-range": `bytes ${first}-${last}/${total}` },
     });
   }
 

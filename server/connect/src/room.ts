@@ -24,29 +24,41 @@ export class Room extends DurableObject {
 
   private sockets(): Socket[] { return (this.ctx as any).getWebSockets() as Socket[]; }
   private me(ws: WebSocket): Attachment { return (ws as Socket).deserializeAttachment() as Attachment; }
-  private send(ws: WebSocket, msg: Record<string, unknown>) {
-    try { ws.send(JSON.stringify({ ...msg, serverTime: Date.now() })); } catch { /* closing */ }
+  /** A message as it goes out, with the server time. Made once for a whole broadcast, not once per device. */
+  private wire(msg: Record<string, unknown>): string { return JSON.stringify({ ...msg, serverTime: Date.now() }); }
+  private put(ws: WebSocket, text: string) {
+    try { ws.send(text); } catch { /* closing */ }
+  }
+  private send(ws: WebSocket, msg: Record<string, unknown>) { this.put(ws, this.wire(msg)); }
+  /** [msg] to everyone in [sockets] but [skip] and [gone]. */
+  private tell(sockets: WebSocket[], msg: Record<string, unknown>, skip?: WebSocket, gone?: WebSocket) {
+    const text = this.wire(msg);
+    for (const ws of sockets) if (ws !== skip && ws !== gone) this.put(ws, text);
   }
   private to(id: string, msg: Record<string, unknown>) {
-    for (const ws of (this.ctx as any).getWebSockets(id) as WebSocket[]) this.send(ws, msg);
+    const sockets = (this.ctx as any).getWebSockets(id) as WebSocket[];
+    if (sockets.length) this.tell(sockets, msg);
   }
   private async now(): Promise<(Now & { name?: string }) | null> { return (await this.ctx.storage.get("now")) ?? null; }
 
   /** The devices online now; the one playing is marked. */
-  private devices(except?: WebSocket, playing?: string | null) {
+  private devices(sockets: Socket[], except?: WebSocket, playing?: string | null) {
     const seen = new Map<string, Attachment & { active: boolean }>();
-    for (const ws of this.sockets()) {
+    for (const ws of sockets) {
       if (ws === except || ws.readyState !== 1) continue;
       const a = this.me(ws);
       if (a && !seen.has(a.id)) seen.set(a.id, { ...a, active: a.id === playing });
     }
     return [...seen.values()];
   }
-  /** Tells everyone but [skip] who is online; [gone] is a connection on its way out, left off the list. */
-  private async broadcastDevices(skip?: WebSocket, gone?: WebSocket) {
-    const now = await this.now();
-    const devices = this.devices(gone, now && now.playing ? now.device : null);
-    for (const ws of this.sockets()) if (ws !== skip && ws !== gone) this.send(ws, { type: "devices", devices });
+  /**
+   * Tells everyone but [skip] who is online, given [now] as the room holds it
+   * (the caller has it already); [gone] is a connection on its way out, left
+   * off the list.
+   */
+  private broadcastDevices(now: Now | null, skip?: WebSocket, gone?: WebSocket) {
+    const sockets = this.sockets();
+    this.tell(sockets, { type: "devices", devices: this.devices(sockets, gone, now && now.playing ? now.device : null) }, skip, gone);
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -55,18 +67,18 @@ export class Room extends DurableObject {
     if (!device) return new Response("A device id is needed.", { status: 400 });
     // One connection per device: a new one (a reload, a second tab) replaces the old.
     for (const old of (this.ctx as any).getWebSockets(device.id) as WebSocket[]) old.close(4000, "replaced");
-    if (this.devices().length >= MAX_DEVICES) return new Response("Too many devices.", { status: 429 });
+    if (this.devices(this.sockets()).length >= MAX_DEVICES) return new Response("Too many devices.", { status: 429 });
 
     const pair = new WebSocketPair();
     const [client, server] = [pair[0], pair[1]];
     (this.ctx as any).acceptWebSocket(server, [device.id]);
     (server as Socket).serializeAttachment({ ...device, since: Date.now() } satisfies Attachment);
-    const now = await this.now();
-    this.send(server, {
-      type: "welcome", you: device.id, now: now ? { ...now, position: positionAt(now, Date.now()), at: Date.now() } : null,
-      devices: this.devices(undefined, now && now.playing ? now.device : null),
-    });
-    await this.broadcastDevices(server); // it has the list already, in its welcome
+    const now = await this.now(), t = Date.now();
+    // The list is the same for the newcomer's welcome and for everyone else.
+    const sockets = this.sockets();
+    const devices = this.devices(sockets, undefined, now && now.playing ? now.device : null);
+    this.send(server, { type: "welcome", you: device.id, now: now ? { ...now, position: positionAt(now, t), at: t } : null, devices });
+    this.tell(sockets, { type: "devices", devices }, server); // it has the list already, in its welcome
     const headers = new Headers();
     if (request.headers.get("x-connect-protocol") === "1") headers.set("Sec-WebSocket-Protocol", "tryptify-connect");
     return new Response(null, { status: 101, webSocket: client, headers });
@@ -91,8 +103,8 @@ export class Room extends DurableObject {
       const now = { ...cleanState(m, me.id, t), name: me.name };
       if (!now.playing && prev && prev.device !== me.id && prev.playing) return; // a paused device does not take over
       await this.ctx.storage.put("now", now);
-      for (const other of this.sockets()) if (other !== ws) this.send(other, { type: "now", now });
-      if (!prev || prev.device !== now.device || prev.playing !== now.playing) await this.broadcastDevices();
+      this.tell(this.sockets(), { type: "now", now }, ws);
+      if (!prev || prev.device !== now.device || prev.playing !== now.playing) this.broadcastDevices(now);
     } else if (m.type === "command") {
       // Remote control: play, pause, next, previous or seek, sent to the device playing.
       const c = cleanCommand(m), target = typeof m.to === "string" ? m.to : "";
@@ -100,12 +112,13 @@ export class Room extends DurableObject {
     } else if (m.type === "transfer") {
       // "Play on [to]": the device playing hands over its exact place and its queue.
       const target = typeof m.to === "string" ? m.to : "";
-      if (!(this.ctx as any).getWebSockets(target).length) return this.send(ws, { type: "error", message: "That device is not online." });
+      const there = (this.ctx as any).getWebSockets(target) as WebSocket[];
+      if (!there.length) return this.send(ws, { type: "error", message: "That device is not online." });
       const now = await this.now();
-      const holder = now ? (this.ctx as any).getWebSockets(now.device) as WebSocket[] : [];
       if (now && now.device === target) return;
+      const holder = now ? (this.ctx as any).getWebSockets(now.device) as WebSocket[] : [];
       if (now && holder.length && m.force !== true) {
-        this.to(now.device, { type: "release", to: target, toName: this.me(((this.ctx as any).getWebSockets(target) as WebSocket[])[0]).name });
+        this.to(now.device, { type: "release", to: target, toName: this.me(there[0]).name });
       } else {
         // Nobody to ask (or no answer came): start from what the room last heard.
         this.to(target, { type: "takeover", from: now ? now.device : null, now: now ? { ...now, position: positionAt(now, t), at: t } : null, queue: [] });
@@ -134,8 +147,8 @@ export class Room extends DurableObject {
     if (now && now.playing && id && now.device === id && !still) {
       const stopped = { ...stoppedAt(now, Date.now()), name: now.name };
       await this.ctx.storage.put("now", stopped);
-      for (const other of this.sockets()) if (other !== ws) this.send(other, { type: "now", now: stopped });
-    }
-    await this.broadcastDevices(ws, ws);
+      this.tell(this.sockets(), { type: "now", now: stopped }, ws);
+      this.broadcastDevices(stopped, ws, ws);
+    } else this.broadcastDevices(now, ws, ws);
   }
 }

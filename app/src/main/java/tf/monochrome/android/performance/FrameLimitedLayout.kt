@@ -20,6 +20,8 @@ import android.widget.FrameLayout
  * at once, as a plain FrameLayout would.
  */
 class FrameLimitedLayout(context: Context) : FrameLayout(context) {
+    // The frame clock's own pacing, which averages out to the limit on any
+    // display rather than drifting from it.
     private val pacer = FramePacer()
     private var heldChild: View? = null
     private var heldTarget: View? = null
@@ -30,7 +32,7 @@ class FrameLimitedLayout(context: Context) : FrameLayout(context) {
             val target = heldTarget ?: return
             // Timed by the same clock as a request let straight through.
             val now = clockNanos()
-            if (!due(now, FrameRateLimit.fps)) {
+            if (!pacer.due(now, FrameRateLimit.fps)) {
                 Choreographer.getInstance().postFrameCallback(this)
                 return
             }
@@ -43,8 +45,9 @@ class FrameLimitedLayout(context: Context) : FrameLayout(context) {
 
     override fun onDescendantInvalidated(child: View, target: View) {
         val fps = FrameRateLimit.fps
-        val now = clockNanos()
-        if (fps <= 0 || (heldChild == null && due(now, fps))) {
+        // Every invalidation in the window comes through here, so at Max the
+        // clock is not even read.
+        if (fps <= 0 || (heldChild == null && pacer.due(clockNanos(), fps))) {
             super.onDescendantInvalidated(child, target)
             return
         }
@@ -64,11 +67,4 @@ class FrameLimitedLayout(context: Context) : FrameLayout(context) {
 
     /** Uptime, in nanoseconds: a millisecond's precision is plenty for gaps of 8 ms and more. */
     private fun clockNanos(): Long = android.os.SystemClock.uptimeMillis() * 1_000_000L
-
-    /**
-     * Whether a frame may be drawn at [nanos], booking the next one if so: the
-     * frame clock's own pacing ([FramePacer]), which averages out to the
-     * limit on any display rather than drifting from it.
-     */
-    private fun due(nanos: Long, fps: Int): Boolean = pacer.due(nanos, fps)
 }

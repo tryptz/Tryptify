@@ -68,6 +68,9 @@ class ConnectClient @Inject constructor(
 
     val connected: Boolean get() = job?.isActive == true
 
+    /** Whether a message could go out right now. */
+    val canTell: Boolean get() = send != null
+
     /**
      * Opens the connection as [deviceId] called [name], signing in with [token]
      * (called again before each try, so a refreshed session is used), and keeps

@@ -219,7 +219,7 @@ private fun ConnectContent(
             Button(onClick = { onPlayOn(myId) }) { Text(stringResource(R.string.connect_play_here)) }
         }
     }
-    val devices = state.devices.sortedWith(compareBy<ConnectDevice> { it.id != myId }.thenBy { it.name })
+    val devices = remember(state.devices, myId) { state.devices.sortedWith(compareBy<ConnectDevice> { it.id != myId }.thenBy { it.name }) }
     Column {
         for (d in devices) DeviceRow(d, isMe = d.id == myId, active = d.id == holder, canMove = holder != null && d.id != holder, onPlayOn)
     }
@@ -298,7 +298,7 @@ private fun RemoteTimeline(
             val dim = LocalContentColor.current.copy(alpha = 0.8f)
             Text(clockOf(shown), style = MaterialTheme.typography.labelSmall, color = dim)
             Spacer(Modifier.weight(1f))
-            Text(clockOf(duration), style = MaterialTheme.typography.labelSmall, color = dim)
+            Text(remember(duration) { clockOf(duration) }, style = MaterialTheme.typography.labelSmall, color = dim)
         }
     }
 }

@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -173,8 +174,12 @@ fun HrtfDatabaseScreen(
 
         val listing = state.listing
         val q = state.query.trim().lowercase()
-        val folders = listing?.folders.orEmpty().filter { q.isEmpty() || it.display.lowercase().contains(q) }
-        val files = listing?.files.orEmpty().filter { q.isEmpty() || it.display.lowercase().contains(q) }
+        // Filtered when the listing or the words change, not on every status line
+        // or download tick: a database folder can list hundreds of files.
+        val (folders, files) = remember(listing, q) {
+            listing?.folders.orEmpty().filter { q.isEmpty() || it.display.lowercase().contains(q) } to
+                listing?.files.orEmpty().filter { q.isEmpty() || it.display.lowercase().contains(q) }
+        }
 
         // A permanent floating bar, as every list search is: the databases
         // scroll up under the glass instead of starting below an inline field.

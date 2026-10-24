@@ -55,8 +55,12 @@ class ApiServerAccess @Inject constructor(
                 loaded = true
             }
         }
+        // Most listeners have no server with a password: skip parsing the
+        // address on every request and stream.
+        val passwords = byOrigin
+        if (passwords.isEmpty()) return null
         val origin = originOf(url) ?: return null
-        return byOrigin[origin]
+        return passwords[origin]
     }
 
     /**

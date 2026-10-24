@@ -25,9 +25,12 @@ fun rememberRemotePosition(now: ConnectNow?, serverNowMs: () -> Long): State<Dou
     val position = remember { mutableDoubleStateOf(0.0) }
     LaunchedEffect(now) {
         if (now == null) return@LaunchedEffect
+        val end = now.track?.duration?.takeIf { it > 0 }
         while (true) {
-            position.doubleValue = ConnectProtocol.positionAt(now, serverNowMs())
-            if (!now.playing) break
+            val p = ConnectProtocol.positionAt(now, serverNowMs())
+            position.doubleValue = p
+            // Paused, or at the end of a song nobody has moved on from: nothing more to follow.
+            if (!now.playing || (end != null && p >= end)) break
             delay(250)
         }
     }

@@ -64,6 +64,9 @@ class UnifiedTrackSelection {
     /** The selected songs in [order]'s order when given, else in the order they were picked. */
     fun tracks(order: List<UnifiedTrack>? = null): List<UnifiedTrack> {
         val selected = ids.selectedIds
+        // Nothing picked (the bar sliding out, or an action that just cleared
+        // it) is not worth a pass over a long list.
+        if (selected.isEmpty()) return emptyList()
         return order?.filter { it.id in selected } ?: selected.mapNotNull { picked[it] }
     }
 }

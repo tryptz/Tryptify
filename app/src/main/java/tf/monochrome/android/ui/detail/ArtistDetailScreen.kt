@@ -267,7 +267,7 @@ fun ArtistDetailScreen(
                     tf.monochrome.android.ui.components.TrackSelectionBar(
                         selectedCount = selection.count,
                         onClose = { selection.clear() },
-                        onSelectAll = (detail.selectable().map { it.id }).let { all -> if (all.isNotEmpty() && !selection.selectedIds.containsAll(all)) ({ selection.selectAll(all) }) else null },
+                        onSelectAll = selection.selectAllOf(detail.selectable()) { it.id },
                         onAddToQueue = {
                             playerViewModel.addToQueue(detail.selectable().filter { it.id in selection.selectedIds })
                             selection.clear()

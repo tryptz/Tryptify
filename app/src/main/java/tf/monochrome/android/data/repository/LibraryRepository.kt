@@ -82,15 +82,6 @@ class LibraryRepository @Inject constructor(
     // brought unliked songs and deleted playlists straight back.
 
     /**
-     * The service [track]'s id belongs to, kept with a liked or playlisted
-     * song (FavoriteTrackEntity.source): Qobuz, Deezer, Apple and TIDAL ids
-     * are plain numbers in overlapping ranges, and the registry that tells
-     * them apart lives on this device only, so a fresh install or the website
-     * would otherwise read every one as TIDAL's. What the queued track plays
-     * from says it outright; a bare Track falls back to the registry, as
-     * toUnifiedTrackAuto does.
-     */
-    /**
      * Teaches this device's registry a saved song's service, so a row synced
      * from another device (or kept from before a reinstall) plays from where
      * it came from instead of falling through to TIDAL.
@@ -103,6 +94,15 @@ class LibraryRepository @Inject constructor(
         }
     }
 
+    /**
+     * The service [track]'s id belongs to, kept with a liked or playlisted
+     * song (FavoriteTrackEntity.source): Qobuz, Deezer, Apple and TIDAL ids
+     * are plain numbers in overlapping ranges, and the registry that tells
+     * them apart lives on this device only, so a fresh install or the website
+     * would otherwise read every one as TIDAL's. What the queued track plays
+     * from says it outright; a bare Track falls back to the registry, as
+     * toUnifiedTrackAuto does.
+     */
     private fun sourceOf(track: Track): String = when (unifiedTrackRegistry[track.id]?.source) {
         is PlaybackSource.LocalFile -> TrackSource.LOCAL
         is PlaybackSource.QobuzCached -> TrackSource.QOBUZ

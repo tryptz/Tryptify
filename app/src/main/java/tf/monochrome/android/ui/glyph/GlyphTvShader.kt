@@ -431,14 +431,17 @@ float3 glowLine(float2 g, float row, bool wide, float scanW, float glowW,
 // the glow took forty-two.
 float3 crtColour(float2 g) {
     float dx = dist(g).x;
-    float4 s = exp2(uSharp * (dx + float4(-2.0, -1.0, 1.0, 2.0)) * (dx + float4(-2.0, -1.0, 1.0, 2.0)));
+    float4 sd = dx + float4(-2.0, -1.0, 1.0, 2.0);
+    float4 s = exp2(uSharp * sd * sd);
     float s0 = exp2(uSharp * dx * dx);
     if (uBloom <= 0.0) {
         return sharp3(g, -1.0, s, s0) * scan(g, -1.0) + sharp5(g, 0.0, s, s0) * scan(g, 0.0)
             + sharp3(g, 1.0, s, s0) * scan(g, 1.0);
     }
-    float3 bL = exp2(BloomPixel * (dx + float3(-3.0, -2.0, -1.0)) * (dx + float3(-3.0, -2.0, -1.0)));
-    float3 bR = exp2(BloomPixel * (dx + float3(1.0, 2.0, 3.0)) * (dx + float3(1.0, 2.0, 3.0)));
+    float3 bdL = dx + float3(-3.0, -2.0, -1.0);
+    float3 bdR = dx + float3(1.0, 2.0, 3.0);
+    float3 bL = exp2(BloomPixel * bdL * bdL);
+    float3 bR = exp2(BloomPixel * bdR * bdR);
     float b0 = exp2(BloomPixel * dx * dx);
     return glowLine(g, -1.0, false, scan(g, -1.0), bloomScan(g, -1.0) * uBloom, s, s0, bL, bR, b0)
         + glowLine(g, 0.0, true, scan(g, 0.0), bloomScan(g, 0.0) * uBloom, s, s0, bL, bR, b0)

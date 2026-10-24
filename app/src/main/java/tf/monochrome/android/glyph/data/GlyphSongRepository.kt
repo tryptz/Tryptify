@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.withContext
 import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
@@ -61,10 +62,12 @@ class GlyphSongRepository @Inject constructor(
      */
     fun songs(): Flow<List<GlyphSong>> = combine(
         localMedia.getAllTracks(),
-        packs.songs.onStart { packs.ensureLoaded() },
-    ) { tracks, packSongs ->
-        val packMusic = packSongs.mapNotNullTo(HashSet()) { packs.musicPath(it) }
-        tracks.filter { it.isConvertible && it.localPath() !in packMusic }.map { it.toGlyphSong() } +
+        // The pack songs' music paths are worked out when the packs change, not
+        // again for every batch the scanner writes to the library.
+        packs.songs.onStart { packs.ensureLoaded() }
+            .map { listed -> listed to listed.mapNotNullTo(HashSet()) { packs.musicPath(it) } },
+    ) { tracks, (packSongs, packMusic) ->
+        tracks.filter { it.isConvertible && (packMusic.isEmpty() || it.localPath() !in packMusic) }.map { it.toGlyphSong() } +
             packSongs.map { it.withEditedChart() }
     }
 

@@ -374,7 +374,7 @@ fun SearchResultsContent(
                 TrackSelectionBar(
                     selectedCount = selection.count,
                     onClose = { selection.clear() },
-                    onSelectAll = (tracks.map { it.id }).let { all -> if (all.isNotEmpty() && !selection.selectedIds.containsAll(all)) ({ selection.selectAll(all) }) else null },
+                    onSelectAll = selection.selectAllOf(tracks) { it.id },
                     onAddToQueue = {
                         playerViewModel.addUnifiedToQueue(tracks.filter { it.id in selection.selectedIds })
                         selection.clear()
@@ -501,7 +501,7 @@ fun SearchResultsContent(
                             } else {
                                 { menuUnified = track }
                             },
-                            isDownloaded = track.toLegacyTrack().id in downloadedTrackIds,
+                            isDownloaded = track.legacyId in downloadedTrackIds,
                             selectionMode = selection.active,
                             selected = track.id in selection.selectedIds
                         )
@@ -662,7 +662,6 @@ private fun UnifiedSearchTrackItem(
     selectionMode: Boolean = false,
     selected: Boolean = false
 ) {
-    val legacyTrack = track.toLegacyTrack()
     // Same treatment as TrackItem: hide per-row affordances while selecting.
     val effectiveOnMoreClick = onMoreClick.takeUnless { selectionMode }
     // Holding plays the song's preview until the finger lifts; Select is in its menu.
@@ -764,7 +763,7 @@ private fun UnifiedSearchTrackItem(
             if (badges.duration) {
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = legacyTrack.formattedDuration,
+                    text = track.formattedDuration,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

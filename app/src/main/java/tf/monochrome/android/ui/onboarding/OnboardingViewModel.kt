@@ -153,15 +153,16 @@ class OnboardingViewModel @Inject constructor(
 
     /** Whether every linked pack folder is already a library folder or inside one. */
     fun packsAdded(folders: List<FolderEntry>, packs: List<String>): Boolean =
-        packs.isNotEmpty() && packs.all { pack -> folders.any { pack == it.path || pack.startsWith("${it.path}/") } }
+        packs.isNotEmpty() && packs.all { isCovered(it, folders) }
 
     /** Adds the linked packs' folders, as Settings › Library › Music folders does. */
     fun addPackFolders() {
         val roots = _folders.value
-        _packFolders.value
-            .filter { pack -> roots.none { pack == it.path || pack.startsWith("${it.path}/") } }
-            .forEach(::addFolderPath)
+        _packFolders.value.filterNot { isCovered(it, roots) }.forEach(::addFolderPath)
     }
+
+    private fun isCovered(pack: String, roots: List<FolderEntry>) =
+        roots.any { pack == it.path || pack.startsWith("${it.path}/") }
 
     fun removeFolder(path: String) {
         _folders.update { list -> list.filterNot { it.path == path } }

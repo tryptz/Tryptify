@@ -72,6 +72,9 @@ fun FpsCounter(
         }
     }
     LaunchedEffect(Unit) {
+        // The clock counts whether or not the counter is shown; start from now,
+        // not from the last time it was.
+        FrameRateLimit.composedFrames.set(0)
         while (true) {
             delay(1_000L)
             fps = frames.getAndSet(0)

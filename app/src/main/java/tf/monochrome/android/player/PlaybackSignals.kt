@@ -29,10 +29,6 @@ class PlaybackSignals @Inject constructor() {
     private val _change = MutableStateFlow(Change(playing = false, positionMs = 0, speed = 1f, atMs = 0, serial = 0))
     val change: StateFlow<Change> = _change.asStateFlow()
 
-    /** Whether the service is up at all; a MediaController can be had cheaply only while it is. */
-    @Volatile var serviceAlive: Boolean = false
-        private set
-
     private fun post(player: Player) {
         _change.value = Change(
             playing = player.isPlaying,
@@ -45,7 +41,6 @@ class PlaybackSignals @Inject constructor() {
 
     /** Called by [PlaybackService] once its player exists. */
     fun attach(player: Player) {
-        serviceAlive = true
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) = post(player)
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = post(player)
@@ -58,7 +53,9 @@ class PlaybackSignals @Inject constructor() {
 
     /** Called by [PlaybackService] as it goes. */
     fun detach() {
-        serviceAlive = false
-        _change.value = _change.value.copy(playing = false, atMs = System.currentTimeMillis(), serial = _change.value.serial + 1)
+        // Already not playing: nothing changed, and a post would only make Connect say the same thing again.
+        val last = _change.value
+        if (!last.playing) return
+        _change.value = last.copy(playing = false, atMs = System.currentTimeMillis(), serial = last.serial + 1)
     }
 }
