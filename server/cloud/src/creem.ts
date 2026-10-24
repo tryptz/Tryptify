@@ -13,9 +13,12 @@ import { PLANS, type BillingEvent, type Period, type PlanId } from "./rules";
 /** One payment provider, behind this. Until it is set up nobody can pay, or be granted anything. */
 export interface Billing {
   name: string;
-  checkoutUrl(plan: PlanId, period: Period, userId: string, trial?: boolean): Promise<string | null>;
+  /** [intro]: the half-price first month (introPrice), a product of its own at the provider. */
+  checkoutUrl(plan: PlanId, period: Period, userId: string, trial?: boolean, intro?: boolean): Promise<string | null>;
   /** Whether [plan] can be bought here: the provider has a product for it, monthly or yearly. */
   sells(plan: PlanId): boolean;
+  /** Whether the provider has [plan]'s half-price first month. */
+  sellsIntro(plan: PlanId): boolean;
   /** The provider's page where a customer changes or cancels their plan, or null when it cannot be had. */
   portalUrl(customerId: string): Promise<string | null>;
   /** The events in a verified webhook, or null when its signature does not check out. */
@@ -24,8 +27,8 @@ export interface Billing {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export const productKey = (plan: PlanId, period: Period, trial = false) =>
-  `CREEM_PRODUCT_${plan.toUpperCase()}_${period.toUpperCase()}${trial ? "_TRIAL" : ""}`;
+export const productKey = (plan: PlanId, period: Period, trial = false, intro = false) =>
+  `CREEM_PRODUCT_${plan.toUpperCase()}_${period.toUpperCase()}${trial ? "_TRIAL" : intro ? "_INTRO" : ""}`;
 
 /** Constant-time comparison of two hex strings. */
 export function sameHex(a: string, b: string): boolean {
@@ -50,7 +53,7 @@ export function creemBilling(env: Record<string, string | undefined>, http: type
   const base = (env.CREEM_API_BASE ?? "https://api.creem.io").replace(/\/+$/, "");
   const planOf = new Map<string, PlanId>();
   for (const plan of Object.keys(PLANS) as PlanId[]) {
-    for (const key of [productKey(plan, "monthly"), productKey(plan, "yearly"), productKey(plan, "monthly", true)]) {
+    for (const key of [productKey(plan, "monthly"), productKey(plan, "yearly"), productKey(plan, "monthly", true), productKey(plan, "monthly", false, true)]) {
       const id = env[key];
       if (id) planOf.set(id, plan);
     }
@@ -68,9 +71,10 @@ export function creemBilling(env: Record<string, string | undefined>, http: type
     name: "creem",
 
     sells: (plan) => !!(env[productKey(plan, "monthly")] || env[productKey(plan, "yearly")]),
+    sellsIntro: (plan) => !!env[productKey(plan, "monthly", false, true)],
 
-    async checkoutUrl(plan, period, userId, trial = false) {
-      const product = env[productKey(plan, period, trial)];
+    async checkoutUrl(plan, period, userId, trial = false, intro = false) {
+      const product = env[productKey(plan, period, trial, intro)];
       if (!product) return null;
       const res = await http(`${base}/v1/checkouts`, {
         method: "POST",

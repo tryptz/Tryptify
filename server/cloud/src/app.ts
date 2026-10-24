@@ -6,7 +6,7 @@ import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { AuthUnreachable } from "./auth";
 import { hmacHex, sameHex, type Billing } from "./creem";
-import { accessOf, isPlan, mayStartTrial, PLANS, READ_ONLY_DAYS, TRIAL_DAYS, TRIAL_GB, type PlanId } from "./rules";
+import { accessOf, introPrice, isPlan, mayGetIntro, mayStartTrial, PLANS, READ_ONLY_DAYS, TRIAL_DAYS, TRIAL_GB, TRIAL_PLAN, type PlanId } from "./rules";
 import { loadAccount, record, type Db } from "./store";
 import {
   abortUpload, completeUpload, deleteSong, getSong, LibraryError, MAX_COVER_BYTES, PART_SIZE, setCover, startUpload, uploadPart, usage,
@@ -78,14 +78,19 @@ export function createApp({ db, storage = null, billing, providers, personOf, pl
    * The plans and the trial's terms, for the app's plan picker and the site's. No account needed.
    * Only plans the payment provider can sell are listed, so a plan added here
    * shows up once its products exist there, never as a checkout that fails.
+   * `introMonthly` is the half-price first month, there only when it can be bought.
    */
   app.get("/plans", (c) =>
     c.json({
       readOnlyDays: READ_ONLY_DAYS,
-      trial: { days: TRIAL_DAYS, storageGb: TRIAL_GB, periods: ["monthly"] },
+      trial: { days: TRIAL_DAYS, storageGb: TRIAL_GB, periods: ["monthly"], plan: TRIAL_PLAN },
       plans: Object.entries(PLANS)
         .filter(([id]) => !billing || billing.sells(id as PlanId))
-        .map(([id, p]) => ({ id, ...p })),
+        .map(([id, p]) => {
+          const intro = introPrice(id as PlanId);
+          const sold = intro !== null && (!billing || billing.sellsIntro(id as PlanId));
+          return { id, ...p, introMonthly: sold ? intro : null };
+        }),
     }),
   );
 
@@ -118,6 +123,7 @@ export function createApp({ db, storage = null, billing, providers, personOf, pl
       quotaBytes,
       trial: a.trial ?? false,
       trialAvailable: mayStartTrial(a),
+      introAvailable: mayGetIntro(a),
       unlimited: a.unlimited ?? false,
     });
   });
@@ -130,10 +136,13 @@ export function createApp({ db, storage = null, billing, providers, personOf, pl
     const period = body?.period;
     const trial = body?.trial === true;
     if (!isPlan(plan) || (period !== "monthly" && period !== "yearly")) return fail(400, "bad_request");
-    // Trials come with the monthly plans only, and once per account.
-    if (trial && period !== "monthly") return fail(400, "bad_request");
-    if (trial && !mayStartTrial(await loadAccount(db!, c.get("uid")))) return fail(409, "trial_used");
-    const url = await billing.checkoutUrl(plan, period, c.get("uid"), trial);
+    // Trials come with TRIAL_PLAN monthly only, and once per account.
+    if (trial && (period !== "monthly" || plan !== TRIAL_PLAN)) return fail(400, "bad_request");
+    const account = await loadAccount(db!, c.get("uid"));
+    if (trial && !mayStartTrial(account)) return fail(409, "trial_used");
+    // Someone who has never paid gets the half-price first month, when the provider has it.
+    const intro = !trial && period === "monthly" && introPrice(plan) !== null && billing.sellsIntro(plan) && mayGetIntro(account);
+    const url = await billing.checkoutUrl(plan, period, c.get("uid"), trial, intro);
     return url ? c.json({ url }) : fail(503, "billing_not_set_up");
   });
 

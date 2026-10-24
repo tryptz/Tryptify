@@ -21,13 +21,15 @@ export const READ_ONLY_DAYS = 7;
 export const REFUND_EXPORT_DAYS = 2;
 
 /**
- * The free trial: TRIAL_DAYS with TRIAL_GB, once per account, card required.
- * The card is Creem's (the trial products carry the 7 days); this service only
- * holds a trial to its smaller quota and gives a trial that ends unpaid the
- * refund's short export window, so one costs at most about $0.10.
+ * The free trial: TRIAL_DAYS with TRIAL_GB, once per account, card required,
+ * and only on TRIAL_PLAN (the owner's call, 2026-10-24: the other plans start
+ * at half price instead, see introPrice). The card is the provider's (its
+ * trial plans carry the 7 days); this service only holds a trial to its quota
+ * and gives a trial that ends unpaid the refund's short export window, so one
+ * costs at most about $0.52.
  */
 export const TRIAL_DAYS = 7;
-export const TRIAL_GB = 20;
+export const TRIAL_GB = 100;
 
 /**
  * The plans, from docs/plans/tryptify-cloud.md ("Pricing"). Each quota is the
@@ -46,6 +48,19 @@ export const PLANS = {
 export type PlanId = keyof typeof PLANS;
 export type Period = "monthly" | "yearly";
 export const isPlan = (p: unknown): p is PlanId => typeof p === "string" && Object.hasOwn(PLANS, p);
+
+/** The one plan with a free trial. */
+export const TRIAL_PLAN: PlanId = "lite";
+
+/**
+ * The first month's price for someone who has never paid: half the monthly
+ * price, rounded down to the cent; null for TRIAL_PLAN, which has the trial
+ * instead. Yearly is always full price. This is the one exception to "nobody
+ * costs more than they pay" (the owner's call, 2026-10-24): it can lose up to
+ * one month's shortfall per person, once, and test.ts holds it to that.
+ */
+export const introPrice = (plan: PlanId): number | null =>
+  plan === TRIAL_PLAN ? null : Math.floor(PLANS[plan].monthly * 50) / 100;
 
 export type Access =
   /** Upload and play. */
@@ -78,6 +93,9 @@ export const NO_ACCOUNT: Account = { plan: null, paidUntil: null, usedBytes: 0, 
 
 /** Whether [a] may start a free trial: only an account that has never had a plan or a trial. */
 export const mayStartTrial = (a: Account): boolean => a.plan === null && !a.unlimited;
+
+/** Whether [a] may have the half-price first month: never paid (a trial is not paying). */
+export const mayGetIntro = (a: Account): boolean => !a.unlimited && (a.plan === null || a.trial === true);
 
 /**
  * The one place the rule lives. Only [Account.paidUntil] grants anything: a

@@ -18,8 +18,8 @@ import { DAY_MS, PLANS, TRIAL_DAYS, type Period, type PlanId } from "./rules";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export const planKey = (plan: PlanId, period: Period, trial = false) =>
-  `PAYPAL_PLAN_${plan.toUpperCase()}_${period.toUpperCase()}${trial ? "_TRIAL" : ""}`;
+export const planKey = (plan: PlanId, period: Period, trial = false, intro = false) =>
+  `PAYPAL_PLAN_${plan.toUpperCase()}_${period.toUpperCase()}${trial ? "_TRIAL" : intro ? "_INTRO" : ""}`;
 
 /** A PayPal API answer that was not 2xx. 4xx is PayPal saying no; anything else may pass if tried again. */
 class PayPalError extends Error {
@@ -48,8 +48,9 @@ export function paypalBilling(env: Record<string, string | undefined>, http: typ
   const sandbox = base.includes("sandbox");
   const planOf = new Map<string, { plan: PlanId; period: Period; trial: boolean }>();
   for (const plan of Object.keys(PLANS) as PlanId[]) {
-    for (const [period, trial] of [["monthly", false], ["yearly", false], ["monthly", true]] as const) {
-      const id = env[planKey(plan, period, trial)];
+    for (const [period, trial, intro] of [["monthly", false, false], ["yearly", false, false], ["monthly", true, false], ["monthly", false, true]] as const) {
+      const id = env[planKey(plan, period, trial, intro)];
+      // A half-price first month is a payment like any other.
       if (id) planOf.set(id, { plan, period, trial });
     }
   }
@@ -117,9 +118,10 @@ export function paypalBilling(env: Record<string, string | undefined>, http: typ
     name: "paypal",
 
     sells: (plan) => !!(env[planKey(plan, "monthly")] || env[planKey(plan, "yearly")]),
+    sellsIntro: (plan) => !!env[planKey(plan, "monthly", false, true)],
 
-    async checkoutUrl(plan, period, userId, trial = false) {
-      const planId = env[planKey(plan, period, trial)];
+    async checkoutUrl(plan, period, userId, trial = false, intro = false) {
+      const planId = env[planKey(plan, period, trial, intro)];
       if (!planId) return null;
       try {
         const sub = await api("POST", "/v1/billing/subscriptions", {

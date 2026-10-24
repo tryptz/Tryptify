@@ -260,6 +260,7 @@ async function setUp() {
       CREEM_PRODUCT_LITE_MONTHLY: "prod_lite_m",
       CREEM_PRODUCT_LITE_YEARLY: "prod_lite_y",
       CREEM_PRODUCT_PLUS_MONTHLY: "prod_plus_m",
+      CREEM_PRODUCT_PLUS_MONTHLY_INTRO: "prod_plus_intro",
       CREEM_PRODUCT_PLUS_YEARLY: "prod_plus_y",
       CREEM_PRODUCT_MAX_MONTHLY: "prod_max_m",
       CREEM_PRODUCT_LITE_MONTHLY_TRIAL: "prod_lite_trial",
@@ -348,7 +349,7 @@ test("every plan is a profit in the worst case (the pricing check, kept)", async
   }
 });
 
-test("a trial gets 20 GB until it ends, never the plan's full quota", async () => {
+test("a trial gets TRIAL_GB until it ends, whatever plan it names", async () => {
   const t = cloud.applyEvent(
     { plan: null, paidUntil: null, usedBytes: 0 },
     { kind: "paid", eventId: "t", userId: A, plan: "max", paidUntil: days(7), trial: true },
@@ -357,7 +358,7 @@ test("a trial gets 20 GB until it ends, never the plan's full quota", async () =
   const r = cloud.accessOf(t, now);
   assert.equal(r.access, "full");
   assert.equal(r.quotaBytes, cloud.TRIAL_GB * GB);
-  assert.equal(cloud.mayUpload({ ...t, usedBytes: 19 * GB }, 2 * GB, now), false);
+  assert.equal(cloud.mayUpload({ ...t, usedBytes: (cloud.TRIAL_GB - 1) * GB }, 2 * GB, now), false);
 });
 
 test("a trial that ends unpaid leaves only the short export window", async () => {
@@ -384,9 +385,36 @@ test("a trial never replaces paid time, and an account that had a plan gets no t
   assert.equal(cloud.mayStartTrial({ plan: null, paidUntil: null, usedBytes: 0 }), true);
 });
 
-test("the trial's worst case costs pennies, not a plan", async () => {
+test("the trial's worst case costs about fifty cents, not a plan", async () => {
   const cost = cloud.TRIAL_GB * 0.015 * 1.15 * (cloud.TRIAL_DAYS + cloud.REFUND_EXPORT_DAYS) / 30;
-  assert.ok(cost < 0.15, `a trial can cost ${cost.toFixed(2)}`);
+  assert.ok(cost < 0.55, `a trial can cost ${cost.toFixed(2)}`);
+});
+
+test("the half-price first month: half, to the cent, never on the trial's plan", async () => {
+  assert.equal(cloud.introPrice("lite"), null);
+  assert.equal(cloud.introPrice("plus"), 4.99);
+  assert.equal(cloud.introPrice("max"), 9.99);
+  assert.equal(cloud.introPrice("pro"), 19.99);
+  assert.equal(cloud.introPrice("studio"), 59.99);
+  assert.equal(cloud.introPrice("vault"), 199.99);
+  assert.equal(cloud.mayGetIntro({ plan: null, paidUntil: null, usedBytes: 0 }), true);
+  assert.equal(cloud.mayGetIntro({ plan: "lite", paidUntil: days(3), usedBytes: 0, trial: true }), true);
+  assert.equal(cloud.mayGetIntro({ plan: "lite", paidUntil: days(-40), usedBytes: 0, trial: false }), false);
+  assert.equal(cloud.mayGetIntro({ plan: null, paidUntil: null, usedBytes: 0, unlimited: true }), false);
+});
+
+test("the half-price month loses at most one month's shortfall, and full price wins it back", async () => {
+  // The owner's exception to the pricing rule: bounded, once per person.
+  const STORE = 0.015, SAFETY = 1.15, VAT = 1.27;
+  const keeps = (price: number) => Math.min((price / VAT) * 0.85, price / VAT - (0.085 * price + 0.5), price - (0.055 * price + 0.5));
+  for (const [id, p] of Object.entries(cloud.PLANS)) {
+    const intro = cloud.introPrice(id as keyof typeof cloud.PLANS);
+    if (intro === null) continue;
+    const cost = p.storageGb * STORE * SAFETY;
+    const loss = cost - keeps(intro);
+    assert.ok(loss < cost * 0.5, `${id}: the first month can lose ${loss.toFixed(2)}`);
+    assert.ok(keeps(p.monthly) - cost > 0, `${id}: full price is not a profit`);
+  }
 });
 
 test("a second trial checkout does not add its days to the first", async () => {
@@ -432,7 +460,7 @@ test("a new person has no plan and no access", async () => {
   assert.equal(r.status, 200);
   assert.deepEqual(r.body, {
     plan: null, access: "none", paidUntil: null, deleteAfter: null, usedBytes: 0, quotaBytes: 0,
-    trial: false, trialAvailable: true, unlimited: false,
+    trial: false, trialAvailable: true, introAvailable: true, unlimited: false,
   });
 });
 
@@ -561,6 +589,32 @@ test("trial checkout: monthly only, the trial product, once per account", async 
   const used = await call("POST", "/v1/checkout", await token(C), { plan: "lite", period: "monthly", trial: true });
   assert.equal(used.status, 409);
   assert.equal(used.body.error, "trial_used");
+  // Only the trial's plan has one.
+  assert.equal((await call("POST", "/v1/checkout", await token(T), { plan: "plus", period: "monthly", trial: true })).status, 400);
+});
+
+test("someone who never paid gets the half-price month; yearly and payers pay in full", async () => {
+  const N = "eeeeeeee-5555-4555-8555-eeeeeeeeeeee";
+  const plans = (await call("GET", "/plans")).body;
+  assert.equal(plans.trial.plan, "lite");
+  const byId = Object.fromEntries(plans.plans.map((p: { id: string }) => [p.id, p]));
+  assert.equal(byId.plus.introMonthly, 4.99);
+  assert.equal(byId.max.introMonthly, null); // no intro product
+  assert.equal(byId.lite.introMonthly, null); // the trial instead
+  assert.equal((await call("POST", "/v1/checkout", await token(N), { plan: "plus", period: "monthly" })).status, 200);
+  assert.equal(checkouts.at(-1).product_id, "prod_plus_intro");
+  assert.equal((await call("POST", "/v1/checkout", await token(N), { plan: "plus", period: "yearly" })).status, 200);
+  assert.equal(checkouts.at(-1).product_id, "prod_plus_y");
+  // C has paid before.
+  assert.equal((await call("GET", "/v1/account", await token(C))).body.introAvailable, false);
+  assert.equal((await call("POST", "/v1/checkout", await token(C), { plan: "plus", period: "monthly" })).status, 200);
+  assert.equal(checkouts.at(-1).product_id, "prod_plus_m");
+  // Paying the half-price month grants the whole plan, and ends the offer.
+  assert.equal((await webhook(paidEvent("evt_intro", N, "prod_plus_intro", future(30), "sub_intro"))).status, 200);
+  const after = (await call("GET", "/v1/account", await token(N))).body;
+  assert.equal(after.plan, "plus");
+  assert.equal(after.quotaBytes, 250 * GB);
+  assert.equal(after.introAvailable, false);
 });
 
 test("Creem's real trial start (a $0 subscription.paid, status trialing) grants the trial only", async () => {
@@ -704,8 +758,8 @@ test("a part of the wrong size is refused, and a short file is not kept", async 
 
 test("the quota counts reservations: two uploads cannot both take the last space", async () => {
   const Q = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
-  subscribe(Q, "lite", 30, 1); // a trial: 20 GB
-  sqlite.query("update cloud_accounts set used_bytes = ?2 where user_id = ?1").run(Q, 20 * GB - 1000);
+  subscribe(Q, "lite", 30, 1); // a trial: TRIAL_GB
+  sqlite.query("update cloud_accounts set used_bytes = ?2 where user_id = ?1").run(Q, cloud.TRIAL_GB * GB - 1000);
   const who = await token(Q);
   const first = await call("POST", "/v1/uploads", who, { size: 600, suffix: "mp3", meta: meta("a") });
   const second = await call("POST", "/v1/uploads", who, { size: 600, suffix: "mp3", meta: meta("b") });

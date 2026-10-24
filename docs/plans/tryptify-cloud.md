@@ -131,6 +131,16 @@ Rules that keep the guarantee (all phase 1 or 3 requirements):
    2026-10-21): 7 days with 20 GB, once per account, monthly plans only,
    charged at day 7 unless cancelled. Unpaid, it gets 2 days to export, so it
    costs at most about $0.10: the only cost a non-payer can cause.
+   **Changed 2026-10-24 (owner's decision):** the trial is Lite's only, with
+   its whole 100 GB, so it costs at most about $0.52. Every other plan has no
+   trial and instead a **half-price first month** for an account that has never
+   paid (`introPrice`, rounded down to the cent; yearly always full price).
+   That month can cost more than it brings in when the plan is filled at once
+   (up to $1.30 on Plus, $38.65 on Vault, once per person): the one accepted
+   exception to rule 1's "never costs more than they pay", held to less than
+   half a month's cost by test.ts. Each plan's half-price month is a provider
+   product of its own (`PAYPAL_PLAN_<PLAN>_MONTHLY_INTRO`); without it the plan
+   is sold at full price and shown that way.
 4. **When payment stops: 7 days read-only, then deleted**, with reminders and
    Export everything. At full Lite quota those 7 days cost $0.40, inside the
    last payment's worst profit ($0.58). Play's grace period is set to match.

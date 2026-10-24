@@ -105,8 +105,10 @@ What the service does with it (`src/paypal.ts`):
    `--webhook-url https://cloud.tryptify.com/webhooks/paypal`. It prints the
    plan ids and the webhook id.
 3. Put the ids under `[vars]` in `wrangler.toml` (`PAYPAL_WEBHOOK_ID`,
-   `PAYPAL_PLAN_LITE_MONTHLY` … `PAYPAL_PLAN_MAX_YEARLY`, the three `_TRIAL`
-   ones, and `PAYPAL_API_BASE = "https://api-m.sandbox.paypal.com"` while
+   `PAYPAL_PLAN_LITE_MONTHLY` … `PAYPAL_PLAN_VAULT_YEARLY`, `_TRIAL` for Lite
+   (the only plan with a trial since 2026-10-24), `_MONTHLY_INTRO` for every
+   other plan (a first billing cycle at `introPrice`, then the monthly price),
+   and `PAYPAL_API_BASE = "https://api-m.sandbox.paypal.com"` while
    testing), then `wrangler secret put PAYPAL_CLIENT_ID` and `PAYPAL_SECRET`.
 4. Deploy. New checkouts now go to PayPal. Buy a plan with a sandbox buyer
    account, see the account page show it, then repeat with the Live app and
