@@ -336,6 +336,13 @@ redraw that screen every frame.
 
 ### Lyrics: letter glass and god rays
 
+**Every slider on the Studio's Lyrics tab has a reset.** `FxSlider` takes a
+`defaultValue` (from `LyricsFxSettings.DEFAULT`); away from it a reset icon
+sits after the value and puts it back, then calls `onChangeFinished` like a
+lifted finger. The sides' curvature resets to "unset" (`curvatureSideDeg =
+-1`, following the bow) through `onReset`, not to a number. A new lyrics
+slider passes its default too.
+
 **The lyric glass reads the same optics as the player's, and its defaults are
 the old pins.** `liquidGlassModifier` used to set roundness, depth, motion,
 reflection, gloss, tilt, light angle, Fresnel and frost by hand; they are

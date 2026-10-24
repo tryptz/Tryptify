@@ -38,6 +38,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.ExpandLess
@@ -1046,20 +1047,22 @@ fun LyricsFxStudioScreen(
         ) {
             item {
                 StudioSection(stringResource(R.string.fx_typography))
-                FxSlider(stringResource(R.string.fx_font_size), "%.0f sp".format(fx.fontSizeSp), fx.fontSizeSp, 14f..64f) {
+                FxSlider(stringResource(R.string.fx_font_size), "%.0f sp".format(fx.fontSizeSp), fx.fontSizeSp, 14f..64f, defaultValue = LyricsFxSettings.DEFAULT.fontSizeSp) {
                     viewModel.update { s -> s.copy(fontSizeSp = it) }
                 }
-                FxSlider(stringResource(R.string.fx_letter_spacing), "%.2f sp".format(fx.letterSpacingSp), fx.letterSpacingSp, -1f..1f) {
+                FxSlider(stringResource(R.string.fx_letter_spacing), "%.2f sp".format(fx.letterSpacingSp), fx.letterSpacingSp, -1f..1f, defaultValue = LyricsFxSettings.DEFAULT.letterSpacingSp) {
                     viewModel.update { s -> s.copy(letterSpacingSp = it) }
                 }
                 FxSlider(
                     stringResource(R.string.fx_edge_margin), "%.0f dp".format(fx.edgeMarginDp), fx.edgeMarginDp, 0f..48f,
                     description = stringResource(R.string.fx_side_spacing_between_the_lyrics_and_the_screen),
+                    defaultValue = LyricsFxSettings.DEFAULT.edgeMarginDp,
                 ) { viewModel.update { s -> s.copy(edgeMarginDp = it) } }
                 FxSlider(
                     stringResource(R.string.fx_lines_per_block), "${fx.maxWrapLines}" + if (fx.maxWrapLines == 1) " (no wrap)" else "",
                     fx.maxWrapLines.toFloat(), 1f..3f, steps = 1,
                     description = stringResource(R.string.fx_how_many_rows_a_long_line_may_wrap_to_before_it),
+                    defaultValue = LyricsFxSettings.DEFAULT.maxWrapLines.toFloat(),
                 ) { viewModel.update { s -> s.copy(maxWrapLines = it.toInt()) } }
             }
 
@@ -1096,23 +1099,27 @@ fun LyricsFxStudioScreen(
                     stringResource(R.string.fx_tilt), "%.0f°".format(fx.rotationDegrees) + if (fx.rotationDegrees < 0.5f) " (off)" else "",
                     fx.rotationDegrees, 0f..25f,
                     linkKey = "lyrics.rotationDegrees",
+                    defaultValue = LyricsFxSettings.DEFAULT.rotationDegrees,
                 ) { viewModel.update { s -> s.copy(rotationDegrees = it) } }
                 FxSlider(
                     stringResource(R.string.fx_wave_speed), "%.2fx".format(fx.waveSpeed), fx.waveSpeed, 0.25f..3f,
                     linkKey = "lyrics.waveSpeed",
+                    defaultValue = LyricsFxSettings.DEFAULT.waveSpeed,
                 ) { viewModel.update { s -> s.copy(waveSpeed = it) } }
                 FxSlider(
                     stringResource(R.string.fx_wave_tightness), "%.2f rad/letter".format(fx.wavePhaseStep),
                     fx.wavePhaseStep, 0.05f..0.9f,
                     description = stringResource(R.string.fx_low_one_smooth_ribbon_high_choppy_per_letter),
+                    defaultValue = LyricsFxSettings.DEFAULT.wavePhaseStep,
                 ) { viewModel.update { s -> s.copy(wavePhaseStep = it) } }
-                FxSlider(stringResource(R.string.fx_wave_travel), "%.1f dp".format(fx.waveTravelDp), fx.waveTravelDp, 0f..8f, linkKey = "lyrics.waveTravelDp") {
+                FxSlider(stringResource(R.string.fx_wave_travel), "%.1f dp".format(fx.waveTravelDp), fx.waveTravelDp, 0f..8f, linkKey = "lyrics.waveTravelDp", defaultValue = LyricsFxSettings.DEFAULT.waveTravelDp) {
                     viewModel.update { s -> s.copy(waveTravelDp = it) }
                 }
                 FxSlider(
                     stringResource(R.string.fx_shadow_depth), "${(fx.shadowDepth * 100).toInt()}%", fx.shadowDepth, 0f..1f,
                     description = stringResource(R.string.fx_lyric_shadow_desc),
                     linkKey = "lyrics.shadowDepth",
+                    defaultValue = LyricsFxSettings.DEFAULT.shadowDepth,
                 ) { viewModel.update { s -> s.copy(shadowDepth = it) } }
                 // Two angles, as the CRT effect's: the top and bottom edges'
                 // bow, and the sides'. Moving one pins the other where it is
@@ -1125,6 +1132,7 @@ fun LyricsFxStudioScreen(
                     fx.curvatureDeg, 0f..75f,
                     description = stringResource(R.string.fx_curvature_desc),
                     linkKey = "lyrics.curvatureDeg",
+                    defaultValue = LyricsFxSettings.DEFAULT.curvatureDeg,
                 ) { viewModel.update { s -> s.copy(curvatureDeg = it, curvatureSideDeg = s.effectiveCurvatureSideDeg) } }
                 // The angle to a tenth of a degree, which a finger on the
                 // slider cannot place.
@@ -1139,6 +1147,7 @@ fun LyricsFxStudioScreen(
                     fx.effectiveCurvatureSideDeg, 0f..75f,
                     description = stringResource(R.string.fx_curvature_sides_desc),
                     linkKey = "lyrics.curvatureSideDeg",
+                    defaultValue = fx.curvatureDeg, onReset = { viewModel.update { s -> s.copy(curvatureSideDeg = -1f) } },
                 ) { viewModel.update { s -> s.copy(curvatureSideDeg = it) } }
                 FxNudge(label = stringResource(R.string.fx_curvature_sides), step = 0.1f, unit = "°") { delta ->
                     viewModel.update { s -> s.copy(curvatureSideDeg = tenth(s.effectiveCurvatureSideDeg + delta)) }
@@ -1185,30 +1194,34 @@ fun LyricsFxStudioScreen(
                     stringResource(R.string.fx_bass_reaction), "${(fx.bassReact * 100).toInt()}%" + if (fx.bassReact < 0.01f) " (off)" else "",
                     fx.bassReact, 0f..1f,
                     description = stringResource(R.string.fx_master_intensity_for_pump_and_glow),
+                    defaultValue = LyricsFxSettings.DEFAULT.bassReact,
                 ) { viewModel.update { s -> s.copy(bassReact = it) } }
-                FxSlider(stringResource(R.string.fx_pump_amount), "+${(fx.pumpAmount * 100).toInt()}%", fx.pumpAmount, 0f..0.25f, linkKey = "lyrics.pumpAmount") {
+                FxSlider(stringResource(R.string.fx_pump_amount), "+${(fx.pumpAmount * 100).toInt()}%", fx.pumpAmount, 0f..0.25f, linkKey = "lyrics.pumpAmount", defaultValue = LyricsFxSettings.DEFAULT.pumpAmount) {
                     viewModel.update { s -> s.copy(pumpAmount = it) }
                 }
                 FxSlider(
                     stringResource(R.string.fx_attack), "%.0f ms".format(fx.attackMs), fx.attackMs, 4f..60f,
                     description = stringResource(R.string.fx_how_fast_the_pulse_snaps_onto_a_kick),
+                    defaultValue = LyricsFxSettings.DEFAULT.attackMs,
                 ) { viewModel.update { s -> s.copy(attackMs = it) } }
                 FxSlider(
                     stringResource(R.string.fx_release), "%.0f ms".format(fx.releaseMs), fx.releaseMs, 40f..500f,
                     description = stringResource(R.string.fx_how_long_the_pulse_holds_through_a_kick),
+                    defaultValue = LyricsFxSettings.DEFAULT.releaseMs,
                 ) { viewModel.update { s -> s.copy(releaseMs = it) } }
                 FxSlider(
                     stringResource(R.string.fx_bounce), "${(fx.bounce * 100).toInt()}%", fx.bounce, 0f..1f,
                     description = stringResource(R.string.fx_spring_overshoot_0_tracks_stiffly_100_rings_like),
+                    defaultValue = LyricsFxSettings.DEFAULT.bounce,
                 ) { viewModel.update { s -> s.copy(bounce = it) } }
             }
 
             item {
                 StudioSection(stringResource(R.string.fx_glow))
-                FxSlider(stringResource(R.string.settings_glow_radius), "+%.0f dp".format(fx.glowRadiusDp), fx.glowRadiusDp, 0f..160f, linkKey = "lyrics.glowRadiusDp") {
+                FxSlider(stringResource(R.string.settings_glow_radius), "+%.0f dp".format(fx.glowRadiusDp), fx.glowRadiusDp, 0f..160f, linkKey = "lyrics.glowRadiusDp", defaultValue = LyricsFxSettings.DEFAULT.glowRadiusDp) {
                     viewModel.update { s -> s.copy(glowRadiusDp = it) }
                 }
-                FxSlider(stringResource(R.string.settings_glow_brightness), "${(fx.glowBrightness * 100).toInt()}%", fx.glowBrightness, 0f..0.6f, linkKey = "lyrics.glowBrightness") {
+                FxSlider(stringResource(R.string.settings_glow_brightness), "${(fx.glowBrightness * 100).toInt()}%", fx.glowBrightness, 0f..0.6f, linkKey = "lyrics.glowBrightness", defaultValue = LyricsFxSettings.DEFAULT.glowBrightness) {
                     viewModel.update { s -> s.copy(glowBrightness = it) }
                 }
                 // "Glow behind album art" is a personal toggle, not a theme
@@ -1227,28 +1240,33 @@ fun LyricsFxStudioScreen(
                     fx.glassBodyOpacity, 0.2f..1f,
                     description = stringResource(R.string.fx_lower_lets_more_of_the_backdrop_read_through_the),
                     linkKey = "lyrics.glassBodyOpacity",
+                    defaultValue = LyricsFxSettings.DEFAULT.glassBodyOpacity,
                 ) { viewModel.update { s -> s.copy(glassBodyOpacity = it) } }
                 FxSlider(
                     stringResource(R.string.fx_refraction), "%.2f".format(fx.glassRefraction), fx.glassRefraction, 0f..0.4f,
                     description = stringResource(R.string.fx_how_hard_the_beveled_edges_lens_the_backdrop),
                     linkKey = "lyrics.glassRefraction",
+                    defaultValue = LyricsFxSettings.DEFAULT.glassRefraction,
                 ) { viewModel.update { s -> s.copy(glassRefraction = it) } }
                 FxSlider(
                     stringResource(R.string.fx_edge_highlight), "${(fx.glassRimBrightness * 100).toInt()}%",
                     fx.glassRimBrightness, 0f..2f,
                     description = stringResource(R.string.fx_brightness_of_the_specular_glass_rim),
                     linkKey = "lyrics.glassRimBrightness",
+                    defaultValue = LyricsFxSettings.DEFAULT.glassRimBrightness,
                 ) { viewModel.update { s -> s.copy(glassRimBrightness = it) } }
                 FxSlider(
                     stringResource(R.string.fx_chromatic_aberration), "${(fx.glassDispersion * 100).toInt()}%",
                     fx.glassDispersion, 0f..2f,
                     description = stringResource(R.string.fx_colour_fringing_where_the_edges_refract),
                     linkKey = "lyrics.glassDispersion",
+                    defaultValue = LyricsFxSettings.DEFAULT.glassDispersion,
                 ) { viewModel.update { s -> s.copy(glassDispersion = it) } }
                 FxSlider(
                     stringResource(R.string.fx_bevel_samples), "${1 + 4 * fx.glassSampleRings} taps/px",
                     fx.glassSampleRings.toFloat(), 1f..3f, steps = 1,
                     description = stringResource(R.string.fx_shader_taps_per_pixel_higher_smoother_glass),
+                    defaultValue = LyricsFxSettings.DEFAULT.glassSampleRings.toFloat(),
                 ) { viewModel.update { s -> s.copy(glassSampleRings = it.toInt()) } }
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
@@ -1270,16 +1288,19 @@ fun LyricsFxStudioScreen(
                     stringResource(R.string.fx_roundness), "%.2f".format(fx.glassRoundness), fx.glassRoundness, 0.5f..2f,
                     description = stringResource(R.string.fx_rolls_the_glass_edge_from_a_sharp_bevel_to_a),
                     linkKey = "lyrics.glassRoundness",
+                    defaultValue = LyricsFxSettings.DEFAULT.glassRoundness,
                 ) { viewModel.update { s -> s.copy(glassRoundness = it) } }
                 FxSlider(
                     stringResource(R.string.fx_depth_profondeur), "%.2f".format(fx.glassDepth), fx.glassDepth, 0.5f..2f,
                     description = stringResource(R.string.fx_lyric_depth_desc),
                     linkKey = "lyrics.glassDepth",
+                    defaultValue = LyricsFxSettings.DEFAULT.glassDepth,
                 ) { viewModel.update { s -> s.copy(glassDepth = it) } }
                 FxSlider(
                     stringResource(R.string.fx_frosted_blur), "${(fx.glassFrost * 100).toInt()}%", fx.glassFrost, 0f..1f,
                     description = stringResource(R.string.fx_frosts_the_glass_from_clear_to_misted),
                     linkKey = "lyrics.glassFrost",
+                    defaultValue = LyricsFxSettings.DEFAULT.glassFrost,
                 ) { viewModel.update { s -> s.copy(glassFrost = it) } }
             }
 
@@ -1289,31 +1310,37 @@ fun LyricsFxStudioScreen(
                     stringResource(R.string.fx_light_angle), "${fx.glassLightAngleDeg.toInt()}°", fx.glassLightAngleDeg, 0f..360f,
                     description = stringResource(R.string.fx_direction_the_key_light_comes_from_and_where_the),
                     linkKey = "lyrics.glassLightAngleDeg",
+                    defaultValue = LyricsFxSettings.DEFAULT.glassLightAngleDeg,
                 ) { viewModel.update { s -> s.copy(glassLightAngleDeg = it) } }
                 FxSlider(
                     stringResource(R.string.fx_tilt_reactivity), "${(fx.glassTiltReactivity * 100).toInt()}%",
                     fx.glassTiltReactivity, 0f..1.5f,
                     description = stringResource(R.string.fx_how_strongly_tilting_the_phone_moves_the_light),
+                    defaultValue = LyricsFxSettings.DEFAULT.glassTiltReactivity,
                 ) { viewModel.update { s -> s.copy(glassTiltReactivity = it) } }
                 FxSlider(
                     stringResource(R.string.fx_edge_width), "${(fx.glassEdgeWidth * 100).toInt()}%", fx.glassEdgeWidth, 0f..1f,
                     description = stringResource(R.string.fx_reflective_rim_thin_crisp_edge_to_a_broad_glassy),
                     linkKey = "lyrics.glassEdgeWidth",
+                    defaultValue = LyricsFxSettings.DEFAULT.glassEdgeWidth,
                 ) { viewModel.update { s -> s.copy(glassEdgeWidth = it) } }
                 FxSlider(
                     stringResource(R.string.fx_reflection), "${(fx.glassReflection * 100).toInt()}%", fx.glassReflection, 0f..2f,
                     description = stringResource(R.string.fx_how_much_of_the_room_environment_reflection),
                     linkKey = "lyrics.glassReflection",
+                    defaultValue = LyricsFxSettings.DEFAULT.glassReflection,
                 ) { viewModel.update { s -> s.copy(glassReflection = it) } }
                 FxSlider(
                     stringResource(R.string.fx_gloss), "${(fx.glassGloss * 100).toInt()}%", fx.glassGloss, 0f..1f,
                     description = stringResource(R.string.fx_highlight_polish_soft_frosted_wide_glint_to_a),
                     linkKey = "lyrics.glassGloss",
+                    defaultValue = LyricsFxSettings.DEFAULT.glassGloss,
                 ) { viewModel.update { s -> s.copy(glassGloss = it) } }
                 FxSlider(
                     stringResource(R.string.fx_surface_motion), "${(fx.glassSurfaceMotion * 100).toInt()}%",
                     fx.glassSurfaceMotion, 0f..1f,
                     description = stringResource(R.string.fx_swell_edge_ripple_and_glint_on_the_glass_surface),
+                    defaultValue = LyricsFxSettings.DEFAULT.glassSurfaceMotion,
                 ) { viewModel.update { s -> s.copy(glassSurfaceMotion = it) } }
             }
 
@@ -1333,6 +1360,7 @@ fun LyricsFxStudioScreen(
                         fx.fxaaStrength, 0f..1f,
                         description = stringResource(R.string.fx_how_hard_edges_are_smoothed_higher_softens_more),
                         linkKey = "lyrics.fxaaStrength",
+                        defaultValue = LyricsFxSettings.DEFAULT.fxaaStrength,
                     ) { viewModel.update { s -> s.copy(fxaaStrength = it) } }
                 }
             }
@@ -2635,6 +2663,14 @@ internal fun FxSlider(
      * ordinary slider.
      */
     linkKey: String? = null,
+    /**
+     * The setting's default. Away from it, a reset button after the value puts
+     * it back (through [onReset] when given, else [onChange]), then calls
+     * [onChangeFinished] as a lifted finger would. Null: no reset.
+     */
+    defaultValue: Float? = null,
+    /** How to reset a setting whose default is not one value to hand to [onChange]. */
+    onReset: (() -> Unit)? = null,
     onChange: (Float) -> Unit,
 ) {
     val linkHost = if (linkKey != null) LocalMusicLinkHost.current else null
@@ -2699,6 +2735,26 @@ internal fun FxSlider(
                 color = MaterialTheme.colorScheme.primary.copy(alpha = if (enabled) 1f else DISABLED_ALPHA),
                 modifier = Modifier.padding(start = 8.dp),
             )
+            // Within a ten-thousandth of the range counts as the default, so a
+            // float that went through a slider and back still reads as one.
+            val atDefault = defaultValue == null ||
+                kotlin.math.abs(value - defaultValue) <= (range.endInclusive - range.start) * 1e-4f
+            if (!atDefault && defaultValue != null) {
+                val resetLabel = stringResource(R.string.action_reset)
+                Icon(
+                    imageVector = Icons.Default.Restore,
+                    contentDescription = resetLabel,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else DISABLED_ALPHA),
+                    modifier = Modifier
+                        .padding(start = 2.dp)
+                        .clickable(enabled = enabled, onClickLabel = resetLabel) {
+                            if (onReset != null) onReset() else onChange(defaultValue)
+                            onChangeFinished?.invoke()
+                        }
+                        .padding(4.dp)
+                        .size(16.dp),
+                )
+            }
             if (linkHost != null && linkKey != null) {
                 // The way in for anyone who never thinks to hold: a tap on the
                 // note opens the same sheet.

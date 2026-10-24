@@ -95,6 +95,7 @@ internal fun GodRaysControls(
         fx.glassRayCatch, 0f..1f,
         description = stringResource(R.string.fx_god_ray_glass_catch_desc),
         linkKey = "lyrics.glassRayCatch",
+        defaultValue = LyricsFxSettings.DEFAULT.glassRayCatch,
     ) { v -> onUpdate { it.copy(glassRayCatch = v) } }
 
     Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
@@ -132,12 +133,14 @@ internal fun GodRaysControls(
         fx.godRayAzimuthDeg, 0f..360f,
         description = stringResource(R.string.fx_god_ray_azimuth_desc),
         linkKey = "lyrics.godRayAzimuthDeg",
+        defaultValue = LyricsFxSettings.DEFAULT.godRayAzimuthDeg,
     ) { v -> onUpdate { it.copy(godRayAzimuthDeg = v) } }
     FxSlider(
         stringResource(R.string.fx_god_ray_elevation), "${fx.godRayElevationDeg.roundToInt()}°",
         fx.godRayElevationDeg, 0f..90f,
         description = stringResource(R.string.fx_god_ray_elevation_desc),
         linkKey = "lyrics.godRayElevationDeg",
+        defaultValue = LyricsFxSettings.DEFAULT.godRayElevationDeg,
     ) { v -> onUpdate { it.copy(godRayElevationDeg = v) } }
 
     FxSlider(
@@ -145,24 +148,28 @@ internal fun GodRaysControls(
         fx.godRayExposure, 0f..1.5f,
         description = stringResource(R.string.fx_god_ray_exposure_desc),
         linkKey = "lyrics.godRayExposure",
+        defaultValue = LyricsFxSettings.DEFAULT.godRayExposure,
     ) { v -> onUpdate { it.copy(godRayExposure = v) } }
     FxSlider(
         stringResource(R.string.fx_god_ray_length), "${(fx.godRayDensity * 100).roundToInt()}%",
         fx.godRayDensity, 0.2f..1f,
         description = stringResource(R.string.fx_god_ray_length_desc),
         linkKey = "lyrics.godRayDensity",
+        defaultValue = LyricsFxSettings.DEFAULT.godRayDensity,
     ) { v -> onUpdate { it.copy(godRayDensity = v) } }
     FxSlider(
         stringResource(R.string.fx_god_ray_decay), String.format(Locale.US, "%.3f", fx.godRayDecay),
         fx.godRayDecay, 0.85f..1f,
         description = stringResource(R.string.fx_god_ray_decay_desc),
         linkKey = "lyrics.godRayDecay",
+        defaultValue = LyricsFxSettings.DEFAULT.godRayDecay,
     ) { v -> onUpdate { it.copy(godRayDecay = v) } }
     if (fx.godRaySource == LyricsFxSettings.GOD_RAYS_BACKLIGHT) {
         FxSlider(
             stringResource(R.string.fx_god_ray_sun_size), "${(fx.godRaySunSize * 100).roundToInt()}%",
             fx.godRaySunSize, 0.03f..0.3f,
             linkKey = "lyrics.godRaySunSize",
+            defaultValue = LyricsFxSettings.DEFAULT.godRaySunSize,
         ) { v -> onUpdate { it.copy(godRaySunSize = v) } }
     }
     FxSlider(
@@ -170,34 +177,40 @@ internal fun GodRaysControls(
         fx.godRayShimmer, 0f..1f,
         description = stringResource(R.string.fx_god_ray_dust_desc),
         linkKey = "lyrics.godRayShimmer",
+        defaultValue = LyricsFxSettings.DEFAULT.godRayShimmer,
     ) { v -> onUpdate { it.copy(godRayShimmer = v) } }
     FxSlider(
         stringResource(R.string.fx_god_ray_beat), "${(fx.godRayBeat * 100).roundToInt()}%",
         fx.godRayBeat, 0f..1f,
         description = stringResource(R.string.fx_god_ray_beat_desc),
         linkKey = "lyrics.godRayBeat",
+        defaultValue = LyricsFxSettings.DEFAULT.godRayBeat,
     ) { v -> onUpdate { it.copy(godRayBeat = v) } }
     FxSlider(
         stringResource(R.string.fx_god_ray_orbit), String.format(Locale.US, "%+.0f°/s", fx.godRaySpinDps),
         fx.godRaySpinDps, -45f..45f,
         description = stringResource(R.string.fx_god_ray_orbit_desc),
+        defaultValue = LyricsFxSettings.DEFAULT.godRaySpinDps,
     ) { v -> onUpdate { it.copy(godRaySpinDps = v) } }
     FxSlider(
         stringResource(R.string.fx_god_ray_sway), "${(fx.godRaySway * 100).roundToInt()}%",
         fx.godRaySway, 0f..1f,
         description = stringResource(R.string.fx_god_ray_sway_desc),
         linkKey = "lyrics.godRaySway",
+        defaultValue = LyricsFxSettings.DEFAULT.godRaySway,
     ) { v -> onUpdate { it.copy(godRaySway = v) } }
     FxSlider(
         stringResource(R.string.fx_tilt_reactivity), "${(fx.godRayTilt * 100).roundToInt()}%",
         fx.godRayTilt, 0f..1.5f,
         description = stringResource(R.string.fx_god_ray_tilt_desc),
+        defaultValue = LyricsFxSettings.DEFAULT.godRayTilt,
     ) { v -> onUpdate { it.copy(godRayTilt = v) } }
     FxSlider(
         stringResource(R.string.fx_quality),
         stringResource(R.string.fx_god_ray_samples_value, GodRayGeometry.samplesFor(fx.godRayQuality)),
         fx.godRayQuality.toFloat(), 1f..4f, steps = 2,
         description = stringResource(R.string.fx_god_ray_quality_desc),
+        defaultValue = LyricsFxSettings.DEFAULT.godRayQuality.toFloat(),
     ) { v -> onUpdate { it.copy(godRayQuality = v.roundToInt()) } }
 }
 
