@@ -173,6 +173,8 @@ LibusbUacDriver::~LibusbUacDriver() {
         libusb_exit(ctx_);
         ctx_ = nullptr;
     }
+    // libusb is gone, so nothing can complete into these any more.
+    freeAbandonedTransfers();
 }
 
 std::string LibusbUacDriver::lastErrorDetail() const {
@@ -1502,17 +1504,44 @@ void LibusbUacDriver::stopIsoPump() {
         libusb_handle_events_timeout(ctx_, &tv);
     }
     if (eventThread_.joinable()) eventThread_.join();
-    for (libusb_transfer* xfr : transfers_) {
-        if (xfr) libusb_free_transfer(xfr);
-    }
-    for (libusb_transfer* fxfr : feedbackTransfers_) {
-        if (fxfr) libusb_free_transfer(fxfr);
+    const int stuck = inflight_.load(std::memory_order_acquire);
+    if (stuck == 0) {
+        // Everything has reported back, this pump's and any earlier
+        // stop's leftovers alike, so none of them can be touched again.
+        for (libusb_transfer* xfr : transfers_) {
+            if (xfr) libusb_free_transfer(xfr);
+        }
+        for (libusb_transfer* fxfr : feedbackTransfers_) {
+            if (fxfr) libusb_free_transfer(fxfr);
+        }
+        transferBuffers_.clear();
+        feedbackBuffers_.clear();
+        freeAbandonedTransfers();
+    } else {
+        // Kept, not freed: a late completion still writes into the
+        // buffer and reads the transfer. inflight_ keeps counting them,
+        // so their CANCELLED callbacks balance it later instead of
+        // driving the next pump's count below zero.
+        LOGW("stopIsoPump: %d transfer(s) still in flight; keeping them", stuck);
+        auto keep = [this](std::vector<libusb_transfer*>& xfrs,
+                           std::vector<std::vector<uint8_t>>& bufs) {
+            for (libusb_transfer* xfr : xfrs) {
+                if (xfr) abandonedTransfers_.push_back(xfr);
+            }
+            for (auto& buf : bufs) abandonedBuffers_.emplace_back(std::move(buf));
+            bufs.clear();
+        };
+        keep(transfers_, transferBuffers_);
+        keep(feedbackTransfers_, feedbackBuffers_);
     }
     transfers_.clear();
-    transferBuffers_.clear();
     feedbackTransfers_.clear();
-    feedbackBuffers_.clear();
-    inflight_.store(0, std::memory_order_relaxed);
+}
+
+void LibusbUacDriver::freeAbandonedTransfers() {
+    for (libusb_transfer* xfr : abandonedTransfers_) libusb_free_transfer(xfr);
+    abandonedTransfers_.clear();
+    abandonedBuffers_.clear();
 }
 
 void LibusbUacDriver::onIsoTrampoline(libusb_transfer* xfr) {

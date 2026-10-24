@@ -155,6 +155,14 @@ class ProjectMEngineRepository @Inject constructor(
     private var pendingPreset: PendingPresetRequest? = null
     private var pendingQuality: Boolean = false
 
+    // The setting was turned off while an engine was live. Freeing it from the
+    // settings observer, which has no GL context current, made projectM's
+    // glDelete calls no-ops: its render targets, textures and shaders stayed
+    // in the preserved EGL context, again on every toggle. So the release
+    // waits here for the render thread, like the preset and quality above.
+    // Guarded by engineLock.
+    private var pendingRelease: Boolean = false
+
     // Set by the GLSurfaceView so a change made while paused still gets a frame
     // to appear on: the view drops to RENDERMODE_WHEN_DIRTY when playback
     // stops, and without a nudge the queued preset would sit until something
@@ -218,9 +226,16 @@ class ProjectMEngineRepository @Inject constructor(
             preferences.visualizerEngineEnabled.collectLatest { enabled ->
                 _engineEnabled.value = enabled
                 synchronized(engineLock) { syncAudioSubscriptionLocked() }
+                // Invoked outside the lock, as requestPresetOnGlThread explains.
+                val trigger = synchronized(engineLock) {
+                    // Back on before the render thread got to it: the engine
+                    // is still whole, so keep it.
+                    pendingRelease = !enabled && nativeInitialized
+                    if (pendingRelease) requestRender else null
+                }
+                trigger?.invoke()
                 synchronized(engineLock) {
                     if (!enabled) {
-                        releaseNativeLocked()
                         updateStatus(
                             phase = VisualizerEnginePhase.FALLBACK,
                             message = "projectM disabled in settings. Showing fallback visualizer."
@@ -490,6 +505,10 @@ class ProjectMEngineRepository @Inject constructor(
      */
     fun renderFrame(frameTimeNanos: Long): Boolean {
         synchronized(engineLock) {
+            if (pendingRelease) {
+                releaseNativeLocked()
+                return false
+            }
             if (!_engineEnabled.value || !nativeInitialized) return false
             // The one place with a current GL context, so the one place these
             // can actually take effect.
@@ -738,6 +757,7 @@ class ProjectMEngineRepository @Inject constructor(
         // re-applies it when the next surface attaches.
         pendingPreset = null
         pendingQuality = false
+        pendingRelease = false
     }
 
     private fun ensureAssetsLocked() {

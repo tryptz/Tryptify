@@ -319,6 +319,14 @@ private:
     std::vector<libusb_transfer*> feedbackTransfers_;
     std::vector<std::vector<uint8_t>> feedbackBuffers_;
     std::atomic<int> inflight_{0};     // active transfers (data + fb)
+    // Transfers a stop gave up waiting for. libusb may still complete
+    // into them, so they and their buffers stay alive until every
+    // transfer has reported back (a later stopIsoPump) or libusb is
+    // gone (the destructor). Freeing them on the timeout was a
+    // use-after-free whenever the device stalled.
+    std::vector<libusb_transfer*> abandonedTransfers_;
+    std::vector<std::vector<uint8_t>> abandonedBuffers_;
+    void freeAbandonedTransfers();
     // Cumulative frame counters used for honest position reporting
     // (see playedFrames() / writtenFrames()). Reset on start().
     std::atomic<long> writtenFrames_{0};
