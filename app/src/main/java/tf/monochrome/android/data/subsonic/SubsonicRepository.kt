@@ -62,6 +62,7 @@ sealed interface SubsonicConnectResult {
 class SubsonicRepository @Inject constructor(
     private val client: SubsonicClient,
     private val preferences: PreferencesManager,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) {
     val server: Flow<SubsonicServer?> = preferences.subsonicServer
 
@@ -159,6 +160,24 @@ class SubsonicRepository @Inject constructor(
         return artist.album.map { it.toUnifiedAlbum() }.sortedBy { it.year ?: Int.MAX_VALUE }
     }
 
+    /**
+     * [songId]'s stream on [server]: the original file, or on mobile data the
+     * MP3 cap chosen under Settings › Connections. Decided when the song is
+     * resolved, so a change of network applies from the next song.
+     */
+    suspend fun streamUrl(server: SubsonicServer, songId: String): String {
+        val cap = if (onMobileData()) preferences.subsonicCellularMaxBitrate.first() else 0
+        return Subsonic.streamUrl(server, songId, cap)
+    }
+
+    // Mobile data only, not "anything but Wi-Fi": a server on the home network
+    // reached over Ethernet or a VPN keeps sending the original file.
+    private fun onMobileData(): Boolean {
+        val connectivity = context.getSystemService(android.net.ConnectivityManager::class.java) ?: return false
+        val capabilities = connectivity.getNetworkCapabilities(connectivity.activeNetwork ?: return false) ?: return false
+        return capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR)
+    }
+
     /** A [Subsonic.coverArtRef]'s picture, for the media session; null on any failure. */
     suspend fun coverArtBytes(ref: String?, size: Int = NOTIFICATION_COVER_SIZE): ByteArray? {
         val id = Subsonic.coverArtId(ref) ?: return null
@@ -169,6 +188,24 @@ class SubsonicRepository @Inject constructor(
             throw e
         } catch (e: Exception) {
             null
+        }
+    }
+
+    /**
+     * Tells the server a song is playing ([submission] false) or was played
+     * ([submission] true, at [timeMillis]), so its play counts, Recently
+     * Played and any Last.fm or ListenBrainz relay it runs see plays made
+     * here. Best effort: a server that is away loses the report, never the
+     * playback.
+     */
+    suspend fun reportPlay(songId: String, submission: Boolean, timeMillis: Long? = null) {
+        val server = currentServer() ?: return
+        try {
+            client.scrobble(server, songId, submission, timeMillis)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Away or refused: nothing to do, the play itself is unaffected.
         }
     }
 

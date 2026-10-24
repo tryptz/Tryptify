@@ -3041,6 +3041,8 @@
     <string name="subsonic_not_connected">Bağlı müzik sunucusu yok</string>
     <string name="subsonic_not_connected_detail">Kendi kitaplığınızı burada çalmak için Navidrome’u veya Subsonic uyumlu herhangi bir sunucuyu bağlayın.</string>
     <string name="subsonic_set_up">Ayarlar’da kur</string>
+    <string name="subsonic_cellular_detail">Mobil veride, veri tasarrufu için sunucudan en fazla bu bit hızında MP3 ister. Wi-Fi’de her zaman orijinal dosya gönderilir.</string>
+    <string name="subsonic_quality_original">Orijinal</string>
     <string name="cloud_title">Tryptify Cloud</string>
     <string name="cloud_intro">Hızlı akış için yapılmış, Subsonic API uyumlu kişisel müzik depolama alanın. Müziğini bir kez yükle, kendi sunucunu çalıştırmadan her yerde dinle.</string>
     <string name="cloud_sign_in_first">Tryptify Cloud’u kullanmak için Hesap sayfasından oturum aç.</string>

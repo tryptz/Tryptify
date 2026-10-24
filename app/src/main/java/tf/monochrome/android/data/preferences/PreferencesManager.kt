@@ -192,6 +192,9 @@ class PreferencesManager @Inject constructor(
         // SETTINGS_SYNC_KEYS, for the Discord token's reason: it is a sign-in
         // to a server, and stays on the device it was typed into.
         private val SUBSONIC_SERVER = stringPreferencesKey("subsonic_server")
+        // The cap on mobile data, in kbps (0 = the original file). Device-local
+        // with the server it applies to.
+        private val SUBSONIC_CELLULAR_MAX_BITRATE = intPreferencesKey("subsonic_cellular_max_bitrate")
 
         // Custom API endpoint
         private val CUSTOM_API_ENDPOINT = stringPreferencesKey("custom_api_endpoint")
@@ -970,6 +973,16 @@ class PreferencesManager @Inject constructor(
         dataStore.edit {
             if (server == null) it.remove(SUBSONIC_SERVER) else it[SUBSONIC_SERVER] = json.encodeToString(server)
         }
+    }
+
+    /** What a Subsonic song streams at on mobile data: a kbps from [Subsonic.MOBILE_BITRATES], 0 for the original. */
+    val subsonicCellularMaxBitrate: Flow<Int> = dataStore.data.map { prefs ->
+        prefs[SUBSONIC_CELLULAR_MAX_BITRATE]?.takeIf { it in tf.monochrome.android.data.subsonic.Subsonic.MOBILE_BITRATES } ?: 0
+    }
+
+    suspend fun setSubsonicCellularMaxBitrate(kbps: Int) {
+        if (kbps !in tf.monochrome.android.data.subsonic.Subsonic.MOBILE_BITRATES) return
+        dataStore.edit { it[SUBSONIC_CELLULAR_MAX_BITRATE] = kbps }
     }
 
     // Qobuz instance — used for downloads. Independent of Dev Mode: any

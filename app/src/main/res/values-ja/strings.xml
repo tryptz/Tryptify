@@ -2968,6 +2968,8 @@
     <string name="subsonic_not_connected">音楽サーバーが接続されていません</string>
     <string name="subsonic_not_connected_detail">Navidrome などの Subsonic 互換サーバーに接続すると、自分のライブラリをここで再生できます。</string>
     <string name="subsonic_set_up">設定を開く</string>
+    <string name="subsonic_cellular_detail">モバイルデータ通信中は、データ節約のため、このビットレート以下の MP3 をサーバーに要求します。Wi-Fi では常に元のファイルが送られます。</string>
+    <string name="subsonic_quality_original">オリジナル</string>
     <string name="cloud_title">Tryptify Cloud</string>
     <string name="cloud_intro">高速ストリーミングのために作られた、あなた専用の Subsonic API 音楽ストレージ。音楽を一度アップロードすれば、自分でサーバーを動かさずにどこでも再生できます。</string>
     <string name="cloud_sign_in_first">Tryptify Cloud を使うには、アカウントページでサインインしてください。</string>

@@ -70,6 +70,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var speedOverride: SpeedOverride
     @Inject lateinit var libraryRepository: LibraryRepository
     @Inject lateinit var scrobblingService: ScrobblingService
+    @Inject lateinit var subsonicRepository: tf.monochrome.android.data.subsonic.SubsonicRepository
     @Inject lateinit var discordPresence: tf.monochrome.android.data.presence.DiscordPresenceManager
     @Inject lateinit var projectMEngineRepository: ProjectMEngineRepository
     @Inject lateinit var channelDetectorProcessor: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor
@@ -1942,9 +1943,17 @@ class PlaybackService : MediaSessionService() {
         if (scrobblePlaying) scrobbles.heard(now - scrobbleClock, player.playbackParameters.speed)
         scrobbleClock = now
         scrobbles.due()?.let { (track, startedAt) ->
-            serviceScope.launch { scrobblingService.scrobbleTrack(track, startedAt) }
+            val subsonicSongId = subsonicSongId(unifiedTrackRegistry[track.id])
+            serviceScope.launch {
+                scrobblingService.scrobbleTrack(track, startedAt)
+                // The listener's own server counts the play too, by the same rule.
+                subsonicSongId?.let { subsonicRepository.reportPlay(it, submission = true, timeMillis = startedAt * 1000) }
+            }
         }
     }
+
+    private fun subsonicSongId(unified: tf.monochrome.android.domain.model.UnifiedTrack?): String? =
+        (unified?.source as? tf.monochrome.android.domain.model.PlaybackSource.Subsonic)?.songId
 
     /** Writes the pending play to history, once, unless it repeats the last one. */
     private fun commitPendingPlay() {
@@ -1957,6 +1966,7 @@ class PlaybackService : MediaSessionService() {
         serviceScope.launch {
             libraryRepository.addToHistory(play.track, play.unified)
             scrobblingService.updateNowPlaying(play.track)
+            subsonicSongId(play.unified)?.let { subsonicRepository.reportPlay(it, submission = false) }
         }
     }
 

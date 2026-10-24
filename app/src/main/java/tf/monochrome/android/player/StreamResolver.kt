@@ -290,14 +290,11 @@ class StreamResolver @Inject constructor(
             .setTrackNumber(track.trackNumber)
             .setDiscNumber(track.discNumber)
             .build()
+        val streamUrl = server?.let { subsonicRepository.streamUrl(it, source.songId) }
         val mediaItem = MediaItem.Builder()
             .setMediaId(track.id)
             .setMediaMetadata(metadata)
-            .apply {
-                if (server != null) {
-                    setUri(tf.monochrome.android.data.subsonic.Subsonic.streamUrl(server, source.songId).toUri())
-                }
-            }
+            .apply { if (streamUrl != null) setUri(streamUrl.toUri()) }
             .build()
         return ResolvedMedia(mediaItem = mediaItem, isPlayable = server != null)
     }

@@ -115,6 +115,33 @@ class SubsonicTest {
         assertTrue(url, url.endsWith("&query=AC%2FDC+%26+co"))
     }
 
+    @Test
+    fun `the stream is the original file unless a cap is asked for`() {
+        val original = Subsonic.streamUrl(server, "s1")
+        assertTrue(original, original.endsWith("&id=s1"))
+        assertFalse(original, "maxBitRate" in original || "format" in original)
+
+        val capped = Subsonic.streamUrl(server, "s1", maxBitRateKbps = 192)
+        assertTrue(capped, capped.endsWith("&id=s1&maxBitRate=192&format=mp3"))
+    }
+
+    @Test
+    fun `now playing is a scrobble without submission or time`() {
+        assertEquals(
+            listOf("id" to "s1", "submission" to "false"),
+            Subsonic.scrobbleParams("s1", submission = false, timeMillis = 1_700_000_000_000),
+        )
+    }
+
+    @Test
+    fun `a counted play is stamped with when it started`() {
+        assertEquals(
+            listOf("id" to "s1", "submission" to "true", "time" to "1700000000000"),
+            Subsonic.scrobbleParams("s1", submission = true, timeMillis = 1_700_000_000_000),
+        )
+        assertEquals(listOf("id" to "s1", "submission" to "true"), Subsonic.scrobbleParams("s1", submission = true))
+    }
+
     // ── Artwork never carries the sign-in ───────────────────────────────
 
     @Test

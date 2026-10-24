@@ -3043,6 +3043,8 @@
     <string name="subsonic_not_connected">No music server connected</string>
     <string name="subsonic_not_connected_detail">Connect Navidrome or any Subsonic-compatible server to play your own library here.</string>
     <string name="subsonic_set_up">Set up in Settings</string>
+    <string name="subsonic_cellular_detail">On mobile data, ask the server for an MP3 at no more than this rate, to save data. On Wi-Fi it always sends the original file.</string>
+    <string name="subsonic_quality_original">Original</string>
     <string name="cloud_title">Tryptify Cloud</string>
     <string name="cloud_intro">Your personal Subsonic-API music storage, made for fast streaming. Upload your music once and play it anywhere, with no server of your own to run.</string>
     <string name="cloud_sign_in_first">Sign in on the Account page to use Tryptify Cloud.</string>

@@ -2968,6 +2968,8 @@
     <string name="subsonic_not_connected">未连接音乐服务器</string>
     <string name="subsonic_not_connected_detail">连接 Navidrome 或任何兼容 Subsonic 的服务器，即可在这里播放自己的音乐库。</string>
     <string name="subsonic_set_up">在设置中配置</string>
+    <string name="subsonic_cellular_detail">使用移动数据时，请服务器以不超过此码率的 MP3 发送，以节省流量。使用 Wi-Fi 时始终发送原始文件。</string>
+    <string name="subsonic_quality_original">原始文件</string>
     <string name="cloud_title">Tryptify Cloud</string>
     <string name="cloud_intro">你的个人 Subsonic API 音乐存储，为快速串流而打造。音乐只需上传一次，随处播放，无需自己运行服务器。</string>
     <string name="cloud_sign_in_first">请在账户页面登录后使用 Tryptify Cloud。</string>

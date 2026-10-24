@@ -67,6 +67,10 @@ class SubsonicClient @Inject constructor(
     suspend fun randomSongs(server: SubsonicServer, size: Int): List<SubsonicSong> =
         call(server, "getRandomSongs", listOf("size" to "$size")).randomSongs?.song.orEmpty()
 
+    suspend fun scrobble(server: SubsonicServer, songId: String, submission: Boolean, timeMillis: Long? = null) {
+        call(server, "scrobble", Subsonic.scrobbleParams(songId, submission, timeMillis))
+    }
+
     private suspend fun call(
         server: SubsonicServer,
         method: String,
