@@ -28,6 +28,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 import javax.inject.Inject
 import javax.inject.Singleton
+import tf.monochrome.android.R
 
 /**
  * Persists the PKCE code verifier in SharedPreferences so it survives
@@ -202,10 +203,18 @@ class SupabaseAuthManager @Inject constructor(
         // or web page can open this link, and taking them would let one
         // silently swap the account. Nothing of the link is logged.
         try {
+            // A failed link (expired, already used) comes back from Supabase
+            // as error_code, in the fragment or the query. Only read, never trusted.
+            val errorCode = uri.getQueryParameter("error_code")
+                ?: uri.fragment.orEmpty().split("&")
+                    .firstOrNull { it.startsWith("error_code=") }?.substringAfter('=')
             val code = uri.getQueryParameter("code")
             if (code.isNullOrBlank()) {
-                if (!uri.fragment.isNullOrBlank()) Log.w("SupabaseAuth", "Sign-in link with tokens in it ignored (PKCE only)")
-                _errorMessage.value = "No code in callback"
+                _errorMessage.value =
+                    if (errorCode != null) context.getString(R.string.auth_link_expired) else "No code in callback"
+                if (errorCode == null && !uri.fragment.isNullOrBlank()) {
+                    Log.w("SupabaseAuth", "Sign-in link with tokens in it ignored (PKCE only)")
+                }
                 return
             }
             auth.exchangeCodeForSession(code)
@@ -312,6 +321,12 @@ class SupabaseAuthManager @Inject constructor(
                 "Please check your email and confirm your account before signing in."
             msg.contains("weak_password", ignoreCase = true) ->
                 "Password is too weak. Please use at least 8 characters with a mix of letters and numbers."
+            // The project's mailer refused or failed to send the confirmation
+            // email (a wrong SMTP login comes back as unexpected_failure).
+            msg.contains("over_email_send_rate_limit", ignoreCase = true) ||
+            msg.contains("unexpected_failure", ignoreCase = true) ||
+            msg.contains("sending confirmation", ignoreCase = true) ->
+                context.getString(R.string.auth_email_send_failed)
             msg.contains("signup_disabled", ignoreCase = true) ->
                 "Account registration is currently disabled."
             msg.contains("over_request_rate_limit", ignoreCase = true) ||

@@ -3110,4 +3110,6 @@
     <string name="onb_next">下一步</string>
     <string name="onb_skip_to_end">跳到最后</string>
     <string name="action_select_all">全选</string>
+    <string name="auth_link_expired">此链接已过期或已被使用。请用邮箱和密码登录，或重新创建账户以获取新链接。</string>
+    <string name="auth_email_send_failed">无法发送确认邮件。请几分钟后重试，或使用 Google 或 Discord 继续。</string>
 </resources>
