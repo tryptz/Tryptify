@@ -2394,6 +2394,41 @@ is drawn over the CRT's layer, not in it, and takes no touches. The
 visualizer's surface is not the window's and keeps its own counter (Settings ›
 Visualizer › Show FPS).
 
+### First-run setup
+
+Setup (`ui/onboarding/OnboardingScreen.kt`) is the now-playing screen as a
+setup, the owner's pick of four prototypes: a cover per step over a wall of
+covers in its colours, the step in a glass sheet with the player's three
+buttons (previous, play for next, skip to the end), and a floating glass tab
+bar of the six steps that jumps to any of them. There is no welcome screen:
+it opens on Permissions, and the copy is plain and formal (the owner asked
+for both).
+
+- **Every step is optional.** Folders no longer blocks Continue: with no
+  folder the first scan covers the whole device, which the Folders hint and
+  the Ready summary both say. "Skip setup" still finishes at once, and
+  `completeOnboarding` still runs `ScanWorker.enqueue` either way.
+- **Setup feeds its own glass.** It is outside the nav host, so nothing
+  publishes `LocalAppHaze` or the listener's `LocalMiniPlayerGlass` for it:
+  it keeps its own `rememberHazeState` on the backdrop, takes the UI panel
+  glass from `preferences.miniPlayerGlass`, and provides `LocalGlassGround`
+  (dark under every theme) and `LocalGlassBackdrop` for the chips. The sheet
+  and the tab bar are the shared material (`glassBase` + `GlassMaterial` +
+  `GlassInkScope`) and siblings of the backdrop, never inside it.
+- **The backdrop has detail on purpose**: a tilted wall of cover tiles.
+  Over the smooth gradient alone the glass bent nothing visible.
+- **Rows sit straight on the sheet**, no pane each; their actions are
+  `GlassChoiceChip`s (on = done). Colour changes snap and the step content
+  does not slide under "Disable animations".
+- **Sources save nothing by themselves.** Picking Music server, Tryptify
+  Cloud or TrypT HiFi sends the listener to Settings › Connections when setup
+  ends (`landingRoute`, by `settingsTabIndex("Connections")`, never a literal
+  index), where each one is set up. Nothing picked lands on the library.
+- **Notifications are asked here** (Android 13+), so MainActivity's prompt
+  after setup finds them granted and stays quiet. A permission denied for
+  good turns its chip into "Settings", which opens the app's page.
+- The old Downloads and Audio output steps are gone; both live in Settings.
+
 ## The visualizer has two compositions, and only one at a time
 
 The hero visualizer (`ProjectMRendererView`, a `GLSurfaceView`) **replaces** the
