@@ -1,9 +1,8 @@
--- Indexes nothing reads — NOT YET APPLIED
--- =======================================
+-- Indexes nothing reads — APPLIED 2026-10-24
+-- ===========================================
 --
--- Run this in the Supabase SQL editor. It was attempted as migration
--- drop_unused_play_indexes three times, and the confirmation prompt for a
--- destructive statement was never answered, so the indexes are still live.
+-- Run by the owner in the Supabase SQL editor on 2026-10-24 (the migration
+-- tool's confirmation prompt never reached them); all three are gone.
 --
 -- Rechecked 2026-10-24 (16,801 plays): none of the three has been used by any
 -- query since it was created (idx_scan = 0; statistics have never been reset).
