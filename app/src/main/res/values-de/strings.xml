@@ -3180,4 +3180,5 @@
     <string name="onb_prev">Vorheriger Schritt</string>
     <string name="onb_next">Nächster Schritt</string>
     <string name="onb_skip_to_end">Zum Ende springen</string>
+    <string name="action_select_all">Alle auswählen</string>
 </resources>

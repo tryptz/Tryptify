@@ -3129,3 +3129,4 @@ onb_ready_signed_out	Not signed in	未登录	サインインしていません	N
 onb_prev	Previous step	上一步	前のステップ	Étape précédente	Paso anterior	Önceki adım	Vorheriger Schritt	Passaggio precedente
 onb_next	Next step	下一步	次のステップ	Étape suivante	Paso siguiente	Sonraki adım	Nächster Schritt	Passaggio successivo
 onb_skip_to_end	Skip to the end	跳到最后	最後までスキップ	Aller à la fin	Ir al final	Sona atla	Zum Ende springen	Vai alla fine
+action_select_all	Select all	全选	すべて選択	Tout sélectionner	Seleccionar todo	Tümünü seç	Alle auswählen	Seleziona tutto

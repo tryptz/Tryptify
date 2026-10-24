@@ -55,6 +55,12 @@ class UnifiedTrackSelection {
         ids.clear()
     }
 
+    /** Picks every one of [tracks]: the bar's "Select all" over the list on screen. */
+    fun selectAll(tracks: List<UnifiedTrack>) {
+        tracks.forEach { picked[it.id] = it }
+        ids.selectAll(tracks.map { it.id })
+    }
+
     /** The selected songs in [order]'s order when given, else in the order they were picked. */
     fun tracks(order: List<UnifiedTrack>? = null): List<UnifiedTrack> {
         val selected = ids.selectedIds
@@ -124,6 +130,11 @@ fun UnifiedTrackSelectionBar(
         TrackSelectionBar(
             selectedCount = selection.count,
             onClose = { selection.clear() },
+            // Only over a list held whole: a paged one (Local's Songs) has no
+            // "all" on hand to pick.
+            onSelectAll = order?.takeIf { it.isNotEmpty() && selection.count < it.size }?.let { all ->
+                { selection.selectAll(all) }
+            },
             onAddToQueue = {
                 playerViewModel.addUnifiedToQueue(selected())
                 selection.clear()

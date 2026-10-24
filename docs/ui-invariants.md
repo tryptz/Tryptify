@@ -973,6 +973,13 @@ screen with every scroll (seen on device).
 
 ### List rows
 
+**The selection bar has "Select all"** (`TrackSelectionBar(onSelectAll)`),
+over the list the screen holds whole, the same list its actions read: a
+playlist, an album, an artist, Favorites, Downloads, a folder, search
+results, a Discover shelf, a genre chart, the local detail pages
+(`UnifiedTrackSelectionBar` uses its `order`). It hides once everything is
+selected, and on a paged list (Local's Songs), which has no "all" on hand.
+
 **Every list row is Material 3, in both looks.** Song rows (`TrackItem`, the
 library's `SongRow`, search results), the Library's category tiles, folders,
 album and artist cards stand on `materialSurface`, never glass: a list is the

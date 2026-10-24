@@ -3104,4 +3104,5 @@
     <string name="onb_prev">上一步</string>
     <string name="onb_next">下一步</string>
     <string name="onb_skip_to_end">跳到最后</string>
+    <string name="action_select_all">全选</string>
 </resources>

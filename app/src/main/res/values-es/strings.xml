@@ -3256,4 +3256,5 @@
     <string name="onb_prev">Paso anterior</string>
     <string name="onb_next">Paso siguiente</string>
     <string name="onb_skip_to_end">Ir al final</string>
+    <string name="action_select_all">Seleccionar todo</string>
 </resources>

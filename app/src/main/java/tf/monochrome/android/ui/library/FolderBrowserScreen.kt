@@ -225,6 +225,7 @@ fun FolderBrowserScreen(
             tf.monochrome.android.ui.components.TrackSelectionBar(
                 selectedCount = selection.count,
                 onClose = { selection.clear() },
+                onSelectAll = (tracks.map { it.id }).let { all -> if (all.isNotEmpty() && !selection.selectedIds.containsAll(all)) ({ selection.selectAll(all) }) else null },
                 onAddToQueue = {
                     playerViewModel.addUnifiedToQueue(selectedTracks())
                     selection.clear()

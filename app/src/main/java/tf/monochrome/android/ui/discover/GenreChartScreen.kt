@@ -172,6 +172,7 @@ fun GenreChartScreen(
                 tf.monochrome.android.ui.components.TrackSelectionBar(
                     selectedCount = selection.count,
                     onClose = { selection.clear() },
+                    onSelectAll = (chart?.entries.orEmpty().map { it.selectionKey }).let { all -> if (all.isNotEmpty() && !selection.selectedIds.containsAll(all)) ({ selection.selectAll(all) }) else null },
                     onAddToQueue = {
                         viewModel.resolveAll(selectedEntries()) { playerViewModel.addUnifiedToQueue(it) }
                         selection.clear()

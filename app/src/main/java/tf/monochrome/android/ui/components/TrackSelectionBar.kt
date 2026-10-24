@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.ImageSearch
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +46,11 @@ fun TrackSelectionBar(
     onAddToParty: (() -> Unit)? = null,
     /** "Upload to Tryptify Cloud" for the selected songs, where they are files on the phone. */
     onUploadToCloud: (() -> Unit)? = null,
+    /**
+     * "Select all" over the list on screen. Null hides it: the list is not held
+     * whole, or everything in it is already selected.
+     */
+    onSelectAll: (() -> Unit)? = null,
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -70,6 +76,15 @@ fun TrackSelectionBar(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
             )
+            if (onSelectAll != null) {
+                IconButton(onClick = onSelectAll) {
+                    Icon(
+                        imageVector = Icons.Default.SelectAll,
+                        contentDescription = stringResource(R.string.action_select_all),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
             IconButton(onClick = onAddToQueue) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.QueueMusic,

@@ -28,6 +28,11 @@ class TrackSelectionState<K : Any> {
     fun clear() {
         selectedIds = emptySet()
     }
+
+    /** Adds every one of [ids], as the bar's "Select all" does with the list on screen. */
+    fun selectAll(ids: Collection<K>) {
+        selectedIds = selectedIds + ids
+    }
 }
 
 @Composable

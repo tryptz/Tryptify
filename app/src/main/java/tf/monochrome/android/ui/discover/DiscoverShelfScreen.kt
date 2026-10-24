@@ -119,6 +119,7 @@ fun DiscoverShelfScreen(
                 // always matches what the buttons will act on.
                 selectedCount = selectedTracks.size,
                 onClose = { selection.clear() },
+                onSelectAll = (shelf?.items.orEmpty().filterIsInstance<DiscoveryItem.TrackItem>().map { it.key }).let { all -> if (all.isNotEmpty() && !selection.selectedIds.containsAll(all)) ({ selection.selectAll(all) }) else null },
                 onAddToQueue = {
                     playerViewModel.addUnifiedToQueue(selectedTracks)
                     selection.clear()
