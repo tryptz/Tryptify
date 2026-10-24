@@ -100,7 +100,9 @@ data class SbFavoriteTrack(
     val audio_quality: String? = null,
     val explicit: Boolean = false,
     val track_number: Int? = null,
-    val added_at: String? = null
+    val added_at: String? = null,
+    /** The service [id] belongs to (TrackSource); null on rows from older apps. */
+    val source: String? = null,
 )
 
 @Serializable
@@ -187,7 +189,9 @@ data class SbPlaylistTrack(
     val album_title: String? = null,
     val album_cover: String? = null,
     val position: Int = 0,
-    val added_at: String? = null
+    val added_at: String? = null,
+    /** The service [track_id] belongs to (TrackSource); null on rows from older apps. */
+    val source: String? = null,
 )
 
 /** What a settings pull found. */
@@ -390,7 +394,8 @@ class SupabaseSyncRepository @Inject constructor(
                     album_cover = track.albumCover,
                     audio_quality = track.audioQuality,
                     explicit = track.explicit,
-                    track_number = track.trackNumber
+                    track_number = track.trackNumber,
+                    source = track.source,
                 )
             ) { onConflict = "user_id,id" }
         }.onFailure { Log.e(TAG, "pushFavoriteTrack failed: ${it.message}") }.isSuccess
@@ -726,7 +731,8 @@ class SupabaseSyncRepository @Inject constructor(
                     album_id = track.albumId,
                     album_title = track.albumTitle,
                     album_cover = track.albumCover,
-                    position = track.position
+                    position = track.position,
+                    source = track.source,
                 )
             ) { onConflict = "playlist_id,track_id" }
         }.onFailure { Log.e(TAG, "pushPlaylistTrack failed: ${it.message}") }.isSuccess
@@ -930,7 +936,8 @@ class SupabaseSyncRepository @Inject constructor(
                         albumCover = t.album_cover,
                         audioQuality = t.audio_quality,
                         explicit = t.explicit,
-                        trackNumber = t.track_number
+                        trackNumber = t.track_number,
+                        source = t.source,
                     )
                 )
             }
@@ -1037,7 +1044,8 @@ class SupabaseSyncRepository @Inject constructor(
                         albumId = t.album_id,
                         albumTitle = t.album_title,
                         albumCover = t.album_cover,
-                        position = t.position
+                        position = t.position,
+                        source = t.source,
                     )
                 )
             }

@@ -112,6 +112,10 @@
   function serviceOf(r) {
     if (r.source) return String(r.source).toLowerCase();
     const c = r.album_cover || "";
+    // A file on the phone: its id is a hash (often negative) and its cover a
+    // file in the app's own storage, which nothing outside the phone reaches.
+    const id = Number(r.id != null ? r.id : r.track_id);
+    if (id <= 0 || c.startsWith("/") || c.startsWith("content:") || c.startsWith("file:")) return "local";
     return /static\.qobuz\.com/.test(c) ? "qobuz" : /dzcdn\.net/.test(c) ? "deezer" : /mzstatic\.com/.test(c) ? "apple" : "tidal";
   }
   /** A favorite_tracks or playlist_tracks row → a queue track, played through Trypt HiFi from its own service. */
@@ -355,6 +359,7 @@
       if (!this.base) throw new Error(T("it needs an API URL: add one under Sources, on the dashboard."));
       const service = track.ref.service || "tidal";
       if (service === "apple") throw new Error(T("Apple Music songs play only in the app."));
+      if (service === "local" || service === "subsonic") throw new Error(T("it is a file on your phone. Open the folder it is in under Sources to play it here."));
       if (service === "qobuz" || service === "deezer") {
         // Qobuz's quality ids, which the server's Deezer route takes too:
         // 27 hi-res, 6 CD lossless, 5 MP3 320. The link it hands back is a
@@ -521,8 +526,20 @@
   window.TryptifySources = {
     Local, Cloud, HiFi, Subsonic, Library,
     /** The playable address of any queue track. */
-    url: (t) => (t.src === "local" ? Local.url(t) : t.src === "cloud" ? Cloud.url(t)
-      : Promise.resolve().then(() => (t.src === "subsonic" ? Subsonic.url(t) : HiFi.url(t)))),
+    url: (t) => {
+      // A liked phone file plays from the same song in this browser's open
+      // folder, found by its title (and artist, where the file has one).
+      if (t.src === "hifi" && t.ref.service === "local" && Local.tree) {
+        const name = (s) => (s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+        const title = name(t.title), artist = name(t.artist);
+        const files = allFiles(Local.tree);
+        const hit = files.find((f) => name(f.title) === title && (!artist || !f.artist || name(f.artist) === artist))
+          || files.find((f) => name(f.title) === title);
+        if (hit) return Local.url(hit);
+      }
+      return t.src === "local" ? Local.url(t) : t.src === "cloud" ? Cloud.url(t)
+        : Promise.resolve().then(() => (t.src === "subsonic" ? Subsonic.url(t) : HiFi.url(t)));
+    },
     util: { parseFileName, buildTree, allFiles, normalizeBase, hifiTrack, hifiAlbum, cloudTrack, savedTrack, coverUrl, isAudio, md5, subsonicTrack },
   };
 })();

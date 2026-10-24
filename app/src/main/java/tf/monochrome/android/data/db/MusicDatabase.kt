@@ -75,7 +75,7 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         CollectionTrackArtistCrossRef::class,
         CollectionAlbumArtistCrossRef::class
     ],
-    version = 20,
+    version = 21,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -443,6 +443,14 @@ abstract class MusicDatabase : RoomDatabase() {
                 db.execSQL("DROP TABLE IF EXISTS `sampler_pattern_channels`")
                 db.execSQL("DROP TABLE IF EXISTS `sampler_patterns`")
                 db.execSQL("DROP TABLE IF EXISTS `sampler_samples`")
+            }
+        }
+
+        /** Which service a saved song's id belongs to (FavoriteTrackEntity.source). */
+        val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `favorite_tracks` ADD COLUMN `source` TEXT")
+                db.execSQL("ALTER TABLE `playlist_tracks` ADD COLUMN `source` TEXT")
             }
         }
     }

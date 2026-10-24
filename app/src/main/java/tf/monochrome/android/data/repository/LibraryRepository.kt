@@ -64,7 +64,7 @@ class LibraryRepository @Inject constructor(
     // --- Favorites ---
 
     fun getFavoriteTracks(): Flow<List<Track>> = favoriteDao.getFavoriteTracks().map { entities ->
-        entities.map { it.toDomain() }
+        entities.map { rememberSource(it.id, it.source); it.toDomain() }
     }
 
     fun getFavoriteAlbums(): Flow<List<Album>> = favoriteDao.getFavoriteAlbums().map { entities ->
@@ -81,12 +81,51 @@ class LibraryRepository @Inject constructor(
     // manual Sync button, and deletes never did — so the launch-time pull
     // brought unliked songs and deleted playlists straight back.
 
+    /**
+     * The service [track]'s id belongs to, kept with a liked or playlisted
+     * song (FavoriteTrackEntity.source): Qobuz, Deezer, Apple and TIDAL ids
+     * are plain numbers in overlapping ranges, and the registry that tells
+     * them apart lives on this device only, so a fresh install or the website
+     * would otherwise read every one as TIDAL's. What the queued track plays
+     * from says it outright; a bare Track falls back to the registry, as
+     * toUnifiedTrackAuto does.
+     */
+    /**
+     * Teaches this device's registry a saved song's service, so a row synced
+     * from another device (or kept from before a reinstall) plays from where
+     * it came from instead of falling through to TIDAL.
+     */
+    private fun rememberSource(id: Long, source: String?) {
+        when (source) {
+            TrackSource.QOBUZ -> qobuzIdRegistry.registerTrack(id)
+            TrackSource.DEEZER -> qobuzIdRegistry.registerDeezerTrack(id)
+            TrackSource.APPLE -> qobuzIdRegistry.registerAppleTrack(id)
+        }
+    }
+
+    private fun sourceOf(track: Track): String = when (unifiedTrackRegistry[track.id]?.source) {
+        is PlaybackSource.LocalFile -> TrackSource.LOCAL
+        is PlaybackSource.QobuzCached -> TrackSource.QOBUZ
+        is PlaybackSource.DeezerPreview -> TrackSource.DEEZER
+        is PlaybackSource.AppleCached -> TrackSource.APPLE
+        is PlaybackSource.Subsonic -> TrackSource.SUBSONIC
+        is PlaybackSource.HiFiApi -> TrackSource.TIDAL
+        else -> when {
+            track.deezerId != null || qobuzIdRegistry.isDeezerTrack(track.id) -> TrackSource.DEEZER
+            track.appleId != null || qobuzIdRegistry.isAppleTrack(track.id) -> TrackSource.APPLE
+            qobuzIdRegistry.isQobuzTrack(track.id) -> TrackSource.QOBUZ
+            // A local file's id is a hash and its cover a file in the app's storage.
+            track.id <= 0 || track.album?.cover?.startsWith("/") == true -> TrackSource.LOCAL
+            else -> TrackSource.TIDAL
+        }
+    }
+
     suspend fun toggleFavoriteTrack(track: Track) {
         if (favoriteDao.isFavoriteTrack(track.id)) {
             favoriteDao.deleteFavoriteTrack(track.id)
             supabaseSync.queueChange(SyncKind.FAVORITE_TRACK, track.id.toString(), SyncOp.DELETE)
         } else {
-            favoriteDao.insertFavoriteTrack(track.toFavoriteEntity())
+            favoriteDao.insertFavoriteTrack(track.toFavoriteEntity().copy(source = sourceOf(track)))
             supabaseSync.queueChange(SyncKind.FAVORITE_TRACK, track.id.toString(), SyncOp.UPSERT)
             autoDownloadOnLike(track)
         }
@@ -268,12 +307,12 @@ class LibraryRepository @Inject constructor(
 
     fun getPlaylistTracks(playlistId: String): Flow<List<Track>> {
         return playlistDao.getPlaylistTracks(playlistId).map { entities ->
-            entities.map { it.toDomain() }
+            entities.map { rememberSource(it.trackId, it.source); it.toDomain() }
         }
     }
 
     suspend fun addTrackToPlaylist(playlistId: String, track: Track) {
-        playlistDao.addTrackToPlaylist(playlistId, track.toPlaylistTrackEntity(playlistId))
+        playlistDao.addTrackToPlaylist(playlistId, track.toPlaylistTrackEntity(playlistId).copy(source = sourceOf(track)))
         supabaseSync.queueChange(SyncKind.PLAYLIST_TRACK, playlistTrackKey(playlistId, track.id), SyncOp.UPSERT)
     }
 
@@ -297,7 +336,7 @@ class LibraryRepository @Inject constructor(
         replacement: Track,
     ): PlaylistTrackReplacement {
         val outcome = playlistDao.replacePlaylistTrack(
-            playlistId, oldTrackId, replacement.toPlaylistTrackEntity(playlistId)
+            playlistId, oldTrackId, replacement.toPlaylistTrackEntity(playlistId).copy(source = sourceOf(replacement))
         )
         if (outcome == PlaylistTrackReplacement.REPLACED || outcome == PlaylistTrackReplacement.MERGED) {
             supabaseSync.queueChange(SyncKind.PLAYLIST_TRACK, playlistTrackKey(playlistId, oldTrackId), SyncOp.DELETE)
@@ -332,7 +371,9 @@ private fun FavoriteTrackEntity.toDomain() = Track(
     album = albumId?.let { Album(id = it, title = albumTitle ?: "", cover = albumCover) },
     audioQuality = audioQuality,
     explicit = explicit,
-    trackNumber = trackNumber
+    trackNumber = trackNumber,
+    deezerId = id.takeIf { source == TrackSource.DEEZER },
+    appleId = id.takeIf { source == TrackSource.APPLE },
 )
 
 private fun FavoriteAlbumEntity.toDomain() = Album(
@@ -365,7 +406,9 @@ private fun PlaylistTrackEntity.toDomain() = Track(
     title = title,
     duration = duration,
     artist = Artist(id = 0, name = artistName),
-    album = albumId?.let { Album(id = it, title = albumTitle ?: "", cover = albumCover) }
+    album = albumId?.let { Album(id = it, title = albumTitle ?: "", cover = albumCover) },
+    deezerId = trackId.takeIf { source == TrackSource.DEEZER },
+    appleId = trackId.takeIf { source == TrackSource.APPLE },
 )
 
 private fun Track.toFavoriteEntity() = FavoriteTrackEntity(
@@ -473,4 +516,14 @@ private fun Track.cloudSourceRef(sourceType: String): String = when (sourceType)
 private fun sha1(input: String): String {
     val bytes = MessageDigest.getInstance("SHA-1").digest(input.toByteArray())
     return bytes.joinToString("") { "%02x".format(it) }
+}
+
+/** The values of FavoriteTrackEntity.source and PlaylistTrackEntity.source, as synced. */
+object TrackSource {
+    const val TIDAL = "tidal"
+    const val QOBUZ = "qobuz"
+    const val DEEZER = "deezer"
+    const val APPLE = "apple"
+    const val SUBSONIC = "subsonic"
+    const val LOCAL = "local"
 }
