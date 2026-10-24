@@ -4,9 +4,18 @@ Proposed on 2026-10-24, not yet agreed with the owner. The tables in
 `docs/supabase/social.sql` (`c2c0cce5`) exist; no app code uses them yet, and
 this plan builds on them rather than beside them. Demos:
 https://claude.ai/artifact/DzPPnA1SvLvPMuqccCpF1p (profile, friends,
-a party invite, Settings › Social). The demo's purple is a placeholder:
-colours, fonts and glass follow the listener's own visual settings like every
-screen (`docs/ui-invariants.md`).
+a party invite, Settings › Social).
+
+**Look: the same as the rest of Tryptify** (the owner's call, 2026-10-24). The
+demos show layout and content only; their dark ground, purple and Manrope
+font are placeholders and are not to be copied. The social screens are built
+from the components every other screen uses and follow
+`docs/ui-invariants.md`: Glass, Text on glass, Titles over descriptions,
+Search bars (the Friends search), Press feedback, Pages and the tab bar, List
+rows (friend rows), Themes (colours from the listener's theme), Stats charts
+(the stat blocks) and the galaxies (My sky is drawn by the galaxy stage, not
+a new renderer). A new "Social" section in that file records anything the
+build adds.
 
 ## What it is
 
@@ -106,6 +115,10 @@ Presence is one row per user in Supabase, written by the phone:
   without polling;
 - a **Private session** hides everything for 6 hours and then turns itself
   off, so nobody forgets it on.
+- To decide when it is built: Tryptify Connect (`server/connect`,
+  `ConnectController`) already knows what each of a listener's devices is
+  playing. Presence could be published from there, one source for every
+  device, instead of each phone writing its own row.
 
 Only songs with a catalogue or ISRC id, or local songs as title and artist,
 are shown. Subsonic and Tryptify Cloud songs show title and artist only,
