@@ -412,6 +412,16 @@ test("health and plans answer without an account", async () => {
   assert.deepEqual(plans.body.plans.map((p: { id: string }) => p.id), ["lite", "plus", "max"]);
 });
 
+test("a plan the provider has no product for is not offered", async () => {
+  // The test provider has products for lite, plus and max only.
+  assert.deepEqual(Object.keys(cloud.PLANS), ["lite", "plus", "max", "pro", "studio", "vault"]);
+  const ids = (await call("GET", "/plans")).body.plans.map((p: { id: string }) => p.id);
+  for (const id of ["pro", "studio", "vault"]) assert.ok(!ids.includes(id), `${id} offered with no product`);
+  const sold = creemBilling({ CREEM_API_KEY: "k", CREEM_WEBHOOK_SECRET: "s", CREEM_PRODUCT_VAULT_YEARLY: "prod_v" })!;
+  assert.equal(sold.sells("vault"), true);
+  assert.equal(sold.sells("pro"), false);
+});
+
 test("the account needs a sign-in", async () => {
   assert.equal((await call("GET", "/v1/account")).status, 401);
   assert.equal((await call("GET", "/v1/account", "not-a-token")).status, 401);

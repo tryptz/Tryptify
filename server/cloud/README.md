@@ -143,7 +143,9 @@ What the service does with it:
    name on the ID.
 2. **Start in test mode.** Create six subscription products, one per plan
    and period, at the prices in `PLANS` (Lite $3.99 / $39.99, Plus $9.99 /
-   $99.99, Max $19.99 / $199.99). Tax included or added on top are both
+   $99.99, Max $19.99 / $199.99, Pro $39.99 / $399.99, Studio $119.99 /
+   $1,199.99, Vault $399.99 / $3,999.99). A plan with no product is left out of
+   `/plans`. Tax included or added on top are both
    inside the worst case the prices were checked against.
 3. Under Developers, copy the API key, and add a webhook to
    `<the service's address>/webhooks/billing` with at least

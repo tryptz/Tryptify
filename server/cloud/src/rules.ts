@@ -39,6 +39,9 @@ export const PLANS = {
   lite: { storageGb: 100, monthly: 3.99, yearly: 39.99 },
   plus: { storageGb: 250, monthly: 9.99, yearly: 99.99 },
   max: { storageGb: 500, monthly: 19.99, yearly: 199.99 },
+  pro: { storageGb: 1_000, monthly: 39.99, yearly: 399.99 },
+  studio: { storageGb: 3_000, monthly: 119.99, yearly: 1199.99 },
+  vault: { storageGb: 10_000, monthly: 399.99, yearly: 3999.99 },
 } as const;
 export type PlanId = keyof typeof PLANS;
 export type Period = "monthly" | "yearly";

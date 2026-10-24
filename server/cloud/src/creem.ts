@@ -14,6 +14,8 @@ import { PLANS, type BillingEvent, type Period, type PlanId } from "./rules";
 export interface Billing {
   name: string;
   checkoutUrl(plan: PlanId, period: Period, userId: string, trial?: boolean): Promise<string | null>;
+  /** Whether [plan] can be bought here: the provider has a product for it, monthly or yearly. */
+  sells(plan: PlanId): boolean;
   /** The provider's page where a customer changes or cancels their plan, or null when it cannot be had. */
   portalUrl(customerId: string): Promise<string | null>;
   /** The events in a verified webhook, or null when its signature does not check out. */
@@ -64,6 +66,8 @@ export function creemBilling(env: Record<string, string | undefined>, http: type
 
   return {
     name: "creem",
+
+    sells: (plan) => !!(env[productKey(plan, "monthly")] || env[productKey(plan, "yearly")]),
 
     async checkoutUrl(plan, period, userId, trial = false) {
       const product = env[productKey(plan, period, trial)];

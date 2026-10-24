@@ -116,6 +116,8 @@ export function paypalBilling(env: Record<string, string | undefined>, http: typ
   return {
     name: "paypal",
 
+    sells: (plan) => !!(env[planKey(plan, "monthly")] || env[planKey(plan, "yearly")]),
+
     async checkoutUrl(plan, period, userId, trial = false) {
       const planId = env[planKey(plan, period, trial)];
       if (!planId) return null;

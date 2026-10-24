@@ -95,6 +95,14 @@ Railway's plan fee.
 | Lite | 100 GB | $3.99 | $39.99 | $1.72 | +$0.51 (yearly) |
 | Plus | 250 GB | $9.99 | $99.99 | $4.31 | +$1.26 (yearly) |
 | Max | 500 GB | $19.99 | $199.99 | $8.62 | +$2.53 (yearly) |
+| Pro | 1 TB | $39.99 | $399.99 | $17.25 | +$5.06 (yearly) |
+| Studio | 3 TB | $119.99 | $1,199.99 | $51.75 | +$15.18 (yearly) |
+| Vault | 10 TB | $399.99 | $3,999.99 | $172.50 | +$50.60 (yearly) |
+
+Pro, Studio and Vault were added on 2026-10-24 at the same $3.99 per 100 GB,
+each with at least 20% of its worst-case net left over. `/plans` lists a plan
+only once the payment provider has a product for it, so they appear in the app
+and on the site when their PayPal plans exist.
 
 How the numbers were made (research on 2026-10-21, sources in the session):
 
@@ -147,8 +155,9 @@ lockers. Competitors on 2026-10-21: YouTube Music uploads free (100k songs,
 no phone uploads), iBroadcast free at 128 kbps or $3.99/month for lossless,
 PikaPods hosted Navidrome from about $1.80/month, iTunes Match $24.99/year.
 
-Later, for libraries over 500 GB: Backblaze B2 or Hetzner store at about
-$7/TB, roughly half, which would allow a 1 TB plan. Their free egress is
+Later, for cheaper large plans: Backblaze B2 or Hetzner store at about
+$7/TB, roughly half, which would let the same prices hold about twice the
+storage. Their free egress is
 pooled and limited (B2: three times what is stored), so only after measuring
 how much listeners stream compared with what they store.
 
