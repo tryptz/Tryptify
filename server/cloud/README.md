@@ -18,9 +18,10 @@ permission.
 
 ## Status
 
-**Live, taking real payments in Creem live mode since 2026-10-21**, at
-`https://cloud.tryptify.com` (the app's default), where the live webhook
-points (`/webhooks/billing`); it is still reachable at
+**Live, taking real payments through PayPal since 2026-10-24** (new
+checkouts; webhook `/webhooks/paypal`), and through Creem since 2026-10-21 for
+the subscribers who started there (webhook `/webhooks/billing`), at
+`https://cloud.tryptify.com` (the app's default); it is still reachable at
 `https://tryptify-cloud.tryptify-cloud.workers.dev` for older builds. Before
 that it ran in test mode, where accounts, billing and the trial worked end to
 end: a test-card payment for Plus
@@ -66,7 +67,9 @@ column, run once against D1 (`npx wrangler d1 execute tryptify-cloud --remote
 
 ## Payments: PayPal
 
-PayPal takes new checkouts once it is set up; Creem (below) keeps renewing,
+PayPal takes new checkouts, live since 2026-10-24: a live trial subscription
+went from checkout through the webhook to the account page, then was
+cancelled. Creem (below) keeps renewing,
 refunding and opening the portal for everyone who subscribed with it. Each
 account remembers its provider, so "Manage subscription" opens the right one.
 Unlike Creem, PayPal is **not** a merchant of record: tryptz is the seller and
@@ -107,7 +110,12 @@ What the service does with it (`src/paypal.ts`):
    testing), then `wrangler secret put PAYPAL_CLIENT_ID` and `PAYPAL_SECRET`.
 4. Deploy. New checkouts now go to PayPal. Buy a plan with a sandbox buyer
    account, see the account page show it, then repeat with the Live app and
-   remove `PAYPAL_API_BASE`.
+   remove `PAYPAL_API_BASE`. Send the live secrets with the deploy
+   (`wrangler deploy --secrets-file`), so the live ids and the live keys
+   switch at the same moment.
+
+Done 2026-10-24: live product `PROD-1MK83635XY8578339`, nine plans and the
+webhook `0C5710575V759231M` (the ids are in `wrangler.toml`).
 
 ## Payments: Creem
 

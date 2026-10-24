@@ -199,6 +199,12 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "Select all",
+                    body = "The selection bar has Select all on playlists, albums, artists, Favorites, Downloads, folders, search, Discover shelves and genre charts. It hides once every song is picked.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = CLOUD,
                     title = "Upload a whole selection",
                     body = "Select songs that are files on your phone, then the cloud button on the selection bar sends them all to Tryptify Cloud: one message when they're queued, one when they're done.",
@@ -228,6 +234,12 @@ object WhatsNew {
                     body = "In a room or a party, a song over the server's limit is turned into Opus at 320 kbps before it goes up, with its progress on the queue row.",
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LYRICS,
+                    title = "Reset on every lyrics slider",
+                    body = "In Player Visuals Studio's Lyrics tab, a slider moved off its default shows a reset button after its value. One tap puts it back.",
+                ),
+                WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = TRYPT_MANIA,
                     title = "Add a chart server",
@@ -241,6 +253,12 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
+                    section = CLOUD,
+                    title = "Subscriptions through PayPal",
+                    body = "New subscriptions are paid through PayPal, and Manage or cancel subscription opens PayPal's automatic payments. A subscription you already have renews as before.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
                     section = THEME_STORE,
                     title = "Store cards show the lyrics and player",
                     body = "A card in the Theme Store shows the lyrics and the player from a theme's picture. The theme's own page still shows it whole.",
@@ -250,6 +268,12 @@ object WhatsNew {
                     section = APP,
                     title = "Safer with your sign-ins",
                     body = "Plain http:// goes only to servers on your own network, logs hide sign-ins, and Android backups leave every sign-in out.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = APP,
+                    title = "A new first-run setup",
+                    body = "Six short steps, all optional: permissions, music folders, where your music comes from, your account, what Tryptify can do, and a summary. No folder is needed: without one, the whole phone is scanned.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
@@ -268,6 +292,24 @@ object WhatsNew {
                     section = VISUALIZER,
                     title = "The visualizer keeps drawing",
                     body = "Leaving the player and coming back left the visualizer frozen, or showing the cover alone. It carries on now, paused or playing.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LIBRARY,
+                    title = "Search bars float over their lists",
+                    body = "On the Local and My server pages, an open search bar takes the header's place and the list scrolls up under its glass, as on the Search tab.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = ACCOUNT_SYNC,
+                    title = "Saved songs keep their service",
+                    body = "Liked and playlist songs sync with the service they're from, so on a new phone or on tryptify.com a Qobuz, Deezer or Apple Music song plays from there, not TIDAL. Songs saved from this version on.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.REMOVED,
+                    section = CONNECTIONS,
+                    title = "Spotify sign-in",
+                    body = "Connecting a Spotify account, and its picker of your own playlists, are gone; a saved sign-in is deleted. Import a playlist by its link (the first 100 songs), or through Exportify for private ones, Liked Songs and longer ones.",
                 ),
             ),
         ),

@@ -130,8 +130,34 @@
 - **Listening parties on tryptify.com**: invites are tryptify.com/party/<code> links, which open in the app where it's installed; anyone else joins in the browser, listens in sync, chats, votes to skip and adds songs. The rooms server moved to Cloudflare.
 - **The web player takes its colours from the song's cover**, as the app's Dynamic Colors: the cover's colour is the accent, made readable on the page, and its main colour washes the top of the page. They fade between songs.
 - **Report a bug or help build Tryptify**, on the Contact page.
+- **The web player says why a TrypT HiFi song won't play.** When one fails to load it asks the server why: a TIDAL song not offered in your subscription's country says "TIDAL does not offer this song in your subscription's country.", in the site's eight languages, and the player moves on.
+
+#### Select all
+- **The selection bar has Select all** on playlists, albums, artists, Favorites, Downloads, folders, search, Discover shelves, genre charts and the local detail pages. It hides once every song is picked. Lists loaded a page at a time, like the Local page's Songs, don't have it.
+
+#### Reset on every lyrics slider
+- **Every slider on Player Visuals Studio's Lyrics tab**, god rays included, shows a reset button after its value once it's off its default. One tap puts it back; the sides' curvature goes back to following the bow.
 
 ### Changed
+
+#### A new first-run setup
+- **Six short steps, all optional**, in the app's own look: progress dots with Skip setup, one step at a time, and a Continue button with Back under it.
+- **Permissions**: Music and audio, and Notifications on Android 13 and later, asked right there. Once Android stops asking, the button opens the app's settings instead.
+- **Music folders**: add folders and see how many songs each holds, and add StepMania packs when you have linked ones. No folder is needed any more: without one, the whole phone is scanned.
+- **Sources**: this phone, plus switches for a music server (Navidrome, Jellyfin or any Subsonic server), Tryptify Cloud and TrypT HiFi. Any switched on opens Settings › Connections when setup ends.
+- **Account**: sign in with Google or Discord. Then **Features**, what Tryptify can do, and **Ready**, a summary of your folders, sources and account.
+- **Gone from setup**: the welcome page and the Downloads, Audio output, Streaming and tour steps. Downloads and audio output are in Settings.
+
+#### Library search bars float over their lists
+- **On Library › Local and My server, an open search bar takes the header row's place**, and the rows start under its glass and scroll up beneath it, as on the Search tab, instead of sitting below a strip that clipped the list. The Search tab's history does the same, and the debug log's and the HRTF database's filters are the same floating bar.
+
+#### Tryptify Cloud subscriptions through PayPal
+- **New subscriptions are paid through PayPal**: checkout opens PayPal, and comes back to your account page. A subscription you already have keeps renewing as before.
+- **Manage or cancel subscription** opens the place you pay: PayPal's automatic payments for a PayPal subscription.
+- **A full refund or a dispute ends the plan**; a partial refund doesn't. A free trial gives the trial only, until its last day.
+
+#### No light follows the pointer on tryptify.com
+- **The soft light that followed the mouse** over the home page, the cards, the plans and the showcase is gone; the cards still lift. The web player's and the party's glass still catch the pointer.
 
 #### No chart server built in
 - **Trypt Mania's chart server is no longer in the app**: charts, and lyrics timed by ear, use a server you add under Settings › Connections. The multiplayer rooms server stays built in.
@@ -187,7 +213,17 @@
 - **The bar is the menu's glass**: the page lightly blurred and bent at the rim, with a wider colour split there, a rim lit at two corners and a glint that follows the pointer. Its icons are cut out of the glass, as in the app's mini player, the green of shuffle or repeat when on. The volume is a glass tube like the timeline.
 - **Another device's song shows on the same glass**, with Connect's green on its phone, its progress and Play here.
 
+### Removed
+
+#### The Spotify account
+- **Spotify sign-in is gone**: the Spotify group in Settings › Connections, Browse My Playlists (the picker of your own playlists and Liked Songs) in Playlist Import, and the Spotify card in setup. Spotify only let accounts on an allowlist connect, so few could use it. A saved Spotify sign-in is deleted.
+- **Importing a Spotify playlist stays**: paste its link in Settings › Library › Playlist Import or Library's New playlist, with a preview, for the first 100 songs. Exportify, in Create playlist, still brings private playlists, Liked Songs and longer ones, and CSV import is unchanged. Settings search finds Playlist import under "spotify".
+
 ### Fixed
+- **Saved songs keep their service.** Liked and playlist songs now store and sync the service they come from (TIDAL, Qobuz, Deezer, Apple Music, your server or the phone), so on a fresh install, another phone or tryptify.com a synced Qobuz, Deezer or Apple Music song plays from that service instead of being read as TIDAL's. Songs saved from this version on carry it.
+- **The web player plays liked songs and playlists from their own service.** Every one was read as a TIDAL song, so it played the wrong song or none. It now reads the song's service, or for older rows its cover's host: Qobuz and Deezer songs stream through TrypT HiFi, Apple Music songs say they play only in the app, and a liked file from your phone plays from the browser's open folder, or says where it is.
+- **The FPS counter's first reading is current**, not left over from before it opened.
+- **A party song a browser guest couldn't fetch once** no longer stays broken for every later guest.
 - **The lyrics' letter wave moves under the CRT effect.** With the CRT over the whole app, the sung line froze mid-wave and its speed, linked or not, did nothing.
 - **The visualizer keeps drawing after you leave the player and come back.** It stayed frozen, or showed the cover alone: the new view never told the engine it was playing, and a paused engine froze before its first frame.
 - **The web player seeks TrypT HiFi's TIDAL songs** again, and the party page plays the catalogue songs TrypT HiFi assembles.
