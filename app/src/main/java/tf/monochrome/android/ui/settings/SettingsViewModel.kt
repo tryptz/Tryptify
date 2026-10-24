@@ -314,6 +314,8 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val crossfadeDuration: StateFlow<Int> = preferences.crossfadeDuration
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    val replayGain: StateFlow<tf.monochrome.android.audio.replaygain.ReplayGainSettings> = preferences.replayGainSettings
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.audio.replaygain.ReplayGainSettings())
 
     // --- Audio speed ---
     val playbackSpeed: StateFlow<Float> = preferences.playbackSpeed
@@ -580,6 +582,8 @@ class SettingsViewModel @Inject constructor(
         preferences.setMultichannelDownmixEnabled(enabled)
     } }
     fun setCrossfadeDuration(seconds: Int) { viewModelScope.launch { preferences.setCrossfadeDuration(seconds) } }
+    fun setReplayGainMode(mode: tf.monochrome.android.audio.replaygain.ReplayGainMode) { viewModelScope.launch { preferences.setReplayGainMode(mode) } }
+    fun setReplayGainPreamp(db: Float) { viewModelScope.launch { preferences.setReplayGainPreamp(db) } }
 
     // --- Audio speed actions ---
     fun setPlaybackSpeed(speed: Float) { viewModelScope.launch { preferences.setPlaybackSpeed(speed) } }

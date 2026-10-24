@@ -923,6 +923,11 @@
     <string name="settings_playback">播放</string>
     <string name="settings_streaming_quality">流媒体音质</string>
     <string name="settings_audio_processing">音频处理</string>
+    <string name="settings_replaygain">ReplayGain</string>
+    <string name="settings_replaygain_desc">根据音乐文件中的 ReplayGain 标签，统一歌曲之间的响度。响亮的歌曲会被调低；只有当文件表明还有余量时才会调高，因此不会削波。“智能”在按顺序播放专辑时使用整张专辑的电平。</string>
+    <string name="settings_replaygain_track">单曲</string>
+    <string name="settings_replaygain_album">专辑</string>
+    <string name="settings_replaygain_smart">智能</string>
     <string name="settings_output">输出</string>
     <string name="settings_playback_speed">播放速度</string>
     <string name="settings_clear_downloads">清除下载</string>

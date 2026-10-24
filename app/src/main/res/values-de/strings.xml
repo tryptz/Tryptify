@@ -961,6 +961,11 @@
     <string name="settings_playback">Wiedergabe</string>
     <string name="settings_streaming_quality">Streaming-Qualität</string>
     <string name="settings_audio_processing">Audioverarbeitung</string>
+    <string name="settings_replaygain">ReplayGain</string>
+    <string name="settings_replaygain_desc">Gleicht die Lautstärke zwischen Songs an, anhand der ReplayGain-Tags in deinen Musikdateien. Laute Songs werden leiser; lauter wird ein Song nur, wenn seine Datei Reserven ausweist, so übersteuert nichts. Smart nutzt den Pegel des Albums, solange ein Album der Reihe nach läuft.</string>
+    <string name="settings_replaygain_track">Titel</string>
+    <string name="settings_replaygain_album">Album</string>
+    <string name="settings_replaygain_smart">Smart</string>
     <string name="settings_output">Ausgabe</string>
     <string name="settings_playback_speed">Wiedergabegeschwindigkeit</string>
     <string name="settings_clear_downloads">Downloads löschen</string>

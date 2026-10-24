@@ -1761,6 +1761,8 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
                 Text("Seap Inflator")
             }
         }
+        Spacer(modifier = Modifier.height(8.dp))
+        ReplayGainSetting(viewModel)
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader(stringResource(R.string.trypt_mania_beta))
@@ -1867,6 +1869,69 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             checked = preservePitch,
             onCheckedChange = { viewModel.setPreservePitch(it) }
         )
+    }
+}
+
+// ReplayGain: the mode, and the pre-amp once a mode is on. Chips, laid out as
+// the DSP block size below is.
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun ReplayGainSetting(viewModel: SettingsViewModel) {
+    val settings by viewModel.replayGain.collectAsStateWithLifecycle()
+    Text(
+        text = stringResource(R.string.settings_replaygain),
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.settingsAnchor(stringResource(R.string.settings_replaygain)),
+    )
+    Text(
+        text = stringResource(R.string.settings_replaygain_desc),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    androidx.compose.foundation.layout.FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        tf.monochrome.android.audio.replaygain.ReplayGainMode.entries.forEach { mode ->
+            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                label = stringResource(
+                    when (mode) {
+                        tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF -> R.string.state_off
+                        tf.monochrome.android.audio.replaygain.ReplayGainMode.TRACK -> R.string.settings_replaygain_track
+                        tf.monochrome.android.audio.replaygain.ReplayGainMode.ALBUM -> R.string.settings_replaygain_album
+                        tf.monochrome.android.audio.replaygain.ReplayGainMode.SMART -> R.string.settings_replaygain_smart
+                    },
+                ),
+                selected = mode == settings.mode,
+                accent = MaterialTheme.colorScheme.primary,
+                onClick = { viewModel.setReplayGainMode(mode) },
+            )
+        }
+    }
+    if (settings.mode != tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF) {
+        Text(
+            text = stringResource(R.string.eq_preamp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        androidx.compose.foundation.layout.FlowRow(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            tf.monochrome.android.audio.replaygain.ReplayGain.PREAMP_STEPS.forEach { db ->
+                tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                    // Numbers and a unit, the same in every language.
+                    label = if (db > 0f) "+${db.toInt()} dB" else "${db.toInt()} dB",
+                    selected = db == settings.preampDb,
+                    accent = MaterialTheme.colorScheme.primary,
+                    onClick = { viewModel.setReplayGainPreamp(db) },
+                )
+            }
+        }
     }
 }
 

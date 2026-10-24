@@ -962,6 +962,11 @@
     <string name="settings_playback">Playback</string>
     <string name="settings_streaming_quality">Streaming Quality</string>
     <string name="settings_audio_processing">Audio Processing</string>
+    <string name="settings_replaygain">ReplayGain</string>
+    <string name="settings_replaygain_desc">Evens out loudness between songs, from the ReplayGain tags in your music files. Loud songs are turned down; a song is only turned up when its file shows there is room, so nothing clips. Smart uses the album’s level while an album plays in order.</string>
+    <string name="settings_replaygain_track">Track</string>
+    <string name="settings_replaygain_album">Album</string>
+    <string name="settings_replaygain_smart">Smart</string>
     <string name="settings_output">Output</string>
     <string name="settings_playback_speed">Playback Speed</string>
     <string name="settings_clear_downloads">Clear Downloads</string>

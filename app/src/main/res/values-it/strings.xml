@@ -999,6 +999,11 @@
     <string name="settings_playback">Riproduzione</string>
     <string name="settings_streaming_quality">Qualità di streaming</string>
     <string name="settings_audio_processing">Elaborazione audio</string>
+    <string name="settings_replaygain">ReplayGain</string>
+    <string name="settings_replaygain_desc">Uniforma il volume tra i brani grazie ai tag ReplayGain dei tuoi file. I brani forti vengono abbassati; un brano viene alzato solo se il suo file indica che c’è margine, quindi nulla distorce. Intelligente usa il livello dell’album mentre un album suona in ordine.</string>
+    <string name="settings_replaygain_track">Brano</string>
+    <string name="settings_replaygain_album">Album</string>
+    <string name="settings_replaygain_smart">Intelligente</string>
     <string name="settings_output">Uscita</string>
     <string name="settings_playback_speed">Velocità di riproduzione</string>
     <string name="settings_clear_downloads">Cancella download</string>

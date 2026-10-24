@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+### Added
+
+#### Your own music server, further
+- **Your server counts your plays.** It hears "now playing" when a song starts, and the play once you've heard enough of it (Last.fm's rule), so its play counts, Recently played and any Last.fm or ListenBrainz it passes plays on to see what you played here.
+- **Liking a song stars it on your server**, and unliking unstars it, so your server's other apps agree.
+- **Playlists and Liked songs in My server**: your server's playlists (open one to play or shuffle it) and everything starred on it.
+- **Your server's lyrics come first** for its songs: timed when it has them timed (Navidrome and other OpenSubsonic servers), plain otherwise.
+- **Cellular Streaming** in Settings › Connections › Music server: keep the original file, or ask your server for an MP3 of at most 320, 192 or 128 kbps on mobile data. Wi-Fi always gets the original.
+
+#### Lyrics from your own files
+- **A song's own lyrics come first**: the `.lrc` next to the file (what other players and Tryptify's own downloads write) and lyrics stored in the file's tags, for library files and downloads. Word-timed ones are used straight away; others still let a word-timed match from the internet replace them. Offline, they're what shows.
+
+#### ReplayGain, for real this time
+- **Settings › Audio › Audio processing › ReplayGain** evens out loudness between songs from the ReplayGain (or R128) tags in your files: Track, Album, or Smart, which uses the album's level while an album plays in order, plus a pre-amp. Off by default, so nothing sounds different until you choose.
+- **It never clips.** Loud songs are turned down; a song is turned up only when its file shows there's room. It works on every output, the USB DAC included, and with it off (or at 0 dB) the sound passes through untouched, so bit-perfect stays bit-perfect.
+
+### Fixed
+- **LRC lyrics that read wrong now read right**, from LRCLib too: a file starting with a byte order mark keeps its first line, an end stamp (`[00:15.00]` after the words) is a time rather than part of the lyric, a file stamped all `[00:00.00]` shows as plain lyrics instead of every line lighting up at once, and LRCLib's lyrics with `[mm:ss]`, two stamps on a line, `[offset:]` or word timing read as they do everywhere else.
+
 ## [1.9.5]
 
 ### Added
@@ -62,6 +81,7 @@
 - **Your password isn't stored.** Tryptify keeps a sign-in token. Only a server that refuses tokens (an old one, or an LDAP user on Navidrome) gets the password itself, and Settings says so. Neither is synced to your account, and neither leaves the phone: covers reach Discord, party guests, the widget and the lock screen as pictures, never as links.
 - **How to set up**, in the same place: which server to run, which address to type at home, on the phone itself or away, and what to check when it won't connect.
 - Songs from your server can't be downloaded or shared as files from Tryptify; they're already yours, on your server.
+
 
 #### Trypt Mania in your stats
 - **A Trypt Mania card on Account › Listening stats**: whole songs played and on how many charts, your best grade, full combos, and the accuracy of your last ten songs with an arrow for better or worse than the ten before. It counts all time, so it shows even when the range you picked has no plays. Its arrow opens Trypt Mania.

@@ -104,7 +104,8 @@
 ```mermaid
 flowchart LR
     S["Local · TIDAL · Qobuz · Deezer · Subsonic · Cloud"] --> X["ExoPlayer"]
-    X --> EQ["AutoEQ"]
+    X --> RG["ReplayGain"]
+    RG --> EQ["AutoEQ"]
     EQ --> M["DSP console"]
     M --> O{"Output"}
     O -->|default| A["Android audio"]

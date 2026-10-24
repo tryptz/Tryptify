@@ -961,6 +961,11 @@
     <string name="settings_playback">Çalma</string>
     <string name="settings_streaming_quality">Akış kalitesi</string>
     <string name="settings_audio_processing">Ses işleme</string>
+    <string name="settings_replaygain">ReplayGain</string>
+    <string name="settings_replaygain_desc">Müzik dosyalarınızdaki ReplayGain etiketleriyle şarkılar arasındaki ses düzeyini eşitler. Yüksek şarkılar kısılır; bir şarkı yalnızca dosyası yer olduğunu gösterdiğinde açılır, böylece hiçbir şey kırpılmaz. Akıllı, bir albüm sırayla çalarken albümün düzeyini kullanır.</string>
+    <string name="settings_replaygain_track">Parça</string>
+    <string name="settings_replaygain_album">Albüm</string>
+    <string name="settings_replaygain_smart">Akıllı</string>
     <string name="settings_output">Çıkış</string>
     <string name="settings_playback_speed">Çalma hızı</string>
     <string name="settings_clear_downloads">İndirilenleri temizle</string>
