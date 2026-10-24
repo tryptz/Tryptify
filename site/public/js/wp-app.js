@@ -125,7 +125,11 @@
       if (t.src === "cloud") Cloud.cover(t).then(() => { if (my === starting) { renderBar(); renderNow(); session(); } }).catch(() => {});
       const url = await S.url(t);
       if (my !== starting) return;
-      await Eng.load(url, t.key, autoplay, startAt);
+      try {
+        await Eng.load(url, t.key, autoplay, startAt);
+      } catch (e) {
+        throw await loadError(url, e);
+      }
       failures = 0;
     } catch (e) {
       if (my === starting) fail(e);
@@ -134,6 +138,29 @@
     renderAll();
     session();
     preloadNext();
+  }
+  /**
+   * What the server said when a song would not load. An audio element only
+   * reports "no supported source", so the server is asked once more for the
+   * first byte, and its answer read: a TrypT HiFi server says why in JSON (a
+   * track TIDAL does not license in the subscription's country is a 403).
+   */
+  async function loadError(url, e) {
+    if (!/^https?:/.test(url) || (e && e.name === "NotAllowedError")) return e;
+    const stop = new AbortController();
+    const timer = setTimeout(() => stop.abort(), 8000);
+    try {
+      const r = await fetch(url, { headers: { Range: "bytes=0-0" }, signal: stop.signal });
+      if (r.ok) return e;
+      const body = await r.json().catch(() => null);
+      const said = body && typeof body.error === "string" ? body.error : "";
+      if (r.status === 403 && /tidal/i.test(said)) return new Error(T("TIDAL does not offer this song in your subscription's country."));
+      return said ? new Error(said) : e;
+    } catch (_) {
+      return e;
+    } finally {
+      clearTimeout(timer);
+    }
   }
   function fail(e) {
     if (!current) return;

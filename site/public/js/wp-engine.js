@@ -130,7 +130,8 @@
       try { await el().play(); } catch (e) { if (e.name !== "AbortError") throw e; }
     },
     pause() { el().pause(); },
-    toggle() { return el().paused ? this.play() : this.pause(); },
+    // A promise either way: the play/pause button chains .catch on it.
+    toggle() { return el().paused ? this.play() : Promise.resolve(this.pause()); },
     seek(t) { const a = el(); if (Number.isFinite(a.duration)) a.currentTime = Math.max(0, Math.min(a.duration, t)); },
     /**
      * Whether [t] seconds can be reached in the playing file as it is. A song
