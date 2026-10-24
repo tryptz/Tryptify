@@ -1135,7 +1135,7 @@ once a server is connected.
 
 **It starts folded under its title.** "Tryptify Cloud", with a ▾ beside it,
 is the only line until it is tapped; the intro, the plans or the storage, and
-the uploads open under it, and stay open while the screen lives. Three plan
+the uploads open under it, and stay open while the screen lives. The plan
 cards made Connections long for everyone who came for something else. Folded,
 it does not ask the server for the account; opening it, and coming back from
 the payment page with it open, does.
@@ -1156,6 +1156,13 @@ than doing it quietly.
 app. The money rules live in `server/cloud/src/rules.ts`, and a price typed
 into the app would drift from what the checkout charges. Sizes are decimal
 gigabytes on both sides (`Formatter.formatShortFileSize`, `GB = 1e9`).
+A plan of whole terabytes is shown in TB (`cloud_plan_storage_tb`, 1 TB =
+1,000 GB), never as "10000 GB".
+
+**The trial offer says "up to" its size** (`cloud_trial_offer`, `/plans`
+`trial.storageGb`, 20 GB): every monthly plan has the trial, but a plan
+smaller than that gives its own size instead (Mini's 10 GB, `trialStorageGb`
+per plan), so the line must not promise 20 GB on every card.
 
 **Upload is a song-menu item for files on the phone only** (`LocalUploadToCloud`,
 offered when the menu knows a `filePath`, like Find album art). Uploads run one
