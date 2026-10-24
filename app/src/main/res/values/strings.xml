@@ -3075,16 +3075,22 @@
         <item quantity="one">Uploaded %1$d song to Tryptify Cloud</item>
         <item quantity="other">Uploaded %1$d songs to Tryptify Cloud</item>
     </plurals>
-    <string name="cloud_trial_offer">Try any plan free for %1$d days with %2$d GB. A card is needed; cancel before the trial ends and you pay nothing.</string>
+    <string name="cloud_trial_offer">Try %3$s free for %1$d days with %2$d GB. A card is needed; cancel before the trial ends and you pay nothing.</string>
+    <string name="cloud_intro_offer">Every other plan is half price for your first month.</string>
     <string name="cloud_plan_terms">Payment opens in your browser. If a plan ends, your music stays playable for %1$d days before it is deleted.</string>
     <string name="cloud_plan_storage">%1$s · %2$d GB</string>
+    <string name="cloud_plan_storage_tb">%1$s · %2$d TB</string>
     <string name="cloud_plan_prices">%1$s a month or %2$s a year</string>
+    <string name="cloud_plan_intro_price">First month %1$s, then %2$s a month, or %3$s a year</string>
     <string name="cloud_start_trial">Start free trial</string>
     <string name="cloud_monthly">Monthly</string>
     <string name="cloud_yearly">Yearly</string>
     <string name="cloud_plan_lite">Lite</string>
     <string name="cloud_plan_plus">Plus</string>
     <string name="cloud_plan_max">Max</string>
+    <string name="cloud_plan_pro">Pro</string>
+    <string name="cloud_plan_studio">Studio</string>
+    <string name="cloud_plan_vault">Vault</string>
     <string name="cloud_error_no_plan">You need a plan for that.</string>
     <string name="cloud_error_read_only">Your plan has ended, so nothing new can be uploaded.</string>
     <string name="cloud_error_over_quota">Not enough space left in your plan.</string>

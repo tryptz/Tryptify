@@ -70,23 +70,27 @@ class CloudTest {
     @Test
     fun `the plans and the account decode from what the server sends`() {
         val plans = json.decodeFromString<CloudPlans>(
-            """{"readOnlyDays":7,"trial":{"days":7,"storageGb":20,"periods":["monthly"]},
-               "plans":[{"id":"lite","storageGb":100,"monthly":3.99,"yearly":39.99},
-                        {"id":"plus","storageGb":250,"monthly":9.99,"yearly":99.99}]}""",
+            """{"readOnlyDays":7,"trial":{"days":7,"storageGb":100,"periods":["monthly"],"plan":"lite"},
+               "plans":[{"id":"lite","storageGb":100,"monthly":3.99,"yearly":39.99,"introMonthly":null},
+                        {"id":"plus","storageGb":250,"monthly":9.99,"yearly":99.99,"introMonthly":4.99}]}""",
         )
         assertEquals(7, plans.readOnlyDays)
-        assertEquals(20, plans.trial.storageGb)
+        assertEquals(100, plans.trial.storageGb)
+        assertEquals("lite", plans.trial.plan)
         assertEquals(listOf("lite", "plus"), plans.plans.map { it.id })
         assertEquals(3.99, plans.plans[0].monthly, 0.0)
+        assertEquals(null, plans.plans[0].introMonthly)
+        assertEquals(4.99, plans.plans[1].introMonthly!!, 0.0)
 
         val account = json.decodeFromString<CloudAccount>(
             """{"plan":"lite","access":"read_only","paidUntil":"2026-10-01T00:00:00.000Z",
                "deleteAfter":"2026-10-08T00:00:00.000Z","usedBytes":12,"quotaBytes":100000000000,
-               "trial":false,"trialAvailable":false}""",
+               "trial":false,"trialAvailable":false,"introAvailable":true}""",
         )
         assertTrue(account.canPlay)
         assertFalse(account.canUpload)
         assertEquals(100_000_000_000L, account.quotaBytes)
+        assertTrue(account.introAvailable)
 
         val none = json.decodeFromString<CloudAccount>("""{"plan":null,"access":"none","paidUntil":null,"trialAvailable":true}""")
         assertFalse(none.canPlay)

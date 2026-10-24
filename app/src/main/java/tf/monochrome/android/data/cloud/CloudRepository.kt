@@ -77,7 +77,7 @@ class CloudRepository @Inject constructor(
         json.decodeFromString<CloudLibrary>(send(HttpMethod.Get, "library").bodyAsText())
     }
 
-    /** The payment page for [plan] ("lite", "plus", "max") and [period] ("monthly", "yearly"). */
+    /** The payment page for [plan] ("lite", "plus", "max", "pro", "studio", "vault") and [period] ("monthly", "yearly"). */
     suspend fun checkoutUrl(plan: String, period: String, trial: Boolean): Result<String> = call {
         val body = json.encodeToString(CheckoutRequest(plan, period, trial))
         json.decodeFromString<CheckoutUrl>(send(HttpMethod.Post, "checkout", body = body).bodyAsText()).url

@@ -3073,16 +3073,22 @@
         <item quantity="one">%1$d şarkı Tryptify Cloud’a yüklendi</item>
         <item quantity="other">%1$d şarkı Tryptify Cloud’a yüklendi</item>
     </plurals>
-    <string name="cloud_trial_offer">Herhangi bir planı %1$d gün boyunca %2$d GB ile ücretsiz dene. Kart gerekir; deneme bitmeden iptal edersen hiçbir şey ödemezsin.</string>
+    <string name="cloud_trial_offer">%3$s planını %1$d gün boyunca %2$d GB ile ücretsiz dene. Kart gerekir; deneme bitmeden iptal edersen hiçbir şey ödemezsin.</string>
+    <string name="cloud_intro_offer">Diğer tüm planlar ilk ay yarı fiyatına.</string>
     <string name="cloud_plan_terms">Ödeme tarayıcında açılır. Bir plan sona ererse müziğin silinmeden önce %1$d gün daha dinlenebilir.</string>
     <string name="cloud_plan_storage">%1$s · %2$d GB</string>
+    <string name="cloud_plan_storage_tb">%1$s · %2$d TB</string>
     <string name="cloud_plan_prices">Aylık %1$s veya yıllık %2$s</string>
+    <string name="cloud_plan_intro_price">İlk ay %1$s, sonra aylık %2$s veya yıllık %3$s</string>
     <string name="cloud_start_trial">Ücretsiz denemeyi başlat</string>
     <string name="cloud_monthly">Aylık</string>
     <string name="cloud_yearly">Yıllık</string>
     <string name="cloud_plan_lite">Lite</string>
     <string name="cloud_plan_plus">Plus</string>
     <string name="cloud_plan_max">Max</string>
+    <string name="cloud_plan_pro">Pro</string>
+    <string name="cloud_plan_studio">Studio</string>
+    <string name="cloud_plan_vault">Vault</string>
     <string name="cloud_error_no_plan">Bunun için bir plan gerekiyor.</string>
     <string name="cloud_error_read_only">Planın sona erdi, yeni bir şey yüklenemez.</string>
     <string name="cloud_error_over_quota">Planında yeterli alan kalmadı.</string>

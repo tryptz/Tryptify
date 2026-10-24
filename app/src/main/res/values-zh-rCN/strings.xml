@@ -2997,16 +2997,22 @@
     <plurals name="cloud_uploaded_n">
         <item quantity="other">已上传 %1$d 首歌曲到 Tryptify Cloud</item>
     </plurals>
-    <string name="cloud_trial_offer">任选套餐免费试用 %1$d 天，含 %2$d GB 空间。需要绑定银行卡；在试用结束前取消即不收费。</string>
+    <string name="cloud_trial_offer">免费试用 %3$s %1$d 天，含 %2$d GB 空间。需要绑定银行卡；在试用结束前取消即不收费。</string>
+    <string name="cloud_intro_offer">其他所有套餐首月半价。</string>
     <string name="cloud_plan_terms">付款将在浏览器中打开。套餐结束后，你的音乐在删除前仍可播放 %1$d 天。</string>
     <string name="cloud_plan_storage">%1$s · %2$d GB</string>
+    <string name="cloud_plan_storage_tb">%1$s · %2$d TB</string>
     <string name="cloud_plan_prices">每月 %1$s 或每年 %2$s</string>
+    <string name="cloud_plan_intro_price">首月 %1$s，之后每月 %2$s，或每年 %3$s</string>
     <string name="cloud_start_trial">开始免费试用</string>
     <string name="cloud_monthly">按月</string>
     <string name="cloud_yearly">按年</string>
     <string name="cloud_plan_lite">Lite</string>
     <string name="cloud_plan_plus">Plus</string>
     <string name="cloud_plan_max">Max</string>
+    <string name="cloud_plan_pro">Pro</string>
+    <string name="cloud_plan_studio">Studio</string>
+    <string name="cloud_plan_vault">Vault</string>
     <string name="cloud_error_no_plan">需要套餐才能这样做。</string>
     <string name="cloud_error_read_only">你的套餐已结束，无法上传新内容。</string>
     <string name="cloud_error_over_quota">套餐空间不足。</string>

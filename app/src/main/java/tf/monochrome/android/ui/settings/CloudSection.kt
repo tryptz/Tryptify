@@ -149,7 +149,7 @@ private fun Ready(viewModel: CloudSettingsViewModel, account: CloudAccount, plan
             }
         }
     } else {
-        PlanPicker(plans, account.trialAvailable, busy) { plan, period, trial -> viewModel.checkout(plan, period, trial) }
+        PlanPicker(plans, account.trialAvailable, account.introAvailable, busy) { plan, period, trial -> viewModel.checkout(plan, period, trial) }
     }
     if (busy) {
         Spacer(Modifier.height(6.dp))
@@ -259,11 +259,16 @@ private fun Uploads(viewModel: CloudSettingsViewModel) {
     }
 }
 
-/** The three plans, monthly or yearly, and the trial when the account may still take it. */
+/**
+ * The plans, monthly or yearly: the trial on its one plan when the account may
+ * still take it, and the half-price first month on the others for someone who
+ * has never paid.
+ */
 @Composable
 private fun PlanPicker(
     plans: CloudPlans?,
     trialAvailable: Boolean,
+    introAvailable: Boolean,
     busy: Boolean,
     onPick: (plan: String, period: String, trial: Boolean) -> Unit,
 ) {
@@ -271,17 +276,28 @@ private fun PlanPicker(
         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
         return
     }
-    if (trialAvailable) {
-        Note(stringResource(R.string.cloud_trial_offer, plans.trial.days, plans.trial.storageGb))
+    if (trialAvailable && plans.plans.any { it.id == plans.trial.plan }) {
+        Note(stringResource(R.string.cloud_trial_offer, plans.trial.days, plans.trial.storageGb, planName(plans.trial.plan)))
+    }
+    if (introAvailable && plans.plans.any { it.introMonthly != null }) {
+        Note(stringResource(R.string.cloud_intro_offer))
     }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        plans.plans.forEach { plan -> PlanCard(plan, trialAvailable, busy, onPick) }
+        plans.plans.forEach { plan ->
+            PlanCard(
+                plan = plan,
+                trialAvailable = trialAvailable && plan.id == plans.trial.plan,
+                intro = plan.introMonthly?.takeIf { introAvailable },
+                busy = busy,
+                onPick = onPick,
+            )
+        }
     }
     Note(stringResource(R.string.cloud_plan_terms, plans.readOnlyDays))
 }
 
 @Composable
-private fun PlanCard(plan: CloudPlan, trialAvailable: Boolean, busy: Boolean, onPick: (String, String, Boolean) -> Unit) {
+private fun PlanCard(plan: CloudPlan, trialAvailable: Boolean, intro: Double?, busy: Boolean, onPick: (String, String, Boolean) -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().materialSurface(shape = RoundedCornerShape(8.dp)),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
@@ -289,11 +305,19 @@ private fun PlanCard(plan: CloudPlan, trialAvailable: Boolean, busy: Boolean, on
     ) {
         Column(Modifier.fillMaxWidth().padding(12.dp)) {
             Text(
-                stringResource(R.string.cloud_plan_storage, planName(plan.id), plan.storageGb),
+                if (plan.storageGb >= 1_000 && plan.storageGb % 1_000 == 0) {
+                    stringResource(R.string.cloud_plan_storage_tb, planName(plan.id), plan.storageGb / 1_000)
+                } else {
+                    stringResource(R.string.cloud_plan_storage, planName(plan.id), plan.storageGb)
+                },
                 style = MaterialTheme.typography.titleSmall,
             )
             Text(
-                stringResource(R.string.cloud_plan_prices, usd(plan.monthly), usd(plan.yearly)),
+                if (intro != null) {
+                    stringResource(R.string.cloud_plan_intro_price, usd(intro), usd(plan.monthly), usd(plan.yearly))
+                } else {
+                    stringResource(R.string.cloud_plan_prices, usd(plan.monthly), usd(plan.yearly))
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -330,6 +354,9 @@ private fun planName(id: String?): String = when (id) {
     "lite" -> stringResource(R.string.cloud_plan_lite)
     "plus" -> stringResource(R.string.cloud_plan_plus)
     "max" -> stringResource(R.string.cloud_plan_max)
+    "pro" -> stringResource(R.string.cloud_plan_pro)
+    "studio" -> stringResource(R.string.cloud_plan_studio)
+    "vault" -> stringResource(R.string.cloud_plan_vault)
     else -> id.orEmpty()
 }
 

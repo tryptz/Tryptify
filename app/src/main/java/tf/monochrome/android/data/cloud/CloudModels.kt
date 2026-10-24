@@ -14,10 +14,13 @@ data class CloudPlan(
     val storageGb: Int,
     val monthly: Double,
     val yearly: Double,
+    /** The half-price first month for someone who has never paid; null when the plan has none. */
+    val introMonthly: Double? = null,
 )
 
+/** The free trial, on one plan only ([plan]). */
 @Serializable
-data class CloudTrial(val days: Int = 7, val storageGb: Int = 20)
+data class CloudTrial(val days: Int = 7, val storageGb: Int = 100, val plan: String = "lite")
 
 @Serializable
 data class CloudPlans(
@@ -37,6 +40,8 @@ data class CloudAccount(
     val quotaBytes: Long = 0,
     val trial: Boolean = false,
     val trialAvailable: Boolean = false,
+    /** Whether a monthly checkout now gets the half-price first month. */
+    val introAvailable: Boolean = false,
     /** Storage given, not sold (the server's cloud_grants): no quota, no end date, no subscription. */
     val unlimited: Boolean = false,
 ) {

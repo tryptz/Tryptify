@@ -3073,16 +3073,22 @@
         <item quantity="one">%1$d Song in Tryptify Cloud hochgeladen</item>
         <item quantity="other">%1$d Songs in Tryptify Cloud hochgeladen</item>
     </plurals>
-    <string name="cloud_trial_offer">Teste jeden Tarif %1$d Tage lang kostenlos mit %2$d GB. Eine Karte ist nötig; kündigst du vor Ende des Tests, zahlst du nichts.</string>
+    <string name="cloud_trial_offer">Teste %3$s %1$d Tage lang kostenlos mit %2$d GB. Eine Karte ist nötig; kündigst du vor Ende des Tests, zahlst du nichts.</string>
+    <string name="cloud_intro_offer">Alle anderen Tarife kosten im ersten Monat die Hälfte.</string>
     <string name="cloud_plan_terms">Die Zahlung öffnet sich im Browser. Endet ein Tarif, bleibt deine Musik noch %1$d Tage abspielbar, bevor sie gelöscht wird.</string>
     <string name="cloud_plan_storage">%1$s · %2$d GB</string>
+    <string name="cloud_plan_storage_tb">%1$s · %2$d TB</string>
     <string name="cloud_plan_prices">%1$s im Monat oder %2$s im Jahr</string>
+    <string name="cloud_plan_intro_price">Erster Monat %1$s, danach %2$s im Monat oder %3$s im Jahr</string>
     <string name="cloud_start_trial">Kostenlos testen</string>
     <string name="cloud_monthly">Monatlich</string>
     <string name="cloud_yearly">Jährlich</string>
     <string name="cloud_plan_lite">Lite</string>
     <string name="cloud_plan_plus">Plus</string>
     <string name="cloud_plan_max">Max</string>
+    <string name="cloud_plan_pro">Pro</string>
+    <string name="cloud_plan_studio">Studio</string>
+    <string name="cloud_plan_vault">Vault</string>
     <string name="cloud_error_no_plan">Dafür brauchst du einen Tarif.</string>
     <string name="cloud_error_read_only">Dein Tarif ist abgelaufen, daher kann nichts Neues hochgeladen werden.</string>
     <string name="cloud_error_over_quota">In deinem Tarif ist nicht genug Platz frei.</string>
