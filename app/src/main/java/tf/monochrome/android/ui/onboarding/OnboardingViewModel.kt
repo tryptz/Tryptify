@@ -8,11 +8,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import tf.monochrome.android.R
@@ -21,7 +19,6 @@ import tf.monochrome.android.data.auth.UserProfile
 import tf.monochrome.android.data.local.scanner.MediaStoreSource
 import tf.monochrome.android.data.local.scanner.ScanWorker
 import tf.monochrome.android.data.preferences.PreferencesManager
-import tf.monochrome.android.domain.model.PlayerGlassSettings
 import tf.monochrome.android.glyph.pack.GlyphPackLibrary
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.settings.settingsTabIndex
@@ -92,13 +89,6 @@ class OnboardingViewModel @Inject constructor(
 
     val userProfile: StateFlow<UserProfile?> = authManager.userProfile
     val isSigningIn: StateFlow<Boolean> = authManager.isSigningIn
-
-    /**
-     * The listener's UI panel glass. Setup lives outside the nav host, which
-     * is what publishes it as LocalMiniPlayerGlass everywhere else.
-     */
-    val glass: StateFlow<PlayerGlassSettings> = preferences.miniPlayerGlass
-        .stateIn(viewModelScope, SharingStarted.Eagerly, PlayerGlassSettings.INITIAL)
 
     init {
         // Re-running setup from Settings: show folders that are already
