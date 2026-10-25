@@ -128,10 +128,6 @@ Contributors and coding agents start at [`AGENTS.md`](AGENTS.md). What changed: 
 
 - **The app, and everything else in this repository unless said otherwise:**
   [GPL-3.0-or-later](LICENSE).
-- **The Tryptify Cloud server** ([`server/cloud/`](server/cloud/)):
-  [PolyForm Noncommercial 1.0.0](server/cloud/LICENSE.md). You may read,
-  run and change it for noncommercial purposes; running it as a paid service
-  needs the author's permission.
 - **Third-party parts keep their own licences:** projectM (LGPL-2.1), libusb
   (LGPL-2.1), the Cavern port (its own terms, `app/src/main/cpp/atmos/cavern/NOTICE.md`),
   StepMania art (MIT, next to the art), fonts (OFL-1.1,
