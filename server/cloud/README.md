@@ -296,7 +296,25 @@ that does not fit is refused (`mayUpload`).
 | `GET /play/:id?u&e&s` | The song by that link, whole or a Range. The HMAC (`PLAY_KEY`) names the person, the song and the expiry, so none can be changed (403 `bad_link`, `link_expired`). CORS for tryptify.com only, so the player can draw its spectrum; the signature, not the origin, is the gate. Without `PLAY_KEY` it answers 503 |
 | `POST /v1/subsonic-keys` | `{label?}` → `{server, username, password}`: one device's Subsonic sign-in (at most 10 kept) |
 | `DELETE /v1/subsonic-keys` | Signs every device out of the Subsonic API |
-| `/rest/<method>.view` | The Subsonic API (`src/subsonic.ts`): ping, getLicense, getMusicFolders, getAlbumList2, getAlbum, getArtists, getArtist, getSong, search3, getRandomSongs, stream and download (with Range), getCoverArt |
+| `/rest/<method>.view` | The Subsonic API (`src/subsonic.ts`): ping, getLicense, getMusicFolders, getAlbumList2, getAlbum, getArtists, getArtist, getSong, search3, getRandomSongs, stream and download (with Range), getCoverArt; and what a listener does with the library: star, unstar, getStarred2 (getStarred), scrobble, getPlaylists, getPlaylist, createPlaylist, updatePlaylist, deletePlaylist. getAlbumList2's `recent`, `frequent` and `starred` come from plays and stars |
+
+### Stars, plays and playlists
+
+What any Subsonic client does with the library, kept per person in D1
+(`cloud_stars`, `cloud_plays`, `cloud_playlists`, `cloud_playlist_songs`):
+
+- **Stars** are songs only; an `albumId` or `artistId` is accepted and stars
+  nothing. Tryptify stars a song when it is liked.
+- **Plays**: `scrobble` with `submission=true` (the default) counts a play at
+  its `time` (never later than now); "now playing" (`false`) is not kept.
+  Recently played and Most played list only albums with a play.
+- **Playlists**: at most 1,000 a person and 5,000 songs each, names up to 200
+  characters. Only the person's own songs go in; any other id is skipped.
+- **A deleted song** takes its star, plays and places in playlists with it,
+  and the daily cleanup's wipe takes all of a person's.
+
+Not yet live (2026-10-25): the tables need `schema.sql` run once against D1
+before the deploy that serves them (see Deploying a change).
 
 ### Storage rules
 

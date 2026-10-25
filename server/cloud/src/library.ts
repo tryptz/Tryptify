@@ -320,6 +320,12 @@ export async function deleteSong(db: Db, bucket: Bucket, userId: string, songId:
   await db.batch([
     db.prepare("delete from cloud_songs where id = ?1 and user_id = ?2").bind(songId, userId),
     db.prepare("update cloud_accounts set used_bytes = max(0, used_bytes - ?2) where user_id = ?1").bind(userId, song.size + song.cover_size),
+    // Its star, its plays, and its places in playlists go with it.
+    db.prepare("delete from cloud_stars where user_id = ?1 and song_id = ?2").bind(userId, songId),
+    db.prepare("delete from cloud_plays where user_id = ?1 and song_id = ?2").bind(userId, songId),
+    db.prepare(
+      "delete from cloud_playlist_songs where song_id = ?2 and playlist_id in (select id from cloud_playlists where user_id = ?1)",
+    ).bind(userId, songId),
   ]);
 }
 
@@ -368,6 +374,10 @@ export async function wipeLibrary(db: Db, bucket: Bucket, userId: string): Promi
     db.prepare("delete from cloud_songs where user_id = ?1").bind(userId),
     db.prepare("delete from cloud_uploads where user_id = ?1").bind(userId),
     db.prepare("update cloud_accounts set used_bytes = 0 where user_id = ?1").bind(userId),
+    db.prepare("delete from cloud_stars where user_id = ?1").bind(userId),
+    db.prepare("delete from cloud_plays where user_id = ?1").bind(userId),
+    db.prepare("delete from cloud_playlist_songs where playlist_id in (select id from cloud_playlists where user_id = ?1)").bind(userId),
+    db.prepare("delete from cloud_playlists where user_id = ?1").bind(userId),
   ]);
   return removed;
 }

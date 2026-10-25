@@ -92,3 +92,42 @@ create table if not exists cloud_subsonic_keys (
   created_at  text    not null
 );
 create index if not exists cloud_subsonic_keys_user on cloud_subsonic_keys (user_id);
+
+-- ── What a listener does with the library (any Subsonic client) ─────────────
+
+-- Songs they starred (a like in Tryptify stars the song here).
+create table if not exists cloud_stars (
+  user_id     text not null,
+  song_id     text not null,
+  starred_at  text not null,
+  primary key (user_id, song_id)
+);
+
+-- How often and when each song was played: scrobble with submission=true.
+-- Drives the Recently played and Most played album lists.
+create table if not exists cloud_plays (
+  user_id      text    not null,
+  song_id      text    not null,
+  play_count   integer not null default 0,
+  last_played  text    not null,
+  primary key (user_id, song_id)
+);
+
+-- Playlists, and their songs in order. A position may skip numbers (a song
+-- deleted from the library leaves its gap); the order is what counts.
+create table if not exists cloud_playlists (
+  id          text primary key,                -- "pl-…"
+  user_id     text not null,
+  name        text not null,
+  comment     text,
+  created_at  text not null,
+  changed_at  text not null
+);
+create index if not exists cloud_playlists_user on cloud_playlists (user_id);
+create table if not exists cloud_playlist_songs (
+  playlist_id  text    not null,
+  position     integer not null,
+  song_id      text    not null,
+  primary key (playlist_id, position)
+);
+create index if not exists cloud_playlist_songs_song on cloud_playlist_songs (song_id);

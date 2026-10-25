@@ -848,6 +848,122 @@ test("nobody else's songs: another person cannot stream or see them", async () =
   assert.equal((await restJson("search3", { query: "", songCount: "10" }, other)).searchResult3.song.length, 0);
 });
 
+/** [method] with repeated parameters (songId=…&songId=…), as clients send lists. */
+async function restList(method: string, pairs: [string, string][], login = subsonicLogin) {
+  const salt = "c19b2d";
+  const t = Array.from(md5(new TextEncoder().encode(login.password + salt)), (x) => x.toString(16).padStart(2, "0")).join("");
+  const q = new URLSearchParams([["u", login.username], ["t", t], ["s", salt], ["v", "1.13.0"], ["c", "Tryptify"], ["f", "json"], ...pairs]);
+  return (await (await fetchCloud(new Request(`http://cloud.test/rest/${method}.view?${q}`))).json())["subsonic-response"];
+}
+
+const D = "eeeeeeee-5555-4555-8555-eeeeeeeeeeee";
+let otherLogin: { server: string; username: string; password: string };
+async function otherListener() {
+  if (!otherLogin) {
+    subscribe(D, "lite");
+    otherLogin = (await call("POST", "/v1/subsonic-keys", await token(D), {})).body;
+  }
+  return otherLogin;
+}
+const songIds = async () => (await restJson("search3", { query: "", songCount: "10" })).searchResult3.song.map((s: any) => s.id).sort();
+
+test("a star is the listener's own: starred, listed, unstarred, never on someone else's song", async () => {
+  const [a] = await songIds();
+  assert.equal((await restJson("star", { id: a })).status, "ok");
+  assert.equal((await restJson("star", { id: a })).status, "ok"); // twice is once
+  assert.equal((await restJson("star", { id: "so-nobody" })).status, "ok"); // nothing to star
+  let starred = (await restJson("getStarred2")).starred2;
+  assert.deepEqual(starred.song.map((s: any) => s.id), [a]);
+  assert.ok(starred.song[0].starred);
+  assert.deepEqual(starred.album, []);
+  assert.equal((await restJson("getAlbumList2", { type: "starred" })).albumList2.album.length, 1);
+  // Another listener can neither star it nor see it starred.
+  const other = await otherListener();
+  await restJson("star", { id: a }, other);
+  assert.equal((await restJson("getStarred2", {}, other)).starred2.song.length, 0);
+  assert.equal((sqlite.query("select count(*) as n from cloud_stars where user_id = ?1").get(D) as any).n, 0);
+  await restJson("unstar", { id: a });
+  starred = (await restJson("getStarred2")).starred2;
+  assert.equal(starred.song.length, 0);
+  assert.equal((await restJson("getAlbumList2", { type: "starred" })).albumList2.album.length, 0);
+});
+
+test("a play counts; now playing does not; Recently played and Most played follow plays", async () => {
+  const [a] = await songIds();
+  assert.equal((await restJson("getAlbumList2", { type: "recent" })).albumList2.album.length, 0);
+  await restJson("scrobble", { id: a, submission: "false" });
+  assert.equal((await restJson("getAlbumList2", { type: "recent" })).albumList2.album.length, 0);
+  const when = Date.now() - 60_000;
+  await restJson("scrobble", { id: a, submission: "true", time: String(when) });
+  await restJson("scrobble", { id: a }); // submission defaults to true
+  const recent = (await restJson("getAlbumList2", { type: "recent" })).albumList2.album;
+  assert.equal(recent.length, 1);
+  assert.equal(recent[0].songCount, 2); // the whole album's songs, not only the played one
+  assert.equal((await restJson("getAlbumList2", { type: "frequent" })).albumList2.album.length, 1);
+  const row = sqlite.query("select play_count, last_played from cloud_plays where user_id = ?1 and song_id = ?2").get(L, a) as any;
+  assert.equal(row.play_count, 2);
+  // A time from the future is taken as now.
+  await restJson("scrobble", { id: a, time: String(Date.now() + 86_400_000) });
+  const later = sqlite.query("select last_played from cloud_plays where user_id = ?1 and song_id = ?2").get(L, a) as any;
+  assert.ok(Date.parse(later.last_played) <= Date.now());
+  // Someone else's scrobble of it counts nowhere.
+  await restJson("scrobble", { id: a }, await otherListener());
+  assert.equal((sqlite.query("select count(*) as n from cloud_plays where user_id = ?1").get(D) as any).n, 0);
+});
+
+test("playlists: made, read in order, edited, replaced and deleted, and only one's own", async () => {
+  const [a, b] = await songIds();
+  const made = await restList("createPlaylist", [["name", "  Road  "], ["songId", b], ["songId", a], ["songId", "so-nobody"]]);
+  assert.equal(made.status, "ok");
+  const id = made.playlist.id;
+  assert.match(id, /^pl-[0-9a-f]{24}$/);
+  assert.equal(made.playlist.name, "Road");
+  assert.deepEqual(made.playlist.entry.map((s: any) => s.id), [b, a]);
+  assert.equal(made.playlist.songCount, 2);
+  const lists = (await restJson("getPlaylists")).playlists.playlist;
+  assert.deepEqual(lists.map((p: any) => [p.id, p.name, p.songCount, p.owner]), [[id, "Road", 2, L]]);
+  // Take out the first, add b at the end, rename.
+  await restList("updatePlaylist", [["playlistId", id], ["name", "Road trip"], ["songIndexToRemove", "0"], ["songIdToAdd", b]]);
+  let one = (await restJson("getPlaylist", { id })).playlist;
+  assert.equal(one.name, "Road trip");
+  assert.deepEqual(one.entry.map((s: any) => s.id), [a, b]);
+  // createPlaylist with an id replaces the songs.
+  await restList("createPlaylist", [["playlistId", id], ["songId", a]]);
+  one = (await restJson("getPlaylist", { id })).playlist;
+  assert.deepEqual(one.entry.map((s: any) => s.id), [a]);
+  assert.equal(one.name, "Road trip");
+  // Nobody else's.
+  const other = await otherListener();
+  assert.equal((await restJson("getPlaylist", { id }, other)).error.code, 70);
+  assert.equal((await restJson("deletePlaylist", { id }, other)).error.code, 70);
+  assert.equal((await restJson("getPlaylists", {}, other)).playlists.playlist.length, 0);
+  const theirs = await restList("createPlaylist", [["name", "Mine"], ["songId", a]], other);
+  assert.equal(theirs.playlist.entry.length, 0); // L's song is not theirs to add
+  // A name is needed; then gone.
+  assert.equal((await restJson("createPlaylist", {})).error.code, 10);
+  assert.equal((await restJson("deletePlaylist", { id })).status, "ok");
+  assert.equal((await restJson("getPlaylist", { id })).error.code, 70);
+});
+
+test("a deleted song takes its star, its plays and its places in playlists with it", async () => {
+  const who = await token(L);
+  const doomed = await upload(who, crypto.getRandomValues(new Uint8Array(5_000)), meta("Doomed", { album: "Other Album" }));
+  const [a] = await songIds();
+  await restJson("star", { id: doomed });
+  await restJson("scrobble", { id: doomed });
+  const list = await restList("createPlaylist", [["name", "Mixed"], ["songId", doomed], ["songId", a]]);
+  assert.equal(list.playlist.songCount, 2);
+  const gone = await fetchCloud(new Request(`http://cloud.test/v1/songs/${doomed}`, { method: "DELETE", headers: { authorization: `Bearer ${who}` } }));
+  assert.equal(gone.status, 204);
+  for (const table of ["cloud_stars", "cloud_plays", "cloud_playlist_songs"]) {
+    assert.equal((sqlite.query(`select count(*) as n from ${table} where song_id = ?1`).get(doomed) as any).n, 0, table);
+  }
+  const left = (await restJson("getPlaylist", { id: list.playlist.id })).playlist;
+  assert.deepEqual(left.entry.map((s: any) => s.id), [a]);
+  assert.equal(left.songCount, 1);
+  await restJson("deletePlaylist", { id: list.playlist.id });
+});
+
 test("a cover counts against the quota, shows as coverArt, and is served", async () => {
   const who = await token(L);
   const song = (await restJson("search3", { query: "Song", songCount: "1" })).searchResult3.song[0];
