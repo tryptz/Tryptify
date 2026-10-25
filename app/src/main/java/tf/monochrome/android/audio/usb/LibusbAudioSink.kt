@@ -66,7 +66,16 @@ class LibusbAudioSink(
     private val crossfadeMix: UsbCrossfadeMix? = null,
 ) : ForwardingAudioSink(delegate) {
 
-    private val chain = AudioProcessorChain(processors)
+    // Last, after the speed stages: off unless the DAC refused the song's rate.
+    private val rateConverter = DacRateConverter()
+    private val chain = AudioProcessorChain(processors + rateConverter)
+
+    /**
+     * Song rates the claimed DAC refused, and the rate it was run at instead
+     * (see [engageForChain]). Forgotten when another DAC is claimed.
+     */
+    private val dacRateFor = HashMap<Int, Int>()
+    private var dacRateDevice: String? = null
 
     /**
      * How the delegate (Android's own output) is fed when bypass is not active.
@@ -382,14 +391,9 @@ class LibusbAudioSink(
             return
         }
 
-        val chainOut = chain.configure(
-            AudioProcessor.AudioFormat(rate, channels, inputFormat.pcmEncoding)
-        )
-        val out = if (chainOut != AudioProcessor.AudioFormat.NOT_SET) {
-            chainOut
-        } else {
-            AudioProcessor.AudioFormat(rate, channels, inputFormat.pcmEncoding)
-        }
+        val input = AudioProcessor.AudioFormat(rate, channels, inputFormat.pcmEncoding)
+        val chainOut = configureChain(input)
+        val out = if (chainOut != AudioProcessor.AudioFormat.NOT_SET) chainOut else input
 
         if (out.sampleRate <= 0 || out.channelCount <= 0 ||
             sourceBytesPerSample(out.encoding) <= 0
@@ -407,10 +411,9 @@ class LibusbAudioSink(
         }
 
         val driverOpen = driver.isOpen.value
-        bypassActive = driverOpen && synchronized(writeLock) {
-            engageDriver(out.sampleRate, out.channelCount, out.encoding)
-        }
-        if (!bypassActive) {
+        val dacOut = if (driverOpen) synchronized(writeLock) { engageForChain(input, out) } else null
+        bypassActive = dacOut != null
+        if (dacOut == null) {
             Log.w(
                 TAG,
                 "bypass not engaged for ${out.sampleRate}Hz ${out.channelCount}ch " +
@@ -423,17 +426,89 @@ class LibusbAudioSink(
             handProcessorsToDelegate()
         }
 
-        if (bypassActive) {
+        if (dacOut != null) {
             Log.i(
                 TAG,
                 "configured: bypass active (chain ${out.sampleRate}/" +
                     "${encodingLabel(out.encoding)}/${out.channelCount}ch -> DAC " +
-                    "${out.sampleRate}/${outBitsPerSample}b in " +
+                    "${dacOut.sampleRate}/${outBitsPerSample}b in " +
                     "${usbBytesPerSample}-byte subslots)",
             )
             resetStreamAccounting()
-            crossfadeMix?.setConsumer(out.sampleRate, out.channelCount)
+            crossfadeMix?.setConsumer(dacOut.sampleRate, dacOut.channelCount)
         }
+    }
+
+    /**
+     * Configures [chain] for [input] at the song's own rate. The rate
+     * conversion joins only once the DAC has refused that rate.
+     */
+    private fun configureChain(input: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
+        rateConverter.targetRate = 0
+        return chain.configure(input)
+    }
+
+    /**
+     * Brings the DAC up for the chain's output [out] and returns what it now
+     * takes, which is the chain's output from here on; null leaves the
+     * stream to the delegate.
+     *
+     * At the song's own rate whenever the DAC can run it. A DAC whose clock
+     * cannot (one crystal, the 48 kHz family only) used to send every song
+     * at another rate to the delegate, through Android's mixer. It is now run
+     * at the rate [DacRateConverter.pickRate] picks from the ones it
+     * advertised, and the chain, configured again for [input], converts to it.
+     */
+    private fun engageForChain(
+        input: AudioProcessor.AudioFormat,
+        out: AudioProcessor.AudioFormat,
+    ): AudioProcessor.AudioFormat? {
+        val device = driver.device.value?.deviceName
+        if (device != dacRateDevice) {
+            dacRateFor.clear()
+            dacRateDevice = device
+        }
+        val convertible = DacRateConverter.supports(out)
+        // A rate this DAC refused before, with the stream still running at the
+        // one it took instead: carry straight on. Asking for the refused rate
+        // first would stop that stream, and an album gapped at every track.
+        val known = dacRateFor[out.sampleRate]
+        if (convertible && known != null) {
+            val running = usbBitDepthLadder(out.encoding)
+                .firstOrNull { driver.isStreamingFormat(known, it, out.channelCount) }
+            if (running != null) engageAtDacRate(input, out, known, running)?.let { return it }
+        }
+        val refused = HashMap<Int, List<ClockRateRange>>()
+        if (engageDriver(out.sampleRate, out.channelCount, out.encoding, refused = refused)) return out
+        if (!convertible) return null
+        for (bits in usbBitDepthLadder(out.encoding)) {
+            val target = DacRateConverter.pickRate(out.sampleRate, refused[bits].orEmpty()) ?: continue
+            engageAtDacRate(input, out, target, bits)?.let { return it }
+        }
+        return null
+    }
+
+    private fun engageAtDacRate(
+        input: AudioProcessor.AudioFormat,
+        out: AudioProcessor.AudioFormat,
+        dacRate: Int,
+        bits: Int,
+    ): AudioProcessor.AudioFormat? {
+        if (!engageDriver(dacRate, out.channelCount, out.encoding, depths = intArrayOf(bits))) return null
+        rateConverter.targetRate = dacRate
+        val converted = chain.configure(input)
+        if (converted.sampleRate != dacRate) {
+            // supports() said it would convert; never play at the wrong pitch.
+            configureChain(input)
+            return null
+        }
+        dacRateFor[out.sampleRate] = dacRate
+        Log.i(
+            TAG,
+            "DAC has no ${out.sampleRate} Hz clock — running it at $dacRate Hz/${bits}b, " +
+                "resampled from ${out.sampleRate} Hz",
+        )
+        return converted
     }
 
     /**
@@ -446,34 +521,43 @@ class LibusbAudioSink(
      * which is what a single failed start() would have done. A 16-bit chain
      * asks the same, for the headroom the level needs (see [sourceIs16Widened]).
      */
-    private fun engageDriver(rate: Int, channels: Int, encoding: Int): Boolean {
-        for (bits in usbBitDepthLadder(encoding)) {
+    private fun engageDriver(
+        rate: Int,
+        channels: Int,
+        encoding: Int,
+        depths: IntArray = usbBitDepthLadder(encoding),
+        // Filled with the rates the DAC advertised at each depth that refused.
+        refused: MutableMap<Int, List<ClockRateRange>>? = null,
+    ): Boolean {
+        for (bits in depths) {
             val reused = driver.isStreamingFormat(rate, bits, channels)
             if (reused) Log.i(TAG, "reused active stream ($rate/${bits}b/${channels}ch)")
-            if (reused || driver.start(rate, bits, channels)) {
-                // A stream the DAC starts from silence fades in from silence;
-                // one it carries on with (gapless, same format) keeps its level.
-                if (!reused) appliedGain = 0f
-                outSampleRate = rate
-                adoptNegotiatedFormat(bits, channels, encoding)
-                // Integer PCM reaches the DAC untouched, so its stride has to
-                // match the subslot the device negotiated. Normally it does —
-                // 16-bit is two bytes everywhere — but a 24-bit alt may use
-                // 4-byte subslots, and handing it 3-byte frames would have the
-                // driver read past the buffer. The JNI bounds check turns that
-                // into a dropped write and an error line per buffer, i.e.
-                // silence, so take the next rung (or the delegate) instead.
-                val sourceStride = sourceBytesPerSample(encoding)
-                if (!packsForUsb && usbBytesPerSample != sourceStride) {
-                    Log.w(
-                        TAG,
-                        "DAC negotiated ${usbBytesPerSample}-byte subslots at ${bits}b but " +
-                            "the chain emits $sourceStride bytes/sample — not engaging at this depth",
-                    )
-                    continue
-                }
-                return true
+            if (!reused && !driver.start(rate, bits, channels)) {
+                refused?.put(bits, driver.supportedRates.value)
+                continue
             }
+            // A stream the DAC starts from silence fades in from silence;
+            // one it carries on with (gapless, same format) keeps its level.
+            if (!reused) appliedGain = 0f
+            outSampleRate = rate
+            adoptNegotiatedFormat(bits, channels, encoding)
+            // Integer PCM reaches the DAC untouched, so its stride has to
+            // match the subslot the device negotiated. Normally it does —
+            // 16-bit is two bytes everywhere — but a 24-bit alt may use
+            // 4-byte subslots, and handing it 3-byte frames would have the
+            // driver read past the buffer. The JNI bounds check turns that
+            // into a dropped write and an error line per buffer, i.e.
+            // silence, so take the next rung (or the delegate) instead.
+            val sourceStride = sourceBytesPerSample(encoding)
+            if (!packsForUsb && usbBytesPerSample != sourceStride) {
+                Log.w(
+                    TAG,
+                    "DAC negotiated ${usbBytesPerSample}-byte subslots at ${bits}b but " +
+                        "the chain emits $sourceStride bytes/sample — not engaging at this depth",
+                )
+                continue
+            }
+            return true
         }
         return false
     }
@@ -944,7 +1028,7 @@ class LibusbAudioSink(
         // configured for nothing (or for an earlier track). Configure it for
         // this stream now; that also takes the shared processors over from
         // the delegate, and they are handed back below if the DAC says no.
-        val chainOut = chain.configure(input)
+        val chainOut = configureChain(input)
         val out = if (chainOut != AudioProcessor.AudioFormat.NOT_SET) chainOut else input
         val rate = out.sampleRate
         val channels = out.channelCount
@@ -955,10 +1039,11 @@ class LibusbAudioSink(
             return
         }
 
-        bypassActive = engageDriver(rate, channels, encoding)
+        val dacOut = engageForChain(input, out)
+        bypassActive = dacOut != null
         publishDacCarriesStream()
 
-        if (bypassActive) {
+        if (dacOut != null) {
             lastEngageFailHash = 0
             pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
             endOfStreamRequested = false
@@ -966,7 +1051,7 @@ class LibusbAudioSink(
             Log.i(
                 TAG,
                 "lazy-engaged bypass mid-stream (chain $rate/${encodingLabel(encoding)}/" +
-                    "${channels}ch -> DAC ${outBitsPerSample}b)",
+                    "${channels}ch -> DAC ${dacOut.sampleRate}/${outBitsPerSample}b)",
             )
         } else {
             lastEngageFailHash = fmtHash
