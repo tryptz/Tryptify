@@ -210,6 +210,7 @@ private fun Index(
     val songs by viewModel.songs.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val liked by viewModel.liked.collectAsStateWithLifecycle()
+    val unsupported by viewModel.unsupported.collectAsStateWithLifecycle()
     val sort by viewModel.albumSort.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
@@ -261,7 +262,7 @@ private fun Index(
                     Section.SONGS to R.string.category_songs,
                     Section.PLAYLISTS to R.string.filter_playlists,
                     Section.LIKED to R.string.liked_songs,
-                )) {
+                ).filterNot { it.first in unsupported }) {
                     tf.monochrome.android.ui.mixer.GlassChoiceChip(
                         label = stringResource(label),
                         selected = section == value,

@@ -123,6 +123,15 @@ class SubsonicLibraryViewModel @Inject constructor(
     private val _liked = MutableStateFlow<Load<List<UnifiedTrack>>>(Load.Loading)
     val liked: StateFlow<Load<List<UnifiedTrack>>> = _liked.asStateFlow()
 
+    /**
+     * The sections this server has said it does not keep: a Subsonic server
+     * need not have playlists or stars (Tryptify Cloud has neither, and
+     * answers "Not supported"). Their chips are not shown; an error there
+     * would only say the library failed to load, which it did not.
+     */
+    private val _unsupported = MutableStateFlow<Set<Section>>(emptySet())
+    val unsupported: StateFlow<Set<Section>> = _unsupported.asStateFlow()
+
     private var albumsJob: Job? = null
     private var songsJob: Job? = null
     private var loadedFor: SubsonicServer? = null
@@ -157,13 +166,33 @@ class SubsonicLibraryViewModel @Inject constructor(
 
     private fun loadPlaylists() {
         _playlists.value = Load.Loading
-        viewModelScope.launch { _playlists.value = runLoad { repository.playlists().sortedBy { it.name.lowercase() } } }
+        viewModelScope.launch {
+            _playlists.value = runLoad(Section.PLAYLISTS) { repository.playlists().sortedBy { it.name.lowercase() } }
+        }
     }
 
     private fun loadLiked() {
         // Kept on screen while it refreshes, rather than a spinner each visit.
         if (_liked.value !is Load.Loaded) _liked.value = Load.Loading
-        viewModelScope.launch { _liked.value = runLoad { repository.starredSongs() } }
+        viewModelScope.launch { _liked.value = runLoad(Section.LIKED) { repository.starredSongs() } }
+    }
+
+    /**
+     * [runLoad] for a section the server may not keep: a `failed` answer (the
+     * server replied, and said no) marks it unsupported and leaves it, so the
+     * page shows albums rather than an error. Anything else (the server away)
+     * fails as usual, to be retried.
+     */
+    private suspend fun <T> runLoad(section: Section, block: suspend () -> T): Load<T> = try {
+        Load.Loaded(block()).also { _unsupported.value = _unsupported.value - section }
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: tf.monochrome.android.data.subsonic.SubsonicException) {
+        _unsupported.value = _unsupported.value + section
+        if (_section.value == section) _section.value = Section.ALBUMS
+        Load.Failed(e.message)
+    } catch (e: Exception) {
+        Load.Failed(e.message)
     }
 
     fun openPlaylist(playlist: ServerPlaylist) {
