@@ -19,6 +19,7 @@
 - **It never clips.** Loud songs are turned down; a song is turned up only when its file shows there's room. It works on every output, the USB DAC included, and with it off (or at 0 dB) the sound passes through untouched, so bit-perfect stays bit-perfect.
 
 ### Fixed
+- **USB DACs with one clock keep exclusive mode for CD-quality songs.** A DAC that runs only 48 and 96 kHz (the Nothing Ear (1) and Headphone (1)) refused 44.1 kHz, so every CD-rate song fell back to Android's mixer. The song is now resampled to the DAC's nearest rate; rates the DAC takes stay bit-perfect.
 - **LRC lyrics that read wrong now read right**, from LRCLib too: a file starting with a byte order mark keeps its first line, an end stamp (`[00:15.00]` after the words) is a time rather than part of the lyric, a file stamped all `[00:00.00]` shows as plain lyrics instead of every line lighting up at once, and LRCLib's lyrics with `[mm:ss]`, two stamps on a line, `[offset:]` or word timing read as they do everywhere else.
 
 ## [1.9.5]
