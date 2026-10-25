@@ -3269,4 +3269,6 @@
     <string name="onb_next">Étape suivante</string>
     <string name="onb_skip_to_end">Aller à la fin</string>
     <string name="action_select_all">Tout sélectionner</string>
+    <string name="auth_link_expired">Ce lien a expiré ou a déjà été utilisé. Connectez-vous avec votre e-mail et votre mot de passe, ou recréez le compte pour recevoir un nouveau lien.</string>
+    <string name="auth_email_send_failed">Impossible d\'envoyer l\'e-mail de confirmation. Réessayez dans quelques minutes, ou continuez avec Google ou Discord.</string>
 </resources>

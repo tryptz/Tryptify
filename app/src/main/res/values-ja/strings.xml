@@ -3117,4 +3117,6 @@
     <string name="onb_next">次のステップ</string>
     <string name="onb_skip_to_end">最後までスキップ</string>
     <string name="action_select_all">すべて選択</string>
+    <string name="auth_link_expired">このリンクは期限切れか、すでに使用されています。メールアドレスとパスワードでログインするか、アカウントをもう一度作成して新しいリンクを受け取ってください。</string>
+    <string name="auth_email_send_failed">確認メールを送信できませんでした。数分後にもう一度お試しいただくか、Google または Discord で続行してください。</string>
 </resources>

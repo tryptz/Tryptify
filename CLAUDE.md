@@ -34,6 +34,13 @@ compaction, so anything that must not be forgotten belongs here, not in chat.
 - Never commit `keystore.properties` or any `.jks`, and never print keystore
   passwords.
 
+## Website
+
+- The website lives in its own repository, `tryptz/tryptify.com`. Never
+  deploy it from this one: older branches still carry a stale `site/`, and a
+  `wrangler deploy` from it replaces the live site (on 2026-10-24 it took the
+  party page, the changelog and the translations down).
+
 ## Every change
 
 - UI changes: read and update `docs/ui-invariants.md` (see AGENTS.md).

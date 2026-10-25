@@ -3269,4 +3269,6 @@
     <string name="onb_next">Passaggio successivo</string>
     <string name="onb_skip_to_end">Vai alla fine</string>
     <string name="action_select_all">Seleziona tutto</string>
+    <string name="auth_link_expired">Questo link è scaduto o è già stato usato. Accedi con email e password, oppure crea di nuovo l\'account per ricevere un nuovo link.</string>
+    <string name="auth_email_send_failed">Impossibile inviare l\'email di conferma. Riprova tra qualche minuto, oppure continua con Google o Discord.</string>
 </resources>

@@ -3269,4 +3269,6 @@
     <string name="onb_next">Paso siguiente</string>
     <string name="onb_skip_to_end">Ir al final</string>
     <string name="action_select_all">Seleccionar todo</string>
+    <string name="auth_link_expired">Este enlace ha caducado o ya se ha usado. Inicia sesión con tu correo y contraseña, o vuelve a crear la cuenta para recibir un enlace nuevo.</string>
+    <string name="auth_email_send_failed">No se pudo enviar el correo de confirmación. Inténtalo de nuevo en unos minutos o continúa con Google o Discord.</string>
 </resources>

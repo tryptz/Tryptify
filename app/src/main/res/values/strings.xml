@@ -3196,4 +3196,6 @@
     <string name="onb_next">Next step</string>
     <string name="onb_skip_to_end">Skip to the end</string>
     <string name="action_select_all">Select all</string>
+    <string name="auth_link_expired">This link has expired or was already used. Sign in with your email and password, or create the account again for a new link.</string>
+    <string name="auth_email_send_failed">We couldn\'t send the confirmation email. Try again in a few minutes, or continue with Google or Discord.</string>
 </resources>
