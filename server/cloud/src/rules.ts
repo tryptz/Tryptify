@@ -23,7 +23,7 @@ export const REFUND_EXPORT_DAYS = 2;
 /**
  * The free trial: TRIAL_DAYS with TRIAL_GB (or the plan's own quota, if that
  * is smaller: Mini's trial is 10 GB), once per account, card required.
- * The card is Creem's (the trial products carry the 7 days); this service only
+ * The card is the provider's (its trial products carry the 7 days); this service only
  * holds a trial to its smaller quota and gives a trial that ends unpaid the
  * refund's short export window, so one costs at most about $0.10.
  */

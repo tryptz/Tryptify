@@ -357,7 +357,7 @@ the server to the same theme parts, pack and picture size caps, and error codes.
 ## Tryptify Cloud server
 
 The paid music storage's API is [`server/cloud/`](server/cloud/README.md): a
-Cloudflare Worker with a D1 database, PayPal for new payments (Creem still renewing its subscribers), Supabase sign-in.
+Cloudflare Worker with a D1 database, PayPal and Creem for payments (the buyer picks; PayPal by default), Supabase sign-in.
 PolyForm Noncommercial, unlike the rest of the repository. Its money rules
 are in `src/rules.ts` and held by `test.ts` (`bun run test.ts`), including the
 worst-case pricing check. Deploy with `npx wrangler deploy` after the tests

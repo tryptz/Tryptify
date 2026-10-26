@@ -18,9 +18,8 @@ permission.
 
 ## Status
 
-**Live, taking real payments through PayPal since 2026-10-24** (new
-checkouts; webhook `/webhooks/paypal`), and through Creem since 2026-10-21 for
-the subscribers who started there (webhook `/webhooks/billing`), at
+**Live, taking real payments through PayPal since 2026-10-24** (webhook
+`/webhooks/paypal`) and through Creem (webhook `/webhooks/billing`), at
 `https://cloud.tryptify.com` (the app's default); it is still reachable at
 `https://tryptify-cloud.tryptify-cloud.workers.dev` for older builds. Before
 that it ran in test mode, where accounts, billing and the trial worked end to
@@ -65,13 +64,26 @@ A schema change goes in `schema.sql` as `create … if not exists` / an added
 column, run once against D1 (`npx wrangler d1 execute tryptify-cloud --remote
 --file schema.sql`) before the deploy that uses it. Then check `/health`.
 
+## Payments: the buyer picks
+
+Both providers take new checkouts: `POST /v1/checkout` takes an optional
+`"provider"` (`"paypal"` or `"creem"`), and without one it is PayPal, the
+default, as every client sent before there was a choice (an unknown one is
+`400 bad_provider`). `GET /plans` lists `providers`, the default first, each
+with what it can sell (`offers`: per plan, `monthly`, `yearly`, `trial`), so
+the app and the site offer a provider only for a plan it has a product for.
+Each account remembers the provider of the payment that last took effect, so
+"Manage subscription" opens the right one; a refused event (a second trial
+with the other provider) does not change it.
+
+Creem was approved for the business on 2026-10-26 and offered again from
+then. It has products for Lite, Plus and Max only; Mini, Pro, Ultra and Xtra
+need theirs made in Creem (below) before Creem can sell them.
+
 ## Payments: PayPal
 
-PayPal takes new checkouts, live since 2026-10-24: a live trial subscription
-went from checkout through the webhook to the account page, then was
-cancelled. Creem (below) keeps renewing,
-refunding and opening the portal for everyone who subscribed with it. Each
-account remembers its provider, so "Manage subscription" opens the right one.
+PayPal has taken checkouts since 2026-10-24: a live trial subscription went
+from checkout through the webhook to the account page, then was cancelled.
 Unlike Creem, PayPal is **not** a merchant of record: tryptz is the seller and
 answers for sales tax, receipts and chargebacks.
 
@@ -186,6 +198,13 @@ ids are not secrets:
 
 ### Live mode, created on 2026-10-21
 
+Mini, Pro, Ultra and Xtra (added 2026-10-24) have no Creem products yet:
+`CREEM_PRODUCT_{MINI,PRO,ULTRA,XTRA}_{MONTHLY,YEARLY,MONTHLY_TRIAL}` are
+unset, so `/plans` lists them as not offered by Creem and a Creem checkout for
+one answers `503 billing_not_set_up`. Twelve products to make, tax included
+like the others, the trial ones with a 7-day trial: Mini $0.99 / $9.99, Pro
+$39.99 / $399.99, Ultra $119.99 / $1,199.99, Xtra $399.99 / $3,999.99.
+
 The same nine exist in Creem's **live** mode (checked back: nine, USD, tax
 included, trials only on the three trial products). The Worker uses them
 since 2026-10-21: `wrangler.toml` has these ids and no `CREEM_API_BASE`, and
@@ -281,9 +300,9 @@ that does not fit is refused (`mayUpload`).
 | Route | Does |
 | --- | --- |
 | `GET /health` | Up, with whether it has a database, music storage and a payment provider |
-| `GET /plans` | The plans, prices and the trial's terms, no account needed |
+| `GET /plans` | The plans, prices and the trial's terms, and `providers` (each with what it sells), no account needed |
 | `GET /v1/account` | Plan, `access` (`full`, `read_only`, `none`), paid-until, delete-after, used and quota bytes, `trial`, `trialAvailable` |
-| `POST /v1/checkout` | `{"plan", "period", "trial"?}` → `{"url"}`, a checkout link that carries the person's id |
+| `POST /v1/checkout` | `{"plan", "period", "trial"?, "provider"?}` → `{"url"}`, a checkout link that carries the person's id; `provider` is `paypal` (the default) or `creem` |
 | `POST /webhooks/billing` | Creem's webhook, signature checked; each event applied once (`cloud_billing_events`) |
 | `GET /v1/library` | Used, reserved and allowed bytes, song count, part size |
 | `POST /v1/uploads` | `{size, suffix, meta}` → `{id, partSize, parts}`; reserves `size` against the quota (413 `over_quota`, 402 `no_plan`, 409 `read_only`, 415 `not_audio`) |

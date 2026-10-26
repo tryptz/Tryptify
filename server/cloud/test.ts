@@ -948,7 +948,8 @@ test("playlists: made, read in order, edited, replaced and deleted, and only one
 test("a deleted song takes its star, its plays and its places in playlists with it", async () => {
   const who = await token(L);
   const doomed = await upload(who, crypto.getRandomValues(new Uint8Array(5_000)), meta("Doomed", { album: "Other Album" }));
-  const [a] = await songIds();
+  // Any song but the doomed one (ids are random, so it may sort first).
+  const a = (await songIds()).find((id: string) => id !== doomed)!;
   await restJson("star", { id: doomed });
   await restJson("scrobble", { id: doomed });
   const list = await restList("createPlaylist", [["name", "Mixed"], ["songId", doomed], ["songId", a]]);
@@ -1297,6 +1298,53 @@ test("with PayPal added, Creem still renews its subscribers, and each person man
   assert.equal(paypalPortal.body.url, "https://www.paypal.com/myaccount/autopay/");
   // A provider nobody set up has no webhook.
   assert.equal((await callOn(fetchBoth, "POST", "/webhooks/stripe", undefined, "{}")).status, 503);
+});
+
+test("the buyer picks PayPal or Creem; with no choice it is PayPal; an unknown one is refused", async () => {
+  const who = await token("77777777-7777-4777-8777-777777777777");
+  const plain = await callOn(fetchBoth, "POST", "/v1/checkout", who, { plan: "lite", period: "monthly" });
+  assert.equal(plain.status, 200);
+  assert.match(plain.body.url, /^https:\/\/paypal\.test\/approve\//);
+  const viaCreem = await callOn(fetchBoth, "POST", "/v1/checkout", who, { plan: "lite", period: "monthly", provider: "creem" });
+  assert.equal(viaCreem.status, 200);
+  assert.match(viaCreem.body.url, /^https:\/\/checkout\.creem\.test\//);
+  assert.equal(checkouts.at(-1).product_id, "prod_lite_m");
+  const viaPaypal = await callOn(fetchBoth, "POST", "/v1/checkout", who, { plan: "lite", period: "monthly", provider: "paypal" });
+  assert.match(viaPaypal.body.url, /^https:\/\/paypal\.test\/approve\//);
+  const unknown = await callOn(fetchBoth, "POST", "/v1/checkout", who, { plan: "lite", period: "monthly", provider: "stripe" });
+  assert.equal(unknown.status, 400);
+  assert.equal(unknown.body.error, "bad_provider");
+  // A plan the chosen provider has no product for cannot be bought there.
+  const notThere = await callOn(fetchBoth, "POST", "/v1/checkout", who, { plan: "max", period: "yearly", provider: "creem" });
+  assert.equal(notThere.status, 503);
+});
+
+test("/plans lists the ways to pay, the default first, each with what it can sell", async () => {
+  const r = await callOn(fetchBoth, "GET", "/plans");
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.providers.map((p: any) => [p.name, p.default]), [["paypal", true], ["creem", false]]);
+  const offer = (name: string, plan: string) =>
+    r.body.providers.find((p: any) => p.name === name).offers.find((o: any) => o.plan === plan);
+  assert.deepEqual(offer("creem", "lite"), { plan: "lite", monthly: true, yearly: true, trial: true });
+  assert.deepEqual(offer("creem", "max"), { plan: "max", monthly: true, yearly: false, trial: false });
+  assert.deepEqual(offer("creem", "mini"), { plan: "mini", monthly: false, yearly: false, trial: false });
+  assert.deepEqual(offer("paypal", "plus"), { plan: "plus", monthly: false, yearly: true, trial: false });
+  // With one provider, that one is the default and the only one listed.
+  const single = (await call("GET", "/plans")).body.providers;
+  assert.deepEqual(single.map((p: any) => [p.name, p.default]), [["creem", true]]);
+});
+
+test("a refused second trial with the other provider does not change who the account pays", async () => {
+  const T = "88888888-8888-4888-8888-888888888888";
+  const raw = JSON.stringify(paidEvent("evt_flip_creem", T, "prod_lite_m", future(30), "sub_flip"));
+  assert.equal((await callOn(fetchBoth, "POST", "/webhooks/billing", undefined, raw, { "creem-signature": sign(raw) })).status, 200);
+  const start = new Date();
+  await ppWebhook(ppActivated("WH-flip-trial", "I-FLIP", T, "P-lite-trial", start, new Date(start.getTime() + 60 * DAY)));
+  const row = sqlite.query("select provider, customer_id, subscription_id from cloud_accounts where user_id = ?1").get(T) as any;
+  assert.equal(row.provider, "creem");
+  assert.equal(row.subscription_id, "sub_flip");
+  const portal = await callOn(fetchBoth, "POST", "/v1/billing-portal", await token(T));
+  assert.match(portal.body.url, /^https:\/\/creem\.test\/portal\//);
 });
 
 // ── Run ──────────────────────────────────────────────────────────────────────

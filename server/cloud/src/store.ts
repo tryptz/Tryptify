@@ -116,7 +116,10 @@ export async function record(db: Db, provider: string, e: BillingEvent, now = ()
              plan = excluded.plan,
              paid_until = excluded.paid_until,
              trial = excluded.trial,
-             provider = excluded.provider,
+             -- Only an event that took changes who the account pays: a refused
+             -- second trial with another provider must not point "Manage
+             -- subscription" (or that provider's refunds) at the wrong one.
+             provider = case when ?11 then excluded.provider else coalesce(cloud_accounts.provider, excluded.provider) end,
              customer_id = coalesce(excluded.customer_id, cloud_accounts.customer_id),
              subscription_id = coalesce(excluded.subscription_id, cloud_accounts.subscription_id),
              version = cloud_accounts.version + 1,
@@ -134,6 +137,7 @@ export async function record(db: Db, provider: string, e: BillingEvent, now = ()
           at.toISOString(),
           e.eventId,
           before.version,
+          took ? 1 : 0,
         ),
       db
         .prepare(

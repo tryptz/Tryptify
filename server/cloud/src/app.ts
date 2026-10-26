@@ -74,12 +74,27 @@ export function createApp({ db, storage = null, billing, providers, personOf, pl
   app.use("/plans", webCors);
   app.use("/v1/*", webCors);
 
-  /** The plans and the trial's terms, for the app's plan picker and the site's. No account needed. */
+  /**
+   * The plans and the trial's terms, for the app's plan picker and the site's.
+   * No account needed. `providers` are the ways to pay, the default first, each
+   * with what it can sell, so a client offers a provider only for a plan it
+   * has: a checkout it cannot make would only fail.
+   */
   app.get("/plans", (c) =>
     c.json({
       readOnlyDays: READ_ONLY_DAYS,
       trial: { days: TRIAL_DAYS, storageGb: TRIAL_GB, periods: ["monthly"] },
       plans: Object.entries(PLANS).map(([id, p]) => ({ id, ...p, trialStorageGb: trialGbOf(id as PlanId) })),
+      providers: [billing, ...all.filter((p) => p !== billing)].filter((p): p is Billing => p !== null).map((p) => ({
+        name: p.name,
+        default: p === billing,
+        offers: (Object.keys(PLANS) as PlanId[]).map((plan) => ({
+          plan,
+          monthly: p.offers?.(plan, "monthly") ?? true,
+          yearly: p.offers?.(plan, "yearly") ?? true,
+          trial: p.offers?.(plan, "monthly", true) ?? true,
+        })),
+      })),
     }),
   );
 
@@ -119,15 +134,21 @@ export function createApp({ db, storage = null, billing, providers, personOf, pl
   /** A checkout link for [plan] and [period], carrying the person's id so the webhook knows who paid. */
   app.post("/v1/checkout", async (c) => {
     if (!billing) return fail(503, "billing_not_set_up");
-    const body = (await c.req.json().catch(() => null)) as { plan?: unknown; period?: unknown; trial?: unknown } | null;
+    const body = (await c.req.json().catch(() => null)) as
+      | { plan?: unknown; period?: unknown; trial?: unknown; provider?: unknown }
+      | null;
     const plan = body?.plan;
     const period = body?.period;
     const trial = body?.trial === true;
     if (!isPlan(plan) || (period !== "monthly" && period !== "yearly")) return fail(400, "bad_request");
+    // The buyer's choice of provider; without one, the default, as every
+    // client did before there was a choice.
+    const chosen = body?.provider === undefined || body?.provider === null ? billing : providerNamed(String(body.provider));
+    if (!chosen) return fail(400, "bad_provider");
     // Trials come with the monthly plans only, and once per account.
     if (trial && period !== "monthly") return fail(400, "bad_request");
     if (trial && !mayStartTrial(await loadAccount(db!, c.get("uid")))) return fail(409, "trial_used");
-    const url = await billing.checkoutUrl(plan, period, c.get("uid"), trial);
+    const url = await chosen.checkoutUrl(plan, period, c.get("uid"), trial);
     return url ? c.json({ url }) : fail(503, "billing_not_set_up");
   });
 

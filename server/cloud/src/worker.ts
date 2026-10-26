@@ -34,8 +34,8 @@ export default {
       const strings = Object.fromEntries(
         Object.entries(env).filter(([, v]) => typeof v === "string"),
       ) as Record<string, string>;
-      // New checkouts go to PayPal once it is set up; Creem keeps renewing
-      // the people who subscribed with it.
+      // The buyer picks PayPal or Creem at checkout; PayPal, once it is set
+      // up, is the default for a client that does not say.
       const paypal = paypalBilling(strings);
       const creem = creemBilling(strings);
       app = createApp({
