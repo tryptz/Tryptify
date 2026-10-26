@@ -3033,6 +3033,8 @@
     <string name="cloud_uploads_channel">クラウドへのアップロード</string>
     <string name="cloud_uploads_channel_desc">Tryptify Cloud への曲のアップロードの進行状況。</string>
     <string name="cloud_manage_subscription">サブスクリプションの管理・解約</string>
+    <string name="cloud_pay_with">支払い方法</string>
+    <string name="cloud_not_with_provider">%1$s ではまだご利用いただけません。</string>
     <string name="action_upload_to_cloud">Tryptify Cloud にアップロード</string>
     <string name="connect_devices">デバイス</string>
     <string name="connect_this_phone">このスマートフォン</string>

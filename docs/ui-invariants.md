@@ -1159,6 +1159,14 @@ gigabytes on both sides (`Formatter.formatShortFileSize`, `GB = 1e9`).
 A plan of whole terabytes is shown in TB (`cloud_plan_storage_tb`, 1 TB =
 1,000 GB), never as "10000 GB".
 
+**The way to pay comes from `/plans` too.** Its `providers` list (PayPal,
+Creem) puts the server's default first, and the app picks that one until the
+listener taps another in the "Pay with" row of `GlassChoiceChip`s, shown only
+when there is more than one. A plan the chosen provider has no product for
+keeps its card, with its buttons off and `cloud_not_with_provider` under the
+price, so switching providers never makes the cards jump or vanish. A server
+with no list gets no row and no `provider` in the checkout: it picks itself.
+
 **The trial offer says "up to" its size** (`cloud_trial_offer`, `/plans`
 `trial.storageGb`, 20 GB): every monthly plan has the trial, but a plan
 smaller than that gives its own size instead (Mini's 10 GB, `trialStorageGb`

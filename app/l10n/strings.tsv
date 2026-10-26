@@ -3057,6 +3057,8 @@ cloud_uploading	Uploading to Tryptify Cloud	正在上传到 Tryptify Cloud	Trypt
 cloud_uploads_channel	Cloud uploads	云端上传	クラウドへのアップロード	Envois vers le cloud	Subidas a la nube	Bulut yüklemeleri	Cloud-Uploads	Caricamenti nel cloud
 cloud_uploads_channel_desc	Progress of songs uploading to Tryptify Cloud.	歌曲上传到 Tryptify Cloud 的进度。	Tryptify Cloud への曲のアップロードの進行状況。	Progression des titres envoyés vers Tryptify Cloud.	Progreso de las canciones que se suben a Tryptify Cloud.	Tryptify Cloud’a yüklenen şarkıların ilerlemesi.	Fortschritt der Songs, die in Tryptify Cloud hochgeladen werden.	Avanzamento dei brani in caricamento su Tryptify Cloud.
 cloud_manage_subscription	Manage or cancel subscription	管理或取消订阅	サブスクリプションの管理・解約	Gérer ou résilier l’abonnement	Gestionar o cancelar la suscripción	Aboneliği yönet veya iptal et	Abo verwalten oder kündigen	Gestisci o annulla l'abbonamento
+cloud_pay_with	Pay with	支付方式	支払い方法	Payer avec	Pagar con	Ödeme yöntemi	Bezahlen mit	Paga con
+cloud_not_with_provider	Not available with %1$s yet.	暂不支持通过 %1$s 购买。	%1$s ではまだご利用いただけません。	Pas encore disponible avec %1$s.	Aún no disponible con %1$s.	%1$s ile henüz kullanılamıyor.	Mit %1$s noch nicht verfügbar.	Non ancora disponibile con %1$s.
 action_upload_to_cloud	Upload to Tryptify Cloud	上传到 Tryptify Cloud	Tryptify Cloud にアップロード	Envoyer vers Tryptify Cloud	Subir a Tryptify Cloud	Tryptify Cloud’a yükle	In Tryptify Cloud hochladen	Carica su Tryptify Cloud
 tryptify_connect	Tryptify Connect							
 connect_devices	Devices	设备	デバイス	Appareils	Dispositivos	Cihazlar	Geräte	Dispositivi

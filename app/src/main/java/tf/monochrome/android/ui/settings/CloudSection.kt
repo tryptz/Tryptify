@@ -48,7 +48,9 @@ import tf.monochrome.android.data.cloud.CloudAccount
 import tf.monochrome.android.data.cloud.CloudError
 import tf.monochrome.android.data.cloud.CloudPlan
 import tf.monochrome.android.data.cloud.CloudPlans
+import tf.monochrome.android.data.cloud.CloudProvider
 import tf.monochrome.android.ui.components.materialSurface
+import tf.monochrome.android.ui.mixer.GlassChoiceChip
 import java.text.NumberFormat
 import java.time.Instant
 import java.time.ZoneId
@@ -142,6 +144,7 @@ private fun Ready(viewModel: CloudSettingsViewModel, account: CloudAccount, plan
         Player(viewModel, busy)
         Uploads(viewModel)
         // Creem requires that a subscriber can cancel from inside the product.
+        // The server opens whichever provider the account pays through.
         // Unlimited storage is given, not bought: there is nothing to manage.
         if (!account.unlimited) {
             TextButton(onClick = viewModel::manageSubscription, enabled = !busy) {
@@ -149,7 +152,9 @@ private fun Ready(viewModel: CloudSettingsViewModel, account: CloudAccount, plan
             }
         }
     } else {
-        PlanPicker(plans, account.trialAvailable, busy) { plan, period, trial -> viewModel.checkout(plan, period, trial) }
+        PlanPicker(plans, account.trialAvailable, busy) { plan, period, trial, provider ->
+            viewModel.checkout(plan, period, trial, provider)
+        }
     }
     if (busy) {
         Spacer(Modifier.height(6.dp))
@@ -259,29 +264,72 @@ private fun Uploads(viewModel: CloudSettingsViewModel) {
     }
 }
 
-/** The three plans, monthly or yearly, and the trial when the account may still take it. */
+/**
+ * The plans, monthly or yearly, and the trial when the account may still take
+ * it. With more than one way to pay on the server, a "Pay with" row picks it,
+ * the server's default first; a plan that provider has no product for keeps
+ * its card, its buttons off.
+ */
 @Composable
 private fun PlanPicker(
     plans: CloudPlans?,
     trialAvailable: Boolean,
     busy: Boolean,
-    onPick: (plan: String, period: String, trial: Boolean) -> Unit,
+    onPick: (plan: String, period: String, trial: Boolean, provider: String?) -> Unit,
 ) {
     if (plans == null) {
         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
         return
     }
+    var chosen by rememberSaveable { mutableStateOf<String?>(null) }
+    val providers = plans.providers
+    val provider = providers.firstOrNull { it.name == chosen }
+        ?: providers.firstOrNull { it.default }
+        ?: providers.firstOrNull()
     if (trialAvailable) {
         Note(stringResource(R.string.cloud_trial_offer, plans.trial.days, plans.trial.storageGb))
     }
+    if (providers.size > 1) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(bottom = 6.dp),
+        ) {
+            Text(
+                stringResource(R.string.cloud_pay_with),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            providers.forEach { p ->
+                GlassChoiceChip(
+                    label = providerName(p.name),
+                    selected = p == provider,
+                    accent = MaterialTheme.colorScheme.primary,
+                    onClick = { chosen = p.name },
+                )
+            }
+        }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        plans.plans.forEach { plan -> PlanCard(plan, trialAvailable, busy, onPick) }
+        plans.plans.forEach { plan ->
+            PlanCard(plan, trialAvailable, busy, provider) { id, period, trial -> onPick(id, period, trial, provider?.name) }
+        }
     }
     Note(stringResource(R.string.cloud_plan_terms, plans.readOnlyDays))
 }
 
 @Composable
-private fun PlanCard(plan: CloudPlan, trialAvailable: Boolean, busy: Boolean, onPick: (String, String, Boolean) -> Unit) {
+private fun PlanCard(
+    plan: CloudPlan,
+    trialAvailable: Boolean,
+    busy: Boolean,
+    /** The chosen way to pay; null from a server that picks it itself. */
+    provider: CloudProvider?,
+    onPick: (String, String, Boolean) -> Unit,
+) {
+    // A server with no list sells every plan through its own provider.
+    val sellsFirst = provider?.sells(plan.id, "monthly", trialAvailable) ?: true
+    val sellsYearly = provider?.sells(plan.id, "yearly", false) ?: true
     Card(
         modifier = Modifier.fillMaxWidth().materialSurface(shape = RoundedCornerShape(8.dp)),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
@@ -302,17 +350,24 @@ private fun PlanCard(plan: CloudPlan, trialAvailable: Boolean, busy: Boolean, on
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (provider != null && !sellsFirst && !sellsYearly) {
+                Text(
+                    stringResource(R.string.cloud_not_with_provider, providerName(provider.name)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
                 if (trialAvailable) {
-                    OutlinedButton(onClick = { onPick(plan.id, "monthly", true) }, enabled = !busy) {
+                    OutlinedButton(onClick = { onPick(plan.id, "monthly", true) }, enabled = !busy && sellsFirst) {
                         Text(stringResource(R.string.cloud_start_trial))
                     }
                 } else {
-                    OutlinedButton(onClick = { onPick(plan.id, "monthly", false) }, enabled = !busy) {
+                    OutlinedButton(onClick = { onPick(plan.id, "monthly", false) }, enabled = !busy && sellsFirst) {
                         Text(stringResource(R.string.cloud_monthly))
                     }
                 }
-                OutlinedButton(onClick = { onPick(plan.id, "yearly", false) }, enabled = !busy) {
+                OutlinedButton(onClick = { onPick(plan.id, "yearly", false) }, enabled = !busy && sellsYearly) {
                     Text(stringResource(R.string.cloud_yearly))
                 }
             }
@@ -328,6 +383,13 @@ private fun Note(text: String, error: Boolean = false) {
         color = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(vertical = 4.dp),
     )
+}
+
+/** Payment providers go by their brand names, untranslated. */
+private fun providerName(name: String): String = when (name) {
+    "paypal" -> "PayPal"
+    "creem" -> "Creem"
+    else -> name.replaceFirstChar { it.uppercase() }
 }
 
 @Composable

@@ -3033,6 +3033,8 @@
     <string name="cloud_uploads_channel">云端上传</string>
     <string name="cloud_uploads_channel_desc">歌曲上传到 Tryptify Cloud 的进度。</string>
     <string name="cloud_manage_subscription">管理或取消订阅</string>
+    <string name="cloud_pay_with">支付方式</string>
+    <string name="cloud_not_with_provider">暂不支持通过 %1$s 购买。</string>
     <string name="action_upload_to_cloud">上传到 Tryptify Cloud</string>
     <string name="connect_devices">设备</string>
     <string name="connect_this_phone">这部手机</string>

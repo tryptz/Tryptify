@@ -22,6 +22,7 @@ class CloudTest {
         ignoreUnknownKeys = true
         isLenient = true
         coerceInputValues = true
+        explicitNulls = false
     }
 
     private val serverSource = File("../server/cloud/src").listFiles()!!
@@ -91,6 +92,44 @@ class CloudTest {
         val none = json.decodeFromString<CloudAccount>("""{"plan":null,"access":"none","paidUntil":null,"trialAvailable":true}""")
         assertFalse(none.canPlay)
         assertTrue(none.trialAvailable)
+    }
+
+    @Test
+    fun `the ways to pay decode with what each can sell, and the choice is sent`() {
+        val plans = json.decodeFromString<CloudPlans>(
+            """{"readOnlyDays":7,"trial":{"days":7,"storageGb":20},
+               "plans":[{"id":"lite","storageGb":100,"monthly":3.99,"yearly":39.99},
+                        {"id":"pro","storageGb":2000,"monthly":39.99,"yearly":399.99}],
+               "providers":[
+                 {"name":"paypal","default":true,"offers":[
+                   {"plan":"lite","monthly":true,"yearly":true,"trial":true},
+                   {"plan":"pro","monthly":true,"yearly":true,"trial":true}]},
+                 {"name":"creem","default":false,"offers":[
+                   {"plan":"lite","monthly":true,"yearly":true,"trial":false},
+                   {"plan":"pro","monthly":false,"yearly":false,"trial":false}]}]}""",
+        )
+        assertEquals(listOf("paypal", "creem"), plans.providers.map { it.name })
+        assertTrue(plans.providers[0].default)
+        val creem = plans.providers[1]
+        assertTrue(creem.sells("lite", "monthly", trial = false))
+        assertTrue(creem.sells("lite", "yearly", trial = false))
+        assertFalse(creem.sells("lite", "monthly", trial = true))
+        assertFalse(creem.sells("pro", "yearly", trial = false))
+        assertFalse(creem.sells("mini", "monthly", trial = false))
+
+        // A server from before the choice: no list, and the checkout names no provider.
+        val old = json.decodeFromString<CloudPlans>("""{"plans":[]}""")
+        assertTrue(old.providers.isEmpty())
+        assertEquals(
+            """{"plan":"lite","period":"monthly","trial":true}""",
+            json.encodeToString(CheckoutRequest("lite", "monthly", true)),
+        )
+        assertEquals(
+            """{"plan":"lite","period":"yearly","provider":"creem"}""",
+            json.encodeToString(CheckoutRequest("lite", "yearly", provider = "creem")),
+        )
+        // The server reads the same field name.
+        assertTrue(serverSource.contains("body?.provider"))
     }
 
     @Test

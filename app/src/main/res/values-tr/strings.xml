@@ -3109,6 +3109,8 @@
     <string name="cloud_uploads_channel">Bulut yüklemeleri</string>
     <string name="cloud_uploads_channel_desc">Tryptify Cloud’a yüklenen şarkıların ilerlemesi.</string>
     <string name="cloud_manage_subscription">Aboneliği yönet veya iptal et</string>
+    <string name="cloud_pay_with">Ödeme yöntemi</string>
+    <string name="cloud_not_with_provider">%1$s ile henüz kullanılamıyor.</string>
     <string name="action_upload_to_cloud">Tryptify Cloud’a yükle</string>
     <string name="connect_devices">Cihazlar</string>
     <string name="connect_this_phone">Bu telefon</string>

@@ -3111,6 +3111,8 @@
     <string name="cloud_uploads_channel">Cloud uploads</string>
     <string name="cloud_uploads_channel_desc">Progress of songs uploading to Tryptify Cloud.</string>
     <string name="cloud_manage_subscription">Manage or cancel subscription</string>
+    <string name="cloud_pay_with">Pay with</string>
+    <string name="cloud_not_with_provider">Not available with %1$s yet.</string>
     <string name="action_upload_to_cloud">Upload to Tryptify Cloud</string>
     <string name="tryptify_connect" translatable="false">Tryptify Connect</string>
     <string name="connect_devices">Devices</string>

@@ -260,8 +260,8 @@ object WhatsNew {
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = CLOUD,
-                    title = "Subscriptions through PayPal",
-                    body = "New subscriptions are paid through PayPal, and Manage or cancel subscription opens PayPal's automatic payments. A subscription you already have renews as before.",
+                    title = "Pay with PayPal or Creem",
+                    body = "Above the plans, pick PayPal or Creem to pay with; PayPal is picked first. Manage or cancel subscription opens whichever one you pay through. A subscription you already have renews as before.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,

@@ -3185,6 +3185,8 @@
     <string name="cloud_uploads_channel">Caricamenti nel cloud</string>
     <string name="cloud_uploads_channel_desc">Avanzamento dei brani in caricamento su Tryptify Cloud.</string>
     <string name="cloud_manage_subscription">Gestisci o annulla l\'abbonamento</string>
+    <string name="cloud_pay_with">Paga con</string>
+    <string name="cloud_not_with_provider">Non ancora disponibile con %1$s.</string>
     <string name="action_upload_to_cloud">Carica su Tryptify Cloud</string>
     <string name="connect_devices">Dispositivi</string>
     <string name="connect_this_phone">Questo telefono</string>

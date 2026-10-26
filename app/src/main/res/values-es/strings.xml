@@ -3185,6 +3185,8 @@
     <string name="cloud_uploads_channel">Subidas a la nube</string>
     <string name="cloud_uploads_channel_desc">Progreso de las canciones que se suben a Tryptify Cloud.</string>
     <string name="cloud_manage_subscription">Gestionar o cancelar la suscripción</string>
+    <string name="cloud_pay_with">Pagar con</string>
+    <string name="cloud_not_with_provider">Aún no disponible con %1$s.</string>
     <string name="action_upload_to_cloud">Subir a Tryptify Cloud</string>
     <string name="connect_devices">Dispositivos</string>
     <string name="connect_this_phone">Este teléfono</string>
