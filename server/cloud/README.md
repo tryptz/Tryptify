@@ -198,12 +198,27 @@ ids are not secrets:
 
 ### Live mode, created on 2026-10-21
 
-Mini, Pro, Ultra and Xtra (added 2026-10-24) have no Creem products yet:
-`CREEM_PRODUCT_{MINI,PRO,ULTRA,XTRA}_{MONTHLY,YEARLY,MONTHLY_TRIAL}` are
-unset, so `/plans` lists them as not offered by Creem and a Creem checkout for
-one answers `503 billing_not_set_up`. Twelve products to make, tax included
-like the others, the trial ones with a 7-day trial: Mini $0.99 / $9.99, Pro
-$39.99 / $399.99, Ultra $119.99 / $1,199.99, Xtra $399.99 / $3,999.99.
+Mini, Pro, Ultra and Xtra (added 2026-10-24) got their twelve live products
+on 2026-10-26, through the API, made like the nine below (USD, tax included,
+SaaS, the trial ones with 7 days) and each read back. Creem refuses a price
+under $1.00, so Mini's monthly went from $0.99 to $1.29 on both providers
+(PayPal's two Mini monthly plans were repriced, ids unchanged, with no
+subscribers on them):
+
+| Variable | Live product |
+| --- | --- |
+| `CREEM_PRODUCT_MINI_MONTHLY` | `prod_2tYlLffgyoIM9NUwgnOdcr` ($1.29) |
+| `CREEM_PRODUCT_MINI_YEARLY` | `prod_7d6oJQkesFmxD7GYeG0qrd` ($9.99) |
+| `CREEM_PRODUCT_MINI_MONTHLY_TRIAL` | `prod_2vbkLLh7Kl6ukJiOhGljSl` ($1.29, 7-day trial) |
+| `CREEM_PRODUCT_PRO_MONTHLY` | `prod_7Lpr4LoZDsmNtqb2ojv5qR` ($39.99) |
+| `CREEM_PRODUCT_PRO_YEARLY` | `prod_40zuAJfISWsChIn3QzG9Cf` ($399.99) |
+| `CREEM_PRODUCT_PRO_MONTHLY_TRIAL` | `prod_2xWsBRNSby2yzUhaBDdHTR` ($39.99, 7-day trial) |
+| `CREEM_PRODUCT_ULTRA_MONTHLY` | `prod_2aSNZ62wBtMvEieAcvHr10` ($119.99) |
+| `CREEM_PRODUCT_ULTRA_YEARLY` | `prod_5bkBnj3iPR9dVPqdV9rIsz` ($1,199.99) |
+| `CREEM_PRODUCT_ULTRA_MONTHLY_TRIAL` | `prod_3SKbwcPvZHa4G4Yzhy91pQ` ($119.99, 7-day trial) |
+| `CREEM_PRODUCT_XTRA_MONTHLY` | `prod_mcBmH30Bj2gfss6JkGh8A` ($399.99) |
+| `CREEM_PRODUCT_XTRA_YEARLY` | `prod_pxy9fSH0IpS6uQtl7LqXq` ($3,999.99) |
+| `CREEM_PRODUCT_XTRA_MONTHLY_TRIAL` | `prod_2yjLYPeLiWkFVqG7k2czzC` ($399.99, 7-day trial) |
 
 The same nine exist in Creem's **live** mode (checked back: nine, USD, tax
 included, trials only on the three trial products). The Worker uses them

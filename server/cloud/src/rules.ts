@@ -34,13 +34,13 @@ export const TRIAL_GB = 20;
  * The plans, smallest first (the order the app and the site list them), from
  * docs/plans/tryptify-cloud.md ("Pricing"). Each is $3.99 per 100 GB a month,
  * yearly at two months free, and a profit in the worst case; change one only
- * by rerunning that check. Mini is the owner's exception (2026-10-24): $0.99
- * for 10 GB, still a profit but a thin one, since a payment's fixed fee is
- * half of it. Prices are what the listener is shown; what they are charged is
+ * by rerunning that check. Mini is the owner's exception (2026-10-24): $1.29
+ * a month for 10 GB (from $0.99 on 2026-10-26: Creem's floor is $1.00), still
+ * a profit but a thin one, since a payment's fixed fee is a third of it. Prices are what the listener is shown; what they are charged is
  * set at the payment provider, and the two must agree.
  */
 export const PLANS = {
-  mini: { storageGb: 10, monthly: 0.99, yearly: 9.99 },
+  mini: { storageGb: 10, monthly: 1.29, yearly: 9.99 },
   lite: { storageGb: 100, monthly: 3.99, yearly: 39.99 },
   plus: { storageGb: 250, monthly: 9.99, yearly: 99.99 },
   max: { storageGb: 500, monthly: 19.99, yearly: 199.99 },

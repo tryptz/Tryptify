@@ -154,7 +154,7 @@
 - **The web player says why a TrypT HiFi song won't play.** When one fails to load it asks the server why: a TIDAL song not offered in your subscription's country says "TIDAL does not offer this song in your subscription's country.", in the site's eight languages, and the player moves on.
 
 #### More Tryptify Cloud plans
-- **Seven plans, from 10 GB to 10 TB.** Mini, 10 GB for $0.99 a month or $9.99 a year, under Lite; and over Max, Pro (1 TB, $39.99 / $399.99), Ultra (3 TB, $119.99 / $1,199.99) and Xtra (10 TB, $399.99 / $3,999.99). The app, tryptify.com/cloud and the account page list them all, a terabyte and up in TB.
+- **Seven plans, from 10 GB to 10 TB.** Mini, 10 GB for $1.29 a month or $9.99 a year, under Lite; and over Max, Pro (1 TB, $39.99 / $399.99), Ultra (3 TB, $119.99 / $1,199.99) and Xtra (10 TB, $399.99 / $3,999.99). The app, tryptify.com/cloud and the account page list them all, a terabyte and up in TB.
 - **The free trial gives up to 20 GB**: Mini's is its own 10 GB.
 
 #### Select all
@@ -176,9 +176,9 @@
 #### Library search bars float over their lists
 - **On Library › Local and My server, an open search bar takes the header row's place**, and the rows start under its glass and scroll up beneath it, as on the Search tab, instead of sitting below a strip that clipped the list. The Search tab's history does the same, and the debug log's and the HRTF database's filters are the same floating bar.
 
-#### Tryptify Cloud subscriptions through PayPal
-- **New subscriptions are paid through PayPal**: checkout opens PayPal, and comes back to your account page. A subscription you already have keeps renewing as before.
-- **Manage or cancel subscription** opens the place you pay: PayPal's automatic payments for a PayPal subscription.
+#### Tryptify Cloud: pay with PayPal or Creem
+- **Pick how you pay**: a Pay with row above the plans, in the app and on the account page, offers PayPal (picked first) or Creem. Checkout opens the one you picked and comes back to your account page. A subscription you already have keeps renewing as before.
+- **Manage or cancel subscription** opens the place you pay: PayPal's automatic payments for a PayPal subscription, Creem's portal for a Creem one.
 - **A full refund or a dispute ends the plan**; a partial refund doesn't. A free trial gives the trial only, until its last day.
 
 #### No light follows the pointer on tryptify.com
