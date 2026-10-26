@@ -11,7 +11,12 @@
 ![Native](https://img.shields.io/badge/native-C%2B%2B17%20%C2%B7%20JNI%20%C2%B7%20NEON-00599C?logo=cplusplus&logoColor=white)
 ![Audio](https://img.shields.io/badge/audio-Media3%20ExoPlayer%201.5.1-FF6F00)
 ![Languages](https://img.shields.io/badge/languages-8-2EA44F)
+## Support Tryptify
 
+Tryptify is free and open source. If it makes your listening better, you can support development here:
+
+[![Patreon](https://img.shields.io/badge/Patreon-Support-f96854?logo=patreon)](https://www.patreon.com/tryptz)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-ff5e5b?logo=ko-fi)](https://ko-fi.com/trypt)
 <p align="center">
   <a href="https://github.com/tryptz/Tryptify/releases/latest/download/tryptify.apk"><b>⬇ Download the latest APK</b></a>
   &nbsp;·&nbsp;
