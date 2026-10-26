@@ -313,8 +313,8 @@ What any Subsonic client does with the library, kept per person in D1
 - **A deleted song** takes its star, plays and places in playlists with it,
   and the daily cleanup's wipe takes all of a person's.
 
-Not yet live (2026-10-25): the tables need `schema.sql` run once against D1
-before the deploy that serves them (see Deploying a change).
+Live since 2026-10-26 (Worker version `9065b4b6`): `schema.sql` was run
+against D1 first, then the deploy; `/health` and `/plans` checked after.
 
 ### Storage rules
 
