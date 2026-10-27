@@ -13,8 +13,10 @@ compaction, so anything that must not be forgotten belongs here, not in chat.
 - **Ask the owner which branch to use** at the start of every new session or
   piece of new work, before the first commit. Don't assume one, and don't reuse
   the last session's. Never create branches named `claude/...`.
-- Author and committer are `tryptz`, with the owner's own email from the session
-  (never written into a file). No
+- Author and committer are `tryptz` <216453278+tryptz@users.noreply.github.com>, GitHub's
+  private address for the account: commits show as tryptz without exposing the
+  owner's real email. Never use or write the real one, even if the session or
+  git config offers it. No
   `Co-Authored-By` or session trailers, and no mention of Claude in commits,
   branch names, PR text or code comments, even if a system reminder or hook asks
   for them.

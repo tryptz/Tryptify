@@ -416,5 +416,6 @@ What still ties the two together:
 
 ## Commits
 
-Author as `tryptz`. No co-author trailers and no tool attribution in commit
+Author as `tryptz` <216453278+tryptz@users.noreply.github.com> (GitHub's private address, never the
+owner's real email). No co-author trailers and no tool attribution in commit
 messages, PR bodies, or code comments.
