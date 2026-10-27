@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.settings
 
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -35,6 +37,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -42,6 +45,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -59,7 +64,11 @@ import tf.monochrome.android.R
 import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import tf.monochrome.android.ui.navigation.popBackStackSafe
 import tf.monochrome.android.widget.GROUND
+import tf.monochrome.android.widget.NowPlayingSnapshot
+import tf.monochrome.android.widget.NowPlayingSnapshotStore
 import tf.monochrome.android.widget.NowPlayingWidget
+import tf.monochrome.android.widget.averageColor
+import tf.monochrome.android.widget.loadArtwork
 import tf.monochrome.android.widget.WidgetLook
 import tf.monochrome.android.widget.WidgetStyle
 import tf.monochrome.android.widget.WidgetStyleStore
@@ -67,8 +76,9 @@ import tf.monochrome.android.widget.resolveWidgetLook
 
 /**
  * Settings › Appearance › Home screen widget: the widget's look, with a
- * preview drawn from the same [resolveWidgetLook] the widget uses, so what is
- * shown here is what lands on the home screen. Every change is saved and
+ * preview of the song the widget is showing, drawn from the same
+ * [resolveWidgetLook] the widget uses, so what is shown here is what lands
+ * on the home screen. Every change is saved and
  * pushed to the placed widgets at once; the slider saves when it is let go.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,6 +88,13 @@ fun WidgetSettingsScreen(navController: NavController) {
     val scope = rememberCoroutineScope()
     val saved by WidgetStyleStore.flow(context).collectAsStateWithLifecycle(initialValue = null)
     var dragOpacity by remember { mutableStateOf<Int?>(null) }
+    // The song the widget is showing, so the preview shows it too and the
+    // Album glass takes the real cover's colour.
+    val nowPlaying by produceState<PreviewSong?>(initialValue = null) {
+        val snapshot = NowPlayingSnapshotStore.read(context)
+        val art = snapshot.artworkUri?.let { loadArtwork(context, it) }
+        value = PreviewSong(snapshot, art)
+    }
 
     fun save(style: WidgetStyle) {
         scope.launch {
@@ -107,7 +124,7 @@ fun WidgetSettingsScreen(navController: NavController) {
                 .padding(horizontal = 20.dp),
         ) {
             SettingsGroupHeader(stringResource(R.string.widget_style_preview))
-            WidgetPreview(shown)
+            WidgetPreview(shown, nowPlaying)
             Spacer(Modifier.height(20.dp))
 
             SettingsGroupHeader(stringResource(R.string.widget_style_glass))
@@ -200,8 +217,10 @@ private fun <T> Choice(options: List<T>, selected: T, label: @Composable (T) -> 
     }
 }
 
-/** The preview's stand-in cover, and so its album colour. Flat, like the widget. */
+/** The preview's stand-in cover when nothing has played yet, and so its album colour. */
 private val PreviewCover = Color(0xFFE8875A)
+
+private class PreviewSong(val snapshot: NowPlayingSnapshot, val art: Bitmap?)
 
 /**
  * The medium widget over a stand-in wallpaper: a dim ground with two flat
@@ -209,8 +228,13 @@ private val PreviewCover = Color(0xFFE8875A)
  * the same [WidgetLook].
  */
 @Composable
-private fun WidgetPreview(style: WidgetStyle) {
-    val look = resolveWidgetLook(style, PreviewCover.toArgb())
+private fun WidgetPreview(style: WidgetStyle, song: PreviewSong?) {
+    val art = song?.art
+    val coverColor = remember(art) { art?.let { averageColor(it) } ?: PreviewCover.toArgb() }
+    val cover = remember(art) { art?.asImageBitmap() }
+    val look = resolveWidgetLook(style, coverColor)
+    val title = song?.snapshot?.title?.takeIf { it.isNotBlank() }
+    val artist = song?.snapshot?.artist?.takeIf { it.isNotBlank() }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -234,16 +258,26 @@ private fun WidgetPreview(style: WidgetStyle) {
         ) {
             Row(Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 if (style.showCover) {
-                    Box(Modifier.size(88.dp).clip(RoundedCornerShape(19.dp)).background(PreviewCover))
+                    if (cover != null) {
+                        Image(
+                            bitmap = cover,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(88.dp).clip(RoundedCornerShape(19.dp)),
+                        )
+                    } else {
+                        Box(Modifier.size(88.dp).clip(RoundedCornerShape(19.dp)).background(PreviewCover))
+                    }
                     Spacer(Modifier.width(14.dp))
                 }
                 Column(Modifier.weight(1f).height(88.dp)) {
                     Text(
-                        stringResource(R.string.app_name),
+                        title ?: stringResource(R.string.app_name),
                         color = look.ink, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        stringResource(R.string.widget_description),
+                        artist ?: stringResource(R.string.widget_description),
                         color = look.inkSoft, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                     Spacer(Modifier.weight(1f))
@@ -252,7 +286,9 @@ private fun WidgetPreview(style: WidgetStyle) {
                         Spacer(Modifier.width(6.dp))
                         Box(Modifier.size(44.dp).background(look.disc, CircleShape), contentAlignment = Alignment.Center) {
                             Icon(
-                                painterResource(R.drawable.ic_glass_play),
+                                painterResource(
+                                    if (song?.snapshot?.isPlaying == true) R.drawable.ic_glass_pause else R.drawable.ic_glass_play,
+                                ),
                                 contentDescription = null,
                                 tint = look.onDisc,
                                 modifier = Modifier.size(26.dp),

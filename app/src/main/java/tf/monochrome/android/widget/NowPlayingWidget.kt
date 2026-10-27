@@ -6,7 +6,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -59,10 +58,9 @@ import tf.monochrome.android.ui.main.MainActivity
  * progress line and the play disc. [resolveWidgetLook] turns that into
  * colours, and picks the text colour so it reads on the chosen glass.
  *
- * The picker offers it three times (small 2x2, medium 4x2, large 4x4; see
+ * The picker offers it three times (small 2x2, medium 5x2, large 4x4; see
  * the receivers), but it is one widget: every entry resizes, and the layout
- * follows the size it is given. The launcher picks the largest layout that
- * fits; each is laid out to fit its own minimum.
+ * and the cover follow the exact size it is given ([pickLayout]).
  *
  * The corner is the launcher's own (`widget_glass_radius`, the system's from
  * Android 12), so on ColorOS, One UI or Pixel it rounds like the widgets
@@ -70,7 +68,8 @@ import tf.monochrome.android.ui.main.MainActivity
  */
 class NowPlayingWidget : GlanceAppWidget() {
 
-    override val sizeMode = SizeMode.Responsive(setOf(COMPACT, BAR, SQUARE, MEDIUM, LARGE))
+    // Exact, not buckets: see WidgetSizing for the 5x2 that got the bar layout.
+    override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val snapshot = NowPlayingSnapshotStore.read(context)
@@ -89,14 +88,6 @@ class NowPlayingWidget : GlanceAppWidget() {
             )
             GlassWidget(snapshot, parts)
         }
-    }
-
-    companion object {
-        val COMPACT = DpSize(110.dp, 50.dp)
-        val BAR = DpSize(260.dp, 64.dp)
-        val SQUARE = DpSize(120.dp, 120.dp)
-        val MEDIUM = DpSize(280.dp, 140.dp)
-        val LARGE = DpSize(280.dp, 260.dp)
     }
 }
 
@@ -135,23 +126,24 @@ private fun GlassWidget(snapshot: NowPlayingSnapshot, parts: WidgetParts) {
                 modifier = GlanceModifier.fillMaxSize(),
             )
         }
-        when (LocalSize.current) {
-            NowPlayingWidget.LARGE -> LargeLayout(snapshot, parts)
-            NowPlayingWidget.MEDIUM -> MediumLayout(snapshot, parts)
-            NowPlayingWidget.SQUARE -> SquareLayout(snapshot, parts)
-            NowPlayingWidget.BAR -> BarLayout(snapshot, parts)
-            else -> CompactLayout(snapshot, parts)
+        val size = LocalSize.current
+        when (pickLayout(size.width, size.height, parts.showProgress)) {
+            WidgetLayout.Large -> LargeLayout(snapshot, parts, largeCover(size.width))
+            WidgetLayout.Medium -> MediumLayout(snapshot, parts, mediumCover(size.width, size.height, parts.showProgress))
+            WidgetLayout.Square -> SquareLayout(snapshot, parts)
+            WidgetLayout.Bar -> BarLayout(snapshot, parts, barCover(size.height))
+            WidgetLayout.Compact -> CompactLayout(snapshot, parts)
         }
     }
 }
 
-/** 4x4: a big cover and the title, progress, then a full-width transport. */
+/** 4x4: a big cover ([largeCover]) and the title, progress, then a full-width transport. */
 @Composable
-private fun LargeLayout(snapshot: NowPlayingSnapshot, parts: WidgetParts) {
+private fun LargeLayout(snapshot: NowPlayingSnapshot, parts: WidgetParts, cover: Dp) {
     Column(modifier = GlanceModifier.fillMaxSize().padding(20.dp)) {
         Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             if (parts.showCover) {
-                Cover(parts, 120.dp)
+                Cover(parts, cover)
                 Spacer(GlanceModifier.width(16.dp))
             }
             Column(modifier = GlanceModifier.defaultWeight()) {
@@ -177,23 +169,23 @@ private fun LargeLayout(snapshot: NowPlayingSnapshot, parts: WidgetParts) {
     }
 }
 
-/** Fits MEDIUM's height: 140 less the padding and the progress row leaves 92. */
-private val MEDIUM_COVER = 88.dp
-
-/** 4x2 and 5x2: the cover, the title and transport beside it, progress along the bottom. */
+/**
+ * 4x2 and 5x2: the cover, the title and transport beside it, progress along
+ * the bottom. The cover fills the height there is ([mediumCover]).
+ */
 @Composable
-private fun MediumLayout(snapshot: NowPlayingSnapshot, parts: WidgetParts) {
-    Column(modifier = GlanceModifier.fillMaxSize().padding(16.dp)) {
+private fun MediumLayout(snapshot: NowPlayingSnapshot, parts: WidgetParts, cover: Dp) {
+    Column(modifier = GlanceModifier.fillMaxSize().padding(MEDIUM_PAD)) {
         Row(
             modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (parts.showCover) {
-                Cover(parts, MEDIUM_COVER)
-                Spacer(GlanceModifier.width(14.dp))
+                Cover(parts, cover)
+                Spacer(GlanceModifier.width(COVER_GAP))
             }
             // As tall as the cover: the title lines up with its top, the transport with its foot.
-            Column(modifier = GlanceModifier.defaultWeight().height(MEDIUM_COVER)) {
+            Column(modifier = GlanceModifier.defaultWeight().height(if (parts.showCover) cover else TEXT_BLOCK)) {
                 TrackText(snapshot, parts.look, titleSize = 17.sp, artistSize = 13.sp)
                 Spacer(GlanceModifier.defaultWeight())
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -232,13 +224,13 @@ private fun SquareLayout(snapshot: NowPlayingSnapshot, parts: WidgetParts) {
 
 /** 4x1: cover, title over a progress line, and the transport. */
 @Composable
-private fun BarLayout(snapshot: NowPlayingSnapshot, parts: WidgetParts) {
+private fun BarLayout(snapshot: NowPlayingSnapshot, parts: WidgetParts, cover: Dp) {
     Row(
         modifier = GlanceModifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (parts.showCover) {
-            Cover(parts, 44.dp)
+            Cover(parts, cover)
             Spacer(GlanceModifier.width(12.dp))
         }
         Column(modifier = GlanceModifier.defaultWeight()) {

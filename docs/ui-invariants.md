@@ -730,7 +730,8 @@ past luminance 0.2, where white and near-black read equally, the ink turns
 dark, and the solid disc with it. White text on dense white glass is the
 failure. `WidgetStyleTest` sweeps every glass, cover and opacity for 4:1. The
 widget and the Settings preview both draw from `resolveWidgetLook`, so the
-preview cannot drift from the widget.
+preview cannot drift from the widget; the preview shows the song the widget
+is showing (`NowPlayingSnapshotStore`), so Album glass takes the real cover.
 
 **The pane and the disc are tinted white shapes** (`widget_glass_fill`,
 `widget_glass_edge`, `widget_glass_disc`), drawn as `Image`s, not a
@@ -745,10 +746,15 @@ grid, the owner's ask; the original class name, so widgets already placed
 stay) and `NowPlayingLargeWidgetReceiver` (4x4) all host `NowPlayingWidget`,
 each with its own `now_playing_widget_*_info` and picker preview
 (`layout/widget_glass_preview*`, the default look). Every entry resizes;
-`SizeMode.Responsive` picks a layout (2x1 compact, 4x1 bar, 2x2 square, 4x2
-and wider medium, 4x4 large), and each is laid out to fit its own minimum
-(`NowPlayingWidget.COMPACT` and the rest). A layout that only fits the size a
-launcher usually gives overflows on one that gives less.
+the widget is laid out at its **exact** size (`SizeMode.Exact`), and
+`pickLayout` (`WidgetSizing.kt`) picks what fits: 2x1 compact, 4x1 bar, 2x2
+square, 4x2 and wider medium, 4x4 large, with the cover grown into the room
+there is (`mediumCover`, `barCover`, `largeCover`). Never go back to fixed
+`SizeMode.Responsive` buckets: the medium bucket asked for 140dp, ColorOS
+reports a 5x2 a little shorter, and the launcher fell back to the bar, a thin
+row with a tiny cover in a tall empty pane (seen on device). `WidgetSizingTest`
+holds the ColorOS sizes and checks the medium layout fits wherever it is
+picked.
 
 **The corner is the launcher's** (`widget_glass_radius`, the system's
 `system_app_widget_background_radius` from Android 12) and the root carries
