@@ -706,6 +706,55 @@ a selected chip as wide as the room offered: invisible in a scrolling row, but i
 a plain `Row` or a `FlowRow` it swallowed the line and squeezed its label to a
 letter a line.
 
+### Home-screen widget
+
+**Flat glass, no gradients** (`widget/NowPlayingWidget.kt`). One see-through
+pane that the wallpaper shows through, the way ColorOS draws its own glass,
+with a 1dp edge. On it: the sharp cover, the text, the previous/next glyphs, a
+play disc and a progress line on a faint track. A version with the cover
+blurred and frosted behind everything, a top sheen and gradient discs was tried
+on a ColorOS 17 phone and rejected as ugly: do not bring back the blurred
+cover, a sheen or any gradient.
+
+**The look is the listener's**, under Settings › Appearance › Home screen
+widget (`WidgetSettingsScreen`, the owner asked for it): glass Light, Dark or
+Album colour (the cover's *average* colour, flat), opacity 0–85% (default
+Light at 18%), the edge, the cover, the progress line, and a Solid or Glass
+play disc. Kept in its own DataStore (`WidgetStyleStore`, `widget_style`),
+not synced: it is about this phone's home screen. Every option stays one
+flat colour at an opacity.
+
+**The text colour is not an option; it follows the glass**
+(`resolveWidgetLook`): the pane is judged over a dim wallpaper (`GROUND`), and
+past luminance 0.2, where white and near-black read equally, the ink turns
+dark, and the solid disc with it. White text on dense white glass is the
+failure. `WidgetStyleTest` sweeps every glass, cover and opacity for 4:1. The
+widget and the Settings preview both draw from `resolveWidgetLook`, so the
+preview cannot drift from the widget.
+
+**The pane and the disc are tinted white shapes** (`widget_glass_fill`,
+`widget_glass_edge`, `widget_glass_disc`), drawn as `Image`s, not a
+background colour: a RemoteViews background colour is square below Android 12,
+and a shape drawable cannot take a runtime colour. The style is collected in
+the widget's composition, not read once, so a change in Settings redraws a
+widget whose session is still open.
+
+**Three picker entries, one widget.** `NowPlayingSmallWidgetReceiver` (2x2),
+`NowPlayingWidgetReceiver` (5x2: the full width of ColorOS's five-column
+grid, the owner's ask; the original class name, so widgets already placed
+stay) and `NowPlayingLargeWidgetReceiver` (4x4) all host `NowPlayingWidget`,
+each with its own `now_playing_widget_*_info` and picker preview
+(`layout/widget_glass_preview*`, the default look). Every entry resizes;
+`SizeMode.Responsive` picks a layout (2x1 compact, 4x1 bar, 2x2 square, 4x2
+and wider medium, 4x4 large), and each is laid out to fit its own minimum
+(`NowPlayingWidget.COMPACT` and the rest). A layout that only fits the size a
+launcher usually gives overflows on one that gives less.
+
+**The corner is the launcher's** (`widget_glass_radius`, the system's
+`system_app_widget_background_radius` from Android 12) and the root carries
+`appWidgetBackground`, so on ColorOS, One UI and Pixel it rounds like the
+widgets beside it.
+
 ### Search bars
 
 Every search bar in the app is `SearchOverlay` + `GlassSearchBar`. There is one

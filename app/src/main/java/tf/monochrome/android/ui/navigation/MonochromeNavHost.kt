@@ -209,6 +209,7 @@ sealed class Screen(val route: String) {
     data object ThemePublish : Screen("theme_publish")
     data object LyricsEditor : Screen("lyrics_editor")
     data object AtmosRenderer : Screen("atmos_renderer")
+    data object WidgetSettings : Screen("widget_settings")
     data object HrtfDatabase : Screen("hrtf_database")
 
     /** StepMania Glyph: generated charts, gameplay and Training Ground. */
@@ -1066,6 +1067,9 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 }
                 composable(Screen.HrtfDatabase.route) {
                     tf.monochrome.android.ui.settings.HrtfDatabaseScreen(navController = navController)
+                }
+                composable(Screen.WidgetSettings.route) {
+                    tf.monochrome.android.ui.settings.WidgetSettingsScreen(navController = navController)
                 }
                 composable(
                     route = Screen.Oxford.route,
