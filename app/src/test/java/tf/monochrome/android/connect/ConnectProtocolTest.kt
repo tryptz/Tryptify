@@ -14,7 +14,7 @@ import org.junit.Test
 
 /**
  * Tryptify Connect as the phone reads and writes it, held to what the room
- * (server/connect/src/protocol.ts and room.ts) and the web player send.
+ * (tryptify-servers/connect/src/protocol.ts and room.ts) and the web player send.
  */
 class ConnectProtocolTest {
 

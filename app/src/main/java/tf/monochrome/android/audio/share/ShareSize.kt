@@ -30,7 +30,7 @@ interface SongShrinker {
  * what is left of its room for shared songs.
  */
 object ShareSize {
-    /** The rooms server's limit when its info does not say (server/rooms `SONG_LIMIT`). */
+    /** The rooms server's limit when its info does not say (tryptify-servers/rooms `SONG_LIMIT`). */
     const val DEFAULT_MAX_SONG_BYTES = 99_000_000L
 
     /** What the smaller copy is uploaded as. */

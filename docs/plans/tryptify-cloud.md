@@ -170,4 +170,4 @@ merchant of record with its own ID check, 3.9% + $0.40, signed webhooks and a
 test mode; payouts by bank transfer, USDC or Alipay, not PayPal. Paddle
 (5% + $0.50, PayPal payouts, custom terms under $10) is the fallback, and
 Dodo Payments a third. All three fit inside the worst case the prices were
-checked against. Built into `server/cloud/` (see its README for the setup).
+checked against. Built into `tryptify-servers/cloud/` (see its README for the setup).

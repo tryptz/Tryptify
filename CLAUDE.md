@@ -41,6 +41,14 @@ compaction, so anything that must not be forgotten belongs here, not in chat.
   `wrangler deploy` from it replaces the live site (on 2026-10-24 it took the
   party page, the changelog and the translations down).
 
+## Servers
+
+- The servers (Cloud, Connect, rooms, Theme Store) live in the private
+  repository `tryptz/tryptify-servers`; this one is public. Never copy server
+  source back in here, for a test or anything else. Tests read only
+  `app/src/test/resources/server-contract/`, which that repository's
+  `tools/app-contract.ts` writes.
+
 ## Every change
 
 - UI changes: read and update `docs/ui-invariants.md` (see AGENTS.md).

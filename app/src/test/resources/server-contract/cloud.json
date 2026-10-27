@@ -1,0 +1,38 @@
+{
+  "errors": [
+    "auth_unreachable",
+    "bad_link",
+    "bad_part_size",
+    "bad_parts",
+    "bad_provider",
+    "bad_request",
+    "bad_signature",
+    "billing_not_set_up",
+    "billing_unreachable",
+    "cover_too_big",
+    "file_too_big",
+    "length_required",
+    "link_expired",
+    "no_plan",
+    "no_subscription",
+    "not_an_image",
+    "not_audio",
+    "not_found",
+    "not_set_up",
+    "over_quota",
+    "read_only",
+    "signed_out",
+    "size_mismatch",
+    "storage_not_set_up",
+    "too_many_uploads",
+    "trial_used"
+  ],
+  "bodyFields": [
+    "label",
+    "parts",
+    "period",
+    "plan",
+    "provider",
+    "trial"
+  ]
+}

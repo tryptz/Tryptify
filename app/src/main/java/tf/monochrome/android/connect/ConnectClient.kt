@@ -38,7 +38,7 @@ data class ConnectState(
 }
 
 /**
- * This phone's one connection to Tryptify Connect (server/connect): which of
+ * This phone's one connection to Tryptify Connect (tryptify-servers/connect): which of
  * the listener's devices are online, and what plays on which.
  *
  * Light on purpose. It is open only while [ConnectController] wants it (the

@@ -43,7 +43,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Tryptify Cloud (server/cloud): the listener's personal Subsonic-API music
+ * Tryptify Cloud (tryptify-servers/cloud): the listener's personal Subsonic-API music
  * storage, made for fast streaming.
  *
  * Every `/v1` call carries the Supabase session, as the Theme Store's do. The

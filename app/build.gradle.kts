@@ -60,7 +60,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // The Theme Store's API (server/theme-store, a Railway Function). It
+        // The Theme Store's API (tryptify-servers/theme-store, a Railway Function). It
         // holds no secret: every call carries the listener's Supabase session,
         // which the server checks against the project's public keys.
         buildConfigField(
@@ -69,7 +69,7 @@ android {
             "\"${localProperties.getProperty("themeStore.url") ?: "https://theme-store-production-a3db.up.railway.app"}\"",
         )
 
-        // Tryptify Cloud (server/cloud, a Cloudflare Worker): the paid personal
+        // Tryptify Cloud (tryptify-servers/cloud, a Cloudflare Worker): the paid personal
         // Subsonic-API music storage. Like the Theme Store it holds no secret;
         // calls carry the listener's Supabase session.
         buildConfigField(
@@ -116,7 +116,7 @@ android {
             "\"${retiredCpuHost?.let { h -> MessageDigest.getInstance("SHA-256").digest(h.toByteArray()).joinToString("") { "%02x".format(it) } } ?: ""}\"",
         )
         // The rooms server for Trypt Mania's multiplayer and the listening
-        // parties (server/rooms, on Cloudflare), built in whenever
+        // parties (tryptify-servers/rooms, on Cloudflare), built in whenever
         // local.properties `tryptmania.roomsServer` or TRYPTMANIA_ROOMS_SERVER
         // is set.
         val roomsServer = (localProperties.getProperty("tryptmania.roomsServer") ?: System.getenv("TRYPTMANIA_ROOMS_SERVER") ?: "").trim()

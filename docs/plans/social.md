@@ -32,7 +32,7 @@ It builds on what exists rather than beside it:
 | Invites | `social_invites` (party or game, a code, 3 h expiry, friends only) | the notification and join sheet |
 | Stats | `ui/stats/` (StatsReport, achievements, Trypt Mania grades); `social_stats.summary` (jsonb, under 16 KB) | the summary builder that fills it |
 | Space chart | the genre and library galaxies (`ui/discover/galaxy/`) | "My sky": a personal, monthly version |
-| Parties | `party/`, the rooms server (`server/rooms`, `rooms.tryptify.com`), joined by code or `tryptify.com/party/<code>` | Invite from a friend's row |
+| Parties | `party/`, the rooms server (`tryptify-servers/rooms`, `rooms.tryptify.com`), joined by code or `tryptify.com/party/<code>` | Invite from a friend's row |
 | Presence | Discord presence (`data/presence/`) | Tryptify's own, for friends |
 
 ## Decisions to make (the owner's call)
@@ -115,7 +115,7 @@ Presence is one row per user in Supabase, written by the phone:
   without polling;
 - a **Private session** hides everything for 6 hours and then turns itself
   off, so nobody forgets it on.
-- To decide when it is built: Tryptify Connect (`server/connect`,
+- To decide when it is built: Tryptify Connect (`tryptify-servers/connect`,
   `ConnectController`) already knows what each of a listener's devices is
   playing. Presence could be published from there, one source for every
   device, instead of each phone writing its own row.

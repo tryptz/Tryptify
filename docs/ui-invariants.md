@@ -1153,7 +1153,7 @@ replaces a connected Navidrome; the button says so, naming that server, rather
 than doing it quietly.
 
 **Prices, storage and terms come from the server's `/plans`**, never from the
-app. The money rules live in `server/cloud/src/rules.ts`, and a price typed
+app. The money rules live in `tryptify-servers/cloud/src/rules.ts`, and a price typed
 into the app would drift from what the checkout charges. Sizes are decimal
 gigabytes on both sides (`Formatter.formatShortFileSize`, `GB = 1e9`).
 A plan of whole terabytes is shown in TB (`cloud_plan_storage_tb`, 1 TB =

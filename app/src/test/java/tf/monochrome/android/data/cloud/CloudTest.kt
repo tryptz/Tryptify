@@ -1,6 +1,9 @@
 package tf.monochrome.android.data.cloud
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -11,9 +14,11 @@ import java.io.File
 import java.nio.file.Files
 
 /**
- * The app's half of Tryptify Cloud's contract with `server/cloud`: the parts a
- * file is cut into, the error codes, the JSON the server sends, and what a
- * local track is uploaded with.
+ * The app's half of Tryptify Cloud's contract with its server (`cloud/` in
+ * tryptz/tryptify-servers): the parts a file is cut into, the error codes, the
+ * JSON the server sends, and what a local track is uploaded with. What the
+ * server sends and reads comes from `server-contract/cloud.json`, which that
+ * repository's `tools/app-contract.ts` writes.
  */
 class CloudTest {
 
@@ -25,9 +30,8 @@ class CloudTest {
         explicitNulls = false
     }
 
-    private val serverSource = File("../server/cloud/src").listFiles()!!
-        .filter { it.extension == "ts" }
-        .joinToString("\n") { it.readText() }
+    private val contract = Json.parseToJsonElement(File("src/test/resources/server-contract/cloud.json").readText()).jsonObject
+    private fun contractList(key: String) = contract.getValue(key).jsonArray.map { it.jsonPrimitive.content }
 
     @Test
     fun `parts cover the file exactly, all full but the last`() {
@@ -52,7 +56,8 @@ class CloudTest {
             "signed_out", "no_plan", "read_only", "over_quota", "not_audio", "file_too_big", "cover_too_big",
             "trial_used", "too_many_uploads", "not_set_up", "billing_not_set_up", "storage_not_set_up",
         )
-        for (code in mapped) assertTrue("server never sends $code", "\"$code\"" in serverSource)
+        val sent = contractList("errors")
+        for (code in mapped) assertTrue("server never sends $code", code in sent)
     }
 
     @Test
@@ -129,7 +134,7 @@ class CloudTest {
             json.encodeToString(CheckoutRequest("lite", "yearly", provider = "creem")),
         )
         // The server reads the same field name.
-        assertTrue(serverSource.contains("body?.provider"))
+        assertTrue("provider" in contractList("bodyFields"))
     }
 
     @Test

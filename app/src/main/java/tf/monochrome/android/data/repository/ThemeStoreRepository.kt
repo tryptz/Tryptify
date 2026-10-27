@@ -180,7 +180,7 @@ internal fun WirePack.toStore() = StorePack(
 )
 
 /**
- * The Theme Store, on its own server (`server/theme-store`, a Railway Function
+ * The Theme Store, on its own server (`tryptify-servers/theme-store`, a Railway Function
  * with its own Postgres). Every call needs an account: it carries the Supabase
  * session's access token, which the server checks against the project's public
  * keys. A token that has run out is refreshed once and the call sent again.
