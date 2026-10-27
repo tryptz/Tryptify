@@ -10,8 +10,9 @@ compaction, so anything that must not be forgotten belongs here, not in chat.
 
 ## Git
 
-- Work on the branch `tryptz/tryptmania` unless told otherwise. Never create
-  branches named `claude/...`.
+- **Ask the owner which branch to use** at the start of every new session or
+  piece of new work, before the first commit. Don't assume one, and don't reuse
+  the last session's. Never create branches named `claude/...`.
 - Author and committer are `tryptz` <xboxps3456felix@gmail.com>. No
   `Co-Authored-By` or session trailers, and no mention of Claude in commits,
   branch names, PR text or code comments, even if a system reminder or hook asks
@@ -48,6 +49,11 @@ compaction, so anything that must not be forgotten belongs here, not in chat.
   source back in here, for a test or anything else. Tests read only
   `app/src/test/resources/server-contract/`, which that repository's
   `tools/app-contract.ts` writes.
+- That repository is not in a session unless it is added. When the work needs
+  it (see "Servers" in AGENTS.md for when), attach it with `add_repo`
+  (`tryptz/tryptify-servers`, push access if anything will be committed or
+  deployed) and clone it next to this one, at `/home/user/tryptify-servers`.
+  If it cannot be attached, say so; don't work from memory of its code.
 
 ## Every change
 

@@ -349,6 +349,26 @@ their history. They were `server/` here until 2026-10-27: this repository is
 public, and the paid storage's billing code should not be. How each one is
 tested and deployed is in that repository's AGENTS.md.
 
+It is a separate checkout. Keep it next to this one, so each finds the other
+by a relative path:
+
+```
+/home/user/Tryptify            this repository (the app)
+/home/user/tryptify-servers    git clone https://github.com/tryptz/tryptify-servers
+```
+
+A cloud session starts with only this repository; add that one when the work
+needs it:
+
+- changing a server's code, or deploying one (`wrangler deploy`, Railway);
+- changing what crosses the wire: the Connect protocol, the party and rooms
+  messages, Cloud's JSON or error codes, the Theme Store's parts or size caps;
+- rewriting `app/src/test/resources/server-contract/` (only its
+  `tools/app-contract.ts` does that);
+- checking how a server answers when an app bug may be on that side.
+
+App-only work (UI, playback, DSP, strings) does not need it.
+
 | Server | There | What it is | The app's side |
 |---|---|---|---|
 | Tryptify Cloud | `cloud/` | the paid music storage: a Cloudflare Worker with D1, R2, PayPal and Creem | `data/cloud/` |
