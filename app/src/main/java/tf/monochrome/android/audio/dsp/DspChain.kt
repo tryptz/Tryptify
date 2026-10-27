@@ -32,6 +32,8 @@ import tf.monochrome.android.audio.eq.ParametricEqProcessor
 @UnstableApi
 class DspChain private constructor(
     val channelDetector: ChannelDetectorProcessor,
+    /** The outgoing song's ReplayGain, held through its tail (seeded by the caller). */
+    val replayGain: tf.monochrome.android.audio.replaygain.ReplayGainProcessor,
     val downmix: DownmixProcessor,
     val mixBus: MixBusProcessor,
     val autoEq: AutoEqProcessor,
@@ -49,7 +51,7 @@ class DspChain private constructor(
      * track, and a blend's outgoing tail must not push frames into them.
      */
     val processors: Array<AudioProcessor>
-        get() = arrayOf(channelDetector, mixBus, downmix, autoEq, parametricEq)
+        get() = arrayOf(channelDetector, replayGain, mixBus, downmix, autoEq, parametricEq)
 
     /**
      * Copies the live chain's settings onto this one.
@@ -187,6 +189,7 @@ class DspChain private constructor(
             val crossfeed = CrossfeedEffect()
             return DspChain(
                 channelDetector = ChannelDetectorProcessor(),
+                replayGain = tf.monochrome.android.audio.replaygain.ReplayGainProcessor(),
                 downmix = DownmixProcessor(crossfeed, placement),
                 // Nobody else holds this copy's engine, so reset() may free it.
                 mixBus = MixBusProcessor(inflator, compressor, crossfeed).apply { destroyEngineOnReset = true },

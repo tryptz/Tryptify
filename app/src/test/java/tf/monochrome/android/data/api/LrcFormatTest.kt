@@ -62,6 +62,26 @@ class LrcFormatTest {
     }
 
     @Test
+    fun byteOrderMarkKeepsTheFirstLine() {
+        val lyrics = LrcFormat.parse("﻿[00:01.00]first\n[00:02.00]second\n")!!
+        assertEquals(listOf("first", "second"), lyrics.lines.map { it.text })
+    }
+
+    @Test
+    fun endStampsAreTimesNotWords() {
+        val lyrics = LrcFormat.parse("[00:01.00]closed line[00:03.50]\n[00:04.00-00:06.00]with its end\n")!!
+        assertEquals(listOf("closed line", "with its end"), lyrics.lines.map { it.text })
+        assertEquals(listOf(1_000L, 4_000L), lyrics.lines.map { it.timeMs })
+    }
+
+    @Test
+    fun allZeroStampsAreUntimed() {
+        val lyrics = LrcFormat.parse("[00:00.00]one\n[00:00.00]two\n")!!
+        assertTrue(!lyrics.isSynced)
+        assertEquals(listOf("one", "two"), lyrics.lines.map { it.text })
+    }
+
+    @Test
     fun stampsRoundToCentiseconds() {
         assertEquals("00:10.40", LrcFormat.stamp(10_404))
         assertEquals("01:00.01", LrcFormat.stamp(60_005))

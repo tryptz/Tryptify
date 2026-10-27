@@ -87,9 +87,10 @@ class ProjectMRendererView @JvmOverloads constructor(
         if (surface == null || !surface.isValid) return
         // The panel's own ceiling rather than a number of our own: the
         // visualizer renders every vblank it is given, so what it wants is
-        // whatever this display can do.
+        // whatever this display can do, or the app's frame rate limit when
+        // that is lower.
         val wanted = if (producingFrames) {
-            display?.supportedModes?.maxOfOrNull { it.refreshRate } ?: return
+            wantedFrameRate(display?.supportedModes?.maxOfOrNull { it.refreshRate } ?: return)
         } else {
             0f
         }

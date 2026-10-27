@@ -534,7 +534,7 @@ private fun StoreTile(
             StorePicture(
                 pack,
                 picture,
-                Modifier.fillMaxWidth().aspectRatio(SNAPSHOT_ASPECT).clip(RoundedCornerShape(16.dp)),
+                Modifier.fillMaxWidth().aspectRatio(SNAPSHOT_CARD_ASPECT).clip(RoundedCornerShape(16.dp)),
             )
             Column(
                 Modifier.padding(start = 4.dp, top = 8.dp, end = 4.dp, bottom = 2.dp),

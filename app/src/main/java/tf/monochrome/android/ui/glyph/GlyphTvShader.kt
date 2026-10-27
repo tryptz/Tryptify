@@ -351,12 +351,17 @@ float3 maskOf(float i) {
 // BloomAmount, set by the sliders.
 const float BloomPixel = -1.5;
 const float BloomScanLine = -2.0;
-const float Shape = 2.0;
 
-float toLinear1(float c) { return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4); }
-float3 toLinear(float3 c) { return float3(toLinear1(c.r), toLinear1(c.g), toLinear1(c.b)); }
-float toSrgb1(float c) { return c < 0.0031308 ? c * 12.92 : 1.055 * pow(c, 0.41666) - 0.055; }
-float3 toSrgb(float3 c) { return float3(toSrgb1(c.r), toSrgb1(c.g), toSrgb1(c.b)); }
+// sRGB to light and back, a whole colour at once: one pow for the three
+// channels and no branch (toLinear runs thirty-one times a pixel with the
+// glow on). toSrgb's pow is fed no less than the curve's knee, below which
+// the mix takes the straight part anyway, so black never reaches pow(0, y).
+float3 toLinear(float3 c) {
+    return mix(c / 12.92, pow((c + 0.055) / 1.055, float3(2.4)), step(float3(0.04045), c));
+}
+float3 toSrgb(float3 c) {
+    return mix(c * 12.92, 1.055 * pow(max(c, float3(0.0031308)), float3(0.41666)) - 0.055, step(float3(0.0031308), c));
+}
 
 // The TV pixel `off` away from the one under `g` (in TV pixels), read at its
 // middle. One the layer's edge cuts in two is read just inside the edge, and
@@ -370,71 +375,78 @@ float3 fetch(float2 g, float2 off) {
 
 float2 dist(float2 g) { return -((g - floor(g)) - float2(0.5, 0.5)); }
 
-float gaus(float pos, float scale) { return exp2(scale * pow(abs(pos), Shape)); }
-
-float3 horz3(float2 g, float off) {
-    float3 b = fetch(g, float2(-1.0, off));
-    float3 c = fetch(g, float2(0.0, off));
-    float3 d = fetch(g, float2(1.0, off));
-    float dst = dist(g).x;
-    float wb = gaus(dst - 1.0, uSharp);
-    float wc = gaus(dst + 0.0, uSharp);
-    float wd = gaus(dst + 1.0, uSharp);
-    return (b * wb + c * wc + d * wd) / (wb + wc + wd);
-}
-
-float3 horz5(float2 g, float off) {
-    float3 a = fetch(g, float2(-2.0, off));
-    float3 b = fetch(g, float2(-1.0, off));
-    float3 c = fetch(g, float2(0.0, off));
-    float3 d = fetch(g, float2(1.0, off));
-    float3 e = fetch(g, float2(2.0, off));
-    float dst = dist(g).x;
-    float wa = gaus(dst - 2.0, uSharp);
-    float wb = gaus(dst - 1.0, uSharp);
-    float wc = gaus(dst + 0.0, uSharp);
-    float wd = gaus(dst + 1.0, uSharp);
-    float we = gaus(dst + 2.0, uSharp);
-    return (a * wa + b * wb + c * wc + d * wd + e * we) / (wa + wb + wc + wd + we);
-}
-
-float3 horz7(float2 g, float off) {
-    float3 a = fetch(g, float2(-3.0, off));
-    float3 b = fetch(g, float2(-2.0, off));
-    float3 c = fetch(g, float2(-1.0, off));
-    float3 d = fetch(g, float2(0.0, off));
-    float3 e = fetch(g, float2(1.0, off));
-    float3 f = fetch(g, float2(2.0, off));
-    float3 h = fetch(g, float2(3.0, off));
-    float dst = dist(g).x;
-    float wa = gaus(dst - 3.0, BloomPixel);
-    float wb = gaus(dst - 2.0, BloomPixel);
-    float wc = gaus(dst - 1.0, BloomPixel);
-    float wd = gaus(dst + 0.0, BloomPixel);
-    float we = gaus(dst + 1.0, BloomPixel);
-    float wf = gaus(dst + 2.0, BloomPixel);
-    float wh = gaus(dst + 3.0, BloomPixel);
-    return (a * wa + b * wb + c * wc + d * wd + e * we + f * wf + h * wh) / (wa + wb + wc + wd + we + wf + wh);
-}
+// The original's gaus, exp2(scale * |pos| ^ Shape), with its Shape of 2 as a
+// square rather than a pow.
+float gaus(float pos, float scale) { return exp2(scale * pos * pos); }
 
 float scan(float2 g, float off) { return gaus(dist(g).y + off, uScan); }
 float bloomScan(float2 g, float off) { return gaus(dist(g).y + off, BloomScanLine); }
 
-float3 tri(float2 g) {
-    float3 a = horz3(g, -1.0);
-    float3 b = horz5(g, 0.0);
-    float3 c = horz3(g, 1.0);
-    return a * scan(g, -1.0) + b * scan(g, 0.0) + c * scan(g, 1.0);
+// The sideways spreads. A TV pixel `k` columns off weighs gaus(dist + k) on
+// every line, so the weights are worked out once a pixel, not once a read:
+// `s` holds the sharp spread's at -2, -1, 1 and 2 with `s0` at 0, and `b`
+// the glow's at -3..-1 and 1..3 with `b0` at 0.
+
+// Line `row`'s three TV pixels around g, at the sharp spread.
+float3 sharp3(float2 g, float row, float4 s, float s0) {
+    float3 c = fetch(g, float2(-1.0, row)) * s.y + fetch(g, float2(0.0, row)) * s0
+        + fetch(g, float2(1.0, row)) * s.z;
+    return c / (s.y + s0 + s.z);
 }
 
-float3 bloom(float2 g) {
-    float3 a = horz5(g, -2.0);
-    float3 b = horz7(g, -1.0);
-    float3 c = horz7(g, 0.0);
-    float3 d = horz7(g, 1.0);
-    float3 e = horz5(g, 2.0);
-    return a * bloomScan(g, -2.0) + b * bloomScan(g, -1.0) + c * bloomScan(g, 0.0)
-        + d * bloomScan(g, 1.0) + e * bloomScan(g, 2.0);
+// Line `row`'s five TV pixels around g, at the sharp spread.
+float3 sharp5(float2 g, float row, float4 s, float s0) {
+    float3 c = fetch(g, float2(-2.0, row)) * s.x + fetch(g, float2(-1.0, row)) * s.y
+        + fetch(g, float2(0.0, row)) * s0 + fetch(g, float2(1.0, row)) * s.z
+        + fetch(g, float2(2.0, row)) * s.w;
+    return c / (s.x + s.y + s0 + s.z + s.w);
+}
+
+// One of the middle three lines with the glow on: its seven TV pixels read
+// once and weighed twice, the sharp spread over the middle three (or five,
+// when `wide`) lit by `scanW`, and the glow over all seven lit by `glowW`.
+// The original read the middle ones again for each.
+float3 glowLine(float2 g, float row, bool wide, float scanW, float glowW,
+                float4 s, float s0, float3 bL, float3 bR, float b0) {
+    float3 a = fetch(g, float2(-3.0, row));
+    float3 b = fetch(g, float2(-2.0, row));
+    float3 c = fetch(g, float2(-1.0, row));
+    float3 d = fetch(g, float2(0.0, row));
+    float3 e = fetch(g, float2(1.0, row));
+    float3 f = fetch(g, float2(2.0, row));
+    float3 h = fetch(g, float2(3.0, row));
+    float3 sharp = c * s.y + d * s0 + e * s.z;
+    float sharpSum = s.y + s0 + s.z;
+    if (wide) {
+        sharp += b * s.x + f * s.w;
+        sharpSum += s.x + s.w;
+    }
+    float3 glow = a * bL.x + b * bL.y + c * bL.z + d * b0 + e * bR.x + f * bR.y + h * bR.z;
+    float glowSum = bL.x + bL.y + bL.z + b0 + bR.x + bR.y + bR.z;
+    return sharp / sharpSum * scanW + glow / glowSum * glowW;
+}
+
+// The original's tri, plus its bloom at uBloom: eleven reads without the
+// glow and thirty-one with it, where reading each line's pixels again for
+// the glow took forty-two.
+float3 crtColour(float2 g) {
+    float dx = dist(g).x;
+    float4 sd = dx + float4(-2.0, -1.0, 1.0, 2.0);
+    float4 s = exp2(uSharp * sd * sd);
+    float s0 = exp2(uSharp * dx * dx);
+    if (uBloom <= 0.0) {
+        return sharp3(g, -1.0, s, s0) * scan(g, -1.0) + sharp5(g, 0.0, s, s0) * scan(g, 0.0)
+            + sharp3(g, 1.0, s, s0) * scan(g, 1.0);
+    }
+    float3 bdL = dx + float3(-3.0, -2.0, -1.0);
+    float3 bdR = dx + float3(1.0, 2.0, 3.0);
+    float3 bL = exp2(BloomPixel * bdL * bdL);
+    float3 bR = exp2(BloomPixel * bdR * bdR);
+    float b0 = exp2(BloomPixel * dx * dx);
+    return glowLine(g, -1.0, false, scan(g, -1.0), bloomScan(g, -1.0) * uBloom, s, s0, bL, bR, b0)
+        + glowLine(g, 0.0, true, scan(g, 0.0), bloomScan(g, 0.0) * uBloom, s, s0, bL, bR, b0)
+        + glowLine(g, 1.0, false, scan(g, 1.0), bloomScan(g, 1.0) * uBloom, s, s0, bL, bR, b0)
+        + (sharp5(g, -2.0, s, s0) * bloomScan(g, -2.0) + sharp5(g, 2.0, s, s0) * bloomScan(g, 2.0)) * uBloom;
 }
 
 // VGA-style shadow mask, its stripes two of `pos`'s units wide.
@@ -487,11 +499,8 @@ half4 main(float2 fragCoord) {
         // CRT, on a grid of TV pixels uPixel phone pixels square. The mask's
         // stripes are about a TV pixel wide, and whole phone pixels.
         float2 g = fragCoord / uPixel;
-        // The bloom is thirty-one of the forty-two reads: none at 0 Glow.
-        float3 colour = tri(g);
-        if (uBloom > 0.0) {
-            colour += bloom(g) * uBloom;
-        }
+        // The glow is twenty of the thirty-one reads: none at 0 Glow.
+        float3 colour = crtColour(g);
         colour *= shadowMask(fragCoord / max(1.0, floor(uPixel / 2.0)));
         tv = toSrgb(clamp(colour * uBright, 0.0, 1.0));
     }

@@ -679,7 +679,15 @@ private fun QueueRow(item: PartyItem, ui: PartyUi, viewModel: PartyViewModel) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        item.shared?.let { shared ->
+        val shrinking = ui.shrinking[item.id]
+        if (shrinking != null) {
+            // Too big for the server as it is: its smaller copy is being made first.
+            Text(
+                stringResource(R.string.party_shrinking, (shrinking * 100).toInt()),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else item.shared?.let { shared ->
             Text(
                 if (shared.ready) stringResource(R.string.party_shared) else stringResource(R.string.party_uploading, (shared.progress * 100).toInt()),
                 style = MaterialTheme.typography.labelSmall,

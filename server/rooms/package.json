@@ -1,0 +1,13 @@
+{
+  "name": "tryptify-rooms",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun run party.test.ts && bun run room.test.ts && bun run catalog.test.ts && bun run test.ts",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.148.0"
+  }
+}

@@ -18,6 +18,8 @@ export interface Billing {
   portalUrl(customerId: string): Promise<string | null>;
   /** The events in a verified webhook, or null when its signature does not check out. */
   parseWebhook(headers: Headers, raw: string): Promise<BillingEvent[] | null>;
+  /** Whether this provider has [plan] for sale for [period] (and with a trial): a product set up for it. */
+  offers?(plan: PlanId, period: Period, trial?: boolean): boolean;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -26,7 +28,7 @@ export const productKey = (plan: PlanId, period: Period, trial = false) =>
   `CREEM_PRODUCT_${plan.toUpperCase()}_${period.toUpperCase()}${trial ? "_TRIAL" : ""}`;
 
 /** Constant-time comparison of two hex strings. */
-function sameHex(a: string, b: string): boolean {
+export function sameHex(a: string, b: string): boolean {
   if (a.length !== b.length || a.length === 0) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
@@ -64,6 +66,7 @@ export function creemBilling(env: Record<string, string | undefined>, http: type
 
   return {
     name: "creem",
+    offers: (plan, period, trial = false) => Boolean(env[productKey(plan, period, trial)]),
 
     async checkoutUrl(plan, period, userId, trial = false) {
       const product = env[productKey(plan, period, trial)];

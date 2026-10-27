@@ -20,9 +20,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
-import android.widget.FrameLayout
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
@@ -32,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.createLifecycleAwareWindowRecomposer
 import androidx.compose.ui.graphics.luminance
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -57,7 +62,6 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var preferences: PreferencesManager
     @Inject lateinit var supabaseAuthManager: SupabaseAuthManager
-    @Inject lateinit var spotifyAuthManager: tf.monochrome.android.data.auth.SpotifyAuthManager
     @Inject lateinit var lastFmAuthManager: tf.monochrome.android.data.auth.LastFmAuthManager
     @Inject lateinit var queueManager: QueueManager
     @Inject lateinit var trackSourceResolver: tf.monochrome.android.ui.components.TrackSourceResolver
@@ -163,16 +167,38 @@ class MainActivity : ComponentActivity() {
         // top rate is only offered at a lower resolution it is a slower one
         // than the override asked for, so the app ended up arguing its own
         // display down. What used to be Settings › System › Display › Frame
-        // Rate and Resolution was removed for this reason.
+        // Rate and Resolution was removed for this reason. The one exception
+        // is the listener's own: a Frame rate limit below Max asks for a
+        // slower rate (never a mode, never a resolution), because that is
+        // what they asked the app to do (FrameRateLimit.applyTo).
 
         // Root container wrapping the Compose content. (Real glass blur is
         // handled by Haze in-Compose; no native BlurView wrapper is needed.)
-        val rootContainer = FrameLayout(this)
+        // Holds every redraw to Settings › System › Performance › Frame rate
+        // limit; a plain FrameLayout at Max.
+        val rootContainer = tf.monochrome.android.performance.FrameLimitedLayout(this)
         val composeView = androidx.compose.ui.platform.ComposeView(this)
         rootContainer.addView(composeView, ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
         ))
         setContentView(rootContainer)
+        // Settings › System › Performance › Frame rate limit: the whole app is
+        // composed on the display's frame clock with the limit applied, so
+        // every recomposition, animation and frame loop under it, Trypt
+        // Mania's playfield included, moves on at most that many frames a
+        // second. Not a display vote: the panel's rate is left alone.
+        val displayClock = androidx.compose.ui.platform.AndroidUiDispatcher.CurrentThread[
+            androidx.compose.runtime.MonotonicFrameClock,
+        ]
+        if (displayClock != null) {
+            composeView.setParentCompositionContext(
+                composeView.createLifecycleAwareWindowRecomposer(
+                    androidx.compose.ui.platform.AndroidUiDispatcher.CurrentThread +
+                        tf.monochrome.android.performance.CappedFrameClock(displayClock),
+                    lifecycle,
+                ),
+            )
+        }
 
         composeView.setContent {
             val themeName by preferences.theme.collectAsStateWithLifecycle(initialValue = "monochrome_dark")
@@ -253,6 +279,16 @@ class MainActivity : ComponentActivity() {
                 .collectAsStateWithLifecycle(
                     initialValue = tf.monochrome.android.performance.LowPerformanceSettings()
                 )
+            // Settings › System › Performance: the frame rate limit, read by
+            // the frame clock and the visualizer's render threads, and the
+            // FPS counter drawn over everything.
+            val frameRateLimit by preferences.frameRateLimit
+                .collectAsStateWithLifecycle(initialValue = tf.monochrome.android.performance.FrameRateLimit.MAX)
+            val showFpsCounter by preferences.showFpsCounter.collectAsStateWithLifecycle(initialValue = false)
+            SideEffect {
+                tf.monochrome.android.performance.FrameRateLimit.fps = frameRateLimit
+                tf.monochrome.android.performance.FrameRateLimit.applyTo(window, frameRateLimit)
+            }
             // The album palette crosses over at the Color transition length —
             // a few hundred milliseconds by default, not the audio blend, which
             // could make every track change a six-second repaint.
@@ -409,6 +445,17 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+                    // Over the CRT's layer, not in it, so it reads plainly.
+                    if (showFpsCounter) {
+                        tf.monochrome.android.performance.FpsCounter(
+                            limit = frameRateLimit,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .wrapContentSize(Alignment.TopEnd)
+                                .statusBarsPadding()
+                                .padding(top = 4.dp, end = 8.dp),
+                        )
+                    }
                 }
             }
         }
@@ -526,8 +573,7 @@ class MainActivity : ComponentActivity() {
     /**
      * Route what other apps send: an audio file opened with Tryptify, a
      * listening party invite (the rooms server's https link), and the
-     * auth callback deep-links, Spotify (tryptify://spotify-callback),
-     * Last.fm (tryptify://lastfm-callback) and Supabase
+     * auth callback deep-links, Last.fm (tryptify://lastfm-callback) and Supabase
      * (tf.monotrypt.android://login-callback). Handled from BOTH
      * onNewIntent (app already running) and onCreate (cold start after process
      * death, where the redirect delivers the callback as the launch intent —
@@ -552,9 +598,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         lifecycleScope.launch {
-            if (scheme == "tryptify" && uri.host == "spotify-callback") {
-                spotifyAuthManager.handleCallback(uri)
-            } else if (scheme == "tryptify" && uri.host == "lastfm-callback") {
+            if (scheme == "tryptify" && uri.host == "lastfm-callback") {
                 lastFmAuthManager.handleCallback(uri)
             } else if (scheme == "tf.monotrypt.android") {
                 supabaseAuthManager.handleDeepLink(uri)

@@ -74,8 +74,9 @@ fun DiscoverShelfScreen(
     // twenty is actually comfortable.
     val selection = rememberTrackSelectionState<String>()
     var showAddToPlaylist by remember { mutableStateOf(false) }
-    val selectedTracks = shelf?.items.orEmpty()
-        .filterIsInstance<DiscoveryItem.TrackItem>()
+    // The songs among the cards, found once per shelf, not on every recomposition.
+    val trackItems = remember(shelf) { shelf?.items.orEmpty().filterIsInstance<DiscoveryItem.TrackItem>() }
+    val selectedTracks = trackItems
         .filter { it.key in selection.selectedIds }
         .map { it.track }
 
@@ -119,6 +120,7 @@ fun DiscoverShelfScreen(
                 // always matches what the buttons will act on.
                 selectedCount = selectedTracks.size,
                 onClose = { selection.clear() },
+                onSelectAll = selection.selectAllOf(trackItems) { it.key },
                 onAddToQueue = {
                     playerViewModel.addUnifiedToQueue(selectedTracks)
                     selection.clear()

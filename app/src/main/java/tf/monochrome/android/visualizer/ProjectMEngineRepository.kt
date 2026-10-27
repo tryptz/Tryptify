@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import tf.monochrome.android.data.preferences.PreferencesManager
+import tf.monochrome.android.performance.FrameRateLimit
 import tf.monochrome.android.domain.model.VisualizerEnginePhase
 import tf.monochrome.android.domain.model.VisualizerEngineStatus
 import tf.monochrome.android.domain.model.VisualizerPreset
@@ -129,6 +130,13 @@ class ProjectMEngineRepository @Inject constructor(
     private var rotationSeconds: Int = 20
     private var playbackPaused: Boolean = false
 
+    /**
+     * Set when a new surface attaches: its first frame is drawn even while
+     * paused. A paused engine freezes on its last frame, but a new surface
+     * has none, so freezing there left it showing nothing, the cover alone.
+     */
+    private var firstFrameOnSurface: Boolean = false
+
     // Track whether there is an active GL surface. Only the most recent
     // onSurfaceAttached call owns the native bridge. All others become no-ops.
     private var attachedSurfaceCount: Int = 0
@@ -146,6 +154,14 @@ class ProjectMEngineRepository @Inject constructor(
     // one field read per frame.
     private var pendingPreset: PendingPresetRequest? = null
     private var pendingQuality: Boolean = false
+
+    // The setting was turned off while an engine was live. Freeing it from the
+    // settings observer, which has no GL context current, made projectM's
+    // glDelete calls no-ops: its render targets, textures and shaders stayed
+    // in the preserved EGL context, again on every toggle. So the release
+    // waits here for the render thread, like the preset and quality above.
+    // Guarded by engineLock.
+    private var pendingRelease: Boolean = false
 
     // Set by the GLSurfaceView so a change made while paused still gets a frame
     // to appear on: the view drops to RENDERMODE_WHEN_DIRTY when playback
@@ -210,9 +226,16 @@ class ProjectMEngineRepository @Inject constructor(
             preferences.visualizerEngineEnabled.collectLatest { enabled ->
                 _engineEnabled.value = enabled
                 synchronized(engineLock) { syncAudioSubscriptionLocked() }
+                // Invoked outside the lock, as requestPresetOnGlThread explains.
+                val trigger = synchronized(engineLock) {
+                    // Back on before the render thread got to it: the engine
+                    // is still whole, so keep it.
+                    pendingRelease = !enabled && nativeInitialized
+                    if (pendingRelease) requestRender else null
+                }
+                trigger?.invoke()
                 synchronized(engineLock) {
                     if (!enabled) {
-                        releaseNativeLocked()
                         updateStatus(
                             phase = VisualizerEnginePhase.FALLBACK,
                             message = "projectM disabled in settings. Showing fallback visualizer."
@@ -398,6 +421,10 @@ class ProjectMEngineRepository @Inject constructor(
             }
 
             nativeInitialized = true
+            // A new native instance starts playing; it is told what the
+            // engine already knows, and draws its first frame regardless.
+            nativeBridge.setPaused(playbackPaused)
+            firstFrameOnSurface = true
             nativeBridge.configureQuality(meshX, meshY)
             nativeBridge.configureTargetFps(targetFps)
             nativeBridge.setPresetShuffleEnabled(_rotationMode.value.isRotating)
@@ -478,6 +505,10 @@ class ProjectMEngineRepository @Inject constructor(
      */
     fun renderFrame(frameTimeNanos: Long): Boolean {
         synchronized(engineLock) {
+            if (pendingRelease) {
+                releaseNativeLocked()
+                return false
+            }
             if (!_engineEnabled.value || !nativeInitialized) return false
             // The one place with a current GL context, so the one place these
             // can actually take effect.
@@ -498,8 +529,9 @@ class ProjectMEngineRepository @Inject constructor(
             // that has just been swapped in has never been drawn, so freezing
             // through it would leave the old one on screen -- the very bug this
             // is fixing, in a different disguise.
-            val freezeFrame = !appliedPendingWork &&
+            val freezeFrame = !appliedPendingWork && !firstFrameOnSurface &&
                 playbackPaused && (System.currentTimeMillis() - lastPcmTimestampMs) > 2_000L
+            firstFrameOnSurface = false
             if (!freezeFrame) {
                 nativeBridge.renderFrame(frameTimeNanos)
                 // Stamped where the frame is actually drawn, not where the cap
@@ -546,36 +578,43 @@ class ProjectMEngineRepository @Inject constructor(
 
     /**
      * How long the render thread should wait before its next frame, so the
-     * Target FPS cap is met by pacing rather than by dropping.
+     * cap ([effectiveFrameCap]) is met by pacing rather than by dropping.
      *
-     * Zero with vsync on: the display paces the swaps. With vsync off the swap
-     * returns at once, and a loop that drew whenever it could and let
-     * [renderFrame] drop the early frames presented those dropped frames
-     * anyway: the ambient overlay composited a cleared, empty frame (only the
-     * cover), the hero swapped a buffer nothing drew into, and the visualizer
-     * flashed and vanished between real frames. Read on the render thread,
-     * which is the thread that stamps the last frame.
+     * With vsync off the swap returns at once, and a loop that drew whenever
+     * it could and let [renderFrame] drop the early frames presented those
+     * dropped frames anyway: the ambient overlay composited a cleared, empty
+     * frame (only the cover), the hero swapped a buffer nothing drew into, and
+     * the visualizer flashed and vanished between real frames. With vsync on
+     * only the app's frame rate limit applies, and the wait is cut short by
+     * [VSYNC_SLACK_NANOS] so the swap still makes the vsync it is meant for.
+     * Read on the render thread, which is the thread that stamps the last
+     * frame.
      */
     fun nanosUntilNextFrame(nowNanos: Long): Long =
-        if (vsyncEnabled) 0L else frameWaitNanos(nowNanos, lastRenderedFrameNanos, targetFps)
+        frameWaitNanos(nowNanos, lastRenderedFrameNanos, frameCap(), frameSlack())
 
     /**
-     * Whether this frame should be dropped to hold the visualizer at Target FPS.
+     * Whether this frame should be dropped to hold the visualizer at its cap
+     * ([effectiveFrameCap]).
      *
-     * Only with vsync off. With vsync on the display is already the limit and
-     * the app draws once per refresh, so applying the cap there would mean a
-     * 165Hz panel rendering at whatever number happened to be in the setting --
-     * a ceiling nobody asked for on the one path that was already correct.
+     * Target FPS only with vsync off. With vsync on the display is already the
+     * limit and the app draws once per refresh, so applying Target FPS there
+     * would mean a 165Hz panel rendering at whatever number happened to be in
+     * the setting -- a ceiling nobody asked for on the one path that was
+     * already correct. The app-wide frame rate limit (Settings › System ›
+     * Performance) is a ceiling somebody did ask for, so it applies either way.
      *
      * This drops the frame rather than sleeping on it. Sleeping is what a
      * limiter would rather do, but this runs holding engineLock, and holding it
      * through a sleep would stall every preset change waiting on the render
      * thread. So the saving is the GPU work, not the loop.
      */
-    private fun shouldSkipForFrameCapLocked(frameTimeNanos: Long): Boolean {
-        if (vsyncEnabled) return false
-        return shouldDropFrame(frameTimeNanos, lastRenderedFrameNanos, targetFps)
-    }
+    private fun shouldSkipForFrameCapLocked(frameTimeNanos: Long): Boolean =
+        shouldDropFrame(frameTimeNanos, lastRenderedFrameNanos, frameCap(), frameSlack())
+
+    private fun frameCap(): Int = effectiveFrameCap(targetFps, vsyncEnabled, FrameRateLimit.fps)
+
+    private fun frameSlack(): Long = if (vsyncEnabled) VSYNC_SLACK_NANOS else 0L
 
     fun setPlaybackPaused(paused: Boolean) {
         playbackPaused = paused
@@ -718,6 +757,7 @@ class ProjectMEngineRepository @Inject constructor(
         // re-applies it when the next surface attaches.
         pendingPreset = null
         pendingQuality = false
+        pendingRelease = false
     }
 
     private fun ensureAssetsLocked() {
@@ -938,8 +978,8 @@ class ProjectMEngineRepository @Inject constructor(
  * whatever the GPU will give, which is the state this was written to end. A cap
  * of zero or less means no limit.
  */
-internal fun shouldDropFrame(frameTimeNanos: Long, lastRenderedNanos: Long, cap: Int): Boolean =
-    cap > 0 && frameTimeNanos - lastRenderedNanos < 1_000_000_000L / cap
+internal fun shouldDropFrame(frameTimeNanos: Long, lastRenderedNanos: Long, cap: Int, slackNanos: Long = 0L): Boolean =
+    cap > 0 && frameTimeNanos - lastRenderedNanos < 1_000_000_000L / cap - slackNanos
 
 /**
  * How long until a frame may be drawn at [cap] frames per second, given the
@@ -947,6 +987,36 @@ internal fun shouldDropFrame(frameTimeNanos: Long, lastRenderedNanos: Long, cap:
  * waits this long first is never told by [shouldDropFrame] to drop. A cap of
  * zero or less means no wait.
  */
-internal fun frameWaitNanos(frameTimeNanos: Long, lastRenderedNanos: Long, cap: Int): Long =
+internal fun frameWaitNanos(frameTimeNanos: Long, lastRenderedNanos: Long, cap: Int, slackNanos: Long = 0L): Long =
     if (cap <= 0) 0L
-    else (lastRenderedNanos + 1_000_000_000L / cap - frameTimeNanos).coerceAtLeast(0L)
+    else (lastRenderedNanos + 1_000_000_000L / cap - slackNanos - frameTimeNanos).coerceAtLeast(0L)
+
+/**
+ * The visualizer's frames-a-second cap: Target FPS ([targetFps]) with vsync
+ * off, the app-wide frame rate limit ([limit], Settings › System ›
+ * Performance) either way, the lower of the two when both apply. 0: none.
+ */
+internal fun effectiveFrameCap(targetFps: Int, vsync: Boolean, limit: Int): Int {
+    val own = if (vsync) 0 else targetFps.coerceAtLeast(0)
+    val app = limit.coerceAtLeast(0)
+    return when {
+        own == 0 -> app
+        app == 0 -> own
+        else -> minOf(own, app)
+    }
+}
+
+/**
+ * The rate a visualizer surface asks the display for while it draws: the
+ * panel's fastest, [panelMax], or the app's frame rate limit when that is
+ * lower. Still one float on the surface, never a mode.
+ */
+internal fun wantedFrameRate(panelMax: Float, limit: Int = FrameRateLimit.fps): Float =
+    if (limit > 0) minOf(panelMax, limit.toFloat()) else panelMax
+
+/**
+ * With vsync on the swap waits for the display, so a frame held for the limit
+ * is let go this much early: drawn a little before its vsync rather than just
+ * after it, which would cost the whole next one.
+ */
+internal const val VSYNC_SLACK_NANOS = 4_000_000L

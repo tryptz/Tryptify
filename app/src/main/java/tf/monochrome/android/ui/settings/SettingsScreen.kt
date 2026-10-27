@@ -1761,6 +1761,8 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
                 Text("Seap Inflator")
             }
         }
+        Spacer(modifier = Modifier.height(8.dp))
+        ReplayGainSetting(viewModel)
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader(stringResource(R.string.trypt_mania_beta))
@@ -1867,6 +1869,69 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             checked = preservePitch,
             onCheckedChange = { viewModel.setPreservePitch(it) }
         )
+    }
+}
+
+// ReplayGain: the mode, and the pre-amp once a mode is on. Chips, laid out as
+// the DSP block size below is.
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun ReplayGainSetting(viewModel: SettingsViewModel) {
+    val settings by viewModel.replayGain.collectAsStateWithLifecycle()
+    Text(
+        text = stringResource(R.string.settings_replaygain),
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.settingsAnchor(stringResource(R.string.settings_replaygain)),
+    )
+    Text(
+        text = stringResource(R.string.settings_replaygain_desc),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    androidx.compose.foundation.layout.FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        tf.monochrome.android.audio.replaygain.ReplayGainMode.entries.forEach { mode ->
+            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                label = stringResource(
+                    when (mode) {
+                        tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF -> R.string.state_off
+                        tf.monochrome.android.audio.replaygain.ReplayGainMode.TRACK -> R.string.settings_replaygain_track
+                        tf.monochrome.android.audio.replaygain.ReplayGainMode.ALBUM -> R.string.settings_replaygain_album
+                        tf.monochrome.android.audio.replaygain.ReplayGainMode.SMART -> R.string.settings_replaygain_smart
+                    },
+                ),
+                selected = mode == settings.mode,
+                accent = MaterialTheme.colorScheme.primary,
+                onClick = { viewModel.setReplayGainMode(mode) },
+            )
+        }
+    }
+    if (settings.mode != tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF) {
+        Text(
+            text = stringResource(R.string.eq_preamp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        androidx.compose.foundation.layout.FlowRow(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            tf.monochrome.android.audio.replaygain.ReplayGain.PREAMP_STEPS.forEach { db ->
+                tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                    // Numbers and a unit, the same in every language.
+                    label = if (db > 0f) "+${db.toInt()} dB" else "${db.toInt()} dB",
+                    selected = db == settings.preampDb,
+                    accent = MaterialTheme.colorScheme.primary,
+                    onClick = { viewModel.setReplayGainPreamp(db) },
+                )
+            }
+        }
     }
 }
 
@@ -2509,12 +2574,15 @@ private fun DownloadsTab(viewModel: SettingsViewModel) {
     }
 }
 
+/** Max, then the limits the Frame rate limit chips offer. */
+private val FRAME_RATE_CHIPS =
+    listOf(tf.monochrome.android.performance.FrameRateLimit.MAX) + tf.monochrome.android.performance.FrameRateLimit.CHOICES
+
 // ─── Tab 6: Connections ────────────────────────────────────────────────
 /**
  * Every account and endpoint in one place: which catalogs to search, the
- * self-hosted server URLs behind them, the two scrobblers, the Spotify link
- * that Library's playlist import rides on, and the app sign-in that syncs
- * favourites across devices.
+ * self-hosted server URLs behind them, the two scrobblers, and the app
+ * sign-in that syncs favourites across devices.
  *
  * Replaces the old Instances and Scrobbling tabs and absorbs System's
  * "Account & Sync" group. Each section is a `...Controls` function rather than
@@ -2724,58 +2792,7 @@ private fun ConnectionsTab(viewModel: SettingsViewModel) {
         Spacer(modifier = Modifier.height(20.dp))
         DiscordPresenceControls(viewModel)
         Spacer(modifier = Modifier.height(20.dp))
-        SpotifyAccountControls()
-        Spacer(modifier = Modifier.height(20.dp))
         AccountControls(viewModel)
-    }
-}
-
-/**
- * Spotify connect / disconnect. Only the account link lives here — the import
- * UI it feeds stays on Library, next to the playlists it creates. Both read the
- * same [SpotifyImportViewModel]: `hiltViewModel()` resolves against the Settings
- * NavBackStackEntry, which is shared by every tab, so connecting here is
- * immediately visible to the importer there.
- */
-@Composable
-private fun SpotifyAccountControls() {
-    val context = LocalContext.current
-    val spotifyViewModel: SpotifyImportViewModel = hiltViewModel()
-    val connected by spotifyViewModel.isConnected.collectAsStateWithLifecycle()
-    val userName by spotifyViewModel.userName.collectAsStateWithLifecycle()
-    val connecting by spotifyViewModel.isConnecting.collectAsStateWithLifecycle()
-    val authError by spotifyViewModel.authError.collectAsStateWithLifecycle()
-
-    SettingsGroupHeader("Spotify")
-    if (connected) {
-        SettingItem(
-            title = "Spotify",
-            subtitle = stringResource(R.string.settings_connected_as, userName ?: "…"),
-        )
-        OutlinedButton(onClick = { spotifyViewModel.disconnect() }) {
-            Text(stringResource(R.string.settings_disconnect_spotify))
-        }
-    } else {
-        Text(
-            stringResource(R.string.settings_connect_your_spotify_account_to_import_playlists),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        Button(
-            onClick = { spotifyViewModel.connect(context) },
-            enabled = !connecting
-        ) {
-            Text(if (connecting) stringResource(R.string.settings_connecting) else stringResource(R.string.settings_connect_spotify))
-        }
-    }
-    authError?.let { error ->
-        Text(
-            error,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.padding(top = 8.dp)
-        )
     }
 }
 
@@ -2970,10 +2987,6 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         }
 
         Spacer(modifier = Modifier.height(20.dp))
-        // Frame rate and resolution are whole-app settings and were sitting in
-        // Appearance under a "Display" header, next to the explicit-badge
-        // toggle. They cost battery and heat, which makes them System's
-        // business — the visualizer's own GPU settings stay with the visualizer.
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader(stringResource(R.string.settings_performance))
 
@@ -3010,6 +3023,51 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
                 onCheckedChange = { viewModel.setDisableLiquidGlass(it) }
             )
         }
+
+        // The frame rate limit. Not a display-mode vote (the window holds
+        // none): the app draws on fewer of the panel's refreshes, and the
+        // visualizer's render threads wait out the same interval.
+        val frameRateLimit by viewModel.frameRateLimit.collectAsStateWithLifecycle()
+        val showFpsCounter by viewModel.showFpsCounter.collectAsStateWithLifecycle()
+        val frameRateLimitTitle = stringResource(R.string.settings_frame_rate_limit)
+        Text(
+            frameRateLimitTitle,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.settingsAnchor(frameRateLimitTitle).padding(top = 8.dp, bottom = 2.dp),
+        )
+        Text(
+            stringResource(R.string.settings_frame_rate_limit_desc),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FRAME_RATE_CHIPS.forEach { fps ->
+                val max = fps == tf.monochrome.android.performance.FrameRateLimit.MAX
+                tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                    label = if (max) stringResource(R.string.waterfall_max) else "$fps",
+                    selected = frameRateLimit == fps,
+                    accent = MaterialTheme.colorScheme.primary,
+                    onClick = { viewModel.setFrameRateLimit(fps) },
+                    // Three digits (120) need the room "Max" has; at 52 dp it read "12…".
+                    modifier = Modifier.width(if (max || fps >= 100) 64.dp else 52.dp),
+                    description = if (max) {
+                        stringResource(R.string.waterfall_every_refresh_desc)
+                    } else {
+                        stringResource(R.string.settings_frame_rate_limit_chip, fps)
+                    },
+                )
+            }
+        }
+        SettingSwitchItem(
+            title = stringResource(R.string.settings_fps_counter),
+            subtitle = stringResource(R.string.settings_fps_counter_desc),
+            checked = showFpsCounter,
+            onCheckedChange = { viewModel.setShowFpsCounter(it) }
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader(stringResource(R.string.settings_display))
@@ -3998,11 +4056,29 @@ private fun MusicFolders(viewModel: SettingsViewModel) {
             }
         }
     }
+    // Trypt Mania's linked packs, as songs: their folders join the list above
+    // (or are already in a whole-phone library), and the scan shows each song
+    // with its chart's title, artist and picture, each pack as an album.
+    val scope = rememberCoroutineScope()
+    SettingItem(
+        title = stringResource(R.string.settings_add_stepmania_packs),
+        subtitle = stringResource(R.string.settings_add_stepmania_packs_desc),
+        onClick = {
+            scope.launch {
+                val added = viewModel.addStepManiaPacks()
+                android.widget.Toast.makeText(
+                    context,
+                    context.getString(if (added) R.string.settings_stepmania_packs_scanning else R.string.settings_stepmania_packs_none),
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+            }
+        },
+    )
 }
 
 /**
- * Import a Spotify playlist from its link, with or without an account, and
- * with one, from your own playlists and Liked Songs.
+ * Import a Spotify playlist from its link, with no account: the public
+ * embed's first 100 songs, matched in the catalogue.
  *
  * Was a group on the System tab, between the app sign-in and the backup
  * controls. It produces playlists, so it belongs with the library — and
@@ -4015,11 +4091,8 @@ private fun PlaylistImportSection() {
         val context = LocalContext.current
         SettingsGroupHeader(stringResource(R.string.settings_playlist_import))
         val spotifyViewModel: SpotifyImportViewModel = hiltViewModel()
-        val spotifyConnected by spotifyViewModel.isConnected.collectAsStateWithLifecycle()
-        val spotifyUserName by spotifyViewModel.userName.collectAsStateWithLifecycle()
         val importProgress by spotifyViewModel.importProgress.collectAsStateWithLifecycle()
         val isImporting by spotifyViewModel.isImporting.collectAsStateWithLifecycle()
-        var showSpotifyPicker by remember { mutableStateOf(false) }
         var importUrl by remember { mutableStateOf("") }
 
         val onImportResult: (Boolean, UiText) -> Unit = { success, msg ->
@@ -4030,8 +4103,7 @@ private fun PlaylistImportSection() {
         // The link import, as Library › Playlists › New playlist has it: no
         // account needed, a public playlist read from its link, looked up as
         // it is pasted so its cover, name and length show before anything is
-        // imported. The account (Connections tab) adds browsing your own
-        // playlists and Liked Songs, and lists past the public 100 songs.
+        // imported.
         var strictAlbumMatch by remember { mutableStateOf(false) }
         val preview = tf.monochrome.android.ui.components.rememberSpotifyLinkPreview(importUrl.ifBlank { null })
         tf.monochrome.android.ui.components.SpotifyLinkField(link = importUrl, onLinkChange = { importUrl = it }) { trailing ->
@@ -4058,35 +4130,15 @@ private fun PlaylistImportSection() {
         val linkReady = preview is tf.monochrome.android.ui.components.LinkPreview.Found ||
             preview is tf.monochrome.android.ui.components.LinkPreview.Unreachable
         Spacer(modifier = Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                onClick = {
-                    val name = (preview as? tf.monochrome.android.ui.components.LinkPreview.Found)?.name
-                    spotifyViewModel.importByUrl(context, importUrl.trim(), strictAlbumMatch, name, onImportResult)
-                },
-                enabled = linkReady && !isImporting
-            ) {
-                Text(stringResource(R.string.settings_import_playlist))
-            }
-            if (spotifyConnected) {
-                OutlinedButton(
-                    onClick = {
-                        spotifyViewModel.loadMyPlaylists()
-                        showSpotifyPicker = true
-                    },
-                    enabled = !isImporting
-                ) {
-                    Text(stringResource(R.string.settings_browse_my_playlists))
-                }
-            }
+        Button(
+            onClick = {
+                val name = (preview as? tf.monochrome.android.ui.components.LinkPreview.Found)?.name
+                spotifyViewModel.importByUrl(context, importUrl.trim(), strictAlbumMatch, name, onImportResult)
+            },
+            enabled = linkReady && !isImporting
+        ) {
+            Text(stringResource(R.string.settings_import_playlist))
         }
-        Text(
-            if (spotifyConnected) stringResource(R.string.settings_connected_as, spotifyUserName ?: "…")
-            else stringResource(R.string.settings_spotify_browse_needs_connect),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp)
-        )
 
         when (val progress = importProgress) {
             is tf.monochrome.android.data.import_.ImportProgress.Fetching -> {
@@ -4148,25 +4200,6 @@ private fun PlaylistImportSection() {
             tf.monochrome.android.data.import_.ImportProgress.Idle -> {}
         }
 
-        if (showSpotifyPicker) {
-            val spotifyPlaylists by spotifyViewModel.myPlaylists.collectAsStateWithLifecycle()
-            val playlistsLoading by spotifyViewModel.playlistsLoading.collectAsStateWithLifecycle()
-            val playlistsError by spotifyViewModel.playlistsError.collectAsStateWithLifecycle()
-            tf.monochrome.android.ui.components.SpotifyPlaylistPickerDialog(
-                playlists = spotifyPlaylists,
-                isLoading = playlistsLoading,
-                error = playlistsError,
-                onPick = { playlistId, name, strict ->
-                    showSpotifyPicker = false
-                    spotifyViewModel.importPlaylist(context, playlistId, name, strict, onImportResult)
-                },
-                onPickLikedSongs = { strict ->
-                    showSpotifyPicker = false
-                    spotifyViewModel.importLikedSongs(context, strict, onImportResult)
-                },
-                onDismiss = { showSpotifyPicker = false }
-            )
-        }
 }
 
 /** One search hit: the setting, and where it lives. */

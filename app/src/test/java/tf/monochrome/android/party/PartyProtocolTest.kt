@@ -128,9 +128,11 @@ class PartyProtocolTest {
     fun anInviteLinkGivesItsCodeAndNothingElseDoes() {
         assertEquals("K7QD", PartyProtocol.inviteCode("https", "/s3cret/party/K7QD"))
         assertEquals("K7QD", PartyProtocol.inviteCode("https", "/party/k7qd/"))
+        assertEquals("K7QD", PartyProtocol.inviteCode("https", "/de/party/K7QD"))
         // The link the app itself hands out comes back to the same code.
-        val link = java.net.URI(PartyProtocol.inviteLink("https://rooms.example/s3cret", "k7qd"))
-        assertEquals("/s3cret/party/K7QD", link.path)
+        val link = java.net.URI(PartyProtocol.inviteLink("k7qd"))
+        assertEquals("tryptify.com", link.host)
+        assertEquals("K7QD", PartyProtocol.inviteCode(link.scheme, link.path))
         assertNull(PartyProtocol.inviteCode("http", "/party/K7QD"))
         assertNull(PartyProtocol.inviteCode("https", "/party/"))
         assertNull(PartyProtocol.inviteCode("https", "/party/K7QD/extra"))
@@ -158,13 +160,14 @@ class PartyProtocolTest {
     }
 
     @Test
-    fun songsAndInvitesLiveUnderTheServersAddress() {
+    fun songsLiveUnderTheServersAddressAndInvitesOnTheWebsite() {
         assertEquals(
             "https://rooms.example/s3cret/api/party/song?item=s1&ext=flac",
             PartyProtocol.songUrl("https://rooms.example/s3cret/", "s1", "flac"),
         )
         assertEquals("https://rooms.example/s3cret/api/party/song?item=s1", PartyProtocol.songUrl("https://rooms.example/s3cret", "s1"))
-        assertEquals("https://rooms.example/s3cret/party/K7QD", PartyProtocol.inviteLink("https://rooms.example/s3cret", "k7qd"))
+        // An invite is the website's page, never the rooms server's address.
+        assertEquals("https://tryptify.com/party/K7QD", PartyProtocol.inviteLink("k7qd"))
     }
 
     @Test

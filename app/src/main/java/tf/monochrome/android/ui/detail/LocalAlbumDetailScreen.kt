@@ -100,12 +100,15 @@ fun LocalAlbumDetailScreen(
         tracks.applyUnifiedSearchAndSort(listQuery, listSort)
     }
 
+    // Multi-select, begun from a song's menu ("Select").
+    val selection = tf.monochrome.android.ui.components.rememberUnifiedTrackSelection()
     var menuTrack by remember { mutableStateOf<UnifiedTrack?>(null) }
     UnifiedTrackContextMenuHost(
         track = menuTrack,
         onDismissRequest = { menuTrack = null },
         navController = navController,
         playerViewModel = playerViewModel,
+        onSelect = menuTrack?.let { t -> { selection.toggle(t) } },
     )
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -127,6 +130,11 @@ fun LocalAlbumDetailScreen(
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = MaterialTheme.colorScheme.background
             )
+        )
+        tf.monochrome.android.ui.components.UnifiedTrackSelectionBar(
+            selection = selection,
+            playerViewModel = playerViewModel,
+            order = visibleTracks,
         )
 
         when {
@@ -281,10 +289,12 @@ fun LocalAlbumDetailScreen(
                         LocalTrackRow(
                             track = track,
                             trackNumber = track.trackNumber ?: (index + 1),
-                            onClick = { onPlayTrack(track, visibleTracks) },
+                            onClick = { if (selection.active) selection.toggle(track) else onPlayTrack(track, visibleTracks) },
                             onAddToQueue = { onAddToQueue(track) },
                             onMoreClick = { menuTrack = track },
-                            navController = navController
+                            navController = navController,
+                            selectionMode = selection.active,
+                            selected = selection.isSelected(track),
                         )
                     }
                 }
@@ -301,7 +311,9 @@ private fun LocalTrackRow(
     onClick: () -> Unit,
     onAddToQueue: () -> Unit,
     onMoreClick: () -> Unit,
-    navController: NavController
+    navController: NavController,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
 ) {
     // Holding plays the song's preview until the finger lifts.
     val holdToPreview = rememberHoldToPreview(track)
@@ -312,7 +324,8 @@ private fun LocalTrackRow(
             .clip(MonoDimens.shapeMd)
             .combinedClickable(onClick = onClick, onLongClick = holdToPreview),
         shape = MonoDimens.shapeMd,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = MonoDimens.cardAlpha),
+        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = MonoDimens.cardAlpha),
     ) {
         Row(
             modifier = Modifier
@@ -322,6 +335,7 @@ private fun LocalTrackRow(
                 .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingSm),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (selectionMode) tf.monochrome.android.ui.components.SelectionCheck(selected)
             Text(
                 text = trackNumber.toString(),
                 style = MaterialTheme.typography.bodyMedium,
@@ -339,7 +353,8 @@ private fun LocalTrackRow(
                 ClickableArtists(
                     artists = track.artists,
                     fallbackName = track.artistName,
-                    onArtistClick = { ref -> ref.id?.let { navController.openArtist(track.sourceType, it) } },
+                    // While selecting, a tap anywhere on the row picks it.
+                    onArtistClick = { ref -> if (!selectionMode) ref.id?.let { navController.openArtist(track.sourceType, it) } },
                 )
             }
             // Where it plays from — on this screen, the device.
@@ -371,21 +386,23 @@ private fun LocalTrackRow(
             }
             // Default IconButton size keeps the touch target at the 48dp
             // minimum (was forced to 32dp); the glyph stays 20dp.
-            IconButton(onClick = onAddToQueue) {
-                Icon(
-                    Icons.AutoMirrored.Filled.PlaylistAdd,
-                    contentDescription = stringResource(R.string.action_add_to_queue),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            IconButton(onClick = onMoreClick) {
-                Icon(
-                    Icons.Default.MoreVert,
-                    contentDescription = stringResource(R.string.action_more_options),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
+            if (!selectionMode) {
+                IconButton(onClick = onAddToQueue) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.PlaylistAdd,
+                        contentDescription = stringResource(R.string.action_add_to_queue),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                IconButton(onClick = onMoreClick) {
+                    Icon(
+                        Icons.Default.MoreVert,
+                        contentDescription = stringResource(R.string.action_more_options),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
     }

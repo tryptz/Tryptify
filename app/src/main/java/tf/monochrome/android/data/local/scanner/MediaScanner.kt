@@ -48,7 +48,37 @@ class MediaScanner @Inject constructor(
     private val genreGraph: tf.monochrome.android.data.repository.GenreGraphRepository,
     private val artworkStore: tf.monochrome.android.data.local.tags.ArtworkStore,
     private val folderIndexer: FolderIndexer,
+    private val packs: tf.monochrome.android.glyph.pack.GlyphPackLibrary,
+    private val ownPack: tf.monochrome.android.glyph.pack.OwnPackStore,
 ) {
+    /**
+     * Linked StepMania packs' songs by their music's path ([GlyphPackLibrary.libraryTags]):
+     * read with the chart's title, artist and picture and the pack as the
+     * album. Empty when the packs cannot be read; the songs then keep their
+     * files' tags.
+     */
+    private suspend fun packTags(): Map<String, tf.monochrome.android.glyph.pack.GlyphPackLibrary.LibraryTags> =
+        try {
+            packs.libraryTags()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("MediaScanner", "could not read the StepMania packs", e)
+            emptyMap()
+        }
+
+    /**
+     * Trypt Mania's own pack folder (`<chosen folder>/Tryptify`), left out of
+     * the library: every chart made in the app is written there with a copy
+     * of its music, which the library already has where it came from, so the
+     * copy was every such song a second time.
+     */
+    private fun ownPackPaths(): Set<String> {
+        val tree = ownPack.folder.value ?: return emptySet()
+        val root = tf.monochrome.android.util.safTreeUriToPath(tree) ?: return emptySet()
+        return setOf("$root/${tf.monochrome.android.glyph.pack.StepManiaPack.OWN_PACK}")
+    }
+
 
     fun fullScan(
         excludedPaths: Set<String> = emptySet()
@@ -63,7 +93,7 @@ class MediaScanner @Inject constructor(
             // They were a parameter only, and the one real caller —
             // ScanCoordinator.runFullScan — has nothing to pass, so the setting
             // was written by the UI and then ignored by every scan.
-            val excluded = excludedPaths + preferences.excludedPaths.first()
+            val excluded = excludedPaths + preferences.excludedPaths.first() + ownPackPaths()
             // A scan sees only what Android has indexed, and not every way of
             // putting a file in a folder tells it: a new song stayed missing
             // through any number of rescans (#136). Ask for the ones it has
@@ -97,19 +127,23 @@ class MediaScanner @Inject constructor(
             // Rows an older scan gave a number for an artist are healed by one
             // full scan, not by every one: see needsReRead.
             val healNumbering = preferences.localNumberingHealScanned.first() < NUMBERING_HEAL_VERSION
+            val packTags = packTags()
 
             val addedCount = processFiles(
                 files = mediaStoreFiles,
                 shouldRead = {
+                    val existing = scanInfoByPath[it.absolutePath]
                     titleModeChanged ||
+                        needsPackRetag(existing, packTags[it.absolutePath]) ||
                         needsReRead(
-                            scanInfoByPath[it.absolutePath], it.dateModified,
+                            existing, it.dateModified,
                             titleFromFileName = titleFromFileName,
                             healNumbering = healNumbering,
                         )
                 },
                 progressChunkSize = 50,
                 titleFromFileName = titleFromFileName,
+                packTags = packTags,
             )
 
             // Prune deleted files
@@ -172,12 +206,17 @@ class MediaScanner @Inject constructor(
             // so adding or touching a file under an excluded folder let the
             // incremental scan import it straight back — the removal held only
             // until the next song landed in that folder.
-            val excluded = preferences.excludedPaths.first()
+            val excluded = preferences.excludedPaths.first() + ownPackPaths()
             val audio = mediaStoreSource.queryAllAudio(
                 excluded, folderRoots, includeAtmosVideos = false,
             )
             val known = localMediaDao.getAllTrackScanInfo().associateBy { it.filePath }
-            val changed = audio.filter { needsIncrementalRead(known[it.absolutePath], it.dateModified) }
+            val packTags = packTags()
+            val changed = audio.filter {
+                val existing = known[it.absolutePath]
+                needsIncrementalRead(existing, it.dateModified) ||
+                    needsPackRetag(existing, packTags[it.absolutePath])
+            }
 
             val addedCount = if (changed.isEmpty()) 0 else {
                 emit(ScanProgress.Started(totalFiles = changed.size))
@@ -186,6 +225,7 @@ class MediaScanner @Inject constructor(
                     shouldRead = { true },
                     progressChunkSize = 20,
                     titleFromFileName = preferences.localTitleFromFileName.first(),
+                    packTags = packTags,
                 )
             }
 
@@ -235,6 +275,7 @@ class MediaScanner @Inject constructor(
         shouldRead: (AudioFileInfo) -> Boolean,
         progressChunkSize: Int,
         titleFromFileName: Boolean,
+        packTags: Map<String, tf.monochrome.android.glyph.pack.GlyphPackLibrary.LibraryTags> = emptyMap(),
     ): Int {
         val parallelism = Runtime.getRuntime().availableProcessors().coerceIn(2, 8)
         val tagDispatcher = Dispatchers.IO.limitedParallelism(parallelism)
@@ -257,6 +298,7 @@ class MediaScanner @Inject constructor(
                             if (!shouldRead(audioFile)) return@async null
                             val tags = tagReader.readTags(audioFile.absolutePath, folderArtCache)
                             buildTrackEntity(audioFile, tags, titleFromFileName)
+                                .withPackTags(packTags[audioFile.absolutePath])
                         } catch (e: CancellationException) {
                             throw e
                         } catch (_: Exception) {
@@ -380,6 +422,33 @@ class MediaScanner @Inject constructor(
             isThxSpatialAudio = tags.isThxSpatialAudio,
             isDolbyAtmos = tags.isDolbyAtmos,
             lastScannedAt = System.currentTimeMillis()
+        )
+    }
+
+    /**
+     * A linked StepMania pack song as the library shows it: the chart's title
+     * and artist over the file's tags, the pack as its album, and the song's
+     * picture when it has one. A song of a pack that is no longer linked is
+     * read as its file says, on the next scan that reads it.
+     */
+    private fun LocalTrackEntity.withPackTags(
+        tags: tf.monochrome.android.glyph.pack.GlyphPackLibrary.LibraryTags?,
+    ): LocalTrackEntity {
+        if (tags == null) return this
+        val art = tags.artPath?.takeIf { File(it).isFile }
+        return copy(
+            title = tags.title,
+            titleSearchKey = tf.monochrome.android.player.LocalTrackMatching.searchKey(tags.title),
+            artist = tags.artist,
+            albumArtist = tags.albumArtist,
+            album = tags.album,
+            // One pack, one album: no disc or track numbers from the files.
+            trackNumber = null,
+            trackTotal = null,
+            discNumber = 1,
+            discTotal = null,
+            artworkCacheKey = art ?: artworkCacheKey,
+            hasEmbeddedArt = art != null || hasEmbeddedArt,
         )
     }
 
@@ -787,6 +856,18 @@ class MediaScanner @Inject constructor(
             ) return true
             return false
         }
+
+        /**
+         * Whether a linked StepMania pack song ([tags]) has to be read again
+         * to take the chart's title and artist: its row was read before the
+         * pack was linked, or the chart was renamed. Never for a song of no
+         * pack. Its date says nothing here, since the file did not change.
+         */
+        fun needsPackRetag(
+            existing: TrackScanInfo?,
+            tags: tf.monochrome.android.glyph.pack.GlyphPackLibrary.LibraryTags?,
+        ): Boolean = tags != null && existing != null &&
+            (existing.title != tags.title || existing.artist != tags.artist)
 
         /**
          * Whether the incremental scan reads a MediaStore file: the library has

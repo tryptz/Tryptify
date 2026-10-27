@@ -327,7 +327,21 @@ every pixel, so the library screen alone ran the phone hot (seen on device).
 The tube and the mask hide a breath of glass anyway. Turning the CRT off
 brings the motion back.
 
+**The lyrics' letter wave keeps moving under it.** `rememberLetterWaveSeconds`
+stops for "Disable animations" only. It once stopped for the CRT too, as the
+glass does, and the sung line's letters froze mid-wave with their speed, linked
+or not, doing nothing (seen on device). The wave is the one sung line, while
+the lyrics show, never a screen the listener idles on; the god rays already
+redraw that screen every frame.
+
 ### Lyrics: letter glass and god rays
+
+**Every slider on the Studio's Lyrics tab has a reset.** `FxSlider` takes a
+`defaultValue` (from `LyricsFxSettings.DEFAULT`); away from it a reset icon
+sits after the value and puts it back, then calls `onChangeFinished` like a
+lifted finger. The sides' curvature resets to "unset" (`curvatureSideDeg =
+-1`, following the bow) through `onReset`, not to a number. A new lyrics
+slider passes its default too.
 
 **The lyric glass reads the same optics as the player's, and its defaults are
 the old pins.** `liquidGlassModifier` used to set roundness, depth, motion,
@@ -538,7 +552,8 @@ term the letters use. It was the app clock times the speed: the slider then
 threw the letters to a new pose at each step instead of speeding them up,
 looked dead while dragged, and a link on it would have shaken them every
 frame. One clock for the app, so every line rides the same wave; it stops
-with "Disable animations" and the CRT over the whole app, as the glass does.
+with "Disable animations", and unlike the glass it runs under the CRT over the
+whole app (see the CRT paragraph under glass).
 
 The knobs are the same rule in native code: the engine keeps each linked
 knob's own value (`Route::base`) and saves *that*, so a mix saved mid-song
@@ -715,6 +730,22 @@ behaviour and it is not negotiable:
   Discover's bar is the field alone, one row like every other: its "Browse the
   map" line made it twice their height, so the map and "no match" live in the
   genre row under it.
+- Library › Local and My server are pages of their own under the Library chips,
+  and they had the inset as `padding(top = …)` on their Column, so the bar sat
+  in a strip and the list clipped under it (seen on device, side by side with
+  the Search tab). Now, as on the Search tab, the open bar takes the header
+  row's place (its own button closes it) and the list under it gets the inset
+  as content padding: Local lists every song until something is typed, My
+  server keeps the section that was open. `SongList`, `AlbumGrid` and
+  `ArtistList` take a `topInset` for this. Local's selection bar is fixed
+  chrome inside the overlay, so while it shows it is moved below the glass and
+  the list takes no inset.
+- The Search tab's history (an empty query) takes the inset as content
+  padding too (`SearchHistoryContent(topInset)`); it was padded, and clipped
+  under the bar. The debug log's filter and the HRTF database's filter were
+  inline text fields above their lists; both are permanent `SearchOverlay`s
+  now, with the log's level chips and the database's status line in
+  `barContent`.
 - Settings' form runs full height under the bar, with the inset going to each
   tab's own `LazyColumn` via `LocalSettingsSearchInset`. Pushing the form down
   instead leaves an empty strip behind the glass, and glass with nothing behind
@@ -787,12 +818,32 @@ from or there in the other at once. A second store of folders for Settings
 would be exactly the two switches above. An empty list scans the whole
 phone, and the row says so.
 
+**StepMania packs join the library through that same list, and are each one
+song.** Music folders › Add StepMania packs adds the folders Trypt Mania's
+linked packs are read from (`GlyphPackLibrary.linkedFolders`) to the user's
+folder roots, never a list of its own, and adds none to a whole-phone library,
+which holds them already. The scanner shows a linked pack song with its chart's
+title and artist over the file's tags (StepMania music is often an untagged
+OGG), the pack as its album, its album artist the pack's one artist or "Various
+Artists" so a pack is one album, and the song's picture
+(`GlyphPackLibrary.libraryTags`, `MediaScanner.withPackTags`); a row read before
+its pack was linked is read again for it (`needsPackRetag`). In Trypt Mania a
+library song whose file is a pack song's music is dropped for the pack's
+(`GlyphSongRepository.songs`), so it is listed once, with its chart, and never
+counted in "Chart every song without one", which would send a hand-made chart's
+song to the paid chart server. "Play in Trypt Mania" finds it by the file
+(`findRequested` reads a linked song's document as its path). Trypt Mania's own
+pack folder (`<chosen folder>/Tryptify`) is left out of every scan without
+touching the user's exclusions: each chart made in the app is written there
+with a copy of its music, and the copy was its song a second time. Copied (ZIP)
+packs live in the app's own storage and are not in the library.
+
 **Playlist Import in Settings is the link import.** No account needed: the
 link is looked up as it is pasted (`rememberSpotifyLinkPreview`,
 `LinkPreviewCard`, the same pieces as Library › Playlists › New playlist),
-and Import Playlist reads the public playlist when the account cannot.
-Browse My Playlists, for your own playlists and Liked Songs, shows only with
-Spotify connected; the field is never greyed out behind a sign-in again.
+and Import Playlist reads the public playlist (its first 100 songs). There is
+no Spotify account any more, and nothing here waits for one: the sign-in, the
+browse of your own playlists and Liked Songs went with it.
 
 **An imported font is a family, not a file.** Fonts arrive as a file per
 weight; the library groups the files that name the same family
@@ -922,6 +973,13 @@ screen with every scroll (seen on device).
 
 ### List rows
 
+**The selection bar has "Select all"** (`TrackSelectionBar(onSelectAll)`),
+over the list the screen holds whole, the same list its actions read: a
+playlist, an album, an artist, Favorites, Downloads, a folder, search
+results, a Discover shelf, a genre chart, the local detail pages
+(`UnifiedTrackSelectionBar` uses its `order`). It hides once everything is
+selected, and on a paged list (Local's Songs), which has no "all" on hand.
+
 **Every list row is Material 3, in both looks.** Song rows (`TrackItem`, the
 library's `SongRow`, search results), the Library's category tiles, folders,
 album and artist cards stand on `materialSurface`, never glass: a list is the
@@ -1004,18 +1062,55 @@ all. The listener's quality setting is untouched for real plays.
   every list that has a selection. Left out on purpose: the queue (hold there
   drags), Trypt Mania's wheel (it previews by itself) and Discover's cards.
 
+**Every song list has multi-select.** Begun from "Select" in a song's ⋮ menu;
+then a tap picks or unpicks a row and the bar acts on all of them. The lists
+over `UnifiedTrack` (the Local page's Songs and search, My server's songs,
+search and albums, and the local album, artist and genre/year pages) share
+`UnifiedTrackSelection` and `UnifiedTrackSelectionBar`, which keep the picked
+songs themselves: the Local page's Songs is paged, and a picked row that
+scrolls away is dropped from the page. A selection belongs to its list:
+changing category, section or search, or leaving an album, ends it. In
+selection mode a row shows its tick, hides ⋮ and its queue button, and its
+artist and album links pick the row instead of opening the page. Search
+results from the phone or the listener's server have a ⋮ too (the local
+menu), so a selection can start there. Two lists start it differently: a
+genre chart's row has no preview and no menu, so holding it picks it, and the
+picked rows are found in the catalogue when the bar acts; an artist's
+unreleased cards have no menu, so they join a selection begun from a top
+song. Left out: the queue (its own selection), Trypt Mania's wheel, the
+listening party's lists (Up next, and the add-song picker), the galaxy's
+moons and the genre map's chart panel.
+
+**Upload to Tryptify Cloud is on the selection bar** wherever the picked
+songs include files on the phone (the Local lists, the local album, artist
+and genre pages, folders, and search hits from the phone), and only those
+files go up. A batch says it was queued once, then once when it is done
+("Uploaded 12 songs"); a song that fails is told at once. There is no upload
+to a listener's own music server: the Subsonic API has none.
+
 `SongPreviewTest` holds the start point, the fade and the fill's colours.
 
 ### My server (Subsonic)
 
 **My server is one Library page, with its own small stack inside it.** Index
-(Albums · Artists) → artist → album, and Back pops that stack before it leaves
+(Albums · Artists · Songs) → artist → album, and Back pops that stack before it leaves
 the page (`SubsonicLibraryTab`'s `BackHandler`, like Local's categories). It
 pushes no nav routes: a server's ids are strings, and the catalogue album and
 artist screens take Longs, so a pushed route would open the wrong page or none.
 For the same reason a server song's "Go to album/artist" is hidden
 (`CatalogNav`, `SourceType.SUBSONIC` beside `LIVE_RADIO`), and Search shows its
 songs only, never its albums or artists.
+
+**Songs and the search ask the server, they never filter on the phone.**
+Songs is search3 with an empty query, a page of 500 at a time, fetched only
+once the chip is opened; the list ends on an empty page (videos are dropped
+from each page, so a short page is not the end) or one that adds nothing new
+(a server that ignores `songOffset`). The search is the page's own
+`SearchOverlay`, like Local's: songs only, asked again once typing pauses,
+and Back closes it before it leaves the page. The three chips scroll sideways
+and the buttons stay pinned right, because three chips and four buttons are
+wider than a phone. A tap in a long list queues that song and the next 999,
+not the whole server: the player maps every row of a queue on the tap.
 
 **It is built from the Local page's lists**: `AlbumGrid`, `ArtistList`,
 `SongList`. Material rows at `listRowHeight`, never glass, so the two pages read
@@ -1038,6 +1133,13 @@ once a server is connected.
 
 ### Tryptify Cloud
 
+**It starts folded under its title.** "Tryptify Cloud", with a ▾ beside it,
+is the only line until it is tapped; the intro, the plans or the storage, and
+the uploads open under it, and stay open while the screen lives. The plan
+cards made Connections long for everyone who came for something else. Folded,
+it does not ask the server for the account; opening it, and coming back from
+the payment page with it open, does.
+
 **It is described as storage, never as hosting a server**: "your personal
 Subsonic-API music storage, made for fast streaming". It sits right under the
 music server section in Settings › Connections, because it plays through that
@@ -1054,6 +1156,21 @@ than doing it quietly.
 app. The money rules live in `server/cloud/src/rules.ts`, and a price typed
 into the app would drift from what the checkout charges. Sizes are decimal
 gigabytes on both sides (`Formatter.formatShortFileSize`, `GB = 1e9`).
+A plan of whole terabytes is shown in TB (`cloud_plan_storage_tb`, 1 TB =
+1,000 GB), never as "10000 GB".
+
+**The way to pay comes from `/plans` too.** Its `providers` list (PayPal,
+Creem) puts the server's default first, and the app picks that one until the
+listener taps another in the "Pay with" row of `GlassChoiceChip`s, shown only
+when there is more than one. A plan the chosen provider has no product for
+keeps its card, with its buttons off and `cloud_not_with_provider` under the
+price, so switching providers never makes the cards jump or vanish. A server
+with no list gets no row and no `provider` in the checkout: it picks itself.
+
+**The trial offer says "up to" its size** (`cloud_trial_offer`, `/plans`
+`trial.storageGb`, 20 GB): every monthly plan has the trial, but a plan
+smaller than that gives its own size instead (Mini's 10 GB, `trialStorageGb`
+per plan), so the line must not promise 20 GB on every card.
 
 **Upload is a song-menu item for files on the phone only** (`LocalUploadToCloud`,
 offered when the menu knows a `filePath`, like Find album art). Uploads run one
@@ -1126,7 +1243,13 @@ pack of theirs with none gets one the first time they open it.
 **The store is two tiles to a row, each one `PressableGlass`** with the picture
 inset at the top and the name, author, likes and downloads on the glass under
 it. The picture is what a theme is chosen by, so it gets the room; part icons
-stay on the pack's page. The list refreshes quietly on coming back to it
+stay on the pack's page.
+
+**A card shows the top of the picture, the lyrics and the player, cut off
+above the panels band** (`SNAPSHOT_CARD_ASPECT`, cropped from the top). The
+whole 270 by 584 picture made two cards fill a screen, and the panels band's
+coloured backdrop, drawn so its glass has something to bend, read as clutter
+at card size. The pack's own page shows the picture whole. The list refreshes quietly on coming back to it
 (`refreshQuietly`), so a download or a like counts on the card at once.
 
 ### The globe
@@ -1785,6 +1908,14 @@ copy (`appTvTuning`, one line in the settings store, synced), and the app is
 their preview: a drag moves the whole app live (`AppTvLive`, read in the
 root layer's draw) and the store is written once, on release.
 
+**The CRT look reads each TV pixel once.** Its glow and its sharp spread share
+one read of each line's pixels (`glowLine`), and the sideways weights are
+worked out once a pixel, not once a read: thirty-one reads with the glow on,
+eleven without. The original's arithmetic read the middle lines twice, forty-two
+reads a pixel over the whole screen every frame, and the phone dropped frames
+over the app and the playfield alike. The picture is the same to within one
+step in 255; a "simpler" `tri` plus `bloom` brings the dropped frames back.
+
 **Chromatic shift and the two curves are the tube's glass, over any look.** A
 second pass chained after the pattern (`TUBE_SHADER`), so the scanlines and the
 mask bow with the picture, as on a tube; it runs only while one is above 0, and
@@ -2067,7 +2198,12 @@ Ready, the host's Start, Leave, and a line of chat.
   that can: its welcome hands the phone a key, and without one nothing of
   this shows. While someone is without the song the host has Share the song
   with the room, which uploads its file as it is (`RoomClient.shareSong`);
-  once it is up, a player without it has Get the song with its size, which
+  a file bigger than the server takes (its info's `maxSongBytes`, 99 MB)
+  goes up as an Opus copy at 320 kbps (`ShareSize`, `ShareShrinker`, the
+  owner's rule), its making shown as Making the song smaller to share with
+  its own percentage before the upload's; with no Opus encoder (before
+  Android 10), or a copy still too big, the file goes up as it is and the
+  server's refusal shows, as before. Once it is up, a player without it has Get the song with its size, which
   fetches it (`fetchSong`) into the cache, plays from that file and readies
   them in one tap (`haveAndReady`, in that order on the socket, since the
   server refuses a ready without the song). Until the host shares, they are
@@ -2102,6 +2238,36 @@ Ready, the host's Start, Leave, and a line of chat.
   its own (`PartyClient`, never `RoomClient`), Back from the party screen
   leaves the party on, and only Leave the party ends it.
 
+### Tryptify Connect
+
+**The Devices button sits in the player's top bar, left of the output
+(headphones) button**, white like its neighbours; `DevicesOther` while another
+of the listener's devices is online, `Devices` otherwise. It opens
+`ConnectPanel`, a pane of the player's own glass through `MainPlayerScreen`'s
+`overlay` slot, like the Speed panel and the audio tools: never a dialog or a
+`ModalBottomSheet` (see Glass), swiped down or Back to close.
+
+* Top to bottom: the grab handle and "Tryptify Connect"; when another device
+  plays, "Playing on …" (or "Last played on …" once it is gone), the song, its
+  timeline (a Slider with the elapsed and total time, moving in step, a drag
+  seeks that device), its Previous, Play/Pause and Next, and Play here; then
+  the devices, this phone
+  first, each a list row (`MonoDimens.listRowHeight`) with "Play here" or
+  "Play there" when the music can move to it.
+* Its text and icons are the glass's ink (Text on glass): the playing device
+  is said in words ("Playing"), never by an accent colour.
+* **The mini player follows another device, as Spotify's does.** While this
+  phone plays nothing (or is paused) and another of the listener's devices
+  plays, the bar shows that song, "Artist · Playing on …" on its artist line,
+  its progress line running in step (`rememberRemotePosition`: worked out from
+  that device's last word and the server's clock, nothing sent to keep it
+  moving), and its buttons and swipes steer that device. It keeps following
+  when that device is paused from here, and lets go when this phone plays or
+  that device goes. A tap opens the player with the Connect panel up.
+* What it says once ("Now playing on …", "Playing here, from …", "… started
+  playing, so this phone paused") is a toast, and only while the app is on
+  screen.
+
 ### Listening party
 
 **A listening party is the song first** (direction A, the owner's pick from
@@ -2115,7 +2281,8 @@ that says how this phone is doing (In sync, Catching up, Paused by the host,
 …); the cover large, the title, the artist and who added it, the progress
 (a Slider for the host, who seeks for everyone; a bar for the rest); the
 host's Play/Pause for everyone and Skip, everyone else's Vote skip with the
-count; Up next with who added each song and Shared or Uploading N%, and
+count; Up next with who added each song and Shared, Uploading N% or (this
+phone's own, too big to go up as it is) Making it smaller N%, and
 Add song; the switches for this phone (Share songs, and which goings-on are
 notified); Leave the party, and for the host End the party for everyone.
 The chat is a panel of the page right under Up next: every line, newest at
@@ -2150,7 +2317,8 @@ the bottom, and the field to say something.
   only opens a panel saying what it does, with End it and Cancel. Neither is
   a dialog (a dialog is another window and opaque; see Glass), and ending a
   party is never one tap.
-* An invite link (`https://<rooms server>/<secret>/party/<code>`) opens the
+* An invite link (`https://tryptify.com/party/<code>`, a translated page's
+  `/de/party/<code>`, or an older app's link on the rooms server) opens the
   party screen, which joins the code at once when this phone is at no party.
   At another party it asks first, in place at the top of the room ("You're
   invited to party …", Join and Not now), never a dialog and never by
@@ -2171,7 +2339,11 @@ the bottom, and the field to say something.
   (`PartyController.addAll`), one after another, never racing each other.
 * Anyone at the party with the app shares their own songs that are files on
   their phone (Share songs, on by default): one upload at a time, in queue
-  order, tried three times. A song that came from search says which
+  order, tried three times. A file bigger than the server takes, or than
+  what is left of the party's room, goes up as an Opus copy at 320 kbps,
+  made once before the tries and deleted after; where none can be made, or
+  it is still too big, it goes up as it is and the server refuses it (not
+  shared), as before. A song that came from search says which
   catalogue song it is (`PartyMatch.catalogId(source)`) and carries its
   cover, so other phones and the website find that very recording. Away
   longer than the seat is kept, a phone joins its party again by its code;
@@ -2200,6 +2372,82 @@ the assembled size.
 Local (`content://` / `file://`) artwork has no URL Discord can fetch, so it is
 uploaded as an attachment and referenced by the media-proxy path — the same route
 the animation takes. This needs the upload channel configured.
+
+### Frame rate limit and FPS counter
+
+**The limit is a slower frame clock, and the listener's own refresh-rate
+vote.** Settings ›
+System › Performance › Frame rate limit (Max, 30, 45, 60, 90, 120; per device,
+not synced) puts the activity's whole composition on `CappedFrameClock`, the
+display's clock with `FramePacer` keeping only the frames due: every
+recomposition, animation and `withFrameNanos` loop, Trypt Mania's playfield
+included, moves on at most that many frames a second, and with nothing changed
+nothing is redrawn. The clock alone was not enough on an LTPO phone (seen on
+device): the system and Compose's own votes held the panel at 120 Hz and the
+window drew on every refresh, 120 fps at "30". So a limit below Max also sets
+the window's `preferredRefreshRate` to the slowest of the display's rates at the
+current resolution that holds it (`FrameRateLimit.applyTo`, `refreshRateFor`):
+the rate alone, never a mode id or a resolution. At Max the window holds no
+refresh-rate or resolution vote, as before (MainActivity says why). A due
+frame runs inside the display's own frame callback, so what it changes is drawn
+on that frame. Each kept frame books the next one interval on, so a limit the
+panel does not divide (90 on 120 Hz) averages out to it, and a stall starts
+afresh rather than catching up. Touch input still arrives every vsync.
+
+**Every redraw is held to the limit at the root, whoever asks for it.** The
+clock and the refresh-rate vote were still not enough on device: things that
+ask for a frame outside the clock (a value read while drawing and written from
+an audio tap or the player, a TextureView's new frame, a library's own layer)
+kept the window drawing on every refresh. The activity's root view is a
+`FrameLimitedLayout`: a child's request to be drawn again reaches the window
+through it, and one that comes before the next frame the limit allows
+(`FramePacer`, the clock's own pacing) is held and passed on in that frame's
+animation pass, so it is drawn there with everything asked for meanwhile. At
+Max it passes everything at once. A plain FrameLayout there brings the
+120 fps at "30" back.
+
+**Nothing that keeps time counts frames.** Every animation measures the time
+between its frames, so a slower clock moves things further a frame at the same
+speed. The kick pulse was the one that counted frames, its decay and cooldown
+tuned per 60 fps frame; it now raises each rate to the frames of 60 fps a frame
+stood for (`KickPulse`). Trypt Mania's judgement never follows the frame clock:
+the audio clock, the 8 ms tick and the touch timestamps place every note, so a
+limit costs the playfield frames of animation and never a judgement.
+
+**The FPS counter counts what reached the screen.** `FpsCounter` counts the
+window's frame metrics each second, in brackets the frames the app's clock
+moved its animations on (`FrameRateLimit.composedFrames`), beside the display's
+refresh rate and the limit: a window drawing more than the bracket is drawing
+for something outside the clock. An app at rest reads near 0 (its own update is one frame a second). It
+is drawn over the CRT's layer, not in it, and takes no touches. The
+visualizer's surface is not the window's and keeps its own counter (Settings ›
+Visualizer › Show FPS).
+
+### First-run setup
+
+Setup (`ui/onboarding/OnboardingScreen.kt`) keeps the app's own look, the
+first setup's evolved: progress dots, the step sliding in, a heading and a
+line under it, the rows as `materialSurface` tiles like every list row, and
+one pill button pinned at the bottom with Back under it. A redesign as a
+player screen (a cover per step, a glass sheet, a step tab bar) was built
+and the owner turned it down as too far from Tryptify's design: do not bring
+it back. There is no welcome screen: it opens on Permissions, and the copy
+is plain and formal (the owner asked for both).
+
+- **Every step is optional.** Folders no longer blocks Continue: with no
+  folder the first scan covers the whole device, which the Folders hint and
+  the Ready summary both say. "Skip setup" still finishes at once, and
+  `completeOnboarding` still runs `ScanWorker.enqueue` either way.
+- **Sources save nothing by themselves.** Switching on Music server,
+  Tryptify Cloud or TrypT HiFi sends the listener to Settings › Connections
+  when setup ends (`landingRoute`, by `settingsTabIndex("Connections")`,
+  never a literal index), where each one is set up. Nothing on lands on the
+  library.
+- **Notifications are asked here** (Android 13+), so MainActivity's prompt
+  after setup finds them granted and stays quiet. A permission denied for
+  good turns its button into "Settings", which opens the app's page.
+- The step does not slide under "Disable animations".
+- The old Downloads and Audio output steps are gone; both live in Settings.
 
 ## The visualizer has two compositions, and only one at a time
 
@@ -2250,6 +2498,23 @@ compositing its cleared, empty frame (the cover alone) and the hero swapping a
 buffer nothing drew into, and the visualizer flashed and vanished between real
 frames. When nothing new was drawn the overlay composites its last capture
 (`freshFrame = false`).
+
+**A new view tells the engine its playback, and a new surface draws once.**
+The engine outlives every view. Leaving the player told it "paused" through the
+ambient view that went; the next view started out "playing" and, seeing nothing
+change, never said otherwise, so the visualizer stayed frozen on coming back to
+the player (seen on device). `ProjectMOverlayView.updatePlayback` always sends
+its first answer (`playbackSent`). A re-initialised native instance is told the
+engine's paused state, and its first frame is drawn even while paused
+(`firstFrameOnSurface`): a new surface has no last frame to freeze on.
+
+**The app's frame rate limit caps the visualizer too, vsync on or off.**
+`effectiveFrameCap` is Target FPS with vsync off and Settings › System ›
+Performance › Frame rate limit either way, the lower when both apply. With vsync
+on the wait is cut `VSYNC_SLACK_NANOS` short, so the swap makes the vsync it was
+held for instead of the one after. Target FPS stays no ceiling with vsync on.
+The surface's rate hint asks for the limit when it is below the panel's top
+(`wantedFrameRate`): still one float on the surface, never a mode.
 
 **Alpha is inferred from the rendered image, never from the preset.** Presets
 assume an opaque, usually black framebuffer and many depend on feedback; making

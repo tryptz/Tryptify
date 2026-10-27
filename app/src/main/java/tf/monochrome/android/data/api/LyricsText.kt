@@ -60,6 +60,16 @@ object LyricsText {
         return words
     }
 
+    /** [lyrics] with every line and word in romaji, for sources that hand over finished lyrics. */
+    fun romaji(lyrics: Lyrics): Lyrics = lyrics.copy(
+        lines = lyrics.lines.map { line ->
+            line.copy(
+                text = RomajiConverter.convert(line.text),
+                words = line.words.map { it.copy(text = RomajiConverter.convert(it.text)) },
+            )
+        },
+    )
+
     /** True when [text] has Han or kana in it — Chinese or Japanese. */
     fun hasUnspacedScript(text: String): Boolean = text.any { isUnspacedScript(it) }
 

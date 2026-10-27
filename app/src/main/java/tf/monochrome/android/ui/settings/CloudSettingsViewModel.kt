@@ -94,8 +94,8 @@ class CloudSettingsViewModel @Inject constructor(
         }
     }
 
-    fun checkout(plan: String, period: String, trial: Boolean) = act {
-        cloud.checkoutUrl(plan, period, trial).onSuccess { _openUrl.value = it }
+    fun checkout(plan: String, period: String, trial: Boolean, provider: String?) = act {
+        cloud.checkoutUrl(plan, period, trial, provider).onSuccess { _openUrl.value = it }
     }
 
     /** Opens the payment provider's page for changing or cancelling the plan. */

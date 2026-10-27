@@ -12,6 +12,7 @@ import tf.monochrome.android.data.api.ApiService
 import tf.monochrome.android.data.api.HiFiApiClient
 import tf.monochrome.android.data.api.ServiceQuality
 import tf.monochrome.android.data.api.LyricsQuery
+import tf.monochrome.android.data.api.LyricsText
 import tf.monochrome.android.data.preferences.LyricsWordProvider
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.Album
@@ -32,6 +33,8 @@ class MusicRepository @Inject constructor(
     private val apiClient: HiFiApiClient,
     private val lyricsResolver: LyricsResolver,
     private val serverLyrics: ServerLyricsEngine,
+    private val localLyrics: LocalLyrics,
+    private val subsonic: tf.monochrome.android.data.subsonic.SubsonicRepository,
     private val preferences: PreferencesManager,
     @ApplicationContext private val context: Context
 ) {
@@ -163,10 +166,17 @@ class MusicRepository @Inject constructor(
 
     // --- Lyrics ---
 
+    /**
+     * [localFile] is the file the song plays from, when it plays from one, and
+     * [subsonicSongId] the song's id on the listener's server, when it is one
+     * of its songs: either way its own lyrics are read first.
+     */
     suspend fun getLyrics(
         trackId: Long,
         track: Track? = null,
         skipTidal: Boolean = false,
+        localFile: String? = null,
+        subsonicSongId: String? = null,
     ): Result<Lyrics?> = runCatching {
         val romajiEnabled = preferences.romajiLyrics.first()
         val wordProvider = preferences.lyricsWordProvider.first()
@@ -177,6 +187,22 @@ class MusicRepository @Inject constructor(
         serverLyrics.cached(trackId, romajiEnabled)?.let { timed ->
             synchronized(lyricsCache) { lyricsCache[cacheKey] = timed }
             return@runCatching timed
+        }
+
+        // The song's own lyrics, beside or inside its file (or its download's),
+        // or kept by the listener's server for its song. Word-timed ones were
+        // made for this recording (the editor, a lyrics server) and are final;
+        // otherwise they race first in line.
+        val own = (
+            localLyrics.find(trackId, localFile)
+                ?: subsonicSongId?.let { id ->
+                    // A server that is away must not hold the catalogues up.
+                    kotlinx.coroutines.withTimeoutOrNull(OWN_SERVER_LYRICS_MS) { subsonic.lyrics(id, track?.displayArtist, track?.title) }
+                }
+            )?.let { if (romajiEnabled) LyricsText.romaji(it) else it }
+        if (LyricsRace.tier(own) == 3) {
+            synchronized(lyricsCache) { lyricsCache[cacheKey] = own!! }
+            return@runCatching own
         }
 
         // TIDAL by id is the highest-quality path (LRC + word-level timing).
@@ -193,13 +219,25 @@ class MusicRepository @Inject constructor(
         // title and an artist; without them only TIDAL can answer.
         val query = track?.let(::lyricsQueryFor)
         val lyrics = if (query == null) {
-            primary()
+            if (own == null) {
+                primary()
+            } else {
+                // Better timed wins; the song's own on a tie, and when the lookup fails.
+                val fetched = try {
+                    primary()
+                } catch (c: kotlinx.coroutines.CancellationException) {
+                    throw c
+                } catch (_: Exception) {
+                    null
+                }
+                listOfNotNull(own, fetched).maxByOrNull { LyricsRace.tier(it) }
+            }
         } else {
             // TIDAL races the free catalogues rather than going first, and
             // its line-timed lyrics no longer stop a word-timed match from
             // replacing them. Which word-level catalogues join is the user's
             // choice (Settings › Word-level lyrics provider).
-            lyricsResolver.resolve(query, romajiEnabled, wordProvider, primary)
+            lyricsResolver.resolve(query, romajiEnabled, wordProvider, primary, own)
         }
         if (lyrics != null) synchronized(lyricsCache) { lyricsCache[cacheKey] = lyrics }
         lyrics
@@ -297,5 +335,6 @@ class MusicRepository @Inject constructor(
 
     private companion object {
         const val LYRICS_CACHE_SIZE = 32
+        const val OWN_SERVER_LYRICS_MS = 3_000L
     }
 }

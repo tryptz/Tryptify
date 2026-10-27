@@ -266,6 +266,33 @@ class TagReader @Inject constructor(
             readExtraTags(filePath)?.musical
         }
 
+    /**
+     * The lyrics stored inside [filePath], as written: ID3 USLT, a Vorbis or
+     * Opus LYRICS (or UNSYNCEDLYRICS) comment, MP4 ©lyr. Often LRC text,
+     * sometimes plain words. Null when there are none or the file cannot be
+     * read; a content:// document is not a file and is not read here.
+     */
+    fun readEmbeddedLyrics(filePath: String): String? {
+        val ext = filePath.substringAfterLast('.', "").lowercase()
+        val text = when (ext) {
+            in OGG_EXTENSIONS -> OggComments.read(File(filePath))?.let { it["LYRICS"] ?: it["UNSYNCEDLYRICS"] }
+            in JAUDIOTAGGER_EXTENSIONS -> try {
+                val file = File(filePath)
+                val tag = if (file.isFile) org.jaudiotagger.audio.AudioFileIO.read(file).tag else null
+                tag?.let {
+                    runCatching { it.getFirst(org.jaudiotagger.tag.FieldKey.LYRICS) }.getOrNull()?.takeIf { l -> l.isNotBlank() }
+                        ?: tagTextFields(it)["UNSYNCEDLYRICS"]
+                }
+            } catch (_: Exception) {
+                null
+            } catch (_: OutOfMemoryError) {
+                null
+            }
+            else -> null
+        }
+        return text?.takeIf { it.isNotBlank() }
+    }
+
     /** What one tag read gives beyond the retriever: tempo, key and gains, and for FLAC the THX mark. */
     private class ExtraTags(val musical: MusicalTags, val namesThx: Boolean)
 

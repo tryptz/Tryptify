@@ -155,7 +155,7 @@ export async function startUpload(
     .prepare(
       `insert into cloud_uploads (id, user_id, key, r2_upload, size, meta, created_at)
        select ?1, ?2, ?3, ?4, ?5, ?6, ?7
-        where (select coalesce(used_bytes, 0) from cloud_accounts where user_id = ?2)
+        where coalesce((select used_bytes from cloud_accounts where user_id = ?2), 0)
               + (select coalesce(sum(size), 0) from cloud_uploads where user_id = ?2) + ?5 <= ?8
           and (select count(*) from cloud_uploads where user_id = ?2) < ?9`,
     )
@@ -289,7 +289,9 @@ export async function setCover(db: Db, bucket: Bucket, userId: string, songId: s
   if (!song) throw new LibraryError(404, "not_found");
   const bytes = new Uint8Array(image);
   if (bytes.length === 0 || bytes.length > MAX_COVER_BYTES) throw new LibraryError(413, "cover_too_big");
-  const type = IMAGE_TYPES.find(([magic]) => magic.every((b, i) => bytes[i] === b))?.[1];
+  let type = IMAGE_TYPES.find(([magic]) => magic.every((b, i) => bytes[i] === b))?.[1];
+  // RIFF is any RIFF file (a WAV too): WebP says so in bytes 8 to 11.
+  if (type === "image/webp" && String.fromCharCode(...bytes.subarray(8, 12)) !== "WEBP") type = undefined;
   if (!type) throw new LibraryError(415, "not_an_image");
   const { access, quotaBytes } = await usage(db, userId, now);
   if (access !== "full") throw new LibraryError(access === "none" ? 402 : 409, access === "none" ? "no_plan" : "read_only");
@@ -318,6 +320,12 @@ export async function deleteSong(db: Db, bucket: Bucket, userId: string, songId:
   await db.batch([
     db.prepare("delete from cloud_songs where id = ?1 and user_id = ?2").bind(songId, userId),
     db.prepare("update cloud_accounts set used_bytes = max(0, used_bytes - ?2) where user_id = ?1").bind(userId, song.size + song.cover_size),
+    // Its star, its plays, and its places in playlists go with it.
+    db.prepare("delete from cloud_stars where user_id = ?1 and song_id = ?2").bind(userId, songId),
+    db.prepare("delete from cloud_plays where user_id = ?1 and song_id = ?2").bind(userId, songId),
+    db.prepare(
+      "delete from cloud_playlist_songs where song_id = ?2 and playlist_id in (select id from cloud_playlists where user_id = ?1)",
+    ).bind(userId, songId),
   ]);
 }
 
@@ -366,6 +374,10 @@ export async function wipeLibrary(db: Db, bucket: Bucket, userId: string): Promi
     db.prepare("delete from cloud_songs where user_id = ?1").bind(userId),
     db.prepare("delete from cloud_uploads where user_id = ?1").bind(userId),
     db.prepare("update cloud_accounts set used_bytes = 0 where user_id = ?1").bind(userId),
+    db.prepare("delete from cloud_stars where user_id = ?1").bind(userId),
+    db.prepare("delete from cloud_plays where user_id = ?1").bind(userId),
+    db.prepare("delete from cloud_playlist_songs where playlist_id in (select id from cloud_playlists where user_id = ?1)").bind(userId),
+    db.prepare("delete from cloud_playlists where user_id = ?1").bind(userId),
   ]);
   return removed;
 }

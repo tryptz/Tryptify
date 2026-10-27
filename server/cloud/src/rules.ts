@@ -21,8 +21,9 @@ export const READ_ONLY_DAYS = 7;
 export const REFUND_EXPORT_DAYS = 2;
 
 /**
- * The free trial: TRIAL_DAYS with TRIAL_GB, once per account, card required.
- * The card is Creem's (the trial products carry the 7 days); this service only
+ * The free trial: TRIAL_DAYS with TRIAL_GB (or the plan's own quota, if that
+ * is smaller: Mini's trial is 10 GB), once per account, card required.
+ * The card is the provider's (its trial products carry the 7 days); this service only
  * holds a trial to its smaller quota and gives a trial that ends unpaid the
  * refund's short export window, so one costs at most about $0.10.
  */
@@ -30,19 +31,29 @@ export const TRIAL_DAYS = 7;
 export const TRIAL_GB = 20;
 
 /**
- * The plans, from docs/plans/tryptify-cloud.md ("Pricing"). Each quota is the
- * largest that is still a profit in the worst case; change one only by
- * rerunning that check. Prices are what the listener is shown; what they are
- * charged is set at the payment provider, and the two must agree.
+ * The plans, smallest first (the order the app and the site list them), from
+ * docs/plans/tryptify-cloud.md ("Pricing"). Each is $3.99 per 100 GB a month,
+ * yearly at two months free, and a profit in the worst case; change one only
+ * by rerunning that check. Mini is the owner's exception (2026-10-24): $1.29
+ * a month for 10 GB (from $0.99 on 2026-10-26: Creem's floor is $1.00), still
+ * a profit but a thin one, since a payment's fixed fee is a third of it. Prices are what the listener is shown; what they are charged is
+ * set at the payment provider, and the two must agree.
  */
 export const PLANS = {
+  mini: { storageGb: 10, monthly: 1.29, yearly: 9.99 },
   lite: { storageGb: 100, monthly: 3.99, yearly: 39.99 },
   plus: { storageGb: 250, monthly: 9.99, yearly: 99.99 },
   max: { storageGb: 500, monthly: 19.99, yearly: 199.99 },
+  pro: { storageGb: 1_000, monthly: 39.99, yearly: 399.99 },
+  ultra: { storageGb: 3_000, monthly: 119.99, yearly: 1199.99 },
+  xtra: { storageGb: 10_000, monthly: 399.99, yearly: 3999.99 },
 } as const;
 export type PlanId = keyof typeof PLANS;
 export type Period = "monthly" | "yearly";
 export const isPlan = (p: unknown): p is PlanId => typeof p === "string" && Object.hasOwn(PLANS, p);
+
+/** The quota a free trial of [plan] gets: TRIAL_GB, or the plan's own if smaller. */
+export const trialGbOf = (plan: PlanId): number => Math.min(TRIAL_GB, PLANS[plan].storageGb);
 
 export type Access =
   /** Upload and play. */
@@ -58,20 +69,32 @@ export interface Account {
   usedBytes: number;
   /** The paid-until date is a free trial's end, not a payment's. */
   trial?: boolean;
+  /** Given, not sold (cloud_grants): full access with no quota and no end. */
+  unlimited?: boolean;
+  /** The provider's subscription the account pays (or trials) with. */
+  subscriptionId?: string | null;
 }
+
+/**
+ * The quota an unlimited account is held to: a petabyte, far past anything
+ * one listener uploads, but a real number, so the arithmetic that compares
+ * against a quota keeps working.
+ */
+export const UNLIMITED_BYTES = 1_000_000 * GB;
 
 export const NO_ACCOUNT: Account = { plan: null, paidUntil: null, usedBytes: 0, trial: false };
 
 /** Whether [a] may start a free trial: only an account that has never had a plan or a trial. */
-export const mayStartTrial = (a: Account): boolean => a.plan === null;
+export const mayStartTrial = (a: Account): boolean => a.plan === null && !a.unlimited;
 
 /**
  * The one place the rule lives. Only [Account.paidUntil] grants anything: a
  * plan without a future paid-until date is no plan.
  */
 export function accessOf(a: Account, now: Date): { access: Access; quotaBytes: number; deleteAfter: Date | null } {
+  if (a.unlimited) return { access: "full", quotaBytes: UNLIMITED_BYTES, deleteAfter: null };
   if (!a.plan || !a.paidUntil) return { access: "none", quotaBytes: 0, deleteAfter: null };
-  const quotaBytes = (a.trial ? TRIAL_GB : PLANS[a.plan].storageGb) * GB;
+  const quotaBytes = (a.trial ? trialGbOf(a.plan) : PLANS[a.plan].storageGb) * GB;
   const graceDays = a.trial ? REFUND_EXPORT_DAYS : READ_ONLY_DAYS;
   const deleteAfter = new Date(a.paidUntil.getTime() + graceDays * DAY_MS);
   if (now >= deleteAfter) return { access: "none", quotaBytes: 0, deleteAfter };
@@ -117,6 +140,10 @@ export function applyEvent(a: Account, e: BillingEvent, now: Date): Account {
     // A trial never takes the place of time someone paid for, and comes once.
     const paidUp = a.paidUntil !== null && !a.trial && a.paidUntil > now;
     if (paidUp || (!mayStartTrial(a) && !a.trial)) return a;
+    // A trial running already takes news only of its own subscription: a
+    // second trial checkout, opened before the first one's webhook came,
+    // must not add its days on top.
+    if (a.trial && a.subscriptionId && e.subscriptionId !== a.subscriptionId) return a;
     const later = !a.paidUntil || e.paidUntil > a.paidUntil ? e.paidUntil : a.paidUntil;
     return { ...a, plan: e.plan, paidUntil: later, trial: true };
   }

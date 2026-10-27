@@ -29,6 +29,7 @@ import tf.monochrome.android.domain.model.AudioQuality
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.ToneControls
+import tf.monochrome.android.performance.FrameRateLimit
 import tf.monochrome.android.performance.LowPerformanceSettings
 import tf.monochrome.android.performance.PerformanceProfile
 import tf.monochrome.android.visualizer.AmbientVisualizerSettings
@@ -135,6 +136,9 @@ class PreferencesManager @Inject constructor(
 
         // Player state
         private val SHUFFLE_ENABLED = booleanPreferencesKey("shuffle_enabled")
+        // Device-local, like the list it edits: whether the retired built-in chart server was taken out.
+        private val RETIRED_CPU_SERVER_REMOVED = booleanPreferencesKey("retired_cpu_server_removed")
+        private val OLD_ROOMS_SERVER_REMOVED = booleanPreferencesKey("old_rooms_server_removed")
         private val REPEAT_MODE = intPreferencesKey("repeat_mode")
         private val VOLUME = doublePreferencesKey("volume")
 
@@ -188,6 +192,9 @@ class PreferencesManager @Inject constructor(
         // SETTINGS_SYNC_KEYS, for the Discord token's reason: it is a sign-in
         // to a server, and stays on the device it was typed into.
         private val SUBSONIC_SERVER = stringPreferencesKey("subsonic_server")
+        // The cap on mobile data, in kbps (0 = the original file). Device-local
+        // with the server it applies to.
+        private val SUBSONIC_CELLULAR_MAX_BITRATE = intPreferencesKey("subsonic_cellular_max_bitrate")
 
         // Custom API endpoint
         private val CUSTOM_API_ENDPOINT = stringPreferencesKey("custom_api_endpoint")
@@ -201,6 +208,8 @@ class PreferencesManager @Inject constructor(
         private val APPLE_QUALITY = stringPreferencesKey("apple_quality")
         private val DEV_MODE_ENABLED = booleanPreferencesKey("dev_mode_enabled")
         private val API_SERVERS = stringPreferencesKey("api_servers")
+        // Device-local, like the Subsonic sign-in: never in SETTINGS_SYNC_KEYS.
+        private val API_SERVER_PASSWORDS = stringPreferencesKey("api_server_passwords")
 
         // Lyrics 3D appearance (legacy per-field keys, read for migration only)
         private val LYRICS_3D_ROTATION = floatPreferencesKey("lyrics_3d_rotation")
@@ -282,6 +291,8 @@ class PreferencesManager @Inject constructor(
         private val DISABLE_ANIMATIONS = booleanPreferencesKey("disable_animations")
         private val LEGACY_PLAYER = booleanPreferencesKey("legacy_player")
         private val DISABLE_LIQUID_GLASS = booleanPreferencesKey("disable_liquid_glass")
+        private val FRAME_RATE_LIMIT = intPreferencesKey("frame_rate_limit")
+        private val SHOW_FPS_COUNTER = booleanPreferencesKey("show_fps_counter")
 
         // Interface
         private val GAPLESS_PLAYBACK = booleanPreferencesKey("gapless_playback")
@@ -303,6 +314,9 @@ class PreferencesManager @Inject constructor(
 
         // Audio extras
         private val NORMALIZATION_ENABLED = booleanPreferencesKey("normalization_enabled")
+        // ReplayGain (audio/replaygain): the mode's name and the pre-amp in dB.
+        private val REPLAYGAIN_MODE = stringPreferencesKey("replaygain_mode")
+        private val REPLAYGAIN_PREAMP_DB = floatPreferencesKey("replaygain_preamp_db")
         private val CROSSFADE_DURATION = intPreferencesKey("crossfade_duration")
 
         // Downloads
@@ -388,7 +402,8 @@ class PreferencesManager @Inject constructor(
         private val RADIO_WEIGHT_AVOID_RECENTLY_PLAYED = floatPreferencesKey("radio_weight_avoid_recently_played")
         private val RADIO_WEIGHT_DISCOVERY_DISTANCE = floatPreferencesKey("radio_weight_discovery_distance")
 
-        // Spotify (PKCE OAuth tokens for playlist import)
+        // The Spotify account the app no longer has: kept only to delete them
+        // from installs that signed in (clearRetiredSpotifySignIn).
         private val SPOTIFY_ACCESS_TOKEN = stringPreferencesKey("spotify_access_token")
         private val SPOTIFY_REFRESH_TOKEN = stringPreferencesKey("spotify_refresh_token")
         private val SPOTIFY_TOKEN_EXPIRES_AT = longPreferencesKey("spotify_token_expires_at")
@@ -539,7 +554,7 @@ class PreferencesManager @Inject constructor(
             FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
             GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, SHOW_EXPLICIT_BADGES,
             ROW_BADGE_SOURCE, ROW_BADGE_QUALITY, ROW_BADGE_FORMAT, ROW_BADGE_DOWNLOAD, ROW_BADGE_DURATION,
-            NORMALIZATION_ENABLED, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
+            NORMALIZATION_ENABLED, REPLAYGAIN_MODE, REPLAYGAIN_PREAMP_DB, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
             PLAYBACK_SPEED, PRESERVE_PITCH, PITCH_SEMITONES, SPEED_UNIT_SEMITONES, SPEED_UNIT_BPM,
             PITCH_ENGINE, PITCH_QUALITY,
             DOWNLOAD_QUALITY, DOWNLOAD_LYRICS, AUTO_DOWNLOAD_LIKED,
@@ -963,6 +978,16 @@ class PreferencesManager @Inject constructor(
         }
     }
 
+    /** What a Subsonic song streams at on mobile data: a kbps from [Subsonic.MOBILE_BITRATES], 0 for the original. */
+    val subsonicCellularMaxBitrate: Flow<Int> = dataStore.data.map { prefs ->
+        prefs[SUBSONIC_CELLULAR_MAX_BITRATE]?.takeIf { it in tf.monochrome.android.data.subsonic.Subsonic.MOBILE_BITRATES } ?: 0
+    }
+
+    suspend fun setSubsonicCellularMaxBitrate(kbps: Int) {
+        if (kbps !in tf.monochrome.android.data.subsonic.Subsonic.MOBILE_BITRATES) return
+        dataStore.edit { it[SUBSONIC_CELLULAR_MAX_BITRATE] = kbps }
+    }
+
     // Qobuz instance — used for downloads. Independent of Dev Mode: any
     // value set here is honored whenever the download path is invoked.
     val qobuzInstanceUrl: Flow<String?> = dataStore.data.map { prefs ->
@@ -1032,12 +1057,12 @@ class PreferencesManager @Inject constructor(
      */
     val apiServers: Flow<List<tf.monochrome.android.data.api.ApiServer>> = dataStore.data.map { prefs -> apiServersOf(prefs) }
 
-    /** The saved list, always with the build's chart server in it (BuiltInServer). */
+    /** The saved list, always with the build's rooms server in it (BuiltInServer). */
     private fun apiServersOf(prefs: Preferences): List<tf.monochrome.android.data.api.ApiServer> =
         withBuiltIn(savedApiServers(prefs))
 
     private fun withBuiltIn(servers: List<tf.monochrome.android.data.api.ApiServer>) =
-        tf.monochrome.android.data.api.BuiltInServer.ensureAll(servers, BuildConfig.BUILT_IN_CPU_SERVER, BuildConfig.BUILT_IN_ROOMS_SERVER) ?: servers
+        tf.monochrome.android.data.api.BuiltInServer.ensureAll(servers, BuildConfig.BUILT_IN_ROOMS_SERVER) ?: servers
 
     private fun savedApiServers(prefs: Preferences): List<tf.monochrome.android.data.api.ApiServer> =
         prefs[API_SERVERS]
@@ -1050,11 +1075,26 @@ class PreferencesManager @Inject constructor(
                 appleUrl = prefs[APPLE_INSTANCE_URL],
             )
 
-    /** Writes the build's servers into the saved list, once a launch (BuiltInServer). */
-    suspend fun seedBuiltInServer(builtIn: String, roomsServer: String = "") {
+    /**
+     * Writes the build's rooms server into the saved list, once a launch, and
+     * the first time takes out the chart server older builds put there
+     * (BuiltInServer.withoutRetired) and the rooms server they had before it
+     * moved (BuiltInServer.withoutOldRooms): once only, so one added again stays.
+     */
+    suspend fun seedBuiltInServer(roomsServer: String, retiredCpuHostSha256: String = "") {
         dataStore.edit { prefs ->
-            val saved = savedApiServers(prefs)
-            tf.monochrome.android.data.api.BuiltInServer.ensureAll(saved, builtIn, roomsServer)?.let { prefs[API_SERVERS] = json.encodeToString(it) }
+            var saved = savedApiServers(prefs)
+            var changed = false
+            if (prefs[RETIRED_CPU_SERVER_REMOVED] != true && retiredCpuHostSha256.isNotBlank()) {
+                tf.monochrome.android.data.api.BuiltInServer.withoutRetired(saved, retiredCpuHostSha256)?.let { saved = it; changed = true }
+                prefs[RETIRED_CPU_SERVER_REMOVED] = true
+            }
+            if (prefs[OLD_ROOMS_SERVER_REMOVED] != true && roomsServer.isNotBlank()) {
+                tf.monochrome.android.data.api.BuiltInServer.withoutOldRooms(saved, roomsServer)?.let { saved = it; changed = true }
+                prefs[OLD_ROOMS_SERVER_REMOVED] = true
+            }
+            tf.monochrome.android.data.api.BuiltInServer.ensureAll(saved, roomsServer)?.let { saved = it; changed = true }
+            if (changed) prefs[API_SERVERS] = json.encodeToString(saved)
         }
     }
 
@@ -1078,6 +1118,28 @@ class PreferencesManager @Inject constructor(
                 ?.let { prefs[QOBUZ_INSTANCE_URL] = it } ?: prefs.remove(QOBUZ_INSTANCE_URL)
             urlFor(tf.monochrome.android.data.api.ApiService.APPLE)
                 ?.let { prefs[APPLE_INSTANCE_URL] = it } ?: prefs.remove(APPLE_INSTANCE_URL)
+        }
+    }
+
+    /**
+     * The passwords of servers that ask for one, by server URL: a device
+     * secret, kept apart from [apiServers], which settings sync uploads.
+     * Read through [tf.monochrome.android.data.api.ApiServerAccess].
+     */
+    val apiServerPasswords: Flow<Map<String, String>> = dataStore.data.map { prefs ->
+        prefs[API_SERVER_PASSWORDS]
+            ?.let { runCatching { json.decodeFromString<Map<String, String>>(it) }.getOrNull() }
+            .orEmpty()
+    }
+
+    /** Saves [url]'s password, or forgets it when null. */
+    suspend fun setApiServerPassword(url: String, password: String?) {
+        dataStore.edit { prefs ->
+            val current = prefs[API_SERVER_PASSWORDS]
+                ?.let { runCatching { json.decodeFromString<Map<String, String>>(it) }.getOrNull() }
+                .orEmpty()
+            val next = if (password == null) current - url else current + (url to password)
+            if (next.isEmpty()) prefs.remove(API_SERVER_PASSWORDS) else prefs[API_SERVER_PASSWORDS] = json.encodeToString(next)
         }
     }
 
@@ -1229,6 +1291,26 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setNormalizationEnabled(enabled: Boolean) {
         dataStore.edit { it[NORMALIZATION_ENABLED] = enabled }
+    }
+
+    /** ReplayGain's mode and pre-amp. Off unless chosen, so nothing sounds different until then. */
+    val replayGainSettings: Flow<tf.monochrome.android.audio.replaygain.ReplayGainSettings> = dataStore.data.map { prefs ->
+        tf.monochrome.android.audio.replaygain.ReplayGainSettings(
+            mode = prefs[REPLAYGAIN_MODE]
+                ?.let { runCatching { tf.monochrome.android.audio.replaygain.ReplayGainMode.valueOf(it) }.getOrNull() }
+                ?: tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF,
+            preampDb = prefs[REPLAYGAIN_PREAMP_DB]
+                ?.takeIf { it in tf.monochrome.android.audio.replaygain.ReplayGain.PREAMP_STEPS } ?: 0f,
+        )
+    }.distinctUntilChanged()
+
+    suspend fun setReplayGainMode(mode: tf.monochrome.android.audio.replaygain.ReplayGainMode) {
+        dataStore.edit { it[REPLAYGAIN_MODE] = mode.name }
+    }
+
+    suspend fun setReplayGainPreamp(db: Float) {
+        if (db !in tf.monochrome.android.audio.replaygain.ReplayGain.PREAMP_STEPS) return
+        dataStore.edit { it[REPLAYGAIN_PREAMP_DB] = db }
     }
 
     /**
@@ -1755,33 +1837,24 @@ class PreferencesManager @Inject constructor(
 
 
     // --- Spotify ---
-    val spotifyAccessToken: Flow<String?> = dataStore.data.map { it[SPOTIFY_ACCESS_TOKEN] }
-    val spotifyRefreshToken: Flow<String?> = dataStore.data.map { it[SPOTIFY_REFRESH_TOKEN] }
-    val spotifyTokenExpiresAt: Flow<Long> = dataStore.data.map { it[SPOTIFY_TOKEN_EXPIRES_AT] ?: 0L }
-    val spotifyUserName: Flow<String?> = dataStore.data.map { it[SPOTIFY_USER_NAME] }
-
-    suspend fun setSpotifyTokens(accessToken: String, refreshToken: String, expiresAtMillis: Long) {
+    /**
+     * The Spotify account sign-in was removed: playlist import reads a pasted
+     * link with no account. A phone that signed in still holds its tokens and
+     * the sign-in's half-finished state; they are deleted, once a launch, if
+     * there.
+     */
+    suspend fun clearRetiredSpotifySignIn() {
         dataStore.edit {
-            it[SPOTIFY_ACCESS_TOKEN] = accessToken
-            it[SPOTIFY_REFRESH_TOKEN] = refreshToken
-            it[SPOTIFY_TOKEN_EXPIRES_AT] = expiresAtMillis
+            if (it[SPOTIFY_ACCESS_TOKEN] != null || it[SPOTIFY_REFRESH_TOKEN] != null ||
+                it[SPOTIFY_TOKEN_EXPIRES_AT] != null || it[SPOTIFY_USER_NAME] != null
+            ) {
+                it.remove(SPOTIFY_ACCESS_TOKEN)
+                it.remove(SPOTIFY_REFRESH_TOKEN)
+                it.remove(SPOTIFY_TOKEN_EXPIRES_AT)
+                it.remove(SPOTIFY_USER_NAME)
+            }
         }
-    }
-
-    suspend fun setSpotifyUserName(name: String?) {
-        dataStore.edit {
-            if (name.isNullOrBlank()) it.remove(SPOTIFY_USER_NAME)
-            else it[SPOTIFY_USER_NAME] = name
-        }
-    }
-
-    suspend fun clearSpotifyTokens() {
-        dataStore.edit {
-            it.remove(SPOTIFY_ACCESS_TOKEN)
-            it.remove(SPOTIFY_REFRESH_TOKEN)
-            it.remove(SPOTIFY_TOKEN_EXPIRES_AT)
-            it.remove(SPOTIFY_USER_NAME)
-        }
+        runCatching { context.deleteSharedPreferences("spotify_pkce") }
     }
 
     // --- Onboarding ---
@@ -2683,6 +2756,14 @@ class PreferencesManager @Inject constructor(
         prefs.asMap()
             .filterKeys { it in SETTINGS_SYNC_KEYS }
             .mapKeys { it.key.name }
+            .let { snapshot ->
+                // The built-in rooms server's address carries a secret path: it
+                // never leaves the device, and each device puts it back itself.
+                if (API_SERVERS.name !in snapshot) snapshot
+                else snapshot + (API_SERVERS.name to json.encodeToString(
+                    tf.monochrome.android.data.api.BuiltInServer.withoutBuiltIn(savedApiServers(prefs), BuildConfig.BUILT_IN_ROOMS_SERVER),
+                ))
+            }
 
     /**
      * Apply a settings snapshot pulled from the cloud, in a single atomic edit.
@@ -2930,6 +3011,26 @@ class PreferencesManager @Inject constructor(
                 disableLiquidGlass = prefs[DISABLE_LIQUID_GLASS] ?: false,
             ).allEnabled
         }
+    }
+
+    // --- Frame rate limit and FPS counter (Settings › System › Performance) ---
+    // Per-device tuning like the switches above: not in SETTINGS_SYNC_KEYS.
+
+    /** The most frames a second the app draws; [FrameRateLimit.MAX] (0) for every refresh. */
+    val frameRateLimit: Flow<Int> = dataStore.data.map {
+        (it[FRAME_RATE_LIMIT] ?: FrameRateLimit.MAX).let { fps ->
+            if (fps in FrameRateLimit.CHOICES) fps else FrameRateLimit.MAX
+        }
+    }
+
+    suspend fun setFrameRateLimit(fps: Int) {
+        dataStore.edit { it[FRAME_RATE_LIMIT] = if (fps in FrameRateLimit.CHOICES) fps else FrameRateLimit.MAX }
+    }
+
+    val showFpsCounter: Flow<Boolean> = dataStore.data.map { it[SHOW_FPS_COUNTER] ?: false }
+
+    suspend fun setShowFpsCounter(enabled: Boolean) {
+        dataStore.edit { it[SHOW_FPS_COUNTER] = enabled }
     }
 
     // --- Clear all prefs (System) ---

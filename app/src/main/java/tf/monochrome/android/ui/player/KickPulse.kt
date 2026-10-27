@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
+import kotlin.math.pow
 import kotlinx.coroutines.isActive
 import tf.monochrome.android.audio.eq.WaveScopeNative
 
@@ -28,18 +29,23 @@ fun rememberKickPulse(enabled: Boolean, onsetRatio: Float = 1.45f): FloatState {
         pulse.floatValue = 0f
         if (!enabled) return@LaunchedEffect
         var average = 0f
-        var cooldown = 0
+        var cooldownUntil = 0L
+        var last = 0L
         while (isActive) {
-            withFrameNanos { }
+            val now = withFrameNanos { it }
+            // Each rate below is per 60 fps frame, raised to the frames of 60
+            // fps this frame stood for, so the pulse decays at the same speed
+            // on a 120 Hz panel and under a frame rate limit.
+            val frames = if (last == 0L) 1f else ((now - last) / NANOS_PER_60FPS_FRAME).coerceIn(0f, 30f)
+            last = now
             val energy = WaveScopeNative.nativeLowBandRms(KICK_FRAMES)
-            val onset = energy > average * ratio.value && energy > FLOOR && cooldown == 0
-            average += (energy - average) * AVERAGE_RATE
+            val onset = energy > average * ratio.value && energy > FLOOR && now >= cooldownUntil
+            average += (energy - average) * (1f - (1f - AVERAGE_RATE).pow(frames))
             if (onset) {
                 pulse.floatValue = 1f
-                cooldown = COOLDOWN_FRAMES
+                cooldownUntil = now + COOLDOWN_NANOS
             } else {
-                pulse.floatValue *= DECAY
-                if (cooldown > 0) cooldown--
+                pulse.floatValue *= DECAY.pow(frames)
             }
         }
     }
@@ -64,4 +70,5 @@ private const val AVERAGE_RATE = 0.06f
 // Per 60 fps frame: back to ~10% in about 150 ms.
 private const val DECAY = 0.86f
 // At least ~120 ms between kicks — hardstyle tops out near 160 BPM.
-private const val COOLDOWN_FRAMES = 7
+private const val COOLDOWN_NANOS = 117_000_000L
+private const val NANOS_PER_60FPS_FRAME = 1_000_000_000f / 60f

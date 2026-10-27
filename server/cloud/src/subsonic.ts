@@ -5,15 +5,17 @@
 //
 // The subset the app uses, in JSON (f=json): ping, getLicense,
 // getMusicFolders, getAlbumList2, getAlbum, getArtists, getArtist, getSong,
-// search3, getRandomSongs, stream, download, getCoverArt. Sign-in is the
+// search3, getRandomSongs, stream, download, getCoverArt; and what a listener
+// does with the library: star, unstar, getStarred2 (getStarred), scrobble,
+// getPlaylists, getPlaylist, createPlaylist, updatePlaylist, deletePlaylist. Sign-in is the
 // API's token scheme (t = md5(password + s)) or p=enc:hex, with a per-device
 // password from POST /v1/subsonic-keys, never the Tryptify password. The
 // username is the person's account id.
 
 import { md5 } from "@noble/hashes/legacy.js";
 import { accessOf } from "./rules";
-import { getSong, type Bucket, type SongRow } from "./library";
-import { loadAccount, type Db } from "./store";
+import { getSong, randomId, type Bucket, type SongRow } from "./library";
+import { loadAccount, type Db, type Stmt } from "./store";
 
 const API_VERSION = "1.16.1";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -64,7 +66,10 @@ async function signIn(db: Db, params: URLSearchParams): Promise<string | null> {
 
 // ── Shapes ───────────────────────────────────────────────────────────────────
 
-function songJson(s: SongRow) {
+/** A song row, with when it was starred when the query joined that in. */
+type ListedSong = SongRow & { starred_at?: string | null };
+
+function songJson(s: ListedSong) {
   return {
     id: s.id,
     parent: s.album_id,
@@ -89,6 +94,7 @@ function songJson(s: SongRow) {
     samplingRate: s.sample_rate ?? undefined,
     bitDepth: s.bit_depth ?? undefined,
     created: s.created_at,
+    starred: s.starred_at ?? undefined,
   };
 }
 
@@ -126,13 +132,108 @@ const ORDERS: Record<string, string> = {
   alphabeticalByName: "lower(min(album)), album_id",
   alphabeticalByArtist: "lower(min(album_artist)), lower(min(album)), album_id",
   newest: "max(created_at) desc, album_id",
-  recent: "max(created_at) desc, album_id",
-  frequent: "max(created_at) desc, album_id",
   highest: "max(created_at) desc, album_id",
-  starred: "max(created_at) desc, album_id",
   byYear: "max(year), lower(min(album))",
   random: "random()",
 };
+
+/**
+ * The album lists that come from what the listener did, not from the files:
+ * only albums with a play (or a star) are listed, the latest or most first.
+ * Left joins, so an album's song count and length stay the whole album's.
+ */
+const LISTENED: Record<string, { join: string; having: string; order: string }> = {
+  recent: {
+    join: "left join cloud_plays p on p.user_id = s.user_id and p.song_id = s.id",
+    having: "max(p.last_played) is not null",
+    order: "max(p.last_played) desc, album_id",
+  },
+  frequent: {
+    join: "left join cloud_plays p on p.user_id = s.user_id and p.song_id = s.id",
+    having: "coalesce(sum(p.play_count), 0) > 0",
+    order: "sum(p.play_count) desc, max(p.last_played) desc, album_id",
+  },
+  starred: {
+    join: "left join cloud_stars st on st.user_id = s.user_id and st.song_id = s.id",
+    having: "count(st.song_id) > 0",
+    order: "max(st.starred_at) desc, album_id",
+  },
+};
+
+/** Caps that keep one request's work bounded. */
+const MAX_IDS = 500;
+const MAX_PLAYLIST_SONGS = 5000;
+const MAX_PLAYLISTS = 1000;
+const MAX_NAME = 200;
+
+interface PlaylistRow {
+  id: string;
+  name: string;
+  comment: string | null;
+  created_at: string;
+  changed_at: string;
+  song_count: number;
+  duration: number;
+  cover: string | null;
+}
+
+// Counts and cover over the songs still in the library: one deleted since
+// leaves no gap in either.
+const PLAYLIST_COLUMNS = `p.id, p.name, p.comment, p.created_at, p.changed_at,
+  (select count(*) from cloud_playlist_songs ps join cloud_songs s on s.id = ps.song_id where ps.playlist_id = p.id) as song_count,
+  (select coalesce(sum(s.duration), 0) from cloud_playlist_songs ps join cloud_songs s on s.id = ps.song_id where ps.playlist_id = p.id) as duration,
+  (select s.id from cloud_playlist_songs ps join cloud_songs s on s.id = ps.song_id
+     where ps.playlist_id = p.id and s.cover_key is not null order by ps.position limit 1) as cover`;
+
+const playlistJson = (p: PlaylistRow, owner: string) => ({
+  id: p.id,
+  name: p.name,
+  comment: p.comment ?? undefined,
+  owner,
+  public: false,
+  songCount: Number(p.song_count),
+  duration: Number(p.duration),
+  created: p.created_at,
+  changed: p.changed_at,
+  coverArt: p.cover ?? undefined,
+});
+
+const getPlaylistRow = (db: Db, user: string, id: string) =>
+  db.prepare(`select ${PLAYLIST_COLUMNS} from cloud_playlists p where p.id = ?1 and p.user_id = ?2`).bind(id, user).first<PlaylistRow>();
+
+/** The playlist's songs in order, as the API's `entry`. */
+async function playlistEntries(db: Db, user: string, id: string) {
+  const rows = await db
+    .prepare(
+      `select s.* from cloud_playlist_songs ps join cloud_songs s on s.id = ps.song_id and s.user_id = ?1
+        where ps.playlist_id = ?2 order by ps.position`,
+    )
+    .bind(user, id)
+    .all<SongRow>();
+  return rows.results.map(songJson);
+}
+
+/**
+ * Statements that make [songIds] the playlist's songs, in that order. Only the
+ * listener's own songs go in: an id that is not one of theirs is skipped.
+ */
+const writePlaylistSongs = (db: Db, user: string, playlistId: string, songIds: string[]): Stmt[] => [
+  db.prepare("delete from cloud_playlist_songs where playlist_id = ?1").bind(playlistId),
+  db
+    .prepare(
+      `insert into cloud_playlist_songs (playlist_id, position, song_id)
+         select ?1, j.key, j.value from json_each(?2) j join cloud_songs s on s.id = j.value and s.user_id = ?3`,
+    )
+    .bind(playlistId, JSON.stringify(songIds.slice(0, MAX_PLAYLIST_SONGS)), user),
+];
+
+const cleanName = (v: string | null) => (v ?? "").trim().slice(0, MAX_NAME);
+
+/** A scrobble's time (ms since the epoch), as an instant no later than [now]. */
+function playedAt(v: string | undefined, now: Date): string {
+  const ms = Number(v);
+  return Number.isFinite(ms) && ms > 0 && ms <= now.getTime() ? new Date(ms).toISOString() : now.toISOString();
+}
 
 const clampInt = (v: string | null, def: number, max: number) => {
   const n = Number.parseInt(v ?? "", 10);
@@ -157,7 +258,8 @@ export function parseRange(header: string | null, size: number): { offset: numbe
   return { offset: start, length: end - start + 1 };
 }
 
-async function streamSong(bucket: Bucket, song: SongRow, rangeHeader: string | null, download: boolean): Promise<Response> {
+/** [song]'s file, whole or the range asked for; also the web player's (app.ts, /play). */
+export async function streamSong(bucket: Bucket, song: SongRow, rangeHeader: string | null, download: boolean): Promise<Response> {
   const range = parseRange(rangeHeader, song.size);
   if (rangeHeader && !range) {
     return new Response(null, { status: 416, headers: { "content-range": `bytes */${song.size}` } });
@@ -204,14 +306,158 @@ export async function subsonic(request: Request, db: Db, bucket: Bucket | null, 
       return envelope({ musicFolders: { musicFolder: [{ id: 1, name: "Tryptify Cloud" }] } });
 
     case "getAlbumList2": {
-      const order = ORDERS[params.get("type") ?? ""] ?? ORDERS.alphabeticalByName;
+      const type = params.get("type") ?? "";
       const size = clampInt(params.get("size"), 10, 500);
       const offset = clampInt(params.get("offset"), 0, 1_000_000);
-      const rows = await db
-        .prepare(`select ${ALBUM_COLUMNS} from cloud_songs s where user_id = ?1 group by album_id order by ${order} limit ?2 offset ?3`)
-        .bind(user, size, offset)
-        .all<AlbumRow>();
+      const listened = LISTENED[type];
+      const sql = listened
+        ? `select ${ALBUM_COLUMNS} from cloud_songs s ${listened.join} where s.user_id = ?1
+             group by album_id having ${listened.having} order by ${listened.order} limit ?2 offset ?3`
+        : `select ${ALBUM_COLUMNS} from cloud_songs s where user_id = ?1 group by album_id
+             order by ${ORDERS[type] ?? ORDERS.alphabeticalByName} limit ?2 offset ?3`;
+      const rows = await db.prepare(sql).bind(user, size, offset).all<AlbumRow>();
       return envelope({ albumList2: { album: rows.results.map(albumJson) } });
+    }
+
+    // ── Stars ──
+    // Songs only: an albumId or artistId is accepted and has nothing to star.
+    case "star":
+    case "unstar": {
+      const ids = JSON.stringify(params.getAll("id").slice(0, MAX_IDS));
+      if (method === "star") {
+        await db
+          .prepare(
+            `insert into cloud_stars (user_id, song_id, starred_at)
+               select ?1, j.value, ?3 from json_each(?2) j join cloud_songs s on s.id = j.value and s.user_id = ?1
+               where true on conflict (user_id, song_id) do nothing`,
+          )
+          .bind(user, ids, now.toISOString())
+          .run();
+      } else {
+        await db.prepare("delete from cloud_stars where user_id = ?1 and song_id in (select value from json_each(?2))").bind(user, ids).run();
+      }
+      return envelope({});
+    }
+
+    case "getStarred":
+    case "getStarred2": {
+      const rows = await db
+        .prepare(
+          `select s.*, st.starred_at from cloud_songs s join cloud_stars st on st.user_id = s.user_id and st.song_id = s.id
+            where s.user_id = ?1 order by st.starred_at desc limit ?2`,
+        )
+        .bind(user, MAX_PLAYLIST_SONGS)
+        .all<ListedSong>();
+      const starred = { artist: [], album: [], song: rows.results.map(songJson) };
+      return envelope(method === "getStarred2" ? { starred2: starred } : { starred });
+    }
+
+    // ── Plays ──
+    // "Now playing" (submission=false) is not kept; a play (the default) is
+    // counted once per id, at its own time when given.
+    case "scrobble": {
+      if (params.get("submission") === "false") return envelope({});
+      const ids = params.getAll("id").slice(0, 50);
+      const times = params.getAll("time");
+      if (ids.length) {
+        await db.batch(
+          ids.map((id, i) =>
+            db
+              .prepare(
+                `insert into cloud_plays (user_id, song_id, play_count, last_played)
+                   select ?1, id, 1, ?3 from cloud_songs where id = ?2 and user_id = ?1
+                   on conflict (user_id, song_id) do update
+                     set play_count = play_count + 1, last_played = max(last_played, excluded.last_played)`,
+              )
+              .bind(user, id, playedAt(times[i], now)),
+          ),
+        );
+      }
+      return envelope({});
+    }
+
+    // ── Playlists ──
+    case "getPlaylists": {
+      const rows = await db
+        .prepare(`select ${PLAYLIST_COLUMNS} from cloud_playlists p where p.user_id = ?1 order by lower(p.name), p.id`)
+        .bind(user)
+        .all<PlaylistRow>();
+      return envelope({ playlists: { playlist: rows.results.map((p) => playlistJson(p, user)) } });
+    }
+
+    case "getPlaylist": {
+      const id = params.get("id") ?? "";
+      const row = await getPlaylistRow(db, user, id);
+      if (!row) return failed(70, "Playlist not found");
+      return envelope({ playlist: { ...playlistJson(row, user), entry: await playlistEntries(db, user, id) } });
+    }
+
+    // A new playlist, or with playlistId, that playlist's songs replaced.
+    case "createPlaylist": {
+      const songIds = params.getAll("songId");
+      const stamp = now.toISOString();
+      let id = params.get("playlistId") ?? "";
+      if (id) {
+        const row = await getPlaylistRow(db, user, id);
+        if (!row) return failed(70, "Playlist not found");
+        const name = cleanName(params.get("name"));
+        await db.batch([
+          db.prepare("update cloud_playlists set name = coalesce(nullif(?3, ''), name), changed_at = ?4 where id = ?1 and user_id = ?2")
+            .bind(id, user, name, stamp),
+          ...writePlaylistSongs(db, user, id, songIds),
+        ]);
+      } else {
+        const name = cleanName(params.get("name"));
+        if (!name) return failed(10, "Required parameter is missing: name");
+        const count = await db.prepare("select count(*) as n from cloud_playlists where user_id = ?1").bind(user).first<{ n: number }>();
+        if (Number(count?.n ?? 0) >= MAX_PLAYLISTS) return failed(0, "Too many playlists");
+        id = randomId("pl-");
+        await db.batch([
+          db.prepare("insert into cloud_playlists (id, user_id, name, created_at, changed_at) values (?1, ?2, ?3, ?4, ?4)")
+            .bind(id, user, name, stamp),
+          ...writePlaylistSongs(db, user, id, songIds),
+        ]);
+      }
+      const row = (await getPlaylistRow(db, user, id))!;
+      return envelope({ playlist: { ...playlistJson(row, user), entry: await playlistEntries(db, user, id) } });
+    }
+
+    // Renamed, described, songs taken out by their place (0 first) and added at the end.
+    case "updatePlaylist": {
+      const id = params.get("playlistId") ?? "";
+      const row = await getPlaylistRow(db, user, id);
+      if (!row) return failed(70, "Playlist not found");
+      const current = await db
+        .prepare(
+          `select ps.song_id from cloud_playlist_songs ps join cloud_songs s on s.id = ps.song_id and s.user_id = ?2
+            where ps.playlist_id = ?1 order by ps.position`,
+        )
+        .bind(id, user)
+        .all<{ song_id: string }>();
+      const remove = new Set(params.getAll("songIndexToRemove").map(Number));
+      const next = current.results.map((r) => r.song_id).filter((_, i) => !remove.has(i)).concat(params.getAll("songIdToAdd"));
+      const name = params.has("name") ? cleanName(params.get("name")) : "";
+      const comment = params.has("comment") ? (params.get("comment") ?? "").trim().slice(0, 1000) : null;
+      await db.batch([
+        db
+          .prepare(
+            `update cloud_playlists set name = coalesce(nullif(?3, ''), name),
+               comment = case when ?4 then nullif(?5, '') else comment end, changed_at = ?6 where id = ?1 and user_id = ?2`,
+          )
+          .bind(id, user, name, comment !== null ? 1 : 0, comment ?? "", now.toISOString()),
+        ...writePlaylistSongs(db, user, id, next),
+      ]);
+      return envelope({});
+    }
+
+    case "deletePlaylist": {
+      const id = params.get("id") ?? "";
+      if (!(await getPlaylistRow(db, user, id))) return failed(70, "Playlist not found");
+      await db.batch([
+        db.prepare("delete from cloud_playlist_songs where playlist_id = ?1").bind(id),
+        db.prepare("delete from cloud_playlists where id = ?1 and user_id = ?2").bind(id, user),
+      ]);
+      return envelope({});
     }
 
     case "getAlbum": {
@@ -326,7 +572,11 @@ export async function subsonic(request: Request, db: Db, bucket: Bucket | null, 
       const object = row ? await bucket.get(row.cover_key) : null;
       if (!object) return new Response(null, { status: 404 });
       return new Response(object.body, {
-        headers: { "content-type": object.httpMetadata?.contentType ?? "image/jpeg", "cache-control": "private, max-age=86400" },
+        headers: {
+          "content-type": object.httpMetadata?.contentType ?? "image/jpeg",
+          "cache-control": "private, max-age=86400",
+          "x-content-type-options": "nosniff",
+        },
       });
     }
 

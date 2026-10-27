@@ -229,6 +229,7 @@ fun DownloadsScreen(
         TrackSelectionBar(
             selectedCount = selection.count,
             onClose = { selection.clear() },
+            onSelectAll = selection.selectAllOf(visibleTracks) { it.id },
             onAddToQueue = {
                 playerViewModel.addUnifiedToQueue(
                     downloadedTracks.filter { it.id in selection.selectedIds }

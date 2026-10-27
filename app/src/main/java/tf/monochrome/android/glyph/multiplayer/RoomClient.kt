@@ -9,6 +9,7 @@ import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.timeout
+import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.prepareGet
 import io.ktor.client.request.put
@@ -364,6 +365,30 @@ class RoomClient @Inject constructor(
             }
         }
 
+    /**
+     * The biggest song the rooms server takes (its info's `maxSongBytes`),
+     * asked once per server; null when not connected or it does not say.
+     */
+    suspend fun maxSongBytes(): Long? = withContext(Dispatchers.IO) {
+        val server = serverUrl ?: return@withContext null
+        songLimit?.takeIf { it.first == server }?.let { return@withContext it.second }
+        val limit = runCatching {
+            val info = httpClient.get(server.trimEnd('/') + "/api/multiplayer/info") {
+                timeout { requestTimeoutMillis = INFO_TIMEOUT_MS }
+            }.bodyAsText()
+            RoomProtocol.maxSongBytes(json, info)
+        }.getOrNull()
+        if (limit != null) songLimit = server to limit
+        limit
+    }
+
+    /** The server whose limit was asked last, and its answer. */
+    @Volatile
+    private var songLimit: Pair<String, Long>? = null
+
+    /** How big the song at [source] is, in bytes; null when its provider does not say. */
+    suspend fun songSize(source: Uri): Long? = withContext(Dispatchers.IO) { sizeOf(source) }
+
     private fun sizeOf(source: Uri): Long? = runCatching {
         if (source.scheme == "file") return@runCatching source.path?.let { File(it).length() }
         context.contentResolver.query(source, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
@@ -397,6 +422,7 @@ class RoomClient @Inject constructor(
         private const val MAX_ATTEMPTS = 5
         private const val CHAT_LINES = 60
         private const val KEY_HEADER = "X-Room-Key"
+        private const val INFO_TIMEOUT_MS = 10_000L
 
         /** A whole song either way, on a slow phone connection. */
         private const val TRANSFER_TIMEOUT_MS = 15 * 60 * 1000L

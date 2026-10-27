@@ -1,6 +1,8 @@
 # Tryptify Cloud on Cloudflare Workers. Secrets are NOT here: set them with
 #   wrangler secret put CREEM_API_KEY
 #   wrangler secret put CREEM_WEBHOOK_SECRET
+#   wrangler secret put PAYPAL_CLIENT_ID
+#   wrangler secret put PAYPAL_SECRET
 name = "tryptify-cloud"
 main = "src/worker.ts"
 compatibility_date = "2026-10-01"
@@ -9,8 +11,14 @@ workers_dev = true
 # working, for app builds made before it.
 routes = [{ pattern = "cloud.tryptify.com", custom_domain = true }]
 
+# Logs keep what the code writes (console.error), but not each request's
+# address: a /play link and a Subsonic app's request carry a sign-in in it.
 [observability]
 enabled = true
+
+[observability.logs]
+enabled = true
+invocation_logs = false
 
 [[d1_databases]]
 binding = "DB"
@@ -38,6 +46,51 @@ CREEM_PRODUCT_MAX_YEARLY = "prod_6G4ubzzqvCaJKaamWsnHMt"
 CREEM_PRODUCT_LITE_MONTHLY_TRIAL = "prod_56tTODaE022GeT50ruLqXj"
 CREEM_PRODUCT_PLUS_MONTHLY_TRIAL = "prod_OSmi11W9RYftN5oUWt9rz"
 CREEM_PRODUCT_MAX_MONTHLY_TRIAL = "prod_6dOHBryZ66HGZnk9wjwydV"
+# Mini, Pro, Ultra and Xtra, made 2026-10-26.
+CREEM_PRODUCT_MINI_MONTHLY = "prod_2tYlLffgyoIM9NUwgnOdcr"
+CREEM_PRODUCT_MINI_YEARLY = "prod_7d6oJQkesFmxD7GYeG0qrd"
+CREEM_PRODUCT_MINI_MONTHLY_TRIAL = "prod_2vbkLLh7Kl6ukJiOhGljSl"
+CREEM_PRODUCT_PRO_MONTHLY = "prod_7Lpr4LoZDsmNtqb2ojv5qR"
+CREEM_PRODUCT_PRO_YEARLY = "prod_40zuAJfISWsChIn3QzG9Cf"
+CREEM_PRODUCT_PRO_MONTHLY_TRIAL = "prod_2xWsBRNSby2yzUhaBDdHTR"
+CREEM_PRODUCT_ULTRA_MONTHLY = "prod_2aSNZ62wBtMvEieAcvHr10"
+CREEM_PRODUCT_ULTRA_YEARLY = "prod_5bkBnj3iPR9dVPqdV9rIsz"
+CREEM_PRODUCT_ULTRA_MONTHLY_TRIAL = "prod_3SKbwcPvZHa4G4Yzhy91pQ"
+CREEM_PRODUCT_XTRA_MONTHLY = "prod_mcBmH30Bj2gfss6JkGh8A"
+CREEM_PRODUCT_XTRA_YEARLY = "prod_pxy9fSH0IpS6uQtl7LqXq"
+CREEM_PRODUCT_XTRA_MONTHLY_TRIAL = "prod_2yjLYPeLiWkFVqG7k2czzC"
+
+# PayPal: new checkouts go to it once PAYPAL_CLIENT_ID, PAYPAL_SECRET and
+# PAYPAL_WEBHOOK_ID are all set; Creem above keeps renewing its subscribers.
+# Plan ids are not secrets. tools/paypal_setup in the site's repository makes
+# the plans and prints these lines; add them under [vars]:
+#   PAYPAL_WEBHOOK_ID = "…"                  (the webhook to /webhooks/paypal)
+#   PAYPAL_PLAN_MINI_MONTHLY = "P-…"   … PAYPAL_PLAN_XTRA_YEARLY, and the seven _TRIAL
+#   PAYPAL_API_BASE = "https://api-m.sandbox.paypal.com"   while testing only
+# Live since 2026-10-24 (product PROD-1MK83635XY8578339). For sandbox testing,
+# use the sandbox ids and secrets with PAYPAL_API_BASE as above.
+PAYPAL_PLAN_MINI_MONTHLY = "P-72G416546T5582156NLOMGCQ"
+PAYPAL_PLAN_MINI_MONTHLY_TRIAL = "P-63J26351GU175510NNLOMGCQ"
+PAYPAL_PLAN_MINI_YEARLY = "P-4ER94326BL2413847NLOMGCQ"
+PAYPAL_PLAN_LITE_MONTHLY = "P-7VH21141K1598551GNLOLHKQ"
+PAYPAL_PLAN_LITE_MONTHLY_TRIAL = "P-6TG112940N206204SNLOLHKY"
+PAYPAL_PLAN_LITE_YEARLY = "P-9YJ11454HJ503332BNLOLHKY"
+PAYPAL_PLAN_PLUS_MONTHLY = "P-89B04685AU782703NNLOLHKY"
+PAYPAL_PLAN_PLUS_MONTHLY_TRIAL = "P-5LK805840R021893CNLOLHLA"
+PAYPAL_PLAN_PLUS_YEARLY = "P-53A24553SU088445BNLOLHLA"
+PAYPAL_PLAN_MAX_MONTHLY = "P-7S346877EB4880024NLOLHLI"
+PAYPAL_PLAN_MAX_MONTHLY_TRIAL = "P-25T79727D2066150CNLOLHLI"
+PAYPAL_PLAN_MAX_YEARLY = "P-51K38798GV0904223NLOLHLQ"
+PAYPAL_PLAN_PRO_MONTHLY = "P-75F00792EC446684HNLOMGCY"
+PAYPAL_PLAN_PRO_MONTHLY_TRIAL = "P-32H64087LT371723HNLOMGCY"
+PAYPAL_PLAN_PRO_YEARLY = "P-8R903344680092144NLOMGDA"
+PAYPAL_PLAN_ULTRA_MONTHLY = "P-0L5792390B947611PNLOMGDA"
+PAYPAL_PLAN_ULTRA_MONTHLY_TRIAL = "P-2M649345RM652764PNLOMGDI"
+PAYPAL_PLAN_ULTRA_YEARLY = "P-9KS4388215444702GNLOMGDI"
+PAYPAL_PLAN_XTRA_MONTHLY = "P-30D80602LC878644NNLOMGDI"
+PAYPAL_PLAN_XTRA_MONTHLY_TRIAL = "P-1EV35391PC907941VNLOMGDQ"
+PAYPAL_PLAN_XTRA_YEARLY = "P-7P040679SP392541UNLOMGDQ"
+PAYPAL_WEBHOOK_ID = "0C5710575V759231M"
 
 # The daily cleanup: lapsed libraries and abandoned uploads (src/cleanup.ts).
 [triggers]

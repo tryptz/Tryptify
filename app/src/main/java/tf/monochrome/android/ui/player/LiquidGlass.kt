@@ -150,15 +150,17 @@ private const val LETTER_WAVE_WRAP = (20.0 * Math.PI).toFloat()
 
 /**
  * The 3D letter wave's clock ([letterWaveSeconds]), run while anything draws
- * the wave and stopped by the same switches as [rememberFrameSeconds]: "Disable
- * animations" and the CRT effect over the whole app. [speed] is read each
- * frame, outside composition, so a linked speed moves it with no
- * recomposition; read the clock in a layer block.
+ * the wave and stopped by "Disable animations". Unlike [rememberFrameSeconds]
+ * it keeps running under the CRT effect over the whole app: the wave is the
+ * sung line alone, on the lyrics, and stopped there it was frozen letters
+ * rather than glass that holds still. [speed] is read each frame, outside
+ * composition, so a linked speed moves it with no recomposition; read the
+ * clock in a layer block.
  */
 @Composable
 internal fun rememberLetterWaveSeconds(speed: () -> Float): State<Float> {
     val currentSpeed by androidx.compose.runtime.rememberUpdatedState(speed)
-    if (!LocalLowPerformance.current.disableAnimations && !LocalAppTvShader.current) {
+    if (!LocalLowPerformance.current.disableAnimations) {
         LaunchedEffect(Unit) {
             while (true) {
                 withFrameNanos { now ->

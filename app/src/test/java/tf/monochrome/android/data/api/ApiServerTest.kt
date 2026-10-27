@@ -98,5 +98,24 @@ class ApiServerTest {
         // A hifi-api server asked for a TrypT HiFi route.
         assertNotNull(v(ApiService.QOBUZ, 404, """{"detail":"Not Found"}"""))
         assertNotNull(v(ApiService.QOBUZ, 200, """{"detail":"ok"}"""))
+        // trypt-hifi behind ACCESS_PASSWORD, on both route layouts: the password, said plainly.
+        val password = "asks for a password, or the one given is wrong"
+        assertEquals(password, v(ApiService.TIDAL, 401, """{"detail":"This server needs its password."}"""))
+        assertEquals(password, v(ApiService.QOBUZ, 401, """{"success":false,"error":"This server needs its password."}"""))
+    }
+
+    @Test
+    fun `a password belongs to its server's origin`() {
+        val origin = ApiServerAccess.originOf("https://trypt-hifi.com")
+        assertEquals("https://trypt-hifi.com:443", origin)
+        // Its routes and stream links are the same origin.
+        assertEquals(origin, ApiServerAccess.originOf("https://trypt-hifi.com/api/tidal/atmos-file?track_id=1"))
+        assertEquals(origin, ApiServerAccess.originOf("https://TRYPT-HIFI.com/search/?s=a"))
+        // TIDAL's CDN, another port and plain http are not.
+        assertTrue(ApiServerAccess.originOf("https://sp-pr-cf.audio.tidal.com/x.flac") != origin)
+        assertTrue(ApiServerAccess.originOf("https://trypt-hifi.com:8443/search/") != origin)
+        assertTrue(ApiServerAccess.originOf("http://trypt-hifi.com/search/") != origin)
+        // An inline DASH manifest has no origin, so never a password.
+        assertNull(ApiServerAccess.originOf("data:application/dash+xml;base64,AAAA"))
     }
 }

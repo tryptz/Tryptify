@@ -222,6 +222,15 @@ object RoomProtocol {
         return ext.takeIf { it.isNotEmpty() && it.length <= 5 && it.all(Char::isLetterOrDigit) } ?: "bin"
     }
 
+    /**
+     * The biggest song the rooms server takes, from its info
+     * (`/api/multiplayer/info` → `data.maxSongBytes`); null when it does not say.
+     */
+    fun maxSongBytes(json: Json, info: String): Long? = runCatching {
+        val data = json.parseToJsonElement(info).jsonObject["data"]?.jsonObject ?: return@runCatching null
+        (data["maxSongBytes"] as? JsonPrimitive)?.contentOrNull?.toDoubleOrNull()?.toLong()?.takeIf { it > 0 }
+    }.getOrNull()
+
     fun nameOf(room: RoomView?, id: String): String = room?.players?.firstOrNull { it.id == id }?.name ?: id
 }
 

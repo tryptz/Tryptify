@@ -1,0 +1,16 @@
+{
+  "name": "tryptify-connect",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun run test.ts",
+    "dev": "wrangler dev --var DEV_TOKENS:1 --local-upstream 127.0.0.1:8787",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "jose": "6.2.12"
+  },
+  "devDependencies": {
+    "wrangler": "4.148.0"
+  }
+}

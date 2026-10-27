@@ -22,6 +22,9 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.Circle
+import androidx.compose.foundation.background
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -202,7 +205,7 @@ fun ArtistDetailScreen(
                     playlist.id,
                     // Resolve against the FULL top-tracks list so selections made
                     // while expanded still resolve after the list collapses.
-                    artistDetail?.topTracks.orEmpty().filter { it.id in selection.selectedIds },
+                    artistDetail?.selectable().orEmpty().filter { it.id in selection.selectedIds },
                 )
                 showAddToPlaylistForSelection = false
                 selection.clear()
@@ -264,13 +267,14 @@ fun ArtistDetailScreen(
                     tf.monochrome.android.ui.components.TrackSelectionBar(
                         selectedCount = selection.count,
                         onClose = { selection.clear() },
+                        onSelectAll = selection.selectAllOf(detail.selectable()) { it.id },
                         onAddToQueue = {
-                            playerViewModel.addToQueue(detail.topTracks.filter { it.id in selection.selectedIds })
+                            playerViewModel.addToQueue(detail.selectable().filter { it.id in selection.selectedIds })
                             selection.clear()
                         },
                         onAddToParty = tf.monochrome.android.ui.party.LocalPartyAdder.current?.let { party ->
                             {
-                                party.tracks(detail.topTracks.filter { it.id in selection.selectedIds })
+                                party.tracks(detail.selectable().filter { it.id in selection.selectedIds })
                                 selection.clear()
                             }
                         },
@@ -428,8 +432,11 @@ fun ArtistDetailScreen(
                                     ArtistGridTrackItem(
                                         track = track,
                                         onClick = {
-                                            playerViewModel.playTrack(track, detail.unreleasedTracks)
-                                        }
+                                            if (selection.active) selection.toggle(track.id)
+                                            else playerViewModel.playTrack(track, detail.unreleasedTracks)
+                                        },
+                                        selectionMode = selection.active,
+                                        selected = track.id in selection.selectedIds,
                                     )
                                 }
                             }
@@ -498,7 +505,9 @@ private fun ShowAllTracksRow(
 @Composable
 private fun ArtistGridTrackItem(
     track: tf.monochrome.android.domain.model.Track,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
 ) {
     // Holding plays the song's preview until the finger lifts.
     val holdToPreview = rememberHoldToPreview(track)
@@ -509,12 +518,26 @@ private fun ArtistGridTrackItem(
             .songPreviewHold(SongPreview.keyOf(track), MonoDimens.shapeMd),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        CoverImage(
-            url = track.coverUrl,
-            contentDescription = track.title,
-            size = 80.dp,
-            cornerRadius = 8.dp
-        )
+        // While a selection runs (begun from a top song's menu: these cards
+        // have none), a tap picks the card; the tick sits on its cover.
+        androidx.compose.foundation.layout.Box(contentAlignment = Alignment.TopEnd) {
+            CoverImage(
+                url = track.coverUrl,
+                contentDescription = track.title,
+                size = 80.dp,
+                cornerRadius = 8.dp
+            )
+            if (selectionMode) {
+                Icon(
+                    imageVector = if (selected) Icons.Default.CheckCircle else Icons.Outlined.Circle,
+                    contentDescription = stringResource(if (selected) R.string.state_selected else R.string.state_not_selected),
+                    tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .padding(4.dp)
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f), CircleShape),
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = track.title,
@@ -525,3 +548,7 @@ private fun ArtistGridTrackItem(
         )
     }
 }
+
+/** The songs a selection here can hold: the top songs and the unreleased ones. */
+private fun tf.monochrome.android.domain.model.ArtistDetail.selectable(): List<tf.monochrome.android.domain.model.Track> =
+    (topTracks + unreleasedTracks).distinctBy { it.id }

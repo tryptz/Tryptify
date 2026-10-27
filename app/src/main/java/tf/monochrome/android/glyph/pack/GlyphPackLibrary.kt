@@ -18,6 +18,8 @@ import tf.monochrome.android.audio.stepmania.StepManiaDifficulty
 import tf.monochrome.android.domain.model.AudioCodec
 import tf.monochrome.android.glyph.data.GlyphChartState
 import tf.monochrome.android.glyph.data.GlyphSong
+import tf.monochrome.android.util.safDocumentUriToPath
+import tf.monochrome.android.util.safTreeUriToPath
 
 /**
  * The StepMania packs imported into the app, as songs the mode can play.
@@ -39,8 +41,24 @@ import tf.monochrome.android.glyph.data.GlyphSong
 class GlyphPackLibrary @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
-    /** One imported pack, for the list under Settings. */
-    data class Pack(val name: String, val songs: Int, val bytes: Long, val inPlace: Boolean = false)
+    /**
+     * One imported pack, for the list under Settings. [source] is the folder
+     * a pack read in place is read from (its tree URI), null for one copied in.
+     */
+    data class Pack(val name: String, val songs: Int, val bytes: Long, val inPlace: Boolean = false, val source: String? = null)
+
+    /**
+     * What the library shows for a linked pack song's music file: the chart's
+     * title and artist, the pack as the album, and the song's own picture.
+     */
+    data class LibraryTags(
+        val title: String,
+        val artist: String,
+        val album: String,
+        val albumArtist: String,
+        /** The song's picture on the phone, or null to keep what the file has. */
+        val artPath: String?,
+    )
 
     val root: File get() = File(context.filesDir, "glyph/packs")
 
@@ -67,6 +85,7 @@ class GlyphPackLibrary @Inject constructor(
                 songs = index.songs.size,
                 bytes = folder.walkTopDown().filter { it.isFile }.sumOf { it.length() },
                 inPlace = index.source != null,
+                source = index.source,
             )
             for (song in index.songs) songs += song.toGlyphSong(folder, index.name)
         }
@@ -86,8 +105,11 @@ class GlyphPackLibrary @Inject constructor(
      */
     private fun fillEmbeddedArt(listed: List<GlyphSong>) {
         val found = HashMap<String, String>()
+        // Read once: it lists the cache folder, and the library scan loads
+        // the packs, so a list of thousands read it once per song.
+        val noCover = noArt()
         for (song in listed) {
-            if (song.artworkUri != null || song.trackId in noArt()) continue
+            if (song.artworkUri != null || song.trackId in noCover) continue
             val music = if (song.filePath.startsWith("content:")) Uri.parse(song.filePath) else Uri.fromFile(File(song.filePath))
             val bytes = SongArt.embedded(context, music)
             if (bytes == null) {
@@ -144,6 +166,52 @@ class GlyphPackLibrary @Inject constructor(
             }
         }
         refresh()
+    }
+
+    /**
+     * Where [song]'s music is on the phone: the file of a pack read in place,
+     * through its document, or of one copied in. Null for a document that is
+     * not on the phone's own storage (a cloud folder).
+     */
+    fun musicPath(song: GlyphSong): String? =
+        if (song.filePath.startsWith("content:")) safDocumentUriToPath(Uri.parse(song.filePath)) else song.filePath
+
+    /**
+     * The folders the linked packs are read from, as paths: what Settings ›
+     * Library › Music folders adds for "Add StepMania packs".
+     */
+    suspend fun linkedFolders(): List<String> {
+        ensureLoaded()
+        return _packs.value.mapNotNull { it.source }.distinct().mapNotNull { safTreeUriToPath(Uri.parse(it)) }.distinct()
+    }
+
+    /**
+     * The library's view of every linked pack song, by its music's path: the
+     * scanner shows these songs with the chart's title and artist instead of
+     * the file's tags (StepMania's music is often an untagged OGG), each pack
+     * as one album. A copied pack's music is in the app's own storage, where
+     * the library never looks, so only linked packs are here.
+     */
+    suspend fun libraryTags(): Map<String, LibraryTags> {
+        ensureLoaded()
+        val linked = _songs.value.filter { it.filePath.startsWith("content:") }
+        val tags = HashMap<String, LibraryTags>()
+        for ((pack, songs) in linked.groupBy { it.pack.orEmpty() }) {
+            val albumArtist = packAlbumArtist(songs.map { it.artist })
+            for (song in songs) {
+                val path = musicPath(song) ?: continue
+                tags[path] = LibraryTags(
+                    title = song.title,
+                    artist = song.artist,
+                    album = pack,
+                    albumArtist = albumArtist,
+                    artPath = song.artworkUri
+                        ?.takeIf { it.startsWith("content:") }
+                        ?.let { safDocumentUriToPath(Uri.parse(it)) },
+                )
+            }
+        }
+        return tags
     }
 
     /** The pack's own chart for a pack song's [trackId], or null for any other song. */
@@ -231,6 +299,18 @@ class GlyphPackLibrary @Inject constructor(
         private const val HEADER_CHARS = 16 * 1024
 
         fun isPackSong(trackId: String): Boolean = trackId.startsWith(PREFIX)
+
+        /**
+         * A pack's album artist in the library: its one artist when every
+         * song shares it, else "Various Artists", so a pack is one album and
+         * not one per artist in it.
+         */
+        internal fun packAlbumArtist(artists: List<String>): String {
+            val distinct = artists.map { it.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() }
+            return distinct.singleOrNull() ?: VARIOUS_ARTISTS
+        }
+
+        const val VARIOUS_ARTISTS = "Various Artists"
 
         private fun parse(trackId: String): Pair<String, String>? {
             if (!isPackSong(trackId)) return null

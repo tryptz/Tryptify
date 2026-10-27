@@ -79,6 +79,7 @@ internal fun SubsonicSection(viewModel: SubsonicSettingsViewModel = hiltViewMode
     val connected = server
     if (connected != null) {
         ServerCard(connected, onDisconnect = { confirmDisconnect = true })
+        CellularBitrate(viewModel)
     } else {
         OutlinedButton(
             onClick = { viewModel.resetConnect(); showConnect = true },
@@ -109,6 +110,39 @@ internal fun SubsonicSection(viewModel: SubsonicSettingsViewModel = hiltViewMode
                 TextButton(onClick = { confirmDisconnect = false }) { Text(stringResource(R.string.action_cancel)) }
             },
         )
+    }
+}
+
+/** What songs stream at on mobile data: the original file, or an MP3 cap. Laid out as the DSP block size is. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun CellularBitrate(viewModel: SubsonicSettingsViewModel) {
+    val current by viewModel.cellularMaxBitrate.collectAsStateWithLifecycle()
+    Spacer(Modifier.height(8.dp))
+    Text(
+        text = stringResource(R.string.settings_cellular_streaming),
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    Text(
+        text = stringResource(R.string.subsonic_cellular_detail),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    androidx.compose.foundation.layout.FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        tf.monochrome.android.data.subsonic.Subsonic.MOBILE_BITRATES.forEach { kbps ->
+            tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                // Rates are numbers and a unit, the same in every language.
+                label = if (kbps == 0) stringResource(R.string.subsonic_quality_original) else "MP3 $kbps kbps",
+                selected = kbps == current,
+                accent = MaterialTheme.colorScheme.primary,
+                onClick = { viewModel.setCellularMaxBitrate(kbps) },
+            )
+        }
     }
 }
 
@@ -250,6 +284,8 @@ private fun ConnectDialog(viewModel: SubsonicSettingsViewModel, onDismiss: () ->
 @Composable
 private fun connectErrorText(error: SubsonicConnectError, detail: String?): String = when (error) {
     SubsonicConnectError.BAD_ADDRESS -> stringResource(R.string.subsonic_error_address)
+    SubsonicConnectError.NEEDS_HTTPS -> stringResource(R.string.subsonic_error_needs_https)
+    SubsonicConnectError.PASSWORD_NEEDS_HTTPS -> stringResource(R.string.subsonic_error_password_needs_https)
     SubsonicConnectError.WRONG_LOGIN -> stringResource(R.string.subsonic_error_login)
     SubsonicConnectError.NOT_SUBSONIC -> stringResource(R.string.subsonic_error_not_subsonic)
     SubsonicConnectError.UNREACHABLE -> stringResource(R.string.subsonic_error_unreachable)

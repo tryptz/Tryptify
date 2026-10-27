@@ -28,6 +28,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 import javax.inject.Inject
 import javax.inject.Singleton
+import tf.monochrome.android.R
 
 /**
  * Persists the PKCE code verifier in SharedPreferences so it survives
@@ -170,7 +171,6 @@ class SupabaseAuthManager @Inject constructor(
         _successMessage.value = null
         try {
             val url = auth.getOAuthUrl(provider)
-            Log.d("SupabaseAuth", "OAuth URL: $url")
             val customTab = CustomTabsIntent.Builder().build()
             customTab.launchUrl(context, Uri.parse(url))
         } catch (e: Exception) {
@@ -181,10 +181,7 @@ class SupabaseAuthManager @Inject constructor(
 
     /**
      * Handle the OAuth callback deep-link URI returned from the browser.
-     * Call this from MainActivity.onNewIntent().
-     *
-     * Implicit flow: tokens arrive in the URL fragment (#access_token=...&refresh_token=...)
-     * PKCE fallback: code arrives as query param (?code=...)
+     * Call this from MainActivity.onNewIntent(). Only `?code=` (PKCE) signs in.
      */
     /**
      * Clear a stuck "Signing in…" state when the user came back from the OAuth
@@ -199,47 +196,31 @@ class SupabaseAuthManager @Inject constructor(
 
     suspend fun handleDeepLink(uri: Uri) {
         oauthCallbackReceived = true
-        Log.d("SupabaseAuth", "Deep-link received: $uri")
-        Log.d("SupabaseAuth", "Fragment: ${uri.fragment}")
+        // PKCE only. A callback is a one-time code, and it signs in only with
+        // the verifier this phone made when it started that sign-in, so a
+        // link from anywhere else cannot sign the phone into another account.
+        // Tokens in the fragment (the implicit flow) are never taken: any app
+        // or web page can open this link, and taking them would let one
+        // silently swap the account. Nothing of the link is logged.
         try {
-            val fragment = uri.fragment
-            if (!fragment.isNullOrBlank()) {
-                // Implicit flow: parse tokens from fragment
-                val params = fragment.split("&").associate {
-                    val (key, value) = it.split("=", limit = 2)
-                    key to value
+            // A failed link (expired, already used) comes back from Supabase
+            // as error_code, in the fragment or the query. Only read, never trusted.
+            val errorCode = uri.getQueryParameter("error_code")
+                ?: uri.fragment.orEmpty().split("&")
+                    .firstOrNull { it.startsWith("error_code=") }?.substringAfter('=')
+            val code = uri.getQueryParameter("code")
+            if (code.isNullOrBlank()) {
+                _errorMessage.value =
+                    if (errorCode != null) context.getString(R.string.auth_link_expired) else "No code in callback"
+                if (errorCode == null && !uri.fragment.isNullOrBlank()) {
+                    Log.w("SupabaseAuth", "Sign-in link with tokens in it ignored (PKCE only)")
                 }
-                val accessToken = params["access_token"]
-                val refreshToken = params["refresh_token"]
-                Log.d("SupabaseAuth", "Implicit flow: accessToken=${accessToken?.take(20)}..., refreshToken=${refreshToken?.take(10)}...")
-
-                if (accessToken != null) {
-                    auth.importAuthToken(
-                        accessToken,
-                        refreshToken ?: "",
-                        retrieveUser = true
-                    )
-                    val user = auth.currentUserOrNull()
-                    _userProfile.value = user?.toProfile()
-                    _isSigningIn.value = false
-                    Log.d("SupabaseAuth", "Implicit flow login successful, user: ${user?.id}")
-                } else {
-                    _errorMessage.value = "No access token in callback"
-                }
-            } else {
-                val code = uri.getQueryParameter("code")
-                Log.d("SupabaseAuth", "PKCE flow: code=${code?.take(20)}...")
-                if (code.isNullOrBlank()) {
-                    _errorMessage.value = "No code in callback"
-                    return
-                }
-                auth.exchangeCodeForSession(code)
-                val user = auth.currentUserOrNull()
-                _userProfile.value = user?.toProfile()
-                Log.d("SupabaseAuth", "PKCE flow login successful, user: ${user?.id}")
+                return
             }
+            auth.exchangeCodeForSession(code)
+            _userProfile.value = auth.currentUserOrNull()?.toProfile()
         } catch (e: Exception) {
-            Log.e("SupabaseAuth", "Deep-link handling failed: ${e.message}", e)
+            Log.e("SupabaseAuth", "Deep-link handling failed: ${e.javaClass.simpleName}")
             _errorMessage.value = "Sign-in callback failed: ${e.message}"
         } finally {
             _isSigningIn.value = false
@@ -340,6 +321,12 @@ class SupabaseAuthManager @Inject constructor(
                 "Please check your email and confirm your account before signing in."
             msg.contains("weak_password", ignoreCase = true) ->
                 "Password is too weak. Please use at least 8 characters with a mix of letters and numbers."
+            // The project's mailer refused or failed to send the confirmation
+            // email (a wrong SMTP login comes back as unexpected_failure).
+            msg.contains("over_email_send_rate_limit", ignoreCase = true) ||
+            msg.contains("unexpected_failure", ignoreCase = true) ||
+            msg.contains("sending confirmation", ignoreCase = true) ->
+                context.getString(R.string.auth_email_send_failed)
             msg.contains("signup_disabled", ignoreCase = true) ->
                 "Account registration is currently disabled."
             msg.contains("over_request_rate_limit", ignoreCase = true) ||

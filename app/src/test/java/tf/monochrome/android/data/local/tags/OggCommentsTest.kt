@@ -3,6 +3,7 @@ package tf.monochrome.android.data.local.tags
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -39,6 +40,15 @@ class OggCommentsTest {
         assertEquals("140", read["BPM"])
         assertEquals("Am", read["INITIALKEY"])
         assertFalse(read.containsKey("METADATA_BLOCK_PICTURE"))
+    }
+
+    @Test
+    fun `a song's lyrics are kept though they are longer than a tag usually is`() {
+        val lrc = (1..300).joinToString("\n") { "[00:%02d.00]line number $it".format(it % 60) }
+        assertTrue(lrc.length > 4096)
+        val ogg = stream(opusHead(), comments(vorbis = false, "LYRICS=$lrc", "BPM=90"), segmentsPerPage = 7)
+        val read = OggComments.read(ByteArrayInputStream(ogg))!!
+        assertEquals(lrc, read["LYRICS"])
     }
 
     @Test

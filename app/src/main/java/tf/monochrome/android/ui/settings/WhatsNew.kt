@@ -149,8 +149,176 @@ object WhatsNew {
     /** How late each output plays, and everything that waits for it. */
     private const val BLUETOOTH_SYNC = "Bluetooth sync"
 
+    /** The listener's devices: what plays where, and moving it between them. */
+    private const val CONNECT = "Tryptify Connect"
+
+    /** The paid music storage, under Settings › Connections. */
+    private const val CLOUD = "Tryptify Cloud"
+
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
+        WhatsNewRelease(
+            versionCode = 195,
+            versionName = "1.9.5",
+            entries = listOf(
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = CONNECT,
+                    title = "Your devices, together",
+                    body = "Signed in, your phone and tryptify.com/player see each other. The Devices button in the player lists them, and a tap moves the music there at the same second, queue and all.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = CONNECT,
+                    title = "Follow the other device",
+                    body = "While your phone is quiet and another device plays, the mini player shows that song with its progress running in step, and its buttons steer it. The Connect panel has a seek bar.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = CONNECT,
+                    title = "One plays at a time",
+                    body = "When another of your devices starts playing, this one pauses.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "Select on every song list",
+                    body = "Select, in a song's ⋮ menu, now works on the Local page, My server, local albums, artists and genres, and search results from your phone or server. On a genre chart, hold a row.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "My server's songs, and its search",
+                    body = "Library › My server has a Songs chip beside Albums and Artists, and a search that asks your server as you type.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "Your StepMania packs, as songs",
+                    body = "Settings › Library › Music folders › Add StepMania packs: songs of packs linked from a folder play like any other, with their chart's title, artist and picture, each pack an album. Trypt Mania lists each once, charted.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "Select all",
+                    body = "The selection bar has Select all on playlists, albums, artists, Favorites, Downloads, folders, search, Discover shelves and genre charts. It hides once every song is picked.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = CLOUD,
+                    title = "Upload a whole selection",
+                    body = "Select songs that are files on your phone, then the cloud button on the selection bar sends them all to Tryptify Cloud: one message when they're queued, one when they're done.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = CLOUD,
+                    title = "Plans from 10 GB to 10 TB",
+                    body = "Mini, 10 GB for \$1.29 a month, and Pro, Ultra and Xtra for 1, 3 and 10 TB, beside Lite, Plus and Max. The free trial gives up to 20 GB.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = CONNECTIONS,
+                    title = "A password for your server",
+                    body = "A TrypT HiFi server can ask for a password. Give it under the address in Settings › Connections › Add API. It stays on this phone and is never synced.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = APP,
+                    title = "A frame rate limit",
+                    body = "Settings › System › Performance › Frame rate limit: Max, 30, 45, 60, 90 or 120 frames a second for the app, its animations, Trypt Mania and the visualizer. Lower saves battery and heat.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = APP,
+                    title = "An FPS counter",
+                    body = "In the same place: the frames drawn each second, the display's refresh rate and the limit, in the top corner over everything.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = TRYPT_MANIA,
+                    title = "A song too big to share goes smaller",
+                    body = "In a room or a party, a song over the server's limit is turned into Opus at 320 kbps before it goes up, with its progress on the queue row.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LYRICS,
+                    title = "Reset on every lyrics slider",
+                    body = "In Player Visuals Studio's Lyrics tab, a slider moved off its default shows a reset button after its value. One tap puts it back.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = TRYPT_MANIA,
+                    title = "Add a chart server",
+                    body = "No chart server is built in any more. Trypt Mania's charts, and lyrics timed by ear, use a server you add under Settings › Connections.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = CLOUD,
+                    title = "Tryptify Cloud folds under its title",
+                    body = "In Settings › Connections, tap Tryptify Cloud to open its plans, storage and uploads.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = CLOUD,
+                    title = "Pay with PayPal or Creem",
+                    body = "Above the plans, pick PayPal or Creem to pay with; PayPal is picked first. Manage or cancel subscription opens whichever one you pay through. A subscription you already have renews as before.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = THEME_STORE,
+                    title = "Store cards show the lyrics and player",
+                    body = "A card in the Theme Store shows the lyrics and the player from a theme's picture. The theme's own page still shows it whole.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = APP,
+                    title = "Safer with your sign-ins",
+                    body = "Plain http:// goes only to servers on your own network, logs hide sign-ins, and Android backups leave every sign-in out.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = APP,
+                    title = "A new first-run setup",
+                    body = "Six short steps, all optional: permissions, music folders, where your music comes from, your account, what Tryptify can do, and a summary. No folder is needed: without one, the whole phone is scanned.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = CRT_EFFECT,
+                    title = "The CRT effect is lighter",
+                    body = "Its CRT look does about half the work for the same picture, so it no longer drops frames over the app or Trypt Mania.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LYRICS,
+                    title = "The letter wave moves under the CRT",
+                    body = "With the CRT effect over the whole app, the sung line's letter wave froze, and its speed did nothing. It moves again, linked to the music or not.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = VISUALIZER,
+                    title = "The visualizer keeps drawing",
+                    body = "Leaving the player and coming back left the visualizer frozen, or showing the cover alone. It carries on now, paused or playing.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LIBRARY,
+                    title = "Search bars float over their lists",
+                    body = "On the Local and My server pages, an open search bar takes the header's place and the list scrolls up under its glass, as on the Search tab.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = ACCOUNT_SYNC,
+                    title = "Saved songs keep their service",
+                    body = "Liked and playlist songs sync with the service they're from, so on a new phone or on tryptify.com a Qobuz, Deezer or Apple Music song plays from there, not TIDAL. Songs saved from this version on.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.REMOVED,
+                    section = CONNECTIONS,
+                    title = "Spotify sign-in",
+                    body = "Connecting a Spotify account, and its picker of your own playlists, are gone; a saved sign-in is deleted. Import a playlist by its link (the first 100 songs), or through Exportify for private ones, Liked Songs and longer ones.",
+                ),
+            ),
+        ),
         WhatsNewRelease(
             versionCode = 194,
             versionName = "1.9.4",

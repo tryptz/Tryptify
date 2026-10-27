@@ -225,6 +225,7 @@ fun FolderBrowserScreen(
             tf.monochrome.android.ui.components.TrackSelectionBar(
                 selectedCount = selection.count,
                 onClose = { selection.clear() },
+                onSelectAll = selection.selectAllOf(tracks) { it.id },
                 onAddToQueue = {
                     playerViewModel.addUnifiedToQueue(selectedTracks())
                     selection.clear()
@@ -245,6 +246,12 @@ fun FolderBrowserScreen(
                                 tf.monochrome.android.data.local.art.ArtRequest(t.title, t.artistName, t.albumTitle, t.durationSeconds, path)
                             },
                         )
+                        selection.clear()
+                    }
+                },
+                onUploadToCloud = tf.monochrome.android.ui.components.LocalUploadToCloud.current?.let { upload ->
+                    {
+                        upload(selectedTracks().mapNotNull { (it.source as? tf.monochrome.android.domain.model.PlaybackSource.LocalFile)?.filePath })
                         selection.clear()
                     }
                 },

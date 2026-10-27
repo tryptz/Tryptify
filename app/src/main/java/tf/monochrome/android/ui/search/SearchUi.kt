@@ -113,11 +113,13 @@ fun SearchHistoryContent(
     history: List<String>,
     onSelect: (String) -> Unit,
     onClearHistory: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** The search bar's height: content padding, so the history scrolls up under the glass. */
+    topInset: Dp = 0.dp,
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = tf.monochrome.android.ui.navigation.bottomChromePadding)
+        contentPadding = PaddingValues(top = topInset, bottom = tf.monochrome.android.ui.navigation.bottomChromePadding)
     ) {
         item {
             Text(
@@ -194,7 +196,8 @@ fun SearchResultsContent(
     favoriteTrackIds: Set<Long>,
     libraryPlaylists: List<UserPlaylistEntity>,
     modifier: Modifier = Modifier,
-    emptyContent: @Composable (() -> Unit)? = null,
+    /** Shown for an empty query, handed [topInset] to use as its list's content padding. */
+    emptyContent: @Composable ((topInset: Dp) -> Unit)? = null,
     onLoadMore: (SearchViewModel.SearchPageType) -> Unit = {},
     isLoadingMore: Boolean = false,
     endReached: Boolean = false,
@@ -238,6 +241,17 @@ fun SearchResultsContent(
             onSelect = menuSelectId?.let { id -> { selection.toggle(id) } },
         )
     }
+
+    // Songs on the phone or the listener's own server: the menu that keeps
+    // their album and artist links local (and with it, Select).
+    var menuUnified by remember { mutableStateOf<UnifiedTrack?>(null) }
+    tf.monochrome.android.ui.components.UnifiedTrackContextMenuHost(
+        track = menuUnified,
+        onDismissRequest = { menuUnified = null },
+        navController = navController,
+        playerViewModel = playerViewModel,
+        onSelect = menuUnified?.let { t -> { selection.toggle(t.id) } },
+    )
 
     if (showCreatePlaylistDialog) {
         CreatePlaylistDialog(
@@ -286,7 +300,7 @@ fun SearchResultsContent(
 
     when {
         query.isBlank() && emptyContent != null ->
-            Box(modifier = modifier.fillMaxSize().padding(top = topInset)) { emptyContent() }
+            Box(modifier = modifier.fillMaxSize()) { emptyContent(topInset) }
         // The pills stay up while a query runs. Swapping the whole list for a
         // spinner made them blink out on every keystroke, and hid the source
         // row just when someone reached for it.
@@ -360,6 +374,7 @@ fun SearchResultsContent(
                 TrackSelectionBar(
                     selectedCount = selection.count,
                     onClose = { selection.clear() },
+                    onSelectAll = selection.selectAllOf(tracks) { it.id },
                     onAddToQueue = {
                         playerViewModel.addUnifiedToQueue(tracks.filter { it.id in selection.selectedIds })
                         selection.clear()
@@ -483,8 +498,10 @@ fun SearchResultsContent(
                                     menuSelectId = track.id
                                     showContextMenuForTrack = track.toLegacyTrack()
                                 }
-                            } else null,
-                            isDownloaded = track.toLegacyTrack().id in downloadedTrackIds,
+                            } else {
+                                { menuUnified = track }
+                            },
+                            isDownloaded = track.legacyId in downloadedTrackIds,
                             selectionMode = selection.active,
                             selected = track.id in selection.selectedIds
                         )
@@ -645,7 +662,6 @@ private fun UnifiedSearchTrackItem(
     selectionMode: Boolean = false,
     selected: Boolean = false
 ) {
-    val legacyTrack = track.toLegacyTrack()
     // Same treatment as TrackItem: hide per-row affordances while selecting.
     val effectiveOnMoreClick = onMoreClick.takeUnless { selectionMode }
     // Holding plays the song's preview until the finger lifts; Select is in its menu.
@@ -747,7 +763,7 @@ private fun UnifiedSearchTrackItem(
             if (badges.duration) {
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = legacyTrack.formattedDuration,
+                    text = track.formattedDuration,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

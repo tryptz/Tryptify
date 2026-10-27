@@ -63,8 +63,8 @@ val LocalPlayInTryptMania = staticCompositionLocalOf<((TryptManiaRequest) -> Uni
 val LocalFindAlbumArt = staticCompositionLocalOf<((List<tf.monochrome.android.data.local.art.ArtRequest>) -> Unit)?> { null }
 
 /**
- * "Upload to Tryptify Cloud" from a song's menu: the song's file on the phone,
- * queued for the listener's cloud storage. Given at the app's root like "Find
- * album art"; a menu offers it only for a song whose file it knows.
+ * "Upload to Tryptify Cloud" from a song's menu or the selection bar: the
+ * songs' files on the phone, queued for the listener's cloud storage. Given at
+ * the app's root like "Find album art"; offered only for songs whose file it knows.
  */
-val LocalUploadToCloud = staticCompositionLocalOf<((String) -> Unit)?> { null }
+val LocalUploadToCloud = staticCompositionLocalOf<((List<String>) -> Unit)?> { null }

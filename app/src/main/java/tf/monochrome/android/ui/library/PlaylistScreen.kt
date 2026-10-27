@@ -325,6 +325,7 @@ fun PlaylistScreen(
             TrackSelectionBar(
                 selectedCount = selection.count,
                 onClose = { selection.clear() },
+                onSelectAll = selection.selectAllOf(tracks) { it.id },
                 onAddToQueue = {
                     playerViewModel.addToQueue(tracks.filter { it.id in selection.selectedIds })
                     selection.clear()

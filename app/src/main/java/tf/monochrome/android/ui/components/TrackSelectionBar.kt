@@ -7,8 +7,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.ImageSearch
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,6 +44,13 @@ fun TrackSelectionBar(
     onFindAlbumArt: (() -> Unit)? = null,
     /** "Add to party" for the selected songs, while a listening party is on. */
     onAddToParty: (() -> Unit)? = null,
+    /** "Upload to Tryptify Cloud" for the selected songs, where they are files on the phone. */
+    onUploadToCloud: (() -> Unit)? = null,
+    /**
+     * "Select all" over the list on screen. Null hides it: the list is not held
+     * whole, or everything in it is already selected.
+     */
+    onSelectAll: (() -> Unit)? = null,
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -67,6 +76,15 @@ fun TrackSelectionBar(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
             )
+            if (onSelectAll != null) {
+                IconButton(onClick = onSelectAll) {
+                    Icon(
+                        imageVector = Icons.Default.SelectAll,
+                        contentDescription = stringResource(R.string.action_select_all),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
             IconButton(onClick = onAddToQueue) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.QueueMusic,
@@ -95,6 +113,15 @@ fun TrackSelectionBar(
                     Icon(
                         imageVector = Icons.Default.ImageSearch,
                         contentDescription = stringResource(R.string.action_find_album_art),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+            if (onUploadToCloud != null) {
+                IconButton(onClick = onUploadToCloud) {
+                    Icon(
+                        imageVector = Icons.Default.CloudUpload,
+                        contentDescription = stringResource(R.string.action_upload_to_cloud),
                         tint = MaterialTheme.colorScheme.onSurface,
                     )
                 }

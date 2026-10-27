@@ -17,6 +17,7 @@ export async function cleanup(db: Db, bucket: Bucket, now: Date): Promise<{ wipe
     .prepare(
       `select a.user_id, a.plan, a.paid_until, a.used_bytes, a.trial from cloud_accounts a
         where a.paid_until is not null and a.paid_until < ?1
+          and not exists (select 1 from cloud_grants g where g.user_id = a.user_id)
           and (a.used_bytes > 0
                or exists (select 1 from cloud_uploads u where u.user_id = a.user_id)
                or exists (select 1 from cloud_songs s where s.user_id = a.user_id))`,

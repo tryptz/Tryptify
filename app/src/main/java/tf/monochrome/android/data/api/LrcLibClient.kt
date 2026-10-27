@@ -131,27 +131,19 @@ class LrcLibClient @Inject constructor(
     }
 
     private fun parseLyricsRecord(record: LrcLibRecord, convertToRomaji: Boolean): Lyrics? {
-        // Synced first — LRC `[mm:ss.cs]text` lines map cleanly to LyricLine.
+        // Synced first, read by the one LRC parser: `[mm:ss]`, several stamps
+        // on a line, `[offset:]`, word timing and end stamps all come through.
         record.syncedLyrics?.takeIf { it.isNotBlank() }?.let { synced ->
-            val lines = mutableListOf<LyricLine>()
-            val regex = Regex("\\[(\\d+):(\\d+\\.\\d+)](.*)")
-            synced.split('\n').forEach { rawLine ->
-                regex.find(rawLine)?.let { match ->
-                    val minutes = match.groupValues[1].toLongOrNull() ?: 0
-                    val seconds = match.groupValues[2].toDoubleOrNull() ?: 0.0
-                    val timeMs = (minutes * 60 * 1000) + (seconds * 1000).toLong()
-                    var text = match.groupValues[3].trim()
-                    if (convertToRomaji) text = RomajiConverter.convert(text)
-                    if (text.isNotBlank()) lines.add(LyricLine(timeMs, text))
-                }
-            }
-            if (lines.isNotEmpty()) return Lyrics(lines = lines, isSynced = true)
+            val parsed = LrcFormat.parse(synced)?.takeIf { it.isSynced }
+            if (parsed != null) return if (convertToRomaji) LyricsText.romaji(parsed) else parsed
         }
         record.plainLyrics?.takeIf { it.isNotBlank() }?.let { plain ->
             val text = if (convertToRomaji) RomajiConverter.convert(plain) else plain
             val lines = text.split('\n').map { LyricLine(0L, it) }
             return Lyrics(lines = lines, isSynced = false)
         }
+        // Stamped but never timed (every stamp zero) and no plain copy: keep
+        // looking for a timed one; the untimed fallback still has these words.
         return null
     }
 

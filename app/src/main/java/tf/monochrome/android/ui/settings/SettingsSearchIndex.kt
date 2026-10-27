@@ -38,7 +38,7 @@ data class SettingsEntry(
      * What the result says on screen, in the reader's language, and the text
      * its row anchors on. Usually the row's own title resource, so the search
      * scrolls to exactly that row; null for a name that is never translated
-     * (Spotify, ListenBrainz, Wave Candy), shown as [title].
+     * (ListenBrainz, Wave Candy), shown as [title].
      */
     @StringRes val titleRes: Int?,
     val tabLabel: String,
@@ -166,6 +166,7 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     // ── Audio ───────────────────────────────────────────────────────────
     entry("Gapless playback", R.string.settings_gapless_playback, "Audio", listOf("gap", "continuous", "album")),
     entry("Crossfade", R.string.search_crossfade, "Audio", listOf("fade", "transition", "blend")),
+    entry("ReplayGain", R.string.settings_replaygain, "Audio", listOf("replay gain", "loudness", "normalize", "normalise", "volume", "r128", "level")),
     entry(
         "Play alongside other apps", R.string.settings_play_alongside_other_apps, "Audio",
         listOf("audio focus", "focus", "game", "gaming", "mix", "pause", "duck", "interrupt", "video"),
@@ -236,7 +237,9 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     entry("Hide mini player when the nav bar shows", R.string.settings_mini_player_hide_with_tabs, "Library", listOf("mini player", "nav bar", "tab bar", "scroll", "hide", "bottom bar")),
     entry("Library sections", R.string.settings_library_sections, "Library", listOf("reorder", "order", "hide", "pages", "local", "playlists", "favorites", "downloads")),
     entry("Local folders", R.string.settings_local_media_scanning, "Library", listOf("storage", "saf", "sd card", "path")),
+    entry("Playlist import", R.string.settings_playlist_import, "Library", listOf("spotify", "import", "link", "transfer", "playlist")),
     entry("Music folders", R.string.settings_music_folders, "Library", listOf("add folder", "remove folder", "scan", "storage", "local", "path")),
+    entry("Add StepMania packs", R.string.settings_add_stepmania_packs, "Library", listOf("stepmania", "trypt mania", "pack", "simfile", "songs folder", "ssc")),
     entry("Titles from file names", R.string.settings_titles_from_file_names, "Library", listOf("filename", "file name", "title", "tags", "rename", "local")),
 
     // ── Downloads ───────────────────────────────────────────────────────
@@ -259,7 +262,6 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
             "stem", "stems", "separation", "separate", "demucs", "gpu", "modal", "railway"),
     ),
     entry("Show what I'm playing", R.string.settings_show_what_i_m_playing, "Connections", listOf("discord", "presence", "rich", "status", "playing")),
-    entry("Spotify", null, "Connections", listOf("import", "playlist", "account", "transfer")),
 
     // ── Radio ───────────────────────────────────────────────────────────
     entry("AI radio", R.string.search_ai_radio, "Radio", listOf("station", "recommend", "queue", "seed")),
@@ -267,6 +269,8 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
 
     // ── System ──────────────────────────────────────────────────────────
     entry("Performance", R.string.settings_performance, "System", listOf("battery", "fps", "low power", "glass", "blur")),
+    entry("Frame rate limit", R.string.settings_frame_rate_limit, "System", listOf("fps", "frames", "refresh", "hz", "cap", "battery", "heat")),
+    entry("FPS counter", R.string.settings_fps_counter, "System", listOf("frames", "frame rate", "refresh", "hz", "overlay", "meter")),
     entry(
         "Full screen", R.string.settings_full_screen,
         "System",

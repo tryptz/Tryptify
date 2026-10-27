@@ -16,12 +16,21 @@ import javax.inject.Inject
 
 /**
  * Settings › Connections › Music server. Its own view model rather than more
- * of SettingsViewModel, the way Spotify's account controls have theirs.
+ * of SettingsViewModel.
  */
 @HiltViewModel
 class SubsonicSettingsViewModel @Inject constructor(
     private val repository: SubsonicRepository,
+    private val preferences: tf.monochrome.android.data.preferences.PreferencesManager,
 ) : ViewModel() {
+
+    /** The mobile-data cap, kbps; 0 streams the original file. */
+    val cellularMaxBitrate: StateFlow<Int> =
+        preferences.subsonicCellularMaxBitrate.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    fun setCellularMaxBitrate(kbps: Int) {
+        viewModelScope.launch { preferences.setSubsonicCellularMaxBitrate(kbps) }
+    }
 
     sealed interface ConnectState {
         data object Idle : ConnectState

@@ -152,9 +152,39 @@ object Subsonic {
         return "${server.url}/rest/$method.view?${authQuery(server)}$extra"
     }
 
-    /** The original file as the server has it (no `format`, so no transcoding asked for). */
-    fun streamUrl(server: SubsonicServer, songId: String): String =
-        endpoint(server, "stream", listOf("id" to songId))
+    /**
+     * scrobble's parameters. `submission=false` is "now playing"; `true` counts
+     * the play, stamped with [timeMillis] (when it started) so the server's
+     * history and any Last.fm relay it runs date it right.
+     */
+    fun scrobbleParams(songId: String, submission: Boolean, timeMillis: Long? = null): List<Pair<String, String>> =
+        buildList {
+            add("id" to songId)
+            add("submission" to submission.toString())
+            if (submission && timeMillis != null) add("time" to timeMillis.toString())
+        }
+
+    /**
+     * The song's stream. With no [maxBitRateKbps] (0), the original file as the
+     * server has it; with one, an MP3 at that rate at most, which every
+     * Subsonic server can transcode to. A file already under the cap is sent
+     * as it is.
+     */
+    fun streamUrl(server: SubsonicServer, songId: String, maxBitRateKbps: Int = 0): String =
+        endpoint(
+            server,
+            "stream",
+            buildList {
+                add("id" to songId)
+                if (maxBitRateKbps > 0) {
+                    add("maxBitRate" to maxBitRateKbps.toString())
+                    add("format" to "mp3")
+                }
+            },
+        )
+
+    /** The mobile-data choices, kbps: the original file (0), then the MP3 caps. */
+    val MOBILE_BITRATES = listOf(0, 320, 192, 128)
 
     fun coverArtUrl(server: SubsonicServer, coverArtId: String?, size: Int = COVER_SIZE): String? =
         coverArtId?.takeIf { it.isNotBlank() }

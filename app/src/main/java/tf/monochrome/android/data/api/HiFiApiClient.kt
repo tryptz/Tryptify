@@ -158,6 +158,9 @@ class HiFiApiClient @Inject constructor(
                         instanceIndex++
                     }
                     response.status.value == 401 -> {
+                        // A TrypT HiFi behind a password: say so, rather than
+                        // "all instances failed".
+                        lastError = Exception("The server asks for a password (Settings › Connections › Add API, with its address and password)")
                         instanceIndex++
                     }
                     response.status.isSuccess() -> {

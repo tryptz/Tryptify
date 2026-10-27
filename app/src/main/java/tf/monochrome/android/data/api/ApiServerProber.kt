@@ -94,6 +94,8 @@ class ApiServerProber @Inject constructor(
          */
         fun verdict(service: ApiService, status: Int, body: String, json: Json): String? {
             val first = body.firstOrNull { !it.isWhitespace() }
+            // trypt-hifi behind ACCESS_PASSWORD, asked without it or with the wrong one.
+            if (status == 401) return "asks for a password, or the one given is wrong"
             if (first == '<') return "answered with a web page, not the API (HTTP $status)"
             val obj = if (first == '{') {
                 runCatching { json.parseToJsonElement(body) as? JsonObject }.getOrNull()

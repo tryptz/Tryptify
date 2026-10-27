@@ -1,4 +1,5 @@
 import java.net.URI
+import java.security.MessageDigest
 import java.util.Properties
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -54,19 +55,10 @@ android {
         applicationId = "tf.monotrypt.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 194
-        versionName = "1.9.4"
+        versionCode = 195
+        versionName = "1.9.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        // Spotify PKCE OAuth — client ID is public by design (no secret needed for
-        // the authorization-code-with-PKCE flow). Overridable via local.properties.
-        buildConfigField(
-            "String",
-            "SPOTIFY_CLIENT_ID",
-            "\"${localProperties.getProperty("spotify.clientId") ?: "c9e571c8b81948feb6573014a3efdd2c"}\"",
-        )
-        buildConfigField("String", "SPOTIFY_REDIRECT_URI", "\"tryptify://spotify-callback\"")
 
         // The Theme Store's API (server/theme-store, a Railway Function). It
         // holds no secret: every call carries the listener's Supabase session,
@@ -108,27 +100,33 @@ android {
             "\"${localProperties.getProperty("lastfm.apiKey") ?: "153452aaeaa3e666645274b3a9e5bb0a"}\"",
         )
 
-        // The Trypt Mania chart server every install starts with (Slow, a
-        // CPU server on Railway), its secret path and all. From
-        // local.properties (`tryptmania.cpuServer`) or the
-        // TRYPTMANIA_CPU_SERVER environment variable, never the repository:
-        // a build without either ships no server, and charting waits for one
-        // under Settings › Connections. Anyone with the APK can read it.
+        // The TryptMania Parser chart server is never built in (the owner's
+        // rule): no build puts it under Settings › Connections. Charting
+        // waits for a server the listener adds there. Builds before this one
+        // did put it there, so the app takes that entry out once, by its
+        // host: only the host's SHA-256 goes in, never the address. From
+        // local.properties (`tryptmania.cpuServer`) or TRYPTMANIA_CPU_SERVER;
+        // empty without either.
+        val retiredCpuHost = runCatching {
+            URI((localProperties.getProperty("tryptmania.cpuServer") ?: System.getenv("TRYPTMANIA_CPU_SERVER") ?: "").trim()).host
+        }.getOrNull()?.lowercase()?.takeIf { it.isNotBlank() }
         buildConfigField(
             "String",
-            "BUILT_IN_CPU_SERVER",
-            "\"${(localProperties.getProperty("tryptmania.cpuServer") ?: System.getenv("TRYPTMANIA_CPU_SERVER") ?: "").trim()}\"",
+            "RETIRED_CPU_HOST_SHA256",
+            "\"${retiredCpuHost?.let { h -> MessageDigest.getInstance("SHA-256").digest(h.toByteArray()).joinToString("") { "%02x".format(it) } } ?: ""}\"",
         )
-        // The rooms server for Trypt Mania's multiplayer (TryptMania-Parser's
-        // multiplayer/ service on Railway), the same way: local.properties
-        // `tryptmania.roomsServer` or TRYPTMANIA_ROOMS_SERVER.
+        // The rooms server for Trypt Mania's multiplayer and the listening
+        // parties (server/rooms, on Cloudflare), built in whenever
+        // local.properties `tryptmania.roomsServer` or TRYPTMANIA_ROOMS_SERVER
+        // is set.
         val roomsServer = (localProperties.getProperty("tryptmania.roomsServer") ?: System.getenv("TRYPTMANIA_ROOMS_SERVER") ?: "").trim()
         buildConfigField("String", "BUILT_IN_ROOMS_SERVER", "\"$roomsServer\"")
-        // Listening party invites (https://<rooms host>/…/party/<code>) open
-        // in the app: the manifest claims the built-in rooms server's host,
-        // and that server's /.well-known/assetlinks.json vouches for the app.
-        // Only the host goes in, never the secret path. Without a built-in
-        // server it claims a host that cannot exist.
+        // Listening party invites are tryptify.com/party/<code> (the manifest
+        // claims that host itself); an older app's invite pointed at the rooms
+        // server, so the manifest claims its host too, and that server's
+        // /.well-known/assetlinks.json vouches for the app. Only the host goes
+        // in, never a path. Without a built-in server it claims a host that
+        // cannot exist.
         manifestPlaceholders["partyLinkHost"] =
             runCatching { URI(roomsServer).host }.getOrNull()?.takeIf { it.isNotBlank() } ?: "party.invalid"
 
@@ -353,6 +351,10 @@ dependencies {
     implementation(libs.media3.session)
     implementation(libs.media3.ui)
     implementation(libs.media3.cast)
+    // Turns a song too big for the rooms server into Opus before it is shared.
+    implementation(libs.media3.transformer)
+    // Its MP4 muxer: the only one of Media3's that writes Opus into an .m4a.
+    implementation(libs.media3.muxer)
     // Prebuilt FFmpeg audio decoder wired as FfmpegAudioRenderer. Drops in
     // support for DSD/DSF, APE, TAK, WavPack, Musepack, TrueHD/MLP, DTS, AC-3,
     // and a long tail of codecs the platform MediaCodec can't handle.

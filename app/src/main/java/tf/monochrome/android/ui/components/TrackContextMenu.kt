@@ -213,7 +213,7 @@ fun TrackContextMenu(
                         ContextMenuItem(
                             icon = Icons.Default.CloudUpload,
                             label = stringResource(R.string.action_upload_to_cloud),
-                            onClick = { uploadToCloud(filePath); onDismiss() }
+                            onClick = { uploadToCloud(listOf(filePath)); onDismiss() }
                         )
                     }
                     if (addToParty != null) {

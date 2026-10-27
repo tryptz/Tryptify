@@ -112,6 +112,7 @@ import tf.monochrome.android.ui.glyph.GlyphRoute
 import tf.monochrome.android.ui.oxford.OxfordViewModel
 import androidx.compose.ui.res.stringResource
 import tf.monochrome.android.R
+import tf.monochrome.android.ui.player.asShownTrackOn
 
 sealed class Screen(val route: String) {
     data object Home : Screen("home")
@@ -318,6 +319,41 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         {
             val d = durationState.value
             if (d > 0) positionState.value.toFloat() / d.toFloat() else 0f
+        }
+    }
+
+    // Tryptify Connect, as Spotify does it: while this phone plays nothing and
+    // another of the listener's devices does, the mini player shows that song,
+    // its progress runs in step and its buttons steer that device. It keeps
+    // following when that device is paused from here, and lets go when this
+    // phone plays or that device goes.
+    val connectVm: tf.monochrome.android.ui.player.ConnectViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    val connectState by connectVm.state.collectAsStateWithLifecycle()
+    val elsewhere = connectState.now?.takeIf { n ->
+        n.device != connectVm.myId && n.track != null && connectState.devices.any { it.id == n.device }
+    }
+    var followElsewhere by remember { mutableStateOf(false) }
+    LaunchedEffect(elsewhere?.playing, elsewhere == null, isPlaying) {
+        followElsewhere = when {
+            elsewhere == null || isPlaying -> false
+            elsewhere.playing -> true
+            else -> followElsewhere
+        }
+    }
+    val remote = elsewhere?.takeIf { followElsewhere || (currentTrack == null && it.playing) }
+    // Read only in the progress lambda, like the phone's own position.
+    val remotePosition = tf.monochrome.android.ui.player.rememberRemotePosition(remote, connectVm::serverNowMs)
+    val remoteName = remote?.let { r -> connectState.devices.firstOrNull { it.id == r.device }?.name ?: r.name.orEmpty() }
+    val playingOn = remoteName?.let { stringResource(R.string.connect_playing_on, it) }
+    val remoteTrack = remember(remote?.track, playingOn) {
+        remote?.track?.let { t ->
+            t.asShownTrackOn(playingOn.orEmpty())
+        }
+    }
+    val remoteProgress = remember(remotePosition, remote) {
+        {
+            val d = remote?.track?.duration ?: 0.0
+            if (d > 0) (remotePosition.value / d).toFloat().coerceIn(0f, 1f) else 0f
         }
     }
 
@@ -646,19 +682,39 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 tf.monochrome.android.data.cloud.CloudEntryPoint::class.java,
             ).cloudUploads()
         }
-        val uploadToCloud: (String) -> Unit = remember(cloudUploads) {
-            { path ->
-                cloudUploads.enqueue(path)
-                android.widget.Toast.makeText(appContext, appContext.getString(R.string.cloud_upload_queued), android.widget.Toast.LENGTH_SHORT).show()
+        // Songs queued from here and not finished yet ([0]), and how many of
+        // them went up ([1]): a batch from the selection bar says how it went
+        // once, at the end, not one toast a song. A failure is told at once.
+        val uploadBatch = remember { intArrayOf(0, 0) }
+        val uploadToCloud: (List<String>) -> Unit = remember(cloudUploads) {
+            { paths ->
+                paths.forEach(cloudUploads::enqueue)
+                uploadBatch[0] += paths.size
+                val text = if (paths.size == 1) appContext.getString(R.string.cloud_upload_queued)
+                else appContext.resources.getQuantityString(R.plurals.cloud_upload_queued_n, paths.size, paths.size)
+                android.widget.Toast.makeText(appContext, text, android.widget.Toast.LENGTH_SHORT).show()
             }
         }
         androidx.compose.runtime.LaunchedEffect(cloudUploads) {
+            val toast = { text: String -> android.widget.Toast.makeText(appContext, text, android.widget.Toast.LENGTH_LONG).show() }
             // drop(1): the value already there was toasted when it happened.
             cloudUploads.last.drop(1).collect { r ->
                 if (r == null) return@collect
-                val text = if (r.error == null) appContext.getString(R.string.cloud_uploaded, r.title)
-                else appContext.getString(R.string.cloud_upload_failed_toast, r.title)
-                android.widget.Toast.makeText(appContext, text, android.widget.Toast.LENGTH_LONG).show()
+                if (r.error != null) toast(appContext.getString(R.string.cloud_upload_failed_toast, r.title))
+                // Queued before the app was last opened: nothing to count it against.
+                if (uploadBatch[0] == 0) {
+                    if (r.error == null) toast(appContext.getString(R.string.cloud_uploaded, r.title))
+                    return@collect
+                }
+                uploadBatch[0] -= 1
+                if (r.error == null) uploadBatch[1] += 1
+                if (uploadBatch[0] > 0) return@collect
+                val sent = uploadBatch[1]
+                uploadBatch[1] = 0
+                when {
+                    sent == 1 && r.error == null -> toast(appContext.getString(R.string.cloud_uploaded, r.title))
+                    sent > 0 -> toast(appContext.resources.getQuantityString(R.plurals.cloud_uploaded_n, sent, sent))
+                }
             }
         }
         // Every song menu's "Add to party", while a party is on.
@@ -1214,12 +1270,15 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             tf.monochrome.android.ui.player.LocalGlassArea provides tf.monochrome.android.domain.model.LinkArea.PANELS,
                         ) {
                             MiniPlayer(
-                                track = currentTrack,
-                                isPlaying = isPlaying,
-                                progressProvider = progressProvider,
-                                onPlayPauseClick = { playerViewModel.togglePlayPause() },
-                                onSkipNextClick = { playerViewModel.skipToNext() },
-                                onSkipPreviousClick = { playerViewModel.skipToPrevious() },
+                                track = remoteTrack ?: currentTrack,
+                                isPlaying = remote?.playing ?: isPlaying,
+                                progressProvider = if (remote != null) remoteProgress else progressProvider,
+                                onPlayPauseClick = {
+                                    if (remote != null) connectVm.remote(if (remote.playing) "pause" else "play")
+                                    else playerViewModel.togglePlayPause()
+                                },
+                                onSkipNextClick = { if (remote != null) connectVm.remote("next") else playerViewModel.skipToNext() },
+                                onSkipPreviousClick = { if (remote != null) connectVm.remote("prev") else playerViewModel.skipToPrevious() },
                                 // A plain push, not navigateTool: collapsing an
                                 // earlier player would take every screen above it
                                 // along. One left under the mixer is the only kind

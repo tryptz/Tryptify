@@ -20,7 +20,13 @@ data class FavoriteTrackEntity(
     val audioQuality: String? = null,
     val explicit: Boolean = false,
     val trackNumber: Int? = null,
-    val addedAt: Long = System.currentTimeMillis()
+    val addedAt: Long = System.currentTimeMillis(),
+    /**
+     * The service [id] belongs to: "tidal", "qobuz", "deezer" or "apple"
+     * (TrackSource). Their ids are plain numbers in overlapping ranges, so
+     * the id alone does not say; null for a row saved before this was kept.
+     */
+    val source: String? = null,
 )
 
 @Serializable
@@ -134,7 +140,9 @@ data class PlaylistTrackEntity(
     val albumTitle: String? = null,
     val albumCover: String? = null,
     val position: Int = 0,
-    val addedAt: Long = System.currentTimeMillis()
+    val addedAt: Long = System.currentTimeMillis(),
+    /** The service [trackId] belongs to, as on [FavoriteTrackEntity.source]. */
+    val source: String? = null,
 )
 
 @Entity(

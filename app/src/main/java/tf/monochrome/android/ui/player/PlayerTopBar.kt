@@ -10,6 +10,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.DevicesOther
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
@@ -76,6 +78,10 @@ fun PlayerTopBar(
     onGoToAlbum: (() -> Unit)? = null,
     /** Shown while a song opened from another app plays, until it is in the library. */
     onAddToLibrary: (() -> Unit)? = null,
+    /** Tryptify Connect's Devices panel; null hides the button. */
+    onDevicesClick: (() -> Unit)? = null,
+    /** Another of the listener's devices is online (the icon says so). */
+    devicesOnline: Boolean = false,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
@@ -98,6 +104,15 @@ fun PlayerTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+            if (onDevicesClick != null) {
+                IconButton(onClick = onDevicesClick) {
+                    Icon(
+                        imageVector = if (devicesOnline) Icons.Default.DevicesOther else Icons.Default.Devices,
+                        contentDescription = stringResource(R.string.connect_devices),
+                        tint = Color.White,
+                    )
+                }
+            }
             IconButton(onClick = onOutputClick) {
                 Icon(
                     imageVector = Icons.Default.Headphones,

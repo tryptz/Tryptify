@@ -43,6 +43,10 @@ void check(bool ok, const char* what) {
 libusb_config_descriptor* gConfig = nullptr;
 int gSpeed = LIBUSB_SPEED_FULL;
 std::deque<libusb_transfer*> gPending;   // submitted, not yet completed
+// A wedged device: cancel is accepted but nothing completes until the
+// test says so, long after the driver stopped waiting.
+bool gStallCancel = false;
+std::vector<libusb_transfer*> gStalled;
 int gClockSetCount = 0;
 int gLastAlt = -1;
 
@@ -147,6 +151,7 @@ libusb_transfer* LIBUSB_CALL libusb_alloc_transfer(int packets) {
 void LIBUSB_CALL libusb_free_transfer(libusb_transfer* t) { std::free(t); }
 int LIBUSB_CALL libusb_submit_transfer(libusb_transfer* t) { gPending.push_back(t); return 0; }
 int LIBUSB_CALL libusb_cancel_transfer(libusb_transfer* t) {
+    if (gStallCancel) { gStalled.push_back(t); return 0; }
     t->status = LIBUSB_TRANSFER_CANCELLED;
     t->callback(t);
     return 0;
@@ -483,6 +488,32 @@ int main() {
         check(s.started, "an endpoint sized to the nominal rate still starts");
         Pumped p = pump(200, s.stride(), overAsk);
         check(p.maxBytes <= 36, "feedback can't push a packet past wMaxPacketSize");
+    }
+
+    std::printf("-- a DAC that stalls while stopping\n");
+    {
+        resetUnits({{2, 0}});
+        Session s(appleUac2(), LIBUSB_SPEED_FULL, 48000, 24);
+        check(s.started, "starts");
+        pump(10, s.stride());
+        gStallCancel = true;
+        gStalled.clear();
+        s.driver.stop();
+        gStallCancel = false;
+        check(!gStalled.empty(), "stop gave up on transfers that never came back");
+        // They come back now. Their memory must still be the driver's:
+        // AddressSanitizer reports this write if stop freed them.
+        for (libusb_transfer* t : gStalled) {
+            std::memset(t->buffer, 0, static_cast<size_t>(t->length));
+            t->status = LIBUSB_TRANSFER_CANCELLED;
+            t->callback(t);
+        }
+        gStalled.clear();
+        gPending.clear();
+        check(s.driver.start(48000, 24, 2), "starts again after the late completions");
+        pump(10, s.stride());
+        s.driver.stop();
+        check(gStalled.empty(), "a normal stop waits for nothing");
     }
 
     if (failures) {

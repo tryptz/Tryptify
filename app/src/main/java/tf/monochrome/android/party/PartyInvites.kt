@@ -10,8 +10,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * A listening party invite opened from outside the app: the rooms server's
- * link (`https://<host>/<secret>/party/<code>`), which the manifest claims.
+ * A listening party invite opened from outside the app: the website's link
+ * (`https://tryptify.com/party/<code>`), or an older app's on the rooms server,
+ * which the manifest claims.
  * Only its code is kept, and the party screen joins it on this phone's own
  * rooms server, so a link names a party and nothing more.
  */

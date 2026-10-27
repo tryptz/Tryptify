@@ -30,7 +30,58 @@ data class SubsonicResponse(
     val artist: SubsonicArtist? = null,
     val searchResult3: SubsonicSearchResult? = null,
     val randomSongs: SubsonicSongList? = null,
+    val playlists: SubsonicPlaylists? = null,
+    val playlist: SubsonicPlaylist? = null,
+    val starred2: SubsonicStarred? = null,
+    /** OpenSubsonic getLyricsBySongId. */
+    val lyricsList: SubsonicLyricsList? = null,
+    /** Classic getLyrics. */
+    val lyrics: SubsonicPlainLyrics? = null,
 )
+
+@Serializable
+data class SubsonicPlaylists(val playlist: List<SubsonicPlaylist> = emptyList())
+
+/** A playlist as getPlaylists lists it, and with its songs ([entry]) as getPlaylist returns it. */
+@Serializable
+data class SubsonicPlaylist(
+    val id: String,
+    val name: String = "",
+    val comment: String? = null,
+    val owner: String? = null,
+    val songCount: Int = 0,
+    val duration: Int = 0,
+    val coverArt: String? = null,
+    val entry: List<SubsonicSong> = emptyList(),
+)
+
+@Serializable
+data class SubsonicStarred(
+    val artist: List<SubsonicArtist> = emptyList(),
+    val album: List<SubsonicAlbum> = emptyList(),
+    val song: List<SubsonicSong> = emptyList(),
+)
+
+@Serializable
+data class SubsonicLyricsList(val structuredLyrics: List<SubsonicStructuredLyrics> = emptyList())
+
+/**
+ * One language's lyrics. [offset] is in milliseconds, positive meaning the
+ * lines show sooner, as LRC's `[offset:]`.
+ */
+@Serializable
+data class SubsonicStructuredLyrics(
+    val lang: String? = null,
+    val synced: Boolean = false,
+    val offset: Long = 0,
+    val line: List<SubsonicLyricLine> = emptyList(),
+)
+
+@Serializable
+data class SubsonicLyricLine(val start: Long? = null, val value: String = "")
+
+@Serializable
+data class SubsonicPlainLyrics(val artist: String? = null, val title: String? = null, val value: String? = null)
 
 @Serializable
 data class SubsonicError(val code: Int? = null, val message: String? = null)

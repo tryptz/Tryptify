@@ -10,6 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import tf.monochrome.android.data.subsonic.SubsonicRepository.Companion.codecFor
+import tf.monochrome.android.data.subsonic.SubsonicRepository.Companion.toServerPlaylist
 import tf.monochrome.android.data.subsonic.SubsonicRepository.Companion.toUnifiedAlbum
 import tf.monochrome.android.data.subsonic.SubsonicRepository.Companion.toUnifiedTrack
 import tf.monochrome.android.domain.model.AudioCodec
@@ -115,6 +116,33 @@ class SubsonicTest {
         assertTrue(url, url.endsWith("&query=AC%2FDC+%26+co"))
     }
 
+    @Test
+    fun `the stream is the original file unless a cap is asked for`() {
+        val original = Subsonic.streamUrl(server, "s1")
+        assertTrue(original, original.endsWith("&id=s1"))
+        assertFalse(original, "maxBitRate" in original || "format" in original)
+
+        val capped = Subsonic.streamUrl(server, "s1", maxBitRateKbps = 192)
+        assertTrue(capped, capped.endsWith("&id=s1&maxBitRate=192&format=mp3"))
+    }
+
+    @Test
+    fun `now playing is a scrobble without submission or time`() {
+        assertEquals(
+            listOf("id" to "s1", "submission" to "false"),
+            Subsonic.scrobbleParams("s1", submission = false, timeMillis = 1_700_000_000_000),
+        )
+    }
+
+    @Test
+    fun `a counted play is stamped with when it started`() {
+        assertEquals(
+            listOf("id" to "s1", "submission" to "true", "time" to "1700000000000"),
+            Subsonic.scrobbleParams("s1", submission = true, timeMillis = 1_700_000_000_000),
+        )
+        assertEquals(listOf("id" to "s1", "submission" to "true"), Subsonic.scrobbleParams("s1", submission = true))
+    }
+
     // ── Artwork never carries the sign-in ───────────────────────────────
 
     @Test
@@ -139,7 +167,8 @@ class SubsonicTest {
         val passwordServer = Subsonic.passwordServer("http://h", "joe", "sesame")
         val track = song.toUnifiedTrack()
         val album = albumWithSongs.toUnifiedAlbum()
-        for (text in listOf(json.encodeToString(track), track.artworkUri.orEmpty(), album.artworkUri.orEmpty())) {
+        val playlist = SubsonicPlaylist(id = "p1", name = "Mix", coverArt = "pl-p1").toServerPlaylist()
+        for (text in listOf(json.encodeToString(track), track.artworkUri.orEmpty(), album.artworkUri.orEmpty(), playlist.toString())) {
             assertFalse(text, server.token in text || passwordServer.hexPassword in text || "sesame" in text)
             assertFalse(text, "getCoverArt" in text)
         }
@@ -201,6 +230,60 @@ class SubsonicTest {
         assertEquals(AudioCodec.OPUS, codecFor("opus", null))
         assertNull(codecFor("xyz", null))
         assertNull(codecFor(null, null))
+    }
+
+    // ── Playlists, likes and lyrics ─────────────────────────────────────
+
+    @Test
+    fun `playlists, a playlist's songs and starred songs parse`() {
+        val lists = SubsonicClient.parse(
+            json,
+            """{"subsonic-response":{"status":"ok","playlists":{"playlist":[
+                {"id":"p1","name":"Road","songCount":2,"duration":400,"coverArt":"pl-p1","public":true}]}}}""",
+        )
+        assertEquals("Road", lists.playlists!!.playlist.single().name)
+        assertEquals("subsonic-cover://pl-p1", lists.playlists!!.playlist.single().toServerPlaylist().artworkUri)
+
+        val one = SubsonicClient.parse(
+            json,
+            """{"subsonic-response":{"status":"ok","playlist":{"id":"p1","name":"Road",
+                "entry":[{"id":"s1","title":"A"},{"id":"s2","title":"B"}]}}}""",
+        )
+        assertEquals(listOf("s1", "s2"), one.playlist!!.entry.map { it.id })
+
+        val starred = SubsonicClient.parse(
+            json,
+            """{"subsonic-response":{"status":"ok","starred2":{"song":[{"id":"s9","title":"Fav","starred":"2026-01-01T00:00:00Z"}]}}}""",
+        )
+        assertEquals("subsonic_s9", starred.starred2!!.song.single().toUnifiedTrack().id)
+    }
+
+    @Test
+    fun `timed server lyrics keep their times, less the offset`() {
+        val r = SubsonicClient.parse(
+            json,
+            """{"subsonic-response":{"status":"ok","lyricsList":{"structuredLyrics":[
+                {"lang":"eng","synced":false,"line":[{"value":"plain one"}]},
+                {"lang":"eng","synced":true,"offset":100,"line":[
+                  {"start":2000,"value":"second"},{"start":1000,"value":"first"},{"start":1500,"value":" "}]}]}}}""",
+        )
+        val lyrics = SubsonicRepository.pickLyrics(r.lyricsList!!.structuredLyrics)!!
+        assertTrue(lyrics.isSynced)
+        assertEquals(listOf("first", "second"), lyrics.lines.map { it.text })
+        assertEquals(listOf(900L, 1_900L), lyrics.lines.map { it.timeMs })
+    }
+
+    @Test
+    fun `untimed server lyrics keep their verses, and all-zero times are untimed`() {
+        val plain = SubsonicStructuredLyrics(synced = false, line = listOf("", "verse one", "", "verse two", "").map { SubsonicLyricLine(value = it) })
+        with(SubsonicRepository) {
+            val lyrics = plain.toLyrics()!!
+            assertFalse(lyrics.isSynced)
+            assertEquals(listOf("verse one", "", "verse two"), lyrics.lines.map { it.text })
+            val zero = SubsonicStructuredLyrics(synced = true, line = listOf(SubsonicLyricLine(0, "a"), SubsonicLyricLine(0, "b")))
+            assertFalse(zero.toLyrics()!!.isSynced)
+            assertNull(SubsonicStructuredLyrics(synced = true).toLyrics())
+        }
     }
 
     // ── Parsing ─────────────────────────────────────────────────────────

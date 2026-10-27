@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Tryptify Cloud end to end: the Worker's own routes (src/app.ts) over a real
 // SQLite database (the engine D1 is), with stand-ins for Supabase Auth's
-// public keys and for Creem's API. Needs nothing else:
+// public keys and for Creem's and PayPal's APIs. Needs nothing else:
 //
 //   bun install && bun run test.ts
 //
@@ -13,6 +13,7 @@ import { SignJWT, exportJWK, generateKeyPair } from "jose";
 import { createApp } from "./src/app";
 import { supabaseAuth } from "./src/auth";
 import { creemBilling } from "./src/creem";
+import { addPeriod, paypalBilling } from "./src/paypal";
 import * as rules from "./src/rules";
 import type { Db, Stmt } from "./src/store";
 import type { Bucket, MultipartUpload, StoredObject } from "./src/library";
@@ -124,6 +125,8 @@ class MemBucket implements Bucket {
 }
 let bucket: MemBucket;
 let fetchCloud: (r: Request) => Promise<Response>;
+/** The Worker as deployed with both providers: PayPal for new checkouts, Creem still renewing. */
+let fetchBoth: (r: Request) => Promise<Response>;
 const cloud = rules;
 
 // A stand-in for Creem: what checkouts it was asked for, and its answer.
@@ -158,10 +161,15 @@ async function token(sub: string) {
     .sign(keys.privateKey);
 }
 
-async function call(method: string, path: string, who?: string, body?: unknown, headers: Record<string, string> = {}) {
+const call = (method: string, path: string, who?: string, body?: unknown, headers: Record<string, string> = {}) =>
+  callOn(fetchCloud, method, path, who, body, headers);
+
+async function callOn(
+  app: (r: Request) => Promise<Response>, method: string, path: string, who?: string, body?: unknown, headers: Record<string, string> = {},
+) {
   const h: Record<string, string> = { ...headers };
   if (who) h.authorization = `Bearer ${who}`;
-  const res = await fetchCloud(
+  const res = await app(
     new Request(`http://cloud.test${path}`, {
       method,
       headers: h,
@@ -171,6 +179,8 @@ async function call(method: string, path: string, who?: string, body?: unknown, 
   const text = await res.text();
   return { status: res.status, body: text ? JSON.parse(text) : null };
 }
+
+const PLAY_KEY = "test-play-key";
 
 const tests: [string, () => Promise<void>][] = [];
 const test = (name: string, fn: () => Promise<void>) => tests.push([name, fn]);
@@ -203,12 +213,47 @@ async function setUp() {
       return Response.json({ id: "ch_1", checkout_url: `https://checkout.creem.test/ch_${checkouts.length}` });
     },
   });
+  const paypalApi = Bun.serve({
+    port: 0,
+    async fetch(req) {
+      const path = new URL(req.url).pathname;
+      if (path === "/v1/oauth2/token") {
+        return req.headers.get("authorization") === "Basic " + btoa("pp_id:pp_secret")
+          ? Response.json({ access_token: "pp_tok", expires_in: 3600 })
+          : new Response("no", { status: 401 });
+      }
+      if (req.headers.get("authorization") !== "Bearer pp_tok") return new Response("no", { status: 401 });
+      if (path === "/v1/billing/subscriptions" && req.method === "POST") {
+        pp.created.push(await req.json());
+        const n = pp.created.length;
+        return Response.json({ id: `I-NEW${n}`, status: "APPROVAL_PENDING", links: [{ rel: "approve", href: `https://paypal.test/approve/${n}` }] }, { status: 201 });
+      }
+      if (path === "/v1/notifications/verify-webhook-signature") {
+        const text = await req.text();
+        pp.verified.push(text);
+        const b = JSON.parse(text);
+        return Response.json({ verification_status: b.transmission_sig === "good" && b.webhook_id === "WH-test" ? "SUCCESS" : "FAILURE" });
+      }
+      const sub = path.match(/^\/v1\/billing\/subscriptions\/(.+)$/);
+      const sale = path.match(/^\/v1\/payments\/sale\/(.+)$/);
+      const found = sub ? pp.subs.get(decodeURIComponent(sub[1])) : sale ? pp.sales.get(decodeURIComponent(sale[1])) : null;
+      return found ? Response.json(found) : Response.json({ name: "RESOURCE_NOT_FOUND" }, { status: 404 });
+    },
+  });
   bucket = new MemBucket();
-  const app = createApp({
-    db: d1(sqlite),
-    storage: bucket,
-    personOf: supabaseAuth(`http://127.0.0.1:${supabase.port}/`, "test-anon-key"),
-    billing: creemBilling({
+  const personOf = supabaseAuth(`http://127.0.0.1:${supabase.port}/`, "test-anon-key");
+  const paypal = paypalBilling({
+    PAYPAL_CLIENT_ID: "pp_id",
+    PAYPAL_SECRET: "pp_secret",
+    PAYPAL_WEBHOOK_ID: "WH-test",
+    PAYPAL_API_BASE: `http://127.0.0.1:${paypalApi.port}`,
+    PAYPAL_PLAN_LITE_MONTHLY: "P-lite-m",
+    PAYPAL_PLAN_PLUS_YEARLY: "P-plus-y",
+    PAYPAL_PLAN_MAX_MONTHLY: "P-max-m",
+    PAYPAL_PLAN_LITE_MONTHLY_TRIAL: "P-lite-trial",
+    // MAX_YEARLY left unset on purpose, as for Creem.
+  })!;
+  const creemProvider = creemBilling({
       CREEM_API_KEY: "creem_test_key",
       CREEM_WEBHOOK_SECRET: SECRET,
       CREEM_API_BASE: `http://127.0.0.1:${creem.port}`,
@@ -219,9 +264,11 @@ async function setUp() {
       CREEM_PRODUCT_MAX_MONTHLY: "prod_max_m",
       CREEM_PRODUCT_LITE_MONTHLY_TRIAL: "prod_lite_trial",
       // MAX_YEARLY left unset on purpose: that checkout must say not set up.
-    }),
-  });
+  })!;
+  const app = createApp({ db: d1(sqlite), storage: bucket, personOf, playKey: PLAY_KEY, billing: creemProvider });
   fetchCloud = (r) => Promise.resolve(app.fetch(r));
+  const both = createApp({ db: d1(sqlite), storage: bucket, personOf, playKey: PLAY_KEY, billing: paypal, providers: [paypal, creemProvider] });
+  fetchBoth = (r) => Promise.resolve(both.fetch(r));
 }
 
 // ── The rule: nobody costs more than they pay ───────────────────────────────
@@ -301,6 +348,23 @@ test("every plan is a profit in the worst case (the pricing check, kept)", async
   }
 });
 
+test("Mini's trial holds Mini's 10 GB, never the trial's 20", async () => {
+  const t = cloud.applyEvent(
+    { plan: null, paidUntil: null, usedBytes: 0 },
+    { kind: "paid", eventId: "tm", userId: A, plan: "mini", paidUntil: days(7), trial: true },
+    now,
+  );
+  assert.equal(cloud.accessOf(t, now).quotaBytes, 10 * GB);
+  assert.equal(cloud.mayUpload({ ...t, usedBytes: 9 * GB }, 2 * GB, now), false);
+});
+
+test("the big plans hold their terabytes, paid; a trial of one still 20 GB", async () => {
+  for (const [id, tb] of [["pro", 1], ["ultra", 3], ["xtra", 10]] as const) {
+    assert.equal(cloud.accessOf({ plan: id, paidUntil: days(10), usedBytes: 0 }, now).quotaBytes, tb * 1000 * GB);
+    assert.equal(cloud.accessOf({ plan: id, paidUntil: days(7), usedBytes: 0, trial: true }, now).quotaBytes, cloud.TRIAL_GB * GB);
+  }
+});
+
 test("a trial gets 20 GB until it ends, never the plan's full quota", async () => {
   const t = cloud.applyEvent(
     { plan: null, paidUntil: null, usedBytes: 0 },
@@ -342,13 +406,35 @@ test("the trial's worst case costs pennies, not a plan", async () => {
   assert.ok(cost < 0.15, `a trial can cost ${cost.toFixed(2)}`);
 });
 
+test("a second trial checkout does not add its days to the first", async () => {
+  const first = cloud.applyEvent(
+    { plan: null, paidUntil: null, usedBytes: 0 },
+    { kind: "paid", eventId: "t1", userId: A, plan: "max", paidUntil: days(7), trial: true, subscriptionId: "sub_1" },
+    now,
+  );
+  const onFile = { ...first, subscriptionId: "sub_1" };
+  const second = { kind: "paid", eventId: "t2", userId: A, plan: "max", paidUntil: days(9), trial: true, subscriptionId: "sub_2" } as const;
+  assert.equal(cloud.applyEvent(onFile, second, now), onFile);
+  // The same subscription's own news (its $0 payment next to "trialing") still counts.
+  const again = cloud.applyEvent(onFile, { ...second, subscriptionId: "sub_1", paidUntil: days(7) }, now);
+  assert.deepEqual(again.paidUntil, days(7));
+});
+
 // ── Routes ───────────────────────────────────────────────────────────────────
 
 test("health and plans answer without an account", async () => {
   assert.equal((await call("GET", "/health")).body.ok, true);
   assert.equal((await call("GET", "/health")).body.database, true);
   const plans = await call("GET", "/plans");
-  assert.deepEqual(plans.body.plans.map((p: { id: string }) => p.id), ["lite", "plus", "max"]);
+  assert.deepEqual(
+    plans.body.plans.map((p: { id: string }) => p.id),
+    ["mini", "lite", "plus", "max", "pro", "ultra", "xtra"],
+  );
+  // Each plan says what its trial holds: Mini's own 10 GB, the rest 20 GB.
+  const trialOf = (id: string) => plans.body.plans.find((p: { id: string }) => p.id === id).trialStorageGb;
+  assert.equal(trialOf("mini"), 10);
+  assert.equal(trialOf("lite"), cloud.TRIAL_GB);
+  assert.equal(trialOf("xtra"), cloud.TRIAL_GB);
 });
 
 test("the account needs a sign-in", async () => {
@@ -361,7 +447,7 @@ test("a new person has no plan and no access", async () => {
   assert.equal(r.status, 200);
   assert.deepEqual(r.body, {
     plan: null, access: "none", paidUntil: null, deleteAfter: null, usedBytes: 0, quotaBytes: 0,
-    trial: false, trialAvailable: true,
+    trial: false, trialAvailable: true, unlimited: false,
   });
 });
 
@@ -699,6 +785,59 @@ test("stream plays the file, with ranges for seeking", async () => {
   assert.equal(bad.status, 416);
 });
 
+test("the web player gets a signed link that plays, with ranges, and CORS only for the site", async () => {
+  const who = await token(L);
+  const song = (await restJson("search3", { query: "Song", songCount: "1" })).searchResult3.song[0];
+  const stored = bucket.objects.get(`u/${L}/${song.id}.flac`)!.data;
+  const link = await call("GET", `/v1/songs/${song.id}/play`, who);
+  assert.equal(link.status, 200, JSON.stringify(link.body));
+  assert.equal(link.body.contentType, "audio/flac");
+  assert.match(link.body.url, new RegExp(`^http://cloud\\.test/play/${song.id}\\?u=${L}&e=\\d+&s=[0-9a-f]{64}$`));
+  const whole = await fetchCloud(new Request(link.body.url));
+  assert.equal(whole.status, 200);
+  assert.deepEqual(new Uint8Array(await whole.arrayBuffer()), stored);
+  assert.equal(whole.headers.get("access-control-allow-origin"), null);
+  const part = await fetchCloud(new Request(link.body.url, { headers: { range: "bytes=10-19", origin: "https://tryptify.com" } }));
+  assert.equal(part.status, 206);
+  assert.equal(part.headers.get("content-range"), `bytes 10-19/${stored.length}`);
+  assert.deepEqual(new Uint8Array(await part.arrayBuffer()), stored.slice(10, 20));
+  assert.equal(part.headers.get("access-control-allow-origin"), "https://tryptify.com");
+  const elsewhere = await fetchCloud(new Request(link.body.url, { headers: { origin: "https://evil.test" } }));
+  assert.equal(elsewhere.headers.get("access-control-allow-origin"), null);
+});
+
+test("a play link can't be bent: another song, a later expiry, a bad signature or old age", async () => {
+  const who = await token(L);
+  const songs = (await restJson("search3", { query: "", songCount: "10" })).searchResult3.song;
+  const url = new URL((await call("GET", `/v1/songs/${songs[0].id}/play`, who)).body.url);
+  const other = new URL(url); other.pathname = `/play/${songs[1].id}`;
+  assert.equal((await fetchCloud(new Request(other))).status, 403);
+  const later = new URL(url); later.searchParams.set("e", String(Number(url.searchParams.get("e")) + 3600));
+  assert.equal((await fetchCloud(new Request(later))).status, 403);
+  const forged = new URL(url); forged.searchParams.set("s", "0".repeat(64));
+  assert.equal((await fetchCloud(new Request(forged))).status, 403);
+  const someoneElse = new URL(url); someoneElse.searchParams.set("u", B);
+  assert.equal((await fetchCloud(new Request(someoneElse))).status, 403);
+  const tomorrow = createApp({
+    db: d1(sqlite), storage: bucket, billing: null, personOf: async () => null, playKey: PLAY_KEY,
+    now: () => new Date(Date.now() + 7 * 3600_000),
+  });
+  const old = await tomorrow.fetch(new Request(url));
+  assert.equal(old.status, 403);
+  assert.equal((await old.json()).error, "link_expired");
+});
+
+test("no plan, no play link; another person's song has none either", async () => {
+  const N = "cccccccc-3333-4333-8333-cccccccccccc";
+  const song = (await restJson("search3", { query: "Song", songCount: "1" })).searchResult3.song[0];
+  const none = await call("GET", `/v1/songs/${song.id}/play`, await token(N));
+  assert.equal(none.status, 402);
+  assert.equal(none.body.error, "no_plan");
+  subscribe(N, "lite");
+  assert.equal((await call("GET", `/v1/songs/${song.id}/play`, await token(N))).status, 404);
+  assert.equal((await call("GET", `/v1/songs/${song.id}/play`)).status, 401);
+});
+
 test("nobody else's songs: another person cannot stream or see them", async () => {
   const O = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb";
   subscribe(O, "lite");
@@ -707,6 +846,123 @@ test("nobody else's songs: another person cannot stream or see them", async () =
   const theirs = await (await rest("stream", { id: mine.id }, other)).json();
   assert.equal(theirs["subsonic-response"].error.code, 70);
   assert.equal((await restJson("search3", { query: "", songCount: "10" }, other)).searchResult3.song.length, 0);
+});
+
+/** [method] with repeated parameters (songId=…&songId=…), as clients send lists. */
+async function restList(method: string, pairs: [string, string][], login = subsonicLogin) {
+  const salt = "c19b2d";
+  const t = Array.from(md5(new TextEncoder().encode(login.password + salt)), (x) => x.toString(16).padStart(2, "0")).join("");
+  const q = new URLSearchParams([["u", login.username], ["t", t], ["s", salt], ["v", "1.13.0"], ["c", "Tryptify"], ["f", "json"], ...pairs]);
+  return (await (await fetchCloud(new Request(`http://cloud.test/rest/${method}.view?${q}`))).json())["subsonic-response"];
+}
+
+const D = "eeeeeeee-5555-4555-8555-eeeeeeeeeeee";
+let otherLogin: { server: string; username: string; password: string };
+async function otherListener() {
+  if (!otherLogin) {
+    subscribe(D, "lite");
+    otherLogin = (await call("POST", "/v1/subsonic-keys", await token(D), {})).body;
+  }
+  return otherLogin;
+}
+const songIds = async () => (await restJson("search3", { query: "", songCount: "10" })).searchResult3.song.map((s: any) => s.id).sort();
+
+test("a star is the listener's own: starred, listed, unstarred, never on someone else's song", async () => {
+  const [a] = await songIds();
+  assert.equal((await restJson("star", { id: a })).status, "ok");
+  assert.equal((await restJson("star", { id: a })).status, "ok"); // twice is once
+  assert.equal((await restJson("star", { id: "so-nobody" })).status, "ok"); // nothing to star
+  let starred = (await restJson("getStarred2")).starred2;
+  assert.deepEqual(starred.song.map((s: any) => s.id), [a]);
+  assert.ok(starred.song[0].starred);
+  assert.deepEqual(starred.album, []);
+  assert.equal((await restJson("getAlbumList2", { type: "starred" })).albumList2.album.length, 1);
+  // Another listener can neither star it nor see it starred.
+  const other = await otherListener();
+  await restJson("star", { id: a }, other);
+  assert.equal((await restJson("getStarred2", {}, other)).starred2.song.length, 0);
+  assert.equal((sqlite.query("select count(*) as n from cloud_stars where user_id = ?1").get(D) as any).n, 0);
+  await restJson("unstar", { id: a });
+  starred = (await restJson("getStarred2")).starred2;
+  assert.equal(starred.song.length, 0);
+  assert.equal((await restJson("getAlbumList2", { type: "starred" })).albumList2.album.length, 0);
+});
+
+test("a play counts; now playing does not; Recently played and Most played follow plays", async () => {
+  const [a] = await songIds();
+  assert.equal((await restJson("getAlbumList2", { type: "recent" })).albumList2.album.length, 0);
+  await restJson("scrobble", { id: a, submission: "false" });
+  assert.equal((await restJson("getAlbumList2", { type: "recent" })).albumList2.album.length, 0);
+  const when = Date.now() - 60_000;
+  await restJson("scrobble", { id: a, submission: "true", time: String(when) });
+  await restJson("scrobble", { id: a }); // submission defaults to true
+  const recent = (await restJson("getAlbumList2", { type: "recent" })).albumList2.album;
+  assert.equal(recent.length, 1);
+  assert.equal(recent[0].songCount, 2); // the whole album's songs, not only the played one
+  assert.equal((await restJson("getAlbumList2", { type: "frequent" })).albumList2.album.length, 1);
+  const row = sqlite.query("select play_count, last_played from cloud_plays where user_id = ?1 and song_id = ?2").get(L, a) as any;
+  assert.equal(row.play_count, 2);
+  // A time from the future is taken as now.
+  await restJson("scrobble", { id: a, time: String(Date.now() + 86_400_000) });
+  const later = sqlite.query("select last_played from cloud_plays where user_id = ?1 and song_id = ?2").get(L, a) as any;
+  assert.ok(Date.parse(later.last_played) <= Date.now());
+  // Someone else's scrobble of it counts nowhere.
+  await restJson("scrobble", { id: a }, await otherListener());
+  assert.equal((sqlite.query("select count(*) as n from cloud_plays where user_id = ?1").get(D) as any).n, 0);
+});
+
+test("playlists: made, read in order, edited, replaced and deleted, and only one's own", async () => {
+  const [a, b] = await songIds();
+  const made = await restList("createPlaylist", [["name", "  Road  "], ["songId", b], ["songId", a], ["songId", "so-nobody"]]);
+  assert.equal(made.status, "ok");
+  const id = made.playlist.id;
+  assert.match(id, /^pl-[0-9a-f]{24}$/);
+  assert.equal(made.playlist.name, "Road");
+  assert.deepEqual(made.playlist.entry.map((s: any) => s.id), [b, a]);
+  assert.equal(made.playlist.songCount, 2);
+  const lists = (await restJson("getPlaylists")).playlists.playlist;
+  assert.deepEqual(lists.map((p: any) => [p.id, p.name, p.songCount, p.owner]), [[id, "Road", 2, L]]);
+  // Take out the first, add b at the end, rename.
+  await restList("updatePlaylist", [["playlistId", id], ["name", "Road trip"], ["songIndexToRemove", "0"], ["songIdToAdd", b]]);
+  let one = (await restJson("getPlaylist", { id })).playlist;
+  assert.equal(one.name, "Road trip");
+  assert.deepEqual(one.entry.map((s: any) => s.id), [a, b]);
+  // createPlaylist with an id replaces the songs.
+  await restList("createPlaylist", [["playlistId", id], ["songId", a]]);
+  one = (await restJson("getPlaylist", { id })).playlist;
+  assert.deepEqual(one.entry.map((s: any) => s.id), [a]);
+  assert.equal(one.name, "Road trip");
+  // Nobody else's.
+  const other = await otherListener();
+  assert.equal((await restJson("getPlaylist", { id }, other)).error.code, 70);
+  assert.equal((await restJson("deletePlaylist", { id }, other)).error.code, 70);
+  assert.equal((await restJson("getPlaylists", {}, other)).playlists.playlist.length, 0);
+  const theirs = await restList("createPlaylist", [["name", "Mine"], ["songId", a]], other);
+  assert.equal(theirs.playlist.entry.length, 0); // L's song is not theirs to add
+  // A name is needed; then gone.
+  assert.equal((await restJson("createPlaylist", {})).error.code, 10);
+  assert.equal((await restJson("deletePlaylist", { id })).status, "ok");
+  assert.equal((await restJson("getPlaylist", { id })).error.code, 70);
+});
+
+test("a deleted song takes its star, its plays and its places in playlists with it", async () => {
+  const who = await token(L);
+  const doomed = await upload(who, crypto.getRandomValues(new Uint8Array(5_000)), meta("Doomed", { album: "Other Album" }));
+  // Any song but the doomed one (ids are random, so it may sort first).
+  const a = (await songIds()).find((id: string) => id !== doomed)!;
+  await restJson("star", { id: doomed });
+  await restJson("scrobble", { id: doomed });
+  const list = await restList("createPlaylist", [["name", "Mixed"], ["songId", doomed], ["songId", a]]);
+  assert.equal(list.playlist.songCount, 2);
+  const gone = await fetchCloud(new Request(`http://cloud.test/v1/songs/${doomed}`, { method: "DELETE", headers: { authorization: `Bearer ${who}` } }));
+  assert.equal(gone.status, 204);
+  for (const table of ["cloud_stars", "cloud_plays", "cloud_playlist_songs"]) {
+    assert.equal((sqlite.query(`select count(*) as n from ${table} where song_id = ?1`).get(doomed) as any).n, 0, table);
+  }
+  const left = (await restJson("getPlaylist", { id: list.playlist.id })).playlist;
+  assert.deepEqual(left.entry.map((s: any) => s.id), [a]);
+  assert.equal(left.songCount, 1);
+  await restJson("deletePlaylist", { id: list.playlist.id });
 });
 
 test("a cover counts against the quota, shows as coverArt, and is served", async () => {
@@ -728,6 +984,37 @@ test("a cover counts against the quota, shows as coverArt, and is served", async
     method: "PUT", headers: { authorization: `Bearer ${who}`, "content-length": "3" }, body: new Uint8Array([1, 2, 3]),
   }));
   assert.equal(notImage.status, 415);
+  // A WAV starts RIFF like a WebP; only "WEBP" in bytes 8 to 11 makes it one.
+  const riff = (kind: string) => new Uint8Array([0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, ...new TextEncoder().encode(kind)]);
+  const putCover = (body: Uint8Array, length?: string) => fetchCloud(new Request(`http://cloud.test/v1/songs/${song.id}/cover`, {
+    method: "PUT", headers: { authorization: `Bearer ${who}`, ...(length ? { "content-length": length } : {}) }, body,
+  }));
+  assert.equal((await putCover(riff("WAVE"), "12")).status, 415);
+  assert.equal((await putCover(riff("WEBP"), "12")).status, 204);
+  assert.equal((await putCover(jpeg)).status, 411);
+  assert.equal((await putCover(jpeg, "8")).status, 204);
+  assert.equal(art.headers.get("x-content-type-options"), "nosniff");
+});
+
+test("a token signed with the shared secret: Supabase is asked only for a live one of this project, and a refusal is remembered", async () => {
+  let asked = 0;
+  const server = Bun.serve({ port: 0, fetch() { asked++; return new Response("{}", { status: 401 }); } });
+  try {
+    const issuer = `http://127.0.0.1:${server.port}/auth/v1`;
+    const personOf = supabaseAuth(`http://127.0.0.1:${server.port}`, "anon");
+    const secret = new TextEncoder().encode("shared-secret-of-at-least-32-bytes!!");
+    const hs = (iss: string, exp: string | number) => new SignJWT({ role: "authenticated" })
+      .setProtectedHeader({ alg: "HS256" }).setSubject(L).setIssuer(iss).setExpirationTime(exp).sign(secret);
+    assert.equal(await personOf(await hs("https://elsewhere.example/auth/v1", "5m")), null);
+    assert.equal(await personOf(await hs(issuer, Math.floor(Date.now() / 1000) - 60)), null);
+    assert.equal(asked, 0);
+    const live = await hs(issuer, "5m");
+    assert.equal(await personOf(live), null);
+    assert.equal(await personOf(live), null);
+    assert.equal(asked, 1);
+  } finally {
+    server.stop(true);
+  }
 });
 
 test("the web app lists, searches and shows covers, only for the signed-in person", async () => {
@@ -783,6 +1070,13 @@ test("the web app's pages may call /v1 from a browser; other sites may not", asy
   for (const bad of ["https://evil.example", "https://tryptify.com.evil.example", "http://tryptify.com"]) {
     assert.equal((await pre(bad)).headers.get("access-control-allow-origin"), null, bad);
   }
+  // The price list too: the account page's plan card reads it, and a browser
+  // that may not read it fails the whole card.
+  const plans = await fetchCloud(new Request("http://cloud.test/plans", { headers: { origin: "https://tryptify.com" } }));
+  assert.equal(plans.status, 200);
+  assert.equal(plans.headers.get("access-control-allow-origin"), "https://tryptify.com");
+  const elsewhere = await fetchCloud(new Request("http://cloud.test/plans", { headers: { origin: "https://evil.example" } }));
+  assert.equal(elsewhere.headers.get("access-control-allow-origin"), null);
 });
 
 test("deleting a song removes its file and cover and gives the space back", async () => {
@@ -802,6 +1096,36 @@ test("a lapsed library still plays (read-only) but takes no uploads", async () =
   assert.equal((await restJson("getAlbumList2", { type: "newest" })).status, "ok");
 });
 
+test("an unlimited grant: full access with no plan, no quota, plays, and the cleanup leaves it alone", async () => {
+  const G = "dddddddd-4444-4444-8444-dddddddddddd";
+  // A grant comes with an account row (README): it is where the bytes used are kept.
+  sqlite.query("insert into cloud_grants (user_id, kind, note, created_at) values (?1, 'unlimited', 'test', ?2)").run(G, new Date().toISOString());
+  sqlite.query("insert into cloud_accounts (user_id) values (?1)").run(G);
+  const who = await token(G);
+  const acct = (await call("GET", "/v1/account", who)).body;
+  assert.equal(acct.plan, null);
+  assert.equal(acct.access, "full");
+  assert.equal(acct.unlimited, true);
+  assert.equal(acct.quotaBytes, rules.UNLIMITED_BYTES);
+  assert.equal(acct.trialAvailable, false);
+  const id = await upload(who, new Uint8Array(800), meta("Granted"));
+  assert.equal((await call("GET", "/v1/account", who)).body.usedBytes, 800);
+  // Past even Max's 500 GB, an upload still fits.
+  sqlite.query("update cloud_accounts set used_bytes = ?2, plan = 'lite', paid_until = ?3 where user_id = ?1")
+    .run(G, 600 * GB, new Date(Date.now() - 30 * DAY).toISOString());
+  const more = await call("POST", "/v1/uploads", who, { size: 10, suffix: "mp3", meta: meta("more") });
+  assert.equal(more.status, 201, JSON.stringify(more.body));
+  await call("DELETE", `/v1/uploads/${more.body.id}`, who);
+  assert.equal((await call("GET", `/v1/songs/${id}/play`, who)).status, 200);
+  // A plan that ran out a month ago, which would be deleted without the grant.
+  await cleanup(d1(sqlite), bucket, new Date());
+  assert.equal((sqlite.query("select count(*) as n from cloud_songs where user_id = ?1").get(G) as any).n, 1);
+  assert.equal([...bucket.objects.keys()].some((k) => k.startsWith(`u/${G}/`)), true);
+  // Without the grant, the same account has nothing.
+  sqlite.query("delete from cloud_grants where user_id = ?1").run(G);
+  assert.equal((await call("GET", "/v1/account", who)).body.access, "none");
+});
+
 test("cleanup deletes libraries past their grace and abandoned uploads, nothing else", async () => {
   const keep = "cccccccc-3333-4333-8333-cccccccccccc";
   subscribe(keep, "plus");
@@ -818,6 +1142,209 @@ test("cleanup deletes libraries past their grace and abandoned uploads, nothing 
   assert.equal((sqlite.query("select count(*) as n from cloud_uploads where user_id = ?1").get(keep) as any).n, 0);
   // The deleted library is gone for the API too.
   assert.equal((await restJson("getAlbumList2", { type: "newest" })).error.code, 50);
+});
+
+// ── PayPal ───────────────────────────────────────────────────────────────────
+
+// A stand-in for PayPal: the subscriptions and sales it knows, what it was asked.
+const pp = { subs: new Map<string, any>(), sales: new Map<string, any>(), created: [] as any[], verified: [] as string[] };
+const ppUser = (n: number) => `55555555-5555-4555-8555-55555555555${n}`;
+async function ppWebhook(event: unknown, sig = "good", headers = true) {
+  const raw = JSON.stringify(event);
+  const h: Record<string, string> = headers
+    ? {
+        "paypal-auth-algo": "SHA256withRSA",
+        "paypal-cert-url": "https://api.paypal.com/v1/notifications/certs/CERT-test",
+        "paypal-transmission-id": "tx-1",
+        "paypal-transmission-sig": sig,
+        "paypal-transmission-time": new Date().toISOString(),
+      }
+    : {};
+  return callOn(fetchBoth, "POST", "/webhooks/paypal", undefined, raw, h);
+}
+const ppAccount = async (who: string) => (await callOn(fetchBoth, "GET", "/v1/account", await token(who))).body;
+const ppSubscription = (id: string, userId: string, plan: string, next: Date | null) =>
+  pp.subs.set(id, {
+    id, plan_id: plan, custom_id: userId, status: "ACTIVE", subscriber: { payer_id: "PAYER1" },
+    billing_info: next ? { next_billing_time: next.toISOString() } : {},
+  });
+/** A completed charge on [sub] at [at], as the webhook carries it (and PayPal keeps it). */
+const ppSale = (eventId: string, saleId: string, sub: string | null, at: Date, total = "3.99") => {
+  const sale = { id: saleId, state: "completed", amount: { total, currency: "USD" }, create_time: at.toISOString(), ...(sub ? { billing_agreement_id: sub } : {}) };
+  pp.sales.set(saleId, { ...sale });
+  return { id: eventId, event_type: "PAYMENT.SALE.COMPLETED", create_time: at.toISOString(), resource: sale };
+};
+const ppActivated = (eventId: string, sub: string, userId: string, plan: string, start: Date, next: Date) => ({
+  id: eventId,
+  event_type: "BILLING.SUBSCRIPTION.ACTIVATED",
+  create_time: start.toISOString(),
+  resource: {
+    id: sub, plan_id: plan, custom_id: userId, status: "ACTIVE", start_time: start.toISOString(),
+    subscriber: { payer_id: "PAYER1" }, billing_info: { next_billing_time: next.toISOString() },
+  },
+});
+
+test("PayPal checkout: a subscription to the plan, naming the person, opened at PayPal's approve link", async () => {
+  const P = ppUser(1);
+  const r = await callOn(fetchBoth, "POST", "/v1/checkout", await token(P), { plan: "plus", period: "yearly" });
+  assert.equal(r.status, 200);
+  assert.match(r.body.url, /^https:\/\/paypal\.test\/approve\//);
+  assert.equal(pp.created.at(-1).plan_id, "P-plus-y");
+  assert.equal(pp.created.at(-1).custom_id, P);
+  await callOn(fetchBoth, "POST", "/v1/checkout", await token(P), { plan: "lite", period: "monthly", trial: true });
+  assert.equal(pp.created.at(-1).plan_id, "P-lite-trial");
+  const missing = await callOn(fetchBoth, "POST", "/v1/checkout", await token(P), { plan: "max", period: "yearly" });
+  assert.equal(missing.status, 503);
+});
+
+test("a PayPal webhook PayPal does not vouch for, or with no signature, changes nothing", async () => {
+  const P = ppUser(2);
+  ppSubscription("I-SIG", P, "P-lite-m", future(30));
+  const e = ppSale("WH-sig", "S-sig", "I-SIG", new Date());
+  assert.equal((await ppWebhook(e, "forged")).status, 401);
+  assert.equal((await ppWebhook(e, "good", false)).status, 401);
+  assert.equal((await ppAccount(P)).plan, null);
+});
+
+test("PayPal is asked about the webhook byte for byte as it came", async () => {
+  const raw = '{"id":"WH-raw","event_type":"SOMETHING.ELSE","n":1.10,"t":"\\u00e9","resource":{}}';
+  await callOn(fetchBoth, "POST", "/webhooks/paypal", undefined, raw, {
+    "paypal-auth-algo": "a", "paypal-cert-url": "b", "paypal-transmission-id": "c", "paypal-transmission-sig": "good", "paypal-transmission-time": "d",
+  });
+  assert.ok(pp.verified.at(-1)!.endsWith(`"webhook_event":${raw}}`));
+});
+
+test("a PayPal payment grants its plan until PayPal's next billing date, once however often it comes", async () => {
+  const P = ppUser(3);
+  const paidAt = new Date(Date.now() - DAY);
+  const next = addPeriod(paidAt, "monthly");
+  ppSubscription("I-PAY", P, "P-lite-m", next);
+  const e = ppSale("WH-pay", "S-pay", "I-PAY", paidAt);
+  assert.equal((await ppWebhook(e)).status, 200);
+  assert.equal((await ppWebhook(e)).status, 200);
+  const a = await ppAccount(P);
+  assert.equal(a.plan, "lite");
+  assert.equal(a.access, "full");
+  assert.equal(a.trial, false);
+  assert.equal(a.paidUntil, next.toISOString());
+  const { n } = sqlite.query("select count(*) as n from cloud_billing_events where provider = 'paypal' and event_id = 'WH-pay'").get() as { n: number };
+  assert.equal(n, 1);
+});
+
+test("a PayPal payment never grants more than one period, whatever the next billing date says", async () => {
+  const P = ppUser(4);
+  const paidAt = new Date(Date.now() - DAY);
+  ppSubscription("I-FAR", P, "P-max-m", new Date(Date.now() + 5 * 365 * DAY));
+  await ppWebhook(ppSale("WH-far", "S-far", "I-FAR", paidAt, "19.99"));
+  // A cancelled subscription has no next billing date at all: one period too.
+  const Q = ppUser(5);
+  ppSubscription("I-NONE", Q, "P-lite-m", null);
+  await ppWebhook(ppSale("WH-none", "S-none", "I-NONE", paidAt));
+  assert.equal((await ppAccount(P)).paidUntil, addPeriod(paidAt, "monthly").toISOString());
+  assert.equal((await ppAccount(Q)).paidUntil, addPeriod(paidAt, "monthly").toISOString());
+});
+
+test("a PayPal trial grants the trial only, never past its days; other plans wait for their payment", async () => {
+  const T = ppUser(6);
+  const start = new Date();
+  await ppWebhook(ppActivated("WH-tr", "I-TR", T, "P-lite-trial", start, new Date(start.getTime() + 60 * DAY)));
+  const a = await ppAccount(T);
+  assert.equal(a.trial, true);
+  assert.equal(a.quotaBytes, rules.TRIAL_GB * GB);
+  assert.equal(a.paidUntil, new Date(start.getTime() + (rules.TRIAL_DAYS + 1) * DAY).toISOString());
+  const N = ppUser(7);
+  await ppWebhook(ppActivated("WH-act", "I-ACT", N, "P-lite-m", start, future(30)));
+  assert.equal((await ppAccount(N)).plan, null);
+});
+
+test("a full PayPal refund or a dispute ends access; a partial refund does not", async () => {
+  const P = ppUser(8);
+  ppSubscription("I-REF", P, "P-lite-m", future(30));
+  await ppWebhook(ppSale("WH-ref-pay", "S-ref", "I-REF", new Date()));
+  pp.sales.get("S-ref").state = "partially_refunded";
+  await ppWebhook({ id: "WH-ref-1", event_type: "PAYMENT.SALE.REFUNDED", resource: { id: "R-1", sale_id: "S-ref", amount: { total: "1.00" } } });
+  assert.equal((await ppAccount(P)).access, "full");
+  pp.sales.get("S-ref").state = "refunded";
+  await ppWebhook({ id: "WH-ref-2", event_type: "PAYMENT.SALE.REFUNDED", resource: { id: "R-2", sale_id: "S-ref", amount: { total: "2.99" } } });
+  assert.equal((await ppAccount(P)).access, "read_only");
+
+  const D = ppUser(9);
+  ppSubscription("I-DIS", D, "P-lite-m", future(30));
+  await ppWebhook(ppSale("WH-dis-pay", "S-dis", "I-DIS", new Date()));
+  await ppWebhook({
+    id: "WH-dis", event_type: "CUSTOMER.DISPUTE.CREATED",
+    resource: { dispute_id: "PP-D-1", disputed_transactions: [{ seller_transaction_id: "NOT-A-SALE" }, { seller_transaction_id: "S-dis" }] },
+  });
+  assert.equal((await ppAccount(D)).access, "read_only");
+});
+
+test("a PayPal payment that is not a known plan's subscription grants nothing", async () => {
+  const P = ppUser(0);
+  ppSubscription("I-ODD", P, "P-someone-elses", future(30));
+  await ppWebhook(ppSale("WH-odd", "S-odd", "I-ODD", new Date()));
+  await ppWebhook(ppSale("WH-oneoff", "S-oneoff", null, new Date()));
+  assert.equal((await ppAccount(P)).plan, null);
+});
+
+test("with PayPal added, Creem still renews its subscribers, and each person manages their plan where they pay", async () => {
+  const K = "66666666-6666-4666-8666-666666666666";
+  const raw = JSON.stringify(paidEvent("evt_both_creem", K, "prod_lite_m", future(30), "sub_k"));
+  const r = await callOn(fetchBoth, "POST", "/webhooks/billing", undefined, raw, { "creem-signature": sign(raw) });
+  assert.equal(r.status, 200);
+  assert.equal((await ppAccount(K)).plan, "lite");
+  const creemPortal = await callOn(fetchBoth, "POST", "/v1/billing-portal", await token(K));
+  assert.equal(creemPortal.body.url, "https://creem.test/portal/cust_1");
+  const paypalPortal = await callOn(fetchBoth, "POST", "/v1/billing-portal", await token(ppUser(3)));
+  assert.equal(paypalPortal.body.url, "https://www.paypal.com/myaccount/autopay/");
+  // A provider nobody set up has no webhook.
+  assert.equal((await callOn(fetchBoth, "POST", "/webhooks/stripe", undefined, "{}")).status, 503);
+});
+
+test("the buyer picks PayPal or Creem; with no choice it is PayPal; an unknown one is refused", async () => {
+  const who = await token("77777777-7777-4777-8777-777777777777");
+  const plain = await callOn(fetchBoth, "POST", "/v1/checkout", who, { plan: "lite", period: "monthly" });
+  assert.equal(plain.status, 200);
+  assert.match(plain.body.url, /^https:\/\/paypal\.test\/approve\//);
+  const viaCreem = await callOn(fetchBoth, "POST", "/v1/checkout", who, { plan: "lite", period: "monthly", provider: "creem" });
+  assert.equal(viaCreem.status, 200);
+  assert.match(viaCreem.body.url, /^https:\/\/checkout\.creem\.test\//);
+  assert.equal(checkouts.at(-1).product_id, "prod_lite_m");
+  const viaPaypal = await callOn(fetchBoth, "POST", "/v1/checkout", who, { plan: "lite", period: "monthly", provider: "paypal" });
+  assert.match(viaPaypal.body.url, /^https:\/\/paypal\.test\/approve\//);
+  const unknown = await callOn(fetchBoth, "POST", "/v1/checkout", who, { plan: "lite", period: "monthly", provider: "stripe" });
+  assert.equal(unknown.status, 400);
+  assert.equal(unknown.body.error, "bad_provider");
+  // A plan the chosen provider has no product for cannot be bought there.
+  const notThere = await callOn(fetchBoth, "POST", "/v1/checkout", who, { plan: "max", period: "yearly", provider: "creem" });
+  assert.equal(notThere.status, 503);
+});
+
+test("/plans lists the ways to pay, the default first, each with what it can sell", async () => {
+  const r = await callOn(fetchBoth, "GET", "/plans");
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.providers.map((p: any) => [p.name, p.default]), [["paypal", true], ["creem", false]]);
+  const offer = (name: string, plan: string) =>
+    r.body.providers.find((p: any) => p.name === name).offers.find((o: any) => o.plan === plan);
+  assert.deepEqual(offer("creem", "lite"), { plan: "lite", monthly: true, yearly: true, trial: true });
+  assert.deepEqual(offer("creem", "max"), { plan: "max", monthly: true, yearly: false, trial: false });
+  assert.deepEqual(offer("creem", "mini"), { plan: "mini", monthly: false, yearly: false, trial: false });
+  assert.deepEqual(offer("paypal", "plus"), { plan: "plus", monthly: false, yearly: true, trial: false });
+  // With one provider, that one is the default and the only one listed.
+  const single = (await call("GET", "/plans")).body.providers;
+  assert.deepEqual(single.map((p: any) => [p.name, p.default]), [["creem", true]]);
+});
+
+test("a refused second trial with the other provider does not change who the account pays", async () => {
+  const T = "88888888-8888-4888-8888-888888888888";
+  const raw = JSON.stringify(paidEvent("evt_flip_creem", T, "prod_lite_m", future(30), "sub_flip"));
+  assert.equal((await callOn(fetchBoth, "POST", "/webhooks/billing", undefined, raw, { "creem-signature": sign(raw) })).status, 200);
+  const start = new Date();
+  await ppWebhook(ppActivated("WH-flip-trial", "I-FLIP", T, "P-lite-trial", start, new Date(start.getTime() + 60 * DAY)));
+  const row = sqlite.query("select provider, customer_id, subscription_id from cloud_accounts where user_id = ?1").get(T) as any;
+  assert.equal(row.provider, "creem");
+  assert.equal(row.subscription_id, "sub_flip");
+  const portal = await callOn(fetchBoth, "POST", "/v1/billing-portal", await token(T));
+  assert.match(portal.body.url, /^https:\/\/creem\.test\/portal\//);
 });
 
 // ── Run ──────────────────────────────────────────────────────────────────────

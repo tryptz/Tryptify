@@ -44,6 +44,7 @@ class SubsonicClient @Inject constructor(
         songCount: Int = 50,
         albumCount: Int = 0,
         artistCount: Int = 0,
+        songOffset: Int = 0,
     ): SubsonicSearchResult = call(
         server,
         "search3",
@@ -52,6 +53,7 @@ class SubsonicClient @Inject constructor(
             "songCount" to "$songCount",
             "albumCount" to "$albumCount",
             "artistCount" to "$artistCount",
+            "songOffset" to "$songOffset",
         ),
     ).searchResult3 ?: SubsonicSearchResult()
 
@@ -64,6 +66,32 @@ class SubsonicClient @Inject constructor(
 
     suspend fun randomSongs(server: SubsonicServer, size: Int): List<SubsonicSong> =
         call(server, "getRandomSongs", listOf("size" to "$size")).randomSongs?.song.orEmpty()
+
+    suspend fun playlists(server: SubsonicServer): List<SubsonicPlaylist> =
+        call(server, "getPlaylists").playlists?.playlist.orEmpty()
+
+    suspend fun playlist(server: SubsonicServer, id: String): SubsonicPlaylist? =
+        call(server, "getPlaylist", listOf("id" to id)).playlist
+
+    suspend fun starred(server: SubsonicServer): SubsonicStarred =
+        call(server, "getStarred2").starred2 ?: SubsonicStarred()
+
+    /** star or unstar one song. */
+    suspend fun setStarred(server: SubsonicServer, songId: String, starred: Boolean) {
+        call(server, if (starred) "star" else "unstar", listOf("id" to songId))
+    }
+
+    /** OpenSubsonic's lyrics for a song, every language; a plain Subsonic server answers with an error. */
+    suspend fun lyricsBySongId(server: SubsonicServer, songId: String): List<SubsonicStructuredLyrics> =
+        call(server, "getLyricsBySongId", listOf("id" to songId)).lyricsList?.structuredLyrics.orEmpty()
+
+    /** Classic getLyrics, by artist and title: untimed text, or nothing. */
+    suspend fun lyrics(server: SubsonicServer, artist: String, title: String): String? =
+        call(server, "getLyrics", listOf("artist" to artist, "title" to title)).lyrics?.value?.takeIf { it.isNotBlank() }
+
+    suspend fun scrobble(server: SubsonicServer, songId: String, submission: Boolean, timeMillis: Long? = null) {
+        call(server, "scrobble", Subsonic.scrobbleParams(songId, submission, timeMillis))
+    }
 
     private suspend fun call(
         server: SubsonicServer,

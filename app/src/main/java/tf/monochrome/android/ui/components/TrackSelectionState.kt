@@ -28,6 +28,23 @@ class TrackSelectionState<K : Any> {
     fun clear() {
         selectedIds = emptySet()
     }
+
+    /** Adds every one of [ids], as the bar's "Select all" does with the list on screen. */
+    fun selectAll(ids: Collection<K>) {
+        selectedIds = selectedIds + ids
+    }
+
+    /**
+     * The bar's "Select all" over [items] on screen, or null when there are none
+     * or every one is already picked. It stops at the first row not yet picked
+     * and builds the id list only when tapped, so a long list costs a glance,
+     * not a copy, each time the bar recomposes.
+     */
+    fun <T> selectAllOf(items: List<T>, key: (T) -> K): (() -> Unit)? {
+        val picked = selectedIds
+        if (items.isEmpty() || items.all { key(it) in picked }) return null
+        return { selectAll(items.map(key)) }
+    }
 }
 
 @Composable

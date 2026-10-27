@@ -22,7 +22,10 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideHttpClient(json: Json): HttpClient = HttpClient(OkHttp) {
+    fun provideHttpClient(
+        json: Json,
+        access: tf.monochrome.android.data.api.ApiServerAccess,
+    ): HttpClient = HttpClient(OkHttp) {
         install(ContentNegotiation) {
             json(json)
         }
@@ -42,6 +45,23 @@ object NetworkModule {
                 connectTimeout(30, TimeUnit.SECONDS)
                 readTimeout(30, TimeUnit.SECONDS)
                 writeTimeout(30, TimeUnit.SECONDS)
+                // http:// only to servers at home (CleartextPolicy), checked on
+                // every hop, redirects included.
+                addNetworkInterceptor { chain ->
+                    tf.monochrome.android.data.net.CleartextPolicy.require(chain.request().url.toString())
+                    chain.proceed(chain.request())
+                }
+                // A server's password (a TrypT HiFi behind ACCESS_PASSWORD), on
+                // every hop to its own origin and never to another: a network
+                // interceptor sees each redirect separately.
+                addNetworkInterceptor { chain ->
+                    val request = chain.request()
+                    val password = access.passwordFor(request.url.toString())
+                    chain.proceed(
+                        if (password == null) request
+                        else request.newBuilder().header(tf.monochrome.android.data.api.ApiServerAccess.HEADER, password).build(),
+                    )
+                }
                 // OkHttp runs five requests to one host at a time and queues
                 // the rest: a Trypt Mania batch sends a song to every
                 // replica of its chart server at once (StepManiaGenerationWorker.MAX_LANES).

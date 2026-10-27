@@ -43,7 +43,9 @@ Auth does not answer, the store says `auth_unreachable` (502) rather than
 ## Routes
 
 `GET /health` (and `GET /`) answers without an account, with whether it has a
-database. Everything under `/v1` needs one:
+database. Everything under `/v1` needs one. A pack's `user_id` is its author's
+account id only when the author asks; to anyone else it is `""`, so the store
+hands out nobody's account id (the app needs it only to say "yours"):
 
 | Route                          | Does                                                    |
 | ------------------------------ | ------------------------------------------------------- |

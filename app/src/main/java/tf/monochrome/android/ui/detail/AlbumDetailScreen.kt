@@ -196,6 +196,7 @@ fun AlbumDetailScreen(
                     tf.monochrome.android.ui.components.TrackSelectionBar(
                         selectedCount = selection.count,
                         onClose = { selection.clear() },
+                        onSelectAll = selection.selectAllOf(visibleTracks) { it.id },
                         onAddToQueue = {
                             playerViewModel.addToQueue(visibleTracks.filter { it.id in selection.selectedIds })
                             selection.clear()

@@ -36,6 +36,7 @@ interface Row {
   paid_until: string | null;
   used_bytes: number;
   trial: number;
+  subscription_id: string | null;
   version: number;
 }
 
@@ -46,19 +47,27 @@ const toAccount = (row: Row | null): Account & { version: number } =>
         paidUntil: row.paid_until ? new Date(row.paid_until) : null,
         usedBytes: Number(row.used_bytes),
         trial: row.trial === 1,
+        subscriptionId: row.subscription_id ?? null,
         version: Number(row.version),
       }
     : { ...NO_ACCOUNT, version: 0 };
 
 async function read(db: Db, userId: string) {
   const row = await db
-    .prepare("select plan, paid_until, used_bytes, trial, version from cloud_accounts where user_id = ?1")
+    .prepare("select plan, paid_until, used_bytes, trial, subscription_id, version from cloud_accounts where user_id = ?1")
     .bind(userId)
     .first<Row>();
   return toAccount(row);
 }
 
-export const loadAccount = async (db: Db, userId: string): Promise<Account> => read(db, userId);
+/** [userId]'s account as access is judged: what they paid for, and any grant (cloud_grants). */
+export const loadAccount = async (db: Db, userId: string): Promise<Account> => {
+  const [account, grant] = await Promise.all([
+    read(db, userId),
+    db.prepare("select kind from cloud_grants where user_id = ?1").bind(userId).first<{ kind: string }>(),
+  ]);
+  return grant?.kind === "unlimited" ? { ...account, unlimited: true } : account;
+};
 
 const seen = async (db: Db, provider: string, eventId: string) =>
   (await db.prepare("select 1 as hit from cloud_billing_events where provider = ?1 and event_id = ?2").bind(provider, eventId).first()) !== null;
@@ -82,14 +91,16 @@ export async function record(db: Db, provider: string, e: BillingEvent, now = ()
     console.error(`billing event ${e.eventId} (${e.kind}) names nobody this service knows; ignored`);
     return false;
   }
-  const customer = e.kind === "paid" ? e.customerId ?? null : null;
-  const subscription = e.kind === "paid" ? e.subscriptionId ?? null : null;
-
   for (let attempt = 0; attempt < 8; attempt++) {
     if (await seen(db, provider, e.eventId)) return false;
     const before = await read(db, userId);
     const at = now();
     const after = applyEvent(before, e, at);
+    // The customer and subscription are kept only from an event that changed
+    // the account: a refused second trial does not become the one on file.
+    const took = after !== before;
+    const customer = e.kind === "paid" && took ? e.customerId ?? null : null;
+    const subscription = e.kind === "paid" && took ? e.subscriptionId ?? null : null;
     // Write the account only if the event is new and nobody wrote it since the
     // read; then record the event only if that write is the one that landed:
     // the row then carries this event's id and the next version. Another
@@ -105,7 +116,10 @@ export async function record(db: Db, provider: string, e: BillingEvent, now = ()
              plan = excluded.plan,
              paid_until = excluded.paid_until,
              trial = excluded.trial,
-             provider = excluded.provider,
+             -- Only an event that took changes who the account pays: a refused
+             -- second trial with another provider must not point "Manage
+             -- subscription" (or that provider's refunds) at the wrong one.
+             provider = case when ?11 then excluded.provider else coalesce(cloud_accounts.provider, excluded.provider) end,
              customer_id = coalesce(excluded.customer_id, cloud_accounts.customer_id),
              subscription_id = coalesce(excluded.subscription_id, cloud_accounts.subscription_id),
              version = cloud_accounts.version + 1,
@@ -123,6 +137,7 @@ export async function record(db: Db, provider: string, e: BillingEvent, now = ()
           at.toISOString(),
           e.eventId,
           before.version,
+          took ? 1 : 0,
         ),
       db
         .prepare(

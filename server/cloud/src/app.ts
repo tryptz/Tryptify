@@ -2,17 +2,17 @@
 // The HTTP API, built from its dependencies so the Worker and the tests run
 // exactly the same routes.
 
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { AuthUnreachable } from "./auth";
-import type { Billing } from "./creem";
-import { accessOf, isPlan, mayStartTrial, PLANS, READ_ONLY_DAYS, TRIAL_DAYS, TRIAL_GB } from "./rules";
+import { hmacHex, sameHex, type Billing } from "./creem";
+import { accessOf, isPlan, mayStartTrial, PLANS, READ_ONLY_DAYS, TRIAL_DAYS, TRIAL_GB, trialGbOf, type PlanId } from "./rules";
 import { loadAccount, record, type Db } from "./store";
 import {
-  abortUpload, completeUpload, deleteSong, LibraryError, MAX_COVER_BYTES, PART_SIZE, setCover, startUpload, uploadPart, usage,
+  abortUpload, completeUpload, deleteSong, getSong, LibraryError, MAX_COVER_BYTES, PART_SIZE, setCover, startUpload, uploadPart, usage,
   type Bucket,
 } from "./library";
-import { newDevicePassword, subsonic } from "./subsonic";
+import { newDevicePassword, streamSong, subsonic } from "./subsonic";
 
 /** Pages allowed to call /v1 from a browser: the site, and a local copy while it is built. */
 const WEB_ORIGINS = /^(https:\/\/(www\.)?tryptify\.com|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/;
@@ -23,43 +23,80 @@ const SONG_PAGE = 200;
 /** Devices a person may have signed in to the Subsonic API at once; the oldest goes first. */
 const MAX_DEVICE_KEYS = 10;
 
+/** How long a web player's song link works: a long FLAC, paused a good while. */
+const PLAY_LINK_SECONDS = 2 * 3600;
+
+/** What a /play link signs: the person, the song and when the link stops working. */
+const playSignature = (key: string, uid: string, id: string, expires: number) =>
+  hmacHex(key, `play:${uid}:${id}:${expires}`);
+
 export interface Deps {
   db: Db | null;
   /** The music bucket (R2). */
   storage?: Bucket | null;
+  /** Where new checkouts go. */
   billing: Billing | null;
+  /**
+   * Every provider still taking webhooks and opening portals, [billing]
+   * included: one that took payments before keeps renewing the people who
+   * subscribed with it. Defaults to [billing] alone.
+   */
+  providers?: Billing[];
   personOf: (token: string) => Promise<string | null>;
+  /** Signs the web player's song links (PLAY_KEY); without it the web player is off. */
+  playKey?: string | null;
   now?: () => Date;
 }
 
 const fail = (status: number, error: string) =>
   new Response(JSON.stringify({ error }), { status, headers: { "content-type": "application/json" } });
 
-export function createApp({ db, storage = null, billing, personOf, now = () => new Date() }: Deps) {
+export function createApp({ db, storage = null, billing, providers, personOf, playKey = null, now = () => new Date() }: Deps) {
   const app = new Hono<{ Variables: { uid: string } }>();
+  const all = providers ?? (billing ? [billing] : []);
+  const providerNamed = (name: string | null | undefined) => all.find((p) => p.name === name) ?? null;
 
   const health = (c: { json: (body: unknown) => Response }) =>
     c.json({ ok: true, service: "tryptify-cloud", database: db !== null, storage: storage !== null, billing: billing !== null });
   app.get("/", health);
   app.get("/health", health);
 
-  /** The plans and the trial's terms, for the app's plan picker. No account needed. */
-  app.get("/plans", (c) =>
-    c.json({
-      readOnlyDays: READ_ONLY_DAYS,
-      trial: { days: TRIAL_DAYS, storageGb: TRIAL_GB, periods: ["monthly"] },
-      plans: Object.entries(PLANS).map(([id, p]) => ({ id, ...p })),
-    }),
-  );
-
-  // The web app at tryptify.com calls /v1 from the browser. Only its own
-  // pages may: the session token is the gate, this keeps other sites out.
-  app.use("/v1/*", cors({
+  // The web app at tryptify.com calls /v1 and /plans from the browser. Only
+  // its own pages may: the session token is the gate, this keeps other sites
+  // out. Without it on /plans the browser refused the price list, and the
+  // account page's whole plan card with it.
+  const webCors = cors({
     origin: (origin) => (WEB_ORIGINS.test(origin) ? origin : null),
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowHeaders: ["authorization", "content-type"],
     maxAge: 86400,
-  }));
+  });
+  app.use("/plans", webCors);
+  app.use("/v1/*", webCors);
+
+  /**
+   * The plans and the trial's terms, for the app's plan picker and the site's.
+   * No account needed. `providers` are the ways to pay, the default first, each
+   * with what it can sell, so a client offers a provider only for a plan it
+   * has: a checkout it cannot make would only fail.
+   */
+  app.get("/plans", (c) =>
+    c.json({
+      readOnlyDays: READ_ONLY_DAYS,
+      trial: { days: TRIAL_DAYS, storageGb: TRIAL_GB, periods: ["monthly"] },
+      plans: Object.entries(PLANS).map(([id, p]) => ({ id, ...p, trialStorageGb: trialGbOf(id as PlanId) })),
+      providers: [billing, ...all.filter((p) => p !== billing)].filter((p): p is Billing => p !== null).map((p) => ({
+        name: p.name,
+        default: p === billing,
+        offers: (Object.keys(PLANS) as PlanId[]).map((plan) => ({
+          plan,
+          monthly: p.offers?.(plan, "monthly") ?? true,
+          yearly: p.offers?.(plan, "yearly") ?? true,
+          trial: p.offers?.(plan, "monthly", true) ?? true,
+        })),
+      })),
+    }),
+  );
 
   app.use("/v1/*", async (c, next) => {
     if (!db) return fail(503, "not_set_up");
@@ -90,47 +127,58 @@ export function createApp({ db, storage = null, billing, personOf, now = () => n
       quotaBytes,
       trial: a.trial ?? false,
       trialAvailable: mayStartTrial(a),
+      unlimited: a.unlimited ?? false,
     });
   });
 
   /** A checkout link for [plan] and [period], carrying the person's id so the webhook knows who paid. */
   app.post("/v1/checkout", async (c) => {
     if (!billing) return fail(503, "billing_not_set_up");
-    const body = (await c.req.json().catch(() => null)) as { plan?: unknown; period?: unknown; trial?: unknown } | null;
+    const body = (await c.req.json().catch(() => null)) as
+      | { plan?: unknown; period?: unknown; trial?: unknown; provider?: unknown }
+      | null;
     const plan = body?.plan;
     const period = body?.period;
     const trial = body?.trial === true;
     if (!isPlan(plan) || (period !== "monthly" && period !== "yearly")) return fail(400, "bad_request");
+    // The buyer's choice of provider; without one, the default, as every
+    // client did before there was a choice.
+    const chosen = body?.provider === undefined || body?.provider === null ? billing : providerNamed(String(body.provider));
+    if (!chosen) return fail(400, "bad_provider");
     // Trials come with the monthly plans only, and once per account.
     if (trial && period !== "monthly") return fail(400, "bad_request");
     if (trial && !mayStartTrial(await loadAccount(db!, c.get("uid")))) return fail(409, "trial_used");
-    const url = await billing.checkoutUrl(plan, period, c.get("uid"), trial);
+    const url = await chosen.checkoutUrl(plan, period, c.get("uid"), trial);
     return url ? c.json({ url }) : fail(503, "billing_not_set_up");
   });
 
   /**
    * The payment provider's customer portal for the signed-in person, where
-   * they change or cancel their plan. Creem requires that people can cancel
-   * from inside the product; this is how the app's "Manage subscription" does.
+   * they change or cancel their plan: the provider they pay with. Creem
+   * requires that people can cancel from inside the product; this is how the
+   * app's "Manage subscription" does.
    */
   app.post("/v1/billing-portal", async (c) => {
     if (!billing) return fail(503, "billing_not_set_up");
-    const row = await db!.prepare("select customer_id from cloud_accounts where user_id = ?1")
-      .bind(c.get("uid")).first<{ customer_id: string | null }>();
+    const row = await db!.prepare("select provider, customer_id from cloud_accounts where user_id = ?1")
+      .bind(c.get("uid")).first<{ provider: string | null; customer_id: string | null }>();
     if (!row?.customer_id) return fail(404, "no_subscription");
-    const url = await billing.portalUrl(row.customer_id);
+    const url = await (providerNamed(row.provider) ?? billing).portalUrl(row.customer_id);
     return url ? c.json({ url }) : fail(502, "billing_unreachable");
   });
 
-  /** The payment provider's webhook. Answers 2xx only once the event is safely recorded. */
-  app.post("/webhooks/billing", async (c) => {
-    if (!db || !billing) return fail(503, "not_set_up");
+  /** A payment provider's webhook. Answers 2xx only once the event is safely recorded. */
+  const webhook = (provider: Billing | null) => async (c: Context) => {
+    if (!db || !provider) return fail(503, "not_set_up");
     const raw = await c.req.text();
-    const events = await billing.parseWebhook(c.req.raw.headers, raw);
+    const events = await provider.parseWebhook(c.req.raw.headers, raw);
     if (events === null) return fail(401, "bad_signature");
-    for (const e of events) await record(db, billing.name, e, now);
+    for (const e of events) await record(db, provider.name, e, now);
     return c.json({ ok: true, applied: events.length });
-  });
+  };
+  // Creem's webhook was registered at this address before there was a second provider.
+  app.post("/webhooks/billing", (c) => webhook(providerNamed("creem") ?? billing)(c));
+  app.post("/webhooks/:provider", (c) => webhook(providerNamed(c.req.param("provider")))(c));
 
   // ── The library ──────────────────────────────────────────────────────────
 
@@ -209,7 +257,10 @@ export function createApp({ db, storage = null, billing, personOf, now = () => n
   app.put("/v1/songs/:id/cover", async (c) => {
     const missing = needsStorage();
     if (missing) return missing;
-    const length = Number(c.req.header("content-length") ?? "0");
+    // Read whole into memory, so its size is asked first: a body that does
+    // not say how long it is could be anything.
+    const length = Number(c.req.header("content-length") ?? NaN);
+    if (!Number.isInteger(length) || length <= 0) return fail(411, "length_required");
     if (length > MAX_COVER_BYTES) return fail(413, "cover_too_big");
     try {
       await setCover(db!, storage!, c.get("uid"), c.req.param("id"), await c.req.arrayBuffer(), now());
@@ -254,8 +305,32 @@ export function createApp({ db, storage = null, billing, personOf, now = () => n
     const object = row ? await storage.get(row.cover_key) : null;
     if (!object) return fail(404, "not_found");
     return new Response(object.body, {
-      headers: { "content-type": object.httpMetadata?.contentType ?? "image/jpeg", "cache-control": "private, max-age=86400" },
+      headers: {
+        "content-type": object.httpMetadata?.contentType ?? "image/jpeg",
+        "cache-control": "private, max-age=86400",
+        "x-content-type-options": "nosniff",
+      },
     });
+  });
+
+  /**
+   * A link the web player's audio element can play. <audio> sends no
+   * Authorization header, so the song is fetched from /play/:id with a
+   * signature that names the person, the song and when the link stops
+   * working. The same plan check as the Subsonic API: read-only still plays.
+   */
+  app.get("/v1/songs/:id/play", async (c) => {
+    if (!storage || !playKey) return fail(503, "not_set_up");
+    const uid = c.get("uid");
+    const id = c.req.param("id");
+    // Both asked at once; the plan is still judged first.
+    const [account, song] = await Promise.all([loadAccount(db!, uid), getSong(db!, uid, id)]);
+    if (accessOf(account, now()).access === "none") return fail(402, "no_plan");
+    if (!song) return fail(404, "not_found");
+    const expires = Math.floor(now().getTime() / 1000) + PLAY_LINK_SECONDS;
+    const signature = await playSignature(playKey, uid, id, expires);
+    const url = `${new URL(c.req.url).origin}/play/${encodeURIComponent(id)}?u=${uid}&e=${expires}&s=${signature}`;
+    return c.json({ url, expiresAt: new Date(expires * 1000).toISOString(), contentType: song.content_type, suffix: song.suffix });
   });
 
   app.delete("/v1/songs/:id", async (c) => {
@@ -314,6 +389,40 @@ export function createApp({ db, storage = null, billing, personOf, now = () => n
   app.delete("/v1/subsonic-keys", async (c) => {
     await db!.prepare("delete from cloud_subsonic_keys where user_id = ?1").bind(c.get("uid")).run();
     return c.body(null, 204);
+  });
+
+  // ── The web player's songs ────────────────────────────────────────────
+
+  /**
+   * A song for the web player, by a link from /v1/songs/:id/play: whole or a
+   * range, for seeking. The site's own pages get CORS, so the player can read
+   * the audio for its spectrum; the signature is the gate, not the origin.
+   */
+  app.on(["GET", "HEAD"], "/play/:id", async (c) => {
+    const origin = c.req.header("origin") ?? "";
+    const cors = (res: Response) => {
+      if (WEB_ORIGINS.test(origin)) {
+        res.headers.set("access-control-allow-origin", origin);
+        res.headers.set("access-control-expose-headers", "content-range, content-length, accept-ranges");
+        res.headers.set("vary", "origin");
+      }
+      return res;
+    };
+    if (!db || !storage || !playKey) return cors(fail(503, "not_set_up"));
+    const id = c.req.param("id");
+    const uid = c.req.query("u") ?? "";
+    const expires = Number(c.req.query("e"));
+    const given = (c.req.query("s") ?? "").toLowerCase();
+    if (!Number.isInteger(expires) || !sameHex(given, await playSignature(playKey, uid, id, expires))) {
+      return cors(fail(403, "bad_link"));
+    }
+    if (expires * 1000 < now().getTime()) return cors(fail(403, "link_expired"));
+    // The plan and the song are asked at once (the player seeks with many
+    // requests, each a round trip to D1); the plan is still judged first.
+    const [account, song] = await Promise.all([loadAccount(db, uid), getSong(db, uid, id)]);
+    if (accessOf(account, now()).access === "none") return cors(fail(402, "no_plan"));
+    if (!song) return cors(fail(404, "not_found"));
+    return cors(await streamSong(storage, song, c.req.header("range") ?? null, false));
   });
 
   app.all("/rest/*", async (c) => {

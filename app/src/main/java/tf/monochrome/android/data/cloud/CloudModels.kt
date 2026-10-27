@@ -19,11 +19,40 @@ data class CloudPlan(
 @Serializable
 data class CloudTrial(val days: Int = 7, val storageGb: Int = 20)
 
+/** What a payment provider can sell of one plan: a product set up for each. */
+@Serializable
+data class CloudProviderOffer(
+    val plan: String,
+    val monthly: Boolean = false,
+    val yearly: Boolean = false,
+    val trial: Boolean = false,
+)
+
+/** A way to pay (`paypal`, `creem`), the default first in [CloudPlans.providers]. */
+@Serializable
+data class CloudProvider(
+    val name: String,
+    val default: Boolean = false,
+    val offers: List<CloudProviderOffer> = emptyList(),
+) {
+    /** Whether this provider sells [plan] for [period], with a trial when [trial]. */
+    fun sells(plan: String, period: String, trial: Boolean): Boolean {
+        val offer = offers.firstOrNull { it.plan == plan } ?: return false
+        return when {
+            trial -> offer.trial
+            period == "yearly" -> offer.yearly
+            else -> offer.monthly
+        }
+    }
+}
+
 @Serializable
 data class CloudPlans(
     val readOnlyDays: Int = 7,
     val trial: CloudTrial = CloudTrial(),
     val plans: List<CloudPlan> = emptyList(),
+    /** Empty from a server before there was a choice: it picks the provider itself. */
+    val providers: List<CloudProvider> = emptyList(),
 )
 
 /** What the signed-in person may do: `full`, `read_only` or `none`. */
@@ -37,6 +66,8 @@ data class CloudAccount(
     val quotaBytes: Long = 0,
     val trial: Boolean = false,
     val trialAvailable: Boolean = false,
+    /** Storage given, not sold (the server's cloud_grants): no quota, no end date, no subscription. */
+    val unlimited: Boolean = false,
 ) {
     val canUpload: Boolean get() = access == "full"
     val canPlay: Boolean get() = access == "full" || access == "read_only"
@@ -86,7 +117,13 @@ internal data class UploadComplete(val parts: List<UploadedPart>)
 internal data class UploadedSong(val id: String)
 
 @Serializable
-internal data class CheckoutRequest(val plan: String, val period: String, val trial: Boolean = false)
+internal data class CheckoutRequest(
+    val plan: String,
+    val period: String,
+    val trial: Boolean = false,
+    /** The buyer's choice; null leaves it to the server (its default). */
+    val provider: String? = null,
+)
 
 @Serializable
 internal data class CheckoutUrl(val url: String)

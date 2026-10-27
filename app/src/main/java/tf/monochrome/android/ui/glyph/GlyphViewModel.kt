@@ -132,6 +132,8 @@ class GlyphViewModel @Inject constructor(
     private val packLibrary: GlyphPackLibrary,
     private val ownPack: OwnPackStore,
     private val rooms: RoomClient,
+    /** Makes a song too big for the rooms server into a smaller copy before it is shared. */
+    private val shareShrinker: tf.monochrome.android.audio.share.ShareShrinker,
     private val supabaseAuth: SupabaseAuthManager,
     /** Read only, for the player's own look behind the play ([backdropLook]). */
     preferences: tf.monochrome.android.data.preferences.PreferencesManager,
@@ -1187,7 +1189,12 @@ class GlyphViewModel @Inject constructor(
      * then by title, artist and length. Null, with why, when there is none.
      */
     private suspend fun findRequested(request: TryptManiaRequest, library: List<GlyphSong>): Pair<GlyphSong?, String?> {
-        fun pathOf(path: String) = path.removePrefix("file://")
+        // A linked pack song's music is a document; the menu knows its file.
+        fun pathOf(path: String) = if (path.startsWith("content:")) {
+            tf.monochrome.android.util.safDocumentUriToPath(android.net.Uri.parse(path)) ?: path
+        } else {
+            path.removePrefix("file://")
+        }
         fun byPath(path: String?) = path?.let { wanted -> library.firstOrNull { pathOf(it.filePath) == pathOf(wanted) } }
         byPath(request.filePath)?.let { return it to null }
         val local = runCatching {
@@ -2745,13 +2752,17 @@ class GlyphViewModel @Inject constructor(
         }
     }
 
-    /** Progress and the last failure, from the transfer's own thread too. */
-    private fun setRoomTransfer(progress: Float?, error: RoomTransferError? = null) {
+    /**
+     * Progress and the last failure, from the transfer's own thread too;
+     * [shrinking] while the progress is the song's smaller copy being made.
+     */
+    private fun setRoomTransfer(progress: Float?, error: RoomTransferError? = null, shrinking: Boolean = false) {
         val step = progress?.let { (it.coerceIn(0f, 1f) * 100f).toInt() / 100f }
+        val shrink = shrinking && step != null
         _ui.update { state ->
             val mp = state.multiplayer
-            if (mp.songTransfer == step && mp.transferError == error) state
-            else state.copy(multiplayer = mp.copy(songTransfer = step, transferError = error))
+            if (mp.songTransfer == step && mp.transferError == error && mp.songShrinking == shrink) state
+            else state.copy(multiplayer = mp.copy(songTransfer = step, transferError = error, songShrinking = shrink))
         }
     }
 
@@ -2759,6 +2770,11 @@ class GlyphViewModel @Inject constructor(
      * Host: this phone's song for the room's chart, up to the rooms server for
      * the players without it. Streamed from where it is; the room hears it is
      * there from the server, and their buttons light up.
+     *
+     * A song bigger than the server takes (its `maxSongBytes`) goes up as an
+     * Opus copy at 320 kbps instead, made first and deleted once it is up or
+     * has failed. Where no copy can be made, or it is still too big, the song
+     * goes up as it is and the server's refusal is shown, as before.
      */
     private fun shareRoomSong() {
         val plan = roomPlan ?: return
@@ -2771,8 +2787,21 @@ class GlyphViewModel @Inject constructor(
             ?: "bin"
         roomTransferJob = viewModelScope.launch {
             setRoomTransfer(0f)
-            val result = rooms.shareSong(plan.hash, source, ext) { setRoomTransfer(it) }
-            setRoomTransfer(null, result.exceptionOrNull()?.let { RoomTransferError(sharing = true, reason = it.message.orEmpty()) })
+            val limit = tf.monochrome.android.audio.share.ShareSize.limit(rooms.maxSongBytes())
+            val prepared = withContext(Dispatchers.IO) {
+                tf.monochrome.android.audio.share.ShareSize.prepare(
+                    shareShrinker, source.toString(), rooms.songSize(source), ext, limit,
+                    durationMs = plan.song.durationSeconds.takeIf { it > 0 }?.times(1000L),
+                ) { setRoomTransfer(it, shrinking = true) }
+            }
+            try {
+                val upload = prepared.shrunk?.let(android.net.Uri::fromFile) ?: source
+                setRoomTransfer(0f)
+                val result = rooms.shareSong(plan.hash, upload, prepared.ext) { setRoomTransfer(it) }
+                setRoomTransfer(null, result.exceptionOrNull()?.let { RoomTransferError(sharing = true, reason = it.message.orEmpty()) })
+            } finally {
+                prepared.discard()
+            }
         }
     }
 

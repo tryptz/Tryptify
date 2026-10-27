@@ -4,6 +4,54 @@
 
 ### Added
 
+#### Your own music server, further
+- **Your server counts your plays.** It hears "now playing" when a song starts, and the play once you've heard enough of it (Last.fm's rule), so its play counts, Recently played and any Last.fm or ListenBrainz it passes plays on to see what you played here.
+- **Liking a song stars it on your server**, and unliking unstars it, so your server's other apps agree.
+- **Playlists and Liked songs in My server**: your server's playlists (open one to play or shuffle it) and everything starred on it.
+- **Your server's lyrics come first** for its songs: timed when it has them timed (Navidrome and other OpenSubsonic servers), plain otherwise.
+- **Cellular Streaming** in Settings › Connections › Music server: keep the original file, or ask your server for an MP3 of at most 320, 192 or 128 kbps on mobile data. Wi-Fi always gets the original.
+
+#### Lyrics from your own files
+- **A song's own lyrics come first**: the `.lrc` next to the file (what other players and Tryptify's own downloads write) and lyrics stored in the file's tags, for library files and downloads. Word-timed ones are used straight away; others still let a word-timed match from the internet replace them. Offline, they're what shows.
+
+#### ReplayGain, for real this time
+- **Settings › Audio › Audio processing › ReplayGain** evens out loudness between songs from the ReplayGain (or R128) tags in your files: Track, Album, or Smart, which uses the album's level while an album plays in order, plus a pre-amp. Off by default, so nothing sounds different until you choose.
+- **It never clips.** Loud songs are turned down; a song is turned up only when its file shows there's room. It works on every output, the USB DAC included, and with it off (or at 0 dB) the sound passes through untouched, so bit-perfect stays bit-perfect.
+
+### Fixed
+- **USB DACs with one clock keep exclusive mode for CD-quality songs.** A DAC that runs only 48 and 96 kHz (the Nothing Ear (1) and Headphone (1)) refused 44.1 kHz, so every CD-rate song fell back to Android's mixer. The song is now resampled to the DAC's nearest rate; rates the DAC takes stay bit-perfect.
+- **LRC lyrics that read wrong now read right**, from LRCLib too: a file starting with a byte order mark keeps its first line, an end stamp (`[00:15.00]` after the words) is a time rather than part of the lyric, a file stamped all `[00:00.00]` shows as plain lyrics instead of every line lighting up at once, and LRCLib's lyrics with `[mm:ss]`, two stamps on a line, `[offset:]` or word timing read as they do everywhere else.
+
+## [1.9.5]
+
+### Added
+
+#### Tryptify Connect
+- **Follow the other device.** While the phone plays nothing (or is paused) and another of your devices plays, the mini player shows that song, "Artist · Playing on …" on its artist line, its progress running in step, and its buttons and swipes steer that device. A tap opens the player with the Connect panel up.
+- **The Connect panel has the song's timeline**: a seek bar with the elapsed and total time, moving in step, that sends the other device to the second you let go.
+- **The same on tryptify.com/player**: while the browser plays nothing, its bar shows the other device's song at its second, a drag seeks it and the buttons steer it.
+- **A device that goes offline stops where it was**, so its song no longer runs to the end on everyone else's screen, and moving the music from it starts at that second.
+- **Your devices, together.** Signed in, the phone and tryptify.com/player see each other: the player's Devices button lists every device online and which one is playing.
+- **Move the music** to any of them with a tap, at the same second, the queue coming too; or take it from another device with Play here.
+- **Steer the other device** from the panel: play, pause, previous and next.
+- **One plays at a time.** When another device starts playing, this one pauses.
+- **Next to no battery.** Connected only while the app is on screen or playing, and a message only when something changes.
+
+#### Select on every song list
+- **Select, in a song's ⋮ menu, works on every song list**: the Local page's Songs and its search, My server's songs, search and albums, local albums, artists and genres, and search results from the phone or your own server, which now have a ⋮ menu too. Then a tap picks or unpicks a row, and the bar adds them all to the queue, the party or a playlist.
+- **A selection on the Local page's Songs keeps its songs** when you scroll far away from them.
+- **Genre charts**: hold a row to pick it (chart rows have no preview); the picked rows are found in the catalogue when the bar acts, and a message says how many were.
+- **An artist's unreleased songs** join a selection begun from one of their top songs.
+
+#### Upload a selection to Tryptify Cloud
+- **The selection bar has Upload to Tryptify Cloud** wherever the picked songs include files on the phone. Only those files go up. One message says they're queued and one says how many went up; a song that fails is told at once.
+
+#### My server's songs and search
+- **Library › My server has a Songs chip** beside Albums and Artists, loaded a page of 500 at a time, and a **search** that asks your server as you type. A tap in a long list plays that song and queues the next 999.
+
+#### A password for your server
+- **A TrypT HiFi server can ask for a password** (its `ACCESS_PASSWORD`). Give it under the address in Settings › Connections › Add API; adding a listed server again with a password changes it. It goes with every request and stream to that server and nowhere else, stays on the phone and is never synced. A missing or wrong one says so instead of failing quietly.
+
 #### Listening parties
 - **Listen together, in sync.** Start a party from your profile or join one with its code; Invite shares a link that opens in the app. Everyone hears the same moment of the same song, and the party page shows who's listening and whether you're in sync.
 - **Guests on the web.** Anyone without the app joins from the link in a web browser, sees the song, the queue and the chat, and can vote to skip and add songs. The app's guest list marks them On the web. A website guest can't be the host.
@@ -16,7 +64,7 @@
 - **It plays as your Tryptify account**, on the rooms server Trypt Mania's multiplayer uses. A rooms server from before parties says so instead.
 
 #### Tryptify Cloud
-- **Your music, stored for you.** Settings › Connections › Tryptify Cloud: plans from 100 GB, a 7-day free trial with 20 GB, and a storage meter. Upload to Tryptify Cloud from a song's menu; uploads carry on in the background with a progress notification.
+- **Your music, stored for you.** Settings › Connections › Tryptify Cloud: plans from 10 GB to 10 TB, a 7-day free trial with up to 20 GB, and a storage meter. Upload to Tryptify Cloud from a song's menu; uploads carry on in the background with a progress notification.
 - **It plays like your own server**: one tap connects it as the Subsonic server, with its own device password, and your library is in Library › My server.
 - **Files are kept as uploaded**: FLAC, ALAC and WAV stay lossless, with their covers.
 - **Manage or cancel the subscription** from the same page. Your library, devices and uploads are also at tryptify.com/account.
@@ -34,6 +82,7 @@
 - **Your password isn't stored.** Tryptify keeps a sign-in token. Only a server that refuses tokens (an old one, or an LDAP user on Navidrome) gets the password itself, and Settings says so. Neither is synced to your account, and neither leaves the phone: covers reach Discord, party guests, the widget and the lock screen as pictures, never as links.
 - **How to set up**, in the same place: which server to run, which address to type at home, on the phone itself or away, and what to check when it won't connect.
 - Songs from your server can't be downloaded or shared as files from Tryptify; they're already yours, on your server.
+
 
 #### Trypt Mania in your stats
 - **A Trypt Mania card on Account › Listening stats**: whole songs played and on how many charts, your best grade, full combos, and the accuracy of your last ten songs with an arrow for better or worse than the ten before. It counts all time, so it shows even when the range you picked has no plays. Its arrow opens Trypt Mania.
@@ -79,7 +128,75 @@
 - **Zoom in to fill the corners.** Over 100% the picture fills the dark corners a curve leaves. It stops at 120% so the tab bar stays on screen.
 - **Taps follow the zoom**, as they follow the curve. Your looks and saved presets keep their size: anything saved before reads as 100%.
 
+#### A frame rate limit and an FPS counter
+- **Settings › System › Performance › Frame rate limit**: Max, 30, 45, 60, 90 or 120. The app, every animation in it, Trypt Mania's playfield and the visualizer draw no more than that many frames a second; lower saves battery and heat. Max draws on every refresh, as before.
+- **It holds whatever asks for a frame**: the app's animations move on a slower clock, every redraw is held to the limit at the app's root, the visualizer's render threads wait out the same interval with vsync on or off, and the screen is asked for the slowest refresh rate that fits (only while a limit is set; never a resolution).
+- **Pick a limit your screen divides** for even frames: 60 or 30 on a 120 Hz screen. Any other averages out to the limit.
+- **Trypt Mania's timing never follows the frames**: notes and judgements come from the song's own clock, so a limit costs the playfield frames of animation, never a judgement.
+- **An FPS counter**, in the same place: the frames drawn each second, in brackets the frames the app's animations moved on, the display's refresh rate and the limit, in the top corner over everything (the CRT effect included).
+- **The kick pulse on the cover keeps time**: it decayed per frame, so it punched faster on a 120 Hz screen and would have slowed under a limit.
+
+#### Your StepMania packs in your library
+- **Settings › Library › Music folders › Add StepMania packs** adds the folders Trypt Mania's linked packs are read from to your music folders (a whole-phone library holds them already) and scans them in.
+- **Each pack song shows its chart's title and artist**, not the file's tags (StepMania music is often an untagged OGG), the pack as its album, its album artist the pack's one artist or Various Artists, and the song's own picture.
+- **Listed once in Trypt Mania, with its chart.** A library song whose file is a pack song's music is that pack song: no second entry with No chart, and never counted in Chart every song without one, so a hand-made chart's song is never sent to the chart server. Play in Trypt Mania from the library opens it.
+- **Trypt Mania's own pack folder is left out of the library**: every chart made in the app is written there with a copy of its music, which doubled the song.
+- Packs imported as a ZIP live in the app's own storage and stay out of the library.
+
+#### A song too big to share goes smaller
+- **A song over the rooms server's limit** (99 MB a song, or what is left of a party's 1 GB) is turned into Opus at 320 kbps before it's shared, in listening parties and Trypt Mania rooms alike. Your queue row shows "Making it smaller" with its progress. It needs Android 10 and an Opus encoder.
+
+#### On tryptify.com
+- **The site in the app's eight languages**, under /zh, /ja, /fr, /es, /tr, /de and /it, with a language list in every footer and the player's sidebar. The first visit follows the browser's language.
+- **Listening parties on tryptify.com**: invites are tryptify.com/party/<code> links, which open in the app where it's installed; anyone else joins in the browser, listens in sync, chats, votes to skip and adds songs. The rooms server moved to Cloudflare.
+- **The web player takes its colours from the song's cover**, as the app's Dynamic Colors: the cover's colour is the accent, made readable on the page, and its main colour washes the top of the page. They fade between songs.
+- **Report a bug or help build Tryptify**, on the Contact page.
+- **The web player says why a TrypT HiFi song won't play.** When one fails to load it asks the server why: a TIDAL song not offered in your subscription's country says "TIDAL does not offer this song in your subscription's country.", in the site's eight languages, and the player moves on.
+
+#### More Tryptify Cloud plans
+- **Seven plans, from 10 GB to 10 TB.** Mini, 10 GB for $1.29 a month or $9.99 a year, under Lite; and over Max, Pro (1 TB, $39.99 / $399.99), Ultra (3 TB, $119.99 / $1,199.99) and Xtra (10 TB, $399.99 / $3,999.99). The app, tryptify.com/cloud and the account page list them all, a terabyte and up in TB.
+- **The free trial gives up to 20 GB**: Mini's is its own 10 GB.
+
+#### Select all
+- **The selection bar has Select all** on playlists, albums, artists, Favorites, Downloads, folders, search, Discover shelves, genre charts and the local detail pages. It hides once every song is picked. Lists loaded a page at a time, like the Local page's Songs, don't have it.
+
+#### Reset on every lyrics slider
+- **Every slider on Player Visuals Studio's Lyrics tab**, god rays included, shows a reset button after its value once it's off its default. One tap puts it back; the sides' curvature goes back to following the bow.
+
 ### Changed
+
+#### A new first-run setup
+- **Six short steps, all optional**, in the app's own look: progress dots with Skip setup, one step at a time, and a Continue button with Back under it.
+- **Permissions**: Music and audio, and Notifications on Android 13 and later, asked right there. Once Android stops asking, the button opens the app's settings instead.
+- **Music folders**: add folders and see how many songs each holds, and add StepMania packs when you have linked ones. No folder is needed any more: without one, the whole phone is scanned.
+- **Sources**: this phone, plus switches for a music server (Navidrome, Jellyfin or any Subsonic server), Tryptify Cloud and TrypT HiFi. Any switched on opens Settings › Connections when setup ends.
+- **Account**: sign in with Google or Discord. Then **Features**, what Tryptify can do, and **Ready**, a summary of your folders, sources and account.
+- **Gone from setup**: the welcome page and the Downloads, Audio output, Streaming and tour steps. Downloads and audio output are in Settings.
+
+#### Library search bars float over their lists
+- **On Library › Local and My server, an open search bar takes the header row's place**, and the rows start under its glass and scroll up beneath it, as on the Search tab, instead of sitting below a strip that clipped the list. The Search tab's history does the same, and the debug log's and the HRTF database's filters are the same floating bar.
+
+#### Tryptify Cloud: pay with PayPal or Creem
+- **Pick how you pay**: a Pay with row above the plans, in the app and on the account page, offers PayPal (picked first) or Creem. Checkout opens the one you picked and comes back to your account page. A subscription you already have keeps renewing as before.
+- **Manage or cancel subscription** opens the place you pay: PayPal's automatic payments for a PayPal subscription, Creem's portal for a Creem one.
+- **A full refund or a dispute ends the plan**; a partial refund doesn't. A free trial gives the trial only, until its last day.
+
+#### No light follows the pointer on tryptify.com
+- **The soft light that followed the mouse** over the home page, the cards, the plans and the showcase is gone; the cards still lift. The web player's and the party's glass still catch the pointer.
+
+#### No chart server built in
+- **Trypt Mania's chart server is no longer in the app**: charts, and lyrics timed by ear, use a server you add under Settings › Connections. The multiplayer rooms server stays built in.
+
+#### Safer with your sign-ins
+- **Plain http:// goes only to servers on your own network** (private addresses, Tailscale, `.local` and `.lan` names), for the API client, the player, previews and covers. A Subsonic password never goes over plain http://.
+- **Logs, the shared debug log and crash files hide sign-ins**: tokens, codes, keys and the rooms server's secret path.
+- **Android backup and device transfer leave every sign-in out**, and settings sync no longer carries the built-in rooms server's address.
+
+#### Tryptify Cloud folds under its title
+- **In Settings › Connections, Tryptify Cloud starts folded**: tap its title to open the plans or storage and the uploads. Folded, it no longer asks the server on every visit.
+
+#### Theme Store cards show the lyrics and player
+- **A card crops its picture to the lyrics and the player**, so more than two fit a screen. A theme's own page still shows the picture whole.
 
 #### APIs in two groups
 - **Settings › Connections › APIs lists Streaming and Trypt Mania apart.** The servers that search and play (TIDAL, Qobuz, Apple Music, Deezer) are under Streaming; the ones that only chart, time lyrics or run rooms for Trypt Mania are under Trypt Mania. ↑ moves a server above the one before it in its own group, which is the order that decides which server is used.
@@ -114,7 +231,27 @@
 - **The ambient visualizer stays in the player.** It can only run on one screen at a time, and the game's music does not feed it.
 - **Trypt Mania takes the colour of the song you pick.** Choose a song on the wheel and the app's dynamic colours fade to its album colour within half a second, whatever your "Blend between tracks" length is (a shorter one is kept). The whole app follows that one song while the mode is open, tab bar and "Tint the menus too" included, so two songs never colour the screen at once; when you leave, the playing track takes over again. The colours stay readable on every menu.
 
+#### The CRT effect is lighter
+- **Its CRT look reads each TV pixel once**: the glow and the sharp picture shared one read of each line's pixels, and the weights are worked out once a pixel. Thirty-one reads a pixel with the glow on instead of forty-two, about half the work for the same picture, so it no longer drops frames over the app or Trypt Mania.
+
+#### The web player's bar is the site's glass
+- **The bar is the menu's glass**: the page lightly blurred and bent at the rim, with a wider colour split there, a rim lit at two corners and a glint that follows the pointer. Its icons are cut out of the glass, as in the app's mini player, the green of shuffle or repeat when on. The volume is a glass tube like the timeline.
+- **Another device's song shows on the same glass**, with Connect's green on its phone, its progress and Play here.
+
+### Removed
+
+#### The Spotify account
+- **Spotify sign-in is gone**: the Spotify group in Settings › Connections, Browse My Playlists (the picker of your own playlists and Liked Songs) in Playlist Import, and the Spotify card in setup. Spotify only let accounts on an allowlist connect, so few could use it. A saved Spotify sign-in is deleted.
+- **Importing a Spotify playlist stays**: paste its link in Settings › Library › Playlist Import or Library's New playlist, with a preview, for the first 100 songs. Exportify, in Create playlist, still brings private playlists, Liked Songs and longer ones, and CSV import is unchanged. Settings search finds Playlist import under "spotify".
+
 ### Fixed
+- **Saved songs keep their service.** Liked and playlist songs now store and sync the service they come from (TIDAL, Qobuz, Deezer, Apple Music, your server or the phone), so on a fresh install, another phone or tryptify.com a synced Qobuz, Deezer or Apple Music song plays from that service instead of being read as TIDAL's. Songs saved from this version on carry it.
+- **The web player plays liked songs and playlists from their own service.** Every one was read as a TIDAL song, so it played the wrong song or none. It now reads the song's service, or for older rows its cover's host: Qobuz and Deezer songs stream through TrypT HiFi, Apple Music songs say they play only in the app, and a liked file from your phone plays from the browser's open folder, or says where it is.
+- **The FPS counter's first reading is current**, not left over from before it opened.
+- **A party song a browser guest couldn't fetch once** no longer stays broken for every later guest.
+- **The lyrics' letter wave moves under the CRT effect.** With the CRT over the whole app, the sung line froze mid-wave and its speed, linked or not, did nothing.
+- **The visualizer keeps drawing after you leave the player and come back.** It stayed frozen, or showed the cover alone: the new view never told the engine it was playing, and a paused engine froze before its first frame.
+- **The web player seeks TrypT HiFi's TIDAL songs** again, and the party page plays the catalogue songs TrypT HiFi assembles.
 - **Golden Ears and the Quality card agree on what Hi-Res is.** The achievement counted "HI-RES" or "HI RES" tags the card called lossy, and missed "HIRES", which the card counted.
 - **Night means one thing in your stats: 9 pm to 5 am.** The Night owl listening type, the share of night listening, the clock chart's Night row and the Night Owl achievement used four different windows, so a 4 am peak made you an "Early bird". Night Owl now counts plays from midnight to 5 am.
 

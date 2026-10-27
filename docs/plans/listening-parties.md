@@ -1,5 +1,7 @@
 # Listening parties: plan
 
+> **Moved, 2026-10-23.** The server now runs on Cloudflare (`server/rooms`, `rooms.tryptify.com`), ported from `tryptz/tryptify-party` with the same wire format, and the guests' page is tryptify.com's own (`public/party.html` in tryptz/tryptify.com, `https://tryptify.com/party/<code>`). Invites point there. What follows is the plan as it was written.
+
 Agreed with the owner on 2026-10-20 and built the same day. The server and
 the website are their own repository, tryptz/tryptify-party (the party's
 rules in C++, `cpp/`, at the owner's word; sockets, songs and the website in

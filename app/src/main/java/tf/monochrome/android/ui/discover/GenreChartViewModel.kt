@@ -98,20 +98,31 @@ class GenreChartViewModel @Inject constructor(
     /** Resolve the top of the chart and play it in order. */
     fun playAll(player: PlayerViewModel) {
         val entries = _chart.value?.entries.orEmpty().take(QUEUE_DEPTH)
+        resolveAll(entries, R.string.chart_partial) { tracks -> player.playUnifiedTrack(tracks.first(), tracks) }
+    }
+
+    /**
+     * Resolve [entries] in order and hand the ones found to [then], saying how
+     * many were not ([partial], "%1$d of %2$d"). For the selection bar's actions.
+     */
+    fun resolveAll(
+        entries: List<ChartEntry>,
+        @androidx.annotation.StringRes partial: Int = R.string.chart_found_partial,
+        then: (List<UnifiedTrack>) -> Unit,
+    ) {
         if (entries.isEmpty()) return
         viewModelScope.launch {
             _loading.value = true
             val tracks = entries.mapNotNull { resolve(it) }.distinctBy { it.id }
             _loading.value = false
-            val first = tracks.firstOrNull()
-            if (first == null) {
+            if (tracks.isEmpty()) {
                 _message.value = tf.monochrome.android.ui.components.UiText.Res(R.string.chart_none_in_catalogue)
                 return@launch
             }
             if (tracks.size < entries.size) {
-                _message.value = tf.monochrome.android.ui.components.UiText.Res(R.string.chart_partial, listOf(tracks.size, entries.size))
+                _message.value = tf.monochrome.android.ui.components.UiText.Res(partial, listOf(tracks.size, entries.size))
             }
-            player.playUnifiedTrack(first, tracks)
+            then(tracks)
         }
     }
 

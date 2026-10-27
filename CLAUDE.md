@@ -21,17 +21,25 @@ compaction, so anything that must not be forgotten belongs here, not in chat.
 
 ## Secrets
 
-- The built-in Railway chart server address contains a secret. It lives only in
-  the gitignored `local.properties` key `tryptmania.cpuServer` (or the
-  `TRYPTMANIA_CPU_SERVER` environment variable). Never print it, never commit
-  it. Before each commit, check the staged diff does not contain it.
-- The multiplayer rooms server address is kept the same way, in
-  `tryptmania.roomsServer` (or `TRYPTMANIA_ROOMS_SERVER`), under the same rules.
-- A release built without these keys has no built-in chart or rooms server.
-  Before a release build, check both keys are set (without printing them), and
-  say so if they are not.
+- **Never put the TryptMania Parser chart server in the app's default API
+  list.** It is not built in: no build adds it under Settings › Connections.
+  Only its host's SHA-256 goes in the build, so the app can take out the entry
+  older builds saved (once). Its address (`tryptmania.cpuServer` /
+  `TRYPTMANIA_CPU_SERVER`) contains a secret: never print it, never commit it.
+- The multiplayer rooms server (multiplayer and listening parties) stays built
+  in, from `tryptmania.roomsServer` (or `TRYPTMANIA_ROOMS_SERVER`), under the
+  same secret rules. Before each commit, check the staged diff contains neither.
+- A release built without the rooms key has no rooms server. Before a release
+  build, check it is set (without printing it), and say so if it is not.
 - Never commit `keystore.properties` or any `.jks`, and never print keystore
   passwords.
+
+## Website
+
+- The website lives in its own repository, `tryptz/tryptify.com`. Never
+  deploy it from this one: older branches still carry a stale `site/`, and a
+  `wrangler deploy` from it replaces the live site (on 2026-10-24 it took the
+  party page, the changelog and the translations down).
 
 ## Every change
 

@@ -1,6 +1,7 @@
 package tf.monochrome.android.ui.settings
 
 import android.text.format.Formatter
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,6 +14,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -25,11 +28,16 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -40,7 +48,9 @@ import tf.monochrome.android.data.cloud.CloudAccount
 import tf.monochrome.android.data.cloud.CloudError
 import tf.monochrome.android.data.cloud.CloudPlan
 import tf.monochrome.android.data.cloud.CloudPlans
+import tf.monochrome.android.data.cloud.CloudProvider
 import tf.monochrome.android.ui.components.materialSurface
+import tf.monochrome.android.ui.mixer.GlassChoiceChip
 import java.text.NumberFormat
 import java.time.Instant
 import java.time.ZoneId
@@ -53,6 +63,10 @@ import java.util.Currency
  * music storage, for a listener who would rather not run a server. Plans and
  * the trial, the storage used, connecting the player, and the uploads.
  * Unwrapped from any scroll container, like [SubsonicSection].
+ *
+ * Folded by default under its title, which opens it: most people on
+ * Connections are there for something else, and three plan cards made the
+ * page long. Folded, it does not ask the server for the account either.
  */
 @Composable
 internal fun CloudSection(viewModel: CloudSettingsViewModel = hiltViewModel()) {
@@ -61,15 +75,38 @@ internal fun CloudSection(viewModel: CloudSettingsViewModel = hiltViewModel()) {
     val state by viewModel.account.collectAsStateWithLifecycle()
     val plans by viewModel.plans.collectAsStateWithLifecycle()
     val openUrl by viewModel.openUrl.collectAsStateWithLifecycle()
+    var open by rememberSaveable { mutableStateOf(false) }
 
     // Back from the payment page: the webhook has usually landed by now.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
-    LaunchedEffect(signedIn) { viewModel.refresh() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { if (open) viewModel.refresh() }
+    LaunchedEffect(signedIn, open) { if (open) viewModel.refresh() }
     LaunchedEffect(openUrl) {
         openUrl?.let { openDonationUrl(context, it); viewModel.urlOpened() }
     }
 
-    SettingsGroupHeader(stringResource(R.string.cloud_title))
+    val title = stringResource(R.string.cloud_title)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .settingsAnchor(title)
+            .clickable(role = Role.Button) { open = !open }
+            .padding(top = 4.dp, bottom = 8.dp),
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(Modifier.width(6.dp))
+        Icon(
+            if (open) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
+    }
+    if (!open) return
     Text(
         text = stringResource(R.string.cloud_intro),
         style = MaterialTheme.typography.bodyMedium,
@@ -107,11 +144,17 @@ private fun Ready(viewModel: CloudSettingsViewModel, account: CloudAccount, plan
         Player(viewModel, busy)
         Uploads(viewModel)
         // Creem requires that a subscriber can cancel from inside the product.
-        TextButton(onClick = viewModel::manageSubscription, enabled = !busy) {
-            Text(stringResource(R.string.cloud_manage_subscription))
+        // The server opens whichever provider the account pays through.
+        // Unlimited storage is given, not bought: there is nothing to manage.
+        if (!account.unlimited) {
+            TextButton(onClick = viewModel::manageSubscription, enabled = !busy) {
+                Text(stringResource(R.string.cloud_manage_subscription))
+            }
         }
     } else {
-        PlanPicker(plans, account.trialAvailable, busy) { plan, period, trial -> viewModel.checkout(plan, period, trial) }
+        PlanPicker(plans, account.trialAvailable, busy) { plan, period, trial, provider ->
+            viewModel.checkout(plan, period, trial, provider)
+        }
     }
     if (busy) {
         Spacer(Modifier.height(6.dp))
@@ -130,6 +173,16 @@ private fun StorageCard(account: CloudAccount) {
         shape = RoundedCornerShape(8.dp),
     ) {
         Column(Modifier.fillMaxWidth().padding(12.dp)) {
+            if (account.unlimited) {
+                Text(stringResource(R.string.cloud_unlimited_title), style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    stringResource(R.string.cloud_unlimited_used, Formatter.formatShortFileSize(context, account.usedBytes)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                return@Column
+            }
             val plan = planName(account.plan)
             Text(
                 if (account.trial) stringResource(R.string.cloud_trial_until, dateOf(account.paidUntil))
@@ -211,29 +264,72 @@ private fun Uploads(viewModel: CloudSettingsViewModel) {
     }
 }
 
-/** The three plans, monthly or yearly, and the trial when the account may still take it. */
+/**
+ * The plans, monthly or yearly, and the trial when the account may still take
+ * it. With more than one way to pay on the server, a "Pay with" row picks it,
+ * the server's default first; a plan that provider has no product for keeps
+ * its card, its buttons off.
+ */
 @Composable
 private fun PlanPicker(
     plans: CloudPlans?,
     trialAvailable: Boolean,
     busy: Boolean,
-    onPick: (plan: String, period: String, trial: Boolean) -> Unit,
+    onPick: (plan: String, period: String, trial: Boolean, provider: String?) -> Unit,
 ) {
     if (plans == null) {
         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
         return
     }
+    var chosen by rememberSaveable { mutableStateOf<String?>(null) }
+    val providers = plans.providers
+    val provider = providers.firstOrNull { it.name == chosen }
+        ?: providers.firstOrNull { it.default }
+        ?: providers.firstOrNull()
     if (trialAvailable) {
         Note(stringResource(R.string.cloud_trial_offer, plans.trial.days, plans.trial.storageGb))
     }
+    if (providers.size > 1) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(bottom = 6.dp),
+        ) {
+            Text(
+                stringResource(R.string.cloud_pay_with),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            providers.forEach { p ->
+                GlassChoiceChip(
+                    label = providerName(p.name),
+                    selected = p == provider,
+                    accent = MaterialTheme.colorScheme.primary,
+                    onClick = { chosen = p.name },
+                )
+            }
+        }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        plans.plans.forEach { plan -> PlanCard(plan, trialAvailable, busy, onPick) }
+        plans.plans.forEach { plan ->
+            PlanCard(plan, trialAvailable, busy, provider) { id, period, trial -> onPick(id, period, trial, provider?.name) }
+        }
     }
     Note(stringResource(R.string.cloud_plan_terms, plans.readOnlyDays))
 }
 
 @Composable
-private fun PlanCard(plan: CloudPlan, trialAvailable: Boolean, busy: Boolean, onPick: (String, String, Boolean) -> Unit) {
+private fun PlanCard(
+    plan: CloudPlan,
+    trialAvailable: Boolean,
+    busy: Boolean,
+    /** The chosen way to pay; null from a server that picks it itself. */
+    provider: CloudProvider?,
+    onPick: (String, String, Boolean) -> Unit,
+) {
+    // A server with no list sells every plan through its own provider.
+    val sellsFirst = provider?.sells(plan.id, "monthly", trialAvailable) ?: true
+    val sellsYearly = provider?.sells(plan.id, "yearly", false) ?: true
     Card(
         modifier = Modifier.fillMaxWidth().materialSurface(shape = RoundedCornerShape(8.dp)),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
@@ -241,7 +337,12 @@ private fun PlanCard(plan: CloudPlan, trialAvailable: Boolean, busy: Boolean, on
     ) {
         Column(Modifier.fillMaxWidth().padding(12.dp)) {
             Text(
-                stringResource(R.string.cloud_plan_storage, planName(plan.id), plan.storageGb),
+                // 1 TB and up read in TB (1,000 GB each, as the server counts).
+                if (plan.storageGb >= 1000 && plan.storageGb % 1000 == 0) {
+                    stringResource(R.string.cloud_plan_storage_tb, planName(plan.id), plan.storageGb / 1000)
+                } else {
+                    stringResource(R.string.cloud_plan_storage, planName(plan.id), plan.storageGb)
+                },
                 style = MaterialTheme.typography.titleSmall,
             )
             Text(
@@ -249,17 +350,24 @@ private fun PlanCard(plan: CloudPlan, trialAvailable: Boolean, busy: Boolean, on
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (provider != null && !sellsFirst && !sellsYearly) {
+                Text(
+                    stringResource(R.string.cloud_not_with_provider, providerName(provider.name)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
                 if (trialAvailable) {
-                    OutlinedButton(onClick = { onPick(plan.id, "monthly", true) }, enabled = !busy) {
+                    OutlinedButton(onClick = { onPick(plan.id, "monthly", true) }, enabled = !busy && sellsFirst) {
                         Text(stringResource(R.string.cloud_start_trial))
                     }
                 } else {
-                    OutlinedButton(onClick = { onPick(plan.id, "monthly", false) }, enabled = !busy) {
+                    OutlinedButton(onClick = { onPick(plan.id, "monthly", false) }, enabled = !busy && sellsFirst) {
                         Text(stringResource(R.string.cloud_monthly))
                     }
                 }
-                OutlinedButton(onClick = { onPick(plan.id, "yearly", false) }, enabled = !busy) {
+                OutlinedButton(onClick = { onPick(plan.id, "yearly", false) }, enabled = !busy && sellsYearly) {
                     Text(stringResource(R.string.cloud_yearly))
                 }
             }
@@ -277,11 +385,22 @@ private fun Note(text: String, error: Boolean = false) {
     )
 }
 
+/** Payment providers go by their brand names, untranslated. */
+private fun providerName(name: String): String = when (name) {
+    "paypal" -> "PayPal"
+    "creem" -> "Creem"
+    else -> name.replaceFirstChar { it.uppercase() }
+}
+
 @Composable
 private fun planName(id: String?): String = when (id) {
+    "mini" -> stringResource(R.string.cloud_plan_mini)
     "lite" -> stringResource(R.string.cloud_plan_lite)
     "plus" -> stringResource(R.string.cloud_plan_plus)
     "max" -> stringResource(R.string.cloud_plan_max)
+    "pro" -> stringResource(R.string.cloud_plan_pro)
+    "ultra" -> stringResource(R.string.cloud_plan_ultra)
+    "xtra" -> stringResource(R.string.cloud_plan_xtra)
     else -> id.orEmpty()
 }
 

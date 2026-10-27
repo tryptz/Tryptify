@@ -49,6 +49,7 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val preferences: PreferencesManager,
     private val apiServerProber: tf.monochrome.android.data.api.ApiServerProber,
+    private val serverAccess: tf.monochrome.android.data.api.ApiServerAccess,
     private val authRepository: AuthRepository,
     private val backupManager: BackupManager,
     private val projectMEngineRepository: ProjectMEngineRepository,
@@ -63,6 +64,7 @@ class SettingsViewModel @Inject constructor(
     private val downloadDao: tf.monochrome.android.data.db.dao.DownloadDao,
     private val updateChecker: tf.monochrome.android.data.update.UpdateChecker,
     private val crashLogger: tf.monochrome.android.debug.CrashLogger,
+    private val glyphPacks: tf.monochrome.android.glyph.pack.GlyphPackLibrary,
     @ApplicationContext private val appContext: Context
 ) : ViewModel(), CrtEffectPrefs {
 
@@ -312,6 +314,8 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val crossfadeDuration: StateFlow<Int> = preferences.crossfadeDuration
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    val replayGain: StateFlow<tf.monochrome.android.audio.replaygain.ReplayGainSettings> = preferences.replayGainSettings
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.audio.replaygain.ReplayGainSettings())
 
     // --- Audio speed ---
     val playbackSpeed: StateFlow<Float> = preferences.playbackSpeed
@@ -363,6 +367,10 @@ class SettingsViewModel @Inject constructor(
     val legacyPlayer: StateFlow<Boolean> = preferences.legacyPlayer
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val disableLiquidGlass: StateFlow<Boolean> = preferences.disableLiquidGlass
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val frameRateLimit: StateFlow<Int> = preferences.frameRateLimit
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.performance.FrameRateLimit.MAX)
+    val showFpsCounter: StateFlow<Boolean> = preferences.showFpsCounter
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val nowPlayingViewMode: StateFlow<NowPlayingViewMode> = preferences.nowPlayingViewMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NowPlayingViewMode.COVER_ART)
@@ -574,6 +582,8 @@ class SettingsViewModel @Inject constructor(
         preferences.setMultichannelDownmixEnabled(enabled)
     } }
     fun setCrossfadeDuration(seconds: Int) { viewModelScope.launch { preferences.setCrossfadeDuration(seconds) } }
+    fun setReplayGainMode(mode: tf.monochrome.android.audio.replaygain.ReplayGainMode) { viewModelScope.launch { preferences.setReplayGainMode(mode) } }
+    fun setReplayGainPreamp(db: Float) { viewModelScope.launch { preferences.setReplayGainPreamp(db) } }
 
     // --- Audio speed actions ---
     fun setPlaybackSpeed(speed: Float) { viewModelScope.launch { preferences.setPlaybackSpeed(speed) } }
@@ -616,6 +626,8 @@ class SettingsViewModel @Inject constructor(
     fun setDisableAnimations(enabled: Boolean) { viewModelScope.launch { preferences.setDisableAnimations(enabled) } }
     fun setLegacyPlayer(enabled: Boolean) { viewModelScope.launch { preferences.setLegacyPlayer(enabled) } }
     fun setDisableLiquidGlass(enabled: Boolean) { viewModelScope.launch { preferences.setDisableLiquidGlass(enabled) } }
+    fun setFrameRateLimit(fps: Int) { viewModelScope.launch { preferences.setFrameRateLimit(fps) } }
+    fun setShowFpsCounter(enabled: Boolean) { viewModelScope.launch { preferences.setShowFpsCounter(enabled) } }
     fun setVisualizerVsyncEnabled(value: Boolean) { viewModelScope.launch { preferences.setVisualizerVsyncEnabled(value) } }
     fun setVisualizerShowFps(enabled: Boolean) { viewModelScope.launch { preferences.setVisualizerShowFps(enabled) } }
     fun setVisualizerFullscreen(enabled: Boolean) { viewModelScope.launch { preferences.setVisualizerFullscreen(enabled) } }
@@ -817,6 +829,25 @@ class SettingsViewModel @Inject constructor(
         else scanCoordinator.addFolderAndScan(path)
     }
 
+    /**
+     * Music folders › Add StepMania packs: the folders Trypt Mania's linked
+     * packs are read from join the music folders, and a scan brings their
+     * songs in with their charts' titles, artists and pictures. With no folders
+     * chosen the library is the whole phone and holds them already; the scan
+     * then only retags them. False when no pack is linked from a folder.
+     */
+    suspend fun addStepManiaPacks(): Boolean {
+        val linked = glyphPacks.linkedFolders()
+        if (linked.isEmpty()) return false
+        val roots = preferences.userFolderRoots.first()
+        if (roots.isNotEmpty()) {
+            linked.filter { folder -> roots.none { folder == it || folder.startsWith("$it/") } }
+                .forEach { preferences.addUserFolderRoot(it) }
+        }
+        scanCoordinator.requestFullScanAfterCurrent()
+        return true
+    }
+
     /** Takes a folder out of the library, as Library › Local's remove does. The files stay. */
     fun removeMusicFolder(path: String) = scanCoordinator.excludeFolder(path)
 
@@ -1002,19 +1033,42 @@ class SettingsViewModel @Inject constructor(
      * used would sit in the list looking configured. The dialog shows why each
      * service didn't answer instead, which is the part worth reading.
      */
-    fun addApi(raw: String) {
+    fun addApi(raw: String, password: String = "") {
         val url = tf.monochrome.android.data.api.ApiServers.normalizeUrl(raw)
         if (url == null) {
             _addApiState.value = AddApiState.Invalid
             return
         }
-        if (apiServers.value.any { it.url.equals(url, ignoreCase = true) }) {
+        val listed = apiServers.value.firstOrNull { it.url.equals(url, ignoreCase = true) }
+        // A listed server again, with a password: its password changed (or it
+        // gained one). Save it and check the server again under it.
+        if (listed != null && password.isNotBlank()) {
+            _addApiState.value = AddApiState.Checking(listed.url)
+            viewModelScope.launch {
+                serverAccess.set(listed.url, password)
+                val result = apiServerProber.probe(listed.url)
+                preferences.setApiServers(preferences.apiServers.first().map {
+                    if (it.url == listed.url) {
+                        it.copy(services = result.services, checkedAt = System.currentTimeMillis(), stemDevice = result.stemDevice)
+                    } else {
+                        it
+                    }
+                })
+                _addApiState.value = AddApiState.Done(result)
+            }
+            return
+        }
+        if (listed != null) {
             _addApiState.value = AddApiState.AlreadyAdded(url)
             return
         }
         _addApiState.value = AddApiState.Checking(url)
         viewModelScope.launch {
+            // Before the check, so the check is asked with it.
+            serverAccess.set(url, password)
             val result = apiServerProber.probe(url)
+            // Not added: no password of a server that is not in the list.
+            if (result.services.isEmpty()) serverAccess.set(url, null)
             if (result.services.isNotEmpty()) {
                 val current = preferences.apiServers.first()
                 preferences.setApiServers(
@@ -1053,9 +1107,10 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun removeApi(url: String) {
-        if (tf.monochrome.android.data.api.BuiltInServer.isBuiltIn(url, tf.monochrome.android.BuildConfig.BUILT_IN_CPU_SERVER, tf.monochrome.android.BuildConfig.BUILT_IN_ROOMS_SERVER)) return
+        if (tf.monochrome.android.data.api.BuiltInServer.isBuiltIn(url, tf.monochrome.android.BuildConfig.BUILT_IN_ROOMS_SERVER)) return
         viewModelScope.launch {
             preferences.setApiServers(preferences.apiServers.first().filterNot { it.url == url })
+            serverAccess.set(url, null)
         }
     }
 

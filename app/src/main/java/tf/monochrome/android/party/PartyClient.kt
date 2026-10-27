@@ -56,6 +56,7 @@ import tf.monochrome.android.data.api.ApiService
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.glyph.multiplayer.ClockSync
 import tf.monochrome.android.glyph.multiplayer.RoomClient
+import tf.monochrome.android.glyph.multiplayer.RoomProtocol
 
 enum class PartyStatus {
     OFF,
@@ -128,6 +129,11 @@ class PartyClient @Inject constructor(
     @Volatile
     private var serverUrl: String? = null
 
+    /** The biggest song the server takes, from its info; null when it does not say. */
+    @Volatile
+    var maxSongBytes: Long? = null
+        private set
+
     /** This phone's key: for the song routes, and to get its seat back. */
     @Volatile
     private var key: String = ""
@@ -158,9 +164,9 @@ class PartyClient @Inject constructor(
             _state.value = PartyState(status = PartyStatus.CONNECTING, serverHost = host)
             // A server from before parties would take `create` for a game room
             // and never answer as a party: asked first, and said plainly.
-            val holdsParties = runCatching {
-                PartyProtocol.supportsParties(json, httpClient.get(server.url.trimEnd('/') + "/api/multiplayer/info").bodyAsText())
-            }.getOrDefault(false)
+            val info = runCatching { httpClient.get(server.url.trimEnd('/') + "/api/multiplayer/info").bodyAsText() }.getOrNull()
+            val holdsParties = info != null && PartyProtocol.supportsParties(json, info)
+            maxSongBytes = info?.let { RoomProtocol.maxSongBytes(json, it) }
             if (!holdsParties) {
                 _state.update { it.copy(status = PartyStatus.FAILED, error = NOT_SUPPORTED) }
                 return@launch
@@ -328,6 +334,7 @@ class PartyClient @Inject constructor(
         send = null
         key = ""
         serverUrl = null
+        maxSongBytes = null
         _state.value = PartyState()
     }
 
@@ -351,9 +358,8 @@ class PartyClient @Inject constructor(
 
     /** The link a guest opens in a browser, for this party; null when not in one. */
     fun inviteLink(): String? {
-        val server = serverUrl ?: return null
         val code = _state.value.party?.code ?: return null
-        return PartyProtocol.inviteLink(server, code)
+        return PartyProtocol.inviteLink(code)
     }
 
     /**
@@ -384,6 +390,24 @@ class PartyClient @Inject constructor(
                 onProgress(1f)
             }
         }
+
+    /**
+     * Tells the party [itemId] will not come, with an empty upload: the server
+     * answers "the song is empty" and shows it as not shared. For a file too
+     * big to send, which Cloudflare refuses (over 100 MB) before the server
+     * sees it, so the song would otherwise stay "Uploading" for good.
+     */
+    suspend fun giveUpUpload(itemId: String, ext: String) {
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val server = serverUrl ?: return@runCatching
+                httpClient.put(PartyProtocol.songUrl(server, itemId, ext)) {
+                    header(KEY_HEADER, key)
+                    setBody(ByteArray(0))
+                }
+            }.onFailure { Log.w(TAG, "giveUpUpload: ${it.message}") }
+        }
+    }
 
     /**
      * Fetches shared song [item] into [into], through a `.part` file so a

@@ -12,18 +12,22 @@ import org.junit.Test
 import java.io.File
 
 /**
- * The website's AutoEQ try-out (site/public/js/autoeq-engine.js) is a port of
- * this engine. This test holds the engine to the answers the port is checked
- * against (site/tests/autoeq-engine-fixtures.json, by site/tests/engine-parity.mjs):
- * change the engine and it fails here, so the port is updated with it.
+ * The website's AutoEQ try-out (public/js/autoeq-engine.js in the
+ * tryptz/tryptify.com repository) is a port of this engine. This test holds
+ * the engine to the answers the port is checked against: the fixtures here
+ * (src/test/resources/web-autoeq/) and their copy in that repository's tests/,
+ * which its tests/engine-parity.mjs reads. Change the engine and it fails
+ * here, so the port is updated with it.
  *
- * After a deliberate engine change, rewrite the fixtures and port the change:
+ * After a deliberate engine change, rewrite the fixtures, copy them to the
+ * website and port the change there:
  *   TRYPTIFY_WRITE_WEB_FIXTURE=1 ./gradlew :app:testDebugUnitTest --tests '*WebAutoEqFixtureTest*'
- *   node site/tests/engine-parity.mjs
+ *   cp app/src/test/resources/web-autoeq/autoeq-engine-fixtures.json ../tryptify.com/tests/
+ *   node ../tryptify.com/tests/engine-parity.mjs
  */
 class WebAutoEqFixtureTest {
 
-    private val site = File("../site/tests")
+    private val site = File("src/test/resources/web-autoeq")
     private val targets = File("src/main/assets/autoeq/targets")
 
     private val cases = listOf(
@@ -67,7 +71,7 @@ class WebAutoEqFixtureTest {
         val file = File(site, "autoeq-engine-fixtures.json")
         if (System.getenv("TRYPTIFY_WRITE_WEB_FIXTURE") == "1") file.writeText(now + "\n")
         assertEquals(
-            "AutoEqEngine changed: rewrite site/tests/autoeq-engine-fixtures.json and port the change to site/public/js/autoeq-engine.js (see this test's comment)",
+            "AutoEqEngine changed: rewrite the fixtures, copy them to tryptify.com's tests/ and port the change to its public/js/autoeq-engine.js (see this test's comment)",
             file.readText().trim(), now,
         )
     }

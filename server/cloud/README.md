@@ -18,9 +18,9 @@ permission.
 
 ## Status
 
-**Live, taking real payments in Creem live mode since 2026-10-21**, at
-`https://cloud.tryptify.com` (the app's default), where the live webhook
-points (`/webhooks/billing`); it is still reachable at
+**Live, taking real payments through PayPal since 2026-10-24** (webhook
+`/webhooks/paypal`) and through Creem (webhook `/webhooks/billing`), at
+`https://cloud.tryptify.com` (the app's default); it is still reachable at
 `https://tryptify-cloud.tryptify-cloud.workers.dev` for older builds. Before
 that it ran in test mode, where accounts, billing and the trial worked end to
 end: a test-card payment for Plus
@@ -39,10 +39,10 @@ webhook answer `billing_not_set_up`, and nobody can pay or be granted anything.
 | The API | Worker `tryptify-cloud` | `src/worker.ts`, config in `wrangler.toml` |
 | Accounts, billing events | D1 database `tryptify-cloud` | `b2b03937-98bd-4fec-a132-ce0d0b932454`, tables from `schema.sql` |
 | Music (phase 1) | R2 bucket `tryptify-cloud-music` | Binding `MUSIC`; enabled and checked 2026-10-21 (a 1 MB file written, read back identical, deleted). Empty until phase 1 |
-| Secrets | Worker secrets | `CREEM_API_KEY`, `CREEM_WEBHOOK_SECRET`; never in the repository |
+| Secrets | Worker secrets | `CREEM_API_KEY`, `CREEM_WEBHOOK_SECRET`, `PAYPAL_CLIENT_ID` and `PAYPAL_SECRET` (once PayPal is set up), `PLAY_KEY` (signs the web player's links; random, set 2026-10-22); never in the repository |
 
-Code: `src/rules.ts` (the money rules, pure), `src/creem.ts` (checkout and
-webhooks), `src/store.ts` (D1), `src/auth.ts` (Supabase sign-in),
+Code: `src/rules.ts` (the money rules, pure), `src/creem.ts` and
+`src/paypal.ts` (checkout and webhooks, one file per provider), `src/store.ts` (D1), `src/auth.ts` (Supabase sign-in),
 `src/app.ts` (routes), `src/worker.ts` (the entry point).
 
 D1 has no row locks, so a billing event is written optimistically
@@ -63,6 +63,71 @@ npx wrangler deploy                 # needs CLOUDFLARE_API_TOKEN (Workers edit)
 A schema change goes in `schema.sql` as `create … if not exists` / an added
 column, run once against D1 (`npx wrangler d1 execute tryptify-cloud --remote
 --file schema.sql`) before the deploy that uses it. Then check `/health`.
+
+## Payments: the buyer picks
+
+Both providers take new checkouts: `POST /v1/checkout` takes an optional
+`"provider"` (`"paypal"` or `"creem"`), and without one it is PayPal, the
+default, as every client sent before there was a choice (an unknown one is
+`400 bad_provider`). `GET /plans` lists `providers`, the default first, each
+with what it can sell (`offers`: per plan, `monthly`, `yearly`, `trial`), so
+the app and the site offer a provider only for a plan it has a product for.
+Each account remembers the provider of the payment that last took effect, so
+"Manage subscription" opens the right one; a refused event (a second trial
+with the other provider) does not change it.
+
+Creem was approved for the business on 2026-10-26 and offered again from
+then. It has products for Lite, Plus and Max only; Mini, Pro, Ultra and Xtra
+need theirs made in Creem (below) before Creem can sell them.
+
+## Payments: PayPal
+
+PayPal has taken checkouts since 2026-10-24: a live trial subscription went
+from checkout through the webhook to the account page, then was cancelled.
+Unlike Creem, PayPal is **not** a merchant of record: tryptz is the seller and
+answers for sales tax, receipts and chargebacks.
+
+What the service does with it (`src/paypal.ts`):
+
+- **Checkout** creates a PayPal subscription to the plan with the signed-in
+  person's id in `custom_id`, and sends them to PayPal's approve link.
+- **`PAYMENT.SALE.COMPLETED`** on a subscription grants the plan. PayPal's
+  event names only the subscription, so the plan and the person are read back
+  from it. Paid until PayPal's next billing date, but never more than one
+  period (a month or a year) from when the charge was taken.
+- **`BILLING.SUBSCRIPTION.ACTIVATED`** on a trial plan grants the trial (no
+  money moves at its start), never longer than 7 days plus one. On other
+  plans it grants nothing: their first payment does.
+- **`PAYMENT.SALE.REFUNDED`** when the sale is fully refunded, and
+  **`PAYMENT.SALE.REVERSED`** or **`CUSTOMER.DISPUTE.CREATED`**, end access
+  with 2 days to export. A partial refund does not.
+- Cancelled, suspended, expired, a failed payment: nothing, as with Creem.
+- Every webhook is sent back to PayPal's `verify-webhook-signature`, byte for
+  byte as it came, before anything in it is read. One PayPal does not vouch
+  for gets 401. When PayPal cannot be reached, the webhook gets 500 and PayPal
+  sends it again.
+- "Manage subscription" opens PayPal's automatic payments page
+  (`paypal.com/myaccount/autopay`): PayPal has no portal per customer.
+
+### Setting it up (the owner, once)
+
+1. developer.paypal.com → Apps & Credentials → create a REST app (Sandbox
+   first, Live after). Keep its Client ID and Secret.
+2. Make the plans with the site repository's `tools/paypal_setup`, adding
+   `--webhook-url https://cloud.tryptify.com/webhooks/paypal`. It prints the
+   plan ids and the webhook id.
+3. Put the ids under `[vars]` in `wrangler.toml` (`PAYPAL_WEBHOOK_ID`,
+   `PAYPAL_PLAN_LITE_MONTHLY` … `PAYPAL_PLAN_MAX_YEARLY`, the three `_TRIAL`
+   ones, and `PAYPAL_API_BASE = "https://api-m.sandbox.paypal.com"` while
+   testing), then `wrangler secret put PAYPAL_CLIENT_ID` and `PAYPAL_SECRET`.
+4. Deploy. New checkouts now go to PayPal. Buy a plan with a sandbox buyer
+   account, see the account page show it, then repeat with the Live app and
+   remove `PAYPAL_API_BASE`. Send the live secrets with the deploy
+   (`wrangler deploy --secrets-file`), so the live ids and the live keys
+   switch at the same moment.
+
+Done 2026-10-24: live product `PROD-1MK83635XY8578339`, nine plans and the
+webhook `0C5710575V759231M` (the ids are in `wrangler.toml`).
 
 ## Payments: Creem
 
@@ -133,6 +198,28 @@ ids are not secrets:
 
 ### Live mode, created on 2026-10-21
 
+Mini, Pro, Ultra and Xtra (added 2026-10-24) got their twelve live products
+on 2026-10-26, through the API, made like the nine below (USD, tax included,
+SaaS, the trial ones with 7 days) and each read back. Creem refuses a price
+under $1.00, so Mini's monthly went from $0.99 to $1.29 on both providers
+(PayPal's two Mini monthly plans were repriced, ids unchanged, with no
+subscribers on them):
+
+| Variable | Live product |
+| --- | --- |
+| `CREEM_PRODUCT_MINI_MONTHLY` | `prod_2tYlLffgyoIM9NUwgnOdcr` ($1.29) |
+| `CREEM_PRODUCT_MINI_YEARLY` | `prod_7d6oJQkesFmxD7GYeG0qrd` ($9.99) |
+| `CREEM_PRODUCT_MINI_MONTHLY_TRIAL` | `prod_2vbkLLh7Kl6ukJiOhGljSl` ($1.29, 7-day trial) |
+| `CREEM_PRODUCT_PRO_MONTHLY` | `prod_7Lpr4LoZDsmNtqb2ojv5qR` ($39.99) |
+| `CREEM_PRODUCT_PRO_YEARLY` | `prod_40zuAJfISWsChIn3QzG9Cf` ($399.99) |
+| `CREEM_PRODUCT_PRO_MONTHLY_TRIAL` | `prod_2xWsBRNSby2yzUhaBDdHTR` ($39.99, 7-day trial) |
+| `CREEM_PRODUCT_ULTRA_MONTHLY` | `prod_2aSNZ62wBtMvEieAcvHr10` ($119.99) |
+| `CREEM_PRODUCT_ULTRA_YEARLY` | `prod_5bkBnj3iPR9dVPqdV9rIsz` ($1,199.99) |
+| `CREEM_PRODUCT_ULTRA_MONTHLY_TRIAL` | `prod_3SKbwcPvZHa4G4Yzhy91pQ` ($119.99, 7-day trial) |
+| `CREEM_PRODUCT_XTRA_MONTHLY` | `prod_mcBmH30Bj2gfss6JkGh8A` ($399.99) |
+| `CREEM_PRODUCT_XTRA_YEARLY` | `prod_pxy9fSH0IpS6uQtl7LqXq` ($3,999.99) |
+| `CREEM_PRODUCT_XTRA_MONTHLY_TRIAL` | `prod_2yjLYPeLiWkFVqG7k2czzC` ($399.99, 7-day trial) |
+
 The same nine exist in Creem's **live** mode (checked back: nine, USD, tax
 included, trials only on the three trial products). The Worker uses them
 since 2026-10-21: `wrangler.toml` has these ids and no `CREEM_API_BASE`, and
@@ -190,6 +277,30 @@ A trial that is cancelled costs at most 20 GB for 9 days, about $0.10. That is
 the one place a non-payer costs anything, by the owner's choice; the test
 `the trial's worst case costs pennies` keeps it so.
 
+## Unlimited storage, given by hand
+
+An account in `cloud_grants` (kind `unlimited`) has full access with no quota
+(`UNLIMITED_BYTES`, a petabyte, so the arithmetic still works) and no end
+date, whatever it has paid for. It is never sold, never in `/plans`, never
+changed by a webhook, and the daily cleanup skips it. `/v1/account` says
+`unlimited: true`, and the app and the site show "Unlimited storage" with
+no subscription to manage. A grant needs an account row too: that row keeps
+the bytes used. In D1:
+
+```sql
+insert into cloud_grants (user_id, kind, note, created_at)
+  values ('<user id>', 'unlimited', '<who and why>', '<ISO date>');
+insert into cloud_accounts (user_id) values ('<user id>') on conflict (user_id) do nothing;
+-- to take it back:
+delete from cloud_grants where user_id = '<user id>';
+```
+
+The user id is the Supabase account's (`auth.users.id`). Taken back, the
+account falls back to whatever it paid for, and with nothing paid its
+library is deleted by the cleanup after the grace days, like any other.
+
+Granted so far: the owner's account (tryptz, 2026-10-22).
+
 ## The rule it enforces
 
 A listener can never cost more than they pay. Access comes only from the date
@@ -204,20 +315,40 @@ that does not fit is refused (`mayUpload`).
 | Route | Does |
 | --- | --- |
 | `GET /health` | Up, with whether it has a database, music storage and a payment provider |
-| `GET /plans` | The plans, prices and the trial's terms, no account needed |
+| `GET /plans` | The plans, prices and the trial's terms, and `providers` (each with what it sells), no account needed |
 | `GET /v1/account` | Plan, `access` (`full`, `read_only`, `none`), paid-until, delete-after, used and quota bytes, `trial`, `trialAvailable` |
-| `POST /v1/checkout` | `{"plan", "period", "trial"?}` → `{"url"}`, a checkout link that carries the person's id |
+| `POST /v1/checkout` | `{"plan", "period", "trial"?, "provider"?}` → `{"url"}`, a checkout link that carries the person's id; `provider` is `paypal` (the default) or `creem` |
 | `POST /webhooks/billing` | Creem's webhook, signature checked; each event applied once (`cloud_billing_events`) |
 | `GET /v1/library` | Used, reserved and allowed bytes, song count, part size |
 | `POST /v1/uploads` | `{size, suffix, meta}` → `{id, partSize, parts}`; reserves `size` against the quota (413 `over_quota`, 402 `no_plan`, 409 `read_only`, 415 `not_audio`) |
 | `PUT /v1/uploads/:id/parts/:n` | One part as the raw body: exactly `partSize` (50 MB) except the last → `{partNumber, etag}` |
 | `POST /v1/uploads/:id/complete` | `{parts}` → the song; the file must be exactly the reserved size |
 | `DELETE /v1/uploads/:id` | Gives the upload and its reservation up |
-| `PUT /v1/songs/:id/cover` | JPEG, PNG or WebP up to 1 MB, counted in the quota |
+| `PUT /v1/songs/:id/cover` | JPEG, PNG or WebP up to 1 MB, counted in the quota, with its Content-Length (411 `length_required` without) |
 | `DELETE /v1/songs/:id` | The song, its file and cover; the space comes back |
+| `GET /v1/songs/:id/play` | `{url, expiresAt, contentType, suffix}`: a link the web player's `<audio>` can play for 2 hours (402 `no_plan`, 404 `not_found`; read-only still plays) |
+| `GET /play/:id?u&e&s` | The song by that link, whole or a Range. The HMAC (`PLAY_KEY`) names the person, the song and the expiry, so none can be changed (403 `bad_link`, `link_expired`). CORS for tryptify.com only, so the player can draw its spectrum; the signature, not the origin, is the gate. Without `PLAY_KEY` it answers 503 |
 | `POST /v1/subsonic-keys` | `{label?}` → `{server, username, password}`: one device's Subsonic sign-in (at most 10 kept) |
 | `DELETE /v1/subsonic-keys` | Signs every device out of the Subsonic API |
-| `/rest/<method>.view` | The Subsonic API (`src/subsonic.ts`): ping, getLicense, getMusicFolders, getAlbumList2, getAlbum, getArtists, getArtist, getSong, search3, getRandomSongs, stream and download (with Range), getCoverArt |
+| `/rest/<method>.view` | The Subsonic API (`src/subsonic.ts`): ping, getLicense, getMusicFolders, getAlbumList2, getAlbum, getArtists, getArtist, getSong, search3, getRandomSongs, stream and download (with Range), getCoverArt; and what a listener does with the library: star, unstar, getStarred2 (getStarred), scrobble, getPlaylists, getPlaylist, createPlaylist, updatePlaylist, deletePlaylist. getAlbumList2's `recent`, `frequent` and `starred` come from plays and stars |
+
+### Stars, plays and playlists
+
+What any Subsonic client does with the library, kept per person in D1
+(`cloud_stars`, `cloud_plays`, `cloud_playlists`, `cloud_playlist_songs`):
+
+- **Stars** are songs only; an `albumId` or `artistId` is accepted and stars
+  nothing. Tryptify stars a song when it is liked.
+- **Plays**: `scrobble` with `submission=true` (the default) counts a play at
+  its `time` (never later than now); "now playing" (`false`) is not kept.
+  Recently played and Most played list only albums with a play.
+- **Playlists**: at most 1,000 a person and 5,000 songs each, names up to 200
+  characters. Only the person's own songs go in; any other id is skipped.
+- **A deleted song** takes its star, plays and places in playlists with it,
+  and the daily cleanup's wipe takes all of a person's.
+
+Live since 2026-10-26 (Worker version `9065b4b6`): `schema.sql` was run
+against D1 first, then the deploy; `/health` and `/plans` checked after.
 
 ### Storage rules
 

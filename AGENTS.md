@@ -117,21 +117,37 @@ StepMania's notice requires next to the art.
 
 ## Trypt Mania's built-in servers are build secrets
 
-A release can ship with two TryptMania Parser servers built in. Each address
-carries a secret path, so it comes only from the gitignored `local.properties`
-or the environment, never from the repository (`app/build.gradle.kts`):
+A release ships with one TryptMania Parser server built in, the rooms server
+for multiplayer and listening parties. Its address carries a secret path, so it
+comes only from the gitignored `local.properties` or the environment, never
+from the repository (`app/build.gradle.kts`):
 
 | `local.properties` key | or environment variable | becomes | what it is |
 |---|---|---|---|
-| `tryptmania.cpuServer` | `TRYPTMANIA_CPU_SERVER` | `BuildConfig.BUILT_IN_CPU_SERVER` | the chart server (Slow mode, a CPU server; it also times lyrics) |
 | `tryptmania.roomsServer` | `TRYPTMANIA_ROOMS_SERVER` | `BuildConfig.BUILT_IN_ROOMS_SERVER` | the multiplayer rooms server |
+| `tryptmania.cpuServer` | `TRYPTMANIA_CPU_SERVER` | `BuildConfig.RETIRED_CPU_HOST_SHA256` (its host's hash only) | the chart server, **never built in** |
+
+**The chart server is never put in the default API list** (the owner's rule).
+No build adds it under Settings › Connections, and charting waits until the
+listener adds a server there. Builds before 2026-10-23 did add it, so the
+build carries only the SHA-256 of its host, and `PreferencesManager.
+seedBuiltInServer` takes that entry out once (`retired_cpu_server_removed`);
+one the listener adds again stays. The address itself is not in the APK.
 
 The `local.properties` key wins over the variable. A release build for the
-owner needs both. Without them the app still builds and runs, but nothing is
-built in: no server is added under Settings › Connections, charting waits until
-the listener adds one there, and multiplayer has no rooms server. With them,
-`BuiltInServer` puts each one back in that list on every read, and the list
-shows only its host.
+owner needs the rooms key. Without it there is no rooms server; with it,
+`BuiltInServer` puts it back in that list on every read, and the list shows
+only its host.
+
+The rooms server moved to Cloudflare (`server/rooms`, below) at
+`https://rooms.tryptify.com`, which a release build sets as
+`tryptmania.roomsServer`. That address has no secret path, since the website's
+party page talks to it as well; the old Railway server's address had one, and
+it stays a secret like the chart server's. The old entry sat ahead of the new
+one in the saved list and would still have been picked, so builds since take
+it out once (`BuiltInServer.withoutOldRooms`, `old_rooms_server_removed`),
+recognised by the shape older builds gave it: a rooms-only entry under a long
+hex path on another host.
 
 Never print, log or commit the values, and never write them into a document, a
 test, a commit message or a chat reply. Anyone with the APK can dig them out;
@@ -141,18 +157,42 @@ value:
 ```
 cut -d= -f1 local.properties     # the key names only
 f=app/build/generated/source/buildConfig/release/tf/monochrome/android/BuildConfig.java
-grep -c 'BUILT_IN_CPU_SERVER = ""' $f; grep -c 'BUILT_IN_ROOMS_SERVER = ""' $f
+grep -c 'BUILT_IN_ROOMS_SERVER = ""' $f   # 0: the rooms server is built in; 1: left out
+grep -c 'BUILT_IN_CPU_SERVER' $f            # always 0: the chart server is never built in
 ```
 
-After a release build, each `grep` prints `1` when that server was left out and
-`0` when it is built in. The cloud setup below writes `local.properties` with
+After a release build, the first prints `0` when the rooms server is built in
+and `1` when it was left out; the second must print `0`. The cloud setup below writes `local.properties` with
 `>`, which replaces the file, so add these keys after it, not before. The CI
 workflow sets neither variable, so an APK it builds has no built-in servers.
 
-The other settings `local.properties` can override (`spotify.clientId`,
-`themeStore.url`, `lastfm.apiKey`) are public and have committed defaults.
+The other settings `local.properties` can override (`themeStore.url`,
+`lastfm.apiKey`) are public and have committed defaults.
 They are not secrets, but the rule for `local.properties` stays the same: it is
 never committed.
+
+## Plain http:// is for servers at home only
+
+`data/net/CleartextPolicy.kt` is the one rule, and every HTTP stack asks it:
+the API client (an OkHttp network interceptor in `NetworkModule`, so
+redirects are checked too), the player and song previews (a
+`ResolvingDataSource` in front of the HTTP source), and Coil (its own
+OkHttp fetcher in `MonochromeApp`). http:// goes only to localhost, private
+and link-local ranges, 100.64/10 (Tailscale) and home names (`.local`,
+`.lan`, `.home.arpa`, `.internal`). Audio and covers without a sign-in in
+their address (internet radio) may still use http:// anywhere. A Subsonic
+plain password (`p=`) never goes over http://, home or not. The manifest keeps
+`usesCleartextTraffic="true"` because Android's own config cannot say "any
+private address"; the policy is what refuses.
+
+Logs go through `debug/LogRedactor.kt` before they are kept, shown or written
+to a crash file: tokens, codes, Subsonic `t`/`s`/`p`/`u`, keys, JWTs and the
+rooms server's secret path. Sign-in links are PKCE only
+(`SupabaseAuthManager.handleDeepLink`); tokens in a link's fragment are
+ignored. Android backup and device transfer leave out SharedPreferences and
+`monochrome_prefs` (`res/xml/data_extraction_rules.xml`, `backup_rules.xml`),
+which hold every sign-in. `CleartextPolicyTest` and `LogRedactorTest` hold
+these.
 
 ## A listener's Subsonic server is a device secret
 
@@ -166,6 +206,18 @@ song id (the stream URL is built in `StreamResolver` at play time), and artwork
 is a `subsonic-cover://` reference resolved only by the app's own Coil
 (`SubsonicCoverMapper`). `SubsonicTest` checks that nothing mapped from a server
 contains the token or the password.
+
+## A server's password is a device secret
+
+A TrypT HiFi with `ACCESS_PASSWORD` set (trypt-hifi's `middleware.ts`) answers
+401 without it. The password is given under the address in Settings ›
+Connections › Add API (adding a listed server again with a password changes
+it), and kept by `ApiServerAccess` in the DataStore key `api_server_passwords`,
+by server URL, deliberately not in `SETTINGS_SYNC_KEYS`: the server list syncs,
+its passwords do not. It goes out as `X-Access-Key` on every request and
+stream to that server's origin only: the API client's network interceptor
+(`NetworkModule`, per redirect hop) and the players' data sources
+(`PlaybackService`, `SongPreview`). `ApiServerTest` holds the origin match.
 
 ## Tryptify Cloud
 
@@ -305,18 +357,67 @@ the server to the same theme parts, pack and picture size caps, and error codes.
 ## Tryptify Cloud server
 
 The paid music storage's API is [`server/cloud/`](server/cloud/README.md): a
-Cloudflare Worker with a D1 database, Creem for payments, Supabase sign-in.
+Cloudflare Worker with a D1 database, PayPal and Creem for payments (the buyer picks; PayPal by default), Supabase sign-in.
 PolyForm Noncommercial, unlike the rest of the repository. Its money rules
 are in `src/rules.ts` and held by `test.ts` (`bun run test.ts`), including the
 worst-case pricing check. Deploy with `npx wrangler deploy` after the tests
 pass; secrets live only in the Worker.
 
+## Tryptify Connect server
+
+[`server/connect/`](server/connect/README.md): a listener's devices, what
+plays on which, and moving it between them (like Spotify Connect). A
+Cloudflare Worker with one Durable Object per account, on the WebSocket
+Hibernation API so it sleeps between messages; Supabase sign-in, no secret.
+Its README is the protocol the web player and the app both speak; the app's
+side is `connect/` (`ConnectController`, which watches the player through
+`PlaybackSignals` rather than holding a controller, and is connected only
+while signed in and on screen or playing).
+`bun run test.ts`, then `npm run dev` and `bun run e2e.ts` in Cloudflare's
+own runtime. `DEV_TOKENS` is for `wrangler dev` only, never the deployed
+Worker.
+
+## Rooms server
+
+[`server/rooms/`](server/rooms/README.md): Trypt Mania's multiplayer rooms and
+the listening parties, on Cloudflare at `rooms.tryptify.com`. It is the
+`tryptz/tryptify-party` Rust server moved over as it was: one Durable Object
+holds every room, party and socket (`src/hub.ts`), the party's rules are a
+port of its C++ (`src/party.ts`, checked byte for byte against it) and the
+game rooms' of its Rust (`src/room.ts`), shared songs live in R2. The wire
+format is unchanged, so the app's `PartyClient` and `RoomClient` need nothing
+new. Invites are `https://tryptify.com/party/<code>` (the site's party page,
+`public/party.html` in the website repository), which open in the app where it is installed;
+both hosts serve `/.well-known/assetlinks.json`. A shared song no browser
+plays reaches the website as AAC from a small ffmpeg service on Railway
+(`server/rooms/ffmpeg`, `FFMPEG_URL` and the secret `FFMPEG_KEY`); without
+it the original goes. `bun run test` for the rules,
+`bun run e2e.ts` against `wrangler dev` for the sockets.
+
 ## Website
 
-[`site/`](site/README.md) is the public site (app, Tryptify Cloud and its
-pricing, Terms, Privacy, Refunds, Contact), static files on Cloudflare. Its
-prices and grace periods repeat `server/cloud/src/rules.ts`: change both
-together.
+The public site (app, Tryptify Cloud and its pricing, Terms, Privacy,
+Refunds, Contact, the web player, the party page), static files on
+Cloudflare, lives in its own repository,
+[tryptz/tryptify.com](https://github.com/tryptz/tryptify.com), with the tools
+that build it (its eight languages, the changelog, the headphone list) and
+its README. It was `site/` here until it moved out with its history.
+
+What still ties the two together:
+
+- Its prices and grace periods repeat `server/cloud/src/rules.ts`: change
+  both together.
+- `/changelog` is built from `docs/releases/` here, by that repository's
+  `tools/site_changelog/build.py` pointed at a full (not shallow) checkout of
+  this one. Rebuild it after a release note changes.
+- Its web player speaks the same protocols as the app: Connect
+  (`server/connect`), the listening parties (`server/rooms`), TrypT HiFi, and
+  the Supabase tables the app syncs (`favorite_tracks.source` and the rest).
+  A change to one of those changes both repositories.
+- Its AutoEQ try-out ports `AutoEqEngine`; `WebAutoEqFixtureTest` holds the
+  engine to `app/src/test/resources/web-autoeq/`, a copy of that
+  repository's `tests/` fixtures. Rewrite them, copy them over, port the
+  change.
 
 ## Commits
 

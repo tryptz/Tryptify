@@ -65,10 +65,12 @@ class PlaybackService : MediaSessionService() {
 
     @Inject lateinit var queueManager: QueueManager
     @Inject lateinit var streamResolver: StreamResolver
+    @Inject lateinit var serverAccess: tf.monochrome.android.data.api.ApiServerAccess
     @Inject lateinit var preferences: PreferencesManager
     @Inject lateinit var speedOverride: SpeedOverride
     @Inject lateinit var libraryRepository: LibraryRepository
     @Inject lateinit var scrobblingService: ScrobblingService
+    @Inject lateinit var subsonicRepository: tf.monochrome.android.data.subsonic.SubsonicRepository
     @Inject lateinit var discordPresence: tf.monochrome.android.data.presence.DiscordPresenceManager
     @Inject lateinit var projectMEngineRepository: ProjectMEngineRepository
     @Inject lateinit var channelDetectorProcessor: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor
@@ -82,6 +84,7 @@ class PlaybackService : MediaSessionService() {
     // Each local track's dynamic range, measured once as it plays through, for
     // the library galaxy: the tap at the head of the chain, and what keeps it.
     @Inject lateinit var dynamicRangeTap: tf.monochrome.android.audio.meter.DynamicRangeTapProcessor
+    @Inject lateinit var replayGainProcessor: tf.monochrome.android.audio.replaygain.ReplayGainProcessor
     @Inject lateinit var dynamicRangeRecorder: DynamicRangeRecorder
     // A library track's own BPM tag, over the estimate from its audio.
     @Inject lateinit var taggedTempo: TaggedTempo
@@ -98,6 +101,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var spectrumAnalyzerTap: SpectrumAnalyzerTap
     @Inject lateinit var unifiedTrackRegistry: UnifiedTrackRegistry
     @Inject lateinit var playbackState: PlaybackStateRepository
+    @Inject lateinit var playbackSignals: PlaybackSignals
     // The Audio Pipeline panel's window into the decoder. Nothing else in
     // the app can see a Format: the UI reaches the player through a
     // MediaController, which carries neither one nor any decoder identity.
@@ -145,7 +149,13 @@ class PlaybackService : MediaSessionService() {
             .setUserAgent(RADIO_USER_AGENT)
             .setConnectTimeoutMs(15_000)
             .setReadTimeoutMs(15_000)
-        val default = androidx.media3.datasource.DefaultDataSource.Factory(this, http)
+        // A stream carrying a sign-in (a music server's) plays over http:// only at home (CleartextPolicy).
+        // A server's password goes along to its own streams (ApiServerAccess).
+        val guarded = androidx.media3.datasource.ResolvingDataSource.Factory(http) { spec ->
+            tf.monochrome.android.data.net.CleartextPolicy.requireForMedia(spec.uri.toString())
+            serverAccess.withPassword(spec)
+        }
+        val default = androidx.media3.datasource.DefaultDataSource.Factory(this, guarded)
         val qobuz = tf.monochrome.android.data.cache.QobuzPartialDataSource.Factory(qobuzCache)
         val deezer = tf.monochrome.android.data.cache.DeezerPartialDataSource.Factory(deezerCache)
         return androidx.media3.datasource.DataSource.Factory {
@@ -246,6 +256,8 @@ class PlaybackService : MediaSessionService() {
             }
 
         player.addAnalyticsListener(audioPipelineAnalytics())
+        // Play, pause, seeks, songs and speed for Tryptify Connect, without it holding a controller.
+        playbackSignals.attach(player)
 
         player.addListener(object : Player.Listener {
             // Keep the home-screen now-playing widget live: the widget uses
@@ -414,6 +426,8 @@ class PlaybackService : MediaSessionService() {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 // A new track gets its own blend at its own end, and its own tempo.
                 crossfadeArmed = true
+                // And its own loudness.
+                applyReplayGain(mediaItem)
                 bpmTap.newTrack()
                 // A tagged library track's tempo is its tag: no estimate.
                 taggedTempo.trackChanged(mediaItem)
@@ -631,6 +645,12 @@ class PlaybackService : MediaSessionService() {
         // pushes both of these into the injected MixBusProcessor singleton, but
         // a chain copy is built outside its reach and would otherwise start at
         // the 1024 default with the mixer on regardless of what the user set.
+        serviceScope.launch {
+            preferences.replayGainSettings.collect {
+                replayGainSettings = it
+                applyReplayGain()
+            }
+        }
         serviceScope.launch { preferences.dspBlockSize.collect { dspBlockSize = it } }
         serviceScope.launch { preferences.dspEnabled.collect { dspEnabled = it } }
         serviceScope.launch { preferences.hiResHalOutputEnabled.collect { hiResHalEnabled = it } }
@@ -995,6 +1015,9 @@ class PlaybackService : MediaSessionService() {
                                 channelDetectorProcessor, // Passive tap: reports source channel count/layout + per-channel activity
                                 bpmTap,                 // Passive tap: the track's own tempo, before the mixer and the speed change
                                 dynamicRangeTap,        // Passive tap: the track's dynamic range, for the galaxy; off unless measuring
+                                // ReplayGain after the taps (they hear the song as decoded) and before
+                                // the mixer, so its dynamics and the EQ preamps see songs at one level.
+                                replayGainProcessor,
                                 atmosAudioProcessor,    // Atmos: multichannel bed → object render → binaural stereo or speakers; inactive for ≤2ch
                                 // The mixer before the fold, so it sees the song's own layout: a
                                 // 9.1.6 bed spreads one channel group per bus (nine of them), and
@@ -1067,6 +1090,7 @@ class PlaybackService : MediaSessionService() {
                             channelDetectorProcessor,
                             bpmTap,
                             dynamicRangeTap,
+                            replayGainProcessor,
                             atmosAudioProcessor,
                             upmixProcessor,
                             // Mixer before the fold, as in the chain above.
@@ -1129,6 +1153,7 @@ class PlaybackService : MediaSessionService() {
                             channelDetectorProcessor,
                             bpmTap,
                             dynamicRangeTap,
+                            replayGainProcessor,
                             atmosAudioProcessor,
                             upmixProcessor,
                             // Mixer before the fold, as in the chain above.
@@ -1291,6 +1316,7 @@ class PlaybackService : MediaSessionService() {
             }
         }
         crossfade.release()
+        playbackSignals.detach()
         mediaSession?.run {
             player.release()
             release()
@@ -1358,7 +1384,13 @@ class PlaybackService : MediaSessionService() {
 
                 val streamUrl = trackStream?.streamUrl
                 if (streamUrl != null && streamUrl.isNotBlank()) {
-                    val dataSourceFactory = DefaultDataSource.Factory(this@PlaybackService)
+                    // A TrypT HiFi Atmos file (/api/tidal/atmos-file) needs its server's password.
+                    val dataSourceFactory = DefaultDataSource.Factory(
+                        this@PlaybackService,
+                        androidx.media3.datasource.ResolvingDataSource.Factory(
+                            androidx.media3.datasource.DefaultHttpDataSource.Factory(),
+                        ) { spec -> serverAccess.withPassword(spec) },
+                    )
 
                     val source = if (trackStream.isDash) {
                         // The MPD XML inline as a data: URI, or an .mpd link
@@ -1545,6 +1577,42 @@ class PlaybackService : MediaSessionService() {
     // so the first track does not play at the stale level.
     @Volatile private var legacyVolumeChecked = false
 
+    @Volatile private var replayGainSettings = tf.monochrome.android.audio.replaygain.ReplayGainSettings()
+
+    /**
+     * Sets ReplayGain's stage to [mediaItem]'s gain (see ReplayGain): on every
+     * change of track and of the setting. Its tags are the playing
+     * UnifiedTrack's: a library file's, an opened file's or a collection's;
+     * any other song has none and plays as it is. An album, for the Smart
+     * mode, is the song between songs of its own album in the queue.
+     *
+     * On a gapless hand-off the stage has already run ahead into the next
+     * track, so its gain glides in a moment into it; a skip or a seek starts
+     * the new stream at its gain.
+     */
+    private fun applyReplayGain(mediaItem: MediaItem? = player.currentMediaItem) {
+        val settings = replayGainSettings
+        if (settings.mode == tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF || mediaItem == null) {
+            replayGainProcessor.setGain(1f)
+            return
+        }
+        val queue = queueManager.currentQueue
+        val track = PlayRecording.trackFor(
+            mediaId = mediaItem.mediaId,
+            current = queueManager.currentTrack.value,
+            queue = queue,
+            unifiedIdOf = { unifiedTrackRegistry[it]?.id },
+        )
+        val index = track?.let { t -> queue.indexOfFirst { it.id == t.id } } ?: -1
+        val inAlbum = index >= 0 && tf.monochrome.android.audio.replaygain.ReplayGain.playingAnAlbum(
+            previousAlbumId = queue.getOrNull(index - 1)?.album?.id,
+            albumId = queue[index].album?.id,
+            nextAlbumId = queue.getOrNull(index + 1)?.album?.id,
+        )
+        val tags = tf.monochrome.android.audio.replaygain.ReplayGain.of(track?.let { unifiedTrackRegistry[it.id] })
+        replayGainProcessor.setGain(tf.monochrome.android.audio.replaygain.ReplayGain.linear(tags, settings, inAlbum))
+    }
+
     private fun applyVolume() {
         serviceScope.launch {
             if (!legacyVolumeChecked) {
@@ -1637,6 +1705,10 @@ class PlaybackService : MediaSessionService() {
     @OptIn(UnstableApi::class)
     private fun buildSeededDspChain(): tf.monochrome.android.audio.dsp.DspChain {
         val chain = tf.monochrome.android.audio.dsp.DspChain.createCopy(spatialPlacement)
+        // Built while the outgoing track still plays on the main chain (see
+        // CrossfadeController.start), so this is that track's gain, and its
+        // tail keeps it while the main chain moves to the next track's.
+        chain.replayGain.setGain(replayGainProcessor.gain)
         val autoEq = lastAutoEq
         val paramEq = lastParametricEq
         chain.seedFrom(
@@ -1925,9 +1997,17 @@ class PlaybackService : MediaSessionService() {
         if (scrobblePlaying) scrobbles.heard(now - scrobbleClock, player.playbackParameters.speed)
         scrobbleClock = now
         scrobbles.due()?.let { (track, startedAt) ->
-            serviceScope.launch { scrobblingService.scrobbleTrack(track, startedAt) }
+            val subsonicSongId = subsonicSongId(unifiedTrackRegistry[track.id])
+            serviceScope.launch {
+                scrobblingService.scrobbleTrack(track, startedAt)
+                // The listener's own server counts the play too, by the same rule.
+                subsonicSongId?.let { subsonicRepository.reportPlay(it, submission = true, timeMillis = startedAt * 1000) }
+            }
         }
     }
+
+    private fun subsonicSongId(unified: tf.monochrome.android.domain.model.UnifiedTrack?): String? =
+        (unified?.source as? tf.monochrome.android.domain.model.PlaybackSource.Subsonic)?.songId
 
     /** Writes the pending play to history, once, unless it repeats the last one. */
     private fun commitPendingPlay() {
@@ -1940,6 +2020,7 @@ class PlaybackService : MediaSessionService() {
         serviceScope.launch {
             libraryRepository.addToHistory(play.track, play.unified)
             scrobblingService.updateNowPlaying(play.track)
+            subsonicSongId(play.unified)?.let { subsonicRepository.reportPlay(it, submission = false) }
         }
     }
 
@@ -2424,8 +2505,14 @@ class PlaybackService : MediaSessionService() {
             // PlayerWrapper.setMediaItems makes DefaultMediaSourceFactory NPE
             // at line 457 (visible in logcat as MediaSessionStub: Session
             // operation failed). Drop them here.
+            // And an address to play comes only from this app itself: another
+            // app's controller could otherwise make the player open any URI
+            // with this app's permissions and sign-ins (a private file, a
+            // content:// grant). Media3 already strips the address from
+            // items sent across processes; this keeps it that way.
+            val own = controller.packageName == this@PlaybackService.packageName
             val playable = mediaItems.filterTo(mutableListOf()) { item ->
-                item.localConfiguration?.uri?.toString()?.isNotBlank() == true
+                own && item.localConfiguration?.uri?.toString()?.isNotBlank() == true
             }
             return com.google.common.util.concurrent.Futures.immediateFuture(playable)
         }

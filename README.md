@@ -5,12 +5,12 @@
 [![Downloads](https://img.shields.io/github/downloads/tryptz/Tryptify/total?label=downloads&color=2EA44F&logo=github)](https://github.com/tryptz/Tryptify/releases)
 [![Latest release](https://img.shields.io/github/v/release/tryptz/Tryptify?label=latest%20release&color=8E5CFF)](https://github.com/tryptz/Tryptify/releases/latest)
 ![Platform](https://img.shields.io/badge/platform-Android%208.0%2B%20(API%2026)-3DDC84?logo=android&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.9.4-8E5CFF)
+![Version](https://img.shields.io/badge/version-1.9.5-8E5CFF)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1.0-7F52FF?logo=kotlin&logoColor=white)
 ![Compose](https://img.shields.io/badge/UI-Jetpack%20Compose%20%C2%B7%20Material%203-4285F4?logo=jetpackcompose&logoColor=white)
 ![Native](https://img.shields.io/badge/native-C%2B%2B17%20%C2%B7%20JNI%20%C2%B7%20NEON-00599C?logo=cplusplus&logoColor=white)
 ![Audio](https://img.shields.io/badge/audio-Media3%20ExoPlayer%201.5.1-FF6F00)
-![Languages](https://img.shields.io/badge/languages-7-2EA44F)
+![Languages](https://img.shields.io/badge/languages-8-2EA44F)
 ## Support Tryptify
 
 Tryptify is free and open source. If it makes your listening better, you can support development here:
@@ -22,7 +22,7 @@ Tryptify is free and open source. If it makes your listening better, you can sup
   &nbsp;·&nbsp;
   <a href="https://github.com/tryptz/Tryptify/releases/latest">Release notes</a>
   &nbsp;·&nbsp;
-  <a href="https://seapengine.lol/tryptify">Web page</a>
+  <a href="https://tryptify.com">tryptify.com</a>
   <br>
   <sub>Android 8.0+ (liquid glass, the CRT effect and god rays need Android 13) · formerly <b>MonoTrypT</b>, existing installs upgrade in place</sub>
 </p>
@@ -83,7 +83,8 @@ Tryptify is free and open source. If it makes your listening better, you can sup
 
 | | |
 | --- | --- |
-| **Every source in one player** | Local FLAC, ALAC, WAV, MP3, AAC and Opus, plus TIDAL, Qobuz and Deezer from servers you add. |
+| **Every source in one player** | Local FLAC, ALAC, WAV, MP3, AAC and Opus, plus TIDAL, Qobuz and Deezer from servers you add, your own Navidrome or other Subsonic server, and Tryptify Cloud. |
+| **Tryptify Cloud** | Your music stored for you, lossless files kept as uploaded, played like your own server. From $1.29 a month for 10 GB up to 10 TB, with a 7-day free trial. |
 | **A spectrum you can read** | A C++ waterfall from a 16K-point FFT, in six styles, up to 120 fps. |
 | **DSP mixing console** | A C++17 engine with up to 48 buses, 36 processors and EBU R128 meters. |
 | **Headphone AutoEQ** | Correction from 4,000+ measurements against 10 targets, with target pills and a filter editor under the graph. |
@@ -97,15 +98,19 @@ Tryptify is free and open source. If it makes your listening better, you can sup
 | **CRT effect** | The whole app or the lyrics through an old TV, with curve, zoom and presets. |
 | **Typography** | Every text style with its own font, weight, size and width; eleven fonts built in. |
 | **Library galaxy** | Your artists as stars, albums as planets and tracks as moons, offline. |
-| **Seven languages** | English, 简体中文, 日本語, Français, Español, Türkçe and Deutsch. |
+| **Tryptify Connect** | Your phone and tryptify.com see each other: move the music between them at the same second, or steer one from the other. |
+| **Listening parties** | Hear the same moment of the same song with friends, in the app or a browser, with a shared queue, chat and vote skip. |
+| **Web player** | [tryptify.com/player](https://tryptify.com/player) plays your files, your server, Tryptify Cloud and TrypT HiFi through the app's AutoEQ. |
+| **Eight languages** | English, 简体中文, 日本語, Français, Español, Türkçe, Deutsch and Italiano. |
 | **Everywhere else** | Widget, Android Auto, Discord, Last.fm, ListenBrainz, downloads and account sync. |
 
 ## How the sound flows
 
 ```mermaid
 flowchart LR
-    S["Local · TIDAL · Qobuz · Deezer"] --> X["ExoPlayer"]
-    X --> EQ["AutoEQ"]
+    S["Local · TIDAL · Qobuz · Deezer · Subsonic · Cloud"] --> X["ExoPlayer"]
+    X --> RG["ReplayGain"]
+    RG --> EQ["AutoEQ"]
     EQ --> M["DSP console"]
     M --> O{"Output"}
     O -->|default| A["Android audio"]
@@ -122,16 +127,12 @@ git clone --recursive https://github.com/tryptz/Tryptify.git
 ./gradlew :app:testDebugUnitTest
 ```
 
-Contributors and coding agents start at [`AGENTS.md`](AGENTS.md). What changed: [release notes](docs/releases/1.9.4.md) and [CHANGELOG](CHANGELOG.md).
+Contributors and coding agents start at [`AGENTS.md`](AGENTS.md). What changed: [release notes](docs/releases/1.9.5.md) and [CHANGELOG](CHANGELOG.md).
 
 ## Licences
 
 - **The app, and everything else in this repository unless said otherwise:**
   [GPL-3.0-or-later](LICENSE).
-- **The Tryptify Cloud server** ([`server/cloud/`](server/cloud/)):
-  [PolyForm Noncommercial 1.0.0](server/cloud/LICENSE.md). You may read,
-  run and change it for noncommercial purposes; running it as a paid service
-  needs the author's permission.
 - **Third-party parts keep their own licences:** projectM (LGPL-2.1), libusb
   (LGPL-2.1), the Cavern port (its own terms, `app/src/main/cpp/atmos/cavern/NOTICE.md`),
   StepMania art (MIT, next to the art), fonts (OFL-1.1,

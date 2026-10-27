@@ -84,6 +84,11 @@ class ProjectMOverlayView(
     @Volatile private var liveBlackPoint = Float.NaN
     @Volatile private var scrimTone = floatArrayOf(0f, 0f, 0f)
     @Volatile private var playing = true
+    // Whether this view has told the engine yet. The engine outlives every
+    // view: leaving the player told it "paused" through the view that went,
+    // and a new view starting out "playing" skipped telling it otherwise, so
+    // coming back to the player left the engine paused (seen on device).
+    private var playbackSent = false
     private var lastAlbum: Bitmap? = null
 
     /** Whether frames are being produced, for the frame-rate hint below. */
@@ -124,7 +129,8 @@ class ProjectMOverlayView(
     }
 
     fun updatePlayback(isPlaying: Boolean) {
-        if (isPlaying == playing) return
+        if (playbackSent && isPlaying == playing) return
+        playbackSent = true
         playing = isPlaying
         repository.setPlaybackPaused(!isPlaying)
         // A paused visualizer still has to draw once, or the last frame it
@@ -235,7 +241,7 @@ class ProjectMOverlayView(
         try {
             if (!surface.isValid) return
             val wanted = if (producingFrames) {
-                display?.supportedModes?.maxOfOrNull { it.refreshRate } ?: return
+                wantedFrameRate(display?.supportedModes?.maxOfOrNull { it.refreshRate } ?: return)
             } else {
                 0f
             }

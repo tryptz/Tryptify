@@ -77,9 +77,13 @@ class CloudRepository @Inject constructor(
         json.decodeFromString<CloudLibrary>(send(HttpMethod.Get, "library").bodyAsText())
     }
 
-    /** The payment page for [plan] ("lite", "plus", "max") and [period] ("monthly", "yearly"). */
-    suspend fun checkoutUrl(plan: String, period: String, trial: Boolean): Result<String> = call {
-        val body = json.encodeToString(CheckoutRequest(plan, period, trial))
+    /**
+     * The payment page for [plan] ("lite", "plus", "max"…) and [period]
+     * ("monthly", "yearly"), at [provider] ("paypal", "creem"), or the
+     * server's default when null.
+     */
+    suspend fun checkoutUrl(plan: String, period: String, trial: Boolean, provider: String? = null): Result<String> = call {
+        val body = json.encodeToString(CheckoutRequest(plan, period, trial, provider))
         json.decodeFromString<CheckoutUrl>(send(HttpMethod.Post, "checkout", body = body).bodyAsText()).url
     }
 
