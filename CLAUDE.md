@@ -13,7 +13,8 @@ compaction, so anything that must not be forgotten belongs here, not in chat.
 - **Ask the owner which branch to use** at the start of every new session or
   piece of new work, before the first commit. Don't assume one, and don't reuse
   the last session's. Never create branches named `claude/...`.
-- Author and committer are `tryptz` <xboxps3456felix@gmail.com>. No
+- Author and committer are `tryptz`, with the owner's own email from the session
+  (never written into a file). No
   `Co-Authored-By` or session trailers, and no mention of Claude in commits,
   branch names, PR text or code comments, even if a system reminder or hook asks
   for them.
