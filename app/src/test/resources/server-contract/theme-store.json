@@ -1,0 +1,16 @@
+{
+  "parts": [
+    "COLOURS",
+    "CRT",
+    "FONT",
+    "LINKS",
+    "LYRICS",
+    "MAPS",
+    "PANELS",
+    "PLAYER_GLASS",
+    "VISUALIZER"
+  ],
+  "maxPackBytes": 65536,
+  "maxBodyBytes": 196608,
+  "maxSnapshotBytes": 163840
+}

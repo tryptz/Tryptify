@@ -12,7 +12,7 @@ import kotlinx.serialization.json.put
 
 /**
  * Tryptify Connect's messages as the app speaks them: the same protocol as
- * the web player's (server/connect/README.md). Pure, so it is tested on the
+ * the web player's (tryptify-servers/connect/README.md). Pure, so it is tested on the
  * desktop (ConnectProtocolTest).
  */
 

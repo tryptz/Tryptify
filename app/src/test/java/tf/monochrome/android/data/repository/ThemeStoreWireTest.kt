@@ -1,6 +1,10 @@
 package tf.monochrome.android.data.repository
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -10,9 +14,12 @@ import tf.monochrome.android.ui.themestore.SnapshotCodec
 import java.io.File
 
 /**
- * The app's half of the Theme Store's contract with `server/theme-store`: what
- * its answers decode to, which errors they stand for, and the limits both sides
- * have to agree on or packs are refused for reasons nobody can see.
+ * The app's half of the Theme Store's contract with its server (`theme-store/`
+ * in tryptz/tryptify-servers): what its answers decode to, which errors they
+ * stand for, and the limits both sides have to agree on or packs are refused
+ * for reasons nobody can see. The server's parts and limits come from
+ * `server-contract/theme-store.json`, which that repository's
+ * `tools/app-contract.ts` writes.
  */
 class ThemeStoreWireTest {
     // As AppModule provides it.
@@ -23,7 +30,8 @@ class ThemeStoreWireTest {
         explicitNulls = false
     }
 
-    private val server = File("../server/theme-store/index.ts").readText()
+    private val server = Json.parseToJsonElement(File("src/test/resources/server-contract/theme-store.json").readText()).jsonObject
+    private fun bytes(key: String) = server.getValue(key).jsonPrimitive.int
 
     @Test
     fun `a listing row decodes as the server sends it`() {
@@ -78,19 +86,16 @@ class ThemeStoreWireTest {
 
     @Test
     fun `the server accepts exactly the parts this build can put in a pack`() {
-        val line = server.lines().first { it.trimStart().startsWith("const PARTS = new Set(") }
-        val named = Regex("\"([A-Z_]+)\"").findAll(line).map { it.groupValues[1] }.toSet()
+        val named = server.getValue("parts").jsonArray.map { it.jsonPrimitive.content }.toSet()
         assertEquals(ThemePart.entries.map { it.name }.toSet(), named)
     }
 
     @Test
     fun `the server takes a store picture as big as the app will send`() {
-        val max = Regex("""const MAX_SNAPSHOT_BYTES = (\d+) \* (\d+);""").find(server)
-            ?.groupValues?.let { it[1].toInt() * it[2].toInt() } ?: 0
+        val max = bytes("maxSnapshotBytes")
         assertTrue("the app's picture cap must fit under the server's", SnapshotCodec.MAX_BYTES <= max)
         // And a whole request carrying one gets through the body limit.
-        val body = Regex("""const MAX_BODY_BYTES = (\d+) \* (\d+);""").find(server)
-            ?.groupValues?.let { it[1].toInt() * it[2].toInt() } ?: 0
+        val body = bytes("maxBodyBytes")
         assertTrue(body >= max)
         val row = """{"id":"a","snapshot":"0123456789abcdef"}"""
         assertEquals("0123456789abcdef", json.decodeFromString(WirePack.serializer(), row).toStore().snapshot)
@@ -99,13 +104,11 @@ class ThemeStoreWireTest {
 
     @Test
     fun `the server takes a pack as big as the app will make`() {
-        val max = Regex("""const MAX_PACK_BYTES = (\d+) \* (\d+);""").find(server)
-            ?.groupValues?.let { it[1].toInt() * it[2].toInt() }
+        val max = bytes("maxPackBytes")
         assertEquals(ThemePackCodec.MAX_BYTES, max)
         // A request carries the pack as an escaped JSON string, up to twice its
         // size, with the listing fields beside it.
-        val body = Regex("""const MAX_BODY_BYTES = (\d+) \* (\d+);""").find(server)
-            ?.groupValues?.let { it[1].toInt() * it[2].toInt() } ?: 0
+        val body = bytes("maxBodyBytes")
         assertTrue(body >= 2 * ThemePackCodec.MAX_BYTES + 4096)
     }
 }

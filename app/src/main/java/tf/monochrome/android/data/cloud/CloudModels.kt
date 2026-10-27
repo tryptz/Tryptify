@@ -3,9 +3,9 @@ package tf.monochrome.android.data.cloud
 import kotlinx.serialization.Serializable
 
 /**
- * Tryptify Cloud's wire, as server/cloud speaks it: a personal Subsonic-API
+ * Tryptify Cloud's wire, as tryptify-servers/cloud speaks it: a personal Subsonic-API
  * music storage, made for fast streaming. The plans and the rules behind them
- * are the server's (server/cloud/src/rules.ts); the app only shows them.
+ * are the server's (tryptify-servers/cloud/src/rules.ts); the app only shows them.
  */
 
 @Serializable

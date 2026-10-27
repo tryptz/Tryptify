@@ -139,7 +139,8 @@ owner needs the rooms key. Without it there is no rooms server; with it,
 `BuiltInServer` puts it back in that list on every read, and the list shows
 only its host.
 
-The rooms server moved to Cloudflare (`server/rooms`, below) at
+The rooms server moved to Cloudflare (`rooms/` in the servers repository,
+see Servers below) at
 `https://rooms.tryptify.com`, which a release build sets as
 `tryptmania.roomsServer`. That address has no secret path, since the website's
 party page talks to it as well; the old Railway server's address had one, and
@@ -221,8 +222,8 @@ stream to that server's origin only: the API client's network interceptor
 
 ## Tryptify Cloud
 
-The paid music storage. The server is `server/cloud` (a Cloudflare Worker with
-D1 and R2, PolyForm Noncommercial; see its README). The app side is
+The paid music storage. The server is `cloud/` in tryptz/tryptify-servers (a
+Cloudflare Worker with D1 and R2, PolyForm Noncommercial; see its README). The app side is
 `data/cloud/` and Settings › Connections › Tryptify Cloud. Its address is
 `BuildConfig.TRYPTIFY_CLOUD_URL`, overridable with `tryptifyCloud.url` in
 `local.properties`. Like the Theme Store, it holds no secret: calls carry the
@@ -340,59 +341,32 @@ Do not use Info-ZIP's own split (`zip -s`, giving `.z01`, `.z02`, `.zip`). It
 failed that round trip here — the rejoined archive was corrupt and the APK in it
 was not the one built — and Android extractors handle it poorly anyway.
 
-## Theme Store server
+## Servers
 
-The Theme Store does not live in Supabase. Its API is
-[`server/theme-store/index.ts`](server/theme-store/README.md), a single-file
-Railway Function (Bun) in project humble-charm with its own Railway Postgres.
-Sign-in stays Supabase: the app sends the session's access token, and the
-server verifies it against the project's public JWKS, or asks Supabase Auth
-when the token was signed with the shared secret. It holds no secret.
+The servers live in their own private repository,
+[tryptz/tryptify-servers](https://github.com/tryptz/tryptify-servers), with
+their history. They were `server/` here until 2026-10-27: this repository is
+public, and the paid storage's billing code should not be. How each one is
+tested and deployed is in that repository's AGENTS.md.
 
-Railway does not deploy it from this repository. Change `index.ts`, run its
-test (`bun run test.ts` against a local Postgres, see the README), then replace
-the function's code with the whole file. `ThemeStoreWireTest` holds the app and
-the server to the same theme parts, pack and picture size caps, and error codes.
+| Server | There | What it is | The app's side |
+|---|---|---|---|
+| Tryptify Cloud | `cloud/` | the paid music storage: a Cloudflare Worker with D1, R2, PayPal and Creem | `data/cloud/` |
+| Tryptify Connect | `connect/` | a listener's devices, and moving playback between them | `connect/` |
+| Rooms | `rooms/` | Trypt Mania's multiplayer rooms and the listening parties, at `rooms.tryptify.com` | `glyph/multiplayer/`, `party/` |
+| Theme Store | `theme-store/` | a Railway Function with its own Postgres | `data/repository/ThemeStoreRepository.kt` |
 
-## Tryptify Cloud server
+The app's tests cannot see that repository, so the two that hold the app to a
+server read `app/src/test/resources/server-contract/` instead: `cloud.json`
+(every error code Cloud sends, and the request fields it reads) for
+`CloudTest`, and `theme-store.json` (the pack parts and size caps) for
+`ThemeStoreWireTest`. That repository's `tools/app-contract.ts` writes them;
+never edit them by hand. After changing one of those values on a server, run
+it against a checkout of this repository and commit the files here (`--check`
+says whether they are current). `ConnectProtocolTest` follows Connect's
+README, which is the protocol: change both together.
 
-The paid music storage's API is [`server/cloud/`](server/cloud/README.md): a
-Cloudflare Worker with a D1 database, PayPal and Creem for payments (the buyer picks; PayPal by default), Supabase sign-in.
-PolyForm Noncommercial, unlike the rest of the repository. Its money rules
-are in `src/rules.ts` and held by `test.ts` (`bun run test.ts`), including the
-worst-case pricing check. Deploy with `npx wrangler deploy` after the tests
-pass; secrets live only in the Worker.
-
-## Tryptify Connect server
-
-[`server/connect/`](server/connect/README.md): a listener's devices, what
-plays on which, and moving it between them (like Spotify Connect). A
-Cloudflare Worker with one Durable Object per account, on the WebSocket
-Hibernation API so it sleeps between messages; Supabase sign-in, no secret.
-Its README is the protocol the web player and the app both speak; the app's
-side is `connect/` (`ConnectController`, which watches the player through
-`PlaybackSignals` rather than holding a controller, and is connected only
-while signed in and on screen or playing).
-`bun run test.ts`, then `npm run dev` and `bun run e2e.ts` in Cloudflare's
-own runtime. `DEV_TOKENS` is for `wrangler dev` only, never the deployed
-Worker.
-
-## Rooms server
-
-[`server/rooms/`](server/rooms/README.md): Trypt Mania's multiplayer rooms and
-the listening parties, on Cloudflare at `rooms.tryptify.com`. It is the
-`tryptz/tryptify-party` Rust server moved over as it was: one Durable Object
-holds every room, party and socket (`src/hub.ts`), the party's rules are a
-port of its C++ (`src/party.ts`, checked byte for byte against it) and the
-game rooms' of its Rust (`src/room.ts`), shared songs live in R2. The wire
-format is unchanged, so the app's `PartyClient` and `RoomClient` need nothing
-new. Invites are `https://tryptify.com/party/<code>` (the site's party page,
-`public/party.html` in the website repository), which open in the app where it is installed;
-both hosts serve `/.well-known/assetlinks.json`. A shared song no browser
-plays reaches the website as AAC from a small ffmpeg service on Railway
-(`server/rooms/ffmpeg`, `FFMPEG_URL` and the secret `FFMPEG_KEY`); without
-it the original goes. `bun run test` for the rules,
-`bun run e2e.ts` against `wrangler dev` for the sockets.
+Never copy server source into this repository, for a test or anything else.
 
 ## Website
 
@@ -405,15 +379,16 @@ its README. It was `site/` here until it moved out with its history.
 
 What still ties the two together:
 
-- Its prices and grace periods repeat `server/cloud/src/rules.ts`: change
-  both together.
+- Its prices and grace periods repeat `cloud/src/rules.ts` in
+  tryptz/tryptify-servers: change both together.
 - `/changelog` is built from `docs/releases/` here, by that repository's
   `tools/site_changelog/build.py` pointed at a full (not shallow) checkout of
   this one. Rebuild it after a release note changes.
 - Its web player speaks the same protocols as the app: Connect
-  (`server/connect`), the listening parties (`server/rooms`), TrypT HiFi, and
+  (`connect/` in the servers repository), the listening parties (`rooms/`),
+  TrypT HiFi, and
   the Supabase tables the app syncs (`favorite_tracks.source` and the rest).
-  A change to one of those changes both repositories.
+  A change to one of those changes the repositories involved.
 - Its AutoEQ try-out ports `AutoEqEngine`; `WebAutoEqFixtureTest` holds the
   engine to `app/src/test/resources/web-autoeq/`, a copy of that
   repository's `tests/` fixtures. Rewrite them, copy them over, port the
