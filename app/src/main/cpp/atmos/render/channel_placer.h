@@ -25,6 +25,10 @@
 //    over every direction is that target. One minimum-phase FIR, designed on
 //    the audio thread into buffers allocated by configure(), only when the
 //    target changes; with no target set it is flat.
+//
+//    The FIR (kDfeTaps = 512) runs as a uniformly partitioned convolution
+//    (partitioned_fir.h): four partitions of 128 taps through 256-point
+//    FFTs, instead of 512 multiply-adds a sample an ear. It adds no latency.
 //  - Pan: an equal-power stereo pan from the direction's left/right component
 //    (sin of the azimuth). For speakers, and for rates the 48 kHz HRIR table
 //    does not suit. Front and back fold to the same side; stereo cannot say
@@ -50,6 +54,7 @@
 
 #include "hrir_dfe.h"
 #include "hrir_renderer.h"
+#include "partitioned_fir.h"
 
 namespace tf {
 namespace atmos {
@@ -70,12 +75,13 @@ class ChannelPlacer {
     lfe_ = (lfe_index >= 0 && lfe_index < channels_) ? lfe_index : -1;
     sample_rate_ = sample_rate > 0 ? sample_rate : 48000;
     renderer_.configure(sample_rate, kMaxChannels);
-    for (int ear = 0; ear < 2; ++ear) dfe_[ear].assign(static_cast<size_t>(kDfeTaps - 1 + kChunk), 0.0f);
     // The equalizer starts as the plain diffuse-field one; a target is folded
     // in by design_eq(). Its scratch, and the diffuse-field EQ's own log
     // magnitude, are made here once.
     for (int b = 0; b < 2; ++b) eq_[b].assign(kDfe, kDfe + kDfeTaps);
     active_eq_ = 0;
+    eq_fir_.reset();
+    eq_fir_.set_filter(eq_[active_eq_].data());
     fft_.assign(kDesignN, std::complex<double>(0.0, 0.0));
     dfe_log_.assign(kDesignN / 2 + 1, 0.0);
     for (int t = 0; t < kDfeTaps; ++t) fft_[t] = kDfe[t];
@@ -153,7 +159,7 @@ class ChannelPlacer {
   // Audio thread: clears the convolution history (seek, flush).
   void reset() {
     renderer_.reset_history();
-    for (int ear = 0; ear < 2; ++ear) std::fill(dfe_[ear].begin(), dfe_[ear].end(), 0.0f);
+    eq_fir_.reset();
     for (auto& s : split_) s = Split{};
     for (int c = 0; c < kMaxChannels; ++c) applied_gain_[c] = -1.0f;
   }
@@ -294,6 +300,7 @@ class ChannelPlacer {
       next[static_cast<size_t>(n)] = static_cast<float>(fft_[n].real() * w);
     }
     active_eq_ = 1 - active_eq_;
+    eq_fir_.set_filter(next.data());
   }
 
   // In place, radix 2; [a] is kDesignN long.
@@ -322,22 +329,7 @@ class ChannelPlacer {
   }
 
   // The equalizer over [m] interleaved stereo frames, in place.
-  void equalize(float* out, int m) {
-    const float* h = eq_[active_eq_].data();
-    const int hist = kDfeTaps - 1;
-    for (int ear = 0; ear < 2; ++ear) {
-      float* x = dfe_[ear].data();
-      for (int i = 0; i < m; ++i) x[hist + i] = out[2 * i + ear];
-      for (int i = 0; i < m; ++i) {
-        const float* w = x + hist + i;  // w[0] newest, w[-k] k samples ago
-        float y = 0.0f;
-        for (int k = 0; k < kDfeTaps; ++k) y += h[k] * w[-k];
-        out[2 * i + ear] = y;
-      }
-      // Keep the last hist samples for the next piece.
-      std::memmove(x, x + m, static_cast<size_t>(hist) * sizeof(float));
-    }
-  }
+  void equalize(float* out, int m) { eq_fir_.process(out, m); }
 
   // The gain for sample [i] of an [m]-sample piece: a linear ramp from what
   // the last block used to the target, so a drag does not click.
@@ -413,8 +405,8 @@ class ChannelPlacer {
 
   BinauralRenderer renderer_;
   int sample_rate_ = 48000;
-  // The diffuse-field equalizer's input history and this piece, per ear.
-  std::vector<float> dfe_[2];
+  // The equalizer in use, as a partitioned convolution.
+  StereoPartitionedFir<kDfeTaps> eq_fir_;
   // The bass split: per channel, two LR4 stages each way.
   struct Split { float z[8] = {}; };
   Split split_[kMaxChannels];

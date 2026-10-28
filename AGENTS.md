@@ -93,7 +93,7 @@ with the NDK and run under qemu for both ARM ABIs when the NDK and
 otherwise that step says it skipped.
 
 Two more native suites are CMake projects of their own, built and run on the
-desktop the same way: the Atmos renderer's (`atmos/tests/`, sixteen tests; the
+desktop the same way: the Atmos renderer's (`atmos/tests/`, eighteen tests; the
 script above runs only `channel_placer_test` from it) and Trypt Mania's game
 engine (`glyph/tests/`, held to the same rules as its Kotlin twin):
 

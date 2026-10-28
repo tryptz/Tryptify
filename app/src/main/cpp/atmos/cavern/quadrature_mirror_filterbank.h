@@ -7,18 +7,31 @@
 // Ported from Cavern.Format/Decoders/EnhancedAC3/QuadratureMirrorFilterBank.cs,
 // QuadratureMirrorFilterBank.Process.cs and .Amp.cs. A 64-band complex
 // exponential-modulated (QMF) analysis/synthesis filterbank — the domain the
-// JOC upmix operates in. The 640-tap prototype filter and the modulation are
+// JOC upmix operates in. The 640-tap prototype filter and the windowing are
 // reproduced exactly from the upstream source.
 //
-// Header-only, standard library only; builds under the NDK and on a host
-// toolchain unchanged.
+// Deviations from upstream (performance, same transform):
+//  - The modulation is computed with an FFT instead of Cavern's dense
+//    64 x 128 rotation matrices. Both directions are a DFT evaluated at
+//    half-integer frequencies (bands sb + 1/2) with a phase offset per band,
+//    which is exactly a 128-point real FFT with a half-bin shift (64-point
+//    complex inside) followed or preceded by one complex twiddle per band.
+//    That is ~2.5k operations a timeslot instead of 16,384 multiply-adds each
+//    way, and no 128 KB of tables to read through. The result is the same up
+//    to float rounding; it is in fact closer to the exact transform, since the
+//    matrices' phases were worked out in float (an error up to 2.4e-5 rad at
+//    the far corner) where the FFT's twiddles are rounded from double.
+//  - The delay lines are rings indexed by a moving head instead of buffers
+//    memmoved by one timeslot each call (576 and 1152 floats a call).
+//
+// Header-only, standard library + the vendored FFT; builds under the NDK and
+// on a host toolchain unchanged.
 #ifndef TF_ATMOS_CAVERN_QUADRATURE_MIRROR_FILTERBANK_H
 #define TF_ATMOS_CAVERN_QUADRATURE_MIRROR_FILTERBANK_H
 
 #include <cmath>
-#include <cstring>
 
-#include "qmath.h"
+#include "../fft.h"
 
 namespace tf {
 namespace atmos {
@@ -30,23 +43,58 @@ class QuadratureMirrorFilterBank {
   static constexpr int kDoubleLength = 128;  // subbands * 2
   static constexpr int kCoeffLen = 640;      // coeffs.Length
 
-  QuadratureMirrorFilterBank() { ensure_cache(); }
+  QuadratureMirrorFilterBank() : fft_(kSubbands) {}
 
   // Transform a timeslot of 64 real input samples into kSubbands complex bands.
+  //
+  // Cavern: input_stream (640 samples, newest first) shifted by a timeslot,
+  // grouping[j] = sum over s of stream[j + 128 s] * coeffs[j + 128 s], then
+  // out[sb] = sum over j of grouping[j] * e^(i pi (sb + 1/2)(j - 1/2) / 64).
+  // The last is e^(-i theta_sb) * conj(F[sb]) with theta_sb = pi (sb + 1/2) /
+  // 128 and F the half-bin-shifted real FFT of grouping (e^(-2 pi i j (sb +
+  // 1/2) / 128)), as grouping is real.
   void process_forward(const float* input) {
-    std::memmove(input_stream_forward_ + kSubbands, input_stream_forward_,
-                 (kCoeffLen - kSubbands) * sizeof(float));
-    for (int i = 0; i < kSubbands; ++i)
-      input_stream_forward_[i] = input[kSubbands - 1 - i];
+    head_forward_ = (head_forward_ == 0 ? kCoeffLen : head_forward_) - kSubbands;
+    float* newest = input_stream_forward_ + head_forward_;
+    for (int i = 0; i < kSubbands; ++i) newest[i] = input[kSubbands - 1 - i];
 
-    qmath::multiply_and_set(input_stream_forward_, kCoeffs, grouping_, kDoubleLength);
-    for (int sample = kDoubleLength; sample < kCoeffLen; sample += kDoubleLength)
-      qmath::multiply_and_add(input_stream_forward_ + sample, kCoeffs + sample,
-                              grouping_, kDoubleLength);
+    // The stream's logical block b (64 samples, b = 0 newest) starts at
+    // head + 64 b, wrapped; a block never straddles the wrap. Same products
+    // added in the same order as Cavern's multiply_and_set / multiply_and_add.
+    for (int half = 0; half < 2; ++half) {
+      float* g = grouping_ + half * kSubbands;
+      const float* x = forward_block(half);
+      const float* c = kCoeffs + half * kSubbands;
+      for (int t = 0; t < kSubbands; ++t) g[t] = x[t] * c[t];
+      for (int s = 1; s < kCoeffLen / kDoubleLength; ++s) {
+        x = forward_block(2 * s + half);
+        c = kCoeffs + s * kDoubleLength + half * kSubbands;
+        for (int t = 0; t < kSubbands; ++t) g[t] += x[t] * c[t];
+      }
+    }
 
-    for (int sb = 0; sb < kSubbands; ++sb) {
-      out_real_[sb] = qmath::dot(forward_real_[sb], grouping_, kDoubleLength);
-      out_imag_[sb] = qmath::dot(forward_imag_[sb], grouping_, kDoubleLength);
+    // The half-bin-shifted real FFT of grouping, as a complex FFT of 64:
+    // z[n] = (g[2n] + i g[2n+1]) e^(-2 pi i n / 128). Its spectrum Z = A + i B
+    // holds the even and odd samples' halves, A[k] = conj(A[63 - k]) and the
+    // same for B, so F[k] = A[k] + e^(-2 pi i (k + 1/2) / 128) B[k] and
+    // F[63 - k] = conj(A[k] - that), two bands per step.
+    const Twiddles& tw = twiddles();
+    for (int n = 0; n < kSubbands; ++n) {
+      z_[n] = fft::mul(fft::Complex(grouping_[2 * n], grouping_[2 * n + 1]), tw.twist[n]);
+    }
+    fft_.forward(z_, zf_);
+    for (int k = 0; k < kSubbands / 2; ++k) {
+      const int c = kSubbands - 1 - k;
+      const fft::Complex zk = zf_[k], zc = std::conj(zf_[c]);
+      const fft::Complex a = 0.5f * (zk + zc);
+      const fft::Complex rot = fft::mul(zk - zc, tw.split[k]);
+      // out[sb] = conj(e^(i theta_sb) F[sb]).
+      const fft::Complex lo = std::conj(fft::mul(tw.theta[k], a + rot));
+      const fft::Complex hi = fft::mul_conj(a - rot, tw.theta[c]);
+      out_real_[k] = lo.real();
+      out_imag_[k] = lo.imag();
+      out_real_[c] = hi.real();
+      out_imag_[c] = hi.imag();
     }
   }
 
@@ -54,49 +102,93 @@ class QuadratureMirrorFilterBank {
   const float* out_imaginary() const { return out_imag_; }
 
   // Transform a timeslot of kSubbands complex bands back to 64 real PCM samples.
+  //
+  // Cavern: input_stream (1280 samples) shifted by 128, its newest 128 being
+  // v[j] = (1/64) Re sum over sb of X[sb] e^(i pi (sb + 1/2)(j - 127.5) / 64),
+  // then windowed by the prototype into 64 samples. The phase splits into
+  // e^(i 2 pi (sb + 1/2) j / 128), the half-bin-shifted inverse real FFT,
+  // times e^(-i 2 pi (sb + 1/2) 127.5 / 128) = -e^(i theta_sb) per band.
   void process_inverse(const float* real, const float* imaginary, float* output) {
-    std::memmove(input_stream_inverse_ + kDoubleLength, input_stream_inverse_,
-                 (kCoeffLen * 2 - kDoubleLength) * sizeof(float));
+    head_inverse_ = (head_inverse_ == 0 ? kCoeffLen * 2 : head_inverse_) - kDoubleLength;
 
-    qmath::multiply_and_set(inverse_real_[0], real[0], inverse_imag_[0], -imaginary[0],
-                            input_stream_inverse_, kDoubleLength);
-    for (int sb = 1; sb < kSubbands; ++sb)
-      qmath::multiply_and_add(inverse_real_[sb], real[sb], inverse_imag_[sb], -imaginary[sb],
-                              input_stream_inverse_, kDoubleLength);
+    // Y[sb] = X[sb] (-e^(i theta_sb) / 128); then the half-bin-shifted
+    // inverse real FFT, whose 2 Re sum Y[sb] e^(...) the 1/128 makes v: the
+    // forward steps above run backwards, through a complex FFT of 64.
+    const Twiddles& tw = twiddles();
+    for (int k = 0; k < kSubbands / 2; ++k) {
+      const int c = kSubbands - 1 - k;
+      const fft::Complex yk = fft::mul(fft::Complex(real[k], imaginary[k]), tw.scale[k]);
+      const fft::Complex yc = std::conj(fft::mul(fft::Complex(real[c], imaginary[c]), tw.scale[c]));
+      const fft::Complex odd = yk + yc;
+      const fft::Complex even = 2.0f * fft::mul_conj(yk - yc, tw.split[k]);
+      zf_[k] = odd + even;
+      zf_[c] = std::conj(odd - even);
+    }
+    fft_.inverse(zf_, z_);
+    float* v = input_stream_inverse_ + head_inverse_;
+    for (int n = 0; n < kSubbands; ++n) {
+      const fft::Complex t = fft::mul_conj(z_[n], tw.twist[n]);
+      v[2 * n] = t.real();
+      v[2 * n + 1] = t.imag();
+    }
 
-    qmath::multiply_and_set(input_stream_inverse_, kCoeffs,
-                            input_stream_inverse_ + kSubbands * 3, kCoeffs + kSubbands,
-                            output, kSubbands);
+    // Cavern's window: output = sum over j < 5 of stream[256 j + t] *
+    // coeffs[128 j + t] + stream[256 j + 192 + t] * coeffs[128 j + 64 + t],
+    // in its order. Logical block b (64 samples) starts at head + 64 b,
+    // wrapped; the head is a multiple of 128, so no block straddles the wrap.
+    const float* a = inverse_block(0);
+    const float* b = inverse_block(3);
+    for (int t = 0; t < kSubbands; ++t) output[t] = a[t] * kCoeffs[t] + b[t] * kCoeffs[kSubbands + t];
     for (int j = 1, end = kCoeffLen / kDoubleLength; j < end; ++j) {
-      const int time_slot = kSubbands * 4 * j;
-      const int coeff_slot = kDoubleLength * j;
-      const int time_pair = time_slot + kSubbands * 3;
-      const int coeff_pair = coeff_slot + kSubbands;
-      qmath::multiply_and_add(input_stream_inverse_ + time_slot, kCoeffs + coeff_slot,
-                              input_stream_inverse_ + time_pair, kCoeffs + coeff_pair,
-                              output, kSubbands);
+      a = inverse_block(4 * j);
+      b = inverse_block(4 * j + 3);
+      const float* ca = kCoeffs + kDoubleLength * j;
+      const float* cb = ca + kSubbands;
+      for (int t = 0; t < kSubbands; ++t) output[t] += a[t] * ca[t] + b[t] * cb[t];
     }
   }
 
  private:
-  static void ensure_cache() {
-    if (cache_ready_) return;
-    const float kPi = 3.14159265358979323846f;
-    const float subband_div = 1.0f / kSubbands;
-    for (int sb = 0; sb < kSubbands; ++sb) {
-      for (int j = 0; j < kDoubleLength; ++j) {
-        float e = kPi * (sb + 0.5f) * (j - 0.5f) * subband_div;
-        forward_real_[sb][j] = std::cos(e);
-        forward_imag_[sb][j] = std::sin(e);
-        e = kPi * (sb + 0.5f) * (j - kDoubleLength + 0.5f) * subband_div;
-        inverse_real_[sb][j] = std::cos(e) * subband_div;
-        inverse_imag_[sb][j] = std::sin(e) * subband_div;
+  // Phase rotations, worked out once in double and rounded.
+  struct Twiddles {
+    fft::Complex twist[kSubbands];  // e^(-2 pi i n / 128): the half-bin shift
+    fft::Complex split[kSubbands];  // -i/2 e^(-2 pi i (k + 1/2) / 128)
+    fft::Complex theta[kSubbands];  // e^(i theta_sb), theta_sb = pi (sb + 1/2) / 128
+    fft::Complex scale[kSubbands];  // -e^(i theta_sb) / 128
+    Twiddles() {
+      const double pi = 3.14159265358979323846;
+      for (int i = 0; i < kSubbands; ++i) {
+        const double tw = -2.0 * pi * i / kDoubleLength;
+        twist[i] = fft::Complex(static_cast<float>(std::cos(tw)), static_cast<float>(std::sin(tw)));
+        const double sp = -2.0 * pi * (i + 0.5) / kDoubleLength;
+        // -i/2 (cos + i sin) = (sin - i cos) / 2
+        split[i] = fft::Complex(static_cast<float>(0.5 * std::sin(sp)), static_cast<float>(-0.5 * std::cos(sp)));
+        const double th = pi * (i + 0.5) / kDoubleLength;
+        theta[i] = fft::Complex(static_cast<float>(std::cos(th)), static_cast<float>(std::sin(th)));
+        scale[i] = fft::Complex(static_cast<float>(-std::cos(th) / kDoubleLength),
+                                static_cast<float>(-std::sin(th) / kDoubleLength));
       }
     }
-    cache_ready_ = true;
+  };
+  static const Twiddles& twiddles() {
+    static const Twiddles t;
+    return t;
   }
 
-  // 640-tap prototype filter, verbatim from Cavern.
+  const float* forward_block(int b) const {
+    int p = head_forward_ + b * kSubbands;
+    if (p >= kCoeffLen) p -= kCoeffLen;
+    return input_stream_forward_ + p;
+  }
+  const float* inverse_block(int b) const {
+    int p = head_inverse_ + b * kSubbands;
+    if (p >= kCoeffLen * 2) p -= kCoeffLen * 2;
+    return input_stream_inverse_ + p;
+  }
+
+ public:
+  // 640-tap prototype filter, verbatim from Cavern. Public so the tests can
+  // hold the filterbank to Cavern's dense transform.
   static inline const float kCoeffs[kCoeffLen] = {
     +0.000000000000000e+000f, +1.990318758627504e-004f, +2.494762615491542e-004f, +3.021769445225078e-004f,
     +3.548460080857985e-004f, +4.058915811480806e-004f, +4.546408052001889e-004f, +5.012680176678405e-004f,
@@ -260,17 +352,18 @@ class QuadratureMirrorFilterBank {
     +3.548460080857985e-004f, +3.021769445225078e-004f, +2.494762615491542e-004f, +1.990318758627504e-004f
   };
 
-  // Rotation caches, shared across instances and computed once.
-  static inline float forward_real_[kSubbands][kDoubleLength];
-  static inline float forward_imag_[kSubbands][kDoubleLength];
-  static inline float inverse_real_[kSubbands][kDoubleLength];
-  static inline float inverse_imag_[kSubbands][kDoubleLength];
-  static inline bool cache_ready_ = false;
+ private:
+  // The 64-point complex FFT both directions run through.
+  fft::ComplexFft fft_;
 
-  // Per-instance delay lines and output caches.
+  // Per-instance delay rings (logical index 0 = newest, at the head) and
+  // scratch.
   float input_stream_forward_[kCoeffLen] = {};
   float input_stream_inverse_[kCoeffLen * 2] = {};
+  int head_forward_ = 0;
+  int head_inverse_ = 0;
   float grouping_[kDoubleLength] = {};
+  fft::Complex z_[kSubbands], zf_[kSubbands];
   float out_real_[kSubbands] = {};
   float out_imag_[kSubbands] = {};
 };

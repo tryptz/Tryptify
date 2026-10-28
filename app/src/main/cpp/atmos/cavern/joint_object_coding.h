@@ -53,18 +53,75 @@ class JointObjectCoding {
     decode_data(br);
   }
 
-  // Interpolated mixing matrix for object/timeslot/channel: kSubbands floats.
-  // Valid after get_mixing_matrices(frame_size).
-  const float* interpolated(int obj, int ts, int ch) const {
-    return interpolated_[obj][ts][ch].data();
+  // The interpolated mixing-matrix row for object/timeslot/channel:
+  // kSubbands floats. Valid after get_mixing_matrices(frame_size), for the
+  // frame it was called for. The row is worked out on demand: where it is an
+  // interpolation it is written to `scratch` (kSubbands floats) and that is
+  // returned; where it is a stored row it is returned as is. Either way the
+  // values are the ones Cavern's precomputed per-timeslot matrices held.
+  const float* mixing_row(int obj, int ts, int ch, float* scratch) const {
+    if (!object_active_[obj]) {
+      for (int sb = 0; sb < kSubbands; ++sb) scratch[sb] = 0.0f;
+      return scratch;
+    }
+    const int timeslots = timeslots_;
+    const float* from = from_matrix_[obj][ch].data();
+    if (data_points_[obj] == 1) {
+      // One data point, steep: the frame's starting matrix up to the offset,
+      // then the decoded one (by Cavern's index, kept as it is).
+      if (steep_slope_[obj]) {
+        if (ts < timeslot_offsets_[obj][0]) return from;
+        return mix_matrix_[obj][ts < timeslot_offsets_[obj][1] ? 1 : 0][ch].data();
+      }
+      // Smooth: a ramp from the starting matrix to the decoded one.
+      const int* pb_mapping = joc_tables::pb_mapping(bands_index_[obj]);
+      const float* mix = mix_matrix_[obj][0][ch].data();
+      const float lerp = static_cast<float>(ts + 1) / timeslots;
+      for (int sb = 0; sb < kSubbands; ++sb) {
+        scratch[sb] = from[sb] + (mix[pb_mapping[sb]] - from[sb]) * lerp;
+      }
+      return scratch;
+    }
+    // Two data points, steep: the starting matrix up to the offset, then the
+    // first data point.
+    if (steep_slope_[obj]) {
+      return ts + 1 < timeslot_offsets_[obj][0] ? from : mix_matrix_[obj][0][ch].data();
+    }
+    // Smooth: the first half ramps to the first data point, the second from
+    // it to the second.
+    const int ts_2 = timeslots >> 1;
+    const int next = ts + 1;
+    if (next <= ts_2) {
+      const float lerp = static_cast<float>(next) / ts_2;
+      const float* to = mix_matrix_[obj][0][ch].data();
+      for (int sb = 0; sb < kSubbands; ++sb) scratch[sb] = from[sb] + (to[sb] - from[sb]) * lerp;
+    } else {
+      const int* pb_mapping = joc_tables::pb_mapping(bands_index_[obj]);
+      const float lerp = static_cast<float>(next - ts_2) / (timeslots - ts_2);
+      const float* cf = mix_matrix_[obj][0][ch].data();
+      const float* ct = mix_matrix_[obj][1][ch].data();
+      for (int sb = 0; sb < kSubbands; ++sb) {
+        const int pb = pb_mapping[sb];
+        scratch[sb] = cf[pb] + (ct[pb] - cf[pb]) * lerp;
+      }
+    }
+    return scratch;
   }
 
-  // Computes the per-timeslot mixing matrices for every object (Cavern's
+  // Prepares every object's mixing matrices for a frame (Cavern's
   // GetMixingMatrices, sequential). frame_size = samples in the QMF window.
+  //
+  // Deviation from Cavern (performance, same values): Cavern fills a matrix
+  // per object x timeslot x channel here, which at 16 objects and 7 channels
+  // is 688 KB written and read back every frame. This only dequantizes and
+  // keeps the matrix the frame starts from; mixing_row() works out each row
+  // when the applier asks for it, with the same arithmetic in the same order.
+  // (The table also took a steep slope's offset, up to 32, as a timeslot
+  // count and wrote past its 24 rows; rows on demand have no such end.)
   void get_mixing_matrices(int frame_size) {
-    const int timeslots = frame_size / kSubbands;
+    timeslots_ = frame_size / kSubbands;
     for (int obj = 0; obj < object_count_; ++obj) {
-      get_mixing_matrices(obj, timeslots);
+      prepare_object(obj);
     }
   }
 
@@ -178,7 +235,7 @@ class JointObjectCoding {
   // Sparse decode (b_joc_sparse). Ported for parity but NOT called: upstream
   // keeps it commented out ("revert 0 to gainStep when the standard
   // documentation is fixed") and dequantizes with gainStep 0 instead, which is
-  // reproduced in get_mixing_matrices below.
+  // reproduced in prepare_object below.
   void decode_sparse(int obj, int center) {
     had_sparse_ = true;
     const int max = center * 2;
@@ -210,104 +267,28 @@ class JointObjectCoding {
 
   // ---- Matrix interpolation (per object) ---------------------------------
 
-  void get_mixing_matrices(int obj, int timeslots) {
+  void prepare_object(int obj) {
     const int center_value = quantization_table_[obj] * 48 + 48;
-    if (object_active_[obj]) {
-      const float gain_step = 0.2f - quantization_table_[obj] * 0.1f;
-      if (sparse_coded_[obj]) {
-        dequantize(obj, center_value, 0.0f);  // upstream: gainStep 0 (sparse WIP)
-      } else {
-        decode_coarse(obj, center_value, gain_step);
-      }
+    // An inactive object's rows are all zero, and its history is left alone.
+    if (!object_active_[obj]) return;
+    const float gain_step = 0.2f - quantization_table_[obj] * 0.1f;
+    if (sparse_coded_[obj]) {
+      dequantize(obj, center_value, 0.0f);  // upstream: gainStep 0 (sparse WIP)
     } else {
-      for (int ts = 0; ts < timeslots; ++ts) {
-        for (int ch = 0; ch < channel_count_; ++ch) {
-          float* dst = interpolated_[obj][ts][ch].data();
-          for (int sb = 0; sb < kSubbands; ++sb) dst[sb] = 0.0f;
-        }
-      }
-      return;
+      decode_coarse(obj, center_value, gain_step);
     }
 
+    // This frame interpolates from the matrix the last frame ended on; carry
+    // the current one forward as history for the next frame.
     const int* pb_mapping = joc_tables::pb_mapping(bands_index_[obj]);
-    if (data_points_[obj] == 1) {
-      if (steep_slope_[obj]) {
-        const int split = timeslot_offsets_[obj][0];
-        for (int ts = 0; ts < split; ++ts) steep_single(obj, ts, prev_matrix_[obj]);
-        for (int ts = split; ts < timeslots; ++ts) {
-          steep_single(obj, ts, mix_matrix_[obj][ts < timeslot_offsets_[obj][1] ? 1 : 0]);
-        }
-      } else {
-        for (int ch = 0; ch < channel_count_; ++ch) {
-          const float* prev = prev_matrix_[obj][ch].data();
-          const float* mix = mix_matrix_[obj][0][ch].data();
-          for (int ts = 0; ts < timeslots;) {
-            float* interp = interpolated_[obj][ts][ch].data();
-            const float lerp = static_cast<float>(++ts) / timeslots;
-            for (int sb = 0; sb < kSubbands; ++sb) {
-              interp[sb] = prev[sb] + (mix[pb_mapping[sb]] - prev[sb]) * lerp;
-            }
-          }
-        }
-      }
-    } else {
-      if (steep_slope_[obj]) {
-        for (int ts = 0; ts < timeslots;) {
-          const int cur = ts++;
-          const auto& source = (ts < timeslot_offsets_[obj][0]) ? prev_matrix_[obj] : mix_matrix_[obj][0];
-          for (int ch = 0; ch < channel_count_; ++ch) {
-            float* interp = interpolated_[obj][cur][ch].data();
-            const float* src = source[ch].data();
-            for (int sb = 0; sb < kSubbands; ++sb) interp[sb] = src[sb];
-          }
-        }
-      } else {
-        const int ts_2 = timeslots >> 1;
-        for (int ts = 0; ts < timeslots;) {
-          const int cur = ts++;
-          float lerp;
-          const std::vector<std::vector<float>>* from;
-          const std::vector<std::vector<float>>* to;
-          const bool first_half = ts <= ts_2;
-          if (first_half) {
-            lerp = static_cast<float>(ts) / ts_2;
-            from = &prev_matrix_[obj];
-            to = &mix_matrix_[obj][0];
-          } else {
-            lerp = static_cast<float>(ts - ts_2) / (timeslots - ts_2);
-            from = &mix_matrix_[obj][0];
-            to = &mix_matrix_[obj][1];
-          }
-          for (int ch = 0; ch < channel_count_; ++ch) {
-            float* interp = interpolated_[obj][cur][ch].data();
-            const float* cf = (*from)[ch].data();
-            const float* ct = (*to)[ch].data();
-            if (first_half) {
-              for (int sb = 0; sb < kSubbands; ++sb) interp[sb] = cf[sb] + (ct[sb] - cf[sb]) * lerp;
-            } else {
-              for (int sb = 0; sb < kSubbands; ++sb) {
-                const int pb = pb_mapping[sb];
-                interp[sb] = cf[pb] + (ct[pb] - cf[pb]) * lerp;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Carry the current matrix forward as history for the next frame.
     for (int ch = 0; ch < channel_count_; ++ch) {
+      float* from = from_matrix_[obj][ch].data();
       float* prev = prev_matrix_[obj][ch].data();
       const float* mix_src = mix_matrix_[obj][data_points_[obj] - 1][ch].data();
-      for (int sb = 0; sb < kSubbands; ++sb) prev[sb] = mix_src[pb_mapping[sb]];
-    }
-  }
-
-  void steep_single(int obj, int ts, const std::vector<std::vector<float>>& source) {
-    for (int ch = 0; ch < channel_count_; ++ch) {
-      float* dst = interpolated_[obj][ts][ch].data();
-      const float* src = source[ch].data();
-      for (int sb = 0; sb < kSubbands; ++sb) dst[sb] = src[sb];
+      for (int sb = 0; sb < kSubbands; ++sb) {
+        from[sb] = prev[sb];
+        prev[sb] = mix_src[pb_mapping[sb]];
+      }
     }
   }
 
@@ -332,7 +313,8 @@ class JointObjectCoding {
     joc_vector_.assign(object_count_, {});
     joc_matrix_.assign(object_count_, {});
     mix_matrix_.assign(object_count_, {});
-    interpolated_.assign(object_count_, {});
+    from_matrix_.assign(object_count_, std::vector<std::vector<float>>(
+                                           channel_count_, std::vector<float>(kSubbands, 0.0f)));
     if (static_cast<int>(prev_matrix_.size()) < kMaxObjects) {
       prev_matrix_.assign(kMaxObjects, std::vector<std::vector<float>>(
                                            kMaxChannels, std::vector<float>(kSubbands, 0.0f)));
@@ -345,10 +327,12 @@ class JointObjectCoding {
                               std::vector<std::vector<int>>(channel_count_, std::vector<int>(kMaxBands, 0)));
       mix_matrix_[obj].assign(kMaxDataPoints,
                               std::vector<std::vector<float>>(channel_count_, std::vector<float>(kSubbands, 0.0f)));
-      interpolated_[obj].assign(kMaxTimeslots,
-                                std::vector<std::vector<float>>(channel_count_, std::vector<float>(kSubbands, 0.0f)));
     }
   }
+
+  // The test that holds mixing_row() to Cavern's precomputed matrices
+  // (cavern_joc_test) reads the decoded state through this.
+  friend struct JointObjectCodingProbe;
 
   // ---- State -------------------------------------------------------------
 
@@ -365,8 +349,9 @@ class JointObjectCoding {
   std::vector<std::vector<std::vector<int>>> joc_channel_, joc_vector_;  // [obj][dp][band]
   std::vector<std::vector<std::vector<std::vector<int>>>> joc_matrix_;   // [obj][dp][ch][band]
   std::vector<std::vector<std::vector<std::vector<float>>>> mix_matrix_;      // [obj][dp][ch][sb]
-  std::vector<std::vector<std::vector<std::vector<float>>>> interpolated_;    // [obj][ts][ch][sb]
-  std::vector<std::vector<std::vector<float>>> prev_matrix_;                  // [obj][ch][sb]
+  std::vector<std::vector<std::vector<float>>> from_matrix_;  // [obj][ch][sb], this frame's start
+  std::vector<std::vector<std::vector<float>>> prev_matrix_;  // [obj][ch][sb], the next frame's
+  int timeslots_ = kMaxTimeslots;  // of the frame get_mixing_matrices() was called for
 };
 
 }  // namespace cavern

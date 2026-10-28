@@ -4,8 +4,9 @@ This directory holds the first, **fully self-contained and verifiable** layer of
 the E-AC-3 JOC → object → binaural/bed renderer described in the renderer plan.
 Everything here is clean-room from the public ETSI specifications
 (TS 102 366 / A/52 for E-AC-3 + EMDF, TS 103 420 for OAMD + JOC) and depends on
-nothing but the C++17 standard library, so it builds under the NDK for every
-shipped ABI and is unit-tested on a host toolchain.
+nothing but the C++17 standard library and the vendored signalsmith-linear FFT
+(`fft.h`, from `third_party/signalsmith-stretch`), so it builds under the NDK
+for every shipped ABI and is unit-tested on a host toolchain.
 
 ## What is here (and verified)
 
@@ -46,12 +47,18 @@ not stubbed to look finished:
 
 - **QMF analysis/synthesis filterbank** (plan A5) — `cavern/quadrature_mirror_filterbank.h`.
   Host-verified: analysis → synthesis reconstructs a broadband signal at
-  correlation 1.00000 (577-sample delay).
+  correlation 1.00000 (577-sample delay). The modulation runs through a 64-point
+  FFT instead of Cavern's dense rotation matrices; `cavern_qmf_test` holds it
+  to the dense transform (to float rounding against exact phases, within
+  5e-5 of peak against Cavern's float tables).
 - **JOC decoder + upmix applier** (plan A6) — `cavern/joint_object_coding.h`
   (frame decode, Huffman, dequant, per-timeslot matrix interpolation) and
   `cavern/joint_object_coding_applier.h` (QMF-domain channel→object mix +
   inverse QMF). `cavern/joc_tables.h` holds the Huffman/band tables. Cavern's
   ThreadPool fan-out is sequential here; exceptions become a `valid()` flag.
+  The per-timeslot matrices are worked out row by row as the applier needs
+  them rather than tabled ahead of the frame (`cavern_joc_test` checks every
+  row against the table: bit for bit on the host and arm64).
   Host-tested for Huffman round-trip, dequant recurrence, band mapping and an
   end-to-end decode→matrices→apply run. **Numeric bit-exactness still needs A/B
   against reference Atmos content** — the host tests prove self-consistency, not
