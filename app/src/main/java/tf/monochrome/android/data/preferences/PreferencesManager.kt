@@ -100,6 +100,24 @@ class PreferencesManager @Inject constructor(
     internal val store: DataStore<Preferences> get() = dataStore
 
     companion object {
+        /**
+         * The target loudness [prefs] hold, LUFS. Unset, it comes from a
+         * pre-amp chosen before the target existed, the nearest target to it.
+         * With neither set but ReplayGain on from an earlier build, the
+         * pre-amp was at its default of 0 dB, which played at ReplayGain's own
+         * reference: -18 LUFS, not the new default of -14, which would have
+         * made those listeners' music 4 dB louder after the update. Anyone
+         * else gets the default.
+         */
+        internal fun replayGainTargetOf(prefs: Preferences): Float {
+            val rg = tf.monochrome.android.audio.replaygain.ReplayGain
+            prefs[REPLAYGAIN_TARGET_LUFS]?.takeIf { it in rg.TARGET_STEPS }?.let { return it }
+            prefs[REPLAYGAIN_PREAMP_DB]?.let { return rg.targetFromPreamp(it) }
+            val mode = prefs[REPLAYGAIN_MODE]
+            val wasOn = mode != null && mode != tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF.name
+            return if (wasOn) rg.targetFromPreamp(0f) else rg.DEFAULT_TARGET_LUFS
+        }
+
         private const val MAX_SEARCH_HISTORY_SIZE = 10
 
         /**
@@ -1310,22 +1328,26 @@ class PreferencesManager @Inject constructor(
     /**
      * ReplayGain's mode and target loudness. Off unless chosen, so nothing
      * sounds different until then. A pre-amp chosen before the target existed
-     * becomes the target nearest it.
+     * becomes the target nearest it ([replayGainTargetOf]).
      */
     val replayGainSettings: Flow<tf.monochrome.android.audio.replaygain.ReplayGainSettings> = dataStore.data.map { prefs ->
         tf.monochrome.android.audio.replaygain.ReplayGainSettings(
             mode = prefs[REPLAYGAIN_MODE]
                 ?.let { runCatching { tf.monochrome.android.audio.replaygain.ReplayGainMode.valueOf(it) }.getOrNull() }
                 ?: tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF,
-            targetLufs = prefs[REPLAYGAIN_TARGET_LUFS]
-                ?.takeIf { it in tf.monochrome.android.audio.replaygain.ReplayGain.TARGET_STEPS }
-                ?: prefs[REPLAYGAIN_PREAMP_DB]?.let(tf.monochrome.android.audio.replaygain.ReplayGain::targetFromPreamp)
-                ?: tf.monochrome.android.audio.replaygain.ReplayGain.DEFAULT_TARGET_LUFS,
+            targetLufs = replayGainTargetOf(prefs),
         )
     }.distinctUntilChanged()
 
     suspend fun setReplayGainMode(mode: tf.monochrome.android.audio.replaygain.ReplayGainMode) {
-        dataStore.edit { it[REPLAYGAIN_MODE] = mode.name }
+        dataStore.edit {
+            // The target as it reads now is written down before the mode
+            // changes, since what an unset target reads as depends on the mode
+            // (see replayGainTargetOf): turning ReplayGain on in this build
+            // must not read as having had it on in an earlier one.
+            if (it[REPLAYGAIN_TARGET_LUFS] == null) it[REPLAYGAIN_TARGET_LUFS] = replayGainTargetOf(it)
+            it[REPLAYGAIN_MODE] = mode.name
+        }
     }
 
     suspend fun setReplayGainTarget(lufs: Float) {

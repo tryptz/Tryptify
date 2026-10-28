@@ -11,7 +11,10 @@
 //   when the glide starts, so it lands on the goal exactly (a step worked out
 //   afresh from what is left would only approach it, and a gain that never
 //   quite gets back to 1.0 is never bit-perfect again).
-// - reset() is the start of a stream (a skip, a seek): it starts at the gain.
+// - A stream starts in one of three ways: reset() for a new one (a skip, a
+//   gapless boundary), by the song's mode; resume() for the same one again
+//   (a seek, a change of speed), where the level carries on; startAt() at a
+//   level given, for a blend's tail.
 // - 16-bit is rounded half up, as Java's Math.round, and held to full scale
 //   rather than wrapping; float is not clipped, headroom is the later stages'.
 //
@@ -104,8 +107,8 @@ public:
     float current() const { return current_; }
 
     /**
-     * The start of a stream: a skip, a seek, or the boundary between two
-     * songs played gapless. Call follow() or fixed() for the new song first.
+     * The start of a new stream: a skip, or the boundary between two songs
+     * played gapless. Call follow() or fixed() for the new song first.
      *
      * - A fixed gain that cuts starts at once: a glide here would be a
      *   fade-in. One that boosts starts at unity and glides up: a gapless
@@ -117,9 +120,35 @@ public:
      */
     void reset() {
         if (following_) return;
-        current_ = std::min(gain(), 1.0f);
-        rampGoal_ = current_;
-        rampStep_ = 0.0f;
+        settleAt(std::min(gain(), 1.0f));
+    }
+
+    /**
+     * The same stream again after a flush that brought no new format: a seek,
+     * a change of speed. The level carries on where it is, glide and all, in
+     * either mode. reset() here would drop a raised song to unity for the
+     * length of a glide on every seek, about 3 dB at 1.4x.
+     *
+     * Nothing to undo: the glide's goal and step still hold, and a following
+     * song's measurement carries on (see follow()). Call follow() or fixed()
+     * first, as for reset().
+     */
+    void resume() {}
+
+    /**
+     * The start of a new stream at [level] exactly, gliding on to gain() from
+     * there: a blend's tail, seeded with the level the outgoing song is
+     * playing at. reset() would start a raised song at unity, a dip just as
+     * the blend begins. A following song keeps its own level, as in reset();
+     * a [level] that is not a positive finite number is reset().
+     */
+    void startAt(float level) {
+        if (following_) return;
+        if (!usable(level)) {
+            reset();
+            return;
+        }
+        settleAt(level);
     }
 
     /** [frames] interleaved frames of [in] to [out], which may be the same buffer. */
@@ -143,6 +172,13 @@ private:
 
     /** Positive and finite. dspIsFinite, since a plain bit test can fold away under -ffast-math (util/finite.h). */
     static bool usable(float v) { return dspIsFinite(v) && v > 0.0f; }
+
+    /** At [level] now, with no glide under way: run() starts one if the goal is elsewhere. */
+    void settleAt(float level) {
+        current_ = level;
+        rampGoal_ = level;
+        rampStep_ = 0.0f;
+    }
 
     void measure(const float* in, int frames) { meter_.process(in, frames); }
 

@@ -30,8 +30,10 @@ import javax.inject.Singleton
  *
  * At unity (ReplayGain off, an untagged song, a 0 dB gain) the samples are
  * copied through exactly, so bit-perfect output stays bit-perfect. A new gain
- * glides in over [RAMP_MS] rather than stepping, except at the start of a
- * stream (a flush: a skip, a seek), which starts at it.
+ * glides in over [RAMP_MS] rather than stepping. A new stream (a skip, a
+ * gapless boundary) starts by the song's mode; the same stream after a seek
+ * carries on at its level; a blend's tail starts at the level it was seeded
+ * with ([seedLevel]). See [flush] for how the two flushes are told apart.
  *
  * A song with no gain tags is measured as it plays instead ([follow]): the
  * stage turns it down to the target loudness as the reading builds.
@@ -57,6 +59,9 @@ class ReplayGainProcessor @Inject constructor() : AudioProcessor {
     /** Which song is being measured: a new one starts the measurement again. */
     @Volatile private var song = 0
     private var songKey: String? = null
+
+    /** The level the next stream starts at exactly, or 0 for none ([seedLevel]). */
+    @Volatile private var seed = 0f
 
     /** The gain the stage is at, linear, as of the last buffer. For the readout and a blend's tail. */
     @Volatile var appliedGain = 1f
@@ -103,6 +108,18 @@ class ReplayGainProcessor @Inject constructor() : AudioProcessor {
 
     /** The gain last set, for seeding a copy of this stage (the blend's tail). */
     val gain: Float get() = target
+
+    /**
+     * Starts the next stream at [linear] exactly rather than by the mode, then
+     * carries on as usual: a blend's tail, seeded with the level the outgoing
+     * song is playing at ([appliedGain]). By the mode a raised song would
+     * start at unity and glide up, a dip just as the blend begins. Taken by
+     * the first stream that starts; anything not a positive finite number is
+     * none. Any thread, before the stream starts.
+     */
+    fun seedLevel(linear: Float) {
+        seed = if (linear.isFinite() && linear > 0f) linear else 0f
+    }
 
     override fun configure(inputAudioFormat: AudioFormat): AudioFormat {
         val supported = inputAudioFormat.channelCount > 0 &&
@@ -157,10 +174,20 @@ class ReplayGainProcessor @Inject constructor() : AudioProcessor {
         inputEnded = true
     }
 
+    /**
+     * The start of a stream, new or the same one again, told apart by whether
+     * a configure came first. Media3's DefaultAudioSink configures every
+     * processor for each new track (AudioProcessingPipeline.configure, as the
+     * renderer hands it the track's format) and flushes them once that
+     * configuration is put to use: a skip, a gapless boundary. A seek or a
+     * change of speed flushes with no configure first: the same song, whose
+     * level carries on rather than dropping a boost to unity for a moment.
+     */
     override fun flush() {
         outputBuffer = AudioProcessor.EMPTY_BUFFER
         inputEnded = false
-        if (pendingFormat != AudioFormat.NOT_SET) {
+        val newStream = pendingFormat != AudioFormat.NOT_SET
+        if (newStream) {
             inputFormat = pendingFormat
             pendingFormat = AudioFormat.NOT_SET
         }
@@ -168,8 +195,10 @@ class ReplayGainProcessor @Inject constructor() : AudioProcessor {
         if (format == AudioFormat.NOT_SET) return
         if (native == 0L) native = ReplayGainNative.nativeCreate()
         ReplayGainNative.nativePrepare(native, format.sampleRate, format.channelCount)
-        // The new stream starts in the mode of the song it is (ReplayGainStage::reset()).
-        ReplayGainNative.nativeReset(native, target, followLufs, song)
+        val start = startOf(newStream, seed)
+        if (start > 0f) seed = 0f
+        // In the mode of the song it is, from where startOf says (ReplayGainStage).
+        ReplayGainNative.nativeReset(native, target, followLufs, song, start)
     }
 
     /**
@@ -225,6 +254,17 @@ class ReplayGainProcessor @Inject constructor() : AudioProcessor {
     companion object {
         /** How long a change of gain takes (ReplayGainStage::kRampMs). */
         const val RAMP_MS = 50f
+
+        /**
+         * nativeReset's start for a flush: a seed if there is one (0 for
+         * none), else by the mode for a new stream, else where it is.
+         */
+        internal fun startOf(newStream: Boolean, seed: Float): Float = when {
+            seed > 0f -> seed
+            newStream -> ReplayGainNative.START_BY_MODE
+            else -> ReplayGainNative.START_RESUME
+        }
+
         private const val FLOAT_BYTES = 4
         private const val INT16_BYTES = 2
     }

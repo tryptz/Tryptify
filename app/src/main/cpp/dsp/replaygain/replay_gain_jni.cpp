@@ -48,13 +48,31 @@ void apply(ReplayGainStage* s, float gain, float followLufs, jint song) {
 }
 }  // namespace
 
-/** The start of a stream, in the mode of the song it starts: see ReplayGainStage::reset(). */
+/**
+ * At or below this, nativeReset's [start] means the same stream again
+ * (ReplayGainNative.START_RESUME): a sentinel, not NaN, as for kFollowOff.
+ */
+constexpr float kStartResume = -2.0f;
+
+/**
+ * The start of a stream, in the mode of the song it starts. [start] says
+ * where: above 0, at that level (ReplayGainStage::startAt()); kStartResume or
+ * below, where the stage is (resume()); otherwise by the mode (reset()).
+ */
 extern "C" JNIEXPORT void JNICALL
 Java_tf_monochrome_android_audio_replaygain_ReplayGainNative_nativeReset(
-        JNIEnv*, jclass, jlong h, jfloat gain, jfloat followLufs, jint song) {
+        JNIEnv*, jclass, jlong h, jfloat gain, jfloat followLufs, jint song, jfloat start) {
     if (h == 0) return;
-    apply(stage(h), gain, followLufs, song);
-    stage(h)->reset();
+    ReplayGainStage* s = stage(h);
+    apply(s, gain, followLufs, song);
+    if (start > 0.0f) {
+        // startAt() checks the level itself, with dspIsFinite.
+        s->startAt(start);
+    } else if (start <= kStartResume) {
+        s->resume();
+    } else {
+        s->reset();
+    }
 }
 
 /**

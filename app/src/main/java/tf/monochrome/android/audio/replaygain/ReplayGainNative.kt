@@ -19,8 +19,13 @@ internal object ReplayGainNative {
     @JvmStatic external fun nativeDestroy(handle: Long)
     @JvmStatic external fun nativePrepare(handle: Long, sampleRate: Int, channels: Int)
 
-    /** The start of a stream, in the mode of the song it starts (as [nativeProcess] takes it). */
-    @JvmStatic external fun nativeReset(handle: Long, gain: Float, followLufs: Float, song: Int)
+    /**
+     * The start of a stream, in the mode of the song it starts (as
+     * [nativeProcess] takes it). [start] says where: [START_BY_MODE] for a new
+     * stream, [START_RESUME] for the same one after a flush, or a level above
+     * 0 to start at exactly (ReplayGainStage's reset(), resume(), startAt()).
+     */
+    @JvmStatic external fun nativeReset(handle: Long, gain: Float, followLufs: Float, song: Int, start: Float)
 
     /**
      * [frames] whole frames of [input] from byte [inputOffset] to the start of
@@ -46,4 +51,10 @@ internal object ReplayGainNative {
 
     /** "Not following", for nativeProcess's followLufs: a sentinel, as the library builds with -ffast-math. */
     const val FOLLOW_OFF = -1000f
+
+    /** nativeReset's start for a new stream: a cut at once, a boost from unity, a following song where it is. */
+    const val START_BY_MODE = -1f
+
+    /** nativeReset's start for the same stream again (a seek, a change of speed): the level carries on. */
+    const val START_RESUME = -2f
 }

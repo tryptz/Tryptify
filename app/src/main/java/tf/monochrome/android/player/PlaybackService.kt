@@ -1759,7 +1759,11 @@ class PlaybackService : MediaSessionService() {
         // CrossfadeController.start), so this is that track's gain, and its
         // tail keeps it while the main chain moves to the next track's.
         // The level it is at, which for a measured song is not the gain set.
-        chain.replayGain.setGain(replayGainProcessor.appliedGain)
+        // And the tail starts there: started by the mode, a raised song would
+        // drop to unity and glide back up just as the blend begins.
+        val level = replayGainProcessor.appliedGain
+        chain.replayGain.setGain(level)
+        chain.replayGain.seedLevel(level)
         val autoEq = lastAutoEq
         val paramEq = lastParametricEq
         chain.seedFrom(

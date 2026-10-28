@@ -6,10 +6,11 @@
 // Oxford inflator, then the Oxford compressor.
 //
 // The stage itself: exact at unity, the gain otherwise, no wrap-around, the
-// glide and back to exact. Then what the chain does with a song ReplayGain has
-// raised to full scale: the chain left at its defaults stays at or under it,
-// a gain change glides through every effect without a click, and every
-// snapin, at its defaults, makes a finite signal of it. Where an effect takes
+// glide and back to exact, and where a stream starts (a new one, the same one
+// after a seek, a blend's seeded tail). Then what the chain does with a song
+// ReplayGain has raised to full scale: the chain left at its defaults stays at
+// or under it, a gain change glides through every effect without a click, and
+// every snapin, at its defaults, makes a finite signal of it. Where an effect takes
 // a raised song past full scale on purpose (makeup gain, an unclipped
 // inflator) the level is printed, not failed: that is the effect's job, and
 // what keeps it from clipping is the next stage's.
@@ -169,6 +170,115 @@ void theStage() {
         const auto out = runF(s, {1, 2, 3, 4, 5, 6, -1, -2, -3, -4, -5, -6}, 6);
         check(out == std::vector<float>({0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, -0.25f, -0.5f, -0.75f, -1.0f, -1.25f, -1.5f}),
               "every channel of a wide stream gets the same gain");
+    }
+}
+
+// ── Where a stream starts ────────────────────────────────────────────────
+
+/** What a flush does before the start itself, as the JNI calls it: the format again, then the song's mode. */
+void reflush(ReplayGainStage& s, float gain, int channels = 2) {
+    s.prepare(kRate, channels);
+    s.setGain(gain);
+    s.fixed();
+}
+
+/** [frames] stereo frames of [level] through [s]; the quietest sample out. */
+float quietestOf(ReplayGainStage& s, int frames, float level, float* first = nullptr) {
+    std::vector<float> in(static_cast<size_t>(frames) * 2, level), out(in.size());
+    s.processFloat(in.data(), out.data(), frames);
+    if (first != nullptr) *first = out[0];
+    return *std::min_element(out.begin(), out.end());
+}
+
+void startingAStream() {
+    std::printf("-- where a stream starts: new, the same again, seeded\n");
+    constexpr float kBoost = 1.4f;   // about +2.9 dB
+    constexpr float kIn = 0.5f;
+    constexpr int kPastGlide = 2410; // 50 ms at 48 kHz is 2400 frames, give or take the rounding of its steps
+    {
+        // A seek in a raised song: the flush brings no new format, so the
+        // level carries on. Every sample after it is at the settled gain.
+        Stage s(kBoost);
+        quietestOf(s, kPastGlide, kIn);
+        const float settled = s.current();
+        reflush(s, kBoost);
+        s.resume();
+        const float quietest = quietestOf(s, 4800, kIn);
+        std::printf("      after a seek at %.2f dB: quietest sample %.4f, settled %.4f\n",
+                    20.0 * std::log10(settled), quietest, kIn * settled);
+        check(settled == kBoost && quietest >= kIn * settled,
+              "a seek in a raised song keeps its level: no sample below the settled gain");
+
+        // The control: the same flush started as a new stream dips to unity.
+        Stage t(kBoost);
+        quietestOf(t, kPastGlide, kIn);
+        reflush(t, kBoost);
+        t.reset();
+        float first = 0.0f;
+        quietestOf(t, 1, kIn, &first);
+        check(first <= kIn * 1.001f && t.current() < 1.001f,
+              "a new stream at a boost still starts at unity, so the next song's start is not boosted");
+    }
+    {
+        // A seek mid-glide changes nothing: the output is the one with no flush at all.
+        Stage a(kBoost), b(kBoost);
+        std::vector<float> in(2 * 3000), outA(in.size()), outB(in.size());
+        for (size_t i = 0; i < in.size(); i++) in[i] = 0.8f * std::sin(0.013f * static_cast<float>(i));
+        a.processFloat(in.data(), outA.data(), 3000);
+        b.processFloat(in.data(), outB.data(), 1000);
+        const float mid = b.current();
+        reflush(b, kBoost);
+        b.resume();
+        b.processFloat(in.data() + 2 * 1000, outB.data() + 2 * 1000, 2000);
+        check(mid > 1.0f && mid < kBoost && outA == outB && b.current() == kBoost,
+              "a seek mid-glide carries the glide on, sample for sample, and lands on the gain");
+    }
+    {
+        Stage s(1.0f);
+        reflush(s, 1.0f);
+        s.resume();
+        const std::vector<int16_t> in{-32768, -1, 0, 1, 12345, 32767};
+        check(run16(s, in) == in, "at unity a seek leaves the samples bit for bit");
+    }
+    {
+        // A blend's tail, seeded with the level the outgoing song plays at: from the first sample.
+        ReplayGainStage tail;
+        reflush(tail, kBoost);
+        tail.startAt(kBoost);
+        float first = 0.0f;
+        const float quietest = quietestOf(tail, 4800, kIn, &first);
+        check(first == kIn * kBoost && quietest == kIn * kBoost,
+              "a seeded stream starts at the seed, with no dip and no glide");
+    }
+    {
+        // Seeded mid-glide: from the seed, on to the gain, as usual.
+        ReplayGainStage tail;
+        reflush(tail, kBoost);
+        tail.startAt(1.2f);
+        float first = 0.0f;
+        quietestOf(tail, 1, kIn, &first);
+        const bool fromSeed = first >= kIn * 1.2f && first <= kIn * 1.2f * 1.001f;
+        quietestOf(tail, kPastGlide, kIn);
+        check(fromSeed && tail.current() == kBoost, "a seed below the gain starts there and glides on to it");
+    }
+    {
+        ReplayGainStage tail;
+        reflush(tail, 1.0f);
+        tail.startAt(1.0f);
+        const std::vector<int16_t> in{-32768, -1, 0, 1, 12345, 32767};
+        check(run16(tail, in) == in, "a stream seeded at unity is bit for bit");
+    }
+    {
+        // Nonsense seeds are no seed: the new stream starts by the mode, a boost at unity.
+        bool allByMode = true;
+        for (float bad : {0.0f, -1.0f, static_cast<float>(NAN), static_cast<float>(INFINITY)}) {
+            Stage s(kBoost);
+            quietestOf(s, kPastGlide, kIn);
+            reflush(s, kBoost);
+            s.startAt(bad);
+            allByMode = allByMode && s.current() == 1.0f;
+        }
+        check(allByMode, "a seed that is not a positive finite number starts the stream by the mode");
     }
 }
 
@@ -674,6 +784,7 @@ void everySnapin() {
 
 int main() {
     theStage();
+    startingAStream();
     following();
     inFrontOfTheChain();
     everySnapin();
