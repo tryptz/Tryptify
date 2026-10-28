@@ -6,9 +6,20 @@
 // Pre-delay ring buffer for lookahead limiters/gates.
 class LookaheadBuffer {
 public:
+    // For a new rate: starts silent, rather than playing out audio held from
+    // the old one.
     void prepare(int delaySamples) {
         delay_ = delaySamples;
-        buffer_.resize(delaySamples, 0.0f);
+        buffer_.assign(static_cast<size_t>(delaySamples), 0.0f);
+        writePos_ = 0;
+    }
+
+    // For a knob that sets the delay mid-stream: keeps what is held, as this
+    // has always done, so turning it does not cut the signal out for the
+    // length of the lookahead.
+    void setDelay(int delaySamples) {
+        delay_ = delaySamples;
+        buffer_.resize(static_cast<size_t>(delaySamples), 0.0f);
         writePos_ = 0;
     }
 
@@ -21,7 +32,7 @@ public:
         if (delay_ == 0) return in;
         float out = buffer_[writePos_];
         buffer_[writePos_] = in;
-        writePos_ = (writePos_ + 1) % delay_;
+        if (++writePos_ == delay_) writePos_ = 0;
         return out;
     }
 

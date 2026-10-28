@@ -29,8 +29,12 @@ public:
         sampleRate_ = sampleRate;
         maxBlockSize_ = maxBlockSize;
 
-        // Max delay: base 40ms + modulation depth headroom
-        int maxSamples = static_cast<int>(0.08 * sampleRate) + 64;
+        // The furthest a voice reads back: the 40 ms base, plus a voice's
+        // offset of up to 5 % of it, plus at 100 % depth an LFO swing of the
+        // whole base again: 2.05 × 40 ms = 82 ms. Sized for 80 ms, the line
+        // was too short for the extreme by 2 ms, and those reads wrapped round
+        // into the newest audio. The 64 covers the cubic's outer taps.
+        int maxSamples = static_cast<int>(0.082 * sampleRate) + 64;
         for (int v = 0; v < MAX_VOICES; v++) {
             delayL_[v].prepare(maxSamples);
             delayR_[v].prepare(maxSamples);

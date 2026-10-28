@@ -188,9 +188,16 @@ class ChannelPlacer {
 
   static float finite_or(float v, float fallback) {
     // Bit test: this library builds with -ffast-math, under which
-    // std::isfinite may fold to true.
+    // std::isfinite may fold to true. The empty asm hides the bits from the
+    // compiler too: clang 21 (NDK r29) takes every float argument as finite
+    // under the flag, works out the exponent can never be all ones, and folds
+    // the bit test away as well (seen under qemu on arm64). The same barrier
+    // as dsp/util/finite.h's dspOpaque.
     uint32_t b;
     std::memcpy(&b, &v, sizeof b);
+#if defined(__GNUC__) || defined(__clang__)
+    __asm__("" : "+r"(b));
+#endif
     return (b & 0x7F800000u) == 0x7F800000u ? fallback : v;
   }
 

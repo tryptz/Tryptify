@@ -75,6 +75,10 @@ struct Bus {
     // is imperceptible in a scope display.
     float waveTap[WAVE_TAP_SIZE] = {};
     std::atomic<int> waveTapPos{0};
+    // Silent samples written since the last audio (audio thread only). At
+    // WAVE_TAP_SIZE the whole ring is silence, and writing more changes
+    // nothing a scope can show.
+    int waveSilent = WAVE_TAP_SIZE;
 
     // Meter ballistics (audio thread only)
     float decayL = 0.0f;
@@ -125,6 +129,16 @@ public:
     // Audio processing — called from audio thread
     void process(float* left, float* right, int numFrames);
 
+    // Whether the last process() handed back every sample as it came in:
+    // one bus taking the player's signal, nothing on it or the master that
+    // runs or delays, its route to the master and both faders at unity and
+    // settled, and nothing non-finite replaced. Only ever true when that is
+    // so (a -0.0 may come back as +0.0, the one way out can differ from in);
+    // a mix that happens to cancel out to the input is reported as changed.
+    // MixBusProcessor's 16-bit path keeps the source's own samples then,
+    // rather than dither and requantise ones it never touched.
+    bool lastProcessUnchanged() const { return processUnchanged_; }
+
     // ── Lane stepping, for MultiLaneEngine ──────────────────────────────
     // process() is these three in a row. A host running several engines as
     // the lanes of one multichannel stream steps them together instead, so
@@ -140,6 +154,10 @@ public:
     // one non-negative sample per frame.
     void processMasterSlotLocked(int slot, int numFrames, const float* detectorKey);
     void finishBlockLocked(float* left, float* right, int numFrames);
+    // After finishBlockLocked: whether that block came out as it went into
+    // processMixBusesLocked, as lastProcessUnchanged() says it of a whole
+    // process(). The host's own non-finite guard is not part of it.
+    bool blockUnchangedLocked() const { return blockUnchanged_; }
     // The master bus signal between slots: what the next slot will receive.
     const float* masterSumL() const { return sumL_.data(); }
     const float* masterSumR() const { return sumR_.data(); }
@@ -317,18 +335,27 @@ private:
     // Per-block peaks across the pieces, stored once at the end.
     float blockPeakL_[TOTAL_BUSES] = {};
     float blockPeakR_[TOTAL_BUSES] = {};
+    // What lastProcessUnchanged() is made of, per block (audio thread only):
+    // every piece of the mix reached the master untouched, every master slot
+    // left it so, and then the whole block, with the master fader.
+    bool mixUnchanged_ = false;
+    bool masterUnchanged_ = false;
+    bool blockUnchanged_ = false;
+    bool processUnchanged_ = false;
     // How many mix buses a save carries: the grown, untouched tail left off.
     int savedMixBusCountLocked() const;
     bool skippedOnThisLane(const SnapinProcessor& plugin) const;
     // One slot of a chain, in place on [l]/[r]: processed and blended when
     // [run], otherwise delayed by the effect's latency so the chain's delay
     // is the same bypassed or not. A block the effect turns non-finite is
-    // replaced by its dry signal and the effect reset.
-    void runSlotLocked(SnapinProcessor& plugin, float* l, float* r, int numFrames, bool run);
+    // replaced by its dry signal and the effect reset. Returns whether the
+    // samples were left exactly as they were: not processed, and no latency.
+    bool runSlotLocked(SnapinProcessor& plugin, float* l, float* r, int numFrames, bool run);
     // Base-rate samples the chain on [bus] delays its signal by.
     static int chainLatencyLocked(const Bus& bus);
     // The pieces of process(), for one block no longer than maxBlockSize_.
-    void processBlockLocked(float* left, float* right, int numFrames);
+    // Returns whether the block came out as it went in.
+    bool processBlockLocked(float* left, float* right, int numFrames);
     bool monoLane_ = false;
     void recalcBusGains(float gainDb, float pan, float& targetL, float& targetR);
 

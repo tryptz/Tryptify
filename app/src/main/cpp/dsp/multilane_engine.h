@@ -148,11 +148,21 @@ public:
      */
     void processPlanar(float* const* channels, int numChannels, int numFrames) {
         const int block = maxBlock_.load(std::memory_order_relaxed);
+        bool unchanged = true;
         for (int done = 0; done < numFrames; done += block) {
             const int n = std::min(block, numFrames - done);
-            processChunk(channels, numChannels, done, n);
+            unchanged = processChunk(channels, numChannels, done, n) && unchanged;
         }
+        unchanged_ = unchanged;
     }
+
+    /**
+     * Whether the last processPlanar() handed every channel back as it came
+     * in: DspEngine::lastProcessUnchanged() of every lane that ran. A mono
+     * lane folds back to its own sample (x + x and the halving are exact).
+     * From the thread that called processPlanar().
+     */
+    bool lastProcessUnchanged() const { return unchanged_; }
 
     /**
      * Whether a wide stream is spread across the mixer, one bus per channel
@@ -277,8 +287,10 @@ private:
         for (int i = 0; i < n; i++) dst[i] = 0.5f * (l[i] + r[i]);
     }
 
-    void processChunk(float* const* ch, int numChannels, int offset, int n) {
+    // One chunk of processPlanar(); returns whether it came out as it went in.
+    bool processChunk(float* const* ch, int numChannels, int offset, int n) {
         std::unique_lock<std::mutex> lanesLock(laneMutex_, std::try_to_lock);
+        bool unchanged = true;
 
         if (!lanesLock.owns_lock()) {
             // A control change is fanning out: this block runs each lane on
@@ -298,9 +310,10 @@ private:
                 float* r;
                 if (!lanePointers(k, ch, numChannels, offset, n, l, r)) continue;
                 lanes_[k]->process(l, r, n);
+                unchanged = lanes_[k]->lastProcessUnchanged() && unchanged;
                 foldMono(k, ch, offset, n);
             }
-            return;
+            return unchanged;
         }
 
         const int count = laneCount();
@@ -316,8 +329,17 @@ private:
             chainLocks[k] = std::unique_lock<std::mutex>(lanes_[k]->chainMutex());
         }
 
+        // A NaN or infinity from upstream is silenced before any lane sees
+        // it, as DspEngine::process does for a stereo stream: the lanes are
+        // stepped here instead, and it would otherwise lodge in their filters
+        // and feedback paths.
+        bool finite[MAX_LANES];
         for (int k = 0; k < count; k++) {
-            if (active[k]) lanes_[k]->processMixBusesLocked(laneL[k], laneR[k], n);
+            if (!active[k]) continue;
+            const bool replacedL = dspZeroNonFinite(laneL[k], n);
+            const bool replacedR = dspZeroNonFinite(laneR[k], n);
+            finite[k] = !replacedL && !replacedR;
+            lanes_[k]->processMixBusesLocked(laneL[k], laneR[k], n);
         }
 
         int slots = 0;
@@ -347,8 +369,10 @@ private:
         for (int k = 0; k < count; k++) {
             if (!active[k]) continue;
             lanes_[k]->finishBlockLocked(laneL[k], laneR[k], n);
+            unchanged = finite[k] && lanes_[k]->blockUnchangedLocked() && unchanged;
             foldMono(k, ch, offset, n);
         }
+        return unchanged;
     }
 
     std::vector<std::unique_ptr<DspEngine>> lanes_;
@@ -367,4 +391,5 @@ private:
     std::vector<float> key_;
     std::vector<float> monoL_[MAX_LANES];
     std::vector<float> monoR_[MAX_LANES];
+    bool unchanged_ = false;  // audio thread only
 };

@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include "finite.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -151,10 +152,8 @@ public:
 
 private:
     static bool finite(double x) {
-        // Bit test, not std::isfinite: see util/finite.h.
-        uint64_t bits;
-        std::memcpy(&bits, &x, sizeof bits);
-        return (bits & 0x7FF0000000000000ull) != 0x7FF0000000000000ull;
+        // Not std::isfinite, nor a bit test of its own: see util/finite.h.
+        return dspIsFinite(x);
     }
 
     float b0_ = 1.0f, b1_ = 0.0f, b2_ = 0.0f;

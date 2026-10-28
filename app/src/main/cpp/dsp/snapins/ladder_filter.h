@@ -44,6 +44,13 @@ public:
 
         float res = resonance_ / 100.0f * 4.0f;  // 0-4 range for self-oscillation
         float driveLin = saturate_ ? std::pow(10.0f, driveDb_ / 20.0f) : 1.0f;
+        // At no resonance (the default) the feedback term is a zero, so its
+        // two tanh() per sub-step are skipped. Taking a zero away leaves every
+        // value as it was, bit for bit, but one: -0.0 - (-0.0) is +0.0. The
+        // input here is -0.0 only when the bias is too (a sum is -0.0 only if
+        // both its terms are), and even then all it changes is the sign of a
+        // silent sample.
+        const bool resonant = res != 0.0f;
 
         for (int i = 0; i < numFrames; i++) {
             // Process at 2x internally for better behaviour near Nyquist.
@@ -89,8 +96,10 @@ public:
                 // on the edge of oscillation, and with saturation off nothing
                 // else stopped it growing — to 1e10 at 44.1 kHz. Bounded
                 // feedback lets it self-oscillate at a steady level instead.
-                inL -= res * std::tanh(feedbackL_);
-                inR -= res * std::tanh(feedbackR_);
+                if (resonant) {
+                    inL -= res * std::tanh(feedbackL_);
+                    inR -= res * std::tanh(feedbackR_);
+                }
 
                 // 4 cascaded one-pole filters
                 for (int s = 0; s < 4; s++) {

@@ -131,7 +131,7 @@ Use for DSP, Atmos/spatial processing, equalization, loudness, normalization, na
 - Parameter updates crossing threads must be atomic, lock-free, or safely handed off outside the realtime callback.
 - Bypass and fallback paths must remain audible and safe when a feature is unavailable.
 - DSP changes must not silently alter gain, clipping behavior, latency, or channel layout.
-- The DSP library builds with `-ffast-math -fno-exceptions`. Under the first, `std::isfinite` may compile to `true`: test finiteness with `dspIsFinite`/`dspAllFinite` (`dsp/util/finite.h`), which read the bits. Under the second, a throw is an abort: parse with `strtof`, never `stof`.
+- The DSP library builds with `-ffast-math -fno-exceptions`. Under the first, `std::isfinite` may compile to `true`, and on the phone's clang 21 so may a plain bit test: test finiteness with `dspIsFinite`/`dspAllFinite` (`dsp/util/finite.h`), which read the bits behind an asm barrier the compiler cannot see through. `finite_guard_test` checks them with the NDK under qemu; `engine_stress_test` on the host cannot catch this fold. Under the second, a throw is an abort: parse with `strtof`, never `stof`.
 - An oversampled effect delays its output by `latency()` samples. The engine aligns the dry blend and the other buses to it; anything new that mixes an oversampled path with an unoversampled one must do the same, or it comb-filters.
 
 ### Workflow

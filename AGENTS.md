@@ -67,7 +67,10 @@ files that nothing ever opened.
 The native DSP has host tests that build with the desktop compiler, no
 device or NDK needed — the multichannel mixer, the Oxford stages at Atmos
 widths, ReplayGain's stage in front of the mixer, the Oxford effects and every
-snapin (`replay_gain_test`), the WSOLA shifter, the EBU R128 loudness meter (against EBU Tech
+snapin (`replay_gain_test`), the mixer's exactness (a flat mix and a fader
+moved and back come out bit for bit, `engine_exactness_test`), the effects'
+delay lines and buffers (`snapin_buffers_test`), the finite guards
+(`finite_guard_test`, see below), the WSOLA shifter, the EBU R128 loudness meter (against EBU Tech
 3341/3342's reference signals), the dynamic range meter (against signals whose
 DR is known by hand), the spectrum waterfall's geometry and the knobs' music
 links (`mod_route_test`, held to the same numbers as the Kotlin
@@ -78,6 +81,16 @@ submodule and is skipped without it:
 ```
 app/src/main/cpp/dsp/tests/run_host_tests.sh
 ```
+
+The phone's compiler is stricter about `-ffast-math` than the desktop's:
+clang 21 (NDK r29) takes every float argument as finite and folds a plain bit
+test for NaN away, which no host build does, so a guard can pass every host
+test and still do nothing on the phone. `dsp/util/finite.h` hides the bits
+behind an empty asm; use `dspIsFinite`/`dspAllFinite`/`dspZeroNonFinite` (or
+the same barrier) for any finiteness check. `finite_guard_test` is also built
+with the NDK and run under qemu for both ARM ABIs when the NDK and
+`qemu-user-static` are present (`apt-get install qemu-user-static`);
+otherwise that step says it skipped.
 
 Two more native suites are CMake projects of their own, built and run on the
 desktop the same way: the Atmos renderer's (`atmos/tests/`, sixteen tests; the

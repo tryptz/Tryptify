@@ -141,12 +141,8 @@ private:
     /** Any reading above this is one: kNone and the silence floor are below. */
     static constexpr float kNoReading = -100.0f;
 
-    static bool usable(float v) {
-        uint32_t bits;
-        std::memcpy(&bits, &v, sizeof bits);
-        // Not negative, not zero, and not NaN or infinity (an exponent of all ones).
-        return (bits >> 31) == 0 && ((bits >> 23) & 0xffu) != 0xffu && v > 0.0f;
-    }
+    /** Positive and finite. dspIsFinite, since a plain bit test can fold away under -ffast-math (util/finite.h). */
+    static bool usable(float v) { return dspIsFinite(v) && v > 0.0f; }
 
     void measure(const float* in, int frames) { meter_.process(in, frames); }
 

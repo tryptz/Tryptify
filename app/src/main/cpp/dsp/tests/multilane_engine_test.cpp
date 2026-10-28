@@ -7,7 +7,9 @@
 // checked where a failure is cheap to read.
 
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -388,7 +390,47 @@ void clonedLanesNarrowWithTheFirst() {
     check(same, "after 7.1.4 then 5.1 every lane has the same four buses");
 }
 
+void nonFiniteInputNeverReachesTheLanes() {
+    // The lanes are stepped by the host, not through DspEngine::process, so
+    // the host silences a NaN or infinity before any lane sees it, as process
+    // does for stereo. Otherwise it reached the reverb, which was reset to
+    // keep it out of the output, and its tail went with it. A block with
+    // them must play on exactly as one with silence in their place.
+    auto run = [](bool poison) {
+        MultiLaneEngine lanes(kRate, kBlock);
+        lanes.forEach([](DspEngine& e) { e.addPlugin(0, 0, static_cast<int>(SnapinType::REVERB)); });
+        lanes.setSpread(false);  // every lane through bus 1's reverb
+        lanes.configureLanes(k714First, k714Second, k714Lanes);
+        Planar p(k714Channels);
+        std::vector<float> out;
+        long n = 0;
+        for (int b = 0; b < 40; b++) {
+            for (int i = 0; i < kBlock; i++, n++) {
+                for (int c = 0; c < k714Channels; c++) p.ch[c][i] = tone(n, 200 + 50 * c, 0.3);
+            }
+            if (b == 5) {
+                const uint32_t nanBits = 0x7FC00000u, infBits = 0xFF800000u;
+                if (poison) {
+                    std::memcpy(&p.ch[0][10], &nanBits, 4);  // front left: a pair lane
+                    std::memcpy(&p.ch[2][20], &infBits, 4);  // centre: a mono lane
+                    std::memcpy(&p.ch[9][30], &nanBits, 4);
+                } else {
+                    p.ch[0][10] = p.ch[2][20] = p.ch[9][30] = 0.0f;
+                }
+            }
+            lanes.processPlanar(p.ptr.data(), k714Channels, kBlock);
+            for (int c = 0; c < k714Channels; c++) out.insert(out.end(), p.ch[c].begin(), p.ch[c].end());
+        }
+        return out;
+    };
+    const std::vector<float> poisoned = run(true), clean = run(false);
+    check(poisoned.size() == clean.size() &&
+              std::memcmp(poisoned.data(), clean.data(), sizeof(float) * poisoned.size()) == 0,
+          "a NaN or infinity into a wide stream plays exactly as silence would have");
+}
+
 int main() {
+    nonFiniteInputNeverReachesTheLanes();
     stereoIsUnchanged();
     everyPairLaneRunsTheSameChain();
     masterDynamicsAreLinked();

@@ -2,7 +2,7 @@
 #include "snapin_processor.h"
 #include <cmath>
 #include <algorithm>
-#include <cstdlib>
+#include <cstdint>
 
 // Lo-fi: reduced sample rate + bit depth with optional dither.
 class BitcrushProcessor : public SnapinProcessor {
@@ -45,8 +45,8 @@ public:
 
                 // Triangular PDF dither
                 if (ditherAmt > 0.0f) {
-                    float d1 = (static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f;
-                    float d2 = (static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f;
+                    float d1 = nextUniform() * 2.0f - 1.0f;
+                    float d2 = nextUniform() * 2.0f - 1.0f;
                     float tpdf = (d1 + d2) * 0.5f;
                     float lsb = 1.0f / levels;
                     inL += tpdf * lsb * ditherAmt;
@@ -95,6 +95,16 @@ public:
     SnapinType getType() const override { return SnapinType::BITCRUSH; }
 
 private:
+    // 0..1 from a xorshift of this instance's own, as the pitch shifter's
+    // drift has. rand() was called here on the audio thread, and bionic's
+    // takes a lock.
+    float nextUniform() {
+        rng_ ^= rng_ << 13;
+        rng_ ^= rng_ >> 17;
+        rng_ ^= rng_ << 5;
+        return static_cast<float>(rng_ & 0xFFFFFF) / static_cast<float>(0xFFFFFF);
+    }
+
     float rate_ = 44100.0f;
     float bits_ = 24.0f;
     float adcQuality_ = 100.0f;
@@ -104,4 +114,5 @@ private:
 
     float holdL_ = 0.0f, holdR_ = 0.0f;
     float phaseAcc_ = 0.0f;
+    uint32_t rng_ = 0x9E3779B9u;
 };

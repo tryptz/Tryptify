@@ -146,6 +146,15 @@ public:
         return y;
     }
 
+    // Takes [x] into the history without working out an output: what
+    // process() does to the filter, less its 511-tap dot product. The history
+    // is the filter's only state, so one fed this way and then process()ed is
+    // exactly one that was process()ed all along.
+    inline void push(float x) noexcept {
+        buffer_[writePos_] = x;
+        writePos_ = (writePos_ + 1) % LEN;
+    }
+
 private:
     std::array<float, LEN> h_{};
     std::array<float, LEN> buffer_{};
@@ -312,12 +321,16 @@ public:
 
                 // Always advance the delay line + FIR buffers so toggling
                 // BAND SPLIT is seamless (no jump when state becomes active).
+                // The FIRs' outputs are only worked out while it is on: off,
+                // the default, that was two 511-tap dot products per sample
+                // per channel, a fifth of a core at 48 kHz stereo, for values
+                // nothing read.
                 const float xd = dryDelay_[c].process(x);
-                const float lo = firLow_ [c].process(x);
-                const float hi = firHigh_[c].process(x);
 
                 float shaped;
                 if (split) {
+                    const float lo = firLow_ [c].process(x);
+                    const float hi = firHigh_[c].process(x);
                     const float mid = xd - lo - hi;
                     // Each band is shaped independently, so each needs its own
                     // oversampler state — sharing one would smear the filter
@@ -326,6 +339,8 @@ public:
                            + shapeOs(c, kOsMid,  mid, A, B, C, D, osFactor)
                            + shapeOs(c, kOsHigh, hi,  A, B, C, D, osFactor);
                 } else {
+                    firLow_ [c].push(x);
+                    firHigh_[c].push(x);
                     shaped = shapeOs(c, kOsFull, xd, A, B, C, D, osFactor);
                 }
 

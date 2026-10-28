@@ -27,7 +27,7 @@ public:
         envL_.setMode(DetectionMode::Peak);
         envR_.setMode(DetectionMode::Peak);
 
-        updateLookahead();
+        updateLookahead(/* fresh = */ true);
 
         gainL_ = 1.0f;
         gainR_ = 1.0f;
@@ -92,7 +92,7 @@ public:
         switch (index) {
             case ATTACK:
                 attackMs_ = std::max(0.0f, std::min(50.0f, value));
-                updateLookahead();
+                updateLookahead(/* fresh = */ false);
                 break;
             case HOLD:    holdMs_ = std::max(0.0f, std::min(500.0f, value)); break;
             case RELEASE:
@@ -131,11 +131,18 @@ public:
     SnapinType getType() const override { return SnapinType::COMPACTOR; }
 
 private:
-    void updateLookahead() {
+    // The attack is the lookahead. [fresh] for a new rate, which starts the
+    // buffers silent; a turn of the knob keeps what they hold.
+    void updateLookahead(bool fresh) {
         int samples = static_cast<int>(attackMs_ * 0.001f * static_cast<float>(sampleRate_));
         if (samples < 1) samples = 1;
-        lookaheadL_.prepare(samples);
-        lookaheadR_.prepare(samples);
+        if (fresh) {
+            lookaheadL_.prepare(samples);
+            lookaheadR_.prepare(samples);
+        } else {
+            lookaheadL_.setDelay(samples);
+            lookaheadR_.setDelay(samples);
+        }
     }
 
     float computeGain(float envVal, float threshLin, float rangeFactor) const {

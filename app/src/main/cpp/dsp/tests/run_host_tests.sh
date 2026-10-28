@@ -30,6 +30,20 @@ echo "== snapin_fixes_test"
 $cxx $flags "$here/snapin_fixes_test.cpp" -o "$out/snapin_fixes_test"
 "$out/snapin_fixes_test"
 
+# The effects' delay lines and rings: read as they did before their % went,
+# never past their ends at any knob setting (DSP_CHECK_DELAY_RANGE counts
+# that), silent after a rate change; the limiter past its old 2^31-sample
+# overflow. Run again under the sanitizers below.
+echo "== snapin_buffers_test"
+$cxx $flags -DDSP_CHECK_DELAY_RANGE "$here/snapin_buffers_test.cpp" -o "$out/snapin_buffers_test"
+"$out/snapin_buffers_test"
+
+# The mixer's exactness: a flat mix and a fader moved and back come out bit
+# for bit, the glide is the one it was, and the untouched flag never lies.
+echo "== engine_exactness_test"
+$cxx $flags "$here/engine_exactness_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/engine_exactness_test"
+"$out/engine_exactness_test"
+
 # ReplayGain's stage, alone and in front of the mixer, the Oxford effects and
 # every snapin: exact at unity, no click on a change, a raised song's level,
 # and a song with no tags measured and turned down to the target. With
@@ -95,12 +109,48 @@ if [ "${SANITIZE:-1}" != "0" ]; then
     UBSAN_OPTIONS=halt_on_error=1 "$out/engine_stress_test" \
         "$here/../../../../test/resources/snapin_ranges.csv" 8
 
+    echo "== snapin_buffers_test (asan, ubsan)"
+    $cxx $flags -DDSP_CHECK_DELAY_RANGE -g -fsanitize=address,undefined -fno-omit-frame-pointer \
+        "$here/snapin_buffers_test.cpp" -o "$out/snapin_buffers_test_asan"
+    UBSAN_OPTIONS=halt_on_error=1 "$out/snapin_buffers_test_asan"
+
     echo "== engine_stress_test chaos (tsan)"
     $cxx $flags -g -fsanitize=thread \
         "$here/engine_stress_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/engine_stress_tsan" -lpthread
     TSAN_OPTIONS=halt_on_error=1 "$out/engine_stress_tsan" \
         "$here/../../../../test/resources/snapin_ranges.csv" 10 chaos
 fi
+
+# The finite guards with -ffast-math. Host compilers keep their bit tests,
+# but clang 21 (NDK r29) folded them away (util/finite.h), so with the NDK
+# and qemu on this machine the test is also built by the phone's compiler,
+# with the library's flags, and run under emulation for both ARM ABIs.
+echo "== finite_guard_test (fast-math)"
+$cxx $flags -ffast-math "$here/finite_guard_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/finite_guard_test"
+"$out/finite_guard_test"
+# The SDK as the build finds it: $ANDROID_HOME, or local.properties' sdk.dir.
+sdk=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}
+props="$here/../../../../../../local.properties"
+if [ -z "$sdk" ] && [ -f "$props" ]; then
+    sdk=$(sed -n 's/^sdk\.dir=//p' "$props" | tail -n 1)
+fi
+ndk_bin=$(ls -d "${sdk:-/nonexistent}"/ndk/*/toolchains/llvm/prebuilt/linux-x86_64/bin 2>/dev/null | tail -n 1 || true)
+for abi in aarch64 armv7a; do
+    echo "== finite_guard_test (NDK $abi, qemu)"
+    case $abi in
+        aarch64) target=aarch64-linux-android26; qemu=qemu-aarch64; arch=-march=armv8-a+simd ;;
+        *) target=armv7a-linux-androideabi26; qemu=qemu-arm; arch= ;;
+    esac
+    runner=$(command -v "$qemu-static" || command -v "$qemu" || true)
+    if [ -z "$ndk_bin" ] || [ ! -x "$ndk_bin/$target-clang++" ] || [ -z "$runner" ]; then
+        echo "skipped: needs the NDK (\$ANDROID_HOME or sdk.dir) and $qemu (qemu-user-static)"
+        continue
+    fi
+    "$ndk_bin/$target-clang++" -std=c++17 -O3 -ffast-math -fno-exceptions -fno-rtti $arch -static \
+        -I"$dsp" -I"$dsp/util" -I"$dsp/snapins" -I"$dsp/.." -I"$here/host_include" \
+        "$here/finite_guard_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/finite_guard_test_$abi"
+    "$runner" "$out/finite_guard_test_$abi"
+done
 
 # The spatial map's placer: channels heard where they are placed (HRIR and
 # pan), the LFE undirected, drags smooth, nonsense ignored. Lives with the

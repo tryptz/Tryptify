@@ -9,6 +9,7 @@ class EnvelopeFollower {
 public:
     void prepare(double sampleRate) {
         sampleRate_ = sampleRate;
+        rmsCoeff_ = rmsCoeffFor(sampleRate_);
         updateCoefficients();
     }
 
@@ -21,9 +22,7 @@ public:
     float process(float input) {
         float level;
         if (mode_ == DetectionMode::RMS) {
-            // ~10ms RMS window approximation via one-pole
-            float rmsCoeff = 1.0f - std::exp(-1.0f / (0.01f * static_cast<float>(sampleRate_)));
-            rmsSum_ += rmsCoeff * (input * input - rmsSum_);
+            rmsSum_ += rmsCoeff_ * (input * input - rmsSum_);
             level = std::sqrt(std::max(rmsSum_, 0.0f));
         } else {
             level = std::fabs(input);
@@ -37,6 +36,13 @@ public:
     float getEnvelope() const { return envelope_; }
 
 private:
+    // ~10ms RMS window approximation via one-pole. It depends on the rate
+    // alone, so it is worked out when that is set rather than with an exp()
+    // on every sample.
+    static float rmsCoeffFor(double sampleRate) {
+        return 1.0f - std::exp(-1.0f / (0.01f * static_cast<float>(sampleRate)));
+    }
+
     void updateCoefficients() {
         if (sampleRate_ <= 0.0) return;
         attackCoeff_ = (attackMs_ <= 0.0f) ? 1.0f
@@ -51,6 +57,7 @@ private:
     DetectionMode mode_ = DetectionMode::Peak;
     float attackCoeff_ = 1.0f;
     float releaseCoeff_ = 1.0f;
+    float rmsCoeff_ = rmsCoeffFor(44100.0);
     float envelope_ = 0.0f;
     float rmsSum_ = 0.0f;
 };
