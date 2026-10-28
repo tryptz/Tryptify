@@ -30,6 +30,12 @@ echo "== snapin_fixes_test"
 $cxx $flags "$here/snapin_fixes_test.cpp" -o "$out/snapin_fixes_test"
 "$out/snapin_fixes_test"
 
+# ReplayGain's stage, alone and in front of the mixer, the Oxford effects and
+# every snapin: exact at unity, no click on a change, a raised song's level.
+echo "== replay_gain_test"
+$cxx $flags "$here/replay_gain_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/replay_gain_test"
+"$out/replay_gain_test"
+
 # Every snapin's defaults against the table ParamDefs.kt is also checked
 # against. After a deliberate default change, regenerate it with --write.
 echo "== snapin_defaults_test"

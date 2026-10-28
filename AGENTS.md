@@ -66,7 +66,8 @@ files that nothing ever opened.
 
 The native DSP has host tests that build with the desktop compiler, no
 device or NDK needed — the multichannel mixer, the Oxford stages at Atmos
-widths, the WSOLA shifter, the EBU R128 loudness meter (against EBU Tech
+widths, ReplayGain's stage in front of the mixer, the Oxford effects and every
+snapin (`replay_gain_test`), the WSOLA shifter, the EBU R128 loudness meter (against EBU Tech
 3341/3342's reference signals), the dynamic range meter (against signals whose
 DR is known by hand), the spectrum waterfall's geometry and the knobs' music
 links (`mod_route_test`, held to the same numbers as the Kotlin

@@ -11,7 +11,6 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.roundToInt
 
 /**
  * ReplayGain's stage: the song's gain ([ReplayGain.linear]), applied to the
@@ -22,13 +21,21 @@ import kotlin.math.roundToInt
  * both outputs (Media3's and the USB DAC's), and a quiet song with room to
  * spare is turned up.
  *
+ * The samples are worked in C++, by the C++ DSP chain's ReplayGainStage
+ * (cpp/dsp/replaygain/replay_gain.h, through [ReplayGainNative]), which is
+ * tested there against the mixer and every effect after it. This is its
+ * Media3 shell: formats, buffers and the stream's start and end. It stays
+ * here, ahead of the mixer, rather than inside the mixer's engine, so it
+ * works with the mixer off, on every output and in a blend's tail.
+ *
  * At unity (ReplayGain off, an untagged song, a 0 dB gain) the samples are
  * copied through exactly, so bit-perfect output stays bit-perfect. A new gain
  * glides in over [RAMP_MS] rather than stepping, except at the start of a
  * stream (a flush: a skip, a seek), which starts at it.
  *
  * Realtime: [setGain] is one volatile store from any thread; the audio thread
- * reads it once a buffer, and neither locks nor allocates per buffer.
+ * reads it once a buffer and hands it over with the buffer. Nothing locks or
+ * allocates per buffer once the output buffer has grown to size.
  * 16-bit and float PCM only; any other encoding passes by inactive.
  */
 @Singleton
@@ -38,20 +45,16 @@ class ReplayGainProcessor @Inject constructor() : AudioProcessor {
     /** The gain wanted, linear. Written from the service, read on the audio thread. */
     @Volatile private var target = 1f
 
-    /** The gain the audio thread is at, gliding to [target]. Audio thread only. */
-    private var current = 1f
-
-    // The glide under way: where to and by how much a frame, fixed when it
-    // starts, so it lands on the goal exactly (a step worked out afresh each
-    // buffer from what is left would only ever approach it, and a gain that
-    // never quite gets back to 1.0 is never bit-perfect again). Audio thread only.
-    private var rampGoal = 1f
-    private var rampStep = 0f
+    /** The native stage, made when a stream of a format it works first starts. Audio thread only. */
+    private var native = 0L
 
     private var pendingFormat = AudioFormat.NOT_SET
     private var inputFormat = AudioFormat.NOT_SET
     private var buffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var outputBuffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
+
+    /** A copy of a buffer Media3 handed over on the heap, for the native side. Rare. */
+    private var directInput: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var inputEnded = false
 
     /** Sets the gain, linear (1.0 = unchanged). Any thread. */
@@ -74,51 +77,22 @@ class ReplayGainProcessor @Inject constructor() : AudioProcessor {
 
     override fun queueInput(inputBuffer: ByteBuffer) {
         val format = inputFormat
-        if (format == AudioFormat.NOT_SET || !inputBuffer.hasRemaining()) {
+        if (format == AudioFormat.NOT_SET || native == 0L || !inputBuffer.hasRemaining()) {
             outputBuffer = AudioProcessor.EMPTY_BUFFER
             return
         }
-        val bytes = inputBuffer.remaining()
-        val out = ensureOutput(bytes)
-        val goal = target
-        if (current == goal && goal == 1f) {
-            // Unity, settled: an exact copy.
-            out.put(inputBuffer)
-            out.flip()
-            outputBuffer = out
-            return
-        }
-        val channels = format.channelCount
         val float = format.encoding == C.ENCODING_PCM_FLOAT
-        val sampleBytes = if (float) FLOAT_BYTES else INT16_BYTES
-        val frames = bytes / (sampleBytes * channels)
-        val start = inputBuffer.position()
-        // A linear glide to the goal over RAMP_MS, then flat.
-        if (goal != rampGoal) {
-            rampGoal = goal
-            rampStep = (goal - current) / maxOf(1f, format.sampleRate * RAMP_MS / 1000f)
-        }
-        var g = current
-        var offset = 0
-        for (frame in 0 until frames) {
-            if (g != goal) {
-                g += rampStep
-                if ((rampStep > 0f && g >= goal) || (rampStep < 0f && g <= goal) || rampStep == 0f) g = goal
-            }
-            for (c in 0 until channels) {
-                if (float) {
-                    out.putFloat(offset, inputBuffer.getFloat(start + offset) * g)
-                } else {
-                    val v = (inputBuffer.getShort(start + offset) * g).roundToInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
-                    out.putShort(offset, v.toShort())
-                }
-                offset += sampleBytes
-            }
-        }
-        current = g
+        val frameBytes = (if (float) FLOAT_BYTES else INT16_BYTES) * format.channelCount
         // Whole frames are processed; a stray part-frame (never from a decoder) is dropped.
+        val frames = inputBuffer.remaining() / frameBytes
+        val bytes = frames * frameBytes
+        val out = ensureOutput(bytes)
+        val source = if (inputBuffer.isDirect) inputBuffer else directCopyOf(inputBuffer, bytes)
+        val offset = if (source === inputBuffer) inputBuffer.position() else 0
+        ReplayGainNative.nativeProcess(native, source, offset, out, frames, float, target)
         inputBuffer.position(inputBuffer.limit())
-        out.limit(offset)
+        out.position(0)
+        out.limit(bytes)
         outputBuffer = out
     }
 
@@ -141,9 +115,12 @@ class ReplayGainProcessor @Inject constructor() : AudioProcessor {
             inputFormat = pendingFormat
             pendingFormat = AudioFormat.NOT_SET
         }
+        val format = inputFormat
+        if (format == AudioFormat.NOT_SET) return
+        if (native == 0L) native = ReplayGainNative.nativeCreate()
+        ReplayGainNative.nativePrepare(native, format.sampleRate, format.channelCount)
         // A new stream starts at its gain: a glide here would be a fade-in.
-        current = target
-        rampGoal = current
+        ReplayGainNative.nativeReset(native, target)
     }
 
     override fun reset() {
@@ -151,9 +128,12 @@ class ReplayGainProcessor @Inject constructor() : AudioProcessor {
         inputFormat = AudioFormat.NOT_SET
         buffer = AudioProcessor.EMPTY_BUFFER
         outputBuffer = AudioProcessor.EMPTY_BUFFER
+        directInput = AudioProcessor.EMPTY_BUFFER
         inputEnded = false
-        current = target
-        rampGoal = current
+        if (native != 0L) {
+            ReplayGainNative.nativeDestroy(native)
+            native = 0L
+        }
     }
 
     /** Position 0, limit at capacity; the caller sets the limit it filled to. */
@@ -166,8 +146,21 @@ class ReplayGainProcessor @Inject constructor() : AudioProcessor {
         return buffer
     }
 
+    private fun directCopyOf(input: ByteBuffer, bytes: Int): ByteBuffer {
+        if (directInput.capacity() < bytes) {
+            directInput = ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder())
+        } else {
+            directInput.clear()
+        }
+        val slice = input.duplicate()
+        slice.limit(slice.position() + bytes)
+        directInput.put(slice)
+        directInput.flip()
+        return directInput
+    }
+
     companion object {
-        /** How long a change of gain takes: long enough not to click, short enough to go unheard. */
+        /** How long a change of gain takes (ReplayGainStage::kRampMs). */
         const val RAMP_MS = 50f
         private const val FLOAT_BYTES = 4
         private const val INT16_BYTES = 2

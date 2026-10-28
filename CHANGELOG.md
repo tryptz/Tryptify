@@ -25,6 +25,7 @@
 
 #### ReplayGain, for real this time
 - **Settings › Audio › Audio processing › ReplayGain** evens out loudness between songs from the ReplayGain (or R128) tags in your files: Track, Album, or Smart, which uses the album's level while an album plays in order. Off by default, so nothing sounds different until you choose.
+- **ReplayGain's stage is part of the C++ DSP chain** (`cpp/dsp/replaygain/`), ahead of the mixer on every output and in a blend's tail, so it works with the mixer off too. Its desktop test runs it in front of the mixer, the inflator, the compressor and every snapin: exact at unity, no click when the gain changes, and a song raised to full scale stays there through the chain at its defaults.
 - **It aims at a target loudness, in LUFS**: -23 (EBU R128), -18 (ReplayGain's own), -16, -14 (most streaming services, the default) or -8. A pre-amp chosen before becomes the nearest target. Turning it on or off, or picking another target, changes the song playing at once, with a 50 ms glide.
 - **It never clips.** Loud songs are turned down; a song is turned up only as far as its file's peak tag (`REPLAYGAIN_TRACK_PEAK`, `REPLAYGAIN_ALBUM_PEAK`) leaves room, and not at all without one. A library scanned before reads its peaks once, in the background, after the update; Opus files have no peak tag and are only turned down. It works on every output, the USB DAC included, and with it off (or at 0 dB) the sound passes through untouched, so bit-perfect stays bit-perfect.
 

@@ -67,6 +67,8 @@ add_library(monochrome_dsp SHARED
     dsp/meter/loudness_jni.cpp
     # Each local track's dynamic range, measured as it plays, for the library galaxy.
     dsp/meter/dynamic_range_jni.cpp
+    # ReplayGain's stage, ahead of the mixer: every song at the target loudness.
+    dsp/replaygain/replay_gain_jni.cpp
 )
 
 target_include_directories(monochrome_dsp PRIVATE
