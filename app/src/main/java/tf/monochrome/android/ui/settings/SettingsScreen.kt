@@ -3984,7 +3984,7 @@ private fun WhatsNewPanel(highlight: Boolean) {
 
                     if (kind != null) {
                         Text(
-                            text = kind.heading,
+                            text = stringResource(kind.headingRes),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.primary,
@@ -3998,8 +3998,9 @@ private fun WhatsNewPanel(highlight: Boolean) {
                     var section: String? = null
                     entries.forEach { entry ->
                         if (entry.section != null && entry.section != section) {
+                            val sectionRes = WhatsNew.sectionRes(entry.section)
                             Text(
-                                text = entry.section,
+                                text = if (sectionRes != 0) stringResource(sectionRes) else entry.section,
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
@@ -4007,13 +4008,15 @@ private fun WhatsNewPanel(highlight: Boolean) {
                         }
                         section = entry.section
                         Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                            // In the listener's language where the release was
+                            // translated; the English as written before that.
                             Text(
-                                text = entry.title,
+                                text = if (entry.titleRes != 0) stringResource(entry.titleRes) else entry.title,
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                             Text(
-                                text = entry.body,
+                                text = if (entry.bodyRes != 0) stringResource(entry.bodyRes) else entry.body,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

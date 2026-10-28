@@ -33,7 +33,7 @@ class ChartsRepository @Inject constructor(
 ) {
     private val mutex = Mutex()
     private val sitewide = mutableMapOf<ChartWindow, Cached<SitewideChart>>()
-    // The artist sets, the tag charts and the artist facts below were checked
+    // The artist sets, the tag charts, the artist tags and the artist facts below were checked
     // for age on read and never let go of, so every genre and artist the map
     // was walked through stayed for the life of the process. Now an expired
     // answer goes as the next one of its kind is written, and past a ceiling
@@ -41,7 +41,7 @@ class ChartsRepository @Inject constructor(
     // if asked for.
     private val artistSets = leastRecentlyUsed<Set<String>>(MAX_GENRE_ENTRIES)
     private val tagCharts = leastRecentlyUsed<List<ChartEntry>>(MAX_GENRE_ENTRIES)
-    private val artistTags = mutableMapOf<String, Cached<List<String>>>()
+    private val artistTags = leastRecentlyUsed<List<String>>(MAX_ARTIST_FACTS)
 
     private val sitewideFlight = SingleFlight<ChartWindow, SitewideChart>()
     private val artistSetFlight = SingleFlight<String, Set<String>>()
@@ -81,7 +81,7 @@ class ChartsRepository @Inject constructor(
          */
         private const val MAX_GENRE_ENTRIES = 200
 
-        /** Most artists' facts held at once. */
+        /** Most artists' facts, and most artists' tags, held at once. */
         private const val MAX_ARTIST_FACTS = 200
     }
 
@@ -245,7 +245,10 @@ class ChartsRepository @Inject constructor(
             val tags = client.artistTopTags(artist, apiKey)
             if (tags.isNotEmpty()) {
                 val held = Cached(tags)
-                mutex.withLock { artistTags[key] = held }
+                mutex.withLock {
+                    artistTags.dropExpired(TTL_ARTIST_TAGS_MS)
+                    artistTags[key] = held
+                }
                 disk.putArtistTags(key, held.value, held.at)
             }
             tags

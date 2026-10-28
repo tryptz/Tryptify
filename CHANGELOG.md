@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Fixed
+- **Continue into the next list keeps going when it should.** After a restart, a long list plays to its end instead of jumping to the next list at song 300; on a weak connection a list that won't load is tried again at the next song's end or Next, rather than taken for the end and replaced by radio, and the wait is at most 15 seconds; right after a restart a Qobuz, Deezer or Apple album is no longer asked for at TIDAL; and folders sorted by date move on without a pause.
+- **Shuffle no longer replays the lists already played.** Turned on after one list has run into the next, it shuffles only what is still to come, and turned off it stays on the same copy of the song.
+- **ReplayGain no longer dips** when a crossfade starts or when you seek in a song it turns up.
+- **ReplayGain keeps its loudness after the update** for anyone who had it on with the pre-amp untouched: -18 LUFS, as before, rather than 4 dB louder at the new default.
+- **What's New is in your language**: the 1.9.51 notes, their headings and sections in all eight.
 - **No crash risk in long sessions with the limiter on.** Its sample counter overflowed after about 12 hours of play (3 at 4× oversampling) and it read outside its buffer.
 - **Bit-perfect stays bit-perfect after a fader move.** The mixer's volume now lands exactly where it is set, so a fader moved and back, or a centred pan, passes the music through untouched again. With the mixer on and nothing changing the sound, 16-bit audio comes out as it went in, without dither.
 - **The safety checks against broken numbers work on the phone.** The phone's compiler quietly removed the checks that stop a NaN from one effect reaching the output; they now hold, on both ARM builds, and in the spatial map's placer too.

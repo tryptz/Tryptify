@@ -117,7 +117,10 @@ and a rewording made only there reverts. `StringResourcesTest` fails when the
 XML and the table disagree. Names that are never translated (`app_name`,
 `trypt_mania`) are listed in the script's `NON_TRANSLATABLE`. Plurals are rows
 whose key ends `#one`, `#other` and so on, and the script refuses a row with
-an empty language. Recurring terms (tab names, settings paths) are fixed in
+an empty language. What's New is no exception: from 1.9.51 on, every entry
+(`ui/settings/WhatsNew.kt`) names its title and body rows (`titleRes`,
+`bodyRes`), its section a row of `WhatsNew.sectionRes`, and the English
+written in the entry must match the table's (`WhatsNewTest`). Recurring terms (tab names, settings paths) are fixed in
 `app/l10n/GLOSSARY.md`; reuse its row, or add one first.
 
 ## Trypt Mania's StepMania art

@@ -1,6 +1,8 @@
 package tf.monochrome.android.ui.settings
 
+import androidx.annotation.StringRes
 import tf.monochrome.android.BuildConfig
+import tf.monochrome.android.R
 
 /**
  * The "What's New" entries shown in About, and the version they belong to.
@@ -34,10 +36,10 @@ import tf.monochrome.android.BuildConfig
  * from the outside "this works now" and "this works differently now" are the
  * same news: the thing does not do what it did.
  */
-enum class WhatsNewKind(val heading: String) {
-    NEW("New"),
-    CHANGED("Changed"),
-    REMOVED("Removed"),
+enum class WhatsNewKind(val heading: String, @StringRes val headingRes: Int) {
+    NEW("New", R.string.whats_new_kind_new),
+    CHANGED("Changed", R.string.whats_new_kind_changed),
+    REMOVED("Removed", R.string.whats_new_kind_removed),
 }
 
 data class WhatsNewEntry(
@@ -52,6 +54,14 @@ data class WhatsNewEntry(
      * confident label on a lot of guesses. New entries should set it.
      */
     val kind: WhatsNewKind? = null,
+    /**
+     * The same title and body in the listener's language, from strings.tsv,
+     * or 0 for an entry written before the notes were translated: those show
+     * the English above. Every release from 1.9.51 on has them (WhatsNewTest),
+     * and the English here must read as the table's English row does.
+     */
+    @StringRes val titleRes: Int = 0,
+    @StringRes val bodyRes: Int = 0,
 )
 
 data class WhatsNewRelease(
@@ -61,6 +71,21 @@ data class WhatsNewRelease(
 )
 
 object WhatsNew {
+
+    /**
+     * [section]'s heading in the listener's language, or 0 to print it as it
+     * is written: the sections the translated releases use.
+     */
+    @StringRes
+    fun sectionRes(section: String): Int = when (section) {
+        PLAYBACK -> R.string.whats_new_section_playback
+        PLAYLISTS -> R.string.whats_new_section_playlists
+        LIBRARY -> R.string.whats_new_section_library
+        CONNECTIONS -> R.string.whats_new_section_connections
+        LYRICS -> R.string.whats_new_section_lyrics
+        USB_DAC -> R.string.whats_new_section_usb_dac
+        else -> 0
+    }
 
     /** What travels between this device and the signed-in account, and when. */
     private const val ACCOUNT_SYNC = "Account sync"
@@ -166,72 +191,96 @@ object WhatsNew {
                     section = PLAYBACK,
                     title = "Continue into the next list",
                     body = "When a playlist, album or folder ends, the next one on the screen you opened it from plays, and after the last, radio from its last song. On by default, in Settings › Audio › Playback.",
+                    titleRes = R.string.whats_new_1951_next_list_title,
+                    bodyRes = R.string.whats_new_1951_next_list_body,
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = PLAYBACK,
                     title = "Previous goes back a list",
                     body = "On a list's first song, Previous plays the last song of the list before. The queue keeps every list played. Repeat All still loops the list, and under shuffle the next one plays shuffled.",
+                    titleRes = R.string.whats_new_1951_previous_list_title,
+                    bodyRes = R.string.whats_new_1951_previous_list_body,
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = PLAYBACK,
                     title = "ReplayGain is back",
                     body = "Settings › Audio › Audio processing › ReplayGain evens songs out to a level you pick, -23 to -8 LUFS: from their tags, or a song's loudness measured as it plays. A quiet song is raised only as far as its peak tag allows.",
+                    titleRes = R.string.whats_new_1951_replaygain_title,
+                    bodyRes = R.string.whats_new_1951_replaygain_body,
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = PLAYLISTS,
                     title = "Sort your playlists",
                     body = "Library › Playlists has a sort button beside New playlist: last edited, name or date created. Playback walks your playlists in that order.",
+                    titleRes = R.string.whats_new_1951_playlist_sort_title,
+                    bodyRes = R.string.whats_new_1951_playlist_sort_body,
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = LIBRARY,
                     title = "Your server counts your plays",
                     body = "Songs from your own music server count there: now playing as a song starts, the play once you've heard enough, so its counts, Recently played and scrobbles agree.",
+                    titleRes = R.string.whats_new_1951_server_plays_title,
+                    bodyRes = R.string.whats_new_1951_server_plays_body,
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = LIBRARY,
                     title = "Likes star songs on your server",
                     body = "Liking one of your server's songs stars it there, and unliking unstars it, so your server's other apps agree.",
+                    titleRes = R.string.whats_new_1951_server_stars_title,
+                    bodyRes = R.string.whats_new_1951_server_stars_body,
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = LIBRARY,
                     title = "Playlists and Liked songs in My server",
                     body = "Library › My server lists your server's playlists, to open, play or shuffle, and everything starred on it.",
+                    titleRes = R.string.whats_new_1951_server_playlists_title,
+                    bodyRes = R.string.whats_new_1951_server_playlists_body,
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = CONNECTIONS,
                     title = "Cellular streaming for your server",
                     body = "Settings › Connections › Music server: keep the original file on mobile data, or ask your server for an MP3 of at most 320, 192 or 128 kbps. Wi-Fi always gets the original.",
+                    titleRes = R.string.whats_new_1951_server_cellular_title,
+                    bodyRes = R.string.whats_new_1951_server_cellular_body,
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = LYRICS,
                     title = "Your files' own lyrics first",
                     body = "The .lrc next to a song and lyrics in its tags come first, for library files and downloads, and show offline. Word-timed ones are used at once.",
+                    titleRes = R.string.whats_new_1951_file_lyrics_title,
+                    bodyRes = R.string.whats_new_1951_file_lyrics_body,
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = LYRICS,
                     title = "Your server's lyrics first",
                     body = "For your server's songs, its own lyrics: timed when it has them timed, as Navidrome does, plain otherwise.",
+                    titleRes = R.string.whats_new_1951_server_lyrics_title,
+                    bodyRes = R.string.whats_new_1951_server_lyrics_body,
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = USB_DAC,
                     title = "DACs with one clock stay exclusive",
                     body = "A USB DAC that runs only 48 and 96 kHz, like the Nothing Ear (1), plays CD-rate songs in exclusive mode, resampled to its nearest rate. Rates it takes stay bit-perfect.",
+                    titleRes = R.string.whats_new_1951_one_clock_dac_title,
+                    bodyRes = R.string.whats_new_1951_one_clock_dac_body,
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = LYRICS,
                     title = "LRC lyrics read right",
                     body = "A file starting with a byte order mark keeps its first line, an end stamp is a time, an all-zero file shows as plain lyrics, and LRCLib's short stamps, offsets and word timing read as elsewhere.",
+                    titleRes = R.string.whats_new_1951_lrc_fixes_title,
+                    bodyRes = R.string.whats_new_1951_lrc_fixes_body,
                 ),
             ),
         ),
