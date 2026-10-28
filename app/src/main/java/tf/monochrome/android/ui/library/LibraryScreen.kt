@@ -1,6 +1,8 @@
 package tf.monochrome.android.ui.library
 
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import tf.monochrome.android.player.ListRef
+import tf.monochrome.android.player.ListTrail
 import tf.monochrome.android.ui.navigation.openTrackArtist
 import tf.monochrome.android.ui.navigation.trackArtistAction
 import tf.monochrome.android.ui.navigation.trackAlbumAction
@@ -192,6 +194,7 @@ fun LibraryScreen(
     val favoriteAlbums by viewModel.favoriteAlbums.collectAsStateWithLifecycle()
     val favoriteArtists by viewModel.favoriteArtists.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
+    val playlistSort by viewModel.playlistSort.collectAsStateWithLifecycle()
     val favoriteTrackIds by playerViewModel.favoriteTrackIds.collectAsStateWithLifecycle()
     val activeDownloads by playerViewModel.activeDownloads.collectAsStateWithLifecycle()
     val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsStateWithLifecycle()
@@ -592,7 +595,14 @@ fun LibraryScreen(
                             Text(
                                 text = stringResource(R.string.create_playlist_title),
                                 style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.primary
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.weight(1f),
+                            )
+                            // Also the order "Continue into the next list" walks them in.
+                            SortMenu(
+                                keys = PLAYLIST_SORT_KEYS,
+                                current = playlistSort,
+                                onChange = viewModel::setPlaylistSort,
                             )
                         }
                     }
@@ -603,7 +613,10 @@ fun LibraryScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { navController.navigateSafe("playlist/${playlist.id}") }
+                                    .clickable {
+                                        ListTrail.opened(playlist, playlists) { ListRef.Playlist(it.id) }
+                                        navController.navigateSafe("playlist/${playlist.id}")
+                                    }
                                     .padding(horizontal = 24.dp, vertical = 16.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -710,13 +723,17 @@ fun LibraryScreen(
                             key = { LibraryKeys.album(it.id) },
                             contentType = { LibraryContentType.ALBUM },
                         ) { album ->
+                            val open = {
+                                ListTrail.opened(album, favoriteAlbums) { ListRef.Album(it.id) }
+                                navController.navigateSafe(Screen.AlbumDetail.createRoute(album.id))
+                            }
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { navController.navigateSafe(Screen.AlbumDetail.createRoute(album.id)) },
+                                    .clickable { open() },
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                AlbumItem(album = album, onClick = { navController.navigateSafe(Screen.AlbumDetail.createRoute(album.id)) })
+                                AlbumItem(album = album, onClick = { open() })
                             }
                         }
                     }

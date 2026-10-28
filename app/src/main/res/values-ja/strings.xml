@@ -836,6 +836,8 @@
     <string name="settings_your_api_key">あなたの API キー</string>
     <string name="settings_gapless_playback">ギャップレス再生</string>
     <string name="settings_remove_silence_between_tracks">曲間の無音を除去</string>
+    <string name="settings_continue_into_next_list">次のリストへ続けて再生</string>
+    <string name="settings_continue_into_next_list_desc">プレイリスト、アルバム、フォルダが終わると、開いた画面で次にあるものを再生し、最後のものが終わるとその最後の曲からラジオを開始します。最初の曲で「前の曲へ」を押すと一つ前のものに戻ります。</string>
     <string name="settings_never_resample_between_tracks">曲間でリサンプリングしない</string>
     <string name="settings_a_track_at_a_different_sample_rate_starts_after">サンプルレートの異なる曲は、合わせてリサンプリングされる代わりに短い間を置いてから始まり、出力はビットパーフェクトに保たれます。オフにすると、すべての曲間をシームレスにしてシステムにリサンプリングさせます。</string>
     <string name="settings_wi_fi_streaming">Wi-Fi でのストリーミング</string>
@@ -1821,6 +1823,8 @@
     <string name="sort_quality">音質</string>
     <string name="sort_file_size">ファイルサイズ</string>
     <string name="sort_song_count">曲数</string>
+    <string name="sort_last_edited">最終編集日</string>
+    <string name="sort_date_created">作成日</string>
     <string name="action_shuffle">シャッフル</string>
     <string name="folder_subfolders_included">サブフォルダを含む</string>
     <string name="folder_go_to">%1$s へ移動</string>

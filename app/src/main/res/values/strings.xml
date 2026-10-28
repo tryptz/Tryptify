@@ -875,6 +875,8 @@
     <string name="settings_your_api_key">Your API key</string>
     <string name="settings_gapless_playback">Gapless Playback</string>
     <string name="settings_remove_silence_between_tracks">Remove silence between tracks</string>
+    <string name="settings_continue_into_next_list">Continue into the next list</string>
+    <string name="settings_continue_into_next_list_desc">When a playlist, album or folder ends, play the next one on the screen it was opened from, and after the last, radio from its last song. Previous on the first song goes back to the one before.</string>
     <string name="settings_never_resample_between_tracks">Never Resample Between Tracks</string>
     <string name="settings_a_track_at_a_different_sample_rate_starts_after">A track at a different sample rate starts after a brief gap instead of being resampled to match, keeping output bit-perfect. Turn off to keep every transition seamless and let the system resample.</string>
     <string name="settings_wi_fi_streaming">Wi-Fi Streaming</string>
@@ -1873,6 +1875,8 @@
     <string name="sort_quality">Quality</string>
     <string name="sort_file_size">File size</string>
     <string name="sort_song_count">Number of songs</string>
+    <string name="sort_last_edited">Last edited</string>
+    <string name="sort_date_created">Date created</string>
     <string name="action_shuffle">Shuffle</string>
     <string name="folder_subfolders_included">Subfolders included</string>
     <string name="folder_go_to">Go to %1$s</string>

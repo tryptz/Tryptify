@@ -1586,6 +1586,7 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
     // because that tab had become the place settings went when no tab obviously
     // owned them.
     val gapless by viewModel.gaplessPlayback.collectAsStateWithLifecycle()
+    val continueIntoNextList by viewModel.continueIntoNextList.collectAsStateWithLifecycle()
     val crossfade by viewModel.crossfadeDuration.collectAsStateWithLifecycle()
     val exclusiveUsb by viewModel.usbExclusiveBitPerfectEnabled.collectAsStateWithLifecycle()
     val gaplessNoResample by viewModel.gaplessNoResample.collectAsStateWithLifecycle()
@@ -1665,6 +1666,14 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             valueRange = 0f..12f,
             steps = 11,
             modifier = Modifier.fillMaxWidth()
+        )
+
+        // What happens after the last song of a list, so next to the blend.
+        SettingSwitchItem(
+            title = stringResource(R.string.settings_continue_into_next_list),
+            subtitle = stringResource(R.string.settings_continue_into_next_list_desc),
+            checked = continueIntoNextList,
+            onCheckedChange = { viewModel.setContinueIntoNextList(it) },
         )
 
         // Issue #131: music under a game without the game pausing it.

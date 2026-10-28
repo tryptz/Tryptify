@@ -836,6 +836,8 @@
     <string name="settings_your_api_key">你的 API 密钥</string>
     <string name="settings_gapless_playback">无缝播放</string>
     <string name="settings_remove_silence_between_tracks">去除歌曲之间的静音</string>
+    <string name="settings_continue_into_next_list">继续播放下一个列表</string>
+    <string name="settings_continue_into_next_list_desc">歌单、专辑或文件夹播放完后，接着播放打开它的页面上的下一个；最后一个结束后，从最后一首歌开始电台。在第一首歌上按“上一首”会回到前一个。</string>
     <string name="settings_never_resample_between_tracks">切歌时绝不重采样</string>
     <string name="settings_a_track_at_a_different_sample_rate_starts_after">采样率不同的歌曲会在短暂停顿后开始播放，而不是被重采样，从而保持比特级精确输出。关闭后每次切歌都无缝衔接，由系统负责重采样。</string>
     <string name="settings_wi_fi_streaming">Wi-Fi 流媒体</string>
@@ -1821,6 +1823,8 @@
     <string name="sort_quality">音质</string>
     <string name="sort_file_size">文件大小</string>
     <string name="sort_song_count">歌曲数量</string>
+    <string name="sort_last_edited">最近编辑</string>
+    <string name="sort_date_created">创建日期</string>
     <string name="action_shuffle">随机播放</string>
     <string name="folder_subfolders_included">包括子文件夹</string>
     <string name="folder_go_to">前往 %1$s</string>

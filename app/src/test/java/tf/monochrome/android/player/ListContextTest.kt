@@ -1,0 +1,274 @@
+package tf.monochrome.android.player
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
+import kotlinx.coroutines.runBlocking
+import org.junit.Test
+import tf.monochrome.android.domain.model.Track
+
+class ListContextTest {
+
+    private fun album(id: Long) = ListRef.Album(id)
+    private fun track(id: Long) = Track(id = id, title = "Track $id")
+
+    // --- Rows ---
+
+    @Test
+    fun `the next list is the one beside it on the screen`() {
+        val context = ListContext.of(album(2), listOf(album(1), album(2), album(3)))
+        assertEquals(album(3), context.after())
+        assertEquals(album(1), context.before())
+    }
+
+    @Test
+    fun `nothing after the last list or before the first`() {
+        val row = listOf(album(1), album(2))
+        assertNull(ListContext.of(album(2), row).after())
+        assertNull(ListContext.of(album(1), row).before())
+    }
+
+    @Test
+    fun `a list opened some other way stands alone`() {
+        val context = ListContext.of(album(9), listOf(album(1), album(2)))
+        assertTrue(context.row.isEmpty())
+        assertNull(context.after())
+        assertNull(context.before())
+    }
+
+    @Test
+    fun `a list shown twice does not send the walk round in circles`() {
+        // A B A C: walking from the second A must reach C, not go back to B.
+        val context = ListContext.of(album(1), listOf(album(1), album(2), album(1), album(3)))
+        assertEquals(listOf(album(1), album(2), album(3)), context.row)
+        var at = context
+        val seen = mutableListOf<ListRef>(at.tail)
+        while (true) {
+            val next = at.after() ?: break
+            seen += next
+            at = at.copy(head = next, tail = next)
+        }
+        assertEquals(listOf(album(1), album(2), album(3)), seen)
+    }
+
+    @Test
+    fun `a long row is kept to a window around the list played`() {
+        val row = (1L..1_000L).map { album(it) }
+        val context = ListContext.of(album(500), row)
+        assertEquals(2 * ListContext.MAX_EITHER_SIDE + 1, context.row.size)
+        assertEquals(album(501), context.after())
+        assertEquals(album(499), context.before())
+    }
+
+    @Test
+    fun `a folder walks the tree, not a row`() {
+        val folder = ListRef.Folder("/Music/A")
+        val context = ListContext.of(folder, listOf(folder, ListRef.Folder("/Music/B")))
+        assertTrue(context.row.isEmpty())
+    }
+
+    /**
+     * /M/Artist1 (no songs of its own) → Album1, Album2
+     * /M/Artist2 → Album3, and two songs of its own
+     * /M/Empty → Nothing (no songs anywhere)
+     * /M/Artist3 → Album4
+     */
+    private val tree = object : FolderView {
+        val kids = mapOf(
+            "/M/Artist1" to listOf("/M/Artist1/Album1", "/M/Artist1/Album2"),
+            "/M/Artist2" to listOf("/M/Artist2/Album3"),
+            "/M/Empty" to listOf("/M/Empty/Nothing"),
+            "/M/Artist3" to listOf("/M/Artist3/Album4"),
+        )
+        val own = setOf(
+            "/M/Artist1/Album1", "/M/Artist1/Album2", "/M/Artist2",
+            "/M/Artist2/Album3", "/M/Artist3/Album4",
+        )
+        override suspend fun roots() = listOf("/M/Artist1", "/M/Artist2", "/M/Empty", "/M/Artist3")
+        override suspend fun children(path: String) = kids[path].orEmpty()
+        override suspend fun hasOwnSongs(path: String) = path in own
+    }
+
+    private fun walkForward(from: String): List<String> =
+        generateSequence(from) { runBlocking { FolderWalk.after(tree, it) } }.toList()
+
+    @Test
+    fun `folders walk the whole tree, top to bottom`() {
+        assertEquals(
+            listOf(
+                "/M/Artist1/Album1", "/M/Artist1/Album2",
+                // A folder's own songs come before its subfolders.
+                "/M/Artist2", "/M/Artist2/Album3",
+                // A branch with no songs is passed through.
+                "/M/Artist3/Album4",
+            ),
+            walkForward("/M/Artist1/Album1"),
+        )
+    }
+
+    @Test
+    fun `walking back is the same walk reversed`() {
+        val forward = walkForward("/M/Artist1/Album1")
+        val backward = generateSequence(forward.last()) { runBlocking { FolderWalk.before(tree, it) } }.toList()
+        assertEquals(forward.reversed(), backward)
+    }
+
+    @Test
+    fun `a whole branch played goes on after the branch`() = runBlocking {
+        assertEquals("/M/Artist2", FolderWalk.after(tree, "/M/Artist1", skipBelow = true))
+        assertEquals("/M/Artist3/Album4", FolderWalk.after(tree, "/M/Artist2", skipBelow = true))
+        assertNull(FolderWalk.after(tree, "/M/Artist3", skipBelow = true))
+    }
+
+    @Test
+    fun `a folder outside the tree has no neighbours`() = runBlocking {
+        assertNull(FolderWalk.after(tree, "/elsewhere/x"))
+        assertNull(FolderWalk.before(tree, "/elsewhere/x"))
+    }
+
+    // --- The saved queue ---
+
+    @Test
+    fun `the lists survive a restart`() {
+        val context = ListContext.of(ListRef.Playlist("p2"), listOf(ListRef.Playlist("p1"), ListRef.Playlist("p2")))
+        val raw = PlaybackSnapshotCodec.encode(
+            PersistedQueue(
+                version = PLAYBACK_SNAPSHOT_VERSION,
+                entries = listOf(PersistedQueueEntry(track(1))),
+                listContext = context,
+            )
+        )
+        assertEquals(context, PlaybackSnapshotCodec.decode(raw)?.listContext)
+    }
+
+    @Test
+    fun `a queue saved before lists were remembered still reads`() {
+        val raw = """{"version":$PLAYBACK_SNAPSHOT_VERSION,"entries":[{"track":{"id":1,"title":"Track 1"}}]}"""
+        val decoded = PlaybackSnapshotCodec.decode(raw)
+        assertEquals(1, decoded?.entries?.size)
+        assertNull(decoded?.listContext)
+    }
+
+    @Test
+    fun `every kind of list round-trips`() {
+        val kinds = listOf(
+            ListRef.Playlist("p"),
+            ListRef.Album(7),
+            ListRef.LocalAlbum(8),
+            ListRef.Folder("/Music/A"),
+            ListRef.SubsonicPlaylist("s"),
+            ListRef.SubsonicAlbum("a"),
+        )
+        val context = ListContext(row = kinds, head = kinds[1], tail = kinds[2], headCut = true)
+        val raw = PlaybackSnapshotCodec.encode(
+            PersistedQueue(
+                version = PLAYBACK_SNAPSHOT_VERSION,
+                entries = listOf(PersistedQueueEntry(track(1))),
+                listContext = context,
+            )
+        )
+        assertEquals(context, PlaybackSnapshotCodec.decode(raw)?.listContext)
+    }
+
+    // --- The queue ---
+
+    private fun context(id: Long) = ListContext(head = album(id))
+
+    @Test
+    fun `a new queue forgets the lists, and can bring its own`() {
+        val qm = QueueManager()
+        qm.setQueue(listOf(track(1)), 0, context(1))
+        assertEquals(context(1), qm.listContext.value)
+        qm.setQueue(listOf(track(2)), 0)
+        assertNull(qm.listContext.value)
+    }
+
+    @Test
+    fun `clearing what is up next or the whole queue forgets the lists`() {
+        val qm = QueueManager()
+        qm.setQueue(listOf(track(1), track(2)), 0, context(1))
+        qm.clearUpcoming()
+        assertNull(qm.listContext.value)
+        qm.setQueue(listOf(track(1)), 0, context(1))
+        qm.clearQueue()
+        assertNull(qm.listContext.value)
+    }
+
+    @Test
+    fun `editing the queue keeps the lists`() {
+        val qm = QueueManager()
+        qm.setQueue(listOf(track(1), track(2), track(3)), 0, context(1))
+        qm.addToQueue(listOf(track(4)))
+        qm.addNextInQueue(track(5))
+        qm.move(1, 2)
+        qm.removeFromQueue(3)
+        assertEquals(context(1), qm.listContext.value)
+    }
+
+    @Test
+    fun `the next list goes behind the queue and plays after it`() {
+        val qm = QueueManager()
+        qm.setQueue(listOf(track(1), track(2)), 1, context(1))
+        val next = listOf(track(3), track(4))
+        qm.appendList(next, next, ListContext(head = album(1), tail = album(2)))
+        assertEquals(listOf(1L, 2L, 3L, 4L), qm.queue.value.map { it.id })
+        assertEquals(3L, qm.next()?.id)
+        assertEquals(album(2), qm.listContext.value?.tail)
+    }
+
+    @Test
+    fun `the previous list goes in front and plays from its last song`() {
+        val qm = QueueManager()
+        qm.setQueue(listOf(track(3), track(4)), 0, context(2))
+        val before = listOf(track(1), track(2))
+        qm.prependList(before, before, ListContext(head = album(1), tail = album(2)))
+        assertEquals(listOf(1L, 2L, 3L, 4L), qm.queue.value.map { it.id })
+        assertEquals(1, qm.currentQueueIndex)
+        assertEquals(2L, qm.currentTrack.value?.id)
+        // And Next goes back into the list it came from.
+        assertEquals(3L, qm.next()?.id)
+    }
+
+    @Test
+    fun `a finished list is dropped and the play head kept`() {
+        val qm = QueueManager()
+        qm.setQueue(listOf(track(1), track(2), track(3), track(4)), 2, context(1))
+        qm.dropBefore(2, context(2))
+        assertEquals(listOf(3L, 4L), qm.queue.value.map { it.id })
+        assertEquals(0, qm.currentQueueIndex)
+        assertEquals(3L, qm.currentTrack.value?.id)
+        assertEquals(context(2), qm.listContext.value)
+    }
+
+    @Test
+    fun `under shuffle the next list is added in order underneath`() {
+        val qm = QueueManager()
+        qm.setQueue(listOf(track(1), track(2)), 0, context(1))
+        qm.toggleShuffle()
+        val inOrder = listOf(track(3), track(4), track(5))
+        qm.appendList(inOrder.reversed(), inOrder, context(1))
+        // Turning shuffle off plays every list in its own order.
+        qm.toggleShuffle()
+        assertEquals(listOf(1L, 2L, 3L, 4L, 5L), qm.queue.value.map { it.id })
+    }
+
+    @Test
+    fun `dropping a list under shuffle drops it from the unshuffled order too`() {
+        val qm = QueueManager()
+        val first = listOf(track(1), track(2))
+        qm.setQueue(first, 0, context(1))
+        qm.toggleShuffle()
+        val second = listOf(track(3), track(4))
+        qm.appendList(second, second, context(1))
+        val firstOfSecond = qm.queue.value.indexOfFirst { it.id == 3L }
+        qm.skipToIndex(firstOfSecond)
+        qm.dropBefore(firstOfSecond, context(2))
+        qm.toggleShuffle()
+        assertEquals(listOf(3L, 4L), qm.queue.value.map { it.id })
+        assertSame(qm.currentTrack.value, qm.queue.value.first { it.id == 3L })
+        assertFalse(qm.shuffleEnabled.value)
+    }
+}
+

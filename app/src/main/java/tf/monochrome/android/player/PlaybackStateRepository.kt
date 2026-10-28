@@ -85,7 +85,8 @@ class PlaybackStateRepository @Inject constructor(
                 queueManager.currentIndex,
                 queueManager.shuffleEnabled,
                 queueManager.repeatMode,
-            ) { queue, index, shuffle, repeat -> QueueShape(queue, index, shuffle, repeat) }
+                queueManager.listContext,
+            ) { queue, index, shuffle, repeat, lists -> QueueShape(queue, index, shuffle, repeat, lists) }
                 .debounce(QUEUE_SAVE_DEBOUNCE_MS)
                 .distinctUntilChanged()
                 .collect { shape ->
@@ -100,6 +101,7 @@ class PlaybackStateRepository @Inject constructor(
         val index: Int,
         val shuffle: Boolean,
         val repeat: RepeatMode,
+        val lists: ListContext?,
     )
 
     // ── Saving ──────────────────────────────────────────────────────
@@ -124,6 +126,10 @@ class PlaybackStateRepository @Inject constructor(
                 // Against the window, not the full queue, or the indices
                 // point past the end of what was stored.
                 originalOrder = QueueOrdering.encode(windowed, queueManager.originalQueueSnapshot),
+                // A window that cuts off the front of the queue no longer starts
+                // where its first list does, so Previous on its first track
+                // must not jump past the rest of that list.
+                listContext = shape.lists?.let { if (window.from > 0) it.copy(headCut = true) else it },
             )
         ) ?: return@withLock
 
@@ -217,6 +223,7 @@ class PlaybackStateRepository @Inject constructor(
             shuffleEnabled = state.shuffleEnabled,
             repeatMode = runCatching { RepeatMode.valueOf(state.repeatMode) }
                 .getOrDefault(RepeatMode.OFF),
+            listContext = persisted.listContext,
         )
 
         val current = queueManager.currentTrack.value ?: return

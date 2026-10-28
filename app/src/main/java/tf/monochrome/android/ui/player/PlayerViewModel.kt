@@ -49,6 +49,10 @@ import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.domain.model.VisualizerEngineStatus
 import tf.monochrome.android.domain.model.VisualizerPreset
+import tf.monochrome.android.player.ListContext
+import tf.monochrome.android.player.ListContinuation
+import tf.monochrome.android.player.ListRef
+import tf.monochrome.android.player.ListTrail
 import tf.monochrome.android.player.PlaybackService
 import tf.monochrome.android.player.QueueManager
 import tf.monochrome.android.player.StreamResolver
@@ -75,6 +79,7 @@ class PlayerViewModel @Inject constructor(
     private val qobuzIdRegistry: tf.monochrome.android.data.api.QobuzIdRegistry,
     private val trackShareHelper: tf.monochrome.android.share.TrackShareHelper,
     private val radioQueueManager: RadioQueueManager,
+    private val listContinuation: ListContinuation,
     val spectrumAnalyzer: SpectrumAnalyzerTap,
     private val bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController,
     private val libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver,
@@ -850,24 +855,28 @@ class PlayerViewModel @Inject constructor(
         resolveAndPlay()
     }
 
-    /** Play a track within a list (sets the full list as queue). */
-    fun playTrack(track: Track, trackList: List<Track>) {
-        queueManager.playTrackInQueue(track, trackList)
+    /**
+     * Play a track within a list (sets the full list as queue). [from] is the
+     * playlist, album or folder it is, so playback can carry on into the one
+     * beside it ([ListContinuation]).
+     */
+    fun playTrack(track: Track, trackList: List<Track>, from: ListRef? = null) {
+        queueManager.playTrackInQueue(track, trackList, listsFor(from))
         resolveAndPlay()
     }
 
     /** Play all tracks starting from index 0. */
-    fun playAll(tracks: List<Track>) {
+    fun playAll(tracks: List<Track>, from: ListRef? = null) {
         if (tracks.isEmpty()) return
-        queueManager.setQueue(tracks, 0)
+        queueManager.setQueue(tracks, 0, listsFor(from))
         resolveAndPlay()
     }
 
     /** Shuffle-play all tracks. */
-    fun shufflePlay(tracks: List<Track>) {
+    fun shufflePlay(tracks: List<Track>, from: ListRef? = null) {
         if (tracks.isEmpty()) return
         try {
-            queueManager.setQueue(tracks, 0)
+            queueManager.setQueue(tracks, 0, listsFor(from))
             queueManager.toggleShuffle()
             resolveAndPlay()
         } catch (t: Throwable) {
@@ -877,8 +886,17 @@ class PlayerViewModel @Inject constructor(
 
     // --- Unified Track playback (local files, collections) ---
 
-    /** Play a UnifiedTrack within a list — the correct path for local/collection files. */
-    fun playUnifiedTrack(track: UnifiedTrack, trackList: List<UnifiedTrack>) {
+    /**
+     * Play a UnifiedTrack within a list — the correct path for local/collection
+     * files. [from] as for [playTrack]; [cut] when [trackList] leaves out the
+     * start of that list, so Previous on its first song stays in it.
+     */
+    fun playUnifiedTrack(
+        track: UnifiedTrack,
+        trackList: List<UnifiedTrack>,
+        from: ListRef? = null,
+        cut: Boolean = false,
+    ) {
         val legacyTracks = trackList.map { it.toLegacyTrack() }
         // Store source mappings so resolveAndPlay can find the right playback source
         trackList.forEach { ut ->
@@ -886,9 +904,12 @@ class PlayerViewModel @Inject constructor(
             unifiedTrackRegistry.put(legacyId, ut)
         }
         val legacyTrack = track.toLegacyTrack()
-        queueManager.playTrackInQueue(legacyTrack, legacyTracks)
+        queueManager.playTrackInQueue(legacyTrack, legacyTracks, listsFor(from)?.copy(headCut = cut))
         resolveAndPlay()
     }
+
+    /** The lists [from] is played among, as the screen it was opened from shows them. */
+    private fun listsFor(from: ListRef?): ListContext? = from?.let(ListTrail::contextFor)
 
     /**
      * Play a song another app opened with Tryptify, as a queue of one. Song
@@ -975,25 +996,25 @@ class PlayerViewModel @Inject constructor(
             unifiedTrackRegistry[track.id]?.source is PlaybackSource.RadioStream
 
     /** Play all unified tracks starting from index 0. */
-    fun playAllUnified(tracks: List<UnifiedTrack>) {
+    fun playAllUnified(tracks: List<UnifiedTrack>, from: ListRef? = null) {
         if (tracks.isEmpty()) return
         tracks.forEach { ut ->
             unifiedTrackRegistry.put(ut.toLegacyTrack().id, ut)
         }
         val legacyTracks = tracks.map { it.toLegacyTrack() }
-        queueManager.setQueue(legacyTracks, 0)
+        queueManager.setQueue(legacyTracks, 0, listsFor(from))
         resolveAndPlay()
     }
 
     /** Shuffle-play all unified tracks. */
-    fun shufflePlayUnified(tracks: List<UnifiedTrack>) {
+    fun shufflePlayUnified(tracks: List<UnifiedTrack>, from: ListRef? = null) {
         if (tracks.isEmpty()) return
         try {
             tracks.forEach { ut ->
                 unifiedTrackRegistry.put(ut.toLegacyTrack().id, ut)
             }
             val legacyTracks = tracks.map { it.toLegacyTrack() }
-            queueManager.setQueue(legacyTracks, 0)
+            queueManager.setQueue(legacyTracks, 0, listsFor(from))
             queueManager.toggleShuffle()
             resolveAndPlay()
         } catch (t: Throwable) {
@@ -1137,7 +1158,14 @@ class PlayerViewModel @Inject constructor(
         if (next != null) {
             resolveAndPlay()
         } else {
-            mediaController?.stop()
+            // The last song: on into the next list, if one is coming.
+            viewModelScope.launch {
+                when (listContinuation.next()) {
+                    ListContinuation.Outcome.MOVED -> resolveAndPlay()
+                    ListContinuation.Outcome.NOTHING -> mediaController?.stop()
+                    ListContinuation.Outcome.OVERTAKEN -> Unit
+                }
+            }
         }
     }
 
@@ -1145,6 +1173,18 @@ class PlayerViewModel @Inject constructor(
         val position = mediaController?.currentPosition ?: 0
         if (position > 3000) {
             mediaController?.seekTo(0)
+            return
+        }
+        if (queueManager.currentQueueIndex == 0) {
+            // The first song: back to the last song of the list before, if
+            // there is one; otherwise it restarts, as it always has.
+            viewModelScope.launch {
+                when (listContinuation.stepBack()) {
+                    ListContinuation.Outcome.MOVED -> resolveAndPlay()
+                    ListContinuation.Outcome.NOTHING -> if (queueManager.previous() != null) resolveAndPlay()
+                    ListContinuation.Outcome.OVERTAKEN -> Unit
+                }
+            }
             return
         }
         val prev = queueManager.previous()

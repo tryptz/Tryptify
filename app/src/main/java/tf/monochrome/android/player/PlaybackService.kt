@@ -64,6 +64,7 @@ import javax.inject.Inject
 class PlaybackService : MediaSessionService() {
 
     @Inject lateinit var queueManager: QueueManager
+    @Inject lateinit var listContinuation: ListContinuation
     @Inject lateinit var streamResolver: StreamResolver
     @Inject lateinit var serverAccess: tf.monochrome.android.data.api.ApiServerAccess
     @Inject lateinit var preferences: PreferencesManager
@@ -1439,7 +1440,14 @@ class PlaybackService : MediaSessionService() {
         if (nextTrack != null) {
             playQueue()
         } else {
-            player.stop()
+            // The last song: on into the next list, if one is coming.
+            serviceScope.launch {
+                when (listContinuation.next()) {
+                    ListContinuation.Outcome.MOVED -> playQueue()
+                    ListContinuation.Outcome.NOTHING -> player.stop()
+                    ListContinuation.Outcome.OVERTAKEN -> Unit
+                }
+            }
         }
     }
 
@@ -1452,6 +1460,18 @@ class PlaybackService : MediaSessionService() {
         }
         crossfade.cancel()
         dropGaplessNext()
+        if (queueManager.currentQueueIndex == 0) {
+            // The first song: back to the last song of the list before, if
+            // there is one; otherwise it restarts, as it always has.
+            serviceScope.launch {
+                when (listContinuation.stepBack()) {
+                    ListContinuation.Outcome.MOVED -> playQueue()
+                    ListContinuation.Outcome.NOTHING -> if (queueManager.previous() != null) playQueue()
+                    ListContinuation.Outcome.OVERTAKEN -> Unit
+                }
+            }
+            return
+        }
         val prevTrack = queueManager.previous()
         if (prevTrack != null) {
             playQueue()
@@ -1474,6 +1494,12 @@ class PlaybackService : MediaSessionService() {
         val nextTrack = queueManager.next()
         if (nextTrack != null) {
             playQueue()
+        } else {
+            // Normally the next list is in the queue by now; a short last
+            // song can end before it has loaded.
+            serviceScope.launch {
+                if (listContinuation.next() == ListContinuation.Outcome.MOVED) playQueue()
+            }
         }
     }
 

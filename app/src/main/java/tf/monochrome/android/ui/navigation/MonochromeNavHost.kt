@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.navigation
 
+import tf.monochrome.android.player.ListRef
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
@@ -1153,10 +1154,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             folderPath = folderPath,
                             navController = navController,
                             onPlayTrack = { track, queue ->
-                                playerViewModel.playUnifiedTrack(track, queue)
-                            },
-                            onPlayAll = { tracks ->
-                                playerViewModel.playAllUnified(tracks)
+                                playerViewModel.playUnifiedTrack(track, queue, ListRef.Folder(folderPath))
                             },
                             onAddToQueue = { track ->
                                 playerViewModel.addUnifiedToQueue(listOf(track))
@@ -1168,18 +1166,19 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 composable(
                     route = Screen.LocalAlbumDetail.route,
                     arguments = listOf(navArgument("albumId") { type = NavType.LongType })
-                ) {
+                ) { backStackEntry ->
+                    val album = backStackEntry.arguments?.getLong("albumId")?.let(ListRef::LocalAlbum)
                     tf.monochrome.android.devedit.DevEditScreen("local_album_detail") {
                         LocalAlbumDetailScreen(
                             navController = navController,
                             onPlayTrack = { track, queue ->
-                                playerViewModel.playUnifiedTrack(track, queue)
+                                playerViewModel.playUnifiedTrack(track, queue, album)
                             },
                             onPlayAll = { tracks ->
-                                playerViewModel.playAllUnified(tracks)
+                                playerViewModel.playAllUnified(tracks, album)
                             },
                             onShuffleAll = { tracks ->
-                                playerViewModel.shufflePlayUnified(tracks)
+                                playerViewModel.shufflePlayUnified(tracks, album)
                             },
                             onAddToQueue = { track ->
                                 playerViewModel.addUnifiedToQueue(listOf(track))

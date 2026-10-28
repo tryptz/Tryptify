@@ -912,6 +912,8 @@
     <string name="settings_your_api_key">Votre clé d’API</string>
     <string name="settings_gapless_playback">Lecture sans blanc</string>
     <string name="settings_remove_silence_between_tracks">Supprimer les silences entre les titres</string>
+    <string name="settings_continue_into_next_list">Enchaîner sur la liste suivante</string>
+    <string name="settings_continue_into_next_list_desc">Quand une playlist, un album ou un dossier se termine, lit le suivant sur l’écran d’où il a été ouvert, puis, après le dernier, une radio à partir de son dernier titre. Précédent sur le premier titre revient au précédent.</string>
     <string name="settings_never_resample_between_tracks">Ne jamais rééchantillonner entre les titres</string>
     <string name="settings_a_track_at_a_different_sample_rate_starts_after">Un titre à une fréquence d’échantillonnage différente démarre après un bref blanc au lieu d’être rééchantillonné, pour une sortie bit-perfect. Désactivez pour des transitions toujours sans blanc, rééchantillonnées par le système.</string>
     <string name="settings_wi_fi_streaming">Streaming en Wi-Fi</string>
@@ -1923,6 +1925,8 @@
     <string name="sort_quality">Qualité</string>
     <string name="sort_file_size">Taille du fichier</string>
     <string name="sort_song_count">Nombre de titres</string>
+    <string name="sort_last_edited">Dernière modification</string>
+    <string name="sort_date_created">Date de création</string>
     <string name="action_shuffle">Aléatoire</string>
     <string name="folder_subfolders_included">Sous-dossiers compris</string>
     <string name="folder_go_to">Aller à %1$s</string>

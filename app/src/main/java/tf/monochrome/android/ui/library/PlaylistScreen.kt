@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.library
 
+import tf.monochrome.android.player.ListRef
 import tf.monochrome.android.ui.navigation.openTrackArtist
 import tf.monochrome.android.ui.navigation.trackArtistAction
 import tf.monochrome.android.ui.navigation.trackAlbumAction
@@ -395,7 +396,7 @@ fun PlaylistScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Button(
-                            onClick = { playerViewModel.playAll(tracks) },
+                            onClick = { playerViewModel.playAll(tracks, ListRef.Playlist(viewModel.playlistId)) },
                             modifier = Modifier.weight(1f),
                             enabled = tracks.isNotEmpty(),
                             contentPadding = PaddingValues(vertical = 12.dp)
@@ -406,7 +407,7 @@ fun PlaylistScreen(
                         }
 
                         FilledIconButton(
-                            onClick = { playerViewModel.shufflePlay(tracks) },
+                            onClick = { playerViewModel.shufflePlay(tracks, ListRef.Playlist(viewModel.playlistId)) },
                             enabled = tracks.isNotEmpty(),
                             modifier = Modifier.size(48.dp),
                             colors = IconButtonDefaults.filledIconButtonColors(
@@ -529,7 +530,7 @@ fun PlaylistScreen(
                         track = track,
                         onClick = {
                             if (selection.active) selection.toggle(track.id)
-                            else playerViewModel.playTrack(track, visibleTracks)
+                            else playerViewModel.playTrack(track, visibleTracks, ListRef.Playlist(viewModel.playlistId))
                         },
                         onLongClick = { selection.toggle(track.id) },
                         onMoreClick = { showContextMenuForTrack = track },

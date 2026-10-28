@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.discover
 
+import tf.monochrome.android.player.ListRef
+import tf.monochrome.android.player.ListTrail
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.infiniteRepeatable
@@ -329,7 +331,10 @@ fun DiscoverScreen(
                 item(key = "radar") {
                     ReleaseRadarRow(
                         items = radar,
-                        onOpen = { navController.openCatalogAlbum(it.release.albumId) },
+                        onOpen = { item ->
+                            ListTrail.opened(item, radar) { ListRef.Album(it.release.albumId) }
+                            navController.openCatalogAlbum(item.release.albumId)
+                        },
                         onShown = viewModel::markRadarSeen,
                     )
                 }
@@ -971,7 +976,12 @@ internal fun openDiscoveryItem(
             val queue = shelf.items.filterIsInstance<DiscoveryItem.TrackItem>().map { it.track }
             playerViewModel.playUnifiedTrack(item.track, queue)
         }
-        is DiscoveryItem.AlbumItem -> navController.openCatalogAlbum(item.album.id)
+        is DiscoveryItem.AlbumItem -> {
+            ListTrail.opened(item.album, shelf.items.filterIsInstance<DiscoveryItem.AlbumItem>().map { it.album }) {
+                ListRef.Album(it.id)
+            }
+            navController.openCatalogAlbum(item.album.id)
+        }
         is DiscoveryItem.ArtistItem -> navController.openCatalogArtist(item.artist.id)
     }
 }

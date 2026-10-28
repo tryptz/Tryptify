@@ -44,6 +44,12 @@ data class PersistedQueue(
      * common case. A second copy of the list would double the blob to say it.
      */
     val originalOrder: List<Int> = emptyList(),
+    /**
+     * The lists the queue was played from, so it still carries on into the
+     * next one after a restart. Optional, so blobs from before it read as
+     * "none" and older builds skip it (`ignoreUnknownKeys`): no version bump.
+     */
+    val listContext: ListContext? = null,
 )
 
 object PlaybackSnapshotCodec {

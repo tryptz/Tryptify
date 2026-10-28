@@ -166,6 +166,10 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     // ── Audio ───────────────────────────────────────────────────────────
     entry("Gapless playback", R.string.settings_gapless_playback, "Audio", listOf("gap", "continuous", "album")),
     entry("Crossfade", R.string.search_crossfade, "Audio", listOf("fade", "transition", "blend")),
+    entry(
+        "Continue into the next list", R.string.settings_continue_into_next_list, "Audio",
+        listOf("next playlist", "next album", "next folder", "autoplay", "continue", "end of playlist", "previous playlist"),
+    ),
     entry("ReplayGain", R.string.settings_replaygain, "Audio", listOf("replay gain", "loudness", "normalize", "normalise", "volume", "r128", "level")),
     entry(
         "Play alongside other apps", R.string.settings_play_alongside_other_apps, "Audio",

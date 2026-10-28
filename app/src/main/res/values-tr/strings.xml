@@ -874,6 +874,8 @@
     <string name="settings_your_api_key">API anahtarınız</string>
     <string name="settings_gapless_playback">Kesintisiz çalma</string>
     <string name="settings_remove_silence_between_tracks">Parçalar arasındaki sessizliği kaldır</string>
+    <string name="settings_continue_into_next_list">Sonraki listeye devam et</string>
+    <string name="settings_continue_into_next_list_desc">Bir çalma listesi, albüm veya klasör bittiğinde, açıldığı ekrandaki bir sonrakini çalar; sonuncusundan sonra son parçasından radyo başlatır. İlk parçada Önceki, bir öncekine döner.</string>
     <string name="settings_never_resample_between_tracks">Parçalar arasında asla yeniden örnekleme</string>
     <string name="settings_a_track_at_a_different_sample_rate_starts_after">Farklı örnekleme hızındaki bir parça, eşleşmesi için yeniden örneklenmek yerine kısa bir boşluktan sonra başlar; çıkış bit-perfect kalır. Her geçişin kesintisiz olması ve sistemin yeniden örneklemesi için kapatın.</string>
     <string name="settings_wi_fi_streaming">Wi-Fi’da akış</string>
@@ -1872,6 +1874,8 @@
     <string name="sort_quality">Kalite</string>
     <string name="sort_file_size">Dosya boyutu</string>
     <string name="sort_song_count">Şarkı sayısı</string>
+    <string name="sort_last_edited">Son düzenleme</string>
+    <string name="sort_date_created">Oluşturulma tarihi</string>
     <string name="action_shuffle">Karıştır</string>
     <string name="folder_subfolders_included">Alt klasörler dahil</string>
     <string name="folder_go_to">%1$s klasörüne git</string>

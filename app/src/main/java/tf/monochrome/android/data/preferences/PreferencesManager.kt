@@ -297,6 +297,7 @@ class PreferencesManager @Inject constructor(
         // Interface
         private val GAPLESS_PLAYBACK = booleanPreferencesKey("gapless_playback")
         private val GAPLESS_NO_RESAMPLE = booleanPreferencesKey("gapless_no_resample")
+        private val CONTINUE_INTO_NEXT_LIST = booleanPreferencesKey("continue_into_next_list")
         private val WHATS_NEW_SEEN_VERSION = intPreferencesKey("whats_new_seen_version")
         private val WHATS_NEW_NEVER_SHOW = booleanPreferencesKey("whats_new_never_show")
         private val DONATE_PLAYS_SINCE_PROMPT = intPreferencesKey("donate_plays_since_prompt")
@@ -508,6 +509,7 @@ class PreferencesManager @Inject constructor(
         private val ALBUM_SORT = stringPreferencesKey("library_album_sort")
         private val ARTIST_SORT = stringPreferencesKey("library_artist_sort")
         private val FOLDER_SORT = stringPreferencesKey("library_folder_sort")
+        private val PLAYLIST_SORT = stringPreferencesKey("library_playlist_sort")
         private val LEGACY_BYPASS_VOLUME_RESET = booleanPreferencesKey("legacy_bypass_volume_reset")
 
         // Car mode
@@ -552,7 +554,7 @@ class PreferencesManager @Inject constructor(
             DYNAMIC_COLORS_MENUS, DYNAMIC_COLORS_KEEP_BACKGROUND, APP_TV_SHADER, APP_TV_TUNING, APP_TV_TARGET, COLOR_TRANSITION_MS,
             CUSTOM_THEME_ENABLED, CUSTOM_ACCENT, CUSTOM_BACKGROUND,
             FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
-            GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, SHOW_EXPLICIT_BADGES,
+            GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, CONTINUE_INTO_NEXT_LIST, SHOW_EXPLICIT_BADGES,
             ROW_BADGE_SOURCE, ROW_BADGE_QUALITY, ROW_BADGE_FORMAT, ROW_BADGE_DOWNLOAD, ROW_BADGE_DURATION,
             NORMALIZATION_ENABLED, REPLAYGAIN_MODE, REPLAYGAIN_PREAMP_DB, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
             PLAYBACK_SPEED, PRESERVE_PITCH, PITCH_SEMITONES, SPEED_UNIT_SEMITONES, SPEED_UNIT_BPM,
@@ -1157,6 +1159,16 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setGaplessPlayback(enabled: Boolean) {
         dataStore.edit { it[GAPLESS_PLAYBACK] = enabled }
+    }
+
+    /**
+     * When a playlist, album or folder runs out, play the one beside it on the
+     * screen it was opened from, and after the last one, song radio. Previous
+     * on its first song goes to the list before. On by default.
+     */
+    val continueIntoNextList: Flow<Boolean> = dataStore.data.map { it[CONTINUE_INTO_NEXT_LIST] ?: true }
+    suspend fun setContinueIntoNextList(enabled: Boolean) {
+        dataStore.edit { it[CONTINUE_INTO_NEXT_LIST] = enabled }
     }
 
     /**
@@ -2452,6 +2464,10 @@ class PreferencesManager @Inject constructor(
     /** The one song-and-folder sort every folder screen uses (FolderSort.encode). */
     val folderSort: Flow<String?> = dataStore.data.map { it[FOLDER_SORT] }.distinctUntilChanged()
     suspend fun setFolderSort(value: String) { dataStore.edit { it[FOLDER_SORT] = value } }
+
+    /** How the Library lists the listener's playlists ([tf.monochrome.android.ui.library.PlaylistSort]). */
+    val playlistSort: Flow<String?> = dataStore.data.map { it[PLAYLIST_SORT] }.distinctUntilChanged()
+    suspend fun setPlaylistSort(value: String) { dataStore.edit { it[PLAYLIST_SORT] = value } }
 
     // --- Car mode ---
     val carModeBandCount: Flow<Int> = dataStore.data.map { it[CAR_MODE_BAND_COUNT] ?: 10 }

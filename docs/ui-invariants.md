@@ -1090,6 +1090,42 @@ to a listener's own music server: the Subsonic API has none.
 
 `SongPreviewTest` holds the start point, the fade and the fill's colours.
 
+### The next list
+
+**"Continue into the next list" (Settings › Audio › Playback, on by
+default) plays the list beside the one that ended, on the screen it was
+opened from.** An album opened from an artist's page goes on to the next
+album there (albums, then EPs and singles, as the page reads), one from the
+Library's liked albums, a search or a Discover shelf to the next one in that
+row; a playlist to the next in the Library's (or the music server's) list; a
+phone folder to the next folder with songs in the whole tree, top to bottom,
+each folder before its subfolders, as the folder browser shows them. After
+the last list comes radio from its last song. Previous on the first song
+goes to the last song of the list before. Repeat All loops the list playing
+and Repeat One the song, as before; under shuffle the next list is shuffled
+too. No label in the player says any of this.
+
+- **Every screen that opens a list records its row as it opens it**
+  (`ListTrail.opened`), and every screen that plays one says which list it is
+  (the `from` of `PlayerViewModel.playTrack`, `playAll`, `playUnifiedTrack`
+  and the rest). A new screen of albums or playlists that skips the first
+  plays each list alone, straight into radio at its end; one that skips the
+  second does not carry on at all.
+- **The trail holds ids, never songs**, and only the last few rows, each to
+  100 lists either side (`ListContext.MAX_EITHER_SIDE`). A list's songs are
+  loaded when playback reaches it (`ListTrackLoader`, at most 1,000), and the
+  list before is dropped from the queue once the next one plays; Previous
+  loads it again. A folder's neighbour is looked for, never the whole tree
+  (`FolderWalk`).
+- **The Library's playlists have a sort, and it is saved**
+  (`PlaylistSort`, the sort button at the end of the New playlist row): last
+  edited first, as they always were, by name, or by date created. Last
+  edited moves a playlist to the top every time a song is added to it, so a
+  listener who walks playlists in order picks name or date created.
+
+`ListContextTest` holds the rows, the folder walk, the saved queue and the
+queue's appending, prepending and dropping.
+
 ### My server (Subsonic)
 
 **My server is one Library page, with its own small stack inside it.** Index

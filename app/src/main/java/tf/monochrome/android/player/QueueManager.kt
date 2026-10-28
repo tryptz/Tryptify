@@ -27,6 +27,15 @@ class QueueManager @Inject constructor() {
 
     private var originalQueue: List<Track> = emptyList()
 
+    /**
+     * The lists this queue was played from, or null when it came from
+     * anywhere else. Set only with a whole new queue, and by [ListContinuation]
+     * as it adds and drops lists; a new queue, clearing what is up next and
+     * clearing the queue all forget it. Editing the queue keeps it.
+     */
+    private val _listContext = MutableStateFlow<ListContext?>(null)
+    val listContext: StateFlow<ListContext?> = _listContext.asStateFlow()
+
     val currentQueue: List<Track> get() = _queue.value
     val currentQueueIndex: Int get() = _currentIndex.value
 
@@ -50,26 +59,85 @@ class QueueManager @Inject constructor() {
         currentIndex: Int,
         shuffleEnabled: Boolean,
         repeatMode: RepeatMode,
+        listContext: ListContext? = null,
     ) {
         _queue.value = queue
         this.originalQueue = originalQueue.ifEmpty { queue }
         _currentIndex.value = if (queue.isEmpty()) -1 else currentIndex.coerceIn(0, queue.lastIndex)
         _shuffleEnabled.value = shuffleEnabled
         _repeatMode.value = repeatMode
+        _listContext.value = listContext
         updateCurrentTrack()
     }
 
-    fun setQueue(tracks: List<Track>, startIndex: Int = 0) {
+    fun setQueue(tracks: List<Track>, startIndex: Int = 0, listContext: ListContext? = null) {
         _queue.value = tracks
         originalQueue = tracks
         _currentIndex.value = startIndex
         _shuffleEnabled.value = false
+        _listContext.value = listContext
         updateCurrentTrack()
     }
 
-    fun playTrackInQueue(track: Track, tracks: List<Track>) {
+    fun playTrackInQueue(track: Track, tracks: List<Track>, listContext: ListContext? = null) {
         val index = tracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
-        setQueue(tracks, index)
+        setQueue(tracks, index, listContext)
+    }
+
+    /**
+     * Add the next list behind the queue. [tracks] is in play order (shuffled
+     * when shuffle is on), [inOrder] the same tracks unshuffled, which is what
+     * turning shuffle off brings back.
+     */
+    fun appendList(tracks: List<Track>, inOrder: List<Track>, context: ListContext) {
+        _queue.value = _queue.value + tracks
+        if (_shuffleEnabled.value) originalQueue = originalQueue + inOrder
+        _listContext.value = context
+    }
+
+    /**
+     * Put the previous list in front of the queue and move to its last track,
+     * in one step: Previous on the first song of a list lands on the last song
+     * of the list before. Does nothing with [tracks] empty.
+     */
+    fun prependList(tracks: List<Track>, inOrder: List<Track>, context: ListContext) {
+        if (tracks.isEmpty()) return
+        _queue.value = tracks + _queue.value
+        if (_shuffleEnabled.value) originalQueue = inOrder + originalQueue
+        _currentIndex.value = tracks.lastIndex
+        _listContext.value = context
+        updateCurrentTrack()
+    }
+
+    /**
+     * Drop everything before [index], a list that has finished playing, so a
+     * queue that runs from list to list all day holds only the one playing.
+     * Previous brings the finished list back from where it is stored.
+     */
+    fun dropBefore(index: Int, context: ListContext) {
+        val queue = _queue.value
+        if (index <= 0 || index > queue.size) return
+        val dropped = queue.subList(0, index)
+        _queue.value = queue.subList(index, queue.size).toList()
+        if (_shuffleEnabled.value) {
+            // The same objects, one for one, or a song the queue holds twice
+            // would lose its other copy too.
+            val gone = java.util.IdentityHashMap<Track, Int>()
+            dropped.forEach { gone[it] = (gone[it] ?: 0) + 1 }
+            originalQueue = originalQueue.filter { track ->
+                val left = gone[track] ?: 0
+                if (left > 0) gone[track] = left - 1
+                left == 0
+            }
+        }
+        _currentIndex.value = (_currentIndex.value - index).coerceAtLeast(0)
+        _listContext.value = context
+        updateCurrentTrack()
+    }
+
+    /** Forget the lists, keeping the queue: there is nothing left to continue into. */
+    fun forgetListContext() {
+        _listContext.value = null
     }
 
     fun addToQueue(tracks: List<Track>) {
@@ -179,6 +247,8 @@ class QueueManager @Inject constructor() {
         _queue.value = listOf(currentTrack)
         originalQueue = listOf(currentTrack)
         _currentIndex.value = 0
+        // Clearing what is up next means nothing next, not the next list.
+        _listContext.value = null
         updateCurrentTrack()
     }
 
@@ -299,6 +369,7 @@ class QueueManager @Inject constructor() {
         originalQueue = emptyList()
         _currentIndex.value = -1
         _currentTrack.value = null
+        _listContext.value = null
     }
 
     private fun updateCurrentTrack() {

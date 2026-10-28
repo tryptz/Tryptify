@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.detail
 
+import tf.monochrome.android.player.ListRef
+import tf.monochrome.android.player.ListTrail
 import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -264,6 +266,7 @@ fun LocalArtistDetailScreen(
                                     LocalAlbumCard(
                                         album = album,
                                         onClick = {
+                                            ListTrail.opened(album, albums) { ListTrail.localAlbum(it.id) }
                                             val albumId = album.id.removePrefix("local_album_").toLongOrNull()
                                             if (albumId != null) {
                                                 navController.navigateSafe(Screen.LocalAlbumDetail.createRoute(albumId))

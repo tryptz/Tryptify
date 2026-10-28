@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.search
 
+import tf.monochrome.android.player.ListRef
+import tf.monochrome.android.player.ListTrail
 import tf.monochrome.android.ui.components.materialSurface
 import tf.monochrome.android.ui.navigation.trackArtistAction
 import tf.monochrome.android.ui.navigation.trackAlbumAction
@@ -443,6 +445,7 @@ fun SearchResultsContent(
                                     AlbumItem(
                                         album = album,
                                         onClick = {
+                                            ListTrail.opened(album, albums) { ListRef.Album(it.id) }
                                             navController.navigateSafe(
                                                 Screen.AlbumDetail.createRoute(album.id)
                                             )
@@ -465,6 +468,7 @@ fun SearchResultsContent(
                         PlaylistSearchItem(
                             playlist = playlist,
                             onClick = {
+                                ListTrail.opened(playlist, playlistResults) { ListRef.Playlist(it.uuid) }
                                 navController.navigateSafe(
                                     Screen.PlaylistDetail.createRoute(playlist.uuid)
                                 )

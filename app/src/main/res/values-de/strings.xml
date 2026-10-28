@@ -874,6 +874,8 @@
     <string name="settings_your_api_key">Dein API-Schlüssel</string>
     <string name="settings_gapless_playback">Lückenlose Wiedergabe</string>
     <string name="settings_remove_silence_between_tracks">Stille zwischen Titeln entfernen</string>
+    <string name="settings_continue_into_next_list">Mit der nächsten Liste weitermachen</string>
+    <string name="settings_continue_into_next_list_desc">Endet eine Playlist, ein Album oder ein Ordner, wird das Nächste auf dem Bildschirm gespielt, von dem es geöffnet wurde, und nach dem Letzten Radio zu seinem letzten Titel. Zurück beim ersten Titel geht zum vorherigen.</string>
     <string name="settings_never_resample_between_tracks">Zwischen Titeln nie resamplen</string>
     <string name="settings_a_track_at_a_different_sample_rate_starts_after">Ein Titel mit anderer Abtastrate beginnt nach einer kurzen Lücke, statt angepasst zu werden – die Ausgabe bleibt bit-perfekt. Ausschalten, damit jeder Übergang nahtlos ist und das System resampelt.</string>
     <string name="settings_wi_fi_streaming">Streaming über WLAN</string>
@@ -1872,6 +1874,8 @@
     <string name="sort_quality">Qualität</string>
     <string name="sort_file_size">Dateigröße</string>
     <string name="sort_song_count">Anzahl der Songs</string>
+    <string name="sort_last_edited">Zuletzt bearbeitet</string>
+    <string name="sort_date_created">Erstellungsdatum</string>
     <string name="action_shuffle">Zufallswiedergabe</string>
     <string name="folder_subfolders_included">Mit Unterordnern</string>
     <string name="folder_go_to">Zu %1$s wechseln</string>

@@ -83,6 +83,8 @@ import coil3.compose.AsyncImage
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.google.accompanist.permissions.shouldShowRationale
+import tf.monochrome.android.player.ListRef
+import tf.monochrome.android.player.ListTrail
 import tf.monochrome.android.data.local.scanner.ScanProgress
 import tf.monochrome.android.domain.model.UnifiedAlbum
 import tf.monochrome.android.domain.model.UnifiedArtist
@@ -433,7 +435,13 @@ fun LocalLibraryTab(
                 selection = selection,
             )
 
-            LibraryCategory.ALBUMS -> AlbumGrid(albums = sortedAlbums, onAlbumClick = onAlbumClick)
+            LibraryCategory.ALBUMS -> AlbumGrid(
+                albums = sortedAlbums,
+                onAlbumClick = { album ->
+                    ListTrail.opened(album, sortedAlbums) { ListTrail.localAlbum(it.id) }
+                    onAlbumClick(album)
+                },
+            )
 
             LibraryCategory.ARTISTS -> ArtistList(artists = sortedArtists, onArtistClick = onArtistClick)
 
@@ -478,7 +486,9 @@ fun LocalLibraryTab(
                 onFolderClick = onFolderClick,
                 onPlayFolder = { path, shuffle ->
                     viewModel.loadFolderForPlay(path) { tracks ->
-                        if (shuffle) playerViewModel.shufflePlayUnified(tracks) else playerViewModel.playAllUnified(tracks)
+                        // The whole branch plays, so the next folder is the one after it.
+                        val from = ListRef.Folder(path, withSubfolders = true)
+                        if (shuffle) playerViewModel.shufflePlayUnified(tracks, from) else playerViewModel.playAllUnified(tracks, from)
                     }
                 },
                 onRemoveFolder = { path, name ->
@@ -493,13 +503,13 @@ fun LocalLibraryTab(
 }
 
 /**
- * Sort affordance for the Albums / Artists / Songs tabs. Tapping the icon opens a
+ * Sort affordance for the Albums / Artists / Songs tabs and the playlists. Tapping the icon opens a
  * menu of the tab's available [keys]; selecting the current key flips the
  * direction, selecting another switches to it ascending. The active key shows an
  * up/down arrow.
  */
 @Composable
-private fun SortMenu(
+internal fun SortMenu(
     keys: List<LibrarySortKey>,
     current: LibrarySort,
     onChange: (LibrarySort) -> Unit,

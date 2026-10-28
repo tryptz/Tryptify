@@ -190,6 +190,8 @@ class SettingsViewModel @Inject constructor(
     // --- Interface ---
     val gaplessPlayback: StateFlow<Boolean> = preferences.gaplessPlayback
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val continueIntoNextList: StateFlow<Boolean> = preferences.continueIntoNextList
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val showExplicitBadges: StateFlow<Boolean> = preferences.showExplicitBadges
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val rowBadges: StateFlow<tf.monochrome.android.data.preferences.RowBadges> = preferences.rowBadges
@@ -527,6 +529,7 @@ class SettingsViewModel @Inject constructor(
 
     // --- Interface actions ---
     fun setGaplessPlayback(enabled: Boolean) { viewModelScope.launch { preferences.setGaplessPlayback(enabled) } }
+    fun setContinueIntoNextList(enabled: Boolean) { viewModelScope.launch { preferences.setContinueIntoNextList(enabled) } }
     fun setShowExplicitBadges(enabled: Boolean) { viewModelScope.launch { preferences.setShowExplicitBadges(enabled) } }
     fun setRowBadges(badges: tf.monochrome.android.data.preferences.RowBadges) { viewModelScope.launch { preferences.setRowBadges(badges) } }
 

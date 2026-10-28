@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.library
 
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -28,7 +30,8 @@ import javax.inject.Inject
 class LibraryViewModel @Inject constructor(
     private val libraryRepository: LibraryRepository,
     private val csvPlaylistParser: CsvPlaylistParser,
-    private val playlistImportService: PlaylistImportService
+    private val playlistImportService: PlaylistImportService,
+    private val preferences: tf.monochrome.android.data.preferences.PreferencesManager,
 ) : ViewModel() {
 
     val importProgress: StateFlow<ImportProgress> = playlistImportService.progress
@@ -110,6 +113,16 @@ class LibraryViewModel @Inject constructor(
     val favoriteArtists: StateFlow<List<Artist>> = libraryRepository.getFavoriteArtists()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val playlists: StateFlow<List<UserPlaylistEntity>> = libraryRepository.getAllPlaylists()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    /** How the playlists are listed (the sort button above them). */
+    val playlistSort: StateFlow<LibrarySort> = preferences.playlistSort
+        .map(PlaylistSort::decode)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PlaylistSort.DEFAULT)
+
+    fun setPlaylistSort(sort: LibrarySort) {
+        viewModelScope.launch { preferences.setPlaylistSort(PlaylistSort.encode(sort)) }
+    }
+
+    val playlists: StateFlow<List<UserPlaylistEntity>> =
+        combine(libraryRepository.getAllPlaylists(), playlistSort, PlaylistSort::apply)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 }

@@ -34,7 +34,7 @@ class PlaylistViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    private val playlistId: String = checkNotNull(savedStateHandle["playlistId"])
+    val playlistId: String = checkNotNull(savedStateHandle["playlistId"])
 
     /**
      * This playlist's repair or regeneration, running or just finished; Idle

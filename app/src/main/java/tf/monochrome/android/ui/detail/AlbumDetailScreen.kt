@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.detail
 
+import tf.monochrome.android.player.ListRef
 import tf.monochrome.android.ui.navigation.trackArtistAction
 import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.compose.foundation.clickable
@@ -281,7 +282,7 @@ fun AlbumDetailScreen(
                             tf.monochrome.android.devedit.DevEditable("album_action_row") {
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 FilledIconButton(
-                                    onClick = { playerViewModel.playAll(visibleTracks) },
+                                    onClick = { playerViewModel.playAll(visibleTracks, ListRef.Album(viewModel.albumId)) },
                                     modifier = Modifier.size(48.dp),
                                     colors = IconButtonDefaults.filledIconButtonColors(
                                         containerColor = MaterialTheme.colorScheme.primary
@@ -294,7 +295,7 @@ fun AlbumDetailScreen(
                                     )
                                 }
                                 FilledIconButton(
-                                    onClick = { playerViewModel.shufflePlay(visibleTracks) },
+                                    onClick = { playerViewModel.shufflePlay(visibleTracks, ListRef.Album(viewModel.albumId)) },
                                     modifier = Modifier.size(48.dp),
                                     colors = IconButtonDefaults.filledIconButtonColors(
                                         containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -367,7 +368,7 @@ fun AlbumDetailScreen(
                             track = track,
                             onClick = {
                                 if (selection.active) selection.toggle(track.id)
-                                else playerViewModel.playTrack(track, visibleTracks)
+                                else playerViewModel.playTrack(track, visibleTracks, ListRef.Album(viewModel.albumId))
                             },
                             onLongClick = { selection.toggle(track.id) },
                             onMoreClick = { showContextMenuForTrack = track },

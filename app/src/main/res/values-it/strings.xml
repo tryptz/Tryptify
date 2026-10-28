@@ -912,6 +912,8 @@
     <string name="settings_your_api_key">La tua chiave API</string>
     <string name="settings_gapless_playback">Riproduzione senza pause</string>
     <string name="settings_remove_silence_between_tracks">Rimuovi il silenzio tra i brani</string>
+    <string name="settings_continue_into_next_list">Continua con la lista successiva</string>
+    <string name="settings_continue_into_next_list_desc">Quando una playlist, un album o una cartella finisce, riproduce il successivo nella schermata da cui è stato aperto e, dopo l’ultimo, una radio a partire dal suo ultimo brano. Precedente sul primo brano torna a quello prima.</string>
     <string name="settings_never_resample_between_tracks">Non ricampionare mai tra i brani</string>
     <string name="settings_a_track_at_a_different_sample_rate_starts_after">Un brano con una frequenza di campionamento diversa inizia dopo una breve pausa anziché essere ricampionato, mantenendo l\'uscita bit-perfect. Disattiva per rendere ogni transizione fluida e consentire al sistema di ricampionare.</string>
     <string name="settings_wi_fi_streaming">Streaming Wi-Fi</string>
@@ -1923,6 +1925,8 @@
     <string name="sort_quality">Qualità</string>
     <string name="sort_file_size">Dimensioni file</string>
     <string name="sort_song_count">Numero di brani</string>
+    <string name="sort_last_edited">Ultima modifica</string>
+    <string name="sort_date_created">Data di creazione</string>
     <string name="action_shuffle">Riproduzione casuale</string>
     <string name="folder_subfolders_included">Sottocartelle incluse</string>
     <string name="folder_go_to">Vai a %1$s</string>
