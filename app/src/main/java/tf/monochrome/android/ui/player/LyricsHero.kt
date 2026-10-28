@@ -118,10 +118,12 @@ internal fun LyricsHeroPanel(
         // just sharper. Either way we layer a dimming gradient on top so
         // foreground text stays legible.
         if (!coverUrl.isNullOrBlank()) {
+            val decodePx = rememberBlurredCoverDecodePx(40.dp)
             SubcomposeAsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(coverUrl)
                     .crossfade(true)
+                    .apply { if (decodePx != null) size(decodePx) }
                     .build(),
                 contentDescription = null,
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
@@ -710,7 +712,12 @@ internal fun SyncedLyricsView(
                     isActive = isActive,
                     isPast = isPast,
                     // Word-level highlight rides the same Bluetooth-adjusted clock.
-                    position = position - syncDelayMs,
+                    // Only the sung line reads it. An inactive line's colours
+                    // ignore the position and it has no sung word to report
+                    // (onSungWordPositioned is null), yet read for every line
+                    // the position recomposed every visible line on each poll,
+                    // at every word's start and end.
+                    position = if (isActive) position - syncDelayMs else 0L,
                     accent = accent,
                     onClick = { onSeekTo(line.timeMs) },
                     beatModifier = beatModifier,

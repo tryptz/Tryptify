@@ -110,7 +110,8 @@ internal fun Modifier.lyricGodRays(
 internal class LyricRayLight(
     /** The saved settings: what composition may read (a switch, a layer choice). */
     val baseFx: LyricsFxSettings,
-    accent: Color,
+    /** The album accent, read in the draw phase: in the player it is the colour fade. */
+    private val accent: () -> Color,
     val moving: Boolean,
     private val time: State<Float>,
     private val tilt: State<Offset>,
@@ -134,8 +135,25 @@ internal class LyricRayLight(
      */
     val fx: LyricsFxSettings get() = live.lyrics(baseFx)
 
-    /** The light's colour: the album accent, a third of the way to white. */
-    val color: Color = lerp(accent, Color.White, 0.35f)
+    constructor(
+        baseFx: LyricsFxSettings,
+        accent: Color,
+        moving: Boolean,
+        time: State<Float>,
+        tilt: State<Offset>,
+        pulse: State<Float>?,
+        band: () -> Rect?,
+        lettersBox: () -> Rect?,
+        scale: Float,
+        live: VisualLinkLive = VisualLinkLive.None,
+    ) : this(baseFx, { accent }, moving, time, tilt, pulse, band, lettersBox, scale, live)
+
+    /**
+     * The light's colour: the album accent, a third of the way to white. Read
+     * it in a draw or layer block, like [fx]: across a track change's colour
+     * fade it moves every frame, and the light itself stays the same object.
+     */
+    val color: Color get() = lerp(accent(), Color.White, 0.35f)
 
     /** This frame's light in root px. Null until the lyrics have been laid out. */
     private fun frameInRoot(): RayFrame? {
@@ -219,6 +237,34 @@ internal fun rememberLyricRayLight(
     /** Who this light is for, in the Debug Log's rays report. */
     debugName: String = "lyrics",
     live: VisualLinkLive = LocalVisualLinks.current,
+): LyricRayLight? = rememberLyricRayLight(
+    // A new accent is a new light, as it always was for a fixed colour.
+    accentOf = remember(accent) { { accent } },
+    pulse = pulse,
+    band = band,
+    lettersBox = lettersBox,
+    fx = fx,
+    debugName = debugName,
+    live = live,
+)
+
+/**
+ * The same light with an accent read in the draw phase ([accentOf]): the player hands it
+ * its colour fade, which would otherwise build a new light, and recompose
+ * everything holding it, on every frame of a track change.
+ */
+@Composable
+internal fun rememberLyricRayLight(
+    accentOf: () -> Color,
+    pulse: State<Float>? = null,
+    /** What is being sung, in root px. */
+    band: () -> Rect? = { null },
+    /** The lyric surface, in root px; read in the draw phase. */
+    lettersBox: () -> Rect?,
+    fx: LyricsFxSettings = LocalLyricsFx.current,
+    /** Who this light is for, in the Debug Log's rays report. */
+    debugName: String = "lyrics",
+    live: VisualLinkLive = LocalVisualLinks.current,
 ): LyricRayLight? {
     if (!fx.godRays) return null
     if (LocalLowPerformance.current.disableLiquidGlass) return null
@@ -231,9 +277,9 @@ internal fun rememberLyricRayLight(
     val tilt = if (fx.godRayTilt > 0f) rememberGravityTilt() else NoTilt
     val window = LocalWindowInfo.current.containerSize
     val scale = min(window.width, window.height).toFloat()
-    val light = remember(fx, accent, moving, time, tilt, pulse, band, lettersBox, scale, live) {
+    val light = remember(fx, accentOf, moving, time, tilt, pulse, band, lettersBox, scale, live) {
         RaysProbe.lightsBuilt++
-        LyricRayLight(fx, accent, moving, time, tilt, pulse, band, lettersBox, scale, live)
+        LyricRayLight(fx, accentOf, moving, time, tilt, pulse, band, lettersBox, scale, live)
     }
     // Keyed on nothing, so a light rebuilt every recomposition still gets
     // reported, as a high "lights built", instead of restarting the timer.

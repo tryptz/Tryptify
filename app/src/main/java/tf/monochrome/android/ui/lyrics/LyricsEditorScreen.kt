@@ -48,6 +48,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -108,7 +109,11 @@ fun LyricsEditorScreen(
     val serverStatus by viewModel.serverStatus.collectAsStateWithLifecycle()
     val hasServer by viewModel.hasServer.collectAsStateWithLifecycle()
     val isPlaying by playerViewModel.isPlaying.collectAsStateWithLifecycle()
-    val position by playerViewModel.positionMs.collectAsStateWithLifecycle()
+    // Held as State: the play head ticks four times a second, and more at
+    // lyric boundaries. Read here it recomposed the whole editor for the
+    // transport's clock alone. The transport reads it, and a stamp reads it
+    // when it is pressed.
+    val positionState = playerViewModel.positionMs.collectAsStateWithLifecycle()
     val duration by playerViewModel.durationMs.collectAsStateWithLifecycle()
     val accent = MaterialTheme.colorScheme.primary
 
@@ -158,7 +163,7 @@ fun LyricsEditorScreen(
             Spacer(Modifier.height(8.dp))
             Transport(
                 isPlaying = isPlaying,
-                positionMs = position,
+                position = positionState,
                 durationMs = duration,
                 onTogglePlay = playerViewModel::togglePlayPause,
                 onSeek = playerViewModel::seekTo,
@@ -166,7 +171,7 @@ fun LyricsEditorScreen(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 GlyphButton(
                     text = stringResource(R.string.lyrics_editor_stamp),
-                    onClick = { viewModel.stamp(position) },
+                    onClick = { viewModel.stamp(positionState.value) },
                     primary = true,
                     enabled = !draft?.lines.isNullOrEmpty(),
                     modifier = Modifier.weight(1f),
@@ -331,7 +336,7 @@ fun LyricsEditorScreen(
             initial = "",
             onDismiss = { inserting = null },
         ) { text ->
-            viewModel.insertAfter(index, text, position)
+            viewModel.insertAfter(index, text, positionState.value)
             inserting = null
         }
     }
@@ -396,7 +401,8 @@ private fun serverStatusText(status: ServerLyricsStatus?): String? = when (statu
 }
 
 @Composable
-private fun Transport(isPlaying: Boolean, positionMs: Long, durationMs: Long, onTogglePlay: () -> Unit, onSeek: (Long) -> Unit) {
+private fun Transport(isPlaying: Boolean, position: State<Long>, durationMs: Long, onTogglePlay: () -> Unit, onSeek: (Long) -> Unit) {
+    val positionMs = position.value
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         IconButton(onClick = onTogglePlay) {
             Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null)

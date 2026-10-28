@@ -227,7 +227,12 @@ fun MainPlayerRoute(
     // Sleep timer lives in PlayerViewModel (shared, nav-host-scoped) so the
     // countdown keeps running when this destination leaves composition.
     val sleepMinutes by playerViewModel.sleepTimerMinutes.collectAsStateWithLifecycle()
-    val sleepRemainingMs by playerViewModel.sleepTimerRemainingMs.collectAsStateWithLifecycle()
+    // The countdown ticks every second, but only its minute is shown: derived,
+    // so the route recomposes when the minute turns over, not with every tick.
+    val sleepRemainingMsState = playerViewModel.sleepTimerRemainingMs.collectAsStateWithLifecycle()
+    val sleepRemainingMinutes by remember(sleepRemainingMsState) {
+        derivedStateOf { ((sleepRemainingMsState.value + 59_999) / 60_000).toInt() }
+    }
 
     // Expanded lyrics: the SAME hero lyric surface grows to full-bleed while
     // MainPlayerScreen collapses the player chrome — no separate overlay.
@@ -290,7 +295,13 @@ fun MainPlayerRoute(
     )
     // Lets the artwork tell a skip from a song ending; see MorphingCoverArt.
     val userTrackChanges by playerViewModel.userTrackChanges.collectAsStateWithLifecycle()
-    val animatedDominant by androidx.compose.animation.animateColorAsState(
+    // Held as State and never read in this body. Each frame of the fade (half
+    // a second by default, up to eight) changes both colours, and read here
+    // they recomposed the whole route with every frame. They are read where
+    // they are used instead: the screen call, the hero slot, the glass locals
+    // and the system bars, each in a scope of its own, and the god rays' light
+    // reads its colour in the draw phase.
+    val dominantFade = androidx.compose.animation.animateColorAsState(
         targetValue = albumColors.dominant,
         animationSpec = androidx.compose.animation.core.tween(
             durationMillis = colorBlendMs,
@@ -298,7 +309,7 @@ fun MainPlayerRoute(
         ),
         label = "playerBackground",
     )
-    val animatedVibrant by androidx.compose.animation.animateColorAsState(
+    val vibrantFade = androidx.compose.animation.animateColorAsState(
         targetValue = albumColors.vibrant,
         animationSpec = androidx.compose.animation.core.tween(
             durationMillis = colorBlendMs,
@@ -306,7 +317,6 @@ fun MainPlayerRoute(
         ),
         label = "playerAccent",
     )
-    val blendedColors = AlbumColors(animatedDominant, animatedVibrant)
     val spectrumColor = MaterialTheme.colorScheme.primary
     val waveCandySettings by playerViewModel.waveCandy.collectAsStateWithLifecycle()
     val waterfallSettings by playerViewModel.spectrumWaterfall.collectAsStateWithLifecycle()
@@ -315,7 +325,7 @@ fun MainPlayerRoute(
     // OR'd with the app-wide setting so leaving the visualiser doesn't hand the
     // status bar back to someone who asked for full screen everywhere.
     SystemBarsHidden(isFullscreenActive || LocalImmersiveFullScreen.current)
-    PlayerSystemBarAppearance(blendedColors.dominant)
+    PlayerSystemBarAppearance(dominantFade)
 
     // --- Sheets ---
     if (showLyricsSheet) {
@@ -346,7 +356,6 @@ fun MainPlayerRoute(
     // MainPlayerScreen's `overlay` slot below so it renders inside the player's
     // own window, next to the haze source — the only place a pane can actually
     // blur this screen. See SpeedPanel.
-    val sleepRemainingMinutes = ((sleepRemainingMs + 59_999) / 60_000).toInt()
     if (showSleepSheet) {
         SleepTimerSheet(
             activeMinutes = sleepMinutes,
@@ -533,7 +542,10 @@ fun MainPlayerRoute(
         sleepTimerLabel = if (sleepMinutes > 0) stringResource(R.string.minutes_short, sleepRemainingMinutes) else stringResource(R.string.state_off),
         sleepTimerActive = sleepMinutes > 0,
         queueLabel = queueLabel,
-        albumColors = blendedColors,
+        // Where the fade is heading. The screen is handed the colours of this
+        // frame of it at its call below (`shownState`), so this body does not
+        // read the fade; nothing here reads these.
+        albumColors = albumColors,
         colorBlendMs = colorBlendMs,
         // Lit for what the chip actually controls: ambient on the glass
         // player, the hero view mode on the legacy one. Tracking both
@@ -642,7 +654,7 @@ fun MainPlayerRoute(
     val lyricLetters = remember { LyricLetterCapture() }
     val lyricsRayLight = if (!legacyPlayer && lyricsSlotWide) {
         rememberLyricRayLight(
-            accent = blendedColors.vibrant,
+            accentOf = remember(vibrantFade) { { vibrantFade.value } },
             pulse = beatPulse,
             band = { lyricLetters.bandInRoot() },
             lettersBox = { lyricLetters.boxInRoot },
@@ -667,20 +679,18 @@ fun MainPlayerRoute(
         LocalLyricsSpectrum provides playerViewModel.spectrumAnalyzer,
         LocalLyricGlyphAnchors provides glyphAnchors.takeIf { lyricsBeatOn },
         LocalBeatPulse provides beatPulse,
-        // Tell the lyric glass what's behind it so it can lens the real album
-        // tones when the blurred album background is on (Apple-OS style).
-        LocalPlayerBackdrop provides PlayerBackdrop(
-            blurredArt = blurredBackground,
-            dominant = blendedColors.dominant,
-            secondary = blendedColors.vibrant,
-            art = backdropArt,
-        ),
         // The transport buttons' refractive glass parameters (Studio › Player Glass).
         LocalPlayerGlass provides playerGlass,
         LocalGlassArea provides LinkArea.PLAYER,
-        // What the player's glass stands over: its own dark background, not the
-        // theme's. Every pane works its text colour out from this.
-        tf.monochrome.android.ui.components.LocalGlassGround provides playerGlassGround(blendedColors.dominant),
+    ) {
+    // What is behind the glass and what it stands over, from this frame of the
+    // colour fade. Provided in a scope of their own so the fade recomposes the
+    // panes that read them and not this whole body.
+    PlayerGlassColors(
+        blurredBackground = blurredBackground,
+        art = backdropArt,
+        dominant = dominantFade,
+        vibrant = vibrantFade,
     ) {
     // topBar and hero are content, not chrome — the artwork, lyrics, queue and
     // visualizer are the same whichever layout is drawing around them. Hoisted
@@ -920,7 +930,7 @@ fun MainPlayerRoute(
                         val d = durationState.value
                         if (d > 0) (positionState.value.toFloat() / d).coerceIn(0f, 1f) else 0f
                     },
-                    albumColors = blendedColors,
+                    albumColors = AlbumColors(dominantFade.value, vibrantFade.value),
                     blendMillis = colorBlendMs,
                     userTrackChanges = userTrackChanges,
                     visualizerSensitivity = visualizerSensitivity,
@@ -966,7 +976,7 @@ fun MainPlayerRoute(
                 LyricsHeroBox(
                     lyrics = lyrics,
                     isLoading = isLyricsLoading,
-                    albumColors = blendedColors,
+                    albumColors = AlbumColors(dominantFade.value, vibrantFade.value),
                     positionMs = playerViewModel.positionMs,
                     serverStatus = serverLyricsStatus,
                     onSyncOnServer = if (hasLyricsServer) playerViewModel::syncLyricsOnServer else null,
@@ -1091,13 +1101,16 @@ fun MainPlayerRoute(
     androidx.compose.runtime.CompositionLocalProvider(
         tf.monochrome.android.ui.components.LocalPlayerSource provides playerSource,
     ) {
+        // This frame of the colour fade, read in this lambda's own scope: the
+        // screen recomposes with it, the route around it does not.
+        val shownState = state.copy(albumColors = AlbumColors(dominantFade.value, vibrantFade.value))
         if (legacyPlayer) {
             // Settings › System › Performance › "Legacy player" — the pre-glass
             // layout, recovered from history. Same state, same slots; no shader,
             // no frame clock, no gravity sensor. The blurred cover layer and the
             // beat-FX underlay are not passed because neither existed then.
             tf.monochrome.android.ui.player.legacy.LegacyMainPlayerScreen(
-                state = state,
+                state = shownState,
                 positionState = positionState,
                 durationState = durationState,
                 isFullscreen = isFullscreenActive,
@@ -1137,7 +1150,7 @@ fun MainPlayerRoute(
         } else {
             MainPlayerScreen(
                 miniGlass = miniGlass,
-                state = state,
+                state = shownState,
                 positionState = positionState,
                 durationState = durationState,
                 isFullscreen = isFullscreenActive,
@@ -1236,6 +1249,38 @@ fun MainPlayerRoute(
         }
     }
     }
+    }
+}
+
+/**
+ * The player's glass backdrop ([LocalPlayerBackdrop]) and the ground its panes
+ * work their ink out against ([LocalGlassGround]), from this frame of the
+ * colour fade. Both locals are dynamic, so a new frame recomposes the panes
+ * that read them and skips [content]: the route that calls this does not read
+ * the fade at all.
+ */
+@Composable
+private fun PlayerGlassColors(
+    blurredBackground: Boolean,
+    art: BackdropArt?,
+    dominant: androidx.compose.runtime.State<Color>,
+    vibrant: androidx.compose.runtime.State<Color>,
+    content: @Composable () -> Unit,
+) {
+    CompositionLocalProvider(
+        // Tell the lyric glass what's behind it so it can lens the real album
+        // tones when the blurred album background is on (Apple-OS style).
+        LocalPlayerBackdrop provides PlayerBackdrop(
+            blurredArt = blurredBackground,
+            dominant = dominant.value,
+            secondary = vibrant.value,
+            art = art,
+        ),
+        // What the player's glass stands over: its own dark background, not the
+        // theme's. Every pane works its text colour out from this.
+        tf.monochrome.android.ui.components.LocalGlassGround provides playerGlassGround(dominant.value),
+        content = content,
+    )
 }
 
 
@@ -1263,14 +1308,20 @@ fun MainPlayerRoute(
  * would keep the player's icons and the rest of the app would lose its own.
  */
 @Composable
-private fun PlayerSystemBarAppearance(albumDominant: Color) {
+private fun PlayerSystemBarAppearance(albumDominant: androidx.compose.runtime.State<Color>) {
     val view = LocalView.current
     val window = (view.context as? android.app.Activity)?.window
 
     val ground = PlayerDesignTokens.BackgroundBlack
-    val wash = lerp(albumDominant, Color.Black, 0.5f)
     // `lightBars` in the platform's sense: dark icons, for a light background.
-    val lightStatus = lerp(ground, wash, wash.alpha * 0.5f).luminance() > 0.5f
+    // Derived, so a colour fade recomposes this only on the frame the verdict
+    // flips, which is the frame it flipped on when it was worked out each time.
+    val lightStatus by remember(albumDominant) {
+        derivedStateOf {
+            val wash = lerp(albumDominant.value, Color.Black, 0.5f)
+            lerp(ground, wash, wash.alpha * 0.5f).luminance() > 0.5f
+        }
+    }
     val lightNav = ground.luminance() > 0.5f
 
     DisposableEffect(lightStatus, lightNav, window, view) {

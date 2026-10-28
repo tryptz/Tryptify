@@ -5,8 +5,10 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.FloatState
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -33,6 +35,16 @@ import tf.monochrome.android.domain.model.WaveGlow
  *
  * Lines are white (or the album accent) set off by a neon glow in their own
  * colour or a soft drop shadow, per [settings], and swell with [kick].
+ *
+ * While the song is paused ([isPlaying] false) the scope keeps sliding until
+ * its window reaches the last sample, a second or so, and then shows the same
+ * picture on every frame, which it redrew, glow and all, sixty to a hundred
+ * and twenty times a second. So while paused each frame works the picture out
+ * first and redraws only when it changed. It is still worked out every frame,
+ * not stopped: the native read clock places the window afresh after a gap of
+ * half a second (as it does after a seek), so a scope that stopped asking
+ * would jump on its next picture, a resize or a settings change while paused
+ * included, instead of carrying on from where it stood.
  */
 @Composable
 fun WaveCandyOverlay(
@@ -40,20 +52,32 @@ fun WaveCandyOverlay(
     accent: Color,
     modifier: Modifier = Modifier,
     kick: FloatState? = null,
+    isPlaying: Boolean = true,
 ) {
     val segs = remember { FloatArray((POINTS - 1) * 4 * 2) }
     val tick = remember { mutableIntStateOf(0) }
     val ink = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND } }
+    val still = remember { StillScope() }
+    val playing by rememberUpdatedState(isPlaying)
+    val current by rememberUpdatedState(settings)
+    val currentKick by rememberUpdatedState(kick)
 
     LaunchedEffect(Unit) {
         while (isActive) {
             withFrameNanos { }
-            tick.intValue++
+            if (playing) {
+                still.forget()
+                tick.intValue++
+            } else if (still.moved(current, currentKick?.floatValue ?: 0f)) {
+                tick.intValue++
+            }
         }
     }
 
     Canvas(modifier) {
         @Suppress("UNUSED_VARIABLE") val t = tick.intValue
+        still.width = size.width
+        still.height = size.height
         val k = kick?.floatValue ?: 0f
         val n = WaveScopeNative.nativeRender(
             segs, POINTS, settings.windowMs, settings.stereo,
@@ -79,6 +103,42 @@ fun WaveCandyOverlay(
         }
         drawIntoCanvas { c -> c.nativeCanvas.drawLines(segs, 0, n, ink) }
     }
+}
+
+/**
+ * The paused scope's last picture, to tell a frame that would redraw the same
+ * lines from one that would not. Main thread only: the frame loop and the
+ * draw both run there.
+ */
+private class StillScope {
+    var width = 0f
+    var height = 0f
+    private val probe = FloatArray((POINTS - 1) * 4 * 2)
+    private val last = FloatArray((POINTS - 1) * 4 * 2)
+    private var lastCount = -1
+
+    /** Forget the last picture, so the first paused frame always draws. */
+    fun forget() {
+        lastCount = -1
+    }
+
+    /** Works this frame's picture out with the draw's own arguments; true when it differs from the last. */
+    fun moved(settings: WaveCandySettings, kick: Float): Boolean {
+        if (width <= 0f || height <= 0f) return true
+        val n = WaveScopeNative.nativeRender(
+            probe, POINTS, settings.windowMs, settings.stereo,
+            width, height, settings.gain * (1f + 0.5f * kick),
+        )
+        if (n == lastCount && sameLines(probe, last, n)) return false
+        probe.copyInto(last, endIndex = n.coerceAtLeast(0))
+        lastCount = n
+        return true
+    }
+}
+
+private fun sameLines(a: FloatArray, b: FloatArray, n: Int): Boolean {
+    for (i in 0 until n) if (a[i] != b[i]) return false
+    return true
 }
 
 private const val POINTS = 384

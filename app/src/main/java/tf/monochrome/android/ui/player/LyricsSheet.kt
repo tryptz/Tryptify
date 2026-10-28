@@ -23,8 +23,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -125,17 +125,15 @@ private fun SyncedLyrics(
     val lyricFont = rememberLyricFontFamily(LocalLyricsFx.current)
     val fontSizeSp = LocalLyricsFx.current.fontSizeSp
     val listState = rememberLazyListState()
-    var currentLineIndex by remember { mutableIntStateOf(-1) }
 
     // Find current line based on the Bluetooth-adjusted playback position.
-    LaunchedEffect(position, syncDelayMs) {
-        val newIndex = lines.indexOfLast { it.timeMs <= position - syncDelayMs }
-        // Allow -1 through: seeking back before the first lyric must clear the
-        // highlight, not leave the previous line lit. The auto-scroll effect
-        // already ignores negative indices.
-        if (newIndex != currentLineIndex) {
-            currentLineIndex = newIndex
-        }
+    // Derived, so the sheet recomposes when the line changes rather than on
+    // every poll: an effect keyed on the position read it here, and relaunched,
+    // at every word's start and end. -1 comes through: seeking back before the
+    // first lyric must clear the highlight, not leave the previous line lit.
+    // The auto-scroll effect already ignores negative indices.
+    val currentLineIndex by remember(lines, syncDelayMs) {
+        derivedStateOf { lines.indexOfLast { it.timeMs <= position - syncDelayMs } }
     }
 
     // Track the last time the user dragged the list, so auto-scroll backs off
@@ -181,6 +179,9 @@ private fun SyncedLyrics(
                     KaraokeLine(
                         line = line,
                         isActive = isActive,
+                        // Every karaoke line, not only the active one: a word
+                        // whose time is still running lights up on a line that
+                        // is no longer the active one (lines that overlap).
                         position = position - syncDelayMs,
                         rowWidth = rowWidth,
                         onClick = { onSeekTo(line.timeMs) }

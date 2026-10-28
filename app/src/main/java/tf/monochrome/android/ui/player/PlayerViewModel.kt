@@ -2,6 +2,8 @@ package tf.monochrome.android.ui.player
 
 import android.content.ComponentName
 import android.content.Context
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
@@ -166,6 +169,13 @@ class PlayerViewModel @Inject constructor(
 
     private val _positionMs = MutableStateFlow(0L)
     val positionMs: StateFlow<Long> = _positionMs.asStateFlow()
+
+    /**
+     * The app's own lifecycle, started while any of its screens is. The
+     * position poll stops while it is not. Declared above the init block that
+     * starts the poll, for the reason given at [_activeDownloads].
+     */
+    private val appLifecycle: Lifecycle = ProcessLifecycleOwner.get().lifecycle
 
     private val _durationMs = MutableStateFlow(0L)
     val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
@@ -552,6 +562,15 @@ class PlayerViewModel @Inject constructor(
     init {
         connectToService()
         startPositionPolling()
+        // Back from the background, read the position once. The poll was
+        // stopped, and a pause or a seek from the notification moved it without
+        // anyone here hearing of it: the bar would come back where it was left.
+        viewModelScope.launch {
+            appLifecycle.currentStateFlow
+                .map { appScreensStopped(it) }
+                .distinctUntilChanged()
+                .collect { stopped -> if (!stopped) syncState() }
+        }
         observeCurrentTrackMeta()
         // Before anything is loaded, so the mini player comes back with the
         // scrubber where the user left it. Duration comes from the snapshot:
@@ -578,6 +597,11 @@ class PlayerViewModel @Inject constructor(
         // The sampler records where in a track a capture came from, and cannot
         // reach a MediaController from its own view model.
         viewModelScope.launch { _positionMs.collect { playbackPositions.update(it) } }
+        // One watcher for the whole queue. A song leaves the map when it leaves
+        // the queue, so a download needs no watcher of its own: one per song,
+        // never stopped, woke on every progress tick of every download and
+        // copied the map each time, and "Download all" on an album left
+        // hundreds of them running.
         viewModelScope.launch {
             downloadManager.observeAllActiveDownloads().collectLatest { active ->
                 _activeDownloads.value = active
@@ -829,6 +853,16 @@ class PlayerViewModel @Inject constructor(
                     _isPlaying.first { it }
                     continue
                 }
+                if (appScreensStopped(appLifecycle.currentState)) {
+                    // Every reader of this position is a screen: the player,
+                    // the mini player, the Studio's preview through
+                    // NowPlayingLyricsHolder. The widget, Discord and
+                    // scrobbling read the service's own player. With the
+                    // screen off the poll still woke the main thread four
+                    // times a second, and at every lyric word, for nobody.
+                    appLifecycle.currentStateFlow.first { !appScreensStopped(it) }
+                    continue
+                }
                 val position = mc.currentPosition.coerceAtLeast(0)
                 _positionMs.value = position
                 _durationMs.value = mc.duration.coerceAtLeast(0)
@@ -899,10 +933,7 @@ class PlayerViewModel @Inject constructor(
     ) {
         val legacyTracks = trackList.map { it.toLegacyTrack() }
         // Store source mappings so resolveAndPlay can find the right playback source
-        trackList.forEach { ut ->
-            val legacyId = ut.toLegacyTrack().id
-            unifiedTrackRegistry.put(legacyId, ut)
-        }
+        trackList.forEachIndexed { i, ut -> unifiedTrackRegistry.put(legacyTracks[i].id, ut) }
         val legacyTrack = track.toLegacyTrack()
         queueManager.playTrackInQueue(legacyTrack, legacyTracks, listsFor(from)?.copy(headCut = cut))
         resolveAndPlay()
@@ -998,10 +1029,8 @@ class PlayerViewModel @Inject constructor(
     /** Play all unified tracks starting from index 0. */
     fun playAllUnified(tracks: List<UnifiedTrack>, from: ListRef? = null) {
         if (tracks.isEmpty()) return
-        tracks.forEach { ut ->
-            unifiedTrackRegistry.put(ut.toLegacyTrack().id, ut)
-        }
         val legacyTracks = tracks.map { it.toLegacyTrack() }
+        tracks.forEachIndexed { i, ut -> unifiedTrackRegistry.put(legacyTracks[i].id, ut) }
         queueManager.setQueue(legacyTracks, 0, listsFor(from))
         resolveAndPlay()
     }
@@ -1010,10 +1039,8 @@ class PlayerViewModel @Inject constructor(
     fun shufflePlayUnified(tracks: List<UnifiedTrack>, from: ListRef? = null) {
         if (tracks.isEmpty()) return
         try {
-            tracks.forEach { ut ->
-                unifiedTrackRegistry.put(ut.toLegacyTrack().id, ut)
-            }
             val legacyTracks = tracks.map { it.toLegacyTrack() }
+            tracks.forEachIndexed { i, ut -> unifiedTrackRegistry.put(legacyTracks[i].id, ut) }
             queueManager.setQueue(legacyTracks, 0, listsFor(from))
             queueManager.toggleShuffle()
             resolveAndPlay()
@@ -1034,8 +1061,9 @@ class PlayerViewModel @Inject constructor(
      */
     fun addUnifiedToQueue(tracks: List<UnifiedTrack>) {
         if (tracks.isEmpty()) return
-        tracks.forEach { unifiedTrackRegistry.put(it.toLegacyTrack().id, it) }
-        queueManager.addToQueue(tracks.map { it.toLegacyTrack() })
+        val legacyTracks = tracks.map { it.toLegacyTrack() }
+        tracks.forEachIndexed { i, ut -> unifiedTrackRegistry.put(legacyTracks[i].id, ut) }
+        queueManager.addToQueue(legacyTracks)
     }
 
     /** Bulk add from multi-select. */
@@ -1568,13 +1596,11 @@ class PlayerViewModel @Inject constructor(
         // download behind a song on the listener's own server.
         if (isLocalTrack(track) || isLiveStreamTrack(track) || isOwnServerTrack(track)) return
         downloadManager.downloadTrack(track)
-        observeTrackDownload(track.id)
     }
 
     fun downloadAllTracks(tracks: List<Track>) {
         val remote = tracks.filterNot { isLocalTrack(it) || isOwnServerTrack(it) }
         downloadManager.downloadTracks(remote)
-        remote.forEach { observeTrackDownload(it.id) }
     }
 
     /**
@@ -1630,20 +1656,6 @@ class PlayerViewModel @Inject constructor(
     fun isLocalUnified(track: UnifiedTrack): Boolean =
         track.source is tf.monochrome.android.domain.model.PlaybackSource.LocalFile
 
-    private fun observeTrackDownload(trackId: Long) {
-        viewModelScope.launch {
-            downloadManager.observeDownloadState(trackId).collectLatest { state ->
-                _activeDownloads.value = _activeDownloads.value.toMutableMap().apply {
-                    if (state.status == tf.monochrome.android.data.downloads.DownloadStatus.IDLE) {
-                        remove(trackId)
-                    } else {
-                        put(trackId, state)
-                    }
-                }
-            }
-        }
-    }
-
     fun addTrackToPlaylist(playlistId: String, track: Track) {
         viewModelScope.launch {
             libraryRepository.addTrackToPlaylist(playlistId, track)
@@ -1689,3 +1701,12 @@ class PlayerViewModel @Inject constructor(
         const val SERVER_LYRICS_AFTER_MS = 15_000L
     }
 }
+
+/**
+ * Whether none of the app's screens is started, as the position poll reads
+ * [ProcessLifecycleOwner]: CREATED while the app is in the background or the
+ * screen is off. INITIALIZED means androidx.startup never set it up (the
+ * manifest already switches one of its initialisers off), and the poll must
+ * not then wait for a start that will never come.
+ */
+internal fun appScreensStopped(state: Lifecycle.State): Boolean = state == Lifecycle.State.CREATED

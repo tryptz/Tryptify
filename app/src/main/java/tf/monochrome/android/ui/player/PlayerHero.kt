@@ -839,6 +839,7 @@ private fun HeroCoverArt(
                     settings = waveSettings,
                     accent = spectrumColor,
                     kick = kick,
+                    isPlaying = isPlaying,
                     modifier = Modifier.fillMaxWidth().height(maxHeight * 0.25f),
                 )
             }

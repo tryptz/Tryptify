@@ -317,11 +317,15 @@ private fun liquidGlassModifier(
             shader.setFloatUniform("uTime", timeSec.value)
             shader.setFloatUniform("uTilt", tilt.value.x, tilt.value.y)
             shader.setFloatUniform("uTint", tint.red, tint.green, tint.blue)
+            // The surface's position only with art to place, as on the player
+            // glass: read without it, this block re-ran on every frame the
+            // surface moved (the expand morph) for a value the uniforms do not
+            // take.
             shader.bindBackdropArt(
                 art = backdrop.art,
                 fit = backdrop.fit,
                 scrim = scrim,
-                anchor = anchor.rect,
+                anchor = if (backdrop.art != null) anchor.rect else AnchorRect.Unset,
                 paneW = size.width,
                 paneH = size.height,
             )
@@ -753,11 +757,21 @@ private fun playerGlassModifier(
             // The transport and the mini player sit directly on the artwork, so
             // this is where lensing the real thing shows most: the play glyph
             // carries the cover's own colour through it instead of a wash.
+            // The pane's position is read only when there is art to place: a
+            // read here re-runs this block, and rebuilds the effect, whenever
+            // the pane moves, and a pane with no art (a search bar, a card in
+            // a list) did that on every frame of a scroll for a value it never
+            // uses. Without art the uniforms take no anchor at all.
+            val art = backdrop.art
             shader.bindBackdropArt(
-                art = backdrop.art,
+                art = art,
                 fit = backdrop.fit,
                 scrim = scrim,
-                anchor = if (artFrame != null) anchorInFrame(anchor.rect, artFrame.rect) else anchor.rect,
+                anchor = when {
+                    art == null -> AnchorRect.Unset
+                    artFrame != null -> anchorInFrame(anchor.rect, artFrame.rect)
+                    else -> anchor.rect
+                },
                 paneW = size.width,
                 paneH = size.height,
             )
