@@ -99,6 +99,38 @@ class MusicalTagsTest {
     }
 
     @Test
+    fun `a ReplayGain peak is a fraction of full scale`() {
+        assertEquals(0.988525f, MusicalTags.parsePeak("0.988525")!!, 0.000001f)
+        assertEquals(1.0232f, MusicalTags.parsePeak("1,0232")!!, 0.000001f)
+        assertEquals(1f, MusicalTags.parsePeak(" 1.000000 ")!!, 0.000001f)
+        // In dB, as the odd tagger writes it: -0.1 dBFS.
+        assertEquals(0.98855f, MusicalTags.parsePeak("-0.10 dB")!!, 0.00001f)
+        for (junk in listOf(null, "", "0", "-0.5", "peak", "50")) assertNull("$junk", MusicalTags.parsePeak(junk))
+    }
+
+    @Test
+    fun `peaks are read beside the gains, from every format`() {
+        val id3 = ID3v24Tag()
+        id3.addField(ID3v24Frame("TXXX").apply { body = FrameBodyTXXX(0, "REPLAYGAIN_TRACK_PEAK", "0.912345") })
+        id3.addField(ID3v24Frame("TXXX").apply { body = FrameBodyTXXX(0, "replaygain_album_peak", "0.998000") })
+        assertEquals(MusicalTags(rgTrackPeak = 0.912345f, rgAlbumPeak = 0.998f), MusicalTags.from(tagTextFields(id3)))
+
+        val comments = VorbisCommentTag.createNewTag()
+        comments.addField("REPLAYGAIN_TRACK_GAIN", "+3.10 dB")
+        comments.addField("REPLAYGAIN_TRACK_PEAK", "0.501187")
+        assertEquals(
+            MusicalTags(rgTrackGain = 3.1f, rgTrackPeak = 0.501187f),
+            MusicalTags.from(tagTextFields(FlacTag(comments, emptyList()))),
+        )
+
+        val mp4 = Mp4Tag()
+        mp4.addField(
+            Mp4TagReverseDnsField("----:com.apple.iTunes:replaygain_track_peak", "com.apple.iTunes", "replaygain_track_peak", "0.750000"),
+        )
+        assertEquals(MusicalTags(rgTrackPeak = 0.75f), MusicalTags.from(tagTextFields(mp4)))
+    }
+
+    @Test
     fun `a tag with none of them reads as empty`() {
         val tag = ID3v24Tag()
         tag.setField(FieldKey.TITLE, "Song")

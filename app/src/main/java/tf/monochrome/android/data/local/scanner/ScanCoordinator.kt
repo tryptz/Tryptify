@@ -226,7 +226,11 @@ class ScanCoordinator @Inject constructor(
         /** Bump to make every install rebuild its folder tree once. */
         const val FOLDER_TREE_REBUILD_VERSION = 1
 
-        /** Bump to make every install read its tracks' tempo, key and gain tags once. */
-        const val MUSICAL_TAGS_VERSION = 1
+        /**
+         * Bump to make every install read its tracks' tempo, key, gain and
+         * peak tags once. 2: the ReplayGain peaks, which ReplayGain needs to
+         * raise a quiet song.
+         */
+        const val MUSICAL_TAGS_VERSION = 2
     }
 }

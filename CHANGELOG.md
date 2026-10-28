@@ -26,7 +26,7 @@
 #### ReplayGain, for real this time
 - **Settings › Audio › Audio processing › ReplayGain** evens out loudness between songs from the ReplayGain (or R128) tags in your files: Track, Album, or Smart, which uses the album's level while an album plays in order. Off by default, so nothing sounds different until you choose.
 - **It aims at a target loudness, in LUFS**: -23 (EBU R128), -18 (ReplayGain's own), -16, -14 (most streaming services, the default) or -8. A pre-amp chosen before becomes the nearest target. Turning it on or off, or picking another target, changes the song playing at once, with a 50 ms glide.
-- **It never clips.** Loud songs are turned down; a song is turned up only when its file shows there's room. It works on every output, the USB DAC included, and with it off (or at 0 dB) the sound passes through untouched, so bit-perfect stays bit-perfect.
+- **It never clips.** Loud songs are turned down; a song is turned up only as far as its file's peak tag (`REPLAYGAIN_TRACK_PEAK`, `REPLAYGAIN_ALBUM_PEAK`) leaves room, and not at all without one. A library scanned before reads its peaks once, in the background, after the update; Opus files have no peak tag and are only turned down. It works on every output, the USB DAC included, and with it off (or at 0 dB) the sound passes through untouched, so bit-perfect stays bit-perfect.
 
 ### Fixed
 - **USB DACs with one clock keep exclusive mode for CD-quality songs.** A DAC that runs only 48 and 96 kHz (the Nothing Ear (1) and Headphone (1)) refused 44.1 kHz, so every CD-rate song fell back to Android's mixer. The song is now resampled to the DAC's nearest rate; rates the DAC takes stay bit-perfect.

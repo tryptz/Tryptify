@@ -48,9 +48,9 @@ data class SongGain(
  *
  * It only ever turns a song down, unless its peak is known and leaves room:
  * a boost with no peak to check it against could push the loudest moment past
- * full scale, and on the 16-bit path that is a hard clip. Files' own peak tags
- * are not read yet, so for them that means loud songs come down and quiet
- * ones stay where they are.
+ * full scale, and on the 16-bit path that is a hard clip. A file's peaks come
+ * from its REPLAYGAIN_TRACK_PEAK and REPLAYGAIN_ALBUM_PEAK tags; R128 (Opus)
+ * has none, so an Opus file is only ever turned down.
  */
 object ReplayGain {
 
@@ -72,8 +72,8 @@ object ReplayGain {
     /**
      * What the target setting offers, in LUFS: EBU R128's broadcast level,
      * ReplayGain's own, Apple Music's, the one most streaming services use,
-     * and a loud master's. Few songs are louder than -8, and a song is raised
-     * only as far as its peak allows, so at -8 most play as they are.
+     * and a loud master's. A song is raised only as far as its peak allows,
+     * so the louder the target, the more songs stop short of it at full scale.
      */
     val TARGET_STEPS = listOf(-23f, -18f, -16f, -14f, -8f)
 
@@ -93,6 +93,8 @@ object ReplayGain {
         return SongGain(
             trackDb = track.replayGainTrack ?: track.r128TrackGain?.let { it / Q78 + R128_TO_REPLAYGAIN_DB },
             albumDb = track.replayGainAlbum ?: track.r128AlbumGain?.let { it / Q78 + R128_TO_REPLAYGAIN_DB },
+            trackPeak = track.replayGainTrackPeak,
+            albumPeak = track.replayGainAlbumPeak,
         )
     }
 

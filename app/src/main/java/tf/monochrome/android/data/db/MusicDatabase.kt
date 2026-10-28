@@ -75,7 +75,7 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         CollectionTrackArtistCrossRef::class,
         CollectionAlbumArtistCrossRef::class
     ],
-    version = 21,
+    version = 22,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -451,6 +451,20 @@ abstract class MusicDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `favorite_tracks` ADD COLUMN `source` TEXT")
                 db.execSQL("ALTER TABLE `playlist_tracks` ADD COLUMN `source` TEXT")
+            }
+        }
+
+        /**
+         * ReplayGain's peaks for scanned local tracks, so ReplayGain can raise
+         * a quiet song as far as its peak allows. Nullable REAL with no
+         * default, as MIGRATION_15_16's `bpm` is: how Room checks a `Float?`.
+         * Existing rows start empty and are read from their tags once, after
+         * the upgrade (ScanCoordinator's MUSICAL_TAGS_VERSION 2).
+         */
+        val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `local_tracks` ADD COLUMN `rgTrackPeak` REAL")
+                db.execSQL("ALTER TABLE `local_tracks` ADD COLUMN `rgAlbumPeak` REAL")
             }
         }
     }

@@ -339,6 +339,8 @@ class OpenedAudioRepository @Inject constructor(
             replayGainAlbum = tags.musical.rgAlbumGain,
             r128TrackGain = tags.musical.r128TrackGain,
             r128AlbumGain = tags.musical.r128AlbumGain,
+            replayGainTrackPeak = tags.musical.rgTrackPeak,
+            replayGainAlbumPeak = tags.musical.rgAlbumPeak,
             lyrics = tags.lyrics?.let { TrackLyrics(basic = it) },
             genre = tags.genre,
             source = PlaybackSource.LocalFile(

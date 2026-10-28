@@ -415,6 +415,8 @@ class MediaScanner @Inject constructor(
             rgAlbumGain = tags.musical.rgAlbumGain,
             r128TrackGain = tags.musical.r128TrackGain,
             r128AlbumGain = tags.musical.r128AlbumGain,
+            rgTrackPeak = tags.musical.rgTrackPeak,
+            rgAlbumPeak = tags.musical.rgAlbumPeak,
             bpm = tags.musical.bpm,
             camelotKey = tags.musical.camelotKey,
             hasEmbeddedArt = tags.hasEmbeddedArt,
@@ -704,6 +706,7 @@ class MediaScanner @Inject constructor(
                 for ((path, t) in found) {
                     localMediaDao.updateMusicalTags(
                         path, t.bpm, t.camelotKey, t.rgTrackGain, t.rgAlbumGain, t.r128TrackGain, t.r128AlbumGain,
+                        t.rgTrackPeak, t.rgAlbumPeak,
                     )
                 }
             }

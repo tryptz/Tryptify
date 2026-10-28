@@ -307,6 +307,8 @@ class LocalMediaRepository @Inject constructor(
                 replayGainAlbum = rgAlbumGain,
                 r128TrackGain = r128TrackGain,
                 r128AlbumGain = r128AlbumGain,
+                replayGainTrackPeak = rgTrackPeak,
+                replayGainAlbumPeak = rgAlbumPeak,
                 lyrics = lyrics?.let { TrackLyrics(basic = it) },
                 isrc = isrc,
                 musicBrainzTrackId = musicbrainzTrack,

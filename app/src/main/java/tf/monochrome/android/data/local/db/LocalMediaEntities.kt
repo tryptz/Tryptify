@@ -75,6 +75,9 @@ data class LocalTrackEntity(
     val rgAlbumGain: Float? = null,
     val r128TrackGain: Int? = null,
     val r128AlbumGain: Int? = null,
+    // ReplayGain's peaks, a fraction of full scale: how far a quiet song may be raised.
+    val rgTrackPeak: Float? = null,
+    val rgAlbumPeak: Float? = null,
 
     // Tempo and key, from the file's tags (TBPM / BPM, TKEY / INITIALKEY).
     // The key is a Camelot code: 1..12 the minor keys 1A..12A, 13..24 the

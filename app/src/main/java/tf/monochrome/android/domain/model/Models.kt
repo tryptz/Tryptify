@@ -547,6 +547,9 @@ data class UnifiedTrack(
     val replayGainAlbum: Float? = null,
     val r128TrackGain: Int? = null,
     val r128AlbumGain: Int? = null,
+    // ReplayGain's peaks, a fraction of full scale (1.0 = 0 dBFS).
+    val replayGainTrackPeak: Float? = null,
+    val replayGainAlbumPeak: Float? = null,
 
     // Lyrics
     val lyrics: TrackLyrics? = null,

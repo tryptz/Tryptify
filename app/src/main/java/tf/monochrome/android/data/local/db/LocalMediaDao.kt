@@ -353,7 +353,7 @@ interface LocalMediaDao {
     suspend fun trackPathsAfter(afterId: Long, limit: Int): List<TrackPath>
 
     /**
-     * Writes the tempo, key and gain tags of the track at [filePath] and
+     * Writes the tempo, key, gain and peak tags of the track at [filePath] and
      * nothing else: not a row rewrite, so its id, its groupings and its
      * dynamic range stay as they are.
      */
@@ -361,7 +361,8 @@ interface LocalMediaDao {
         """
         UPDATE local_tracks SET bpm = :bpm, camelotKey = :camelotKey,
             rgTrackGain = :rgTrackGain, rgAlbumGain = :rgAlbumGain,
-            r128TrackGain = :r128TrackGain, r128AlbumGain = :r128AlbumGain
+            r128TrackGain = :r128TrackGain, r128AlbumGain = :r128AlbumGain,
+            rgTrackPeak = :rgTrackPeak, rgAlbumPeak = :rgAlbumPeak
         WHERE filePath = :filePath
         """
     )
@@ -373,6 +374,8 @@ interface LocalMediaDao {
         rgAlbumGain: Float?,
         r128TrackGain: Int?,
         r128AlbumGain: Int?,
+        rgTrackPeak: Float?,
+        rgAlbumPeak: Float?,
     )
 
     // ── Albums ──────────────────────────────────────────────────────

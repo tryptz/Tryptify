@@ -102,6 +102,19 @@ class ReplayGainTest {
     }
 
     @Test
+    fun `a file's peak tags are read, and let a quiet song be raised`() {
+        val file = libraryFile(rg = 3f).copy(replayGainTrackPeak = 0.5f, replayGainAlbumPeak = 0.6f)
+        val gain = ReplayGain.of(file)
+        assertEquals(0.5f, gain.trackPeak)
+        assertEquals(0.6f, gain.albumPeak)
+        // +3 dB at -18 LUFS, +7 at -14: the peak at -6 dBFS has room for 6 of them.
+        assertEquals(3f, db(ReplayGain.linear(gain, track, inAlbum = false)), 0.01f)
+        assertEquals(6.02f, db(ReplayGain.linear(gain, ReplayGainSettings(ReplayGainMode.TRACK), inAlbum = false)), 0.01f)
+        // Without the peak it stays where it is.
+        assertEquals(1f, ReplayGain.linear(ReplayGain.of(libraryFile(rg = 3f)), track, inAlbum = false))
+    }
+
+    @Test
     fun `r128 gains are read against their own reference`() {
         // -2304 / 256 = -9 dB against -23 LUFS: -4 dB against ReplayGain's -18.
         val gain = ReplayGain.of(libraryFile(r128 = -2304))
