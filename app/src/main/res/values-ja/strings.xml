@@ -930,6 +930,8 @@
     <string name="settings_replaygain_track">トラック</string>
     <string name="settings_replaygain_album">アルバム</string>
     <string name="settings_replaygain_smart">スマート</string>
+    <string name="settings_replaygain_target">目標ラウドネス</string>
+    <string name="settings_replaygain_target_desc">タグ付きの曲はすべてこのラウドネスに揃えられます。-18 LUFS は ReplayGain の標準、-14 LUFS は多くのストリーミングサービスの基準です。</string>
     <string name="settings_output">出力</string>
     <string name="settings_playback_speed">再生速度</string>
     <string name="settings_clear_downloads">ダウンロードを消去</string>

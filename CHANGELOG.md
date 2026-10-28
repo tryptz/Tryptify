@@ -24,7 +24,8 @@
 - **A song's own lyrics come first**: the `.lrc` next to the file (what other players and Tryptify's own downloads write) and lyrics stored in the file's tags, for library files and downloads. Word-timed ones are used straight away; others still let a word-timed match from the internet replace them. Offline, they're what shows.
 
 #### ReplayGain, for real this time
-- **Settings › Audio › Audio processing › ReplayGain** evens out loudness between songs from the ReplayGain (or R128) tags in your files: Track, Album, or Smart, which uses the album's level while an album plays in order, plus a pre-amp. Off by default, so nothing sounds different until you choose.
+- **Settings › Audio › Audio processing › ReplayGain** evens out loudness between songs from the ReplayGain (or R128) tags in your files: Track, Album, or Smart, which uses the album's level while an album plays in order. Off by default, so nothing sounds different until you choose.
+- **It aims at a target loudness, in LUFS**: -23 (EBU R128), -18 (ReplayGain's own), -16, -14 (most streaming services, the default) or -8. A pre-amp chosen before becomes the nearest target. Turning it on or off, or picking another target, changes the song playing at once, with a 50 ms glide.
 - **It never clips.** Loud songs are turned down; a song is turned up only when its file shows there's room. It works on every output, the USB DAC included, and with it off (or at 0 dB) the sound passes through untouched, so bit-perfect stays bit-perfect.
 
 ### Fixed

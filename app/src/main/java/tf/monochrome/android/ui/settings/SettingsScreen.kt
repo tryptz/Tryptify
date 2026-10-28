@@ -1921,23 +1921,28 @@ private fun ReplayGainSetting(viewModel: SettingsViewModel) {
     }
     if (settings.mode != tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF) {
         Text(
-            text = stringResource(R.string.eq_preamp),
+            text = stringResource(R.string.settings_replaygain_target),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
+        )
+        Text(
+            text = stringResource(R.string.settings_replaygain_target_desc),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         androidx.compose.foundation.layout.FlowRow(
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            tf.monochrome.android.audio.replaygain.ReplayGain.PREAMP_STEPS.forEach { db ->
+            tf.monochrome.android.audio.replaygain.ReplayGain.TARGET_STEPS.forEach { lufs ->
                 tf.monochrome.android.ui.mixer.GlassChoiceChip(
                     // Numbers and a unit, the same in every language.
-                    label = if (db > 0f) "+${db.toInt()} dB" else "${db.toInt()} dB",
-                    selected = db == settings.preampDb,
+                    label = "${lufs.toInt()} LUFS",
+                    selected = lufs == settings.targetLufs,
                     accent = MaterialTheme.colorScheme.primary,
-                    onClick = { viewModel.setReplayGainPreamp(db) },
+                    onClick = { viewModel.setReplayGainTarget(lufs) },
                 )
             }
         }

@@ -170,7 +170,7 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
         "Continue into the next list", R.string.settings_continue_into_next_list, "Audio",
         listOf("next playlist", "next album", "next folder", "autoplay", "continue", "end of playlist", "previous playlist"),
     ),
-    entry("ReplayGain", R.string.settings_replaygain, "Audio", listOf("replay gain", "loudness", "normalize", "normalise", "volume", "r128", "level")),
+    entry("ReplayGain", R.string.settings_replaygain, "Audio", listOf("replay gain", "loudness", "normalize", "normalise", "volume", "r128", "level", "lufs", "target loudness")),
     entry(
         "Play alongside other apps", R.string.settings_play_alongside_other_apps, "Audio",
         listOf("audio focus", "focus", "game", "gaming", "mix", "pause", "duck", "interrupt", "video"),

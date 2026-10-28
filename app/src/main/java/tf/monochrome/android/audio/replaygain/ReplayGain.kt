@@ -20,10 +20,13 @@ enum class ReplayGainMode {
     SMART,
 }
 
-/** The listener's choice: the mode, and a pre-amp added to every gain found. */
+/**
+ * The listener's choice: the mode, and the loudness, in LUFS, every gain found
+ * aims each song at.
+ */
 data class ReplayGainSettings(
     val mode: ReplayGainMode = ReplayGainMode.OFF,
-    val preampDb: Float = 0f,
+    val targetLufs: Float = ReplayGain.DEFAULT_TARGET_LUFS,
 )
 
 /**
@@ -57,11 +60,32 @@ object ReplayGain {
     /** Q7.8: an R128 gain counts 1/256 dB steps. */
     private const val Q78 = 256f
 
-    /** A pre-amp, a gain or both past this is a broken tag or a slip, not a choice. */
+    /** A gain, with the target's shift, past this is a broken tag or a slip, not a choice. */
     const val MAX_DB = 24f
 
-    /** What the pre-amp setting offers, in dB. */
-    val PREAMP_STEPS = listOf(-6f, -3f, 0f, 3f, 6f)
+    /** What a ReplayGain tag's gain brings a song to: ReplayGain 2's reference. */
+    const val REFERENCE_LUFS = -18f
+
+    /** Where songs land unless the listener picks otherwise: what most streaming services play at. */
+    const val DEFAULT_TARGET_LUFS = -14f
+
+    /**
+     * What the target setting offers, in LUFS: EBU R128's broadcast level,
+     * ReplayGain's own, Apple Music's, the one most streaming services use,
+     * and a loud master's. Few songs are louder than -8, and a song is raised
+     * only as far as its peak allows, so at -8 most play as they are.
+     */
+    val TARGET_STEPS = listOf(-23f, -18f, -16f, -14f, -8f)
+
+    /**
+     * The target for a listener who chose a pre-amp before there was a target
+     * (the setting it replaced): the step nearest the loudness that pre-amp
+     * aimed at, the quieter one on a tie.
+     */
+    fun targetFromPreamp(preampDb: Float): Float {
+        val aimed = REFERENCE_LUFS + preampDb
+        return TARGET_STEPS.minWith(compareBy<Float> { kotlin.math.abs(it - aimed) }.thenBy { it })
+    }
 
     /** A song's gains from its tags: ReplayGain's when it has them, R128's (Opus) otherwise. */
     fun of(track: UnifiedTrack?): SongGain {
@@ -81,9 +105,10 @@ object ReplayGain {
         albumId != null && (albumId == previousAlbumId || albumId == nextAlbumId)
 
     /**
-     * The gain to apply, linear (1.0 = unchanged). 1.0 when off, and for a
-     * song with no gain tags: the pre-amp is for evening tagged songs out, and
-     * applied to an untagged one it would only move it away from them.
+     * The gain to apply, linear (1.0 = unchanged): the song's gain, which
+     * brings it to [REFERENCE_LUFS], moved by the distance from there to the
+     * listener's target. 1.0 when off, and for a song with no gain tags: its
+     * loudness is not known, so there is nothing to aim from.
      */
     fun linear(gain: SongGain, settings: ReplayGainSettings, inAlbum: Boolean): Float {
         if (settings.mode == ReplayGainMode.OFF || gain.isEmpty) return 1f
@@ -94,7 +119,7 @@ object ReplayGain {
         }
         val db = (if (useAlbum) gain.albumDb ?: gain.trackDb else gain.trackDb ?: gain.albumDb) ?: return 1f
         val peak = if (useAlbum) gain.albumPeak ?: gain.trackPeak else gain.trackPeak ?: gain.albumPeak
-        val total = (db + settings.preampDb).coerceIn(-MAX_DB, MAX_DB)
+        val total = (db + settings.targetLufs - REFERENCE_LUFS).coerceIn(-MAX_DB, MAX_DB)
         val linear = 10f.pow(total / 20f)
         if (linear <= 1f) return linear
         // A boost: only as far as the peak allows, and not at all without one.

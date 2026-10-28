@@ -317,7 +317,9 @@ class PreferencesManager @Inject constructor(
         private val NORMALIZATION_ENABLED = booleanPreferencesKey("normalization_enabled")
         // ReplayGain (audio/replaygain): the mode's name and the pre-amp in dB.
         private val REPLAYGAIN_MODE = stringPreferencesKey("replaygain_mode")
+        // Replaced by the target; read once more for a listener who chose one.
         private val REPLAYGAIN_PREAMP_DB = floatPreferencesKey("replaygain_preamp_db")
+        private val REPLAYGAIN_TARGET_LUFS = floatPreferencesKey("replaygain_target_lufs")
         private val CROSSFADE_DURATION = intPreferencesKey("crossfade_duration")
 
         // Downloads
@@ -556,7 +558,7 @@ class PreferencesManager @Inject constructor(
             FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
             GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, CONTINUE_INTO_NEXT_LIST, SHOW_EXPLICIT_BADGES,
             ROW_BADGE_SOURCE, ROW_BADGE_QUALITY, ROW_BADGE_FORMAT, ROW_BADGE_DOWNLOAD, ROW_BADGE_DURATION,
-            NORMALIZATION_ENABLED, REPLAYGAIN_MODE, REPLAYGAIN_PREAMP_DB, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
+            NORMALIZATION_ENABLED, REPLAYGAIN_MODE, REPLAYGAIN_PREAMP_DB, REPLAYGAIN_TARGET_LUFS, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
             PLAYBACK_SPEED, PRESERVE_PITCH, PITCH_SEMITONES, SPEED_UNIT_SEMITONES, SPEED_UNIT_BPM,
             PITCH_ENGINE, PITCH_QUALITY,
             DOWNLOAD_QUALITY, DOWNLOAD_LYRICS, AUTO_DOWNLOAD_LIKED,
@@ -1305,14 +1307,20 @@ class PreferencesManager @Inject constructor(
         dataStore.edit { it[NORMALIZATION_ENABLED] = enabled }
     }
 
-    /** ReplayGain's mode and pre-amp. Off unless chosen, so nothing sounds different until then. */
+    /**
+     * ReplayGain's mode and target loudness. Off unless chosen, so nothing
+     * sounds different until then. A pre-amp chosen before the target existed
+     * becomes the target nearest it.
+     */
     val replayGainSettings: Flow<tf.monochrome.android.audio.replaygain.ReplayGainSettings> = dataStore.data.map { prefs ->
         tf.monochrome.android.audio.replaygain.ReplayGainSettings(
             mode = prefs[REPLAYGAIN_MODE]
                 ?.let { runCatching { tf.monochrome.android.audio.replaygain.ReplayGainMode.valueOf(it) }.getOrNull() }
                 ?: tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF,
-            preampDb = prefs[REPLAYGAIN_PREAMP_DB]
-                ?.takeIf { it in tf.monochrome.android.audio.replaygain.ReplayGain.PREAMP_STEPS } ?: 0f,
+            targetLufs = prefs[REPLAYGAIN_TARGET_LUFS]
+                ?.takeIf { it in tf.monochrome.android.audio.replaygain.ReplayGain.TARGET_STEPS }
+                ?: prefs[REPLAYGAIN_PREAMP_DB]?.let(tf.monochrome.android.audio.replaygain.ReplayGain::targetFromPreamp)
+                ?: tf.monochrome.android.audio.replaygain.ReplayGain.DEFAULT_TARGET_LUFS,
         )
     }.distinctUntilChanged()
 
@@ -1320,9 +1328,9 @@ class PreferencesManager @Inject constructor(
         dataStore.edit { it[REPLAYGAIN_MODE] = mode.name }
     }
 
-    suspend fun setReplayGainPreamp(db: Float) {
-        if (db !in tf.monochrome.android.audio.replaygain.ReplayGain.PREAMP_STEPS) return
-        dataStore.edit { it[REPLAYGAIN_PREAMP_DB] = db }
+    suspend fun setReplayGainTarget(lufs: Float) {
+        if (lufs !in tf.monochrome.android.audio.replaygain.ReplayGain.TARGET_STEPS) return
+        dataStore.edit { it[REPLAYGAIN_TARGET_LUFS] = lufs }
     }
 
     /**

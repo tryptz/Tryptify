@@ -1006,6 +1006,8 @@
     <string name="settings_replaygain_track">Morceau</string>
     <string name="settings_replaygain_album">Album</string>
     <string name="settings_replaygain_smart">Intelligent</string>
+    <string name="settings_replaygain_target">Niveau cible</string>
+    <string name="settings_replaygain_target_desc">Le niveau où arrive chaque titre tagué. -18 LUFS est la norme ReplayGain ; -14 LUFS, celui de la plupart des services de streaming.</string>
     <string name="settings_output">Sortie</string>
     <string name="settings_playback_speed">Vitesse de lecture</string>
     <string name="settings_clear_downloads">Effacer les téléchargements</string>

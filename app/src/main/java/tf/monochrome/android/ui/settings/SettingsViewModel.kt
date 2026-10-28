@@ -586,7 +586,7 @@ class SettingsViewModel @Inject constructor(
     } }
     fun setCrossfadeDuration(seconds: Int) { viewModelScope.launch { preferences.setCrossfadeDuration(seconds) } }
     fun setReplayGainMode(mode: tf.monochrome.android.audio.replaygain.ReplayGainMode) { viewModelScope.launch { preferences.setReplayGainMode(mode) } }
-    fun setReplayGainPreamp(db: Float) { viewModelScope.launch { preferences.setReplayGainPreamp(db) } }
+    fun setReplayGainTarget(lufs: Float) { viewModelScope.launch { preferences.setReplayGainTarget(lufs) } }
 
     // --- Audio speed actions ---
     fun setPlaybackSpeed(speed: Float) { viewModelScope.launch { preferences.setPlaybackSpeed(speed) } }

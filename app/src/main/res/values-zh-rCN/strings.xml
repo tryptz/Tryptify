@@ -930,6 +930,8 @@
     <string name="settings_replaygain_track">单曲</string>
     <string name="settings_replaygain_album">专辑</string>
     <string name="settings_replaygain_smart">智能</string>
+    <string name="settings_replaygain_target">目标响度</string>
+    <string name="settings_replaygain_target_desc">每首带标签的歌曲都会调整到这个响度。-18 LUFS 是 ReplayGain 标准；-14 LUFS 是多数流媒体服务使用的响度。</string>
     <string name="settings_output">输出</string>
     <string name="settings_playback_speed">播放速度</string>
     <string name="settings_clear_downloads">清除下载</string>

@@ -968,6 +968,8 @@
     <string name="settings_replaygain_track">Parça</string>
     <string name="settings_replaygain_album">Albüm</string>
     <string name="settings_replaygain_smart">Akıllı</string>
+    <string name="settings_replaygain_target">Hedef ses yüksekliği</string>
+    <string name="settings_replaygain_target_desc">Etiketli her şarkının ulaştığı seviye. -18 LUFS ReplayGain standardıdır; -14 LUFS çoğu yayın hizmetinin kullandığı seviyedir.</string>
     <string name="settings_output">Çıkış</string>
     <string name="settings_playback_speed">Çalma hızı</string>
     <string name="settings_clear_downloads">İndirilenleri temizle</string>

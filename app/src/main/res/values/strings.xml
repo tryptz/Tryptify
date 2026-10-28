@@ -969,6 +969,8 @@
     <string name="settings_replaygain_track">Track</string>
     <string name="settings_replaygain_album">Album</string>
     <string name="settings_replaygain_smart">Smart</string>
+    <string name="settings_replaygain_target">Target loudness</string>
+    <string name="settings_replaygain_target_desc">Where every tagged song lands. -18 LUFS is the ReplayGain standard; -14 LUFS is what most streaming services play at.</string>
     <string name="settings_output">Output</string>
     <string name="settings_playback_speed">Playback Speed</string>
     <string name="settings_clear_downloads">Clear Downloads</string>

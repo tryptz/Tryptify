@@ -968,6 +968,8 @@
     <string name="settings_replaygain_track">Titel</string>
     <string name="settings_replaygain_album">Album</string>
     <string name="settings_replaygain_smart">Smart</string>
+    <string name="settings_replaygain_target">Ziellautheit</string>
+    <string name="settings_replaygain_target_desc">Wo jeder getaggte Titel landet. -18 LUFS ist der ReplayGain-Standard, -14 LUFS der Pegel der meisten Streamingdienste.</string>
     <string name="settings_output">Ausgabe</string>
     <string name="settings_playback_speed">Wiedergabegeschwindigkeit</string>
     <string name="settings_clear_downloads">Downloads löschen</string>

@@ -1006,6 +1006,8 @@
     <string name="settings_replaygain_track">Canción</string>
     <string name="settings_replaygain_album">Álbum</string>
     <string name="settings_replaygain_smart">Inteligente</string>
+    <string name="settings_replaygain_target">Sonoridad objetivo</string>
+    <string name="settings_replaygain_target_desc">Donde queda cada canción con etiquetas. -18 LUFS es el estándar de ReplayGain; -14 LUFS, el de la mayoría de los servicios de streaming.</string>
     <string name="settings_output">Salida</string>
     <string name="settings_playback_speed">Velocidad de reproducción</string>
     <string name="settings_clear_downloads">Borrar descargas</string>
