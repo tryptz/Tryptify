@@ -238,9 +238,16 @@ bool LibusbUacDriver::open(int fileDescriptor) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (device_ != nullptr) {
         if (fd_ == fileDescriptor) return true;
+        // Another connection while this one is open, possibly streaming. The
+        // pump's transfers and its event thread use the handle, so they are
+        // stopped and the interfaces given back first, exactly as close()
+        // does; closing the handle under them was a use-after-free.
+        streaming_.store(false, std::memory_order_release);
+        stopLocked();
         libusb_close(device_);
         device_ = nullptr;
         fd_ = -1;
+        format_ = {};
     }
     libusb_device_handle* handle = nullptr;
     int rc = libusb_wrap_sys_device(ctx_,
@@ -1297,6 +1304,10 @@ void LibusbUacDriver::stop() {
     if (!was && transfers_.empty() && !interfaceClaimed_ && !controlInterfaceClaimed_) return;
 
     std::lock_guard<std::mutex> lock(mutex_);
+    stopLocked();
+}
+
+void LibusbUacDriver::stopLocked() {
     stopIsoPump();
     // Full teardown: alt 0 then release. Caller is the toggle going
     // off, the queue clearing, or app pause — NOT a track-to-track

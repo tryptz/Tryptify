@@ -102,6 +102,8 @@ private:
     projectm_handle projectm_ = nullptr;
     projectm_playlist_handle playlist_ = nullptr;
     AudioRingBuffer audio_buffer_;
+    /** What a frame pops from [audio_buffer_]; kept so a frame does not allocate. */
+    std::vector<float> pcm_scratch_;
     bool paused_ = false;
     bool preset_rotation_enabled_ = true;
     int brightness_ = 80;

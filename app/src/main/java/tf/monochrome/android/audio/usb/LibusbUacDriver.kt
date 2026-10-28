@@ -153,6 +153,13 @@ class LibusbUacDriver @Inject constructor(
             Log.w(TAG, "open() called without permission for $device")
             return false
         }
+        // Open already. The same device is left as it is, stream and all; a
+        // different one is let go first, so its connection (and the file
+        // descriptor libusb wrapped) is closed rather than overwritten.
+        if (connection != null) {
+            if (_device.value == device) return true
+            close()
+        }
         val conn = usbManager.openDevice(device) ?: run {
             Log.e(TAG, "UsbManager.openDevice returned null for $device")
             return false

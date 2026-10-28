@@ -60,6 +60,13 @@ class ProjectMEngineRepository @Inject constructor(
     val presets: StateFlow<List<VisualizerPreset>> = _presets.asStateFlow()
 
     private val _currentPreset = MutableStateFlow<VisualizerPreset?>(null)
+
+    /**
+     * The preset to open the next surface on instead of the preferred one: the
+     * one showing when the screen turned off under the visualizer, which
+     * comes back as it was. Under [engineLock].
+     */
+    private var resumePresetId: String? = null
     val currentPreset: StateFlow<VisualizerPreset?> = _currentPreset.asStateFlow()
 
     /**
@@ -137,9 +144,14 @@ class ProjectMEngineRepository @Inject constructor(
      */
     private var firstFrameOnSurface: Boolean = false
 
-    // Track whether there is an active GL surface. Only the most recent
-    // onSurfaceAttached call owns the native bridge. All others become no-ops.
-    private var attachedSurfaceCount: Int = 0
+    // The views with a GL surface attached, by identity. Only the most recent
+    // onSurfaceAttached call owns the native bridge. A set rather than a
+    // count: a view whose EGL context was lost attaches again without having
+    // detached, and a count drifted up there and never came back to zero, so
+    // the audio feed and the engine's GPU memory outlived every visualizer.
+    // Guarded by engineLock.
+    private val attachedSurfaces: MutableSet<Any> =
+        java.util.Collections.newSetFromMap(java.util.IdentityHashMap())
     private var nativeInitialized: Boolean = false
 
     // Work that has to happen with the GL context current, asked for from a
@@ -187,6 +199,11 @@ class ProjectMEngineRepository @Inject constructor(
     private var lastRenderedFrameNanos: Long = 0L
 
     private var lastPcmTimestampMs: Long = 0L
+
+    /** Due audio straight on to projectM, one frame at a time as before; made once. */
+    private val pcmSink = ProjectMAudioBus.FrameSink { samples, count, channels, rate, _ ->
+        nativeBridge.pushPcm(samples, count, channels, rate)
+    }
     private var fpsFrameCount = 0
     private var fpsStartTimeMs = 0L
 
@@ -371,7 +388,7 @@ class ProjectMEngineRepository @Inject constructor(
      * Only the bookkeeping moved: the realtime callback is the same.
      */
     private fun syncAudioSubscriptionLocked() {
-        val want = _engineEnabled.value && attachedSurfaceCount > 0
+        val want = _engineEnabled.value && attachedSurfaces.isNotEmpty()
         if (want && !heldAudioSubscription) {
             audioBus.acquire()
             heldAudioSubscription = true
@@ -382,13 +399,16 @@ class ProjectMEngineRepository @Inject constructor(
     }
 
     /**
-     * Called from the GL thread when a new surface is ready.
-     * Releases any existing native instance first (since it's tied to the
-     * previous EGL context), then re-initializes on the current GL thread.
+     * Called from the GL thread when a new surface is ready, by [owner], the
+     * view it belongs to. Releases any existing native instance first (since
+     * it's tied to the previous EGL context), then re-initializes on the
+     * current GL thread. A second call from the same owner without a detach
+     * between (its context was lost and made again) re-initializes the same
+     * way and still counts as one surface.
      */
-    fun onSurfaceAttached(width: Int, height: Int) {
+    fun onSurfaceAttached(owner: Any, width: Int, height: Int) {
         synchronized(engineLock) {
-            attachedSurfaceCount += 1
+            attachedSurfaces.add(owner)
             syncAudioSubscriptionLocked()
 
             if (!_engineEnabled.value || !ProjectMNativeBridge.isLibraryLoaded) {
@@ -473,13 +493,19 @@ class ProjectMEngineRepository @Inject constructor(
     }
 
     /**
-     * Called from the GL thread when the surface is about to be destroyed.
+     * Called from the GL thread, with the context still current, when
+     * [owner]'s surface is about to be destroyed: the view going away, or the
+     * screen turning off under it. The last one out releases the engine, so
+     * its GPU memory and the audio feed stop with the picture. With
+     * [resumeWhereLeft] (the screen off, the view still there) the next
+     * surface opens on the preset showing now.
      */
-    fun onSurfaceDetached() {
+    fun onSurfaceDetached(owner: Any, resumeWhereLeft: Boolean = false) {
         synchronized(engineLock) {
-            attachedSurfaceCount = (attachedSurfaceCount - 1).coerceAtLeast(0)
+            if (!attachedSurfaces.remove(owner)) return
             syncAudioSubscriptionLocked()
-            if (attachedSurfaceCount == 0) {
+            if (attachedSurfaces.isEmpty()) {
+                resumePresetId = if (resumeWhereLeft) _currentPreset.value?.id else null
                 releaseNativeLocked()
                 updateStatus(
                     phase = if (ProjectMNativeBridge.isLibraryLoaded && _engineEnabled.value) {
@@ -518,13 +544,8 @@ class ProjectMEngineRepository @Inject constructor(
             // show. A dropped frame leaves its audio in the queue, which is
             // bounded by age, so nothing accumulates.
             if (!appliedPendingWork && shouldSkipForFrameCapLocked(frameTimeNanos)) return false
-            val frames = audioBus.drainAll()
-            if (frames.isNotEmpty()) {
-                lastPcmTimestampMs = frames.last().timestampMs
-                for (frame in frames) {
-                    nativeBridge.pushPcm(frame.samples, frame.channelCount, frame.sampleRate)
-                }
-            }
+            val lastDue = audioBus.drainDue(pcmSink)
+            if (lastDue != 0L) lastPcmTimestampMs = lastDue
             // A frozen frame is skipped to save power while paused, but a preset
             // that has just been swapped in has never been drawn, so freezing
             // through it would leave the old one on screen -- the very bug this
@@ -911,7 +932,9 @@ class ProjectMEngineRepository @Inject constructor(
         val presets = _presets.value
         if (presets.isEmpty()) return
         val flagged = _flaggedPresetIds.value
-        val selected = preferredPresetId?.let { id ->
+        val resume = resumePresetId
+        resumePresetId = null
+        val selected = (resume ?: preferredPresetId)?.let { id ->
             presets.firstOrNull { it.id == id }
         }?.takeUnless { it.id in flagged } ?: presets.firstOrNull { it.id !in flagged } ?: return
         if (nativeBridge.setPreset(resolveAbsolutePresetPath(selected))) {

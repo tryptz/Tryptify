@@ -23,9 +23,13 @@ import kotlin.math.roundToInt
  * therefore the song's own tempo; what the listener hears is that times the
  * playback speed, which the UI applies.
  *
- * Audio passes through untouched. The track's channels are summed to mono
- * and always fed to the estimator, which is a few multiplies a sample, so a
- * measurement can start from the last ten seconds instead of waiting for them.
+ * Audio passes through untouched. While a measurement runs, the track's
+ * channels are summed to mono and fed to the estimator. Once it is done, or
+ * the tempo came from a tag or the listener, the estimator is left alone: the
+ * filters it runs per sample were the tap's whole cost, paid for the rest of
+ * every song to keep a number nobody was asking for up to date. A tap on the
+ * number ([measure]) starts it again from fresh audio, so the reading comes
+ * from what plays after the tap, about ten seconds of it.
  *
  * It measures once and then holds still. A measurement takes one estimate a
  * second until [READINGS] of them have come in, publishes their median and
@@ -76,7 +80,7 @@ class BpmTapProcessor @Inject constructor() : AudioProcessor {
         _bpm.value = null
     }
 
-    /** Measure the playing track again, from the audio of the last few seconds on. */
+    /** Measure the playing track again, from fresh audio: about six seconds of it before the first reading. */
     fun measure() {
         request.set(REQUEST_MEASURE)
         _bpm.value = null
@@ -121,9 +125,13 @@ class BpmTapProcessor @Inject constructor() : AudioProcessor {
             }
             when (request.getAndSet(REQUEST_NONE)) {
                 REQUEST_MEASURE -> {
+                    // Not fed since the last measurement ended, so what the
+                    // envelope holds is from then, with a gap after it: start
+                    // it over rather than read a beat across the join.
+                    if (!measuring) est.reset()
                     measuring = true
                     recent.clear()
-                    // Estimate at once: the envelope already holds what played.
+                    // Estimate at once: whatever the envelope holds is usable.
                     sinceEstimate = estimatorRate
                 }
                 REQUEST_SET -> {
@@ -131,19 +139,19 @@ class BpmTapProcessor @Inject constructor() : AudioProcessor {
                     recent.clear()
                 }
             }
-            if (mono.size < frames) mono = FloatArray(frames)
-            val scale = 1f / channels
-            for (i in 0 until frames) {
-                val base = start + i * frameSize
-                var sum = 0f
-                for (c in 0 until channels) {
-                    sum += if (isFloat) inputBuffer.getFloat(base + c * 4)
-                    else inputBuffer.getShort(base + c * 2) / 32768f
-                }
-                mono[i] = sum * scale
-            }
-            est.feed(mono, frames)
             if (measuring) {
+                if (mono.size < frames) mono = FloatArray(frames)
+                val scale = 1f / channels
+                for (i in 0 until frames) {
+                    val base = start + i * frameSize
+                    var sum = 0f
+                    for (c in 0 until channels) {
+                        sum += if (isFloat) inputBuffer.getFloat(base + c * 4)
+                        else inputBuffer.getShort(base + c * 2) / 32768f
+                    }
+                    mono[i] = sum * scale
+                }
+                est.feed(mono, frames)
                 sinceEstimate += frames
                 if (sinceEstimate >= estimatorRate) {
                     sinceEstimate = 0

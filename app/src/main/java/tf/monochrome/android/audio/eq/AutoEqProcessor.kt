@@ -84,7 +84,15 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
 
     private var pendingFormat = AudioFormat.NOT_SET
     private var inputFormat = AudioFormat.NOT_SET
+    /** What [getOutput] hands on: [buffer], or EMPTY once it has been taken. */
     private var outputBuffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
+
+    /**
+     * The output's memory, kept across blocks. [getOutput] has to leave
+     * [outputBuffer] empty, so the memory cannot live there: when it did,
+     * every block found a capacity of 0 and allocated a new direct buffer.
+     */
+    private var buffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var inputEnded = false
 
     // Scratch float arrays
@@ -413,33 +421,65 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
 
     override fun queueInput(inputBuffer: ByteBuffer) {
         val encoding = inputFormat.encoding
-        val frames = block.read(inputBuffer, inputFormat.channelCount, encoding)
-        if (frames <= 0) return
+        val inputChannels = inputFormat.channelCount
+        val frameBytes = inputChannels * (if (encoding == C.ENCODING_PCM_FLOAT) 4 else 2)
+        if (inputBuffer.remaining() < frameBytes) return
+        // The width the filters run at: a mono stream comes out as stereo.
+        val channelCount = if (inputChannels == 1) 2 else inputChannels
 
         // Apply EQ if enabled
         val design = designRef.get()
+        var hasWork = false
         if (design.enabled) {
-            if (design !== appliedDesign || chains.size != block.channelCount) {
-                installDesign(design, block.channelCount)
+            if (design !== appliedDesign || chains.size != channelCount) {
+                installDesign(design, channelCount)
                 appliedDesign = design
             }
             // Hard bypass when the chain is flat: with no active filters and
             // unity preamp the samples are left untouched.
-            val hasWork = chains.any { it.isNotEmpty() } || design.preampLinear != 1f
-            if (hasWork) {
-                applyEq(frames, design.preampLinear)
-            }
+            hasWork = chains.any { it.isNotEmpty() } || design.preampLinear != 1f
         }
 
-        val outBytes = block.outputBytes(frames, encoding)
-        if (outputBuffer.capacity() < outBytes) {
-            outputBuffer = ByteBuffer.allocateDirect(outBytes).order(ByteOrder.nativeOrder())
-        } else {
-            outputBuffer.clear()
+        // Nothing to do and nothing to widen: copy the block as it came. The
+        // planar round trip it skips is exact for both encodings (a 16-bit
+        // sample divided and multiplied by 32768 lands on itself, a float is
+        // stored as read), so this is the same output for less work. A mono
+        // stream still takes the planar path, which makes it stereo.
+        if (!hasWork && inputChannels != 1) {
+            copyFrames(inputBuffer, inputBuffer.remaining() / frameBytes * frameBytes)
+            return
         }
-        block.write(outputBuffer, frames, encoding)
-        outputBuffer.position(0)
-        outputBuffer.limit(outBytes)
+
+        val frames = block.read(inputBuffer, inputChannels, encoding)
+        if (frames <= 0) return
+        if (hasWork) applyEq(frames, design.preampLinear)
+
+        val outBytes = block.outputBytes(frames, encoding)
+        val out = ensureOutput(outBytes)
+        block.write(out, frames, encoding)
+        out.position(0)
+        out.limit(outBytes)
+    }
+
+    /** Copies [bytes] of [input] to the output unchanged, advancing it past them. */
+    private fun copyFrames(input: ByteBuffer, bytes: Int) {
+        val out = ensureOutput(bytes)
+        val savedLimit = input.limit()
+        input.limit(input.position() + bytes)
+        out.put(input)
+        input.limit(savedLimit)
+        out.flip()
+    }
+
+    /** [buffer], at least [bytes] long and cleared, as the pending output. */
+    private fun ensureOutput(bytes: Int): ByteBuffer {
+        if (buffer.capacity() < bytes) {
+            buffer = ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder())
+        } else {
+            buffer.clear()
+        }
+        outputBuffer = buffer
+        return buffer
     }
 
     override fun getOutput(): ByteBuffer {
@@ -479,6 +519,7 @@ class AutoEqProcessor @Inject constructor() : AudioProcessor {
         flush()
         pendingFormat = AudioFormat.NOT_SET
         inputFormat = AudioFormat.NOT_SET
+        buffer = AudioProcessor.EMPTY_BUFFER
         chains = emptyArray()
         appliedDesign = null
     }

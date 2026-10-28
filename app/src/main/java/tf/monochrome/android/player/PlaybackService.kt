@@ -526,9 +526,16 @@ class PlaybackService : MediaSessionService() {
         }
 
         // Scrobbles by time heard, checked every couple of seconds: see
-        // ScrobbleTracker for why not on the track's end.
+        // ScrobbleTracker for why not on the track's end. Only while playing,
+        // parked on [playingSignal] otherwise like the position watcher: a
+        // paused tick hears nothing, so it can never make a play due, and the
+        // pause itself is counted up to its moment by onIsPlayingChanged.
         serviceScope.launch {
             while (true) {
+                if (!playingSignal.value) {
+                    playingSignal.first { it }
+                    continue
+                }
                 kotlinx.coroutines.delay(2_000)
                 tickScrobble()
             }
@@ -2382,10 +2389,16 @@ class PlaybackService : MediaSessionService() {
      * player's Audio panel moves it without the EQ screen open.
      */
     private fun applyEqSettings(cfg: EqApply) {
+        // What was last applied, applied again: every STATE_READY (a track
+        // starting, a seek, a rebuffer) re-reads the settings, and with nothing
+        // changed there is nothing to decode and three AutoEQ designs to skip.
+        // Main thread only, like both callers, so a plain field.
+        if (cfg == lastEqInput) return
         try {
             if (cfg.systemWide) {
                 autoEqProcessor.applyBands(emptyList(), 0f, false)
                 lastAutoEq = AppliedEq(emptyList(), emptyList(), 0f, false)
+                lastEqInput = cfg
                 return
             }
             fun decode(bandsJson: String?): List<EqBand> =
@@ -2414,10 +2427,17 @@ class PlaybackService : MediaSessionService() {
             val active = bandsL.any { it.enabled } || bandsR.any { it.enabled } || preamp != 0f
             autoEqProcessor.applyBands(bandsL, bandsR, preamp, active)
             lastAutoEq = AppliedEq(bandsL, bandsR, preamp, active)
+            lastEqInput = cfg
         } catch (e: Exception) {
             // Gracefully handle EQ application errors
         }
     }
+
+    /** The settings [applyEqSettings] last applied in full; null before the first. */
+    private var lastEqInput: EqApply? = null
+
+    /** The same for [applyParametricEqSettings]. */
+    private var lastParametricEqInput: Triple<Boolean, String?, Double>? = null
 
     /**
      * Apply current Parametric EQ settings from preferences
@@ -2437,6 +2457,12 @@ class PlaybackService : MediaSessionService() {
      * Apply Parametric EQ settings to the standalone ParametricEqProcessor
      */
     private fun applyParametricEqSettings(enabled: Boolean, bandsJson: String?, preamp: Double) {
+        // Unchanged since the last apply: skip the decode, and leave the
+        // filters running. A new snapshot of the same curve used to rebuild
+        // every one of them from silence, which after a mid-song rebuffer
+        // could be heard as a click.
+        val input = Triple(enabled, bandsJson, preamp)
+        if (input == lastParametricEqInput) return
         try {
             val bands = if (!bandsJson.isNullOrEmpty()) {
                 eqJson.decodeFromString<List<EqBand>>(bandsJson)
@@ -2445,6 +2471,7 @@ class PlaybackService : MediaSessionService() {
             }
             parametricEqProcessor.applyBands(bands, preamp.toFloat(), enabled)
             lastParametricEq = AppliedEq(bands, bands, preamp.toFloat(), enabled)
+            lastParametricEqInput = input
         } catch (_: Exception) { }
     }
 

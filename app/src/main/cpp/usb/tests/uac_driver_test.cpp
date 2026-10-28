@@ -49,6 +49,12 @@ bool gStallCancel = false;
 std::vector<libusb_transfer*> gStalled;
 int gClockSetCount = 0;
 int gLastAlt = -1;
+// Handles closed, and whether any was closed while the driver still had
+// transfers out on it or an interface claimed.
+int gCloseCount = 0;
+int gClaimed = 0;
+int gOutstanding = 0;   // submitted and not yet completed or cancelled
+bool gClosedUnderPump = false;
 
 // Feature Units the fake DAC answers for, by unit ID. Each starts the
 // way a DAC left by Android might: attenuated and muted.
@@ -84,15 +90,18 @@ int LIBUSB_CALL libusb_wrap_sys_device(libusb_context*, intptr_t, libusb_device_
     *h = reinterpret_cast<libusb_device_handle*>(1);
     return 0;
 }
-void LIBUSB_CALL libusb_close(libusb_device_handle*) {}
+void LIBUSB_CALL libusb_close(libusb_device_handle*) {
+    ++gCloseCount;
+    if (gClaimed > 0 || gOutstanding > 0) gClosedUnderPump = true;
+}
 int LIBUSB_CALL libusb_set_auto_detach_kernel_driver(libusb_device_handle*, int) { return 0; }
 libusb_device* LIBUSB_CALL libusb_get_device(libusb_device_handle*) { return reinterpret_cast<libusb_device*>(1); }
 int LIBUSB_CALL libusb_get_device_speed(libusb_device*) { return gSpeed; }
 int LIBUSB_CALL libusb_get_active_config_descriptor(libusb_device*, libusb_config_descriptor** c) { *c = gConfig; return 0; }
 int LIBUSB_CALL libusb_get_config_descriptor(libusb_device*, uint8_t, libusb_config_descriptor** c) { *c = gConfig; return 0; }
 void LIBUSB_CALL libusb_free_config_descriptor(libusb_config_descriptor*) {}
-int LIBUSB_CALL libusb_claim_interface(libusb_device_handle*, int) { return 0; }
-int LIBUSB_CALL libusb_release_interface(libusb_device_handle*, int) { return 0; }
+int LIBUSB_CALL libusb_claim_interface(libusb_device_handle*, int) { ++gClaimed; return 0; }
+int LIBUSB_CALL libusb_release_interface(libusb_device_handle*, int) { --gClaimed; return 0; }
 int LIBUSB_CALL libusb_set_interface_alt_setting(libusb_device_handle*, int, int alt) { gLastAlt = alt; return 0; }
 // Feature Unit requests go to gUnits. Any other SET (a clock's rate, a
 // UAC1 endpoint's rate) is accepted and any other GET stalls.
@@ -149,9 +158,10 @@ libusb_transfer* LIBUSB_CALL libusb_alloc_transfer(int packets) {
         1, sizeof(libusb_transfer) + packets * sizeof(libusb_iso_packet_descriptor)));
 }
 void LIBUSB_CALL libusb_free_transfer(libusb_transfer* t) { std::free(t); }
-int LIBUSB_CALL libusb_submit_transfer(libusb_transfer* t) { gPending.push_back(t); return 0; }
+int LIBUSB_CALL libusb_submit_transfer(libusb_transfer* t) { gPending.push_back(t); ++gOutstanding; return 0; }
 int LIBUSB_CALL libusb_cancel_transfer(libusb_transfer* t) {
     if (gStallCancel) { gStalled.push_back(t); return 0; }
+    --gOutstanding;
     t->status = LIBUSB_TRANSFER_CANCELLED;
     t->callback(t);
     return 0;
@@ -343,9 +353,11 @@ Pumped pump(int transfers, int stride, uint32_t feedbackQ16 = 0) {
             std::memcpy(t->buffer, &feedbackQ16, 4);
             t->iso_packet_desc[0].status = LIBUSB_TRANSFER_COMPLETED;
             t->iso_packet_desc[0].actual_length = 4;
+            --gOutstanding;
             t->callback(t);
             continue;
         }
+        --gOutstanding;
         t->callback(t);
         for (int p = 0; p < t->num_iso_packets; ++p) {
             int len = static_cast<int>(t->iso_packet_desc[p].length);
@@ -514,6 +526,30 @@ int main() {
         pump(10, s.stride());
         s.driver.stop();
         check(gStalled.empty(), "a normal stop waits for nothing");
+    }
+
+    std::printf("-- opened again while streaming\n");
+    {
+        resetUnits({{2, 0}});
+        gClaimed = 0;
+        gOutstanding = 0;
+        Session s(appleUac2(), LIBUSB_SPEED_FULL, 48000, 24);
+        check(s.started, "starts");
+        pump(10, s.stride());
+        gCloseCount = 0;
+        gClosedUnderPump = false;
+        check(s.driver.open(3), "the same connection again is still open");
+        check(gCloseCount == 0 && s.driver.isStreaming(), "and its stream is left running");
+        // A second connection to the device: the Kotlin side used to hand one
+        // over on every reconcile, and the handle was closed under the pump.
+        check(s.driver.open(4), "another connection opens");
+        check(gCloseCount == 1, "the old handle is closed");
+        check(!gClosedUnderPump, "only after the pump stopped and its interfaces were released");
+        check(!s.driver.isStreaming(), "the old stream is gone with it");
+        // The stub's queue still points at transfers the driver has freed.
+        gPending.clear();
+        check(s.driver.start(48000, 24, 2), "the new connection starts");
+        pump(10, s.stride());
     }
 
     if (failures) {

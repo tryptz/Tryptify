@@ -31,7 +31,15 @@ class ParametricEqProcessor @Inject constructor() : AudioProcessor {
 
     private var pendingFormat = AudioFormat.NOT_SET
     private var inputFormat = AudioFormat.NOT_SET
+    /** What [getOutput] hands on: [buffer], or EMPTY once it has been taken. */
     private var outputBuffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
+
+    /**
+     * The output's memory, kept across blocks. [getOutput] has to leave
+     * [outputBuffer] empty, so the memory cannot live there: when it did,
+     * every block found a capacity of 0 and allocated a new direct buffer.
+     */
+    private var buffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var inputEnded = false
 
     // Group the three UI-thread writes into one immutable snapshot published atomically.
@@ -48,6 +56,13 @@ class ParametricEqProcessor @Inject constructor() : AudioProcessor {
 
     // One chain per channel, all tuned to the same curve (audio thread only).
     private var chains: Array<Array<BiquadFilter>> = emptyArray()
+
+    /**
+     * Whether the filters' memory is from the audio just before this block:
+     * false while the EQ is off or flat, since they ran on none of it then.
+     * Audio thread only.
+     */
+    private var filtersCurrent = false
     private val block = tf.monochrome.android.audio.dsp.PlanarBlock()
     private var sampleRate = 44100.0
 
@@ -65,6 +80,10 @@ class ParametricEqProcessor @Inject constructor() : AudioProcessor {
                 )
             }.toTypedArray()
         )
+        // The same curve again (the player re-applies its settings when it
+        // becomes ready, after every seek and rebuffer) leaves the published
+        // snapshot alone, so the audio thread has nothing to retune.
+        if (snap.sameAs(stateRef.get())) return
         stateRef.set(snap)
     }
 
@@ -98,27 +117,64 @@ class ParametricEqProcessor @Inject constructor() : AudioProcessor {
 
     override fun queueInput(inputBuffer: ByteBuffer) {
         val encoding = inputFormat.encoding
-        val frames = block.read(inputBuffer, inputFormat.channelCount, encoding)
-        if (frames <= 0) return
+        val inputChannels = inputFormat.channelCount
+        val frameBytes = inputChannels * (if (encoding == C.ENCODING_PCM_FLOAT) 4 else 2)
+        if (inputBuffer.remaining() < frameBytes) return
+        // The width the filters run at: a mono stream comes out as stereo.
+        val channelCount = if (inputChannels == 1) 2 else inputChannels
 
         val snap = stateRef.get()
+        var hasWork = false
         if (snap.enabled) {
-            if (snap !== appliedSnapshot || chains.size != block.channelCount) {
-                rebuildFilters(snap.bands, block.channelCount)
+            if (snap !== appliedSnapshot || chains.size != channelCount) {
+                retuneFilters(snap.bands, channelCount)
                 appliedSnapshot = snap
             }
-            applyEq(frames, snap.preampLinear)
+            hasWork = chains[0].isNotEmpty() || snap.preampLinear != 1f
+        }
+        filtersCurrent = hasWork
+
+        // Off, or on with nothing to do, and nothing to widen: copy the block
+        // as it came. The planar round trip it skips is exact for both
+        // encodings (a 16-bit sample divided and multiplied by 32768 lands on
+        // itself, a float is stored as read), so this is the same output for
+        // less work. A mono stream still takes the planar path, which makes
+        // it stereo.
+        if (!hasWork && inputChannels != 1) {
+            copyFrames(inputBuffer, inputBuffer.remaining() / frameBytes * frameBytes)
+            return
         }
 
+        val frames = block.read(inputBuffer, inputChannels, encoding)
+        if (frames <= 0) return
+        if (hasWork) applyEq(frames, snap.preampLinear)
+
         val outBytes = block.outputBytes(frames, encoding)
-        if (outputBuffer.capacity() < outBytes) {
-            outputBuffer = ByteBuffer.allocateDirect(outBytes).order(ByteOrder.nativeOrder())
+        val out = ensureOutput(outBytes)
+        block.write(out, frames, encoding)
+        out.position(0)
+        out.limit(outBytes)
+    }
+
+    /** Copies [bytes] of [input] to the output unchanged, advancing it past them. */
+    private fun copyFrames(input: ByteBuffer, bytes: Int) {
+        val out = ensureOutput(bytes)
+        val savedLimit = input.limit()
+        input.limit(input.position() + bytes)
+        out.put(input)
+        input.limit(savedLimit)
+        out.flip()
+    }
+
+    /** [buffer], at least [bytes] long and cleared, as the pending output. */
+    private fun ensureOutput(bytes: Int): ByteBuffer {
+        if (buffer.capacity() < bytes) {
+            buffer = ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder())
         } else {
-            outputBuffer.clear()
+            buffer.clear()
         }
-        block.write(outputBuffer, frames, encoding)
-        outputBuffer.position(0)
-        outputBuffer.limit(outBytes)
+        outputBuffer = buffer
+        return buffer
     }
 
     override fun getOutput(): ByteBuffer {
@@ -133,6 +189,11 @@ class ParametricEqProcessor @Inject constructor() : AudioProcessor {
     override fun flush() {
         outputBuffer = AudioProcessor.EMPTY_BUFFER
         inputEnded = false
+        // The filters keep their memory through a flush of the same format.
+        // Media3 drains and flushes the whole chain at every gapless track
+        // change and speed change too, not only on a seek, and a boosted
+        // band starting again from silence there thumped on audio that runs
+        // straight on. AutoEqProcessor keeps its state the same way.
         if (pendingFormat != AudioFormat.NOT_SET) {
             val formatChanged = inputFormat == AudioFormat.NOT_SET
                 || inputFormat.sampleRate != pendingFormat.sampleRate
@@ -143,6 +204,8 @@ class ParametricEqProcessor @Inject constructor() : AudioProcessor {
                 sampleRate = inputFormat.sampleRate.toDouble()
                 // Force filter rebuild on next block (sample-rate-dependent coefficients).
                 appliedSnapshot = null
+                filtersCurrent = false
+                for (chain in chains) for (filter in chain) filter.clearState()
             }
             pendingFormat = AudioFormat.NOT_SET
         }
@@ -152,6 +215,7 @@ class ParametricEqProcessor @Inject constructor() : AudioProcessor {
         flush()
         pendingFormat = AudioFormat.NOT_SET
         inputFormat = AudioFormat.NOT_SET
+        buffer = AudioProcessor.EMPTY_BUFFER
         chains = emptyArray()
         appliedSnapshot = null
     }
@@ -168,18 +232,38 @@ class ParametricEqProcessor @Inject constructor() : AudioProcessor {
         }
     }
 
-    private fun rebuildFilters(bands: Array<BandState>, channelCount: Int) {
-        val active = bands.filter { it.enabled && it.gain != 0f }
-        chains = Array(channelCount) { Array(active.size) { BiquadFilter() } }
-        for ((i, band) in active.withIndex()) {
+    /**
+     * Tunes the chains to [bands].
+     *
+     * Filters are made new only when the channel count or the number of active
+     * bands changes, and those start from silence. Otherwise each one is
+     * retuned in place with its memory kept, as AutoEqProcessor does: a fresh
+     * filter restarting mid-song is a click, and a new snapshot used to mean
+     * exactly that, every time the curve was touched. Memory from before the
+     * EQ was last off or flat is not kept: the filters heard none of the audio
+     * since, so they start from silence as they always did.
+     */
+    private fun retuneFilters(bands: Array<BandState>, channelCount: Int) {
+        var activeCount = 0
+        for (band in bands) if (band.isActive) activeCount++
+        val rebuild = chains.size != channelCount || chains[0].size != activeCount
+        if (rebuild) chains = Array(channelCount) { Array(activeCount) { BiquadFilter() } }
+        val keepState = !rebuild && filtersCurrent
+        var i = 0
+        for (band in bands) {
+            if (!band.isActive) continue
             val type = when (band.type) {
                 FilterType.LOWSHELF -> BiquadType.LOW_SHELF
                 FilterType.HIGHSHELF -> BiquadType.HIGH_SHELF
                 else -> BiquadType.PEAKING
             }
             for (chain in chains) {
-                chain[i].configure(type, sampleRate, band.freq.toDouble(), band.q.toDouble(), band.gain.toDouble())
+                chain[i].configure(
+                    type, sampleRate, band.freq.toDouble(), band.q.toDouble(), band.gain.toDouble(),
+                    keepState = keepState,
+                )
             }
+            i++
         }
     }
 
@@ -188,14 +272,35 @@ class ParametricEqProcessor @Inject constructor() : AudioProcessor {
     private class BandState(
         val freq: Float, val gain: Float, val q: Float,
         val type: FilterType, val enabled: Boolean
-    )
+    ) {
+        /** Disabled, or at zero gain, a band contributes nothing but a wasted biquad. */
+        val isActive: Boolean get() = enabled && gain != 0f
+
+        fun sameAs(other: BandState): Boolean =
+            freq == other.freq && gain == other.gain && q == other.q &&
+                type == other.type && enabled == other.enabled
+    }
+
+    private fun Snapshot.sameAs(other: Snapshot): Boolean {
+        if (enabled != other.enabled || preampLinear != other.preampLinear) return false
+        if (bands.size != other.bands.size) return false
+        for (i in bands.indices) if (!bands[i].sameAs(other.bands[i])) return false
+        return true
+    }
 
     private class BiquadFilter {
         private var b0 = 1f; private var b1 = 0f; private var b2 = 0f
         private var a1 = 0f; private var a2 = 0f
         private var z1 = 0f; private var z2 = 0f
 
-        fun configure(type: BiquadType, sr: Double, freq: Double, q: Double, gainDb: Double) {
+        /**
+         * Designs the coefficients. A new filter, or one whose design failed,
+         * starts from silence; [keepState] retunes a running one in place.
+         */
+        fun configure(
+            type: BiquadType, sr: Double, freq: Double, q: Double, gainDb: Double,
+            keepState: Boolean = false,
+        ) {
             val w0 = 2.0 * Math.PI * freq / sr
             val cosw0 = cos(w0)
             val sinw0 = sin(w0)
@@ -244,9 +349,16 @@ class ParametricEqProcessor @Inject constructor() : AudioProcessor {
             if (!nb0f.isFinite() || !nb1f.isFinite() || !nb2f.isFinite() ||
                 !na1f.isFinite() || !na2f.isFinite()) {
                 b0 = 1f; b1 = 0f; b2 = 0f; a1 = 0f; a2 = 0f
-            } else {
-                b0 = nb0f; b1 = nb1f; b2 = nb2f; a1 = na1f; a2 = na2f
+                z1 = 0f; z2 = 0f
+                return
             }
+            b0 = nb0f; b1 = nb1f; b2 = nb2f; a1 = na1f; a2 = na2f
+            if (!keepState) {
+                z1 = 0f; z2 = 0f
+            }
+        }
+
+        fun clearState() {
             z1 = 0f; z2 = 0f
         }
 

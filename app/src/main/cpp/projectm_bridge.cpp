@@ -10,6 +10,11 @@
 
 namespace {
 constexpr int kDefaultFps = 60;
+/**
+ * Frames of PCM projectM holds for analysis (libprojectM/Audio/AudioConstants.hpp,
+ * AudioBufferSamples). Everything older than that is overwritten as it arrives.
+ */
+constexpr unsigned int kProjectMAudioBufferSamples = 576;
 /** How many other presets a timed switch or Next tries when one fails to load. */
 constexpr int kMaxSwitchRetries = 3;
 constexpr const char* kTag = "ProjectMBridge";
@@ -54,7 +59,13 @@ ProjectMBridge::ProjectMBridge(
 
     const char* texture_paths[] = {texture_root_.c_str()};
     projectm_set_texture_search_paths(projectm_, texture_paths, 1);
-    projectm_playlist_add_path(playlist_, preset_root_.c_str(), true, false);
+    // Duplicates allowed, which only skips the check for them: the playlist is
+    // new and empty, and one walk of a directory tree that does not follow
+    // symlinks (std::filesystem's default) visits each file once, so there
+    // are none to find. The check was a linear search of the playlist for
+    // every preset added, quadratic over the ten thousand bundled, on the
+    // render thread with the engine locked.
+    projectm_playlist_add_path(playlist_, preset_root_.c_str(), true, true);
     projectm_playlist_set_shuffle(playlist_, true);
     RemoveExcludedPresets();
     BuildPresetIndex();
@@ -397,7 +408,7 @@ void ProjectMBridge::PushBufferedAudioToProjectM() {
         return;
     }
 
-    std::vector<float> samples;
+    std::vector<float>& samples = pcm_scratch_;
     int channel_count = 2;
     int sample_rate = 44100;
     if (!audio_buffer_.Pop(samples, channel_count, sample_rate) || samples.empty()) {
@@ -429,18 +440,30 @@ void ProjectMBridge::PushBufferedAudioToProjectM() {
         gain = std::clamp(kTargetRms / smoothed_rms_, kMinGain, kMaxGain);
     }
 
+    (void) sample_rate;
+    // No channels says nothing projectM could read: it would stride past the end.
+    if (channel_count < 1) {
+        return;
+    }
+    const unsigned int per_channel_count = static_cast<unsigned int>(samples.size() / std::max(channel_count, 1));
+    const auto pm_channels = channel_count == 1 ? PROJECTM_MONO : PROJECTM_STEREO;
+    const size_t stride = channel_count == 1 ? 1 : 2;
+
+    // projectM keeps only the newest kProjectMAudioBufferSamples frames it is
+    // given: it writes them round a circular buffer and reads that back from
+    // its own start, oldest first (Audio/PCM.cpp). So handing it just those
+    // frames leaves it holding exactly what the whole block would have, and
+    // the soft clip below runs on a few hundred samples instead of ~100 ms of
+    // them. The level above is still measured over all of it, as before.
+    const unsigned int keep = std::min(per_channel_count, kProjectMAudioBufferSamples);
+    const size_t first = static_cast<size_t>(per_channel_count - keep) * stride;
+    const size_t end = std::min(samples.size(), static_cast<size_t>(per_channel_count) * stride);
+
     // Apply gain with tanh soft-clip so transient peaks drive the
     // visualizer without harsh distortion.
-    for (auto& s : samples) {
-        s = std::tanh(s * gain);
+    for (size_t i = first; i < end; ++i) {
+        samples[i] = std::tanh(samples[i] * gain);
     }
 
-    (void) sample_rate;
-    const unsigned int per_channel_count = static_cast<unsigned int>(samples.size() / std::max(channel_count, 1));
-    projectm_pcm_add_float(
-            projectm_,
-            samples.data(),
-            per_channel_count,
-            channel_count == 1 ? PROJECTM_MONO : PROJECTM_STEREO
-    );
+    projectm_pcm_add_float(projectm_, samples.data() + first, keep, pm_channels);
 }

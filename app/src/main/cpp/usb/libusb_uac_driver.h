@@ -257,6 +257,8 @@ private:
 
     bool startIsoPump();
     void stopIsoPump();
+    // stop()'s teardown, for a caller already holding mutex_.
+    void stopLocked();
 
     // libusb iso completion callback — static trampoline into onIso().
     static void LIBUSB_CALL onIsoTrampoline(libusb_transfer* xfr);

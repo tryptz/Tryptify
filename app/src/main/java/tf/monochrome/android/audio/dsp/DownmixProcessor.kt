@@ -78,7 +78,15 @@ class DownmixProcessor @Inject constructor(
     // inactive immediately.
     private var pendingFormat = AudioFormat.NOT_SET
     private var inputFormat = AudioFormat.NOT_SET
+    /** What [getOutput] hands on: [buffer], or EMPTY once it has been taken. */
     private var outputBuffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
+
+    /**
+     * The output's memory, kept across blocks. [getOutput] has to leave
+     * [outputBuffer] empty, so the memory cannot live there: when it did,
+     * every block found a capacity of 0 and allocated a new direct buffer.
+     */
+    private var buffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var inputEnded = false
 
     // The folded block as floats, for the crossfeed; grown on demand.
@@ -251,11 +259,7 @@ class DownmixProcessor @Inject constructor(
 
         val outFrameSize = bytesPerSample * 2
         val outBytes = numFrames * outFrameSize
-        if (outputBuffer.capacity() < outBytes) {
-            outputBuffer = ByteBuffer.allocateDirect(outBytes).order(ByteOrder.nativeOrder())
-        } else {
-            outputBuffer.clear()
-        }
+        ensureOutput(outBytes)
 
         val spatial = placement?.current
         if (spatial != null && spatial.enabled && placer != 0L) {
@@ -460,6 +464,17 @@ class DownmixProcessor @Inject constructor(
         pushedTarget = null
     }
 
+    /** [buffer], at least [bytes] long and cleared, as the pending output. */
+    private fun ensureOutput(bytes: Int): ByteBuffer {
+        if (buffer.capacity() < bytes) {
+            buffer = ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder())
+        } else {
+            buffer.clear()
+        }
+        outputBuffer = buffer
+        return buffer
+    }
+
     private fun releasePlacer() {
         if (placer != 0L) tf.monochrome.android.audio.atmos.ChannelPlacerNative.nativeDestroy(placer)
         placer = 0L
@@ -499,6 +514,7 @@ class DownmixProcessor @Inject constructor(
         flush()
         pendingFormat = AudioFormat.NOT_SET
         inputFormat = AudioFormat.NOT_SET
+        buffer = AudioProcessor.EMPTY_BUFFER
         coefL = FloatArray(0)
         coefR = FloatArray(0)
         lfeActive = false
