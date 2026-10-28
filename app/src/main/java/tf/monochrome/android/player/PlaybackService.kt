@@ -216,6 +216,16 @@ class PlaybackService : MediaSessionService() {
         // it comes straight off time-to-first-sound. The post-underrun
         // threshold stays at 5 s, so a genuinely struggling connection still
         // refills properly instead of churning.
+        //
+        // The buffer is held in the Java heap, so its size in bytes is capped
+        // too, and the cap wins over the 30 s minimum. With time first, the
+        // 30 s were kept whatever they weighed: about 21 MB for 24-bit/192 kHz
+        // FLAC and 84 MB for DSD256, a third of the heap Android gives the
+        // app. At BUFFER_BYTES lossy and CD-quality streams still get their
+        // full two minutes; only the hi-res formats hold less time (about
+        // 23 s of 24/192, 6 s of DSD256, read from a local file anyway), and
+        // with the cap reached playback starts or resumes on what there is
+        // rather than waiting for the minimum.
         val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
             .setBufferDurationsMs(
                 /* minBufferMs */ 30_000,
@@ -223,8 +233,8 @@ class PlaybackService : MediaSessionService() {
                 /* bufferForPlaybackMs */ 750,
                 /* bufferForPlaybackAfterRebufferMs */ 5_000,
             )
-            .setPrioritizeTimeOverSizeThresholds(true)
-            .setTargetBufferBytes(C.LENGTH_UNSET)
+            .setPrioritizeTimeOverSizeThresholds(false)
+            .setTargetBufferBytes(BUFFER_BYTES)
             .build()
 
         player = ExoPlayer.Builder(this, buildRenderersFactory())
@@ -2086,6 +2096,12 @@ class PlaybackService : MediaSessionService() {
     private companion object {
         /** Retries a failing position before moving past it. */
         const val MAX_CONSECUTIVE_PLAYER_ERRORS = 2
+
+        /**
+         * The most the player's buffer holds, bytes: two minutes of CD-quality
+         * FLAC, and the ceiling for everything denser (see onCreate).
+         */
+        const val BUFFER_BYTES = 16 * 1024 * 1024
 
         /**
          * How long an EQ preference change settles before the filter chain is
