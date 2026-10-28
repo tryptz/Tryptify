@@ -10,8 +10,10 @@ list (owner's rule): the app reaches paid charting signed in, never by a
 built-in address.
 
 Same rule as Tryptify Cloud: **a listener can never cost more than they
-pay.** Every price below is checked against the worst case, with the same
-fee path and the same 20% rule (`tryptify-cloud.md`, Pricing).
+pay.** Every price below is checked against the worst case, and keeps at
+least 20% of what is left after fees (`tryptify-cloud.md`, Pricing).
+
+Paid through **Creem only** (owner, 2026-10-28): no Google Play, no PayPal.
 
 ## What a minute costs
 
@@ -52,25 +54,21 @@ Priced at a worst **0.2¢ a minute**.
 
 ## Minute packs
 
-One-time purchases, not a subscription. Songs are estimated at 4 minutes,
-about a pop song's length; shorter songs give more, longer ones fewer.
+**2¢ a minute** (owner, 2026-10-28: the lowest prices the rule allowed,
+about 0.34¢ a minute, were "kinda cheap"). One-time purchases, not a
+subscription. Songs are estimated at 4 minutes, about a pop song's length;
+shorter songs give more, longer ones fewer.
 
 | Pack | Minutes | About | Price | Per minute | Worst profit |
 |---|---|---|---|---|---|
-| Starter | 600 | 150 songs | $2.99 | 0.50¢ | +$0.40 (25%) |
-| Library | 2,500 | 625 songs | $9.99 | 0.40¢ | +$1.52 (23%) |
-| Big library | 5,000 | 1,250 songs | $19.99 | 0.40¢ | +$3.38 (25%) |
+| Starter | 150 | 37 songs | $2.99 | 2¢ | +$1.55 (84%) |
+| Library | 500 | 125 songs | $9.99 | 2¢ | +$6.11 (86%) |
+| Big library | 1,000 | 250 songs | $19.99 | 2¢ | +$12.62 (87%) |
 
-These are the most minutes each price can carry and still pass the 20% rule.
-By the minute a pack holds about twice the songs it did by the song, since
-the worst case is no longer a 10-minute song. Under $2.99 the payment's fixed
-fee, not the server, is what costs.
-
-Net is the lower of the two worst fee paths Cloud uses: web with 27% VAT,
-8.5% and 50¢, or Play's 15% with 27% VAT. Creem (3.9% + 40¢) is cheaper than
-that path, so real profit is higher; on typical songs (0.16¢ a minute, not 0.2¢)
-higher. No pack under $2.99: Creem's floor is $1.00, and the fixed fee eats
-most of a small one.
+Worst profit takes out 27% VAT, then Creem's 3.9% + 40¢, and counts every
+minute at the worst counted minute (0.19¢). About 8¢ a song is still well
+under stem splitting alone (LALAL.AI about 25¢ a song in bulk). No pack under
+$2.99: Creem's floor is $1.00, and its 40¢ eats most of a small one.
 
 ## What others charge (searched 2026-10-28, third-party pages, unverified)
 
@@ -86,7 +84,7 @@ on the player's own computer. The nearest paid services:
 | LALAL.AI | stem separation only | $9.99/month for 90 fast minutes; $190 for 3,000 minutes (about 25¢ a 4-minute song) |
 | Moises | stem separation only | Premium $3.99/month |
 
-So about 2¢ a song (0.4–0.5¢ a minute) is cheap next to stem splitting alone, but the chart makers
+So about 8¢ a song (2¢ a minute) is cheap next to stem splitting alone, but the chart makers
 players know are free or give free songs every month. A free song every month
 (a few cents each) is the lever if one song proves too little to hook players.
 
@@ -103,7 +101,13 @@ players know are free or give free songs every month. A free song every month
 - **The listener's**, in Trypt Mania: minutes left and about how many songs
   that is, what each batch used, minutes bought, and Buy more.
 - **The owner's**: minutes charted, songs, free trials used, money in, the
-  Railway bill, and profit, by day.
+  Railway bill, and profit, by day. Built as a claude.ai dashboard
+  (2026-10-28): the Railway use is live from the Railway connector, the cost
+  per minute and the packs are worked out from Railway's rates and the pack
+  list; sales and minutes show "not recorded yet" until Cloud records them.
+  Its link is kept out of this public repository.
+- The listener's screens are mocked up (free song, packs, a batch, usage);
+  not built in the app yet.
 
 ## The fixed cost (measured; fixed in Parser `03ff903`, not yet deployed)
 
@@ -133,8 +137,7 @@ few seconds more on the next song.
 
 1. The three minute packs and prices above, or other sizes.
 2. Trial daily cap: 500?
-3. Sell on Play as well as web? (The prices above already pass both.)
-4. Merge the Parser fix to `main` (deploys it), and switch on Railway's
+3. Merge the Parser fix to `main` (deploys it), and switch on Railway's
    Serverless sleep?
 
 Sources: [Railway pricing plans](https://docs.railway.com/pricing/plans),
