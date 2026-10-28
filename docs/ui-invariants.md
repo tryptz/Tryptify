@@ -334,6 +334,26 @@ or not, doing nothing (seen on device). The wave is the one sung line, while
 the lyrics show, never a screen the listener idles on; the god rays already
 redraw that screen every frame.
 
+**The blurred background's cover is decoded small, and only under a blur.**
+`BlurredCoverLayer` asks Coil for `blurredCoverDecodePx`: at least four
+decoded pixels under one sigma of its blur, never under 256 px (256 on a phone
+at 40 and 64dp), and only on Android 12 and up, where `Modifier.blur` runs;
+below that the cover is drawn sharp at full size. Decoded at screen size it was
+6 to 39 MB a song, under a blur that hides anything finer than about 100 px.
+The size follows the blur, so never pin a number. `BlurredCoverDecodeTest`
+holds it.
+
+**A pane reads where it sits only when it has art to place.** `playerGlass`
+and the lyric glass read `anchor.rect` only while `backdrop.art` is set;
+without art the uniforms take no anchor and are the same as before. Read
+always, every art-less pane re-ran its layer on each frame of a scroll.
+
+**The player route never reads the colour fade.** It is held as State and read
+by the screen call, the hero slot, `PlayerGlassColors` and the system bars
+(through `derivedStateOf`, so the icons flip on the same frame), each in its
+own scope; the god rays' light reads its accent in the draw phase. Read in the
+route, every frame of the fade (up to 8 s) recomposed the whole player.
+
 ### Lyrics: letter glass and god rays
 
 **Every slider on the Studio's Lyrics tab has a reset.** `FxSlider` takes a
@@ -534,6 +554,14 @@ own position and a tapped line seeks. Saving goes through
 write, the player's lyrics replaced at once, and the download's `.lrc`
 rewritten with word times. The row list pads its bottom by
 `LocalBottomChromeInset`, like the Studio.
+
+**Only the sung karaoke line reads the play head.** An inactive line takes 0,
+since its colours never use the position; given it, every visible line
+recomposed at every word start and end.
+
+**A paused Wave Candy redraws only when its picture changes.** It still asks
+the native scope every frame, because the scope's clock re-places the window
+after half a second without a render, and a full stop would jump on resume.
 
 ### Music links
 
@@ -1120,7 +1148,11 @@ too. No label in the player says any of this.
   song of the first list. An earlier build dropped a list once the next one
   played: the queue sheet lost its history and the count restarted at every
   list. The queue grows only by what has played, plus the one list added
-  ahead, as it does under song radio.
+  ahead, as it does under song radio. **It stops at 2,000 songs behind**
+  (`QueueManager.MAX_BEHIND`): past that, adding to the queue drops the
+  oldest, whole lists where it knows where they start, down to about 1,500,
+  and the count starts from there. Hours of radio or list after list
+  otherwise grew it, and everything it holds, for as long as the app ran.
 - **The Library's playlists have a sort, and it is saved**
   (`PlaylistSort`, the sort button at the end of the New playlist row): last
   edited first, as they always were, by name, or by date created. Last
@@ -1303,6 +1335,15 @@ crossing for every point inside it, so an even-odd fill inverts: sea filled,
 continents punched out. It looked like the theme flickering. `GlobeLandClipTest`
 sweeps 840 cameras and includes a test that reverses the arc direction and
 asserts the sea floods, so the fix cannot be undone by a sign.
+
+**The globe is turned, not re-projected.** Every point of the asset is placed
+on the sphere once (`GlobeLandClip.spherePoints`). Each frame turns it with one
+`Turn` (four trig calls). The dots, labels, outlines and land clipper all read
+that one turn, so they agree on where the horizon is. `project()` is the same
+arithmetic for one point. `GlobeTurnTest` holds both, and `GlobeLandClipTest`
+still checks the fill through `clipRing`, which runs the same clipper.
+Re-projected, every drag frame was about 95,000 trig calls and 0.7 MB of
+garbage.
 
 ### The genre galaxy
 
@@ -2277,6 +2318,27 @@ Ready, the host's Start, Leave, and a line of chat.
   phone's seat. **A listening party is the exception** (below): its socket is
   its own (`PartyClient`, never `RoomClient`), Back from the party screen
   leaves the party on, and only Leave the party ends it.
+
+**A paused run's field stops drawing once it is still.**
+`GlyphPlayfield(running = …)`: paused, its frame clock runs until the last
+flash and combo burst have faded in real time, and starts again on Resume. A
+room's run passes true under its pause panel; previews always run. The life
+bar throbs and shimmers only in danger or full; the song card's beat light runs
+only while a preview plays. Before, a paused game redrew every frame, the CRT
+pass included, over a picture nobody could see.
+
+**The field's art is warmed once per size, skin, glass and set of note
+divisions, and drawn by place** (`GlyphFieldArt`). The game keeps its own size
+(`releaseImagesExcept`) and drops the rest, so a restart draws what it has.
+Only drawn art is warmed (`GlyphAssetCatalogTest`), a fallback is one shared
+bitmap, and the rasters go when the route leaves composition.
+
+**The CRT programs are compiled once and shared by every layer.** `tvLayer`
+sets every uniform of a program before making its effect. A new uniform must
+be set there on every pass.
+
+**Out of sight and not in a room, the rooms socket closes, and opens again on
+return; in a room it stays open**, since a dropped socket loses the seat.
 
 ### Tryptify Connect
 

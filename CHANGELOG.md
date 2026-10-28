@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+### Fixed
+- **No crash risk in long sessions with the limiter on.** Its sample counter overflowed after about 12 hours of play (3 at 4× oversampling) and it read outside its buffer.
+- **Bit-perfect stays bit-perfect after a fader move.** The mixer's volume now lands exactly where it is set, so a fader moved and back, or a centred pan, passes the music through untouched again. With the mixer on and nothing changing the sound, 16-bit audio comes out as it went in, without dither.
+- **The safety checks against broken numbers work on the phone.** The phone's compiler quietly removed the checks that stop a NaN from one effect reaching the output; they now hold, on both ARM builds, and in the spatial map's placer too.
+- **A library rescan keeps albums and artists as they were.** Their ids no longer change on each rescan, so an open album, and Continue into the next list into a phone album, keep working after new music is found, and a rescan writes far less.
+- **A mixer preset you load is saved at once.** Before, a restart brought back the mix from before it.
+- **Plugging another USB device in while a DAC streams no longer risks a crash** (the DAC was opened a second time under the running stream).
+- **The chorus no longer reads past its buffer** at 40 ms, full depth and two or more voices, and old audio no longer replays in effect tails after a sample-rate change.
+- **The download queue is saved in order**, so a restart never brings back an older queue, and songs queued before the saved queue loads are kept.
+- **Phone-file covers keep their shape** where they are shown in a spot that isn't square.
+- A listening party that took too long to connect no longer keeps the player service running, and in Trypt Mania a kick during READY in a room no longer starts the music behind the rooms screen.
+
+### Changed
+- **Less CPU while music plays, screen off included.** No new memory per audio buffer; EQs that are off or flat copy the sound straight through; the pitch engine is kept between songs; the Inflator's band-split filters rest while band split is off; reverb, chorus, delay and the other delay-line effects work without a divide per sample; the resampler blends its filter once per frame; the scrobble timer sleeps while paused. The BPM tap stops once it has a tempo, so tapping the number to measure again now takes about ten seconds.
+- **Less memory.** Tapping one song no longer keeps the whole library in memory for the rest of the session (about 28 MB at 20,000 songs); the queue keeps at most 2,000 played songs behind the one playing; the blurred background decodes its cover small, and embedded covers decode at the size shown; Theme Store pictures take at most 12 MB and are let go in the background; the Discover, chart, Atmos and hi-res caches are bounded; the visualizer lets go of its audio feed and GPU memory when the screen turns off, and comes back on the same preset.
+- **Smoother screens.** The mixer's meters, the globe, the About tab's header, the parametric EQ's graph, the Atmos map, the Oxford meters, the lyrics, the colour fade between songs and a paused Wave Candy no longer redraw or rebuild more than what changed.
+- **Downloads** update their progress every 1% or quarter second instead of every 8 KB, and the queue is saved at most once a second while they run.
+- **Trypt Mania**: a paused game stops drawing once it is still, the note art is kept between runs, run history is read once per song and once per run instead of on every song played anywhere, the song list is read off the main thread, and the rooms connection closes in the background when you are not in a room.
+- **Background work**: file and network work is no longer held to 4 to 12 threads; album, artist, search and lyrics data are read off the main thread; Discord presence reads only what it needs from each message; the cloud library restore after sign-in is batched.
+
 ## [1.9.51]
 
 ### Added
