@@ -1002,12 +1002,12 @@
     <string name="settings_streaming_quality">Qualità di streaming</string>
     <string name="settings_audio_processing">Elaborazione audio</string>
     <string name="settings_replaygain">ReplayGain</string>
-    <string name="settings_replaygain_desc">Uniforma il volume tra i brani grazie ai tag ReplayGain dei tuoi file. I brani forti vengono abbassati; un brano viene alzato solo se il suo file indica che c’è margine, quindi nulla distorce. Intelligente usa il livello dell’album mentre un album suona in ordine.</string>
-    <string name="settings_replaygain_track">Brano</string>
-    <string name="settings_replaygain_album">Album</string>
-    <string name="settings_replaygain_smart">Intelligente</string>
+    <string name="settings_replaygain_desc">Uniforma il volume tra i brani: in base ai tag ReplayGain dei tuoi file o, per un brano che non li ha, alla sua loudness misurata durante l’ascolto. Un album ascoltato in ordine mantiene il suo equilibrio. I brani forti vengono abbassati fino all’obiettivo; uno debole viene alzato solo fin dove i suoi tag mostrano che c’è margine, quindi niente distorce.</string>
     <string name="settings_replaygain_target">Loudness di destinazione</string>
-    <string name="settings_replaygain_target_desc">Il livello a cui arriva ogni brano con tag. -18 LUFS è lo standard ReplayGain; -14 LUFS quello della maggior parte dei servizi di streaming.</string>
+    <string name="settings_replaygain_target_desc">Il livello a cui arriva ogni brano. -18 LUFS è lo standard ReplayGain; -14 LUFS quello della maggior parte dei servizi di streaming.</string>
+    <string name="settings_replaygain_now">Questo brano: %1$s</string>
+    <string name="settings_replaygain_now_untagged">Misurazione della loudness di questo brano…</string>
+    <string name="settings_replaygain_now_measured">Questo brano: %1$s, misurato a %2$s durante l’ascolto</string>
     <string name="settings_output">Uscita</string>
     <string name="settings_playback_speed">Velocità di riproduzione</string>
     <string name="settings_clear_downloads">Cancella download</string>

@@ -1002,12 +1002,12 @@
     <string name="settings_streaming_quality">Calidad de streaming</string>
     <string name="settings_audio_processing">Procesamiento de audio</string>
     <string name="settings_replaygain">ReplayGain</string>
-    <string name="settings_replaygain_desc">Iguala el volumen entre canciones con las etiquetas ReplayGain de tus archivos. Las canciones fuertes se bajan; una canción solo se sube si su archivo indica que hay margen, así que nada satura. Inteligente usa el nivel del álbum mientras suena un álbum en orden.</string>
-    <string name="settings_replaygain_track">Canción</string>
-    <string name="settings_replaygain_album">Álbum</string>
-    <string name="settings_replaygain_smart">Inteligente</string>
+    <string name="settings_replaygain_desc">Iguala el volumen entre canciones: a partir de las etiquetas ReplayGain de tus archivos o, si una canción no las tiene, de su volumen medido mientras suena. Un álbum escuchado en orden conserva su propio equilibrio. Las canciones fuertes se bajan hasta el objetivo; una suave solo se sube hasta donde sus etiquetas muestran que hay margen, así que nada satura.</string>
     <string name="settings_replaygain_target">Sonoridad objetivo</string>
-    <string name="settings_replaygain_target_desc">Donde queda cada canción con etiquetas. -18 LUFS es el estándar de ReplayGain; -14 LUFS, el de la mayoría de los servicios de streaming.</string>
+    <string name="settings_replaygain_target_desc">Donde queda cada canción. -18 LUFS es el estándar de ReplayGain; -14 LUFS, el de la mayoría de los servicios de streaming.</string>
+    <string name="settings_replaygain_now">Esta canción: %1$s</string>
+    <string name="settings_replaygain_now_untagged">Midiendo el volumen de esta canción…</string>
+    <string name="settings_replaygain_now_measured">Esta canción: %1$s, medida en %2$s mientras suena</string>
     <string name="settings_output">Salida</string>
     <string name="settings_playback_speed">Velocidad de reproducción</string>
     <string name="settings_clear_downloads">Borrar descargas</string>

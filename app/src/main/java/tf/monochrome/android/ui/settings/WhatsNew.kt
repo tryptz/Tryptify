@@ -177,7 +177,7 @@ object WhatsNew {
                     kind = WhatsNewKind.NEW,
                     section = PLAYBACK,
                     title = "ReplayGain is back",
-                    body = "Settings › Audio › Audio processing › ReplayGain evens out loudness from your files' tags, aimed at a level you pick: -23 to -8 LUFS, -14 by default. A quiet song is raised as far as its peak tag allows, so nothing clips.",
+                    body = "Settings › Audio › Audio processing › ReplayGain evens songs out to a level you pick, -23 to -8 LUFS: from their tags, or a song's loudness measured as it plays. A quiet song is raised only as far as its peak tag allows.",
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,

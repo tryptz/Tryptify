@@ -33,8 +33,11 @@ import javax.inject.Singleton
  * glides in over [RAMP_MS] rather than stepping, except at the start of a
  * stream (a flush: a skip, a seek), which starts at it.
  *
- * Realtime: [setGain] is one volatile store from any thread; the audio thread
- * reads it once a buffer and hands it over with the buffer. Nothing locks or
+ * A song with no gain tags is measured as it plays instead ([follow]): the
+ * stage turns it down to the target loudness as the reading builds.
+ *
+ * Realtime: [setGain] and [follow] are volatile stores from any thread; the
+ * audio thread reads them once a buffer and hands them over with the buffer. Nothing locks or
  * allocates per buffer once the output buffer has grown to size.
  * 16-bit and float PCM only; any other encoding passes by inactive.
  */
@@ -44,6 +47,24 @@ class ReplayGainProcessor @Inject constructor() : AudioProcessor {
 
     /** The gain wanted, linear. Written from the service, read on the audio thread. */
     @Volatile private var target = 1f
+
+    /**
+     * The loudness to measure the song to, LUFS, or [ReplayGainNative.FOLLOW_OFF]
+     * to play at [target]. Written from the service, read on the audio thread.
+     */
+    @Volatile private var followLufs = ReplayGainNative.FOLLOW_OFF
+
+    /** Which song is being measured: a new one starts the measurement again. */
+    @Volatile private var song = 0
+    private var songKey: String? = null
+
+    /** The gain the stage is at, linear, as of the last buffer. For the readout and a blend's tail. */
+    @Volatile var appliedGain = 1f
+        private set
+
+    /** The measured song's integrated loudness so far, LUFS, or below -999 with none yet. */
+    @Volatile var measuredLufs = ReplayGainNative.FOLLOW_OFF
+        private set
 
     /** The native stage, made when a stream of a format it works first starts. Audio thread only. */
     private var native = 0L
@@ -57,9 +78,27 @@ class ReplayGainProcessor @Inject constructor() : AudioProcessor {
     private var directInput: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var inputEnded = false
 
-    /** Sets the gain, linear (1.0 = unchanged). Any thread. */
+    /** Sets the gain, linear (1.0 = unchanged), for a song with gain tags. Any thread. */
     fun setGain(linear: Float) {
         target = if (linear.isFinite() && linear > 0f) linear else 1f
+        followLufs = ReplayGainNative.FOLLOW_OFF
+    }
+
+    /**
+     * A song with no gain tags: measure it as it plays and turn it down to
+     * [targetLufs]. The same [key] again (the target moved) carries on with
+     * what has been measured; another starts measuring again. Any thread.
+     */
+    fun follow(targetLufs: Float, key: String) {
+        synchronized(this) {
+            if (key != songKey) {
+                songKey = key
+                song++
+            }
+        }
+        // Wider than the meter takes (past 24 channels), it plays as it is.
+        target = 1f
+        followLufs = targetLufs
     }
 
     /** The gain last set, for seeding a copy of this stage (the blend's tail). */
@@ -89,7 +128,9 @@ class ReplayGainProcessor @Inject constructor() : AudioProcessor {
         val out = ensureOutput(bytes)
         val source = if (inputBuffer.isDirect) inputBuffer else directCopyOf(inputBuffer, bytes)
         val offset = if (source === inputBuffer) inputBuffer.position() else 0
-        ReplayGainNative.nativeProcess(native, source, offset, out, frames, float, target)
+        val at = ReplayGainNative.nativeProcess(native, source, offset, out, frames, float, target, followLufs, song)
+        if (at > 0f) appliedGain = at
+        measuredLufs = if (followLufs > ReplayGainNative.FOLLOW_OFF) ReplayGainNative.nativeMeasuredLufs(native) else ReplayGainNative.FOLLOW_OFF
         inputBuffer.position(inputBuffer.limit())
         out.position(0)
         out.limit(bytes)

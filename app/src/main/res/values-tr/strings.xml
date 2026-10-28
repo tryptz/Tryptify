@@ -964,12 +964,12 @@
     <string name="settings_streaming_quality">Akış kalitesi</string>
     <string name="settings_audio_processing">Ses işleme</string>
     <string name="settings_replaygain">ReplayGain</string>
-    <string name="settings_replaygain_desc">Müzik dosyalarınızdaki ReplayGain etiketleriyle şarkılar arasındaki ses düzeyini eşitler. Yüksek şarkılar kısılır; bir şarkı yalnızca dosyası yer olduğunu gösterdiğinde açılır, böylece hiçbir şey kırpılmaz. Akıllı, bir albüm sırayla çalarken albümün düzeyini kullanır.</string>
-    <string name="settings_replaygain_track">Parça</string>
-    <string name="settings_replaygain_album">Albüm</string>
-    <string name="settings_replaygain_smart">Akıllı</string>
+    <string name="settings_replaygain_desc">Şarkılar arasındaki ses seviyesini eşitler: müzik dosyalarındaki ReplayGain etiketlerine göre, etiketi olmayan bir şarkıda ise çalarken ölçülen ses yüksekliğine göre. Sırayla çalınan bir albüm kendi dengesini korur. Yüksek şarkılar hedefe kadar kısılır; sessiz bir şarkı yalnızca etiketleri yer olduğunu gösterdiği kadar açılır, böylece ses kırpılmaz.</string>
     <string name="settings_replaygain_target">Hedef ses yüksekliği</string>
-    <string name="settings_replaygain_target_desc">Etiketli her şarkının ulaştığı seviye. -18 LUFS ReplayGain standardıdır; -14 LUFS çoğu yayın hizmetinin kullandığı seviyedir.</string>
+    <string name="settings_replaygain_target_desc">Her şarkının ulaştığı seviye. -18 LUFS ReplayGain standardıdır; -14 LUFS çoğu yayın hizmetinin kullandığı seviyedir.</string>
+    <string name="settings_replaygain_now">Bu şarkı: %1$s</string>
+    <string name="settings_replaygain_now_untagged">Bu şarkının ses yüksekliği ölçülüyor…</string>
+    <string name="settings_replaygain_now_measured">Bu şarkı: %1$s, çalarken %2$s ölçüldü</string>
     <string name="settings_output">Çıkış</string>
     <string name="settings_playback_speed">Çalma hızı</string>
     <string name="settings_clear_downloads">İndirilenleri temizle</string>

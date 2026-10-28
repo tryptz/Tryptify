@@ -31,9 +31,11 @@ $cxx $flags "$here/snapin_fixes_test.cpp" -o "$out/snapin_fixes_test"
 "$out/snapin_fixes_test"
 
 # ReplayGain's stage, alone and in front of the mixer, the Oxford effects and
-# every snapin: exact at unity, no click on a change, a raised song's level.
+# every snapin: exact at unity, no click on a change, a raised song's level,
+# and a song with no tags measured and turned down to the target. With
+# -ffast-math as on the phone: its checks must not lean on NaN.
 echo "== replay_gain_test"
-$cxx $flags "$here/replay_gain_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/replay_gain_test"
+$cxx $flags -ffast-math "$here/replay_gain_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/replay_gain_test"
 "$out/replay_gain_test"
 
 # Every snapin's defaults against the table ParamDefs.kt is also checked

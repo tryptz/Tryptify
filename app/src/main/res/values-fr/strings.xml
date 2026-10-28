@@ -1002,12 +1002,12 @@
     <string name="settings_streaming_quality">Qualité du streaming</string>
     <string name="settings_audio_processing">Traitement audio</string>
     <string name="settings_replaygain">ReplayGain</string>
-    <string name="settings_replaygain_desc">Égalise le volume entre les morceaux grâce aux balises ReplayGain de vos fichiers. Les morceaux forts sont baissés ; un morceau n’est monté que si son fichier indique qu’il reste de la marge, donc rien ne sature. Intelligent utilise le niveau de l’album quand un album est lu dans l’ordre.</string>
-    <string name="settings_replaygain_track">Morceau</string>
-    <string name="settings_replaygain_album">Album</string>
-    <string name="settings_replaygain_smart">Intelligent</string>
+    <string name="settings_replaygain_desc">Égalise le volume entre les titres : à partir des tags ReplayGain de vos fichiers, ou, pour un titre qui n’en a pas, de son volume mesuré pendant la lecture. Un album écouté dans l’ordre garde son propre équilibre. Les titres forts sont baissés jusqu’à la cible ; un titre faible n’est monté que dans la marge que ses tags indiquent, donc rien ne sature.</string>
     <string name="settings_replaygain_target">Niveau cible</string>
-    <string name="settings_replaygain_target_desc">Le niveau où arrive chaque titre tagué. -18 LUFS est la norme ReplayGain ; -14 LUFS, celui de la plupart des services de streaming.</string>
+    <string name="settings_replaygain_target_desc">Le niveau où arrive chaque titre. -18 LUFS est la norme ReplayGain ; -14 LUFS, celui de la plupart des services de streaming.</string>
+    <string name="settings_replaygain_now">Ce titre : %1$s</string>
+    <string name="settings_replaygain_now_untagged">Mesure du volume de ce titre…</string>
+    <string name="settings_replaygain_now_measured">Ce titre : %1$s, mesuré à %2$s pendant la lecture</string>
     <string name="settings_output">Sortie</string>
     <string name="settings_playback_speed">Vitesse de lecture</string>
     <string name="settings_clear_downloads">Effacer les téléchargements</string>

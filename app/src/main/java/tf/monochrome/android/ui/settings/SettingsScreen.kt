@@ -1881,43 +1881,51 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
     }
 }
 
-// ReplayGain: the mode, and the pre-amp once a mode is on. Chips, laid out as
-// the DSP block size below is.
+// ReplayGain: a switch, then once it is on, what it does to the song playing
+// and the target loudness. On is Smart (SettingsViewModel.setReplayGainOn);
+// the Track and Album modes are no longer offered, and a listener who chose
+// one sees ReplayGain on.
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun ReplayGainSetting(viewModel: SettingsViewModel) {
     val settings by viewModel.replayGain.collectAsStateWithLifecycle()
-    Text(
-        text = stringResource(R.string.settings_replaygain),
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.settingsAnchor(stringResource(R.string.settings_replaygain)),
+    val now by viewModel.replayGainNow.collectAsStateWithLifecycle()
+    val on = settings.mode != tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF
+    SettingSwitchItem(
+        title = stringResource(R.string.settings_replaygain),
+        subtitle = stringResource(R.string.settings_replaygain_desc),
+        checked = on,
+        onCheckedChange = { viewModel.setReplayGainOn(it) },
     )
-    Text(
-        text = stringResource(R.string.settings_replaygain_desc),
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    androidx.compose.foundation.layout.FlowRow(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        tf.monochrome.android.audio.replaygain.ReplayGainMode.entries.forEach { mode ->
-            tf.monochrome.android.ui.mixer.GlassChoiceChip(
-                label = stringResource(
-                    when (mode) {
-                        tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF -> R.string.state_off
-                        tf.monochrome.android.audio.replaygain.ReplayGainMode.TRACK -> R.string.settings_replaygain_track
-                        tf.monochrome.android.audio.replaygain.ReplayGainMode.ALBUM -> R.string.settings_replaygain_album
-                        tf.monochrome.android.audio.replaygain.ReplayGainMode.SMART -> R.string.settings_replaygain_smart
-                    },
-                ),
-                selected = mode == settings.mode,
-                accent = MaterialTheme.colorScheme.primary,
-                onClick = { viewModel.setReplayGainMode(mode) },
-            )
+    val reading = now
+    if (on && reading != null) {
+        // A measured song's gain moves as its reading builds: read it off the
+        // stage twice a second, and only while this is on screen.
+        var live by remember { mutableStateOf<Pair<Float, Float>?>(null) }
+        if (!reading.tagged) {
+            LaunchedEffect(reading) {
+                while (true) {
+                    live = viewModel.replayGainLive()
+                    kotlinx.coroutines.delay(500)
+                }
+            }
         }
+        // Numbers and units, the same in every language.
+        fun db(v: Float) = String.format(Locale.US, "%+.1f dB", v)
+        val measured = live?.takeIf { it.second > -100f }
+        Text(
+            text = when {
+                reading.tagged -> stringResource(R.string.settings_replaygain_now, db(reading.gainDb))
+                measured != null -> stringResource(
+                    R.string.settings_replaygain_now_measured,
+                    db(measured.first),
+                    String.format(Locale.US, "%.1f LUFS", measured.second),
+                )
+                else -> stringResource(R.string.settings_replaygain_now_untagged)
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
     if (settings.mode != tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF) {
         Text(

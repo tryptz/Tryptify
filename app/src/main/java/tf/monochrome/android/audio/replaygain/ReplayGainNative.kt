@@ -24,8 +24,10 @@ internal object ReplayGainNative {
 
     /**
      * [frames] whole frames of [input] from byte [inputOffset] to the start of
-     * [output], gliding to [gain]. Both direct, native order. False, and
-     * nothing written, when either is not direct.
+     * [output], both direct, native order. With [followLufs] a target (above
+     * [FOLLOW_OFF]) song [song] is measured and turned down to it; otherwise
+     * it glides to [gain]. Returns the gain it is at after the buffer, or -1,
+     * and nothing written, when a buffer is not direct.
      */
     @JvmStatic external fun nativeProcess(
         handle: Long,
@@ -35,5 +37,13 @@ internal object ReplayGainNative {
         frames: Int,
         isFloat: Boolean,
         gain: Float,
-    ): Boolean
+        followLufs: Float,
+        song: Int,
+    ): Float
+
+    /** The following song's integrated loudness so far, LUFS; below -999 with no reading yet. */
+    @JvmStatic external fun nativeMeasuredLufs(handle: Long): Float
+
+    /** "Not following", for nativeProcess's followLufs: a sentinel, as the library builds with -ffast-math. */
+    const val FOLLOW_OFF = -1000f
 }

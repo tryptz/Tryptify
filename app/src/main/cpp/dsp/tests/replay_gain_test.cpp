@@ -161,6 +161,148 @@ void theStage() {
     }
 }
 
+// ── Following a song with no tags ────────────────────────────────────────
+
+/** Stereo music-like test signal: two tones a twelfth apart, at [peak]. */
+void fillSong(std::vector<float>& inter, long start, float peak) {
+    const int frames = static_cast<int>(inter.size()) / 2;
+    for (int i = 0; i < frames; i++) {
+        const double t = static_cast<double>(start + i) / kRate;
+        inter[2 * i] = static_cast<float>(peak * (0.7 * std::sin(2 * kPi * 220.0 * t) + 0.3 * std::sin(2 * kPi * 660.0 * t)));
+        inter[2 * i + 1] = static_cast<float>(peak * (0.7 * std::sin(2 * kPi * 330.0 * t) + 0.3 * std::sin(2 * kPi * 990.0 * t)));
+    }
+}
+
+/** The song's own integrated loudness, LUFS, over [seconds]. */
+float loudnessOf(float peak, double seconds) {
+    tryptify::LoudnessMeter m;
+    m.configure(kRate, 2);
+    std::vector<float> block(kBlock * 2);
+    long n = 0;
+    for (int b = 0; b < static_cast<int>(seconds * kRate / kBlock); b++, n += kBlock) {
+        fillSong(block, n, peak);
+        m.process(block.data(), kBlock);
+    }
+    return m.reading().integrated;
+}
+
+double dbOf(float linear) { return 20.0 * std::log10(linear); }
+
+/** [seconds] of the song at [peak] through [s], following song [song] to [target]; the output's loudness. */
+struct Followed {
+    float lastGain = 1.0f;
+    float outLufs = 0.0f;
+    float maxStepOut = 0.0f, maxStepIn = 0.0f;
+    bool identical = true;
+};
+
+Followed follow(ReplayGainStage& s, uint32_t song, float target, float peak, double seconds, long& n) {
+    Followed f;
+    tryptify::LoudnessMeter out;
+    out.configure(kRate, 2);
+    std::vector<float> in(kBlock * 2), o(kBlock * 2);
+    float prevIn = 0.0f, prevOut = 0.0f;
+    bool first = true;
+    const int blocks = static_cast<int>(seconds * kRate / kBlock);
+    for (int b = 0; b < blocks; b++, n += kBlock) {
+        fillSong(in, n, peak);
+        s.follow(song, target);
+        s.processFloat(in.data(), o.data(), kBlock);
+        f.identical = f.identical && in == o;
+        // The output's loudness over the last two seconds, after the glide has had its time.
+        if (b >= blocks - 2 * kRate / kBlock) out.process(o.data(), kBlock);
+        for (int i = 0; i < kBlock; i++) {
+            if (!first) {
+                f.maxStepIn = std::max(f.maxStepIn, std::fabs(in[2 * i] - prevIn));
+                f.maxStepOut = std::max(f.maxStepOut, std::fabs(o[2 * i] - prevOut));
+            }
+            prevIn = in[2 * i];
+            prevOut = o[2 * i];
+            first = false;
+        }
+    }
+    f.lastGain = s.current();
+    f.outLufs = out.reading().integrated;
+    return f;
+}
+
+void following() {
+    std::printf("-- following a song with no tags\n");
+    const float loud = 0.9f;
+    const float songLufs = loudnessOf(loud, 5.0);
+    std::printf("      the song measures %.2f LUFS\n", songLufs);
+    {
+        Stage s(1.0f);
+        long n = 0;
+        const float target = songLufs - 6.0f;
+        const auto f = follow(s, 1, target, loud, 6.0, n);
+        std::printf("      to %.2f LUFS: %.2f dB, comes out at %.2f LUFS\n", target, dbOf(f.lastGain), f.outLufs);
+        check(std::fabs(dbOf(f.lastGain) + 6.0) < 0.3, "a loud song with no tags is turned down by what it measures over the target");
+        check(std::fabs(f.outLufs - target) < 0.5f, "and comes out at the target loudness");
+        check(f.maxStepOut <= f.maxStepIn * 1.01f, "the gain moves without a click");
+
+        // The next song starts where this one was left, not at full level.
+        std::vector<float> in(kBlock * 2), o(kBlock * 2);
+        fillSong(in, 0, loud);
+        s.follow(2, target);
+        s.processFloat(in.data(), o.data(), kBlock);
+        check(std::fabs(dbOf(s.current()) + 6.0) < 0.5, "the next song starts at the level the last one was left at");
+
+        // The listener picks another target: the measurement carries on, so it moves at once.
+        Stage t(1.0f);
+        long m = 0;
+        follow(t, 7, target, loud, 5.0, m);
+        const auto moved = follow(t, 7, target - 3.0f, loud, 1.0, m);
+        std::printf("      target 3 dB lower: %.2f dB after a second\n", dbOf(moved.lastGain));
+        check(std::fabs(dbOf(moved.lastGain) + 9.0) < 0.3, "a new target on the same song moves the gain within a second");
+
+        // A seek: a new stream, same song, same level.
+        const float before = t.current();
+        t.reset();
+        check(std::fabs(dbOf(t.current()) - dbOf(before)) < 0.01, "a seek inside a measured song keeps its level");
+
+        // Its tags arrive (or the next song has them): back to a fixed gain, in 50 ms.
+        t.setGain(0.25f);
+        t.fixed();
+        // 50 ms is 2400 frames at 48 kHz, give or take the rounding of its steps.
+        std::vector<float> ones(2 * 2410, 0.5f), out(2 * 2410);
+        t.processFloat(ones.data(), out.data(), 2410);
+        check(t.current() == 0.25f, "a song with tags after a measured one glides to its gain");
+    }
+    {
+        Stage s(1.0f);
+        long n = 0;
+        const auto f = follow(s, 1, songLufs + 6.0f, loud, 5.0, n);
+        check(f.lastGain == 1.0f && f.identical, "a song quieter than the target is not raised, and comes through bit for bit");
+    }
+    {
+        // 16-bit is measured the same as float.
+        Stage a(1.0f), b(1.0f);
+        const float target = songLufs - 6.0f;
+        std::vector<float> f(kBlock * 2), fo(kBlock * 2);
+        std::vector<int16_t> i16(kBlock * 2), io(kBlock * 2);
+        for (long n = 0; n < 5L * kRate; n += kBlock) {
+            fillSong(f, n, loud);
+            for (size_t k = 0; k < f.size(); k++) i16[k] = static_cast<int16_t>(std::lround(f[k] * 32767.0f));
+            a.follow(1, target);
+            b.follow(1, target);
+            a.processFloat(f.data(), fo.data(), kBlock);
+            b.processInt16(i16.data(), io.data(), kBlock);
+        }
+        check(std::fabs(dbOf(a.current()) - dbOf(b.current())) < 0.1, "16-bit is measured and followed as float is");
+    }
+    {
+        // Silence has no loudness to go by: left where it is.
+        Stage s(1.0f);
+        std::vector<float> zero(kBlock * 2, 0.0f), o(kBlock * 2);
+        for (int b = 0; b < 100; b++) {
+            s.follow(1, -14.0f);
+            s.processFloat(zero.data(), o.data(), kBlock);
+        }
+        check(s.current() == 1.0f, "silence leaves the gain where it is");
+    }
+}
+
 // ── In front of the chain ────────────────────────────────────────────────
 
 /** A song peaking at [peak]: two tones, so the shaper and the detector have something to work with. */
@@ -408,6 +550,7 @@ void everySnapin() {
 
 int main() {
     theStage();
+    following();
     inFrontOfTheChain();
     everySnapin();
     if (failures == 0) std::printf("all checks passed\n");

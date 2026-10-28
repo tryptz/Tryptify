@@ -48,6 +48,8 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val preferences: PreferencesManager,
+    replayGainNow: tf.monochrome.android.audio.replaygain.ReplayGainNow,
+    private val replayGainProcessor: tf.monochrome.android.audio.replaygain.ReplayGainProcessor,
     private val apiServerProber: tf.monochrome.android.data.api.ApiServerProber,
     private val serverAccess: tf.monochrome.android.data.api.ApiServerAccess,
     private val authRepository: AuthRepository,
@@ -586,6 +588,26 @@ class SettingsViewModel @Inject constructor(
     } }
     fun setCrossfadeDuration(seconds: Int) { viewModelScope.launch { preferences.setCrossfadeDuration(seconds) } }
     fun setReplayGainMode(mode: tf.monochrome.android.audio.replaygain.ReplayGainMode) { viewModelScope.launch { preferences.setReplayGainMode(mode) } }
+
+    /**
+     * ReplayGain's switch. On is Smart: the album's gain while an album plays
+     * in order, the song's own otherwise, which is what the Track and Album
+     * modes each got right half the time.
+     */
+    fun setReplayGainOn(on: Boolean) = setReplayGainMode(
+        if (on) tf.monochrome.android.audio.replaygain.ReplayGainMode.SMART
+        else tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF,
+    )
+
+    /**
+     * A measured song's gain now, dB, and its loudness so far, LUFS (below
+     * -999 before the first reading): read off the stage, for the readout.
+     */
+    fun replayGainLive(): Pair<Float, Float> =
+        20f * kotlin.math.log10(replayGainProcessor.appliedGain) to replayGainProcessor.measuredLufs
+
+    /** What ReplayGain is doing to the song playing; null while off or nothing plays. */
+    val replayGainNow: StateFlow<tf.monochrome.android.audio.replaygain.ReplayGainNow.Reading?> = replayGainNow.reading
     fun setReplayGainTarget(lufs: Float) { viewModelScope.launch { preferences.setReplayGainTarget(lufs) } }
 
     // --- Audio speed actions ---

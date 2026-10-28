@@ -40,24 +40,43 @@ Java_tf_monochrome_android_audio_replaygain_ReplayGainNative_nativeReset(JNIEnv*
     stage(h)->reset();
 }
 
+/** Below this, [followLufs] means "not following": a sentinel, not NaN, as the library builds with -ffast-math. */
+constexpr float kFollowOff = -100.0f;
+
 /**
- * [frames] frames from [in] at byte [inOffset] to the start of [out], at
- * [gain]. False when a buffer is not direct, and nothing is written.
+ * [frames] frames from [in] at byte [inOffset] to the start of [out]. With
+ * [followLufs] a target (above kFollowOff), the song [song] is measured and
+ * turned down to it; otherwise it plays at [gain]. Returns the gain the stage
+ * is at after the buffer, or -1 when a buffer is not direct and nothing was
+ * written.
  */
-extern "C" JNIEXPORT jboolean JNICALL
+extern "C" JNIEXPORT jfloat JNICALL
 Java_tf_monochrome_android_audio_replaygain_ReplayGainNative_nativeProcess(
-        JNIEnv* env, jclass, jlong h, jobject in, jint inOffset, jobject out, jint frames, jboolean isFloat, jfloat gain) {
-    if (h == 0 || frames <= 0) return JNI_TRUE;
+        JNIEnv* env, jclass, jlong h, jobject in, jint inOffset, jobject out, jint frames, jboolean isFloat,
+        jfloat gain, jfloat followLufs, jint song) {
+    if (h == 0) return 1.0f;
+    ReplayGainStage* s = stage(h);
+    if (frames <= 0) return s->current();
     auto* src = static_cast<uint8_t*>(env->GetDirectBufferAddress(in));
     auto* dst = static_cast<uint8_t*>(env->GetDirectBufferAddress(out));
-    if (src == nullptr || dst == nullptr) return JNI_FALSE;
+    if (src == nullptr || dst == nullptr) return -1.0f;
     src += inOffset;
-    ReplayGainStage* s = stage(h);
     s->setGain(gain);
+    if (followLufs > kFollowOff) {
+        s->follow(static_cast<uint32_t>(song), followLufs);
+    } else {
+        s->fixed();
+    }
     if (isFloat) {
         s->processFloat(reinterpret_cast<const float*>(src), reinterpret_cast<float*>(dst), frames);
     } else {
         s->processInt16(reinterpret_cast<const int16_t*>(src), reinterpret_cast<int16_t*>(dst), frames);
     }
-    return JNI_TRUE;
+    return s->current();
+}
+
+/** The following song's integrated loudness so far, LUFS; below -999 with no reading. */
+extern "C" JNIEXPORT jfloat JNICALL
+Java_tf_monochrome_android_audio_replaygain_ReplayGainNative_nativeMeasuredLufs(JNIEnv*, jclass, jlong h) {
+    return h == 0 ? -1000.0f : stage(h)->measuredLufs();
 }

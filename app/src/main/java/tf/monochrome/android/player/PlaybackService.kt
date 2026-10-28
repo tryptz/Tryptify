@@ -86,6 +86,7 @@ class PlaybackService : MediaSessionService() {
     // the library galaxy: the tap at the head of the chain, and what keeps it.
     @Inject lateinit var dynamicRangeTap: tf.monochrome.android.audio.meter.DynamicRangeTapProcessor
     @Inject lateinit var replayGainProcessor: tf.monochrome.android.audio.replaygain.ReplayGainProcessor
+    @Inject lateinit var replayGainNow: tf.monochrome.android.audio.replaygain.ReplayGainNow
     @Inject lateinit var dynamicRangeRecorder: DynamicRangeRecorder
     // A library track's own BPM tag, over the estimate from its audio.
     @Inject lateinit var taggedTempo: TaggedTempo
@@ -1608,9 +1609,10 @@ class PlaybackService : MediaSessionService() {
     /**
      * Sets ReplayGain's stage to [mediaItem]'s gain (see ReplayGain): on every
      * change of track and of the setting. Its tags are the playing
-     * UnifiedTrack's: a library file's, an opened file's or a collection's;
-     * any other song has none and plays as it is. An album, for the Smart
-     * mode, is the song between songs of its own album in the queue.
+     * UnifiedTrack's: a library file's, an opened file's or a collection's.
+     * Any other song (a stream, an untagged file) has none, and is measured
+     * as it plays instead (ReplayGainProcessor.follow). An album, for the
+     * Smart mode, is the song between songs of its own album in the queue.
      *
      * On a gapless hand-off the stage has already run ahead into the next
      * track, so its gain glides in a moment into it; a skip or a seek starts
@@ -1620,6 +1622,7 @@ class PlaybackService : MediaSessionService() {
         val settings = replayGainSettings
         if (settings.mode == tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF || mediaItem == null) {
             replayGainProcessor.setGain(1f)
+            replayGainNow.set(null)
             return
         }
         val queue = queueManager.currentQueue
@@ -1636,7 +1639,21 @@ class PlaybackService : MediaSessionService() {
             nextAlbumId = queue.getOrNull(index + 1)?.album?.id,
         )
         val tags = tf.monochrome.android.audio.replaygain.ReplayGain.of(track?.let { unifiedTrackRegistry[it.id] })
-        replayGainProcessor.setGain(tf.monochrome.android.audio.replaygain.ReplayGain.linear(tags, settings, inAlbum))
+        if (tags.isEmpty) {
+            // No tags (a stream, an untagged file): measured as it plays, and
+            // turned down to the target as the reading builds.
+            replayGainProcessor.follow(settings.targetLufs, key = mediaItem.mediaId)
+            replayGainNow.set(tf.monochrome.android.audio.replaygain.ReplayGainNow.Reading(tagged = false, gainDb = 0f))
+            return
+        }
+        val linear = tf.monochrome.android.audio.replaygain.ReplayGain.linear(tags, settings, inAlbum)
+        replayGainProcessor.setGain(linear)
+        replayGainNow.set(
+            tf.monochrome.android.audio.replaygain.ReplayGainNow.Reading(
+                tagged = true,
+                gainDb = 20f * kotlin.math.log10(linear),
+            ),
+        )
     }
 
     private fun applyVolume() {
@@ -1734,7 +1751,8 @@ class PlaybackService : MediaSessionService() {
         // Built while the outgoing track still plays on the main chain (see
         // CrossfadeController.start), so this is that track's gain, and its
         // tail keeps it while the main chain moves to the next track's.
-        chain.replayGain.setGain(replayGainProcessor.gain)
+        // The level it is at, which for a measured song is not the gain set.
+        chain.replayGain.setGain(replayGainProcessor.appliedGain)
         val autoEq = lastAutoEq
         val paramEq = lastParametricEq
         chain.seedFrom(

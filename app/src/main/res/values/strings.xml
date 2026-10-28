@@ -965,12 +965,12 @@
     <string name="settings_streaming_quality">Streaming Quality</string>
     <string name="settings_audio_processing">Audio Processing</string>
     <string name="settings_replaygain">ReplayGain</string>
-    <string name="settings_replaygain_desc">Evens out loudness between songs, from the ReplayGain tags in your music files. Loud songs are turned down; a song is only turned up when its file shows there is room, so nothing clips. Smart uses the album’s level while an album plays in order.</string>
-    <string name="settings_replaygain_track">Track</string>
-    <string name="settings_replaygain_album">Album</string>
-    <string name="settings_replaygain_smart">Smart</string>
+    <string name="settings_replaygain_desc">Evens out loudness between songs: from the ReplayGain tags in your music files, or for a song without them, its loudness measured as it plays. An album played in order keeps its own balance. Loud songs are turned down to the target; a quiet one is turned up only as far as its tags show there is room, so nothing clips.</string>
     <string name="settings_replaygain_target">Target loudness</string>
-    <string name="settings_replaygain_target_desc">Where every tagged song lands. -18 LUFS is the ReplayGain standard; -14 LUFS is what most streaming services play at.</string>
+    <string name="settings_replaygain_target_desc">Where every song lands. -18 LUFS is the ReplayGain standard; -14 LUFS is what most streaming services play at.</string>
+    <string name="settings_replaygain_now">This song: %1$s</string>
+    <string name="settings_replaygain_now_untagged">Measuring this song\'s loudness…</string>
+    <string name="settings_replaygain_now_measured">This song: %1$s, measured at %2$s as it plays</string>
     <string name="settings_output">Output</string>
     <string name="settings_playback_speed">Playback Speed</string>
     <string name="settings_clear_downloads">Clear Downloads</string>

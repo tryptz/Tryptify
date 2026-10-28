@@ -926,12 +926,12 @@
     <string name="settings_streaming_quality">ストリーミングの音質</string>
     <string name="settings_audio_processing">オーディオ処理</string>
     <string name="settings_replaygain">ReplayGain</string>
-    <string name="settings_replaygain_desc">音楽ファイルの ReplayGain タグをもとに、曲ごとの音量をそろえます。大きな曲は下げ、ファイルに余裕があると示されている場合にだけ上げるので、音割れしません。「スマート」はアルバムを曲順どおりに再生している間、アルバム全体のレベルを使います。</string>
-    <string name="settings_replaygain_track">トラック</string>
-    <string name="settings_replaygain_album">アルバム</string>
-    <string name="settings_replaygain_smart">スマート</string>
+    <string name="settings_replaygain_desc">曲ごとの音量差をそろえます。音楽ファイルの ReplayGain タグをもとに、タグのない曲は再生しながらラウドネスを測定して調整します。順番どおりに再生するアルバムは、アルバム内のバランスを保ちます。大きい曲は目標まで下げ、小さい曲はタグに余裕があると示されている分だけ上げるので、音割れしません。</string>
     <string name="settings_replaygain_target">目標ラウドネス</string>
-    <string name="settings_replaygain_target_desc">タグ付きの曲はすべてこのラウドネスに揃えられます。-18 LUFS は ReplayGain の標準、-14 LUFS は多くのストリーミングサービスの基準です。</string>
+    <string name="settings_replaygain_target_desc">すべての曲がこのラウドネスに揃えられます。-18 LUFS は ReplayGain の標準、-14 LUFS は多くのストリーミングサービスの基準です。</string>
+    <string name="settings_replaygain_now">この曲：%1$s</string>
+    <string name="settings_replaygain_now_untagged">この曲のラウドネスを測定中…</string>
+    <string name="settings_replaygain_now_measured">この曲：%1$s（再生中の測定値 %2$s）</string>
     <string name="settings_output">出力</string>
     <string name="settings_playback_speed">再生速度</string>
     <string name="settings_clear_downloads">ダウンロードを消去</string>
