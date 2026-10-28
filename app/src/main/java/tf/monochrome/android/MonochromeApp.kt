@@ -55,14 +55,16 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
             // once on first access. `companion object { init {} }` fires when the
             // Application class is loaded, which precedes onCreate() and any
             // coroutine dispatch.
+            // The core size only. The maximum is left at the scheduler's own:
+            // it caps every thread the scheduler runs, Dispatchers.IO's too
+            // (see PerformanceProfile).
             System.setProperty("kotlinx.coroutines.scheduler.core.pool.size", profile.corePoolSize.toString())
-            System.setProperty("kotlinx.coroutines.scheduler.max.pool.size", profile.maxPoolSize.toString())
             val snapshot = DeviceCapabilities.detect().second
             Log.i(
                 "MonoPerf",
                 "tier=${profile.tier} cores=${snapshot.cores} big=${snapshot.bigCores} " +
                     "maxFreq=${snapshot.maxFreqMhz}MHz ram=${snapshot.ramMb}MB " +
-                    "pool=${profile.corePoolSize}/${profile.maxPoolSize} " +
+                    "pool=${profile.corePoolSize} " +
                     "spectrumFps=${profile.spectrumFps} haze=${profile.allowHazeBlur}"
             )
         }
@@ -287,6 +289,18 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
             runCatching { preferencesProvider.get().retireRemovedKeys() }
         }
         warmFirstUseCaches()
+    }
+
+    /**
+     * Android asks for memory back. Once the app is out of sight, the Theme
+     * Store's decoded pictures go: they are kept on disk, so a store opened
+     * again decodes them once more instead of downloading them.
+     */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
+            tf.monochrome.android.data.repository.ThemeStorePictures.clear()
+        }
     }
 
     /**

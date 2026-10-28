@@ -1,12 +1,13 @@
 package tf.monochrome.android.debug
 
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.IOException
+import java.util.concurrent.Executors
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,7 +27,16 @@ class DebugLogCollector @Inject constructor(
     private val buffer: DebugLogBuffer,
 ) {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /**
+     * A thread of its own, not one of Dispatchers.IO's: the read below blocks
+     * for as long as the process lives, and on the shared pool that was one
+     * thread fewer for every scan, download and cover fetch, for good.
+     */
+    private val reader = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "DebugLogcat").apply { isDaemon = true }
+    }.asCoroutineDispatcher()
+
+    private val scope = CoroutineScope(SupervisorJob() + reader)
     private var job: Job? = null
     @Volatile private var process: Process? = null
 
@@ -69,6 +79,10 @@ class DebugLogCollector @Inject constructor(
                 for (line in lines) {
                     if (!kotlin.coroutines.coroutineContext.isActive) break
                     if (line.isEmpty()) continue
+                    // Most of what is dropped is dropped here, before the
+                    // regex: Samsung's frame-rate line alone comes 60 to 240
+                    // times a second.
+                    if (isNoiseLine(line)) continue
                     val entry = parse(line)
                     if (isNoise(entry)) continue
                     buffer.append(entry)
@@ -100,7 +114,7 @@ class DebugLogCollector @Inject constructor(
                 level = 'I',
                 tag = "?",
                 message = line,
-                raw = line,
+                line = line,
             )
         }
         val (ts, pidStr, tidStr, levelStr, tag, message) = match.destructured
@@ -111,8 +125,76 @@ class DebugLogCollector @Inject constructor(
             level = levelStr.firstOrNull() ?: 'I',
             tag = tag.trim(),
             message = message,
-            raw = line,
+            // Whole for now; DebugLogBuffer.append keeps only what is before the message.
+            line = line,
         )
+    }
+
+    /**
+     * [isNoise] on the line as logcat printed it, before [parse]: true only
+     * for a line [parse] reads in full whose entry [isNoise] drops. It finds
+     * the level, tag and message the way [THREADTIME_REGEX] does, without the
+     * regex or the strings it makes; a line it is unsure of is not noise here,
+     * and goes on to [parse] and [isNoise] as before.
+     */
+    internal fun isNoiseLine(line: String): Boolean {
+        val head = ThreadtimeHead.of(line) ?: return false
+        if (NOISE_MESSAGES.none { line.startsWith(it, head.messageStart) }) {
+            // No noise message: the tag decides, which needs the tag itself.
+            val tag = line.substring(head.levelAt + 1, head.colonAt).trim()
+            if (!(line[head.levelAt] == 'D' && tag in NOISE_DEBUG_TAGS) && tag !in NOISE_TAGS_ALL_LEVELS) return false
+        }
+        // The regex's `.*$` stops at a line break, so a message holding one is
+        // not parsed into its parts at all, and is never noise.
+        for (i in head.messageStart until line.length) if (isLineBreak(line[i])) return false
+        return true
+    }
+
+    /**
+     * Where the parts of a `-v threadtime` line are, found as
+     * [THREADTIME_REGEX] finds them: null for any line it does not match.
+     */
+    private class ThreadtimeHead(val levelAt: Int, val colonAt: Int, val messageStart: Int) {
+        companion object {
+            fun of(line: String): ThreadtimeHead? {
+                // MM-DD HH:MM:SS.SSS
+                if (line.length < 18) return null
+                for (i in 0 until 18) {
+                    val c = line[i]
+                    val ok = when (i) {
+                        2 -> c == '-'
+                        5 -> c == ' '
+                        8, 11 -> c == ':'
+                        14 -> c == '.'
+                        else -> c in '0'..'9'
+                    }
+                    if (!ok) return null
+                }
+                var at = 18
+                // \s+ pid \s+ tid \s+
+                repeat(2) {
+                    at = skip(line, at) { isSpace(it) } ?: return null
+                    at = skip(line, at) { it in '0'..'9' } ?: return null
+                }
+                at = skip(line, at) { isSpace(it) } ?: return null
+                val levelAt = at
+                if (line[levelAt] !in "VDIWEFS") return null
+                // \s+ then a tag of at least one character, up to the first colon.
+                val colonAt = line.indexOf(':', levelAt + 1)
+                if (colonAt < levelAt + 3 || !isSpace(line[levelAt + 1])) return null
+                // :\s? and the message.
+                var messageStart = colonAt + 1
+                if (messageStart < line.length && isSpace(line[messageStart])) messageStart++
+                return ThreadtimeHead(levelAt, colonAt, messageStart)
+            }
+
+            /** Past one or more of [what] from [from]; null when there is not one. */
+            private inline fun skip(line: String, from: Int, what: (Char) -> Boolean): Int? {
+                var at = from
+                while (at < line.length && what(line[at])) at++
+                return if (at == from || at >= line.length) null else at
+            }
+        }
     }
 
     /**
@@ -140,6 +222,16 @@ class DebugLogCollector @Inject constructor(
     }
 
     private companion object {
+        /** `\s` as the regex means it. */
+        fun isSpace(c: Char) = c == ' ' || c == '\t' || c == '\n' || c == '\u000B' || c == '\u000C' || c == '\r'
+
+        /**
+         * What `.` in the regex does not match: line breaks, and on Android,
+         * whose regex is ICU's, the vertical tab and form feed as well.
+         */
+        fun isLineBreak(c: Char) = c == '\n' || c == '\r' || c == '\u000B' || c == '\u000C' ||
+            c == '\u0085' || c == '\u2028' || c == '\u2029'
+
         /**
          * threadtime format from AOSP's `logcat.cpp`:
          *   `01-02 03:04:05.678  1234  5678 I SomeTag: body`

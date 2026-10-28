@@ -392,6 +392,23 @@ interface LocalMediaDao {
     @Upsert
     suspend fun upsertAlbum(album: LocalAlbumEntity): Long
 
+    // A scan regroups the library against the albums, artists and genres
+    // already there, by their keys, so each keeps its id from one scan to the
+    // next: the ones below are its reads and writes.
+
+    @Query("SELECT * FROM local_albums")
+    suspend fun getAlbumsOnce(): List<LocalAlbumEntity>
+
+    @Insert
+    suspend fun insertAlbum(album: LocalAlbumEntity): Long
+
+    @Update
+    suspend fun updateAlbums(albums: List<LocalAlbumEntity>)
+
+    /** Keep [ids] under SQLite's 999. */
+    @Query("DELETE FROM local_albums WHERE id IN (:ids)")
+    suspend fun deleteAlbums(ids: List<Long>)
+
     // ── Artists ─────────────────────────────────────────────────────
 
     @Query("SELECT * FROM local_artists ORDER BY name")
@@ -403,6 +420,16 @@ interface LocalMediaDao {
     @Upsert
     suspend fun upsertArtist(artist: LocalArtistEntity): Long
 
+    @Insert
+    suspend fun insertArtist(artist: LocalArtistEntity): Long
+
+    @Update
+    suspend fun updateArtists(artists: List<LocalArtistEntity>)
+
+    /** Keep [ids] under SQLite's 999. */
+    @Query("DELETE FROM local_artists WHERE id IN (:ids)")
+    suspend fun deleteArtists(ids: List<Long>)
+
     // ── Genres ──────────────────────────────────────────────────────
 
     @Query("SELECT * FROM local_genres ORDER BY name")
@@ -410,6 +437,19 @@ interface LocalMediaDao {
 
     @Upsert
     suspend fun upsertGenre(genre: LocalGenreEntity): Long
+
+    @Query("SELECT * FROM local_genres")
+    suspend fun getGenresOnce(): List<LocalGenreEntity>
+
+    @Insert
+    suspend fun insertGenres(genres: List<LocalGenreEntity>)
+
+    @Update
+    suspend fun updateGenres(genres: List<LocalGenreEntity>)
+
+    /** Keep [ids] under SQLite's 999. */
+    @Query("DELETE FROM local_genres WHERE id IN (:ids)")
+    suspend fun deleteGenres(ids: List<Long>)
 
     // ── Folders ─────────────────────────────────────────────────────
 

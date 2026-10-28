@@ -201,6 +201,23 @@ class PlaybackSnapshotTest {
     }
 
     @Test
+    fun `the window moves once every step, so most track changes leave it as it is`() {
+        // Moving on a track used to move the window by one, and every save
+        // wrote the whole of it again; now only the play head is written.
+        val windows = (1_000 until 1_100).map { QueueWindow.around(size = 5_000, currentIndex = it) }
+        assertEquals(2, windows.map { it.from }.distinct().size)
+        assertEquals(setOf(950, 1_000), windows.map { it.from }.toSet())
+        for ((offset, window) in windows.withIndex()) {
+            assertEquals(QueueWindow.MAX_PERSISTED_ENTRIES, window.until - window.from)
+            // The current track is in it, with at least as much behind and
+            // ahead of it as the step leaves.
+            assertEquals(1_000 + offset, window.from + window.currentIndex)
+            assertTrue(window.currentIndex in QueueWindow.KEEP_BEHIND until QueueWindow.KEEP_BEHIND + QueueWindow.STEP)
+            assertTrue(window.until - (window.from + window.currentIndex) - 1 >= 200)
+        }
+    }
+
+    @Test
     fun `an empty queue windows to nothing`() {
         val window = QueueWindow.around(size = 0, currentIndex = -1)
         assertEquals(0, window.until - window.from)

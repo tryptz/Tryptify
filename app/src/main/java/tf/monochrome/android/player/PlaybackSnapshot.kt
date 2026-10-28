@@ -128,12 +128,22 @@ object QueueOrdering {
 
 /**
  * How much of a long queue is worth writing down. A queue can run to thousands
- * of entries and the blob is rewritten on every change. Biased forward: what's
- * coming up matters more on reopening than what already played.
+ * of entries and the blob is rewritten whenever what it holds changes. Biased
+ * forward: what's coming up matters more on reopening than what already played.
  */
 object QueueWindow {
     const val MAX_PERSISTED_ENTRIES = 300
     const val KEEP_BEHIND = 50
+
+    /**
+     * How far the window moves at a time. It starts on a multiple of this, so
+     * moving on a track leaves it where it was all but once every [STEP]
+     * tracks, and the save then writes the play head alone, not the whole
+     * window again (PlaybackStateRepository). It keeps [KEEP_BEHIND] to
+     * [KEEP_BEHIND] + [STEP] - 1 tracks behind the current one, and the rest of
+     * [MAX_PERSISTED_ENTRIES] ahead of it: 200 or more.
+     */
+    const val STEP = 50
 
     /** [from] until [until] of the original queue, and where the current track lands in it. */
     data class Window(val from: Int, val until: Int, val currentIndex: Int)
@@ -144,7 +154,7 @@ object QueueWindow {
 
         val current = currentIndex.coerceIn(0, size - 1)
         // Take the tail near the end, so the window is always exactly `max`.
-        val from = (current - KEEP_BEHIND).coerceIn(0, size - max)
+        val from = (Math.floorDiv(current - KEEP_BEHIND, STEP) * STEP).coerceIn(0, size - max)
         return Window(from, from + max, current - from)
     }
 }

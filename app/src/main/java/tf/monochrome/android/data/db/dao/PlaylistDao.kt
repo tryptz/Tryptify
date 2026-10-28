@@ -28,6 +28,10 @@ interface PlaylistDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertPlaylistIfNotExists(playlist: UserPlaylistEntity)
 
+    /** [insertPlaylistIfNotExists] for many, in one transaction: the cloud pull's. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertPlaylistsIfNotExist(playlists: List<UserPlaylistEntity>)
+
     @Update
     suspend fun updatePlaylist(playlist: UserPlaylistEntity)
 
@@ -52,6 +56,10 @@ interface PlaylistDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertTrackIfNotExists(track: PlaylistTrackEntity)
+
+    /** [insertTrackIfNotExists] for many, in one transaction: the cloud pull's. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertTracksIfNotExist(tracks: List<PlaylistTrackEntity>)
 
     @Query("DELETE FROM playlist_tracks WHERE playlistId = :playlistId AND trackId = :trackId")
     suspend fun removeTrackFromPlaylist(playlistId: String, trackId: Long)

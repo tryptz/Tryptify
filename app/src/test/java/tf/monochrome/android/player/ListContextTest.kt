@@ -1,6 +1,7 @@
 package tf.monochrome.android.player
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import kotlinx.coroutines.runBlocking
@@ -254,5 +255,137 @@ class ListContextTest {
         // Turning shuffle off plays every list in its own order.
         qm.toggleShuffle()
         assertEquals(listOf(1L, 2L, 3L, 4L, 5L), qm.queue.value.map { it.id })
+    }
+
+    // --- The oldest dropped from a long queue ---
+
+    private fun tracks(from: Long, count: Int) = (from until from + count).map { track(it) }
+
+    /** Plays on, song by song, to [index]: the cap counts songs played, not jumped to. */
+    private fun QueueManager.playTo(index: Int) {
+        while (currentQueueIndex < index) checkNotNull(next())
+    }
+
+    @Test
+    fun `a queue that runs on past the cap drops its oldest lists whole`() {
+        val qm = QueueManager()
+        qm.setQueue(tracks(0, 100), 0, context(0))
+        // Album after album of 100 songs, each added as the last song of the
+        // queue starts: 2,099 songs behind the one playing after the 21st.
+        for (n in 1L..21L) {
+            qm.playTo(qm.currentQueue.lastIndex)
+            val next = tracks(n * 100, 100)
+            qm.appendList(next, next, qm.listContext.value!!.copy(tail = album(n)))
+        }
+        // Down to between 1,500 and 2,000 behind, at the start of a list.
+        assertEquals(1_599, qm.currentQueueIndex)
+        assertEquals(500L, qm.currentQueue.first().id)
+        assertEquals(1_700, qm.currentQueue.size)
+        assertEquals(2_099L, qm.currentTrack.value?.id)
+        // The queue starts where its first list does, so Previous on its first
+        // song can still go to the list before.
+        assertEquals(album(5), qm.listContext.value?.head)
+        assertFalse(qm.listContext.value!!.headCut)
+        assertEquals(album(21), qm.listContext.value?.tail)
+    }
+
+    @Test
+    fun `cut inside a list, the queue no longer starts where that list does`() {
+        val qm = QueueManager()
+        qm.setQueue(tracks(0, 2_100), 0, context(1))
+        qm.playTo(2_099)
+        // Song radio's picks behind the last song.
+        qm.addToQueue(tracks(10_000, 10))
+        assertEquals(KEEP_BEHIND, qm.currentQueueIndex)
+        assertEquals(599L, qm.currentQueue.first().id)
+        assertEquals(2_099L, qm.currentTrack.value?.id)
+        assertEquals(album(1), qm.listContext.value?.head)
+        assertTrue(qm.listContext.value!!.headCut)
+    }
+
+    @Test
+    fun `nothing is dropped at the cap or under Repeat All`() {
+        val atCap = QueueManager()
+        atCap.setQueue(tracks(0, 2_001), 0)
+        atCap.playTo(QueueManager.MAX_BEHIND)
+        atCap.addToQueue(tracks(10_000, 10))
+        assertEquals(2_011, atCap.currentQueue.size)
+
+        // Repeat All plays the whole queue round again.
+        val looping = QueueManager()
+        looping.setQueue(tracks(0, 2_100), 0)
+        looping.playTo(2_099)
+        looping.setRepeatMode(tf.monochrome.android.domain.model.RepeatMode.ALL)
+        looping.addToQueue(tracks(10_000, 10))
+        assertEquals(2_110, looping.currentQueue.size)
+        assertEquals(2_099, looping.currentQueueIndex)
+    }
+
+    @Test
+    fun `a song tapped deep in a long list, or jumped to, has nothing played behind it`() {
+        // The 5,000th song of a library, then Add to queue: none of the 4,999
+        // before it has played, so none is dropped.
+        val tapped = QueueManager()
+        tapped.setQueue(tracks(0, 20_000), 4_999)
+        tapped.addToQueue(tracks(30_000, 10))
+        assertEquals(20_010, tapped.currentQueue.size)
+        assertEquals(4_999, tapped.currentQueueIndex)
+
+        // A jump in the queue sheet skips songs without playing them.
+        val jumped = QueueManager()
+        jumped.setQueue(tracks(0, 5_000), 0)
+        jumped.playTo(10)
+        jumped.skipToIndex(4_000)
+        jumped.addToQueue(tracks(30_000, 10))
+        assertEquals(5_010, jumped.currentQueue.size)
+
+        // Played on from the tap, the cap counts from there.
+        tapped.playTo(4_999 + QueueManager.MAX_BEHIND + 1)
+        tapped.addToQueue(tracks(40_000, 10))
+        assertEquals(KEEP_BEHIND, tapped.currentQueueIndex)
+        assertEquals(7_000L - KEEP_BEHIND, tapped.currentQueue.first().id)
+    }
+
+    @Test
+    fun `under shuffle the pre-shuffle order drops the same songs`() {
+        val qm = QueueManager()
+        val all = tracks(0, 2_200)
+        qm.setQueue(all, 0)
+        qm.toggleShuffle()
+        qm.playTo(2_100)
+        val before = qm.currentQueue
+        val playing = qm.currentTrack.value
+        qm.addToQueue(tracks(10_000, 5))
+
+        val dropped = before.subList(0, 600)
+        assertEquals(KEEP_BEHIND, qm.currentQueueIndex)
+        assertTrue(playing === qm.currentTrack.value)
+        assertEquals(2_205 - 600, qm.originalQueueSnapshot.size)
+        assertTrue(dropped.none { d -> qm.originalQueueSnapshot.any { it === d } })
+        // Shuffle off: what is left, in its own order, the current song kept.
+        qm.toggleShuffle()
+        val droppedIds = dropped.map { it.id }.toSet()
+        assertEquals(
+            all.map { it.id }.filterNot { it in droppedIds } + (10_000L until 10_005L),
+            qm.currentQueue.map { it.id },
+        )
+        assertEquals(playing?.id, qm.currentTrack.value?.id)
+    }
+
+    @Test
+    fun `whoever keeps tracks for the queue hears of what it dropped`() {
+        val qm = QueueManager()
+        var heard: List<Track>? = null
+        qm.onTracksReleased = { queue, _ -> heard = queue }
+        qm.setQueue(tracks(0, 2_100), 0)
+        qm.playTo(2_099)
+        heard = null
+        qm.addToQueue(tracks(10_000, 1))
+        assertEquals(qm.currentQueue, heard)
+        assertEquals(1_502, heard?.size)
+    }
+
+    private companion object {
+        const val KEEP_BEHIND = QueueManager.KEEP_BEHIND_AFTER_TRIM
     }
 }

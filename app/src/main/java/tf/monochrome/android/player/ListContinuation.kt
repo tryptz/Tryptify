@@ -32,7 +32,9 @@ import javax.inject.Singleton
  *
  * Finished lists stay in the queue, so the queue sheet scrolls back through
  * them and its count runs from the first song played. The queue grows only by
- * what has played, plus the one list added ahead, as it does under song radio.
+ * what has played, plus the one list added ahead, as it does under song radio,
+ * and past [QueueManager.MAX_BEHIND] songs behind the one playing its oldest
+ * lists are dropped.
  */
 @Singleton
 class ListContinuation @Inject constructor(

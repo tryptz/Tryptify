@@ -454,153 +454,15 @@ class MediaScanner @Inject constructor(
         )
     }
 
-    private suspend fun rebuildGroupings() {
-        // Pull every track in one query (was: getAllTrackPaths() then per-path
-        // findByPath, i.e. N+1 round-trips for an N-track library).
-        val tracks = localMediaDao.getAllTracksSnapshot()
-
-        // In-memory grouping — pure CPU work, no DB calls.
-        val tracksByAlbumKey = HashMap<String, MutableList<LocalTrackEntity>>()
-        val artistSet = HashMap<String, MutableList<LocalTrackEntity>>()
-        val genreSet = HashMap<String, Int>()
-        // A track missing a tag its album's other tracks have (a single
-        // downloaded next to its album) joins that album; see AlbumGrouping.
-        val albumKeys = AlbumGrouping.keys(
-            tracks.map {
-                AlbumGrouping.Facts(it.album, it.albumArtist, it.artist, it.year, it.filePath.substringBeforeLast('/', ""))
-            }
-        )
-        for ((index, track) in tracks.withIndex()) {
-            val albumKey = albumKeys[index]
-            tracksByAlbumKey.getOrPut(albumKey) { mutableListOf() }.add(track)
-
-            val artistName = track.albumArtist ?: track.artist ?: "Unknown Artist"
-            val normalizedArtist = normalizeText(artistName)
-            artistSet.getOrPut(normalizedArtist) { mutableListOf() }.add(track)
-
-            track.genre?.let { raw ->
-                // Tags are free text, so "Hip-Hop", "Hip Hop" and "hip hop"
-                // arrived as three separate rows in the genre list. Resolving
-                // through the graph collapses them onto one canonical name;
-                // anything the graph doesn't know keeps its tag verbatim, so
-                // no genre is ever lost, only merged.
-                val canonical = genreGraph.graph.resolve(raw)?.name ?: raw
-                genreSet[canonical] = (genreSet[canonical] ?: 0) + 1
-            }
+    private suspend fun rebuildGroupings() =
+        regroup(musicDatabase, localMediaDao) { raw ->
+            // Tags are free text, so "Hip-Hop", "Hip Hop" and "hip hop"
+            // arrived as three separate rows in the genre list. Resolving
+            // through the graph collapses them onto one canonical name;
+            // anything the graph doesn't know keeps its tag verbatim, so
+            // no genre is ever lost, only merged.
+            genreGraph.graph.resolve(raw)?.name ?: raw
         }
-
-        // Wrap every DB write in a single transaction so Room flushes once and
-        // observers (LocalLibraryViewModel's StateFlows) only get one
-        // invalidation pass.
-        musicDatabase.withTransaction {
-            localMediaDao.clearAllAlbums()
-            localMediaDao.clearAllArtists()
-            localMediaDao.clearAllGenres()
-
-            val albumIdByTrackPath = HashMap<String, Long>(tracks.size)
-            // Album cover propagated down to each track in the album, so
-            // tracks without their own embedded art still render the album
-            // cover in the song list instead of a music-note placeholder.
-            val albumArtByTrackPath = HashMap<String, String?>(tracks.size)
-            for ((key, albumTracks) in tracksByAlbumKey) {
-                // The album's title, artist and year from its most fully
-                // tagged track, not a single that joined it without them.
-                val representative = albumTracks.maxBy {
-                    (if (!it.albumArtist.isNullOrBlank()) 2 else 0) + (if (it.year != null) 1 else 0)
-                }
-                // A "synthetic" album is the bucket every track with a null/
-                // blank `album` tag falls into — those tracks aren't actually
-                // an album together, just unidentified files that share the
-                // grouping key "unknown|unknown|0". If one of them happens to
-                // have embedded art, propagating that single cover onto all
-                // 1000+ unrelated tracks looks completely wrong (every song
-                // ends up branded with one stray file's cover). So: never
-                // store album art for the synthetic bucket, and never
-                // propagate it down to its tracks.
-                // So is a catch-all tag ("Various Artists", "Unknown Album",
-                // "Singles"): files from every folder share it and are no album
-                // together either. And a real album's cover reaches only the
-                // tracks in the folder it came from (AlbumArtShare).
-                val isSyntheticAlbum = AlbumArtShare.isPlaceholder(representative.album)
-                val albumArt = if (isSyntheticAlbum) null
-                    else albumTracks.firstOrNull { it.hasEmbeddedArt }?.artworkCacheKey
-                val sharedCovers = AlbumArtShare.coversByPath(
-                    albumTracks.map { AlbumArtShare.Member(it.filePath, it.hasEmbeddedArt, it.artworkCacheKey) },
-                    placeholder = isSyntheticAlbum,
-                )
-                val albumEntity = LocalAlbumEntity(
-                    title = representative.album ?: "Unknown Album",
-                    artist = representative.albumArtist ?: representative.artist ?: "Unknown Artist",
-                    year = representative.year,
-                    genre = representative.genre,
-                    trackCount = albumTracks.size,
-                    totalDuration = albumTracks.sumOf { it.durationSeconds },
-                    artworkCacheKey = albumArt,
-                    bestQuality = albumTracks.maxByOrNull { qualityScore(it) }?.let {
-                        "${it.codec} ${it.bitDepth ?: ""}/${(it.sampleRate / 1000)}"
-                    },
-                    groupingKey = key
-                )
-                val albumId = localMediaDao.upsertAlbum(albumEntity)
-                for (track in albumTracks) {
-                    albumIdByTrackPath[track.filePath] = albumId
-                    albumArtByTrackPath[track.filePath] = sharedCovers[track.filePath]
-                }
-            }
-
-            val artistIdByTrackPath = HashMap<String, Long>(tracks.size)
-            for ((normalizedName, artistTracks) in artistSet) {
-                val representative = artistTracks.first()
-                val displayName = representative.albumArtist ?: representative.artist ?: "Unknown Artist"
-                val uniqueAlbums = artistTracks.mapNotNull { it.album }.toSet().size
-                // Same logic as albums: the "Unknown Artist" bucket is a
-                // synthetic grouping of unrelated files with no artist tag.
-                // One stray file's embedded cover shouldn't appear next to
-                // every other anonymous track in the artist list.
-                val isSyntheticArtist = representative.albumArtist.isNullOrBlank() &&
-                    representative.artist.isNullOrBlank()
-                val artistArt = if (isSyntheticArtist) null
-                    else artistTracks.firstNotNullOfOrNull { it.artworkCacheKey }
-                        ?: artistTracks.firstNotNullOfOrNull { albumArtByTrackPath[it.filePath] }
-                val artistEntity = LocalArtistEntity(
-                    name = displayName,
-                    normalizedName = normalizedName,
-                    albumCount = uniqueAlbums,
-                    trackCount = artistTracks.size,
-                    artworkCacheKey = artistArt
-                )
-                val artistId = localMediaDao.upsertArtist(artistEntity)
-                for (track in artistTracks) artistIdByTrackPath[track.filePath] = artistId
-            }
-
-            // Point every track at its album, artist and art, in this one
-            // transaction. Trust hasEmbeddedArt (set by TagReader; covers both
-            // an embedded picture atom and a folder sidecar) to decide
-            // ownership. Tracks with their own art keep its path. Tracks
-            // without get the cover of their album in their own folder — or
-            // null if the album is synthetic or a catch-all tag, or that folder
-            // has no cover (AlbumArtShare). Recomputing every row on
-            // rebuild ensures stale propagation from a previous scan gets
-            // cleaned up.
-            //
-            // Those three columns only, and only where they changed. The rows
-            // were read before this transaction, so writing them back whole
-            // put back whatever they held then: tags the backfill wrote
-            // meanwhile, a dynamic range the player measured, gone.
-            for (t in tracks) {
-                val albumId = albumIdByTrackPath[t.filePath]
-                val artistId = artistIdByTrackPath[t.filePath]
-                val art = if (t.hasEmbeddedArt) t.artworkCacheKey else albumArtByTrackPath[t.filePath]
-                if (albumId != t.albumId || artistId != t.artistId || art != t.artworkCacheKey) {
-                    localMediaDao.updateTrackGrouping(t.id, albumId, artistId, art)
-                }
-            }
-
-            for ((genre, count) in genreSet) {
-                localMediaDao.upsertGenre(LocalGenreEntity(name = genre, trackCount = count))
-            }
-        }
-    }
 
     /**
      * Drop a folder from the library: its tracks go, and scans stop finding it.
@@ -752,25 +614,6 @@ class MediaScanner @Inject constructor(
         localLibraryRevision.bump()
     }
 
-    private fun qualityScore(track: LocalTrackEntity): Int {
-        val codecScore = when (track.codec) {
-            "FLAC" -> 100
-            "ALAC" -> 95
-            "WAV" -> 90
-            "AIFF" -> 90
-            "APE" -> 85
-            "OGG_VORBIS" -> 60
-            "OPUS" -> 55
-            "AAC" -> 50
-            "MP3" -> 40
-            "WMA" -> 30
-            else -> 0
-        }
-        val bitDepthScore = (track.bitDepth ?: 16) * 2
-        val sampleRateScore = track.sampleRate / 1000
-        return codecScore + bitDepthScore + sampleRateScore
-    }
-
     companion object {
         /**
          * The numbering heal a full scan applies once (needsReRead). Raise it
@@ -789,6 +632,226 @@ class MediaScanner @Inject constructor(
 
         /** Files read at once by the tag backfill: background work, not a scan. */
         private const val BACKFILL_PARALLELISM = 2
+
+        /**
+         * Groups the library's tracks into albums, artists and genres, writes
+         * them, and points every track at its album, artist and art.
+         *
+         * Each album, artist and genre keeps its row, and so its id, from one
+         * scan to the next: it is matched by its key (the album's grouping key,
+         * the artist's normalised name, the genre's name), written only when
+         * something about it changed, and only the ones no track has any more
+         * are deleted. They were cleared and inserted again, and the ids are
+         * autoincrement, so every scan that found a change gave every album
+         * and artist a new id: an album page left open, or the next list a
+         * queue would carry on into (ListRef.LocalAlbum), pointed at an album
+         * that was gone, and every track's row was written again to follow.
+         * Now a track is written only when its own grouping changed.
+         *
+         * [canonicalGenre] is the name a genre tag is listed under.
+         */
+        internal suspend fun regroup(
+            database: tf.monochrome.android.data.db.MusicDatabase,
+            dao: LocalMediaDao,
+            canonicalGenre: (String) -> String,
+        ) {
+            // Pull every track in one query (was: getAllTrackPaths() then per-path
+            // findByPath, i.e. N+1 round-trips for an N-track library).
+            val tracks = dao.getAllTracksSnapshot()
+
+            // In-memory grouping — pure CPU work, no DB calls.
+            val tracksByAlbumKey = HashMap<String, MutableList<LocalTrackEntity>>()
+            val artistSet = HashMap<String, MutableList<LocalTrackEntity>>()
+            val genreSet = HashMap<String, Int>()
+            // A track missing a tag its album's other tracks have (a single
+            // downloaded next to its album) joins that album; see AlbumGrouping.
+            val albumKeys = AlbumGrouping.keys(
+                tracks.map {
+                    AlbumGrouping.Facts(it.album, it.albumArtist, it.artist, it.year, it.filePath.substringBeforeLast('/', ""))
+                }
+            )
+            for ((index, track) in tracks.withIndex()) {
+                val albumKey = albumKeys[index]
+                tracksByAlbumKey.getOrPut(albumKey) { mutableListOf() }.add(track)
+
+                val artistName = track.albumArtist ?: track.artist ?: "Unknown Artist"
+                val normalizedArtist = normalizeText(artistName)
+                artistSet.getOrPut(normalizedArtist) { mutableListOf() }.add(track)
+
+                track.genre?.let { raw ->
+                    val canonical = canonicalGenre(raw)
+                    genreSet[canonical] = (genreSet[canonical] ?: 0) + 1
+                }
+            }
+
+            // Wrap every DB write in a single transaction so Room flushes once and
+            // observers (LocalLibraryViewModel's StateFlows) only get one
+            // invalidation pass — and none for a table nothing was written to.
+            database.withTransaction {
+                // What is there now, read inside the transaction it is rewritten in.
+                val albumsBefore = dao.getAlbumsOnce().associateBy { it.groupingKey }
+                val artistsBefore = dao.getArtistsOnce().associateBy { it.normalizedName }
+                val genresBefore = dao.getGenresOnce()
+
+                // The gone go first. Keys are unique, so nothing below can
+                // collide with them anyway; it keeps the order obvious.
+                albumsBefore.values.filter { it.groupingKey !in tracksByAlbumKey }.map { it.id }
+                    .chunked(DELETE_CHUNK_SIZE).forEach { dao.deleteAlbums(it) }
+                artistsBefore.values.filter { it.normalizedName !in artistSet }.map { it.id }
+                    .chunked(DELETE_CHUNK_SIZE).forEach { dao.deleteArtists(it) }
+
+                val albumIdByTrackPath = HashMap<String, Long>(tracks.size)
+                // Album cover propagated down to each track in the album, so
+                // tracks without their own embedded art still render the album
+                // cover in the song list instead of a music-note placeholder.
+                val albumArtByTrackPath = HashMap<String, String?>(tracks.size)
+                val albumsChanged = ArrayList<LocalAlbumEntity>()
+                for ((key, albumTracks) in tracksByAlbumKey) {
+                    // The album's title, artist and year from its most fully
+                    // tagged track, not a single that joined it without them.
+                    val representative = albumTracks.maxBy {
+                        (if (!it.albumArtist.isNullOrBlank()) 2 else 0) + (if (it.year != null) 1 else 0)
+                    }
+                    // A "synthetic" album is the bucket every track with a null/
+                    // blank `album` tag falls into — those tracks aren't actually
+                    // an album together, just unidentified files that share the
+                    // grouping key "unknown|unknown|0". If one of them happens to
+                    // have embedded art, propagating that single cover onto all
+                    // 1000+ unrelated tracks looks completely wrong (every song
+                    // ends up branded with one stray file's cover). So: never
+                    // store album art for the synthetic bucket, and never
+                    // propagate it down to its tracks.
+                    // So is a catch-all tag ("Various Artists", "Unknown Album",
+                    // "Singles"): files from every folder share it and are no album
+                    // together either. And a real album's cover reaches only the
+                    // tracks in the folder it came from (AlbumArtShare).
+                    val isSyntheticAlbum = AlbumArtShare.isPlaceholder(representative.album)
+                    val albumArt = if (isSyntheticAlbum) null
+                        else albumTracks.firstOrNull { it.hasEmbeddedArt }?.artworkCacheKey
+                    val sharedCovers = AlbumArtShare.coversByPath(
+                        albumTracks.map { AlbumArtShare.Member(it.filePath, it.hasEmbeddedArt, it.artworkCacheKey) },
+                        placeholder = isSyntheticAlbum,
+                    )
+                    val albumEntity = LocalAlbumEntity(
+                        id = albumsBefore[key]?.id ?: 0,
+                        title = representative.album ?: "Unknown Album",
+                        artist = representative.albumArtist ?: representative.artist ?: "Unknown Artist",
+                        year = representative.year,
+                        genre = representative.genre,
+                        trackCount = albumTracks.size,
+                        totalDuration = albumTracks.sumOf { it.durationSeconds },
+                        artworkCacheKey = albumArt,
+                        bestQuality = albumTracks.maxByOrNull { qualityScore(it) }?.let {
+                            "${it.codec} ${it.bitDepth ?: ""}/${(it.sampleRate / 1000)}"
+                        },
+                        groupingKey = key
+                    )
+                    val albumId = when (val before = albumsBefore[key]) {
+                        null -> dao.insertAlbum(albumEntity)
+                        else -> before.id.also { if (albumEntity != before) albumsChanged += albumEntity }
+                    }
+                    for (track in albumTracks) {
+                        albumIdByTrackPath[track.filePath] = albumId
+                        albumArtByTrackPath[track.filePath] = sharedCovers[track.filePath]
+                    }
+                }
+                if (albumsChanged.isNotEmpty()) dao.updateAlbums(albumsChanged)
+
+                val artistIdByTrackPath = HashMap<String, Long>(tracks.size)
+                val artistsChanged = ArrayList<LocalArtistEntity>()
+                for ((normalizedName, artistTracks) in artistSet) {
+                    val representative = artistTracks.first()
+                    val displayName = representative.albumArtist ?: representative.artist ?: "Unknown Artist"
+                    val uniqueAlbums = artistTracks.mapNotNull { it.album }.toSet().size
+                    // Same logic as albums: the "Unknown Artist" bucket is a
+                    // synthetic grouping of unrelated files with no artist tag.
+                    // One stray file's embedded cover shouldn't appear next to
+                    // every other anonymous track in the artist list.
+                    val isSyntheticArtist = representative.albumArtist.isNullOrBlank() &&
+                        representative.artist.isNullOrBlank()
+                    val artistArt = if (isSyntheticArtist) null
+                        else artistTracks.firstNotNullOfOrNull { it.artworkCacheKey }
+                            ?: artistTracks.firstNotNullOfOrNull { albumArtByTrackPath[it.filePath] }
+                    val artistEntity = LocalArtistEntity(
+                        id = artistsBefore[normalizedName]?.id ?: 0,
+                        name = displayName,
+                        normalizedName = normalizedName,
+                        albumCount = uniqueAlbums,
+                        trackCount = artistTracks.size,
+                        artworkCacheKey = artistArt
+                    )
+                    val artistId = when (val before = artistsBefore[normalizedName]) {
+                        null -> dao.insertArtist(artistEntity)
+                        else -> before.id.also { if (artistEntity != before) artistsChanged += artistEntity }
+                    }
+                    for (track in artistTracks) artistIdByTrackPath[track.filePath] = artistId
+                }
+                if (artistsChanged.isNotEmpty()) dao.updateArtists(artistsChanged)
+
+                // Point every track at its album, artist and art, in this one
+                // transaction. Trust hasEmbeddedArt (set by TagReader; covers both
+                // an embedded picture atom and a folder sidecar) to decide
+                // ownership. Tracks with their own art keep its path. Tracks
+                // without get the cover of their album in their own folder — or
+                // null if the album is synthetic or a catch-all tag, or that folder
+                // has no cover (AlbumArtShare). Recomputing every row on
+                // rebuild ensures stale propagation from a previous scan gets
+                // cleaned up.
+                //
+                // Those three columns only, and only where they changed. The rows
+                // were read before this transaction, so writing them back whole
+                // put back whatever they held then: tags the backfill wrote
+                // meanwhile, a dynamic range the player measured, gone.
+                for (t in tracks) {
+                    val albumId = albumIdByTrackPath[t.filePath]
+                    val artistId = artistIdByTrackPath[t.filePath]
+                    val art = if (t.hasEmbeddedArt) t.artworkCacheKey else albumArtByTrackPath[t.filePath]
+                    if (albumId != t.albumId || artistId != t.artistId || art != t.artworkCacheKey) {
+                        dao.updateTrackGrouping(t.id, albumId, artistId, art)
+                    }
+                }
+
+                // Genres the same way, by name. The table has no unique name,
+                // so a name found twice keeps its first row.
+                val genreByName = LinkedHashMap<String, LocalGenreEntity>()
+                val genresGone = ArrayList<Long>()
+                for (genre in genresBefore) {
+                    if (genre.name in genreSet && genre.name !in genreByName) genreByName[genre.name] = genre
+                    else genresGone += genre.id
+                }
+                genresGone.chunked(DELETE_CHUNK_SIZE).forEach { dao.deleteGenres(it) }
+                val genresChanged = ArrayList<LocalGenreEntity>()
+                val genresNew = ArrayList<LocalGenreEntity>()
+                for ((genre, count) in genreSet) {
+                    val before = genreByName[genre]
+                    when {
+                        before == null -> genresNew += LocalGenreEntity(name = genre, trackCount = count)
+                        before.trackCount != count -> genresChanged += before.copy(trackCount = count)
+                    }
+                }
+                if (genresChanged.isNotEmpty()) dao.updateGenres(genresChanged)
+                if (genresNew.isNotEmpty()) dao.insertGenres(genresNew)
+            }
+        }
+
+        private fun qualityScore(track: LocalTrackEntity): Int {
+            val codecScore = when (track.codec) {
+                "FLAC" -> 100
+                "ALAC" -> 95
+                "WAV" -> 90
+                "AIFF" -> 90
+                "APE" -> 85
+                "OGG_VORBIS" -> 60
+                "OPUS" -> 55
+                "AAC" -> 50
+                "MP3" -> 40
+                "WMA" -> 30
+                else -> 0
+            }
+            val bitDepthScore = (track.bitDepth ?: 16) * 2
+            val sampleRateScore = track.sampleRate / 1000
+            return codecScore + bitDepthScore + sampleRateScore
+        }
 
         /**
          * The dynamic range to keep for a file read again: what the player

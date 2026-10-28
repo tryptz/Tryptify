@@ -106,10 +106,18 @@ class PlaybackStateRepository @Inject constructor(
 
     // ── Saving ──────────────────────────────────────────────────────
 
+    /**
+     * What the queue row on disk holds, as it was last written (under
+     * [writeMutex]); null when unknown. A change that leaves it as it is, which
+     * is most track changes ([QueueWindow.STEP]), writes the play head alone.
+     */
+    private var stored: PersistedQueue? = null
+
     private suspend fun saveQueue(shape: QueueShape) = writeMutex.withLock {
         if (shape.queue.isEmpty()) {
             dao.clearQueue()
             dao.clearState()
+            stored = null
             _pendingStart.value = null
             return@withLock
         }
@@ -119,38 +127,48 @@ class PlaybackStateRepository @Inject constructor(
         val entries = windowed.map { track ->
             PersistedQueueEntry(track = track, unified = unifiedTrackRegistry[track.id])
         }
-        val json = PlaybackSnapshotCodec.encode(
-            PersistedQueue(
-                version = PLAYBACK_SNAPSHOT_VERSION,
-                entries = entries,
-                // Against the window, not the full queue, or the indices
-                // point past the end of what was stored.
-                originalOrder = QueueOrdering.encode(windowed, queueManager.originalQueueSnapshot),
-                // A window that cuts off the front of the queue no longer starts
-                // where its first list does, so Previous on its first track
-                // must not jump past the rest of that list.
-                listContext = shape.lists?.let { if (window.from > 0) it.copy(headCut = true) else it },
-            )
-        ) ?: return@withLock
+        val queue = PersistedQueue(
+            version = PLAYBACK_SNAPSHOT_VERSION,
+            entries = entries,
+            // Against the window, not the full queue, or the indices
+            // point past the end of what was stored.
+            originalOrder = QueueOrdering.encode(windowed, queueManager.originalQueueSnapshot),
+            // A window that cuts off the front of the queue no longer starts
+            // where its first list does, so Previous on its first track
+            // must not jump past the rest of that list.
+            listContext = shape.lists?.let { if (window.from > 0) it.copy(headCut = true) else it },
+        )
 
         val now = System.currentTimeMillis()
         val current = windowed.getOrNull(window.currentIndex)
+        val state = PlaybackStateEntity(
+            id = 1,
+            currentIndex = window.currentIndex,
+            currentTrackId = current?.id ?: 0,
+            // A queue edit doesn't move the play head: carry the stored
+            // position across, or removing a track further down the queue
+            // drops the running song back to zero.
+            positionMs = dao.getState()?.takeIf { it.currentTrackId == current?.id }?.positionMs ?: 0,
+            durationMs = (current?.duration ?: 0) * 1000L,
+            shuffleEnabled = shape.shuffle,
+            repeatMode = shape.repeat.name,
+            updatedAt = now,
+        )
+
+        // The same entries, order and lists as the row on disk: the queue row
+        // stays as it is and only the play head is written. Compared, not
+        // encoded, so the hundreds of kilobytes a long queue encodes to are
+        // neither built nor written on every track change.
+        if (queue == stored) {
+            dao.upsertState(state)
+            return@withLock
+        }
+        val json = PlaybackSnapshotCodec.encode(queue) ?: return@withLock
         dao.upsertSnapshot(
             queue = PlaybackQueueEntity(id = 1, queueJson = json, updatedAt = now),
-            state = PlaybackStateEntity(
-                id = 1,
-                currentIndex = window.currentIndex,
-                currentTrackId = current?.id ?: 0,
-                // A queue edit doesn't move the play head: carry the stored
-                // position across, or removing a track further down the queue
-                // drops the running song back to zero.
-                positionMs = dao.getState()?.takeIf { it.currentTrackId == current?.id }?.positionMs ?: 0,
-                durationMs = (current?.duration ?: 0) * 1000L,
-                shuffleEnabled = shape.shuffle,
-                repeatMode = shape.repeat.name,
-                updatedAt = now,
-            ),
+            state = state,
         )
+        stored = queue
     }
 
     /**

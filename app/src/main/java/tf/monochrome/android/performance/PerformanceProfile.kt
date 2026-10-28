@@ -4,15 +4,19 @@ enum class DeviceTier { LOW, MID, HIGH }
 
 /**
  * Static performance envelope picked once at process start by [DeviceCapabilities.detect].
- * Pool sizes feed Kotlin's coroutine scheduler via `System.setProperty` before any
- * `Dispatchers.Default` work. The rest are read by feature-level consumers
- * (SpectrumAnalyzerTap, the Coil image loader, the glass frost) as they come
- * online.
+ * The core pool size feeds Kotlin's coroutine scheduler via `System.setProperty`
+ * before any `Dispatchers.Default` work. The rest are read by feature-level
+ * consumers (SpectrumAnalyzerTap, the Coil image loader, the glass frost) as
+ * they come online.
+ *
+ * There is no maximum pool size here, on purpose. The scheduler's maximum is
+ * one limit on every thread it runs, `Dispatchers.IO`'s included, so 4, 6 or
+ * 12 there left file and network work 4, 6 or 12 threads where it normally
+ * has 64: a scan, a download and a cover fetch queued behind each other.
  */
 data class PerformanceProfile(
     val tier: DeviceTier,
     val corePoolSize: Int,
-    val maxPoolSize: Int,
     val spectrumFps: Int,
     val visualizerFps: Int,
     val coilMemoryPercent: Double,
@@ -24,7 +28,6 @@ data class PerformanceProfile(
             DeviceTier.LOW -> PerformanceProfile(
                 tier = DeviceTier.LOW,
                 corePoolSize = 2,
-                maxPoolSize = 4,
                 spectrumFps = 15,
                 visualizerFps = 30,
                 coilMemoryPercent = 0.12,
@@ -34,7 +37,6 @@ data class PerformanceProfile(
             DeviceTier.MID -> PerformanceProfile(
                 tier = DeviceTier.MID,
                 corePoolSize = 2,
-                maxPoolSize = 6,
                 spectrumFps = 30,
                 visualizerFps = 60,
                 coilMemoryPercent = 0.20,
@@ -44,7 +46,6 @@ data class PerformanceProfile(
             DeviceTier.HIGH -> PerformanceProfile(
                 tier = DeviceTier.HIGH,
                 corePoolSize = 4,
-                maxPoolSize = 12,
                 spectrumFps = 60,
                 visualizerFps = 120,
                 coilMemoryPercent = 0.30,
