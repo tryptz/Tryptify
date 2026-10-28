@@ -146,7 +146,20 @@ object QueueWindow {
     const val STEP = 50
 
     /** [from] until [until] of the original queue, and where the current track lands in it. */
-    data class Window(val from: Int, val until: Int, val currentIndex: Int)
+    data class Window(val from: Int, val until: Int, val currentIndex: Int) {
+        /**
+         * [lists] as saved with this window of a queue of [size]. A window
+         * that cuts off the front no longer starts where its first list does
+         * ([ListContext.headCut]), so Previous on its first track must not
+         * jump past the rest of that list. One that cuts off the end no
+         * longer ends where its last list does ([ListContext.tailCut]), so
+         * the rest of that list plays before the next.
+         */
+        fun lists(lists: ListContext, size: Int): ListContext = lists.copy(
+            headCut = lists.headCut || from > 0,
+            tailCut = lists.tailCut || until < size,
+        )
+    }
 
     fun around(size: Int, currentIndex: Int, max: Int = MAX_PERSISTED_ENTRIES): Window {
         if (size <= 0) return Window(0, 0, -1)

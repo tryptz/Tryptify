@@ -4,6 +4,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -12,6 +13,7 @@ import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.RepeatMode
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.radio.RadioQueueManager
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,6 +32,10 @@ import javax.inject.Singleton
  * Repeat steps it aside: Repeat All loops the list playing, Repeat One the
  * song. So does song radio, which keeps the queue from running out.
  *
+ * A list that could not be loaded (offline, a server down) is neither passed
+ * over nor the end: the lists are kept, and the last song's end, or Next on
+ * it, looks again ([next]).
+ *
  * Finished lists stay in the queue, so the queue sheet scrolls back through
  * them and its count runs from the first song played. The queue grows only by
  * what has played, plus the one list added ahead, as it does under song radio,
@@ -45,6 +51,9 @@ class ListContinuation @Inject constructor(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
+    private val search = ListSearch(load = loader::load, folders = loader::folders)
+    private val endWait = QueueEndWait(WAIT_MS)
+
     private var extending: Job? = null
     private var extendingFor: ListContext? = null
 
@@ -59,7 +68,10 @@ class ListContinuation @Inject constructor(
         /** Nothing to move to. */
         NOTHING,
 
-        /** The queue changed while it waited: leave the player to whoever changed it. */
+        /**
+         * Someone else moves the player: the queue changed while it waited,
+         * or an earlier call is still waiting and will.
+         */
         OVERTAKEN,
     }
 
@@ -96,33 +108,57 @@ class ListContinuation @Inject constructor(
         extendingFor = context
         extending = scope.launch {
             if (!preferences.continueIntoNextList.first()) return@launch
-            val found = findBeside(context, forward = true)
+            val found = search.beside(context, forward = true, queue = queueManager.currentQueue)
             // Something else set the queue while this one was loading.
             if (queueManager.listContext.value != context) return@launch
-            if (found == null) {
-                // The last list: songs like the one playing, then.
-                queueManager.forgetListContext()
-                radio.startRadio()
-                radioStartedHere = true
-                return@launch
+            when (found) {
+                // Not the end, only not now: the lists stay, and the song's end tries again.
+                ListSearch.Lookup.Failed -> Unit
+                ListSearch.Lookup.End -> {
+                    // The last list: songs like the one playing, then.
+                    queueManager.forgetListContext()
+                    radio.startRadio()
+                    radioStartedHere = true
+                }
+                is ListSearch.Lookup.Found -> queueManager.appendList(
+                    tracks = playOrder(found.tracks),
+                    inOrder = found.tracks,
+                    context = context.copy(tail = found.list, tailCut = false),
+                    startsList = found.whole,
+                )
             }
-            queueManager.appendList(playOrder(found.tracks), found.tracks, context.copy(tail = found.list))
         }
     }
 
     /**
      * The queue has run out: the last song ended, or Next was pressed on it.
      * Waits for the next list if it is still being fetched, and for song
-     * radio's first pick if that is what comes next, then moves on.
+     * radio's first pick if that is what comes next, each for a while at most
+     * ([QueueEndWait]), then moves on.
      */
     suspend fun next(): Outcome {
         val at = queueManager.currentTrack.value ?: return Outcome.NOTHING
-        extending?.join()
-        if (radio.isGenerating.value) {
-            withTimeoutOrNull(RADIO_WAIT_MS) { radio.isGenerating.first { !it } }
-        }
-        if (queueManager.currentTrack.value !== at) return Outcome.OVERTAKEN
-        return if (queueManager.next() != null) Outcome.MOVED else Outcome.NOTHING
+        return endWait.await(
+            list = {
+                // Nothing on its way: the next list could not be loaded when
+                // this song started. Its end is when to look again, once.
+                if (extending?.isActive != true) retry()
+                extending
+            },
+            radioBusy = radio.isGenerating,
+        ) {
+            when {
+                queueManager.currentTrack.value !== at -> Outcome.OVERTAKEN
+                queueManager.next() != null -> Outcome.MOVED
+                else -> Outcome.NOTHING
+            }
+        } ?: Outcome.OVERTAKEN
+    }
+
+    /** Look for the next list again, if the queue still has lists and is on its last song. */
+    private fun retry() {
+        val context = queueManager.listContext.value ?: return
+        if (queueManager.currentQueueIndex == queueManager.currentQueue.lastIndex) extend(context)
     }
 
     /**
@@ -137,47 +173,17 @@ class ListContinuation @Inject constructor(
         if (context.headCut) return Outcome.NOTHING
         if (!preferences.continueIntoNextList.first()) return Outcome.NOTHING
         val head = queueManager.currentQueue.firstOrNull() ?: return Outcome.NOTHING
-        val found = findBeside(context, forward = false)
+        val found = search.beside(context, forward = false)
         if (queueManager.listContext.value != context ||
             queueManager.currentQueue.firstOrNull() !== head ||
             queueManager.currentQueueIndex != 0
         ) {
             return Outcome.OVERTAKEN
         }
-        if (found == null) return Outcome.NOTHING
+        // None, or none that would load: the song restarts, as it always has.
+        if (found !is ListSearch.Lookup.Found) return Outcome.NOTHING
         queueManager.prependList(playOrder(found.tracks), found.tracks, context.copy(head = found.list))
         return Outcome.MOVED
-    }
-
-    private class Found(val list: ListRef, val tracks: List<Track>)
-
-    /**
-     * The nearest list after the queue's last (or before its first) that has
-     * songs. Lists that turn out empty, or cannot be reached, are passed
-     * over, a few at most, so a row of dead links cannot keep it fetching.
-     */
-    private suspend fun findBeside(context: ListContext, forward: Boolean): Found? {
-        var from = if (forward) context.tail else context.head
-        var folders: FolderView? = null
-        repeat(MAX_SKIPPED_LISTS) {
-            val next = when (from) {
-                is ListRef.Folder -> {
-                    val folder = from as ListRef.Folder
-                    val view = folders ?: loader.folders().also { folders = it }
-                    val path = if (forward) {
-                        FolderWalk.after(view, folder.path, skipBelow = folder.withSubfolders)
-                    } else {
-                        FolderWalk.before(view, folder.path)
-                    }
-                    path?.let { ListRef.Folder(it) }
-                }
-                else -> if (forward) context.after(from) else context.before(from)
-            } ?: return null
-            val tracks = loader.load(next)
-            if (tracks.isNotEmpty()) return Found(next, tracks)
-            from = next
-        }
-        return null
     }
 
     /** Under shuffle the next list plays shuffled too. */
@@ -185,9 +191,36 @@ class ListContinuation @Inject constructor(
         if (queueManager.shuffleEnabled.value) tracks.shuffled() else tracks
 
     private companion object {
-        const val MAX_SKIPPED_LISTS = 10
+        /** How long Next on the last song waits for the next list, and then for song radio's first pick. */
+        const val WAIT_MS = 15_000L
+    }
+}
 
-        /** How long Next on the last song waits for song radio's first pick. */
-        const val RADIO_WAIT_MS = 15_000L
+/**
+ * The wait in [ListContinuation.next] for what follows the queue's last song:
+ * one at a time, and each part of it [limitMs] at most. Without the limit a
+ * slow walk through a row of lists kept the player silent after the last
+ * song for as long as the walk took; without the one at a time, every press
+ * of Next meanwhile started another wait, each to move the player when it
+ * was done.
+ */
+class QueueEndWait(private val limitMs: Long) {
+    private val waiting = AtomicBoolean(false)
+
+    /**
+     * Waits for [list] (the next list on its way, if one is) and then, while
+     * [radioBusy], for song radio's first pick, then answers [then]. Null at
+     * once, without waiting, while an earlier call is still waiting: that
+     * one moves the player.
+     */
+    suspend fun <T> await(list: () -> Job?, radioBusy: StateFlow<Boolean>, then: () -> T): T? {
+        if (!waiting.compareAndSet(false, true)) return null
+        try {
+            list()?.let { job -> withTimeoutOrNull(limitMs) { job.join() } }
+            if (radioBusy.value) withTimeoutOrNull(limitMs) { radioBusy.first { !it } }
+            return then()
+        } finally {
+            waiting.set(false)
+        }
     }
 }

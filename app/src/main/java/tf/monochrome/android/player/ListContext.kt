@@ -1,7 +1,9 @@
 package tf.monochrome.android.player
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import tf.monochrome.android.domain.model.Track
 
 /**
  * Which list a queue was played from, so that when it runs out playback can
@@ -67,6 +69,13 @@ sealed interface ListRef {
  * [headCut] means the queue no longer starts where [head] does (a long queue
  * is saved only around the play head, see `QueueWindow`), so Previous on its
  * first track restarts it rather than jumping to the list before.
+ *
+ * [tailCut] is the same at the other end: the saved window stopped short of
+ * the end of the queue. The cut falls in [tail] itself, since the list after
+ * it is added only as its last song starts, so what follows the queue is the
+ * rest of [tail] first ([ListSearch]), and only then the list after it.
+ * Without it a 1,000-song playlist reopened after the process died went on to
+ * the next playlist after its 300th song.
  */
 @Serializable
 data class ListContext(
@@ -74,6 +83,7 @@ data class ListContext(
     val head: ListRef,
     val tail: ListRef = head,
     val headCut: Boolean = false,
+    val tailCut: Boolean = false,
 ) {
     /** The list after [list] in [row], or null at its end (and for folders). */
     fun after(list: ListRef = tail): ListRef? = row.indexOf(list).takeIf { it >= 0 }?.let { row.getOrNull(it + 1) }
@@ -177,6 +187,113 @@ object FolderWalk {
 
     private fun parentOf(path: String): String? =
         path.substringBeforeLast('/', missingDelimiterValue = "").ifEmpty { null }
+}
+
+/**
+ * The nearest list after the queue's last (or before its first) that has
+ * songs, for [ListContinuation]. Given how to load a list ([load], null when
+ * it could not be reached) and the folder tree ([folders], null when it could
+ * not be read), so `ListContextTest` can hold it without a network.
+ *
+ * A list that turns out empty is passed over, a few at most, so a row of dead
+ * links cannot keep it fetching. One that could not be loaded is not:
+ * offline, every list after it read as empty too, the walk ran off the end of
+ * the row into song radio, and the lists still to come were lost for good.
+ * It stops there instead and is asked again later ([Lookup.Failed]). Only
+ * after [MAX_TRIES] failed tries in a row is it passed over, so a playlist
+ * deleted since cannot hold up the ones after it for ever.
+ */
+class ListSearch(
+    private val load: suspend (ListRef) -> List<Track>?,
+    private val folders: suspend () -> FolderView?,
+) {
+    /** What a search came to. */
+    sealed interface Lookup {
+        /**
+         * [list]'s [tracks], in its order. [whole] is false when they are only
+         * the part of it the queue does not hold yet ([ListContext.tailCut]):
+         * the list does not start with them.
+         */
+        class Found(val list: ListRef, val tracks: List<Track>, val whole: Boolean = true) : Lookup
+
+        /** No list beside it with songs: the end of the row, or of the folder tree. */
+        data object End : Lookup
+
+        /** A list could not be loaded. Nothing changes, and the next try starts from the same place. */
+        data object Failed : Lookup
+    }
+
+    /** The list that failed last, and how many times in a row. Guarded by `this`. */
+    private var failing: ListRef? = null
+    private var tries = 0
+
+    /** [queue] is what the queue holds now: the rest of a cut [ListContext.tail] is what it does not. */
+    suspend fun beside(context: ListContext, forward: Boolean, queue: List<Track> = emptyList()): Lookup {
+        if (forward && context.tailCut) {
+            val all = tryLoad(context.tail) ?: return Lookup.Failed
+            // By id: the saved queue holds copies of the tracks, not the
+            // tracks the list loads now.
+            val held = queue.mapTo(HashSet()) { it.id }
+            val rest = all.filter { it.id !in held }
+            if (rest.isNotEmpty()) return Lookup.Found(context.tail, rest, whole = rest.size == all.size)
+        }
+        var from = if (forward) context.tail else context.head
+        var view: FolderView? = null
+        repeat(MAX_SKIPPED_LISTS) {
+            val next = when (val at = from) {
+                is ListRef.Folder -> {
+                    val tree = view ?: (folders() ?: return Lookup.Failed).also { view = it }
+                    val path = try {
+                        if (forward) {
+                            FolderWalk.after(tree, at.path, skipBelow = at.withSubfolders)
+                        } else {
+                            FolderWalk.before(tree, at.path)
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // The library's database, mid-walk: as a list that
+                        // would not load, not as the end of the tree.
+                        return Lookup.Failed
+                    }
+                    path?.let { ListRef.Folder(it) }
+                }
+                else -> if (forward) context.after(at) else context.before(at)
+            } ?: return Lookup.End
+            val tracks = tryLoad(next) ?: return Lookup.Failed
+            if (tracks.isNotEmpty()) return Lookup.Found(next, tracks)
+            from = next
+        }
+        return Lookup.End
+    }
+
+    /** [list]'s songs: null for a failed try, empty for one passed over after [MAX_TRIES]. */
+    private suspend fun tryLoad(list: ListRef): List<Track>? {
+        val tracks = load(list)
+        synchronized(this) {
+            if (tracks != null) {
+                if (failing == list) {
+                    failing = null
+                    tries = 0
+                }
+                return tracks
+            }
+            tries = if (failing == list) tries + 1 else 1
+            failing = list
+            if (tries < MAX_TRIES) return null
+            failing = null
+            tries = 0
+        }
+        return emptyList()
+    }
+
+    companion object {
+        /** Empty lists passed over before giving up: the end of the row, as far as this is concerned. */
+        const val MAX_SKIPPED_LISTS = 10
+
+        /** Failed tries in a row before a list is passed over as if it were empty. */
+        const val MAX_TRIES = 3
+    }
 }
 
 /**

@@ -133,10 +133,8 @@ class PlaybackStateRepository @Inject constructor(
             // Against the window, not the full queue, or the indices
             // point past the end of what was stored.
             originalOrder = QueueOrdering.encode(windowed, queueManager.originalQueueSnapshot),
-            // A window that cuts off the front of the queue no longer starts
-            // where its first list does, so Previous on its first track
-            // must not jump past the rest of that list.
-            listContext = shape.lists?.let { if (window.from > 0) it.copy(headCut = true) else it },
+            // Marked where the window cuts off either end of the queue.
+            listContext = shape.lists?.let { window.lists(it, shape.queue.size) },
         )
 
         val now = System.currentTimeMillis()

@@ -61,17 +61,27 @@ class QueueManager @Inject constructor() {
 
     /**
      * The first track of each list in the queue, by identity, and the list it
-     * starts: where the oldest can be dropped whole ([trimmed]). Only lists the
-     * queue was given whole, and forgotten when the order is no longer theirs
-     * (shuffle turned on or off, a track moved).
+     * starts: where the oldest can be dropped whole ([trimmed]), and what
+     * shuffle leaves in place ([toggleShuffle]). Only lists the queue was given
+     * whole, and forgotten when the order is no longer theirs (a track moved;
+     * shuffle keeps the lists it leaves in place).
      */
     private val listStarts = IdentityHashMap<Track, ListRef>()
 
     /**
+     * Under shuffle, the same for the pre-shuffle order ([originalQueue]):
+     * what [listStarts] goes back to when shuffle is turned off, so turning it
+     * on again still knows which lists have played. Guarded by [listStarts].
+     */
+    private val inOrderStarts = IdentityHashMap<Track, ListRef>()
+
+    /**
      * Where playing this queue started: the song a queue was set or restored
-     * at, or shuffle turned on or off at. The songs before it were chosen, not
-     * played, so the cap on what is behind ([trimmed]) counts from here: a tap
-     * on the 5,000th song of a library is not 5,000 songs played.
+     * at. The songs before it were chosen, not played, so the cap on what is
+     * behind ([trimmed]) counts from here: a tap on the 5,000th song of a
+     * library is not 5,000 songs played. Turning shuffle on or off moves it
+     * with the play head, so as many still count, as far as there are songs
+     * behind the play head to count.
      */
     private var playedFrom = 0
 
@@ -96,7 +106,7 @@ class QueueManager @Inject constructor() {
         _shuffleEnabled.value = shuffleEnabled
         _repeatMode.value = repeatMode
         _listContext.value = listContext
-        startLists(queue, listContext)
+        startLists(queue, this.originalQueue, listContext)
         updateCurrentTrack()
         released()
     }
@@ -108,7 +118,7 @@ class QueueManager @Inject constructor() {
         playedFrom = startIndex.coerceAtLeast(0)
         _shuffleEnabled.value = false
         _listContext.value = listContext
-        startLists(tracks, listContext)
+        startLists(tracks, tracks, listContext)
         updateCurrentTrack()
         released()
     }
@@ -121,10 +131,17 @@ class QueueManager @Inject constructor() {
     /**
      * Add the next list behind the queue. [tracks] is in play order (shuffled
      * when shuffle is on), [inOrder] the same tracks unshuffled, which is what
-     * turning shuffle off brings back.
+     * turning shuffle off brings back. [startsList] is false for the rest of a
+     * list the queue already holds the start of ([ListContext.tailCut]): its
+     * first track here is not where that list starts.
      */
-    fun appendList(tracks: List<Track>, inOrder: List<Track>, context: ListContext) {
-        tracks.firstOrNull()?.let { first -> synchronized(listStarts) { listStarts[first] = context.tail } }
+    fun appendList(tracks: List<Track>, inOrder: List<Track>, context: ListContext, startsList: Boolean = true) {
+        if (startsList && tracks.isNotEmpty()) {
+            synchronized(listStarts) {
+                listStarts[tracks.first()] = context.tail
+                if (_shuffleEnabled.value) inOrderStarts[inOrder.first()] = context.tail
+            }
+        }
         grow(
             queue = _queue.value + tracks,
             original = if (_shuffleEnabled.value) originalQueue + inOrder else originalQueue,
@@ -139,7 +156,10 @@ class QueueManager @Inject constructor() {
      */
     fun prependList(tracks: List<Track>, inOrder: List<Track>, context: ListContext) {
         if (tracks.isEmpty()) return
-        synchronized(listStarts) { listStarts[tracks.first()] = context.head }
+        synchronized(listStarts) {
+            listStarts[tracks.first()] = context.head
+            if (_shuffleEnabled.value) inOrderStarts[inOrder.first()] = context.head
+        }
         _queue.value = tracks + _queue.value
         if (_shuffleEnabled.value) originalQueue = inOrder + originalQueue
         _currentIndex.value = tracks.lastIndex
@@ -151,7 +171,7 @@ class QueueManager @Inject constructor() {
     /** Forget the lists, keeping the queue: there is nothing left to continue into. */
     fun forgetListContext() {
         _listContext.value = null
-        synchronized(listStarts) { listStarts.clear() }
+        forgetStarts()
     }
 
     fun addToQueue(tracks: List<Track>) {
@@ -267,7 +287,7 @@ class QueueManager @Inject constructor() {
         playedFrom = 0
         // Clearing what is up next means nothing next, not the next list.
         _listContext.value = null
-        synchronized(listStarts) { listStarts.clear() }
+        forgetStarts()
         updateCurrentTrack()
         released()
     }
@@ -345,38 +365,61 @@ class QueueManager @Inject constructor() {
     }
 
     fun toggleShuffle() {
-        if (_shuffleEnabled.value) {
-            // Disable shuffle - restore original queue
-            val currentTrack = _currentTrack.value
-            _queue.value = originalQueue
-            _currentIndex.value = if (currentTrack != null) {
-                originalQueue.indexOfFirst { it.id == currentTrack.id }.coerceAtLeast(0)
-            } else 0
-            _shuffleEnabled.value = false
-        } else {
-            // Enable shuffle - Fisher-Yates preserving current track at index 0
-            originalQueue = _queue.value
-            val currentTrack = _currentTrack.value
-            val remaining = _queue.value.toMutableList()
-
-            if (currentTrack != null) {
-                remaining.removeAll { it.id == currentTrack.id }
-            }
-            remaining.shuffle()
-
-            _queue.value = if (currentTrack != null) {
-                listOf(currentTrack) + remaining
+        val queue = _queue.value
+        val index = _currentIndex.value
+        val currentTrack = _currentTrack.value
+        // How many songs count towards the cap on what is behind ([trimmed]):
+        // the same after the toggle, wherever the current song lands.
+        val played = index - playedFrom
+        synchronized(listStarts) {
+            if (_shuffleEnabled.value) {
+                // Disable shuffle - restore original queue
+                _queue.value = originalQueue
+                _currentIndex.value = if (currentTrack != null) {
+                    // The playing copy first, then any with its id: the same
+                    // song in a list played earlier is another copy, and
+                    // finding that one moved the play head back to it.
+                    originalQueue.indexOfFirst { it === currentTrack }.takeIf { it >= 0 }
+                        ?: originalQueue.indexOfFirst { it.id == currentTrack.id }.coerceAtLeast(0)
+                } else 0
+                listStarts.clear()
+                listStarts.putAll(inOrderStarts)
+                inOrderStarts.clear()
+                _shuffleEnabled.value = false
             } else {
-                remaining
+                // Enable shuffle: what played before the current song's list
+                // stays where it is, then the current track, then the rest
+                // shuffled. Shuffling the whole queue sent the finished lists
+                // round again as what comes next. With no list start known (a
+                // plain album or library queue) that is the whole queue, and
+                // the songs before a tapped one can still play.
+                originalQueue = queue
+                inOrderStarts.clear()
+                inOrderStarts.putAll(listStarts)
+                // By position, so only this copy of the song leaves the
+                // shuffle: removing every track with its id lost the others.
+                val current = queue.getOrNull(index)
+                val start = if (current == null) 0 else listStartAt(queue, index)
+                val list = listStarts[queue.getOrNull(start)]
+                val rest = ArrayList<Track>(queue.size - start)
+                for (i in start until queue.size) if (i != index) rest.add(queue[i])
+                rest.shuffle()
+                // The lists left in place are still theirs; the current one
+                // now starts with the current song.
+                for (i in start until queue.size) listStarts.remove(queue[i])
+                if (current != null && list != null) listStarts[current] = list
+                _queue.value = queue.subList(0, start) + listOfNotNull(current) + rest
+                _currentIndex.value = start
+                _shuffleEnabled.value = true
             }
-            _currentIndex.value = 0
-            _shuffleEnabled.value = true
         }
-        // The lists are not in their order any more, or not in the order they were added.
-        synchronized(listStarts) { listStarts.clear() }
-        playedFrom = _currentIndex.value.coerceAtLeast(0)
+        playedFrom = (_currentIndex.value - played).coerceAtLeast(0)
         updateCurrentTrack()
     }
+
+    /** Where the list holding [index] starts, as far as [listStarts] knows; 0 when it does not. */
+    private fun listStartAt(queue: List<Track>, index: Int): Int =
+        (index.coerceAtMost(queue.lastIndex) downTo 1).firstOrNull { listStarts[queue[it]] != null } ?: 0
 
     fun cycleRepeatMode() {
         _repeatMode.value = when (_repeatMode.value) {
@@ -397,7 +440,7 @@ class QueueManager @Inject constructor() {
         playedFrom = 0
         _currentTrack.value = null
         _listContext.value = null
-        synchronized(listStarts) { listStarts.clear() }
+        forgetStarts()
         released()
     }
 
@@ -411,11 +454,21 @@ class QueueManager @Inject constructor() {
         onTracksReleased?.invoke(_queue.value, originalQueue)
     }
 
-    /** A new queue played from [context]'s lists starts the first of them. */
-    private fun startLists(queue: List<Track>, context: ListContext?) {
+    /** A new queue played from [context]'s lists starts the first of them, in both orders. */
+    private fun startLists(queue: List<Track>, original: List<Track>, context: ListContext?) {
         synchronized(listStarts) {
             listStarts.clear()
-            if (context != null) queue.firstOrNull()?.let { listStarts[it] = context.head }
+            inOrderStarts.clear()
+            if (context == null) return
+            queue.firstOrNull()?.let { listStarts[it] = context.head }
+            if (_shuffleEnabled.value) original.firstOrNull()?.let { inOrderStarts[it] = context.head }
+        }
+    }
+
+    private fun forgetStarts() {
+        synchronized(listStarts) {
+            listStarts.clear()
+            inOrderStarts.clear()
         }
     }
 
@@ -482,7 +535,11 @@ class QueueManager @Inject constructor() {
                 // The list the new front is in: the last to start before it.
                 front = (cut - 1 downTo 0).firstNotNullOfOrNull { listStarts[queue[it]] }
             }
-            for (i in 0 until cut) listStarts.remove(queue[i])
+            for (i in 0 until cut) {
+                listStarts.remove(queue[i])
+                // The pre-shuffle order drops the same tracks.
+                inOrderStarts.remove(queue[i])
+            }
         }
         val kept = queue.subList(cut, queue.size).toList()
         val lists = context?.copy(head = front ?: context.head, headCut = !whole)

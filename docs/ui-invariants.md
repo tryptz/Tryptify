@@ -1153,6 +1153,18 @@ too. No label in the player says any of this.
   oldest, whole lists where it knows where they start, down to about 1,500,
   and the count starts from there. Hours of radio or list after list
   otherwise grew it, and everything it holds, for as long as the app ran.
+- **A list that will not load is not the end.** Offline or with a server
+  down, the lists are kept, and the last song's end, or Next, looks again
+  (waiting at most 15 seconds, one wait at a time); a list that fails three
+  times running is passed over (`ListSearch.MAX_TRIES`). Only a list that
+  really is empty, or the end of the row, starts radio. An earlier build took
+  any failed load for "no next list", forgot the row and started radio. A
+  saved queue cut short at its end plays the rest of its last list first
+  (`ListContext.tailCut`), instead of jumping to the list after it.
+- **Shuffle leaves the lists already played behind.** Turned on mid-way
+  through a run of lists, it shuffles the list playing and those after it;
+  the finished lists stay where they are, so they are not played again.
+  Turned off, the play head stays on the same copy of the song.
 - **The Library's playlists have a sort, and it is saved**
   (`PlaylistSort`, the sort button at the end of the New playlist row): last
   edited first, as they always were, by name, or by date created. Last
