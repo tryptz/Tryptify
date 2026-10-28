@@ -1,9 +1,7 @@
 package tf.monochrome.android.player
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
@@ -232,14 +230,18 @@ class ListContextTest {
     }
 
     @Test
-    fun `a finished list is dropped and the play head kept`() {
+    fun `a finished list stays in the queue, and the count runs from its first song`() {
         val qm = QueueManager()
-        qm.setQueue(listOf(track(1), track(2), track(3), track(4)), 2, context(1))
-        qm.dropBefore(2, context(2))
-        assertEquals(listOf(3L, 4L), qm.queue.value.map { it.id })
-        assertEquals(0, qm.currentQueueIndex)
-        assertEquals(3L, qm.currentTrack.value?.id)
-        assertEquals(context(2), qm.listContext.value)
+        qm.setQueue(listOf(track(1), track(2)), 1, context(1))
+        val next = listOf(track(3), track(4))
+        qm.appendList(next, next, ListContext(head = album(1), tail = album(2)))
+        assertEquals(3L, qm.next()?.id)
+        // The queue sheet still holds the list before, and its "3 / 4".
+        assertEquals(listOf(1L, 2L, 3L, 4L), qm.queue.value.map { it.id })
+        assertEquals(2, qm.currentQueueIndex)
+        // Previous on the next list's first song is the last song of the one before.
+        assertEquals(2L, qm.previous()?.id)
+        assertEquals(album(1), qm.listContext.value?.head)
     }
 
     @Test
@@ -253,22 +255,4 @@ class ListContextTest {
         qm.toggleShuffle()
         assertEquals(listOf(1L, 2L, 3L, 4L, 5L), qm.queue.value.map { it.id })
     }
-
-    @Test
-    fun `dropping a list under shuffle drops it from the unshuffled order too`() {
-        val qm = QueueManager()
-        val first = listOf(track(1), track(2))
-        qm.setQueue(first, 0, context(1))
-        qm.toggleShuffle()
-        val second = listOf(track(3), track(4))
-        qm.appendList(second, second, context(1))
-        val firstOfSecond = qm.queue.value.indexOfFirst { it.id == 3L }
-        qm.skipToIndex(firstOfSecond)
-        qm.dropBefore(firstOfSecond, context(2))
-        qm.toggleShuffle()
-        assertEquals(listOf(3L, 4L), qm.queue.value.map { it.id })
-        assertSame(qm.currentTrack.value, qm.queue.value.first { it.id == 3L })
-        assertFalse(qm.shuffleEnabled.value)
-    }
 }
-

@@ -30,8 +30,9 @@ import javax.inject.Singleton
  * Repeat steps it aside: Repeat All loops the list playing, Repeat One the
  * song. So does song radio, which keeps the queue from running out.
  *
- * Holds one list at a time: once playback moves into the next list the one
- * before is dropped from the queue, and Previous loads it again.
+ * Finished lists stay in the queue, so the queue sheet scrolls back through
+ * them and its count runs from the first song played. The queue grows only by
+ * what has played, plus the one list added ahead, as it does under song radio.
  */
 @Singleton
 class ListContinuation @Inject constructor(
@@ -44,14 +45,6 @@ class ListContinuation @Inject constructor(
 
     private var extending: Job? = null
     private var extendingFor: ListContext? = null
-
-    /**
-     * The first track of a list put into the queue (by identity: a queue may
-     * hold the same song twice), the list it starts, and the lists as they
-     * were then. When it plays, whatever is before it has finished.
-     */
-    private data class Boundary(val track: Track, val list: ListRef, val context: ListContext)
-    private var boundary: Boundary? = null
 
     /** Song radio was started here, after the last list; a list played next takes over from it. */
     private var radioStartedHere = false
@@ -81,30 +74,13 @@ class ListContinuation @Inject constructor(
     }
 
     private fun onMoved(queue: List<Track>, index: Int, context: ListContext?) {
-        if (context == null) {
-            boundary = null
-            return
-        }
+        if (context == null) return
         if (radioStartedHere) {
             // A list played after the radio this started: the list's turn.
             radioStartedHere = false
             if (radio.isActive.value) radio.stopRadio()
         }
-        val current = queue.getOrNull(index) ?: return
-        val reached = boundary
-        if (reached != null) {
-            if (reached.context != context) {
-                boundary = null
-            } else if (current === reached.track) {
-                boundary = null
-                if (index > 0) {
-                    queueManager.dropBefore(index, context.copy(head = reached.list, headCut = false))
-                    // The drop comes back through here, with the queue it left.
-                    return
-                }
-            }
-        }
-        if (index == queue.lastIndex) extend(context)
+        if (index >= 0 && index == queue.lastIndex) extend(context)
     }
 
     /** The last song of the queue started: add the next list behind it, or start song radio. */
@@ -128,10 +104,7 @@ class ListContinuation @Inject constructor(
                 radioStartedHere = true
                 return@launch
             }
-            val order = playOrder(found.tracks)
-            val after = context.copy(tail = found.list)
-            boundary = Boundary(order.first(), found.list, after)
-            queueManager.appendList(order, found.tracks, after)
+            queueManager.appendList(playOrder(found.tracks), found.tracks, context.copy(tail = found.list))
         }
     }
 
@@ -170,9 +143,7 @@ class ListContinuation @Inject constructor(
             return Outcome.OVERTAKEN
         }
         if (found == null) return Outcome.NOTHING
-        val before = context.copy(head = found.list)
-        boundary = Boundary(head, context.head, before)
-        queueManager.prependList(playOrder(found.tracks), found.tracks, before)
+        queueManager.prependList(playOrder(found.tracks), found.tracks, context.copy(head = found.list))
         return Outcome.MOVED
     }
 

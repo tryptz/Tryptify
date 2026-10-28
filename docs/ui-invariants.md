@@ -1113,10 +1113,14 @@ too. No label in the player says any of this.
   second does not carry on at all.
 - **The trail holds ids, never songs**, and only the last few rows, each to
   100 lists either side (`ListContext.MAX_EITHER_SIDE`). A list's songs are
-  loaded when playback reaches it (`ListTrackLoader`, at most 1,000), and the
-  list before is dropped from the queue once the next one plays; Previous
-  loads it again. A folder's neighbour is looked for, never the whole tree
-  (`FolderWalk`).
+  loaded when playback reaches it (`ListTrackLoader`, at most 1,000). A
+  folder's neighbour is looked for, never the whole tree (`FolderWalk`).
+- **Finished lists stay in the queue.** The queue sheet scrolls back
+  through every list played, and the player's "3 / 12" counts from the first
+  song of the first list. An earlier build dropped a list once the next one
+  played: the queue sheet lost its history and the count restarted at every
+  list. The queue grows only by what has played, plus the one list added
+  ahead, as it does under song radio.
 - **The Library's playlists have a sort, and it is saved**
   (`PlaylistSort`, the sort button at the end of the New playlist row): last
   edited first, as they always were, by name, or by date created. Last

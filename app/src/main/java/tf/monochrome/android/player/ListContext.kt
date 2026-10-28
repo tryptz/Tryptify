@@ -60,8 +60,9 @@ sealed interface ListRef {
  * go round for ever. It is empty for folders, which walk the whole folder tree
  * instead ([FolderWalk]).
  *
- * [head] is the list at the front of the queue and [tail] the one at its end;
- * they differ only while the next list has been added behind the playing one.
+ * [head] is the list at the front of the queue and [tail] the one at its end:
+ * finished lists stay in the queue, so these are the first played and the
+ * last added.
  *
  * [headCut] means the queue no longer starts where [head] does (a long queue
  * is saved only around the play head, see `QueueWindow`), so Previous on its

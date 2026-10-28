@@ -30,8 +30,8 @@ class QueueManager @Inject constructor() {
     /**
      * The lists this queue was played from, or null when it came from
      * anywhere else. Set only with a whole new queue, and by [ListContinuation]
-     * as it adds and drops lists; a new queue, clearing what is up next and
-     * clearing the queue all forget it. Editing the queue keeps it.
+     * as it adds lists; a new queue, clearing what is up next and clearing the
+     * queue all forget it. Editing the queue keeps it.
      */
     private val _listContext = MutableStateFlow<ListContext?>(null)
     val listContext: StateFlow<ListContext?> = _listContext.asStateFlow()
@@ -105,32 +105,6 @@ class QueueManager @Inject constructor() {
         _queue.value = tracks + _queue.value
         if (_shuffleEnabled.value) originalQueue = inOrder + originalQueue
         _currentIndex.value = tracks.lastIndex
-        _listContext.value = context
-        updateCurrentTrack()
-    }
-
-    /**
-     * Drop everything before [index], a list that has finished playing, so a
-     * queue that runs from list to list all day holds only the one playing.
-     * Previous brings the finished list back from where it is stored.
-     */
-    fun dropBefore(index: Int, context: ListContext) {
-        val queue = _queue.value
-        if (index <= 0 || index > queue.size) return
-        val dropped = queue.subList(0, index)
-        _queue.value = queue.subList(index, queue.size).toList()
-        if (_shuffleEnabled.value) {
-            // The same objects, one for one, or a song the queue holds twice
-            // would lose its other copy too.
-            val gone = java.util.IdentityHashMap<Track, Int>()
-            dropped.forEach { gone[it] = (gone[it] ?: 0) + 1 }
-            originalQueue = originalQueue.filter { track ->
-                val left = gone[track] ?: 0
-                if (left > 0) gone[track] = left - 1
-                left == 0
-            }
-        }
-        _currentIndex.value = (_currentIndex.value - index).coerceAtLeast(0)
         _listContext.value = context
         updateCurrentTrack()
     }
