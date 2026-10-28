@@ -315,14 +315,36 @@ internal fun rememberLyricRayLight(
 internal fun Modifier.rayLayerOrigin(origin: MutableState<Offset?>): Modifier =
     onGloballyPositioned { origin.value = it.positionInRoot() }
 
-/** The god-rays shader, or null on a device that will not compile it. */
+/**
+ * The god-rays shader, or null on a device that will not compile it. It is
+ * [godRaysShader], one for the whole process: whoever makes an effect from it
+ * calls [setGodRayUniforms] first, in the same block.
+ */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
-internal fun rememberGodRaysShader(): RuntimeShader? = remember {
-    runCatching { RuntimeShader(GOD_RAYS_SRC) }
-        .onSuccess { LyricsDebug.log("god-rays shader compiled") }
-        .onFailure { LyricsDebug.log("god-rays shader FAILED to compile: ${it.message}") }
-        .getOrNull()
+internal fun rememberGodRaysShader(): RuntimeShader? = godRaysShader
+
+/**
+ * [GOD_RAYS_SRC], compiled once for the whole process and shared by the lyric
+ * view's rays, the backdrop's shafts, the light on the letters and Trypt
+ * Mania's hit flashes. It was one per layer, a fresh SkSL parse on the main
+ * thread each time one came into composition.
+ *
+ * Shared on the same terms as the glass's shader (see `liquidGlassShader`): an
+ * effect copies the uniforms as it is made, [setGodRayUniforms] sets every one
+ * the shader declares, and it is only ever a RenderEffect made on the main
+ * thread, never a paint shader, which the render thread would read later.
+ * `SharedShaderUniformsTest` holds every effect made from it to that.
+ */
+private val godRaysShader: RuntimeShader? by lazy {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+        null
+    } else {
+        runCatching { RuntimeShader(GOD_RAYS_SRC) }
+            .onSuccess { LyricsDebug.log("god-rays shader compiled") }
+            .onFailure { LyricsDebug.log("god-rays shader FAILED to compile: ${it.message}") }
+            .getOrNull()
+    }
 }
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -371,6 +393,11 @@ internal enum class RayOutput {
  * [emission] scales how much light the letters give: the backdrop's copy is
  * taken before the glass, at full strength, where the shafts were tuned on the
  * glass's see-through letters.
+ *
+ * The shader is shared ([godRaysShader]), so this runs right before every
+ * effect made from it, and sets every uniform on every path: one it left out
+ * would carry the last layer's value. A uniform added to the shader is set
+ * here too; `SharedShaderUniformsTest` fails until it is.
  */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 internal fun Density.setGodRayUniforms(

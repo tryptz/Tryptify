@@ -334,6 +334,20 @@ or not, doing nothing (seen on device). The wave is the one sung line, while
 the lyrics show, never a screen the listener idles on; the god rays already
 redraw that screen every frame.
 
+**Each glass shader is compiled once for the whole process, and every effect
+made from it sets every uniform first.** The glass, the live lens, the god
+rays, the curvature, FXAA and the dither are each one `RuntimeShader` in a
+top-level `by lazy`, shared by every pane, lens and lyric layer; there used to
+be one per call site, and a page of chips parsed the 470-line glass source ten
+to twenty times on the main thread. It is safe only because an effect copies
+the uniforms and bound children as it is made. So an effect is made only
+through the one function that sets every declared uniform on every path and
+binds `uArt` (`liquidGlassEffect`, `liveLensEffect`, `setGodRayUniforms`): a
+fresh shader starts at zero, a shared one holds the last pane's values. Never
+use one as a Paint or brush shader, which the render thread reads later; set
+uniforms on the main thread only; and the probes check the Android version
+before reading the shader. `SharedShaderUniformsTest` holds it.
+
 **The blurred background's cover is decoded small, and only under a blur.**
 `BlurredCoverLayer` asks Coil for `blurredCoverDecodePx`: at least four
 decoded pixels under one sigma of its blur, never under 256 px (256 on a phone

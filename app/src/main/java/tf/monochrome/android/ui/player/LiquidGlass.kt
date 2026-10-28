@@ -235,8 +235,7 @@ internal fun Modifier.dithered(): Modifier {
     // banding comes back, and that is the accepted trade.
     if (LocalLowPerformance.current.disableLiquidGlass) return this
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
-    val shader = remember { runCatching { RuntimeShader(DITHER_SRC) }.getOrNull() }
-        ?: return this
+    val shader = ditherShader ?: return this
     return this.graphicsLayer {
         renderEffect = RenderEffect
             .createRuntimeShaderEffect(shader, "content")
@@ -265,15 +264,11 @@ internal fun Modifier.fxaa(): Modifier {
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
 private fun fxaaModifier(fx: tf.monochrome.android.domain.model.LyricsFxSettings, live: VisualLinkLive): Modifier {
-    val shader = remember {
-        runCatching { RuntimeShader(FXAA_SRC) }
-            .onSuccess { LyricsDebug.log("FXAA shader compiled") }
-            .onFailure { LyricsDebug.log("FXAA shader FAILED to compile: ${it.message}") }
-            .getOrNull()
-    } ?: return Modifier
+    val shader = fxaaShader ?: return Modifier
     return Modifier.graphicsLayer {
         if (size.minDimension > 0f) {
             // Read here, so a music link on the strength moves it each frame.
+            // Its one uniform, set before every effect: the shader is shared.
             shader.setFloatUniform("uStrength", live.lyrics(fx).fxaaStrength)
             renderEffect = RenderEffect
                 .createRuntimeShaderEffect(shader, "content")
@@ -292,12 +287,7 @@ private fun liquidGlassModifier(
     rayLight: LyricRayLight?,
 ): Modifier {
     val baseFx = fx
-    val shader = remember {
-        runCatching { RuntimeShader(LIQUID_GLASS_SRC) }
-            .onSuccess { LyricsDebug.log("liquid-glass shader compiled") }
-            .onFailure { LyricsDebug.log("liquid-glass shader FAILED to compile: ${it.message}") }
-            .getOrNull()
-    } ?: return Modifier
+    val shader = liquidGlassShader ?: return Modifier
 
     // The same two gates the player glass has. Every uTime term is scaled by
     // uLiquid and every uTilt term by uTiltAmount, so still letters need no
@@ -313,55 +303,6 @@ private fun liquidGlassModifier(
             // This frame's settings, music links included: read here, in the
             // layer block, so a link redraws the glass and recomposes nothing.
             val fx = live.lyrics(baseFx)
-            shader.setFloatUniform("uSize", size.width, size.height)
-            shader.setFloatUniform("uTime", timeSec.value)
-            shader.setFloatUniform("uTilt", tilt.value.x, tilt.value.y)
-            shader.setFloatUniform("uTint", tint.red, tint.green, tint.blue)
-            // The surface's position only with art to place, as on the player
-            // glass: read without it, this block re-ran on every frame the
-            // surface moved (the expand morph) for a value the uniforms do not
-            // take.
-            shader.bindBackdropArt(
-                art = backdrop.art,
-                fit = backdrop.fit,
-                scrim = scrim,
-                anchor = if (backdrop.art != null) anchor.rect else AnchorRect.Unset,
-                paneW = size.width,
-                paneH = size.height,
-            )
-            // Second album tone + how strongly the lensed backdrop bleeds into the
-            // glass body. Only non-zero when the blurred album background is on, so
-            // the glass reads as sitting over the real artwork (Apple-OS style);
-            // otherwise uBackdropMix = 0 keeps the flat single-tint look unchanged.
-            val secondary = backdrop.secondary
-            shader.setFloatUniform("uTint2", secondary.red, secondary.green, secondary.blue)
-            shader.setFloatUniform("uBackdropMix", if (backdrop.blurredArt) 0.6f else 0f)
-            shader.setFloatUniform("uBodyOpacity", fx.glassBodyOpacity)
-            shader.setFloatUniform("uRefraction", fx.glassRefraction)
-            shader.setFloatUniform("uRimGain", fx.glassRimBrightness)
-            shader.setFloatUniform("uDispersion", fx.glassDispersion)
-            shader.setFloatUniform("uSampleRings", fx.glassSampleRings.toFloat())
-            // The Player Glass optics, mapped exactly as playerGlassModifier
-            // maps them. These were pinned (1, 1, 1, 1, 90, 0.7, 135°, 5, 0)
-            // before the lyrics had knobs for them, and each LyricsFxSettings
-            // default reproduces its pin: gloss 0.29167 → 90, edge 0.5 → 5.
-            shader.setFloatUniform("uRoundness", fx.glassRoundness)
-            shader.setFloatUniform("uDepth", fx.glassDepth)
-            shader.setFloatUniform("uLiquid", fx.glassSurfaceMotion)
-            shader.setFloatUniform("uReflection", fx.glassReflection)
-            shader.setFloatUniform("uGloss", 20f + 240f * fx.glassGloss)
-            shader.setFloatUniform("uTiltAmount", fx.glassTiltReactivity)
-            shader.setFloatUniform("uLightAngle", fx.glassLightAngleDeg * 0.017453292f)
-            shader.setFloatUniform("uFresnelPower", 8f - 6f * fx.glassEdgeWidth)
-            shader.setFloatUniform("uFrost", fx.glassFrost)
-            shader.setFloatUniform("uBulge", 0.5f, 0.5f)
-            shader.setFloatUniform("uBulgeAmt", 0f)
-            shader.setFloatUniform("uBulgeR", 0f)
-            // Glyphs are not one rounded rect, so no lens rim: the alpha bevel is
-            // the right shape for a letter.
-            shader.setFloatUniform("uLensR", 0f)
-            shader.setFloatUniform("uLensW", 0f)
-            shader.setFloatUniform("uLiveUnder", 0f)
             // The god rays' light, in root px, moved into these
             // letters' own pixels through their root position.
             val light = rayLight
@@ -370,22 +311,67 @@ private fun liquidGlassModifier(
             } else {
                 null
             }
-            if (light != null && ray != null) {
-                shader.setFloatUniform("uRayLight", ray.light.x, ray.light.y, GodRayGeometry.glassLightLift(ray.elevationDeg))
-                shader.setFloatUniform("uRayAmount", GodRayGeometry.glassRayAmount(fx.glassRayCatch, ray.exposure))
-                shader.setFloatUniform("uRayColor", light.color.red, light.color.green, light.color.blue)
-                shader.setFloatUniform("uRayReach", ray.density * ray.scale)
-                shader.setFloatUniform("uRayDecay", fx.godRayDecay)
-                shader.setFloatUniform(
-                    "uRayBack",
-                    if (fx.godRaySource == tf.monochrome.android.domain.model.LyricsFxSettings.GOD_RAYS_BACKLIGHT) 1f else 0f,
-                )
-            } else {
-                setNoRayLight(shader)
-            }
-            renderEffect = RenderEffect
-                .createRuntimeShaderEffect(shader, "content")
-                .asComposeRenderEffect()
+            renderEffect = liquidGlassEffect(
+                shader,
+                size = size,
+                time = timeSec.value,
+                tilt = tilt.value,
+                tint = tint,
+                // Second album tone + how strongly the lensed backdrop bleeds
+                // into the glass body. Only non-zero when the blurred album
+                // background is on, so the glass reads as sitting over the real
+                // artwork (Apple-OS style); otherwise uBackdropMix = 0 keeps the
+                // flat single-tint look unchanged.
+                tint2 = backdrop.secondary,
+                backdropMix = if (backdrop.blurredArt) 0.6f else 0f,
+                art = backdrop.art,
+                artFit = backdrop.fit,
+                artScrim = scrim,
+                // The surface's position only with art to place, as on the
+                // player glass: read without it, this block re-ran on every
+                // frame the surface moved (the expand morph) for a value the
+                // uniforms do not take.
+                artAnchor = if (backdrop.art != null) anchor.rect else AnchorRect.Unset,
+                bodyOpacity = fx.glassBodyOpacity,
+                refraction = fx.glassRefraction,
+                rimGain = fx.glassRimBrightness,
+                dispersion = fx.glassDispersion,
+                sampleRings = fx.glassSampleRings.toFloat(),
+                // The Player Glass optics, mapped exactly as playerGlassModifier
+                // maps them. These were pinned (1, 1, 1, 1, 90, 0.7, 135°, 5, 0)
+                // before the lyrics had knobs for them, and each LyricsFxSettings
+                // default reproduces its pin: gloss 0.29167 → 90, edge 0.5 → 5.
+                roundness = fx.glassRoundness,
+                depth = fx.glassDepth,
+                liquid = fx.glassSurfaceMotion,
+                reflection = fx.glassReflection,
+                gloss = 20f + 240f * fx.glassGloss,
+                tiltAmount = fx.glassTiltReactivity,
+                lightAngle = fx.glassLightAngleDeg * 0.017453292f,
+                fresnelPower = 8f - 6f * fx.glassEdgeWidth,
+                frost = fx.glassFrost,
+                bulge = Offset(0.5f, 0.5f),
+                bulgeAmount = 0f,
+                bulgeRadius = 0f,
+                // Glyphs are not one rounded rect, so no lens rim: the alpha
+                // bevel is the right shape for a letter.
+                lensR = 0f,
+                lensW = 0f,
+                liveUnder = 0f,
+                rays = if (light != null && ray != null) {
+                    GlassRays(
+                        light = ray.light,
+                        lift = GodRayGeometry.glassLightLift(ray.elevationDeg),
+                        amount = GodRayGeometry.glassRayAmount(fx.glassRayCatch, ray.exposure),
+                        color = light.color,
+                        reach = ray.density * ray.scale,
+                        decay = fx.godRayDecay,
+                        back = if (fx.godRaySource == tf.monochrome.android.domain.model.LyricsFxSettings.GOD_RAYS_BACKLIGHT) 1f else 0f,
+                    )
+                } else {
+                    null
+                },
+            )
         }
     }
 }
@@ -448,18 +434,77 @@ fun rememberPlayerLiveLens(): Boolean {
 }
 
 /**
- * Whether [LIQUID_GLASS_SRC] compiles on this device, asked once per process.
+ * Whether [LIQUID_GLASS_SRC] compiles on this device: whether there is a
+ * [liquidGlassShader]. It used to be asked by every caller as it composed,
+ * each building and throwing away a whole RuntimeShader to get a yes.
  *
- * The answer cannot change while the process lives — same source, same OS, same
- * driver — but it used to be asked by every caller as it composed: the mini
- * player, the tab bar, every glass panel and mixer strip, each building and
- * throwing away a whole RuntimeShader on the main thread to get a yes. That is
- * a full SkSL parse of the largest shader in the app per call site, landing on
- * exactly the frames where a screen is being built.
+ * Asked on every Android version, so the version goes first: below 13 the
+ * RuntimeShader class does not exist, and reading the shader at all would
+ * cast to it.
  */
-private val liquidGlassCompiles: Boolean by lazy {
-    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-        runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() != null
+private val liquidGlassCompiles: Boolean
+    get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && liquidGlassShader != null
+
+/**
+ * [LIQUID_GLASS_SRC], compiled once for the whole process and shared by every
+ * pane, button and lyric line that draws glass. Null below API 33, or where
+ * the driver will not take it.
+ *
+ * It was one shader per call site, and each was a full SkSL parse of the
+ * largest shader in the app on the main thread: a page of chips, search bars
+ * and panels built 10 to 20 of them, again whenever a row came back into
+ * composition, on exactly the frames where a screen is being built.
+ *
+ * Sharing it is safe for one reason, and only while it holds: an effect takes
+ * its own copy of the uniforms and the bound child shaders when it is made, so
+ * a pane's effect keeps its values after the next pane sets its own. Every
+ * pane already relied on that from one frame to the next, with the last
+ * frame's effect still on the render thread while the next frame set new
+ * values. Two things keep it true:
+ * - every effect is made by [liquidGlassEffect], which sets every uniform the
+ *   shader declares and binds `uArt` first, so no pane inherits the last
+ *   pane's values (a fresh shader started at zero; this one never does);
+ * - it is only ever a RenderEffect, made in a layer block on the main
+ *   thread. A Paint or brush shader is read later on the render thread, by
+ *   which time another pane may have changed it.
+ * `SharedShaderUniformsTest` holds both.
+ */
+private val liquidGlassShader: RuntimeShader? by lazy {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+        null
+    } else {
+        runCatching { RuntimeShader(LIQUID_GLASS_SRC) }
+            .onSuccess { LyricsDebug.log("liquid-glass shader compiled") }
+            .onFailure { LyricsDebug.log("liquid-glass shader FAILED to compile: ${it.message}") }
+            .getOrNull()
+    }
+}
+
+/**
+ * [DITHER_SRC], compiled once for the whole process. It has no uniforms of its
+ * own, so there is nothing one layer could leave behind for the next.
+ */
+private val ditherShader: RuntimeShader? by lazy {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+        null
+    } else {
+        runCatching { RuntimeShader(DITHER_SRC) }.getOrNull()
+    }
+}
+
+/**
+ * [FXAA_SRC], compiled once for the whole process. Shared as [liquidGlassShader]
+ * is, on the same terms: its one uniform is set before every effect.
+ */
+private val fxaaShader: RuntimeShader? by lazy {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+        null
+    } else {
+        runCatching { RuntimeShader(FXAA_SRC) }
+            .onSuccess { LyricsDebug.log("FXAA shader compiled") }
+            .onFailure { LyricsDebug.log("FXAA shader FAILED to compile: ${it.message}") }
+            .getOrNull()
+    }
 }
 
 /**
@@ -721,7 +766,7 @@ private fun playerGlassModifier(
     lensCorner: Dp,
     liveUnder: Boolean,
 ): Modifier {
-    val shader = remember { runCatching { RuntimeShader(LIQUID_GLASS_SRC) }.getOrNull() } ?: return Modifier
+    val shader = liquidGlassShader ?: return Modifier
     // Unlike the lyric glass and the panel, which pin uLiquid to 1, this
     // surface's motion is user-tunable — and every uTime term in the shader is
     // scaled by uLiquid, so at zero it renders identically frame to frame and
@@ -748,12 +793,6 @@ private fun playerGlassModifier(
     return Modifier.backdropAnchor(anchor).graphicsLayer {
         if (size.minDimension > 0f) {
             val g = links.glass(base, area)
-            shader.setFloatUniform("uSize", size.width, size.height)
-            shader.setFloatUniform("uTime", timeSec.value)
-            shader.setFloatUniform("uTilt", tilt.value.x, tilt.value.y)
-            shader.setFloatUniform("uTint", tint.red, tint.green, tint.blue)
-            shader.setFloatUniform("uTint2", tint.red, tint.green, tint.blue)
-            shader.setFloatUniform("uBackdropMix", 0f)
             // The transport and the mini player sit directly on the artwork, so
             // this is where lensing the real thing shows most: the play glyph
             // carries the cover's own colour through it instead of a wash.
@@ -763,63 +802,172 @@ private fun playerGlassModifier(
             // a list) did that on every frame of a scroll for a value it never
             // uses. Without art the uniforms take no anchor at all.
             val art = backdrop.art
-            shader.bindBackdropArt(
+            val (lensR, lensW) = lensRimPx(lensCorner, size, g.roundness)
+            renderEffect = liquidGlassEffect(
+                shader,
+                size = size,
+                time = timeSec.value,
+                tilt = tilt.value,
+                tint = tint,
+                tint2 = tint,
+                backdropMix = 0f,
                 art = art,
-                fit = backdrop.fit,
-                scrim = scrim,
-                anchor = when {
+                artFit = backdrop.fit,
+                artScrim = scrim,
+                artAnchor = when {
                     art == null -> AnchorRect.Unset
                     artFrame != null -> anchorInFrame(anchor.rect, artFrame.rect)
                     else -> anchor.rect
                 },
-                paneW = size.width,
-                paneH = size.height,
-            )
-            shader.setFloatUniform("uBodyOpacity", g.bodyOpacity)
-            shader.setFloatUniform("uRefraction", g.refraction)
-            // Rim fades out with the last stretch of body opacity: at 0 the
-            // body is invisible and a full-strength rim would leave floating
-            // box outlines around every plate (visible on the transport skips).
-            // Above 0.15 body the rim is untouched.
-            shader.setFloatUniform(
-                "uRimGain",
-                g.rimBrightness * (g.bodyOpacity / 0.15f).coerceIn(0f, 1f),
-            )
-            shader.setFloatUniform("uDispersion", g.dispersion)
-            shader.setFloatUniform("uSampleRings", g.sampleRings.toFloat())
-            shader.setFloatUniform("uRoundness", g.roundness)
-            shader.setFloatUniform("uDepth", g.depth)
-            // Player-tunable relight (Studio "Player Glass" tab). Surface motion
-            // replaces the old fixed 0.25 calm; gloss maps to a specular exponent
-            // (20 = soft/frosted-wide .. 260 = tight mirror), edge width to the
-            // Fresnel falloff (8 = thin crisp .. 2 = broad shoulder).
-            shader.setFloatUniform("uLiquid", g.surfaceMotion)
-            shader.setFloatUniform("uReflection", g.reflection)
-            shader.setFloatUniform("uGloss", 20f + 240f * g.gloss)
-            shader.setFloatUniform("uTiltAmount", g.tiltReactivity)
-            shader.setFloatUniform("uLightAngle", g.lightAngleDeg * 0.017453292f)
-            shader.setFloatUniform("uFresnelPower", 8f - 6f * g.edgeWidth)
-            shader.setFloatUniform("uFrost", g.frost)
-            shader.setFloatUniform("uBulge", bulgeCenter.x, bulgeCenter.y)
-            shader.setFloatUniform("uBulgeAmt", bulgeAmount())
-            shader.setFloatUniform(
-                "uBulgeR",
-                if (bulgeRadiusFraction > 0f) {
+                bodyOpacity = g.bodyOpacity,
+                refraction = g.refraction,
+                // Rim fades out with the last stretch of body opacity: at 0 the
+                // body is invisible and a full-strength rim would leave floating
+                // box outlines around every plate (visible on the transport
+                // skips). Above 0.15 body the rim is untouched.
+                rimGain = g.rimBrightness * (g.bodyOpacity / 0.15f).coerceIn(0f, 1f),
+                dispersion = g.dispersion,
+                sampleRings = g.sampleRings.toFloat(),
+                roundness = g.roundness,
+                depth = g.depth,
+                // Player-tunable relight (Studio "Player Glass" tab). Surface
+                // motion replaces the old fixed 0.25 calm; gloss maps to a
+                // specular exponent (20 = soft/frosted-wide .. 260 = tight
+                // mirror), edge width to the Fresnel falloff (8 = thin crisp ..
+                // 2 = broad shoulder).
+                liquid = g.surfaceMotion,
+                reflection = g.reflection,
+                gloss = 20f + 240f * g.gloss,
+                tiltAmount = g.tiltReactivity,
+                lightAngle = g.lightAngleDeg * 0.017453292f,
+                fresnelPower = 8f - 6f * g.edgeWidth,
+                frost = g.frost,
+                bulge = bulgeCenter,
+                bulgeAmount = bulgeAmount(),
+                bulgeRadius = if (bulgeRadiusFraction > 0f) {
                     max(size.width, size.height) * bulgeRadiusFraction
                 } else {
                     0f
                 },
+                lensR = lensR,
+                lensW = lensW,
+                liveUnder = if (liveUnder) 1f else 0f,
+                rays = null,
             )
-            val (lensR, lensW) = lensRimPx(lensCorner, size, g.roundness)
-            shader.setFloatUniform("uLensR", lensR)
-            shader.setFloatUniform("uLensW", lensW)
-            shader.setFloatUniform("uLiveUnder", if (liveUnder) 1f else 0f)
-            setNoRayLight(shader)
-            renderEffect = RenderEffect
-                .createRuntimeShaderEffect(shader, "content")
-                .asComposeRenderEffect()
         }
     }
+}
+
+/**
+ * The god rays' light as the lyric glass catches it, already moved into the
+ * letters' own pixels: `uRayLight` (with [lift] as its z), `uRayAmount`,
+ * `uRayColor`, `uRayReach`, `uRayDecay` and `uRayBack`.
+ */
+private class GlassRays(
+    val light: Offset,
+    val lift: Float,
+    val amount: Float,
+    val color: Color,
+    val reach: Float,
+    val decay: Float,
+    val back: Float,
+)
+
+/**
+ * One pane's glass this frame: every uniform [LIQUID_GLASS_SRC] declares, set
+ * on the shared [shader], and the effect made from them.
+ *
+ * This is the only place an effect is made from it. The parameters are the
+ * uniforms, already in the shader's units, and none has a default, so a pane
+ * cannot leave one out: whatever it left unset it would inherit from the last
+ * pane that drew. Nothing else runs between the first uniform and the effect,
+ * which takes its copy of them as it is made. A new uniform in the shader
+ * needs a parameter here; `SharedShaderUniformsTest` fails until it has one.
+ *
+ * `uArt` is bound on every path (SkSL fails the draw on an unbound child), and
+ * [rays] null sets [setNoRayLight]: every pane takes the rays' neutral values,
+ * not whatever the lyric glass last caught.
+ */
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+private fun liquidGlassEffect(
+    shader: RuntimeShader,
+    size: Size,
+    time: Float,
+    tilt: Offset,
+    tint: Color,
+    tint2: Color,
+    backdropMix: Float,
+    art: BackdropArt?,
+    artFit: BackdropArtFit,
+    artScrim: Color,
+    artAnchor: AnchorRect,
+    bodyOpacity: Float,
+    refraction: Float,
+    rimGain: Float,
+    dispersion: Float,
+    sampleRings: Float,
+    roundness: Float,
+    depth: Float,
+    liquid: Float,
+    reflection: Float,
+    gloss: Float,
+    tiltAmount: Float,
+    lightAngle: Float,
+    fresnelPower: Float,
+    frost: Float,
+    bulge: Offset,
+    bulgeAmount: Float,
+    bulgeRadius: Float,
+    lensR: Float,
+    lensW: Float,
+    liveUnder: Float,
+    rays: GlassRays?,
+): androidx.compose.ui.graphics.RenderEffect {
+    shader.setFloatUniform("uSize", size.width, size.height)
+    shader.setFloatUniform("uTime", time)
+    shader.setFloatUniform("uTilt", tilt.x, tilt.y)
+    shader.setFloatUniform("uTint", tint.red, tint.green, tint.blue)
+    shader.setFloatUniform("uTint2", tint2.red, tint2.green, tint2.blue)
+    shader.setFloatUniform("uBackdropMix", backdropMix)
+    shader.bindBackdropArt(
+        art = art,
+        fit = artFit,
+        scrim = artScrim,
+        anchor = artAnchor,
+        paneW = size.width,
+        paneH = size.height,
+    )
+    shader.setFloatUniform("uBodyOpacity", bodyOpacity)
+    shader.setFloatUniform("uRefraction", refraction)
+    shader.setFloatUniform("uRimGain", rimGain)
+    shader.setFloatUniform("uDispersion", dispersion)
+    shader.setFloatUniform("uSampleRings", sampleRings)
+    shader.setFloatUniform("uRoundness", roundness)
+    shader.setFloatUniform("uDepth", depth)
+    shader.setFloatUniform("uLiquid", liquid)
+    shader.setFloatUniform("uReflection", reflection)
+    shader.setFloatUniform("uGloss", gloss)
+    shader.setFloatUniform("uTiltAmount", tiltAmount)
+    shader.setFloatUniform("uLightAngle", lightAngle)
+    shader.setFloatUniform("uFresnelPower", fresnelPower)
+    shader.setFloatUniform("uFrost", frost)
+    shader.setFloatUniform("uBulge", bulge.x, bulge.y)
+    shader.setFloatUniform("uBulgeAmt", bulgeAmount)
+    shader.setFloatUniform("uBulgeR", bulgeRadius)
+    shader.setFloatUniform("uLensR", lensR)
+    shader.setFloatUniform("uLensW", lensW)
+    shader.setFloatUniform("uLiveUnder", liveUnder)
+    if (rays != null) {
+        shader.setFloatUniform("uRayLight", rays.light.x, rays.light.y, rays.lift)
+        shader.setFloatUniform("uRayAmount", rays.amount)
+        shader.setFloatUniform("uRayColor", rays.color.red, rays.color.green, rays.color.blue)
+        shader.setFloatUniform("uRayReach", rays.reach)
+        shader.setFloatUniform("uRayDecay", rays.decay)
+        shader.setFloatUniform("uRayBack", rays.back)
+    } else {
+        setNoRayLight(shader)
+    }
+    return RenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect()
 }
 
 /** Glass with no god rays to catch: every pane, and lyrics without rays. Bit-identical to before they existed. */

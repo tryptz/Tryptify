@@ -66,7 +66,7 @@ internal fun Modifier.lyricCurvature(
         this
     } else {
         this.composed {
-            val shader = remember { compileCurvature() }
+            val shader = curvatureShader
             val origin = remember { mutableStateOf(Offset.Zero) }
             if (shader == null) {
                 Modifier
@@ -104,6 +104,8 @@ private fun Modifier.curved(
             renderEffect = null
             return@graphicsLayer
         }
+        // All five, right before the effect: the shader is shared, and one
+        // left out would carry another surface's value.
         shader.setFloatUniform("uSize", size.width, size.height)
         shader.setFloatUniform("uCenter", dome.center.x, dome.center.y)
         shader.setFloatUniform("uRadii", dome.width / 2f, dome.height / 2f)
@@ -169,11 +171,20 @@ private const val MAX_CURVATURE_DEG = 75f
 /** Below this the lyrics are drawn flat, with no layer at all. */
 internal const val MIN_CURVATURE_DEG = 0.05f
 
-private fun compileCurvature(): RuntimeShader? {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return null
-    return runCatching { RuntimeShader(CURVATURE_SHADER) }
-        .onFailure { Log.w("LyricsCurvature", "curvature shader did not compile; lyrics drawn flat", it) }
-        .getOrNull()
+/**
+ * [CURVATURE_SHADER], compiled once for the whole process and shared by every
+ * curved lyric surface. Safe because an effect copies the uniforms as it is
+ * made, [curved] sets all five before each one, and it is never a paint
+ * shader (see `liquidGlassShader` in LiquidGlass.kt).
+ */
+private val curvatureShader: RuntimeShader? by lazy {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+        null
+    } else {
+        runCatching { RuntimeShader(CURVATURE_SHADER) }
+            .onFailure { Log.w("LyricsCurvature", "curvature shader did not compile; lyrics drawn flat", it) }
+            .getOrNull()
+    }
 }
 
 /**
