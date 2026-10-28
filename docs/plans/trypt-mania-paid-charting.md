@@ -50,6 +50,24 @@ that path, so real profit is higher; on typical songs (0.5¢, not 2¢) far
 higher. No pack under $2.99: Creem's floor is $1.00, and the fixed fee eats
 most of a small one.
 
+## What others charge (searched 2026-10-28, third-party pages, unverified)
+
+No service sells StepMania or DDR charts of the listener's own songs. The
+StepMania generators found (AutoStepper, smlab, sm-autogen) are free and run
+on the player's own computer. The nearest paid services:
+
+| Service | What it does | Price |
+|---|---|---|
+| Beat Sage | Beat Saber maps from any song | free, Patreon-funded |
+| beatmapai | Beat Saber maps | 5 free songs a month, then supporters |
+| SaberForge | Beat Saber maps | 3 free a month, paid plans above |
+| LALAL.AI | stem separation only | $9.99/month for 90 fast minutes; $190 for 3,000 minutes (about 25¢ a 4-minute song) |
+| Moises | stem separation only | Premium $3.99/month |
+
+So 4–5¢ a song is cheap next to stem splitting alone, but the chart makers
+players know are free or give free songs every month. A free song every month
+(a few cents each) is the lever if one song proves too little to hook players.
+
 ## Credit rules
 
 - 1 credit = 1 song up to 10 minutes; each further 10 minutes is 1 more.
