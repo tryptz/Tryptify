@@ -13,7 +13,7 @@ Same rule as Tryptify Cloud: **a listener can never cost more than they
 pay.** Every price below is checked against the worst case, with the same
 fee path and the same 20% rule (`tryptify-cloud.md`, Pricing).
 
-## What one song costs
+## What a minute costs
 
 Railway bills by the minute for what a service uses (docs, Oct 2026):
 $0.000463 per vCPU-minute ($20 a month) and $0.000231 per GB-minute
@@ -27,35 +27,48 @@ a minute after the last song and its memory handed back, and lyrics
 (Whisper) are gone from the server, so a song holds memory only while it
 runs and about a minute after.
 
-- **Typical:** a 4-minute song: 1.6 minutes on 4 vCPU and 4 GB, **about 0.6¢**.
-- **Worst:** a 10-minute song: 4 minutes on 4 vCPU, its 4 GB held about a
-  minute more, **1.4¢, priced as 1.5¢**.
+Sold **by the minute of music** (owner, 2026-10-28). A minute of music costs
+0.128¢ (0.4 minutes on 4 vCPU and 4 GB); each song adds 0.133¢ for the
+minute its memory is held after. So a song counts its length **rounded up to
+the minute, at least 2 minutes**, and the worst minute is a 2-minute song's:
+
+| Song | Counts as | Costs us | Per counted minute |
+|---|---|---|---|
+| 1 min | 2 min | 0.26¢ | 0.13¢ |
+| 2 min | 2 min | 0.39¢ | **0.19¢, the worst** |
+| 4 min | 4 min | 0.64¢ | 0.16¢ |
+| 10 min | 10 min | 1.41¢ | 0.14¢ |
+
+Priced at a worst **0.2¢ a minute**.
 
 ## The trial: 1 free song
 
-- One song, once per account, signed in. No card: it costs at most 1.5¢.
+- One song, once per account, signed in. No card: it costs at most 1.5¢
+  (a 10-minute song).
 - Kept on the server, never trusted from the app.
-- Up to 10 minutes, like any one credit. If the chart fails, the trial comes back.
-- A daily cap on trials across all accounts (say 500 a day, at most $10) as
-  a kill switch against throwaway accounts (at most $7.50 a day).
+- Up to 10 minutes. If the chart fails, the trial comes back.
+- A daily cap on trials across all accounts (say 500 a day) as a kill switch
+  against throwaway accounts: at most $7.50 a day.
 
-## Song packs
+## Minute packs
 
-One-time purchases, not a subscription.
+One-time purchases, not a subscription. Songs are estimated at 4 minutes,
+about a pop song's length; shorter songs give more, longer ones fewer.
 
-| Pack | Songs | Price | Per song | Worst profit |
-|---|---|---|---|---|
-| Starter | 80 | $2.99 | 3.7¢ | +$0.40 (25%) |
-| Library | 340 | $9.99 | 2.9¢ | +$1.42 (22%) |
-| Big library | 700 | $19.99 | 2.9¢ | +$2.88 (22%) |
+| Pack | Minutes | About | Price | Per minute | Worst profit |
+|---|---|---|---|---|---|
+| Starter | 600 | 150 songs | $2.99 | 0.50¢ | +$0.40 (25%) |
+| Library | 2,500 | 625 songs | $9.99 | 0.40¢ | +$1.52 (23%) |
+| Big library | 5,000 | 1,250 songs | $19.99 | 0.40¢ | +$3.38 (25%) |
 
-These are the most songs each price can carry and still pass the 20% rule:
-the lowest price per song the rule allows. Under $2.99 the payment's fixed
+These are the most minutes each price can carry and still pass the 20% rule.
+By the minute a pack holds about twice the songs it did by the song, since
+the worst case is no longer a 10-minute song. Under $2.99 the payment's fixed
 fee, not the server, is what costs.
 
 Net is the lower of the two worst fee paths Cloud uses: web with 27% VAT,
 8.5% and 50¢, or Play's 15% with 27% VAT. Creem (3.9% + 40¢) is cheaper than
-that path, so real profit is higher; on typical songs (0.6¢, not 1.5¢) far
+that path, so real profit is higher; on typical songs (0.16¢ a minute, not 0.2¢)
 higher. No pack under $2.99: Creem's floor is $1.00, and the fixed fee eats
 most of a small one.
 
@@ -73,15 +86,24 @@ on the player's own computer. The nearest paid services:
 | LALAL.AI | stem separation only | $9.99/month for 90 fast minutes; $190 for 3,000 minutes (about 25¢ a 4-minute song) |
 | Moises | stem separation only | Premium $3.99/month |
 
-So 4–5¢ a song is cheap next to stem splitting alone, but the chart makers
+So about 2¢ a song (0.4–0.5¢ a minute) is cheap next to stem splitting alone, but the chart makers
 players know are free or give free songs every month. A free song every month
 (a few cents each) is the lever if one song proves too little to hook players.
 
-## Credit rules
+## Minute rules
 
-- 1 credit = 1 song up to 10 minutes; each further 10 minutes is 1 more.
+- A song uses its length rounded up to the whole minute, at least 2 minutes.
 - Taken on the server before the song starts; a failed chart gives it back.
-- Credits never expire. Unused credits refundable within 14 days.
+- Minutes never expire. Unused minutes refundable within 14 days.
+- Every song charted is recorded (account, minutes, server seconds, result),
+  so both usage dashboards read the same numbers.
+
+## Usage dashboards
+
+- **The listener's**, in Trypt Mania: minutes left and about how many songs
+  that is, what each batch used, minutes bought, and Buy more.
+- **The owner's**: minutes charted, songs, free trials used, money in, the
+  Railway bill, and profit, by day.
 
 ## The fixed cost (measured; fixed in Parser `03ff903`, not yet deployed)
 
@@ -109,7 +131,7 @@ few seconds more on the next song.
 
 ## Open decisions for the owner
 
-1. The three packs and prices above, or other sizes.
+1. The three minute packs and prices above, or other sizes.
 2. Trial daily cap: 500?
 3. Sell on Play as well as web? (The prices above already pass both.)
 4. Merge the Parser fix to `main` (deploys it), and switch on Railway's
