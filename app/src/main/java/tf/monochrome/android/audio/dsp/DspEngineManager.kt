@@ -5,6 +5,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,6 +31,7 @@ import tf.monochrome.android.audio.dsp.model.KnobLinkCodec
 import tf.monochrome.android.audio.dsp.model.MixUpmix
 import tf.monochrome.android.audio.dsp.model.PluginInstance
 import tf.monochrome.android.data.preferences.PreferencesManager
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -84,13 +87,22 @@ class DspEngineManager @Inject constructor(
     val clipped: StateFlow<Boolean> = _clipped.asStateFlow()
 
     // Live audio tap for the FX-chain visualizations. Buffers are reused every
-    // poll (see FxTapFrame docs); only the frame wrapper is allocated at 60 Hz.
+    // poll (see FxTapFrame docs); only the frame wrapper is allocated, and only
+    // for a frame that differs from the last one.
     private val fxMetersRaw = FloatArray(MAX_PLUGINS_PER_BUS * 2)
     private val fxMetersSmoothed = FloatArray(MAX_PLUGINS_PER_BUS * 2) { -60f }
     private var fxMetersBus = -1
     private val fxWaveBuffer = FloatArray(FX_WAVE_SAMPLES)
+    private var fxWaveLen = 0
     private var fxTapSeq = 0L
     private var fxLastPollNanos = 0L
+    // What the last native read of the tap saw, for [pollFxTap] to tell when a
+    // read would hand back exactly what it already holds.
+    private var fxReadPtr = 0L
+    private var fxReadBlocks = -1L
+    // Set by every edit too: removing or moving a bus shifts what the
+    // engine holds under an index, paused or not.
+    @Volatile private var fxReadAgain = true
     private val _fxTap = MutableStateFlow<FxTapFrame?>(null)
     val fxTap: StateFlow<FxTapFrame?> = _fxTap.asStateFlow()
 
@@ -141,7 +153,7 @@ class DspEngineManager @Inject constructor(
     }
 
     /**
-     * The live state, captured the instant it changes.
+     * The live state, kept close behind every change.
      *
      * The DataStore write below is debounced by half a second, which is right
      * for flash but wrong as a source of truth: the native engine is
@@ -152,8 +164,17 @@ class DspEngineManager @Inject constructor(
      * change was reverted to its previous value, and then saved in that
      * reverted state, which made it permanent.
      *
-     * Serialising here costs one native call per edit. The write is what is
-     * expensive and the write is still debounced.
+     * Serialising is not free either: the engine builds the JSON while holding
+     * the chain lock the audio thread takes every block, for a few hundred
+     * microseconds, and a knob being dragged is an edit per frame. It used to
+     * be taken on every one of them. Now an edit only marks the
+     * copy stale, and it is brought up to date at most every
+     * [LIVE_STATE_INTERVAL_MS] while edits keep coming, once more when they
+     * stop, and at once by anything about to read it ([refreshLiveState]).
+     * Nothing is lost by the wait: the engine itself holds every edit the
+     * moment it is made, and lives as long as the process
+     * ([MixBusProcessor.reset]), so the copy taken late is the one the edit
+     * would have taken.
      */
     @Volatile private var liveStateJson: String? = null
 
@@ -161,16 +182,46 @@ class DspEngineManager @Inject constructor(
     // lands on top of a change the user has already made.
     @Volatile private var edited = false
 
+    // An edit has reached the engine that [liveStateJson] does not have yet.
+    private val liveStateStale = AtomicBoolean(false)
+    // Held across the capture, so an older copy can never land after a newer one.
+    private val liveStateLock = Any()
+    private val liveStateSignal = Channel<Unit>(Channel.CONFLATED)
+
     private fun requestSave() {
         edited = true
-        getStateJson().takeIf { it != "{}" }?.let { liveStateJson = it }
+        fxReadAgain = true
+        liveStateStale.set(true)
+        // Without an engine the mix is the Kotlin mirror: no lock to wait on,
+        // and it has to be caught before an engine is built and would be read
+        // in its place. Taken at once, as every edit used to be.
+        if (processor.getEnginePtr() == 0L) refreshLiveState() else liveStateSignal.trySend(Unit)
         saveSignal.tryEmit(Unit)
+    }
+
+    /** Brings [liveStateJson] up to date when an edit has not reached it yet. */
+    private fun refreshLiveState() {
+        synchronized(liveStateLock) {
+            if (!liveStateStale.getAndSet(false)) return
+            getStateJson().takeIf { it != "{}" }?.let { liveStateJson = it }
+        }
     }
 
     // Placed after the fields it touches: Kotlin runs initialisers and init
     // blocks in source order, and this coroutine may run at once on another
     // thread — started any earlier, a field initialiser could reset what it set.
     init {
+        // The live copy's catch-up: the first edit at once, then at most one
+        // capture per interval for as long as they keep coming, the last of
+        // them included (a conflated signal sent during the wait is taken
+        // when it ends).
+        scope.launch {
+            while (true) {
+                liveStateSignal.receive()
+                refreshLiveState()
+                delay(LIVE_STATE_INTERVAL_MS)
+            }
+        }
         // The engine is only built when audio first plays, but the mixer can
         // be opened before that. Show — and edit — the saved mix meanwhile,
         // not a blank one: a blank mirror saved over the file would lose it.
@@ -197,6 +248,7 @@ class DspEngineManager @Inject constructor(
      * yet — which is startup, and startup goes through [restoreState] anyway.
      */
     suspend fun reapplyAfterEngineRecreated() {
+        refreshLiveState()
         val json = liveStateJson ?: preferences.dspStateJson.first()
         if (!json.isNullOrEmpty() && json != "{}") loadStateJson(json)
         processor.setMixBypassed(!_enabled.value)
@@ -300,7 +352,21 @@ class DspEngineManager @Inject constructor(
     fun pollFxTap(busIndex: Int) {
         val ptr = processor.getEnginePtr()
         if (ptr == 0L) return
-        processor.nativeGetPluginMeters(ptr, busIndex, fxMetersRaw)
+        // The tap's meters and waveform are written only as the engine
+        // processes audio, so while no block has gone through since the last
+        // read — paused, stopped, or between the player's bursts — a read
+        // returns what is already here. One more read after the count stops,
+        // in case the last one landed while a block was still being processed.
+        val blocks = processor.processedBlocks
+        val sameSource = ptr == fxReadPtr && busIndex == fxMetersBus
+        val read = !sameSource || blocks != fxReadBlocks || fxReadAgain
+        if (read) {
+            fxReadAgain = !sameSource || blocks != fxReadBlocks
+            fxReadPtr = ptr
+            fxReadBlocks = blocks
+            processor.nativeGetPluginMeters(ptr, busIndex, fxMetersRaw)
+            fxWaveLen = processor.nativeGetBusWaveform(ptr, busIndex, fxWaveBuffer)
+        }
         if (fxMetersBus != busIndex) {
             fxMetersRaw.copyInto(fxMetersSmoothed)
             fxMetersBus = busIndex
@@ -310,19 +376,24 @@ class DspEngineManager @Inject constructor(
                  else ((now - fxLastPollNanos) / 1e9f).coerceIn(0f, 0.1f)
         fxLastPollNanos = now
         val release = FX_METER_RELEASE_DB_PER_SEC * dt
+        var moved = false
         for (i in fxMetersSmoothed.indices) {
             val raw = fxMetersRaw[i]
-            fxMetersSmoothed[i] =
-                if (raw >= fxMetersSmoothed[i]) raw
-                else (fxMetersSmoothed[i] - release).coerceAtLeast(-60f)
+            val before = fxMetersSmoothed[i]
+            val after = if (raw >= before) raw else (before - release).coerceAtLeast(-60f)
+            if (after != before) moved = true
+            fxMetersSmoothed[i] = after
         }
-        val waveLen = processor.nativeGetBusWaveform(ptr, busIndex, fxWaveBuffer)
+        // Nothing new read and every meter settled (at the floor, or on a
+        // level the engine is holding): the frame would be the last one again,
+        // and publishing it would only recompose the FX page for nothing.
+        if (!read && !moved) return
         _fxTap.value = FxTapFrame(
             seq = ++fxTapSeq,
             busIndex = busIndex,
             meters = fxMetersSmoothed,
             wave = fxWaveBuffer,
-            waveLen = waveLen
+            waveLen = fxWaveLen
         )
     }
 
@@ -331,6 +402,8 @@ class DspEngineManager @Inject constructor(
         private const val METER_FALL_DB_PER_SEC = 20f
         private const val METER_FLOOR_DB = -60f
         private const val IDLE_AFTER_NANOS = 250_000_000L
+        /** The longest the live copy of the mix trails a run of edits (see [liveStateJson]). */
+        private const val LIVE_STATE_INTERVAL_MS = 250L
         // Mirrors MAX_PLUGINS_PER_BUS in dsp_engine.h — native refuses inserts past this.
         const val MAX_PLUGINS_PER_BUS = 16
 
@@ -368,6 +441,7 @@ class DspEngineManager @Inject constructor(
         val enabled = preferences.dspEnabled.first()
         // Edits made before the engine existed are newer than the file, which
         // is only written half a second after them.
+        refreshLiveState()
         val stateJson = liveStateJson ?: preferences.dspStateJson.first()
 
         if (!stateJson.isNullOrEmpty() && stateJson != "{}") {
@@ -680,6 +754,17 @@ class DspEngineManager @Inject constructor(
         val ptr = processor.getEnginePtr()
         val buses = if (ptr == 0L) DspStateJson.encode(_buses.value) else processor.nativeGetStateJson(ptr)
         return KnobLinkCodec.attach(MixUpmix.attach(buses, _upmix.value), _knobLinks.value)
+    }
+
+    /**
+     * Loads a mix the listener chose (a preset, an import) and saves it as
+     * theirs. Through [loadStateJson] alone it was not saved until the next
+     * edit, so a restart, or the engine being rebuilt for a new format, put
+     * the mix from before it back.
+     */
+    fun loadChosenMix(json: String) {
+        loadStateJson(json)
+        requestSave()
     }
 
     fun loadStateJson(json: String) {

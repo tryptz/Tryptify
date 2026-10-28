@@ -139,9 +139,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextAlign
 import tf.monochrome.android.ui.theme.MonoDimens
+import tf.monochrome.android.ui.theme.reduceMotion
 import tf.monochrome.android.ui.theme.rememberMotionFloat
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.text.style.TextOverflow
 import tf.monochrome.android.ui.eq.EqViewModel
 import tf.monochrome.android.ui.eq.EqProfileMiniGraph
@@ -3355,47 +3360,64 @@ internal fun SettingsGroupHeader(title: String) {
  * it, it needed to be findable at a glance on the way past.
  *
  * The sheen comes from [rememberMotionFloat], so "disable animations" leaves the
- * strip lit but perfectly still rather than driving a gradient forever.
+ * strip lit but perfectly still rather than driving a gradient forever. It runs
+ * only while the header is in view: the whole tab is one lazy item, so the
+ * header stays composed however far down the page is scrolled, and its sweep
+ * kept the window redrawing at the display's rate the whole time About was open.
  */
 @Composable
 private fun LitGroupHeader(title: String, badge: String? = null) {
     val primary = MaterialTheme.colorScheme.primary
-    val sweep = rememberMotionFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        durationMillis = 5200,
-        label = "litHeaderSheen",
-        repeatMode = RepeatMode.Restart,
-        still = 0.5f,
-    )
+    var inView by remember { mutableStateOf(true) }
+    // Off screen the band would travel where nobody can see it. Back in view
+    // the sweep starts again from the left, where the band is still off the
+    // strip, so it slides in rather than jumping.
+    val sweep = if (inView || reduceMotion()) {
+        rememberMotionFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            durationMillis = 5200,
+            label = "litHeaderSheen",
+            repeatMode = RepeatMode.Restart,
+            still = 0.5f,
+        )
+    } else {
+        remember { mutableFloatStateOf(0f) }
+    }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
+            // Clipped by the list's viewport, so this is the part actually on screen.
+            .onGloballyPositioned { inView = it.boundsInWindow().height > 0f }
             .clip(MonoDimens.shapeMd)
-            .drawBehind {
-                drawRect(
-                    Brush.horizontalGradient(
-                        listOf(primary.copy(alpha = 0.18f), primary.copy(alpha = 0.05f)),
-                    ),
+            .drawWithCache {
+                val wash = Brush.horizontalGradient(
+                    listOf(primary.copy(alpha = 0.18f), primary.copy(alpha = 0.05f)),
                 )
-                // A soft band travelling left to right. Read from the draw scope
-                // rather than recomposed, so the motion never invalidates the
-                // settings list behind it.
-                val head = size.width * (sweep.value * 1.7f - 0.35f)
+                // The band, made once for this size and slid across by the
+                // draw rather than rebuilt for every position.
                 val half = size.width * 0.22f
-                drawRect(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            primary.copy(alpha = 0.22f),
-                            Color.Transparent,
-                        ),
-                        startX = head - half,
-                        endX = head + half,
+                val band = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        primary.copy(alpha = 0.22f),
+                        Color.Transparent,
                     ),
+                    startX = -half,
+                    endX = half,
                 )
+                onDrawBehind {
+                    drawRect(wash)
+                    // A soft band travelling left to right. Read from the draw
+                    // scope rather than recomposed, so the motion never
+                    // invalidates the settings list behind it.
+                    val head = size.width * (sweep.value * 1.7f - 0.35f)
+                    translate(left = head) {
+                        drawRect(brush = band, topLeft = Offset(-head, 0f), size = size)
+                    }
+                }
             }
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {

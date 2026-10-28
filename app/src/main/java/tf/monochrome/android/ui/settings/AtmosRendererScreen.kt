@@ -9,7 +9,6 @@ import android.net.Uri
 import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,11 +41,18 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -344,10 +350,11 @@ fun AtmosRendererScreen(
     LaunchedEffect(Unit) { viewModel.refreshFromStorage() }
 
     // Per-channel metering for the live channel map runs only while this
-    // screen is visible (same acquire/release contract as the spectrum tap).
-    DisposableEffect(Unit) {
+    // screen is visible (same acquire/release contract as the spectrum tap):
+    // started, so not in the background and not with the phone locked.
+    androidx.lifecycle.compose.LifecycleStartEffect(Unit) {
         viewModel.acquireDetector()
-        onDispose { viewModel.releaseDetector() }
+        onStopOrDispose { viewModel.releaseDetector() }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -684,64 +691,103 @@ private fun SpeakerLayoutMap(
     accent: Color,
     modifier: Modifier = Modifier,
 ) {
-    val speakers = detected?.let { detectedSpeakers(it.channelNames) } ?: layout.speakers()
+    // The speakers change with the stream or the setting; the levels arrive
+    // ten times a second, and only those are read per frame below.
+    val names = detected?.channelNames
+    val speakers = remember(names, layout) { names?.let { detectedSpeakers(it) } ?: layout.speakers() }
     // 0..1 level per speaker from the −60..0 dBFS meter range; null = idle map.
     val levels = detected?.let { d ->
         FloatArray(speakers.size) { i ->
             ((d.peaksDb.getOrElse(i) { -120f } + 60f) / 60f).coerceIn(0f, 1f)
         }
     }
-    val textMeasurer = rememberTextMeasurer()
+    val liveLevels by rememberUpdatedState(levels)
     val onSurface = MaterialTheme.colorScheme.onSurface
     val outline = MaterialTheme.colorScheme.outline
     val heightTint = MaterialTheme.colorScheme.tertiary
 
-    val pulse by tf.monochrome.android.ui.theme.rememberMotionFloat(
-        initialValue = 0.55f,
-        targetValue = 1f,
-        durationMillis = 1600,
-        label = "map-pulse",
-        still = 1f,
-    )
+    // Measured once per layout, not per speaker per frame: a map of twelve to
+    // sixteen labels is more than the measurer's own cache holds, so every one
+    // of them used to be laid out again on every frame.
+    val textMeasurer = rememberTextMeasurer()
+    val labelStyle = remember(onSurface) {
+        TextStyle(fontSize = 10.sp, fontWeight = FontWeight.Medium, color = onSurface.copy(alpha = 0.85f))
+    }
+    val labels = remember(speakers, labelStyle, textMeasurer) {
+        speakers.map { textMeasurer.measure(it.label, style = labelStyle) }
+    }
+
+    // The idle pulse runs only while it is what the map shows: nothing is
+    // playing, and the map is in view — it sits in a scrolling column, and
+    // scrolled away it used to keep redrawing at the display's rate.
+    var inView by remember { mutableStateOf(true) }
+    val pulse = if ((detected == null && inView) || tf.monochrome.android.ui.theme.reduceMotion()) {
+        tf.monochrome.android.ui.theme.rememberMotionFloat(
+            initialValue = 0.55f,
+            targetValue = 1f,
+            durationMillis = 1600,
+            label = "map-pulse",
+            still = 1f,
+        )
+    } else {
+        remember { mutableFloatStateOf(0.55f) }
+    }
 
     Box(modifier = modifier) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val cx = size.width / 2f
-            val cy = size.height / 2f
-            val half = min(cx, cy) * 0.82f
+        Spacer(
+            modifier = Modifier
+                .fillMaxSize()
+                // Clipped by the scroll viewport, so this is the part on screen.
+                .onGloballyPositioned { inView = it.boundsInWindow().height > 0f }
+                .drawWithCache {
+                    val cx = size.width / 2f
+                    val cy = size.height / 2f
+                    val half = min(cx, cy) * 0.82f
+                    val listener = Offset(cx, cy)
+                    // Each speaker's place and its light at rest, for this size.
+                    // The idle pulse only changes how bright that light is, which
+                    // the draw passes as alpha, so its paths and gradients are
+                    // made here once instead of every frame.
+                    val art = speakers.map { s ->
+                        val pos = if (s.isLfe) Offset(cx, cy + half * 0.28f)
+                        else speakerPosition(s, cx, cy, half)
+                        val tint = if (s.isHeight) heightTint else accent
+                        val dotScale = when {
+                            s.isLfe -> 0.85f
+                            s.isHeight -> 0.9f
+                            else -> 1f
+                        }
+                        SpeakerArt(pos, tint, dotScale, speakerGlow(pos, tint, dotScale, 1f, listener))
+                    }
+                    onDrawBehind {
+                        // Square room boundary (slightly rounded corners) + listener.
+                        drawRoundRect(
+                            color = outline.copy(alpha = 0.25f),
+                            topLeft = Offset(cx - half, cy - half),
+                            size = androidx.compose.ui.geometry.Size(2f * half, 2f * half),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(half * 0.10f, half * 0.10f),
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f),
+                        )
+                        drawCircle(color = onSurface.copy(alpha = 0.5f), radius = half * 0.05f, center = listener)
 
-            // Square room boundary (slightly rounded corners) + listener.
-            drawRoundRect(
-                color = outline.copy(alpha = 0.25f),
-                topLeft = Offset(cx - half, cy - half),
-                size = androidx.compose.ui.geometry.Size(2f * half, 2f * half),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(half * 0.10f, half * 0.10f),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f),
-            )
-            drawCircle(color = onSurface.copy(alpha = 0.5f), radius = half * 0.05f, center = Offset(cx, cy))
-
-            speakers.forEachIndexed { i, s ->
-                val level = levels?.get(i)
-                // Live: glow brightness + reach + dot opacity all render the
-                // channel's volume; a silent channel stays a dim marker.
-                // Idle: the gentle shared pulse.
-                val glowAlpha = if (level != null) 0.10f + 0.70f * level else 0.45f * pulse
-                val glowScale = if (level != null) 0.8f + 1.5f * level else 1f
-                val dotAlpha = if (level != null) 0.35f + 0.65f * level else 0.9f
-                val pos = if (s.isLfe) Offset(cx, cy + half * 0.28f)
-                else speakerPosition(s, cx, cy, half)
-                val tint = if (s.isHeight) heightTint else accent
-                val dotScale = when {
-                    s.isLfe -> 0.85f
-                    s.isHeight -> 0.9f
-                    else -> 1f
-                }
-                drawSpeaker(
-                    pos, tint, glowAlpha, glowScale, dotAlpha, dotScale,
-                    Offset(cx, cy), textMeasurer, s, onSurface,
-                )
-            }
-        }
+                        val live = liveLevels
+                        art.forEachIndexed { i, a ->
+                            val level = live?.getOrNull(i)
+                            // Live: glow brightness + reach + dot opacity all render the
+                            // channel's volume; a silent channel stays a dim marker.
+                            // Idle: the gentle shared pulse.
+                            val glowAlpha = if (level != null) 0.10f + 0.70f * level else 0.45f * pulse.value
+                            val dotAlpha = if (level != null) 0.35f + 0.65f * level else 0.9f
+                            val glow = if (level != null) {
+                                speakerGlow(a.pos, a.tint, a.dotScale, 0.8f + 1.5f * level, listener)
+                            } else {
+                                a.rest
+                            }
+                            drawSpeaker(a, glow, glowAlpha, dotAlpha, labels[i])
+                        }
+                    }
+                },
+        )
     }
 }
 
@@ -796,71 +842,75 @@ private fun speakerPosition(s: SpeakerChannel, cx: Float, cy: Float, half: Float
     return Offset(cx + dx * r, cy + dy * r)
 }
 
-private fun DrawScope.drawSpeaker(
-    pos: Offset,
-    tint: Color,
-    glowAlpha: Float,
-    glowScale: Float,
-    dotAlpha: Float,
-    dotScale: Float,
-    listener: Offset,
-    textMeasurer: androidx.compose.ui.text.TextMeasurer,
-    speaker: SpeakerChannel,
-    labelColor: Color,
-) {
+/** Where a speaker sits on the map, its colour and size, and its light at rest. */
+private class SpeakerArt(val pos: Offset, val tint: Color, val dotScale: Float, val rest: SpeakerGlow)
+
+/**
+ * A speaker's light at one level: the beam toward the listener and the bloom
+ * at the source, in full-strength colour. How bright it is drawn is the alpha
+ * it is drawn with, so the same light serves every frame of the idle pulse.
+ */
+private class SpeakerGlow(val beam: androidx.compose.ui.graphics.Path?, val beamBrush: Brush?, val bloom: Brush, val radius: Float)
+
+private fun speakerGlow(pos: Offset, tint: Color, dotScale: Float, glowScale: Float, listener: Offset): SpeakerGlow {
     val glowR = 40f * dotScale * glowScale
-    if (glowAlpha > 0.01f) {
-        // Directional light: a tapered beam from the speaker aimed at the
-        // listener — narrow at the source, widening as it travels, fading to
-        // nothing. Reach and width grow with the channel's level, so loud
-        // channels visibly "shine" into the room centre.
-        val toListener = listener - pos
-        val dist = toListener.getDistance()
-        if (dist > 1f) {
-            val dir = toListener / dist
-            val perp = Offset(-dir.y, dir.x)
-            val reach = dist * (0.35f + 0.30f * glowScale).coerceAtMost(0.92f)
-            val end = pos + dir * reach
-            val srcW = glowR * 0.28f
-            val endW = glowR * 0.95f
-            val beam = androidx.compose.ui.graphics.Path().apply {
-                moveTo(pos.x + perp.x * srcW, pos.y + perp.y * srcW)
-                lineTo(end.x + perp.x * endW, end.y + perp.y * endW)
-                lineTo(end.x - perp.x * endW, end.y - perp.y * endW)
-                lineTo(pos.x - perp.x * srcW, pos.y - perp.y * srcW)
-                close()
-            }
-            drawPath(
-                path = beam,
-                brush = Brush.linearGradient(
-                    colors = listOf(tint.copy(alpha = glowAlpha * 0.85f), tint.copy(alpha = 0f)),
-                    start = pos,
-                    end = end,
-                ),
-            )
+    // Directional light: a tapered beam from the speaker aimed at the
+    // listener — narrow at the source, widening as it travels, fading to
+    // nothing. Reach and width grow with the channel's level, so loud
+    // channels visibly "shine" into the room centre.
+    val toListener = listener - pos
+    val dist = toListener.getDistance()
+    var beam: androidx.compose.ui.graphics.Path? = null
+    var beamBrush: Brush? = null
+    if (dist > 1f) {
+        val dir = toListener / dist
+        val perp = Offset(-dir.y, dir.x)
+        val reach = dist * (0.35f + 0.30f * glowScale).coerceAtMost(0.92f)
+        val end = pos + dir * reach
+        val srcW = glowR * 0.28f
+        val endW = glowR * 0.95f
+        beam = androidx.compose.ui.graphics.Path().apply {
+            moveTo(pos.x + perp.x * srcW, pos.y + perp.y * srcW)
+            lineTo(end.x + perp.x * endW, end.y + perp.y * endW)
+            lineTo(end.x - perp.x * endW, end.y - perp.y * endW)
+            lineTo(pos.x - perp.x * srcW, pos.y - perp.y * srcW)
+            close()
         }
-        // Soft bloom at the source, rendered from the channel's live level.
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(tint.copy(alpha = glowAlpha), Color.Transparent),
-                center = pos,
-                radius = glowR,
-            ),
-            radius = glowR,
-            center = pos,
+        beamBrush = Brush.linearGradient(
+            colors = listOf(tint.copy(alpha = 0.85f), tint.copy(alpha = 0f)),
+            start = pos,
+            end = end,
         )
     }
-    // Solid speaker dot.
-    drawCircle(color = tint.copy(alpha = dotAlpha), radius = 7f * dotScale, center = pos)
-
-    // Label just below the dot.
-    val measured = textMeasurer.measure(
-        speaker.label,
-        style = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.Medium, color = labelColor.copy(alpha = 0.85f)),
+    // Soft bloom at the source, rendered from the channel's live level.
+    val bloom = Brush.radialGradient(
+        colors = listOf(tint.copy(alpha = 1f), Color.Transparent),
+        center = pos,
+        radius = glowR,
     )
-    drawText(
-        measured,
-        topLeft = Offset(pos.x - measured.size.width / 2f, pos.y + 9f * dotScale),
-    )
+    return SpeakerGlow(beam, beamBrush, bloom, glowR)
 }
 
+private fun DrawScope.drawSpeaker(
+    art: SpeakerArt,
+    glow: SpeakerGlow,
+    glowAlpha: Float,
+    dotAlpha: Float,
+    label: androidx.compose.ui.text.TextLayoutResult,
+) {
+    val pos = art.pos
+    if (glowAlpha > 0.01f) {
+        if (glow.beam != null && glow.beamBrush != null) {
+            drawPath(path = glow.beam, brush = glow.beamBrush, alpha = glowAlpha)
+        }
+        drawCircle(brush = glow.bloom, radius = glow.radius, center = pos, alpha = glowAlpha)
+    }
+    // Solid speaker dot.
+    drawCircle(color = art.tint.copy(alpha = dotAlpha), radius = 7f * art.dotScale, center = pos)
+
+    // Label just below the dot.
+    drawText(
+        label,
+        topLeft = Offset(pos.x - label.size.width / 2f, pos.y + 9f * art.dotScale),
+    )
+}

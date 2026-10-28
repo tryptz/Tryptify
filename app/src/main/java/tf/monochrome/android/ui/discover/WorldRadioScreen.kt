@@ -75,6 +75,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -208,7 +209,12 @@ private fun WorldRadioContent(
     val instant = reduceMotion()
     val scope = rememberCoroutineScope()
 
-    var camera by remember { mutableStateOf(GlobeCamera()) }
+    // Read by this composable only inside callbacks and draw lambdas, never
+    // while composing: the camera moves every frame of a drag or a flight, and
+    // a read here recomposed the whole screen — the station list and the city
+    // card with it — on each of them.
+    val cameraState = remember { mutableStateOf(GlobeCamera()) }
+    var camera by cameraState
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     // Seeded rather than zero, for the same reason the genre map seeds its own:
     // the panel only exists once a city is selected, so a measured-only value
@@ -219,8 +225,9 @@ private fun WorldRadioContent(
 
     // Read at gesture time rather than captured. Keying the pointer handlers on
     // the camera would rebuild them on every frame of a spin and drop the
-    // pointer stream mid-gesture — the bug the genre map documents.
-    val liveCamera = rememberUpdatedState(camera)
+    // pointer stream mid-gesture — the bug the genre map documents. The state
+    // itself, not a copy updated by composition, so reading it composes nothing.
+    val liveCamera: State<GlobeCamera> = cameraState
     val liveCities = rememberUpdatedState(globe.cities)
     val liveScale = rememberUpdatedState(globe.scale)
 
@@ -389,7 +396,7 @@ private fun WorldRadioContent(
                 SelectedCityPing(
                     city = city,
                     scale = globe.scale,
-                    camera = camera,
+                    camera = { camera },
                     accent = dot,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -1173,7 +1180,8 @@ private fun CityChip(city: RadioCity, onClick: () -> Unit) {
 private fun SelectedCityPing(
     city: RadioCity,
     scale: Int,
-    camera: GlobeCamera,
+    /** Read in the draw, like the ping, so a turning globe redraws this ring and recomposes nothing. */
+    camera: () -> GlobeCamera,
     accent: Color,
     modifier: Modifier = Modifier,
 ) {
@@ -1194,8 +1202,9 @@ private fun SelectedCityPing(
     )
 
     Canvas(modifier = modifier) {
-        val radius = globeRadius(size.width, size.height, camera.zoom)
-        val p = project(city.lat, city.lon, scale, camera, size.width / 2f, size.height / 2f, radius)
+        val view = camera()
+        val radius = globeRadius(size.width, size.height, view.zoom)
+        val p = project(city.lat, city.lon, scale, view, size.width / 2f, size.height / 2f, radius)
         if (!p.visible) return@Canvas
 
         // Read inside the draw lambda so the ping invalidates the draw phase and
@@ -1205,7 +1214,7 @@ private fun SelectedCityPing(
         // marker disappeared on ordinary cities: a 42-station dot is about four
         // pixels across, and a ring at 2.6× of that is not a marker, it is a
         // smudge a couple of pixels clear of the thing it is marking.
-        val base = cityDotRadius(city.stations, camera.zoom).coerceAtLeast(PING_MIN_BASE_PX)
+        val base = cityDotRadius(city.stations, view.zoom).coerceAtLeast(PING_MIN_BASE_PX)
 
         // Two rings, half a cycle apart, so one is always mid-flight instead of
         // there being a dead beat between pulses. Squared fade so each ring
@@ -1361,12 +1370,14 @@ private fun project(
     cx: Float,
     cy: Float,
     radius: Float,
+    /** The camera's rotation; pass one in when projecting many points for the same camera. */
+    turn: GlobeLandClip.Turn = GlobeLandClip.Turn(camera.yaw, camera.pitch),
 ): Projected {
     // One projection for the screen and for the land clipper. They were the same
     // arithmetic written out twice, which is two places for the sign of the tilt
     // to drift apart — and a clipper that disagrees with the dots about where
     // the horizon is would cull land the cities are still drawn on.
-    val v = GlobeLandClip.project(latRaw, lonRaw, scale, camera.yaw, camera.pitch)
+    val v = GlobeLandClip.project(latRaw, lonRaw, scale, turn)
     return Projected(
         x = cx + v.x * radius,
         y = cy - v.y * radius,
@@ -1458,8 +1469,9 @@ private fun hitTest(
 
     var best: RadioCity? = null
     var bestDistance = TOUCH_RADIUS
+    val turn = GlobeLandClip.Turn(camera.yaw, camera.pitch)
     for (city in cities) {
-        val p = project(city.lat, city.lon, scale, camera, cx, cy, radius)
+        val p = project(city.lat, city.lon, scale, camera, cx, cy, radius, turn)
         if (!p.visible) continue
         val distance = hypot(p.x - point.x, p.y - point.y)
         if (distance <= bestDistance) {
@@ -1526,22 +1538,34 @@ private fun DrawScope.drawGlobe(
     // matter.
     val borderAlpha = (0.3f + 0.02f * camera.zoom).coerceIn(0.3f, 0.62f)
 
+    // Every point of the asset on the sphere, made once per dataset, and the
+    // camera's rotation, made once per draw: everything below turns the one by
+    // the other, the dots, the labels and the land clipper alike.
+    val sphere = outlines.sphereFor(data, scale)
+    val turn = GlobeLandClip.Turn(camera.yaw, camera.pitch)
+
     // Rebuild the geometry only when it could have moved. The camera and the
     // viewport are the whole of what the projection depends on, so a change
     // that is only to colour reuses every path.
     outlines.update(
         signature = outlineSignature(camera, size.width, size.height, data),
-        buildBorders = { projectLines(data.borders, camera, cx, cy, radius, scale) },
-        buildCoastline = { projectLines(data.coastline, camera, cx, cy, radius, scale) },
-        buildLand = {
+        buildBorders = { reuse ->
+            projectLines(sphere.borders, turn, outlines.view, cx, cy, radius, reuse)
+        },
+        buildCoastline = { reuse ->
+            projectLines(sphere.coastline, turn, outlines.view, cx, cy, radius, reuse)
+        },
+        buildLand = { reuse ->
             projectLandFill(
-                rings = data.land,
+                rings = sphere.land,
                 orientations = outlines.orientationsFor(data.land, scale),
-                camera = camera,
+                turn = turn,
+                view = outlines.view,
+                scratch = outlines.clip,
                 cx = cx,
                 cy = cy,
                 radius = radius,
-                scale = scale,
+                path = reuse,
             )
         },
     )
@@ -1567,17 +1591,22 @@ private fun DrawScope.drawGlobe(
         glowWidth = fx.glowWidth,
     )
 
-    for (city in data.cities) {
-        val p = project(city.lat, city.lon, scale, camera, cx, cy, radius)
-        if (!p.visible) continue
-        if (p.x < -20f || p.y < -20f || p.x > size.width + 20f || p.y > size.height + 20f) continue
+    // The cities, turned once for the dots and the labels both.
+    val cities = outlines.cityView
+    GlobeLandClip.turn(sphere.cities, turn, cities)
+    for ((index, city) in data.cities.withIndex()) {
+        val z = cities.z[index]
+        if (z < 0f) continue
+        val x = cx + cities.x[index] * radius
+        val y = cy - cities.y[index] * radius
+        if (x < -20f || y < -20f || x > size.width + 20f || y > size.height + 20f) continue
 
         val base = cityDotRadius(city.stations, camera.zoom)
         val selected = city.id == selectedId
 
         // Fade toward the limb, so the sphere reads as curved rather than as a
         // flat disc of dots.
-        val edge = (p.z * 1.4f).coerceIn(0.25f, 1f)
+        val edge = (z * 1.4f).coerceIn(0.25f, 1f)
 
         if (selected) {
             // The still part of the marker only. The ring that animates is drawn
@@ -1587,23 +1616,23 @@ private fun DrawScope.drawGlobe(
             drawCircle(
                 color = dot.copy(alpha = 0.22f),
                 radius = base * 2.2f,
-                center = Offset(p.x, p.y),
+                center = Offset(x, y),
             )
         }
         drawCircle(
             color = dot.copy(alpha = edge),
             radius = if (selected) base * 1.7f else base,
-            center = Offset(p.x, p.y),
+            center = Offset(x, y),
         )
     }
 
     drawCityLabels(
         data = data,
         camera = camera,
+        cities = cities,
         cx = cx,
         cy = cy,
         radius = radius,
-        scale = scale,
         labelColor = labelColor,
         labelSizePx = labelSizePx,
         topInset = topInset,
@@ -1641,11 +1670,10 @@ private fun outlineSignature(
  * The projected outlines, kept between draws.
  *
  * Projection is the whole cost of this screen — ~5,100 coastline points and
- * every border vertex, each through two sines and two cosines — and it depends
- * on nothing but the camera and the viewport. The glow settings change how the
- * outlines are *stroked*, not where they are, so rebuilding them when a slider
- * moves meant re-running all of it sixty times a second to change a colour.
- * That is what made the sliders crawl.
+ * every border vertex — and it depends on nothing but the camera and the
+ * viewport. The glow settings change how the outlines are *stroked*, not where
+ * they are, so rebuilding them when a slider moves meant re-running all of it
+ * sixty times a second to change a colour. That is what made the sliders crawl.
  *
  * Owned by the screen and handed to the draw rather than being a global: two
  * globes on screen at once would need two caches, and a cache keyed by a camera
@@ -1674,19 +1702,57 @@ private class OutlineCache {
         return orientations
     }
 
-    /** Rebuild only when the geometry could actually have moved. */
+    // Where every point of the dataset sits on the unspun sphere, the same way:
+    // made when the asset loads, and only turned after that.
+    private var dataSeen: tf.monochrome.android.domain.model.WorldRadioData? = null
+    private var sphere: GlobeSphere? = null
+
+    fun sphereFor(data: tf.monochrome.android.domain.model.WorldRadioData, scale: Int): GlobeSphere {
+        val known = sphere
+        if (known != null && dataSeen === data) return known
+        dataSeen = data
+        return GlobeSphere(data, scale).also { sphere = it }
+    }
+
+    /** Scratch the outlines are turned into while they are rebuilt. */
+    val view = GlobeLandClip.ViewPoints()
+
+    /** The cities turned for this draw, shared by the dots and the labels. */
+    val cityView = GlobeLandClip.ViewPoints()
+
+    /** The land clipper's working space. */
+    val clip = GlobeLandClip.ClipScratch()
+
+    /**
+     * Rebuild only when the geometry could actually have moved. Each builder is
+     * handed what it built last time, to draw into again rather than allocate:
+     * hundreds of paths a frame, every frame of a drag.
+     */
     fun update(
         signature: Long,
-        buildBorders: () -> List<Path>,
-        buildCoastline: () -> List<Path>,
-        buildLand: () -> Path,
+        buildBorders: (List<Path>) -> List<Path>,
+        buildCoastline: (List<Path>) -> List<Path>,
+        buildLand: (Path) -> Path,
     ) {
         if (signature == key) return
         key = signature
-        borders = buildBorders()
-        coastline = buildCoastline()
-        land = buildLand()
+        borders = buildBorders(borders)
+        coastline = buildCoastline(coastline)
+        land = buildLand(land)
     }
+}
+
+/** Every point of a [tf.monochrome.android.domain.model.WorldRadioData] on the sphere, before the camera turns it. */
+private class GlobeSphere(data: tf.monochrome.android.domain.model.WorldRadioData, scale: Int) {
+    val borders = GlobeLandClip.spherePoints(data.borders, scale)
+    val coastline = GlobeLandClip.spherePoints(data.coastline, scale)
+    val land = GlobeLandClip.spherePoints(data.land, scale)
+    val cities = GlobeLandClip.spherePoints(
+        data.cities.size,
+        scale,
+        latOf = { data.cities[it].lat },
+        lonOf = { data.cities[it].lon },
+    )
 }
 
 /**
@@ -1697,31 +1763,40 @@ private class OutlineCache {
  * when a line passes round the back. A second copy of that last part is a
  * second place for it to rot — and getting it wrong is not subtle, it draws a
  * chord straight across the face of the globe.
+ *
+ * Draws into [reuse]'s paths when it has one per line, as it does on every
+ * frame after the first.
  */
 private fun projectLines(
-    lines: List<List<Int>>,
-    camera: GlobeCamera,
+    lines: GlobeLandClip.SpherePoints,
+    turn: GlobeLandClip.Turn,
+    view: GlobeLandClip.ViewPoints,
     cx: Float,
     cy: Float,
     radius: Float,
-    scale: Int,
-): List<Path> = lines.map { line ->
-    val path = Path()
-    var drawing = false
-    var index = 0
-    while (index + 1 < line.size) {
-        val p = project(line[index + 1], line[index], scale, camera, cx, cy, radius)
-        if (p.visible) {
-            if (drawing) path.lineTo(p.x, p.y) else path.moveTo(p.x, p.y)
-            drawing = true
-        } else {
-            // Round the back: lift the pen so the line stops at the limb rather
-            // than being drawn across the disc when it reappears.
-            drawing = false
+    reuse: List<Path>,
+): List<Path> {
+    GlobeLandClip.turn(lines, turn, view)
+    val paths = if (reuse.size == lines.runCount) reuse else List(lines.runCount) { Path() }
+    for (line in 0 until lines.runCount) {
+        val path = paths[line]
+        path.rewind()
+        var drawing = false
+        val start = lines.start(line)
+        for (i in start until start + lines.size(line)) {
+            if (view.z[i] >= 0f) {
+                val x = cx + view.x[i] * radius
+                val y = cy - view.y[i] * radius
+                if (drawing) path.lineTo(x, y) else path.moveTo(x, y)
+                drawing = true
+            } else {
+                // Round the back: lift the pen so the line stops at the limb rather
+                // than being drawn across the disc when it reappears.
+                drawing = false
+            }
         }
-        index += 2
     }
-    path
+    return paths
 }
 
 /**
@@ -1734,37 +1809,44 @@ private fun projectLines(
  *
  * One path for the whole world, filled even-odd: distinct landmasses never
  * overlap on the sphere so they cannot cancel, and a hole punched by a
- * containing ring does exactly what it should.
+ * containing ring does exactly what it should. Drawn into [path] again, which
+ * is the one the last rebuild returned.
  */
 private fun projectLandFill(
-    rings: List<List<Int>>,
+    rings: GlobeLandClip.SpherePoints,
     orientations: FloatArray,
-    camera: GlobeCamera,
+    turn: GlobeLandClip.Turn,
+    view: GlobeLandClip.ViewPoints,
+    scratch: GlobeLandClip.ClipScratch,
     cx: Float,
     cy: Float,
     radius: Float,
-    scale: Int,
+    path: Path,
 ): Path {
-    val path = Path().apply { fillType = PathFillType.EvenOdd }
+    // Rewinding a path forgets its fill type; even-odd is the whole point.
+    path.rewind()
+    path.fillType = PathFillType.EvenOdd
     if (radius <= 0f) return path
 
-    for ((index, ring) in rings.withIndex()) {
-        val polygons = GlobeLandClip.clipRing(
-            ring = ring,
-            orientation = orientations[index],
-            yaw = camera.yaw,
-            pitch = camera.pitch,
-            scale = scale,
-        )
-        for (poly in polygons) {
-            var started = false
-            var i = 0
-            while (i + 1 < poly.size) {
-                started = path.step(started, cx + poly[i] * radius, cy - poly[i + 1] * radius)
-                i += 2
-            }
-            if (started) path.close()
+    GlobeLandClip.turn(rings, turn, view)
+    val sink = GlobeLandClip.PolygonSink { poly, size ->
+        var started = false
+        var i = 0
+        while (i + 1 < size) {
+            started = path.step(started, cx + poly[i] * radius, cy - poly[i + 1] * radius)
+            i += 2
         }
+        if (started) path.close()
+    }
+    for (ring in 0 until rings.runCount) {
+        GlobeLandClip.clipTurned(
+            view = view,
+            from = rings.start(ring),
+            count = rings.size(ring),
+            orientation = orientations[ring],
+            scratch = scratch,
+            sink = sink,
+        )
     }
     return path
 }
@@ -1812,10 +1894,11 @@ private fun DrawScope.strokeOutlines(
 private fun DrawScope.drawCityLabels(
     data: tf.monochrome.android.domain.model.WorldRadioData,
     camera: GlobeCamera,
+    /** Every city already turned for this draw, by its index in [data]. */
+    cities: GlobeLandClip.ViewPoints,
     cx: Float,
     cy: Float,
     radius: Float,
-    scale: Int,
     labelColor: Color,
     labelSizePx: Float,
     topInset: Float,
@@ -1844,19 +1927,22 @@ private fun DrawScope.drawCityLabels(
 
         // The asset is sorted by station count ascending so the busiest cities
         // draw last and on top; naming wants the opposite order.
-        for (city in data.cities.asReversed()) {
+        for (index in data.cities.indices.reversed()) {
             if (drawn >= offered) break
-            val p = project(city.lat, city.lon, scale, camera, cx, cy, radius)
-            if (!p.visible) continue
+            val city = data.cities[index]
+            val z = cities.z[index]
+            if (z < 0f) continue
+            val px = cx + cities.x[index] * radius
+            val py = cy - cities.y[index] * radius
 
             val halfWidth = paint.measureText(city.name) / 2f
             // Below the dot, clear of it, so the label never sits on the thing
             // it names — and the dot grows with zoom, so the gap has to as well.
-            val baseline = p.y + labelSizePx + 6f
+            val baseline = py + labelSizePx + 6f
             val box = android.graphics.RectF(
-                p.x - halfWidth - LABEL_GAP,
+                px - halfWidth - LABEL_GAP,
                 baseline - labelSizePx - LABEL_GAP,
-                p.x + halfWidth + LABEL_GAP,
+                px + halfWidth + LABEL_GAP,
                 baseline + LABEL_GAP,
             )
 
@@ -1873,8 +1959,8 @@ private fun DrawScope.drawCityLabels(
             drawn++
             // Same limb fade as the dots, so a name near the edge doesn't shout
             // louder than the sphere it is curving away on.
-            paint.alpha = (baseAlpha * (p.z * 1.4f).coerceIn(0.3f, 1f)).toInt()
-            drawText(city.name, p.x, baseline, paint)
+            paint.alpha = (baseAlpha * (z * 1.4f).coerceIn(0.3f, 1f)).toInt()
+            drawText(city.name, px, baseline, paint)
         }
     }
 }

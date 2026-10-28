@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
@@ -20,6 +19,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import tf.monochrome.android.audio.eq.LoudnessNative
 import tf.monochrome.android.audio.eq.LoudnessReading
@@ -45,10 +47,16 @@ internal fun MasterLoudnessReadout(accent: Color, modifier: Modifier = Modifier)
         LoudnessNative.acquire()
         onStopOrDispose { LoudnessNative.release() }
     }
-    val reading by produceState<LoudnessReading?>(initialValue = null) {
-        while (true) {
-            value = LoudnessNative.read()
-            delay(READ_INTERVAL_MS)
+    // Read on the same terms. A delay loop does not pause with Compose's frame
+    // clock, so without the lifecycle it went on reading ten times a second in
+    // the background, long after the meter itself had been let go.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val reading by produceState<LoudnessReading?>(initialValue = null, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                value = LoudnessNative.read()
+                delay(READ_INTERVAL_MS)
+            }
         }
     }
     val shortTerm = reading?.shortTerm ?: reading?.momentary

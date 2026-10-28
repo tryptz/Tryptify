@@ -142,7 +142,12 @@ fun FLChannelStrip(
     bus: BusConfig,
     isSelected: Boolean,
     modifier: Modifier = Modifier,
-    levels: BusLevels = BusLevels(),
+    /**
+     * The bus's meter levels, read by the meters themselves. A provider rather
+     * than a value: the levels change on every poll, and as a parameter they
+     * recomposed the whole strip (glass, gradients, colour maths) every frame.
+     */
+    levels: () -> BusLevels = { BusLevels() },
     accentColor: Color = MaterialTheme.colorScheme.primary,
     /**
      * The backdrop to frost. Null when the caller has none, and the strip then
@@ -341,7 +346,7 @@ fun FLChannelStrip(
             horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally)
         ) {
             if (isMaster) {
-                VuMeter(levelDb = levels.peakDbL, muted = bus.muted, accentColor = accent)
+                VuMeter(level = { levels().peakDbL }, muted = bus.muted, accentColor = accent)
             } else {
                 Spacer(modifier = Modifier.width(meterWidth))
             }
@@ -356,7 +361,7 @@ fun FLChannelStrip(
             )
 
             VuMeter(
-                levelDb = if (isMaster) levels.peakDbR else levels.peakDbL,
+                level = if (isMaster) ({ levels().peakDbR }) else ({ levels().peakDbL }),
                 muted = bus.muted,
                 accentColor = accent
             )

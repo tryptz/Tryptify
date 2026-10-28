@@ -169,10 +169,15 @@ private fun OxfordFader(
 // LED meter — vertical, segmented. Semantic green/yellow/red for signal health.
 // ----------------------------------------------------------------------------
 
+/**
+ * The peaks are providers, read in the frame loop and the draw: they change on
+ * every poll, and as values they recomposed each fader column, and the whole
+ * effect screen around it, on every frame.
+ */
 @Composable
 private fun LedMeter(
-    peakL: Float,
-    peakR: Float,
+    peakL: () -> Float,
+    peakR: () -> Float,
     modifier: Modifier = Modifier,
     minDb: Float = -42f,
     maxDb: Float = 0f,
@@ -184,11 +189,10 @@ private fun LedMeter(
     var heldL by remember { mutableStateOf(minDb) }
     var heldR by remember { mutableStateOf(minDb) }
 
-    val dbL = if (peakL > 1e-6f) 20f * log10(peakL) else minDb
-    val dbR = if (peakR > 1e-6f) 20f * log10(peakR) else minDb
+    fun toDb(peak: Float) = if (peak > 1e-6f) 20f * log10(peak) else minDb
     // Read the latest levels inside the frame loop below without restarting it.
-    val latestDbL by rememberUpdatedState(dbL)
-    val latestDbR by rememberUpdatedState(dbR)
+    val latestPeakL by rememberUpdatedState(peakL)
+    val latestPeakR by rememberUpdatedState(peakR)
 
     // Decay on every frame, not only when the level changes. Keying the old
     // effect on (dbL, dbR) meant that once playback stopped and the levels went
@@ -200,8 +204,8 @@ private fun LedMeter(
                 val dtSec = if (lastTick == 0L) 0f else (now - lastTick) / 1_000_000_000f
                 lastTick = now
                 val decayDb = DECAY_DB_PER_SEC * dtSec
-                heldL = max(latestDbL, heldL - decayDb).coerceIn(minDb, maxDb + 3f)
-                heldR = max(latestDbR, heldR - decayDb).coerceIn(minDb, maxDb + 3f)
+                heldL = max(toDb(latestPeakL()), heldL - decayDb).coerceIn(minDb, maxDb + 3f)
+                heldR = max(toDb(latestPeakR()), heldR - decayDb).coerceIn(minDb, maxDb + 3f)
             }
         }
     }
@@ -217,7 +221,7 @@ private fun LedMeter(
 
         for (lane in 0 until laneCount) {
             val lx = lane * (laneW + gap)
-            val db = if (lane == 0) dbL else dbR
+            val db = toDb(if (lane == 0) latestPeakL() else latestPeakR())
             val lit = dbToSegments(db, minDb, maxDb, segmentCount)
             val held = if (lane == 0) heldL else heldR
             val heldSeg = dbToSegments(held, minDb, maxDb, segmentCount) - 1
@@ -318,8 +322,8 @@ private fun FaderColumn(
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
     onValueChange: (Float) -> Unit,
-    peakL: Float,
-    peakR: Float,
+    peakL: () -> Float,
+    peakR: () -> Float,
     modifier: Modifier = Modifier,
     meterStereo: Boolean = true,
     meterMinDb: Float = -42f,
@@ -570,7 +574,7 @@ fun InflatorScreen(
                     value = state.inputDb,
                     valueRange = -6f..12f,
                     onValueChange = effect::setInputDb,
-                    peakL = peak.left, peakR = peak.right,
+                    peakL = { peak.left }, peakR = { peak.right },
                     modifier = Modifier.fillMaxSize(),
                     meterStereo = true,
                     meterMinDb = -42f, meterMaxDb = 0f,
@@ -592,7 +596,7 @@ fun InflatorScreen(
                             value = state.effectPct,
                             valueRange = 0f..100f,
                             onValueChange = effect::setEffectPct,
-                            peakL = peak.left, peakR = peak.right,
+                            peakL = { peak.left }, peakR = { peak.right },
                             meterStereo = true,
                             meterMinDb = -42f, meterMaxDb = 0f,
                             modifier = Modifier.fillMaxSize(),
@@ -605,7 +609,7 @@ fun InflatorScreen(
                             value = state.curve,
                             valueRange = -50f..50f,
                             onValueChange = effect::setCurve,
-                            peakL = 0f, peakR = 0f,
+                            peakL = NoPeak, peakR = NoPeak,
                             meterStereo = false,
                             meterMinDb = -50f, meterMaxDb = 50f,
                             modifier = Modifier.fillMaxSize(),
@@ -673,7 +677,7 @@ fun InflatorScreen(
                     value = state.outputDb,
                     valueRange = -12f..0f,
                     onValueChange = effect::setOutputDb,
-                    peakL = peak.left, peakR = peak.right,
+                    peakL = { peak.left }, peakR = { peak.right },
                     modifier = Modifier.fillMaxSize(),
                     meterStereo = true,
                     meterMinDb = -40f, meterMaxDb = 0f,
@@ -730,7 +734,7 @@ fun CompressorScreen(
                     value = state.thresholdDb,
                     valueRange = -60f..0f,
                     onValueChange = effect::setThresholdDb,
-                    peakL = peak.left, peakR = peak.right,
+                    peakL = { peak.left }, peakR = { peak.right },
                     modifier = Modifier.fillMaxSize(),
                     meterMinDb = -60f, meterMaxDb = 0f,
                 )
@@ -742,7 +746,7 @@ fun CompressorScreen(
                     value = state.ratio,
                     valueRange = 1f..20f,
                     onValueChange = effect::setRatio,
-                    peakL = 0f, peakR = 0f,
+                    peakL = NoPeak, peakR = NoPeak,
                     meterStereo = false,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -754,7 +758,7 @@ fun CompressorScreen(
                     value = state.attackMs.coerceIn(0.1f, 200f),
                     valueRange = 0.1f..200f,
                     onValueChange = effect::setAttackMs,
-                    peakL = 0f, peakR = 0f,
+                    peakL = NoPeak, peakR = NoPeak,
                     meterStereo = false,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -766,7 +770,7 @@ fun CompressorScreen(
                     value = state.releaseMs,
                     valueRange = 5f..2000f,
                     onValueChange = effect::setReleaseMs,
-                    peakL = 0f, peakR = 0f,
+                    peakL = NoPeak, peakR = NoPeak,
                     meterStereo = false,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -782,12 +786,12 @@ fun CompressorScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(4.dp))
-                LcdReadout(text = "-${"%.1f".format(grDb)} dB")
+                GainReductionReadout(grDb = { grDb })
                 Spacer(Modifier.height(10.dp))
                 tf.monochrome.android.devedit.DevEditable("compressor_gr_meter", Modifier.weight(1f).width(12.dp)) {
                     LedMeter(
-                        peakL = grDbToFakePeak(grDb),
-                        peakR = grDbToFakePeak(grDb),
+                        peakL = { grDbToFakePeak(grDb) },
+                        peakR = { grDbToFakePeak(grDb) },
                         stereo = false,
                         minDb = -20f,
                         maxDb = 0f,
@@ -802,7 +806,7 @@ fun CompressorScreen(
                         value = state.makeupDb,
                         valueRange = -12f..24f,
                         onValueChange = effect::setMakeupDb,
-                        peakL = 0f, peakR = 0f,
+                        peakL = NoPeak, peakR = NoPeak,
                         meterStereo = false,
                         modifier = Modifier.height(100.dp).fillMaxWidth(),
                     )
@@ -844,6 +848,20 @@ fun CompressorScreen(
     }
 }
 
+/** A meter with nothing to show: the faders that have no signal of their own. */
+private val NoPeak: () -> Float = { 0f }
+
+/**
+ * The compressor's gain reduction as text. Its own scope, recomposed only when
+ * the tenth of a dB it shows changes, rather than formatting in the screen's
+ * composition and recomposing all of it on every meter frame.
+ */
+@Composable
+private fun GainReductionReadout(grDb: () -> Float) {
+    val text by remember { derivedStateOf { "-${"%.1f".format(grDb())} dB" } }
+    LcdReadout(text = text)
+}
+
 private fun grDbToFakePeak(grDb: Float): Float {
     val displayDb = (-grDb).coerceIn(-20f, 0f)
     return 10f.pow(displayDb / 20f)
@@ -866,11 +884,15 @@ fun OxfordEffectsTabs(
 
     // Frame-synced meter polling — one read per display frame keeps the LED
     // bars fluid under fast transients, at 120 Hz where the device permits.
-    LaunchedEffect(inflator, compressor) {
+    // Only the effect whose tab is shown: the other's meters are drawn by
+    // nothing. Read once straight away, so a tab just switched to starts from
+    // its effect's level now rather than the one it had when it was last shown.
+    LaunchedEffect(inflator, compressor, selected) {
+        fun poll() = if (selected == 0) compressor.pollMeters() else inflator.pollMeters()
+        poll()
         while (isActive) {
             withFrameNanos { }
-            inflator.pollMeters()
-            compressor.pollMeters()
+            poll()
         }
     }
 
