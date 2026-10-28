@@ -68,6 +68,18 @@ class GlyphAudioTransport(context: Context) {
         clock.pause(System.nanoTime())
     }
 
+    /**
+     * Pause, and have the player let go of the song: its decoder and the
+     * seconds it buffered ahead. For leaving a run for the menus, where a
+     * paused player held them for as long as the song list was open; every
+     * run prepares its song again anyway ([prepare]).
+     */
+    fun stop() {
+        pause()
+        player.stop()
+        isPrepared = false
+    }
+
     fun seekTo(seconds: Float) {
         val target = seconds.coerceAtLeast(0f)
         player.seekTo((target * 1000f).toLong())

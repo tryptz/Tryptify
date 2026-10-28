@@ -138,14 +138,24 @@ class GlyphAssetRepository @Inject constructor(
         images[key]?.let { return it }
         val generation = skinGeneration
 
-        // The skin's own image, then the vector pack's, then the same two for
-        // whatever the catalog says stands in for this name.
-        val drawn = render(id, widthPx, heightPx, tint)
-            ?: GlyphAssetCatalog.fallback(id)?.let { render(it, widthPx, heightPx, tint) }
+        // The skin's own image, then the vector pack's, then whatever the
+        // catalog says stands in for this name, loaded under its own name so
+        // every name it stands in for shares the one bitmap. Drawn once for
+        // each, the vector pack's round explosion and hold glow were four
+        // identical copies apiece, at twice a note's size.
+        val own = render(id, widthPx, heightPx, tint)
+        val drawn = own
+            ?: GlyphAssetCatalog.fallback(id)?.let { load(it, widthPx, heightPx, tint) }
             ?: return null
         // A skin change while this was being drawn makes it stale; it is
         // returned for this call but not kept.
-        if (generation == skinGeneration) images[key] = drawn
+        if (generation == skinGeneration) {
+            images[key] = drawn
+            // Its upload to the GPU starts now, off the render thread, rather
+            // than on the frame that first draws it: a note division first
+            // seen mid-song otherwise costs that frame the upload.
+            if (own != null) drawn.prepareToDraw()
+        }
         return drawn
     }
 
@@ -321,12 +331,28 @@ class GlyphAssetRepository @Inject constructor(
     /**
      * Drop rasterized bitmaps, keeping parsed vectors.
      *
-     * Called when the playfield's lane width changes. Re-rasterizing is cheap
-     * next to re-parsing, and keeping stale sizes around is how a rotation leak
-     * turns into an OutOfMemoryError three songs later.
+     * Called when the mode is left. Re-rasterizing is cheap next to
+     * re-parsing, and keeping stale sizes around is how a rotation leak turns
+     * into an OutOfMemoryError three songs later.
      */
     fun releaseImages() {
         images.clear()
+    }
+
+    /**
+     * Drop every raster but a field's own at [noteSizePx]: its notes, and its
+     * effects at twice that. What the game's field asks as it warms, so its
+     * art is kept from run to run and through every restart, where it was
+     * dropped and drawn again each time (some sixty bitmaps); anything else,
+     * a preview's size, the last rotation's, the menus' icons, goes as it
+     * went before. A skin or glass change clears the lot ([configure]).
+     */
+    fun releaseImagesExcept(noteSizePx: Int) {
+        val twice = noteSizePx * 2
+        images.keys.removeAll { key ->
+            key.tintArgb != NO_TINT || key.widthPx != key.heightPx ||
+                (key.widthPx != noteSizePx && key.widthPx != twice)
+        }
     }
 
     private fun Color?.argbKey(): Int =

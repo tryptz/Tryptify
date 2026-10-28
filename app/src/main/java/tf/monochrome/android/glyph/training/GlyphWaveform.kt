@@ -112,3 +112,39 @@ class GlyphWaveformBuilder(expectedFrames: Long = 0L) {
         private const val INITIAL_SPAN = 256L
     }
 }
+
+/** A song's bars and loudness as [GlyphWaveformBuilder] made them. */
+data class GlyphWaveformBars(val bars: List<Float>, val loudness: List<Float>)
+
+/**
+ * The last few songs' [GlyphWaveformBars], by the file they were decoded from.
+ *
+ * Turning the wheel back to a song, or opening Training Ground on one already
+ * picked, decoded the whole file again for the same few hundred numbers. Kept
+ * to [capacity] songs, the least recently used going first: a couple of
+ * kilobytes each, nothing the heap notices. Safe from any thread.
+ */
+class GlyphWaveformCache(private val capacity: Int = DEFAULT_CAPACITY) {
+
+    private val entries = object : LinkedHashMap<String, GlyphWaveformBars>(capacity, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, GlyphWaveformBars>): Boolean =
+            size > capacity
+    }
+
+    @Synchronized
+    fun get(path: String): GlyphWaveformBars? = entries[path]
+
+    /** Kept only when something was decoded: a failed decode is tried again next time. */
+    @Synchronized
+    fun put(path: String, bars: GlyphWaveformBars) {
+        if (bars.bars.isEmpty() && bars.loudness.isEmpty()) return
+        entries[path] = bars
+    }
+
+    @get:Synchronized
+    val size: Int get() = entries.size
+
+    companion object {
+        const val DEFAULT_CAPACITY = 12
+    }
+}

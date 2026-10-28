@@ -11,9 +11,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
-import java.util.EnumMap
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
-import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.glyph.asset.GlyphPalette
 import tf.monochrome.android.glyph.asset.GlyphSkin
 import tf.monochrome.android.glyph.chart.GlyphChart
@@ -123,13 +121,13 @@ fun GlyphPreviewField(
  */
 private class PreviewDriver(private val engine: GlyphGameplayEngine) {
     private val autoplay = GlyphAutoplay()
-    private val flashMap = EnumMap<GlyphLane, LaneFlash>(GlyphLane::class.java)
+    private val flashMap = LaneFlashes()
     private var liveCombo = 0
 
     var lastPosition = Float.NaN
         private set
 
-    fun flashes(): Map<GlyphLane, LaneFlash> = flashMap
+    fun flashes(): LaneFlashes = flashMap
 
     fun combo(): Int = liveCombo
 
@@ -148,7 +146,7 @@ private class PreviewDriver(private val engine: GlyphGameplayEngine) {
         if (last.isNaN()) autoplay.rewind(engine, at)
         lastPosition = at
         for (event in autoplay.advance(engine, at)) {
-            if (!event.isTail) flashMap[event.lane] = LaneFlash(System.nanoTime(), event.judgement.isHit)
+            if (!event.isTail) flashMap.set(event.lane, System.nanoTime(), event.judgement.isHit)
         }
         liveCombo = engine.combo
         return at

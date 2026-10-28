@@ -206,7 +206,21 @@ class StepManiaScoreKeeper(
          */
         fun formatPercent(percent: Float): String {
             val hundredths = kotlin.math.floor(percent.toDouble() * 10_000.0 + 1e-3).toLong()
-            return "%d.%02d%%".format(hundredths / 100, hundredths % 100)
+            // Built by hand, not through String.format: the HUD makes one on
+            // each step of the percent's roll, and a Formatter (with the
+            // locale it looks up) was most of the garbage that made. The text
+            // is what "%d.%02d%%" gave in the app's languages, signs included
+            // (a negative remainder is already two characters), and the same
+            // ASCII digits in any locale, as StepMania's own display has.
+            val whole = hundredths / 100
+            val rest = hundredths % 100
+            return buildString(8) {
+                append(whole)
+                append('.')
+                if (rest in 0..9) append('0')
+                append(rest)
+                append('%')
+            }
         }
     }
 }

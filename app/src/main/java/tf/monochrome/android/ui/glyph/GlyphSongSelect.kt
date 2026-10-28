@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -195,6 +196,7 @@ internal fun GlyphSongInfoCard(
                         reducedMotion = reducedMotion,
                         timing = simfile?.timing,
                         previewPosition = if (loaded) previewPosition else NO_POSITION,
+                        previewPlaying = loaded && state.previewPlaying,
                     )
                     GlyphStars(
                         difficulty = chart?.difficulty,
@@ -369,6 +371,7 @@ private fun GlyphBpmMeter(
     reducedMotion: Boolean,
     timing: GlyphTiming?,
     previewPosition: () -> Float?,
+    previewPlaying: Boolean,
 ) {
     val scheme = MaterialTheme.colorScheme
     val shown by animated(bpm, reducedMotion, "bpm")
@@ -397,7 +400,13 @@ private fun GlyphBpmMeter(
             Spacer(Modifier.width(4.dp))
             Text("BPM", style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
             Spacer(Modifier.weight(1f))
-            BeatLight(timing = timing, previewPosition = previewPosition, colour = colour, reducedMotion = reducedMotion)
+            BeatLight(
+                timing = timing,
+                previewPosition = previewPosition,
+                previewPlaying = previewPlaying,
+                colour = colour,
+                reducedMotion = reducedMotion,
+            )
         }
         Box(
             Modifier
@@ -419,14 +428,30 @@ private fun GlyphBpmMeter(
  * motion.
  */
 @Composable
-private fun BeatLight(timing: GlyphTiming?, previewPosition: () -> Float?, colour: Color, reducedMotion: Boolean) {
+private fun BeatLight(
+    timing: GlyphTiming?,
+    previewPosition: () -> Float?,
+    /** A preview has been started and not stopped ([GlyphUiState.previewPlaying]). */
+    previewPlaying: Boolean,
+    colour: Color,
+    reducedMotion: Boolean,
+) {
     if (reducedMotion || timing == null) {
         Box(Modifier.size(9.dp).clip(CircleShape).background(colour.copy(alpha = 0.5f)))
         return
     }
     // A frame clock read in the layer: each frame redraws the light and
-    // recomposes nothing.
-    val frame = produceState(0L) { while (true) withFrameNanos { value = it } }
+    // recomposes nothing. It runs while a preview plays, and on until its
+    // sound has stopped (a stopped preview fades out first), so its last
+    // frame is the still light; with nothing playing it runs no frames at
+    // all, where it used to run every frame the wheel was open.
+    val position by rememberUpdatedState(previewPosition)
+    val frame = produceState(0L, previewPlaying) {
+        while (true) {
+            withFrameNanos { value = it }
+            if (!previewPlaying && position() == null) break
+        }
+    }
     Box(
         Modifier
             .size(9.dp)

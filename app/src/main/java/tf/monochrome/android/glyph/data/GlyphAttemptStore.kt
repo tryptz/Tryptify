@@ -72,7 +72,7 @@ class GlyphAttemptStore @Inject constructor(
      * Challenge, which is what it was when every difficulty shared a list.
      */
     suspend fun bestAttempt(chartId: String, difficulty: StepManiaDifficulty): GlyphAttempt? =
-        highScores(chartId, difficulty, limit = 1).firstOrNull()
+        bestOf(attempts(chartId), difficulty)
 
     /**
      * The machine's high score table for one chart and difficulty: full runs,
@@ -83,19 +83,17 @@ class GlyphAttemptStore @Inject constructor(
         chartId: String,
         difficulty: StepManiaDifficulty,
         limit: Int = HIGH_SCORES_PER_CHART,
-    ): List<GlyphAttempt> =
-        rankHighScores(attempts(chartId).filter { it.difficulty == difficulty }).take(limit)
+    ): List<GlyphAttempt> = highScoresIn(attempts(chartId), difficulty, limit)
 
-    /**
-     * The most recent attempt carrying a usable ghost.
-     *
-     * Usable is doing real work: a ghost whose arrays disagree is treated as
-     * absent, so a truncated write can never crash playback.
-     */
-    suspend fun latestGhost(chartId: String): GlyphGhost? =
-        attempts(chartId).firstNotNullOfOrNull { attempt ->
-            attempt.ghost?.takeIf { it.isConsistent && it.size > 0 }
-        }
+    /** [highScores] from a chart's [history] already read, so one read serves several answers. */
+    fun highScoresIn(
+        history: List<GlyphAttempt>,
+        difficulty: StepManiaDifficulty,
+        limit: Int = HIGH_SCORES_PER_CHART,
+    ): List<GlyphAttempt> = rankHighScores(history.filter { it.difficulty == difficulty }).take(limit)
+
+    /** The most recent attempt carrying a usable ghost (see [latestGhostOf]). */
+    suspend fun latestGhost(chartId: String): GlyphGhost? = latestGhostOf(attempts(chartId))
 
     /**
      * Every chart's high score tables, for the leaderboard page: chart id to
@@ -141,6 +139,8 @@ class GlyphAttemptStore @Inject constructor(
      *
      * Trimming keeps the highest score regardless of age alongside the most
      * recent runs, so a personal best is never aged out by a run of bad ones.
+     * Only the ghost a later run can play back is written ([withOneGhost]); a
+     * file from before that keeps its ghosts until its next save.
      */
     suspend fun save(attempt: GlyphAttempt): Unit = writeLock.withLock {
         withContext(Dispatchers.IO) {
@@ -166,7 +166,7 @@ class GlyphAttemptStore @Inject constructor(
                 // Written to a sibling and renamed so a kill mid-write leaves
                 // the previous history intact rather than a half file.
                 val temporary = File(file.parentFile, "${file.name}.tmp")
-                temporary.writeText(json.encodeToString(kept.toList()))
+                temporary.writeText(json.encodeToString(withOneGhost(kept.toList())))
                 if (!temporary.renameTo(file)) {
                     file.writeText(temporary.readText())
                     temporary.delete()
@@ -239,3 +239,30 @@ internal fun rankHighScores(runs: List<GlyphAttempt>): List<GlyphAttempt> =
             .thenByDescending { it.score }
             .thenBy { it.playedAtEpochMs },
     )
+
+/**
+ * The ghost "beat your ghost" plays from [history] (newest first, as
+ * [GlyphAttemptStore.attempts] returns it): the newest run whose ghost is
+ * usable. Usable is doing real work: a ghost whose arrays disagree is treated
+ * as absent, so a truncated write can never crash playback.
+ */
+internal fun latestGhostOf(history: List<GlyphAttempt>): GlyphGhost? =
+    history.firstNotNullOfOrNull { attempt -> attempt.ghost?.takeIf { it.isConsistent && it.size > 0 } }
+
+/** The best full run of [difficulty] in [history], as the high score table ranks it. */
+internal fun bestOf(history: List<GlyphAttempt>, difficulty: StepManiaDifficulty): GlyphAttempt? =
+    rankHighScores(history.filter { it.difficulty == difficulty }).firstOrNull()
+
+/**
+ * [runs] with a ghost left only on the run [latestGhostOf] would pick once
+ * they are read back. Nothing else plays a stored ghost, and a ghost is most
+ * of a record's size, so sixty of them made every file several times larger
+ * than its scores, and every read of it, the stats' included, parsed them.
+ * The pick is made in the order a read returns, newest first with ties in
+ * file order, so it is the one the read finds.
+ */
+internal fun withOneGhost(runs: List<GlyphAttempt>): List<GlyphAttempt> {
+    val keep = runs.sortedByDescending { it.playedAtEpochMs }
+        .firstOrNull { attempt -> attempt.ghost?.let { it.isConsistent && it.size > 0 } == true }
+    return runs.map { if (it === keep || it.ghost == null) it else it.copy(ghost = null) }
+}

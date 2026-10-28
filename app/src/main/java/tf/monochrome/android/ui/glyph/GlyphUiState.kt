@@ -81,6 +81,12 @@ data class GlyphUiState(
      * preview starts and goes as the preview stops; null between them.
      */
     val backdrop: GlyphBackdrop? = null,
+    /**
+     * A song preview has been started and not stopped: while it is, the song
+     * card's beat light runs its frame clock; with none it is still and runs
+     * nothing.
+     */
+    val previewPlaying: Boolean = false,
     /** Best StepMania grade per difficulty of the selected song, for the menu. */
     val bestGrades: Map<StepManiaDifficulty, GlyphAttempt> = emptyMap(),
     val gameplay: GlyphGameplayUi = GlyphGameplayUi(),

@@ -68,6 +68,8 @@ import tf.monochrome.android.glyph.data.GlyphAttemptStore
 import tf.monochrome.android.glyph.data.GlyphCalibration
 import tf.monochrome.android.glyph.data.GlyphSyncTrack
 import tf.monochrome.android.glyph.data.GlyphTapSync
+import tf.monochrome.android.glyph.data.bestOf
+import tf.monochrome.android.glyph.data.latestGhostOf
 import tf.monochrome.android.glyph.data.GlyphGhost
 import tf.monochrome.android.glyph.data.GlyphGhostRecorder
 import tf.monochrome.android.glyph.data.GlyphChartState
@@ -241,13 +243,13 @@ class GlyphViewModel @Inject constructor(
     /**
      * The latest judgement per lane, for the receptor explosion.
      *
-     * A plain mutable map read inside the playfield's draw scope rather than
-     * state pushed through recomposition: it changes several times a second
-     * during a stream and none of it is worth a recomposition.
+     * Plain slots read inside the playfield's draw scope rather than state
+     * pushed through recomposition: they change several times a second during
+     * a stream and none of it is worth a recomposition.
      */
-    private val laneFlashes = java.util.EnumMap<GlyphLane, LaneFlash>(GlyphLane::class.java)
+    private val laneFlashes = LaneFlashes()
 
-    fun flashes(): Map<GlyphLane, LaneFlash> = laneFlashes
+    fun flashes(): LaneFlashes = laneFlashes
 
     /**
      * When the combo last crossed a milestone, for the burst.
@@ -277,6 +279,12 @@ class GlyphViewModel @Inject constructor(
 
     private var tickJob: Job? = null
     private var waveformJob: Job? = null
+
+    /** Recent songs' bars and loudness, so coming back to one does not decode it again. */
+    private val waveforms = tf.monochrome.android.glyph.training.GlyphWaveformCache()
+
+    /** The file whose bars the state holds, or [waveformJob] is decoding. */
+    private var waveformPath: String? = null
     private var selectionJob: Job? = null
     private var lastPublishNanos = 0L
     private var countInEndsAtSeconds: Float? = null
@@ -294,6 +302,12 @@ class GlyphViewModel @Inject constructor(
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     init {
+        // A song fetched for a room is the room's: one left by a process that
+        // died in a room, or by a view model cleared before it could clear it,
+        // goes now. Never while a room is on, whose song it may be.
+        if (rooms.session.value.room == null) {
+            viewModelScope.launch(Dispatchers.IO) { clearRoomSongs(keep = null) }
+        }
         loadOptions()
         watchOutputSync()
         watchCharts()
@@ -450,8 +464,14 @@ class GlyphViewModel @Inject constructor(
                 connectRooms()
             }
             GlyphEvent.RefreshRooms -> rooms.refreshRooms()
-            is GlyphEvent.CreateRoom -> rooms.createRoom(event.name)
-            is GlyphEvent.JoinRoom -> rooms.joinRoom(event.code)
+            is GlyphEvent.CreateRoom -> {
+                roomAskedAt = android.os.SystemClock.elapsedRealtime()
+                rooms.createRoom(event.name)
+            }
+            is GlyphEvent.JoinRoom -> {
+                roomAskedAt = android.os.SystemClock.elapsedRealtime()
+                rooms.joinRoom(event.code)
+            }
             GlyphEvent.LeaveRoom -> rooms.leaveRoom()
             GlyphEvent.PickForRoom -> pickForRoom()
             is GlyphEvent.SetRoomReady -> rooms.ready(event.ready)
@@ -555,7 +575,7 @@ class GlyphViewModel @Inject constructor(
             is GlyphEvent.PractiseSection -> practiseSection(event.index)
             GlyphEvent.BackToHome -> {
                 stopTick()
-                transport.pause()
+                transport.stop()
                 _ui.value = _ui.value.copy(screen = GlyphScreen.HOME, results = null)
             }
         }
@@ -593,7 +613,7 @@ class GlyphViewModel @Inject constructor(
      *
      * Where the drop is, quickest first: the chart's own #SAMPLESTART; the
      * drop found on an earlier visit, remembered; or found now from the
-     * loudness bars the page decodes for the selection anyway, and remembered
+     * song's loudness bars, decoded for it ([ensureWaveform]) and remembered
      * for next time. Those bars take reading the whole song, so a song with
      * none of these waits [DROP_WAIT_MILLIS] for them and then starts a third
      * of the way in; its drop, found after, is the next visit's start.
@@ -603,6 +623,7 @@ class GlyphViewModel @Inject constructor(
         previewStopped = false
         if (!_ui.value.previews || song.filePath.isBlank()) {
             preview.stop()
+            setPreviewPlaying(false)
             // No sound for the picture to follow: it changes as the song is chosen.
             showBackdrop(song)
             return
@@ -617,7 +638,9 @@ class GlyphViewModel @Inject constructor(
                     // reading the whole song. Waited for in full, a song's first
                     // preview came seconds late; now it waits a moment, then
                     // starts a third of the way in and remembers the drop for
-                    // the next visit.
+                    // the next visit. Only this needs the song decoded on a
+                    // pick: one with a known drop starts without it.
+                    if (_ui.value.selectedSong?.trackId == song.trackId) ensureWaveform(song)
                     val drop = async { dropFromWaveform(song) }
                     withTimeoutOrNull(DROP_WAIT_MILLIS) { drop.await() }
                         ?.also { prefs.edit().putFloat(PREF_DROP_PREFIX + song.trackId, it).apply() }
@@ -633,9 +656,15 @@ class GlyphViewModel @Inject constructor(
             // gone to the background in the meantime.
             if (!foreground) return@launch
             preview.play(song.audioUri, start, length)
+            setPreviewPlaying(true)
             // The picture behind the list changes with the music, not before it.
             showBackdrop(song)
         }
+    }
+
+    /** Whether a preview has been started and not stopped, for the card's beat light. */
+    private fun setPreviewPlaying(playing: Boolean) {
+        if (_ui.value.previewPlaying != playing) _ui.value = _ui.value.copy(previewPlaying = playing)
     }
 
     /** [song]'s picture behind the song list; null takes it away. */
@@ -665,6 +694,7 @@ class GlyphViewModel @Inject constructor(
     private fun stopPreview() {
         previewJob?.cancel()
         preview.stop()
+        setPreviewPlaying(false)
         previewStopped = true
         // The picture goes as the music does.
         showBackdrop(null)
@@ -685,6 +715,42 @@ class GlyphViewModel @Inject constructor(
         foreground = true
     }
 
+    /** The rooms socket was closed for the app going out of sight; it opens again on return. */
+    private var roomsHidden = false
+
+    /**
+     * When a room was last asked for (created or joined), on the elapsed
+     * clock. Until the server answers there is no room yet, but closing the
+     * socket would lose the answer, and a room just created would be left
+     * without its host.
+     */
+    private var roomAskedAt = 0L
+
+    /**
+     * The app is out of sight. Outside a room the rooms socket is only the
+     * list of rooms and the clock, and its ping woke the radio every two
+     * seconds behind the app for a list nobody could see: it closes, and
+     * [onShown] opens it again. In a room it stays open, ping and all: the
+     * server forgets a dropped phone's seat.
+     */
+    fun onHidden() {
+        val session = rooms.session.value
+        val open = session.status == tf.monochrome.android.glyph.multiplayer.RoomStatus.CONNECTING ||
+            session.status == tf.monochrome.android.glyph.multiplayer.RoomStatus.CONNECTED
+        if (!open || session.room != null) return
+        if (android.os.SystemClock.elapsedRealtime() - roomAskedAt < ROOM_ANSWER_WAIT_MS) return
+        rooms.disconnect()
+        roomsHidden = true
+    }
+
+    /** The app is in sight again: a rooms socket [onHidden] closed opens again. */
+    fun onShown() {
+        if (!roomsHidden) return
+        roomsHidden = false
+        refreshRoomIdentity()
+        connectRooms()
+    }
+
     /** The app left the foreground: a preview, or the editor's song, must not play on behind it. */
     fun onBackground() {
         foreground = false
@@ -700,10 +766,15 @@ class GlyphViewModel @Inject constructor(
     /** Fill in what has to be read from disk, and refresh the chart state. */
     private fun loadSelection(song: GlyphSong) {
         selectionJob?.cancel()
+        showWaveform(song)
         selectionJob = viewModelScope.launch {
             val (refreshed, simfile) = songs.withCurrentChart(song)
             // A later selection may have landed while this was reading; its
             // result must not be overwritten by this one arriving late.
+            if (_ui.value.selectedSong?.trackId != song.trackId) return@launch
+            // The chart's history once, for both the ghost and the grades:
+            // asked for each, the same file was parsed six times a pick.
+            val history = attempts.attempts(refreshed.chartId)
             if (_ui.value.selectedSong?.trackId != song.trackId) return@launch
 
             _ui.value = _ui.value.copy(
@@ -721,16 +792,38 @@ class GlyphViewModel @Inject constructor(
                     available.getOrNull(available.size / 2) ?: available.firstOrNull()
                 },
                 training = _ui.value.training.copy(
-                    hasGhost = attempts.latestGhost(refreshed.chartId) != null,
+                    hasGhost = latestGhostOf(history) != null,
                 ),
-                bestGrades = bestGradesFor(refreshed),
+                bestGrades = bestGradesIn(history),
             )
-            loadWaveform(refreshed)
         }
     }
 
     /**
-     * Decode a coarse envelope for the segment picker.
+     * The selection's bars into the state: the cached ones, or none until
+     * something asks for them ([ensureWaveform]). A pick no longer decodes the
+     * whole song on its own account; a song whose drop is known, picked only
+     * to be played, is never decoded at all.
+     */
+    private fun showWaveform(song: GlyphSong) {
+        // The same song again keeps its bars, or the decode on its way.
+        if (song.filePath.isNotBlank() && song.filePath == waveformPath) return
+        waveformJob?.cancel()
+        waveformPath = song.filePath
+        val cached = waveforms.get(song.filePath)
+        _ui.value = _ui.value.copy(
+            training = _ui.value.training.copy(
+                waveform = cached?.bars.orEmpty(),
+                loudness = cached?.loudness.orEmpty(),
+                isWaveformLoading = false,
+            ),
+        )
+    }
+
+    /**
+     * Decode a coarse envelope of [song], unless it is here or on its way:
+     * the preview's drop is found in it, Training Ground's segment picker and
+     * the editor draw it.
      *
      * Deliberately coarse: the picker exists so a passage can be found by eye,
      * and two hundred bars does that as well as ten thousand. The song is
@@ -738,10 +831,13 @@ class GlyphViewModel @Inject constructor(
      * [GlyphWaveformBuilder]), and the decode stops between blocks once the
      * player moves on, so picking song after song no longer stacks up decodes.
      */
-    private fun loadWaveform(song: GlyphSong) {
-        waveformJob?.cancel()
+    private fun ensureWaveform(song: GlyphSong) {
         if (song.filePath.isBlank()) return
+        showWaveform(song)
+        val training = _ui.value.training
+        if (training.isWaveformLoading || training.waveform.isNotEmpty()) return
 
+        val path = song.filePath
         waveformJob = viewModelScope.launch {
             _ui.value = _ui.value.copy(
                 training = _ui.value.training.copy(isWaveformLoading = true, waveform = emptyList(), loudness = emptyList()),
@@ -761,6 +857,9 @@ class GlyphViewModel @Inject constructor(
                     Log.w(TAG, "waveform for ${song.title} failed: ${it.message}")
                 }.getOrDefault(emptyList<Float>() to emptyList())
             }
+            // A decode cut short by the next pick never gets here: withContext
+            // throws on its way back once this job is cancelled.
+            waveforms.put(path, tf.monochrome.android.glyph.training.GlyphWaveformBars(bars, loudness))
             _ui.value = _ui.value.copy(
                 training = _ui.value.training.copy(
                     waveform = bars,
@@ -1244,6 +1343,8 @@ class GlyphViewModel @Inject constructor(
             _ui.value = _ui.value.copy(error = "That song's file could not be located.")
             return
         }
+        // Training Ground's segment picker draws the song's bars.
+        if (training) ensureWaveform(song)
 
         // A run of this phone's own (Play again, a section to practise) after
         // a room's is no longer the room's.
@@ -1357,6 +1458,14 @@ class GlyphViewModel @Inject constructor(
     private fun rebuildEngine() {
         val chart = _ui.value.chart ?: return
         if (engine == null) return
+        // Only a run on screen is rebuilt. The last run's engine stays after
+        // it ends, and a modifier changed from the menus restarted it there:
+        // its tick ran behind the menus, and the next song's READY played.
+        // The next run is built with the new modifiers anyway.
+        val screen = _ui.value.screen
+        val inRun = screen == GlyphScreen.GAMEPLAY || screen == GlyphScreen.TRAINING ||
+            _ui.value.editor?.testing == true
+        if (!inRun) return
         replaceEngine(buildEngine(chart))
         // A modifier change invalidates the run in progress, so it restarts
         // rather than continuing with a score half-earned under other rules.
@@ -1416,10 +1525,7 @@ class GlyphViewModel @Inject constructor(
                         // A tail completing is not a new hit and should not
                         // re-fire the explosion its head already produced.
                         if (!event.isTail) {
-                            laneFlashes[event.lane] = LaneFlash(
-                                atNanos = System.nanoTime(),
-                                isHit = event.judgement.isHit,
-                            )
+                            laneFlashes.set(event.lane, atNanos = System.nanoTime(), isHit = event.judgement.isHit)
                         }
                         ghostRecorder.record(
                             songSeconds = event.songSeconds,
@@ -1492,16 +1598,25 @@ class GlyphViewModel @Inject constructor(
         tickJob = null
     }
 
-    /** Beats left before play begins, for the on-screen count. */
+    /**
+     * Beats left before play begins, for the on-screen count.
+     *
+     * Written when the number changes, and otherwise at the readouts' own
+     * rate for the playhead Training Ground's picker draws from the position:
+     * written on every tick, it was 125 new states a second for one digit.
+     */
     private fun publishCountIn(position: Float, endsAt: Float) {
         val bpm = _ui.value.simfile?.timing?.startBpm ?: return
         if (bpm <= 0f) return
-        val remaining = ((endsAt - position) / (60f / bpm)).toInt() + 1
+        val remaining = (((endsAt - position) / (60f / bpm)).toInt() + 1).coerceAtLeast(0)
         tickMetronome(position)
+        val now = System.nanoTime()
+        if (remaining == _ui.value.gameplay.countInBeatsRemaining && now - lastPublishNanos < PUBLISH_INTERVAL_NANOS) return
+        lastPublishNanos = now
         _ui.value = _ui.value.copy(
             gameplay = _ui.value.gameplay.copy(
                 positionSeconds = position,
-                countInBeatsRemaining = remaining.coerceAtLeast(0),
+                countInBeatsRemaining = remaining,
             ),
         )
     }
@@ -1734,6 +1849,8 @@ class GlyphViewModel @Inject constructor(
             backToEditor(null)
             return
         }
+        // Back to the songs: the next run prepares its own.
+        transport.stop()
         _ui.value = _ui.value.copy(
             screen = GlyphScreen.HOME,
             gameplay = _ui.value.gameplay.copy(isPlaying = false, isPaused = false, introStartedAtMs = 0L),
@@ -1975,9 +2092,10 @@ class GlyphViewModel @Inject constructor(
         }
     }
 
-    private suspend fun bestGradesFor(song: GlyphSong): Map<StepManiaDifficulty, GlyphAttempt> =
+    /** Each difficulty's best run in a chart's [history], for the card's grade. */
+    private fun bestGradesIn(history: List<GlyphAttempt>): Map<StepManiaDifficulty, GlyphAttempt> =
         StepManiaDifficulty.entries.mapNotNull { difficulty ->
-            attempts.bestAttempt(song.chartId, difficulty)?.let { difficulty to it }
+            bestOf(history, difficulty)?.let { difficulty to it }
         }.toMap()
 
     // ── settings ────────────────────────────────────────────────────────
@@ -2124,6 +2242,8 @@ class GlyphViewModel @Inject constructor(
             return
         }
         stopPreview()
+        // The grid's gutter draws the song's bars.
+        ensureWaveform(song)
         viewModelScope.launch {
             val simfile = if (song.hasChart) songs.simfile(song.trackId) else null
             val timing = simfile?.timing ?: GlyphTiming.constant(song.bpm ?: GlyphTiming.DEFAULT_BPM)
@@ -2150,6 +2270,7 @@ class GlyphViewModel @Inject constructor(
 
     private fun closeEditor() {
         stopEditorPlayback()
+        transport.stop()
         editorHistory.clear()
         _ui.value = _ui.value.copy(screen = GlyphScreen.HOME, editor = null)
         _ui.value.selectedSong?.let { loadSelection(it) }
@@ -2465,7 +2586,7 @@ class GlyphViewModel @Inject constructor(
         val loop = transport.loop
         val keeper = stepScore
 
-        val previousBest = attempts.bestAttempt(song.chartId, difficulty)
+        val previousBest = bestOf(attempts.attempts(song.chartId), difficulty)
         val attempt = GlyphAttempt(
             id = UUID.randomUUID().toString(),
             chartId = song.chartId,
@@ -2504,7 +2625,9 @@ class GlyphViewModel @Inject constructor(
         // A room's run of another phone's chart is not a run of this phone's:
         // it goes to the room and is not kept against the local scores.
         if (!_ui.value.inRoomPlay || roomPlan?.sameChart == true) attempts.save(attempt)
-        val machine = attempts.highScores(song.chartId, difficulty)
+        // Read once after the save, for the table and every difficulty's best.
+        val history = attempts.attempts(song.chartId)
+        val machine = attempts.highScoresIn(history, difficulty)
 
         _ui.value = _ui.value.copy(
             screen = GlyphScreen.RESULTS,
@@ -2516,7 +2639,7 @@ class GlyphViewModel @Inject constructor(
                 machineScores = machine,
             ),
             training = _ui.value.training.copy(hasGhost = true),
-            bestGrades = bestGradesFor(song),
+            bestGrades = bestGradesIn(history),
         )
     }
 
@@ -2621,6 +2744,7 @@ class GlyphViewModel @Inject constructor(
 
     /** Off the rooms screen: the socket closes, and with it any room this phone was in. */
     private fun closeMultiplayer() {
+        roomsHidden = false
         roomStartJob?.cancel()
         roomTransferJob?.cancel()
         clearRoomSongs(keep = null)
@@ -2940,6 +3064,13 @@ class GlyphViewModel @Inject constructor(
     private fun leaveRoomRun(failed: Boolean) {
         stopRoomFrames()
         roomStartJob?.cancel()
+        // Left by the room too (a kick, the room gone), not only by Quit: the
+        // song, its tick and a READY still counting down all end here, or
+        // the music started or ran on behind the rooms screen.
+        stopTick()
+        introJob?.cancel()
+        failJob?.cancel()
+        transport.stop()
         if (failed) rooms.finish(roomResult(failed = true))
         _ui.value = _ui.value.copy(
             screen = GlyphScreen.MULTIPLAYER,
@@ -2953,7 +3084,7 @@ class GlyphViewModel @Inject constructor(
     /** From a room's results back to the room, where the ranking is. */
     private fun backToRoom() {
         stopTick()
-        transport.pause()
+        transport.stop()
         stopRoomFrames()
         _ui.value = _ui.value.copy(
             screen = GlyphScreen.MULTIPLAYER,
@@ -2968,6 +3099,9 @@ class GlyphViewModel @Inject constructor(
         preview.release()
         stopRoomFrames()
         rooms.disconnect()
+        // The socket is closed, so any room with it: its song goes too, as
+        // leaving the rooms screen clears it.
+        clearRoomSongs(keep = null)
         stopTick()
         replaceEngine(null)
         metronome.release()
@@ -2976,6 +3110,9 @@ class GlyphViewModel @Inject constructor(
     }
 
     private companion object {
+        /** How long a room asked for keeps the rooms socket open behind the app, waiting for the answer. */
+        const val ROOM_ANSWER_WAIT_MS = 30_000L
+
         /**
          * How long the wheel rests before a song is chosen: StepMania's
          * `SampleMusicDelay` was 250 ms, which with the fade read as a preview

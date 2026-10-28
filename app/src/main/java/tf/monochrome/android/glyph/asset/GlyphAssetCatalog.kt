@@ -239,11 +239,15 @@ object GlyphAssetCatalog {
         return null
     }
 
-    /** Effects drawn larger than a note — twice its size — lane variants included. */
+    /**
+     * Effects drawn larger than a note — twice its size — as the playfield
+     * asks for them: a lane effect only in its lanes. Its lane-less art is
+     * drawn only as their [fallback], which the repository warms then, once
+     * for all four lanes.
+     */
     fun playfieldEffects(): List<GlyphAssetId> = buildList {
         for (art in GlyphEffectArt.entries) {
-            add(effect(art))
-            if (art in LANE_EFFECTS) for (lane in GlyphLane.entries) add(effect(art, lane))
+            if (art in LANE_EFFECTS) for (lane in GlyphLane.entries) add(effect(art, lane)) else add(effect(art))
         }
     }
 
@@ -255,18 +259,21 @@ object GlyphAssetCatalog {
     fun decor(decor: GlyphDecor): GlyphAssetId = GlyphAssetId(decor.assetName)
 
     /**
-     * Everything the playfield needs before a chart can start.
+     * Everything the playfield draws at the note's size before a chart can
+     * start, and nothing it does not.
      *
      * Prewarming is per-difficulty because a Beginner chart never shows a 48th
-     * note and there is no reason to rasterize one. Receptors, holds and the
-     * feedback overlays are unconditional: they are on screen from the first
-     * frame.
+     * note and there is no reason to rasterize one. Receptors and holds are
+     * unconditional: they are on screen from the first frame. The effects are
+     * drawn at twice the size and warmed apart ([playfieldEffects]). Nothing
+     * on the field draws the uncoloured tap, a shock arrow (no chart note is
+     * one) or the judgement wordmarks (the HUD's are the StepMania theme's),
+     * so they are not warmed: each was a bitmap a note big, held for nothing.
      */
     fun playfieldAssets(divisions: Set<GlyphBeatDivision>): List<GlyphAssetId> = buildList {
         for (lane in GlyphLane.entries) {
             add(receptor(lane, active = false))
             add(receptor(lane, active = true))
-            add(tapDefault(lane))
             for (division in divisions) add(tap(lane, division))
             add(holdHead(lane, roll = false))
             add(holdHead(lane, roll = true))
@@ -279,8 +286,9 @@ object GlyphAssetCatalog {
             add(holdBody(roll, active = true))
             add(holdTail(roll, active = true))
         }
-        for (note in GlyphSpecialNote.entries) add(special(note))
-        for (art in GlyphJudgementArt.entries) add(judgement(art))
-        for (art in GlyphEffectArt.entries) add(effect(art))
+        for (note in FIELD_SPECIALS) add(special(note))
     }
+
+    /** The special notes a chart can hold: [GlyphSpecialNote.SHOCK] is art no note type draws. */
+    private val FIELD_SPECIALS = listOf(GlyphSpecialNote.MINE, GlyphSpecialNote.LIFT, GlyphSpecialNote.FAKE)
 }

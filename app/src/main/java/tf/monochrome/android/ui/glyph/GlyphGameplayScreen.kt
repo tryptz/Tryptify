@@ -37,6 +37,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
@@ -64,7 +65,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import tf.monochrome.android.R
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
-import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.glyph.asset.GlyphPalette
 import tf.monochrome.android.glyph.chart.GlyphTiming
 import tf.monochrome.android.glyph.engine.GlyphAppearance
@@ -97,7 +97,7 @@ fun GlyphGameplayScreen(
     modifier: Modifier = Modifier,
     /** The player's colour settings, for the player's background behind the play. */
     backdropLook: GlyphBackdropLook = GlyphBackdropLook(),
-    explosionProvider: () -> Map<GlyphLane, LaneFlash> = { emptyMap() },
+    explosionProvider: () -> LaneFlashes = { NO_FLASHES },
     comboBurstProvider: () -> Long = { 0L },
     comboProvider: () -> Int = { 0 },
 ) {
@@ -206,6 +206,9 @@ fun GlyphGameplayScreen(
                     comboBurstProvider = comboBurstProvider,
                     comboProvider = comboProvider,
                     look = GlyphFieldLook.of(gameplay.modifiers),
+                    // Paused, the field stops redrawing once its flashes have
+                    // faded; a room's song plays on under its pause panel.
+                    running = gameplay.isPlaying,
                     // Held sideways, a centred column of the setting's width, its
                     // receptors nearer the bottom: thumbs come from the sides.
                     receptorInset = if (landscape && !gameplay.modifiers.reverse) LANDSCAPE_RECEPTOR_INSET else null,
@@ -279,8 +282,10 @@ fun GlyphGameplayScreen(
                         typography = typography,
                         fonts = fonts,
                         onEvent = onEvent,
-                        // The bar fills to its start as the run comes in.
-                        lifeShown = gameplay.life * intro.value,
+                        // The bar fills to its start as the run comes in. Read
+                        // by the bar as it draws: read here, it recomposed this
+                        // whole screen on every frame of the intro.
+                        lifeScale = { intro.value },
                         reducedMotion = reduced,
                     )
                 }
@@ -339,17 +344,11 @@ private fun GameplayHud(
     typography: GlyphTypography,
     fonts: GlyphStepFonts,
     onEvent: (GlyphEvent) -> Unit,
-    /** The life the bar draws: the run's, or less while it fills at the start. */
-    lifeShown: Float = state.gameplay.life,
+    /** How much of the run's life the bar draws: less while it fills at the start. Read while drawing. */
+    lifeScale: () -> Float = { 1f },
     reducedMotion: Boolean = false,
 ) {
     val gameplay = state.gameplay
-    // The percent rolls to each new value rather than jumping to it.
-    val percentShown by animateFloatAsState(
-        targetValue = gameplay.percent,
-        animationSpec = if (reducedMotion) snap() else tween(SCORE_ROLL_MILLIS, easing = FastOutSlowInEasing),
-        label = "score roll",
-    )
 
     Column(modifier = Modifier.padding(horizontal = GlyphTheme.Grid * 2)) {
         // StepMania's top row: the life bar, the percent, and the way out.
@@ -359,16 +358,14 @@ private fun GameplayHud(
             horizontalArrangement = Arrangement.spacedBy(GlyphTheme.Grid * 2),
         ) {
             GlyphLifeBar(
-                life = lifeShown,
+                life = gameplay.life,
+                scale = lifeScale,
                 modifier = Modifier.weight(1f),
             )
-            Text(
-                text = StepManiaScoreKeeper.formatPercent(percentShown),
+            PercentReadout(
+                percent = gameplay.percent,
                 style = fonts.score,
-                color = GlyphTheme.Paper,
-                modifier = Modifier.semantics {
-                    contentDescription = "Score ${StepManiaScoreKeeper.formatPercent(gameplay.percent)}"
-                },
+                reducedMotion = reducedMotion,
             )
             IconButton(onClick = { onEvent(GlyphEvent.TogglePause) }) {
                 Icon(
@@ -388,7 +385,9 @@ private fun GameplayHud(
             // The scroll mode is the first thing a player checks when a chart
             // reads wrong, so it stays on screen rather than two taps away.
             Text(text = gameplay.modifiers.scrollMode.label, style = fonts.label, color = GlyphTheme.Muted)
-            modifierSummary(gameplay.modifiers).takeIf { it.isNotEmpty() }?.let { summary ->
+            // Built when the modifiers change, not on every readout of the run.
+            val summary = remember(gameplay.modifiers) { modifierSummary(gameplay.modifiers) }
+            if (summary.isNotEmpty()) {
                 // A run at another rate or judge says so while it is played.
                 Text(
                     text = summary,
@@ -406,6 +405,32 @@ private fun GameplayHud(
             trackColor = GlyphTheme.InkRaised,
         )
     }
+}
+
+/**
+ * The run's percent, rolling to each new value rather than jumping to it.
+ *
+ * Its own scope, so the roll recomposes the number and nothing else: read in
+ * the HUD, every frame of every roll rebuilt the HUD, which in dense play is
+ * every frame. The text is made only when the hundredths it shows change.
+ * Its spoken label is the real percent, not the rolling one.
+ */
+@Composable
+private fun PercentReadout(percent: Float, style: androidx.compose.ui.text.TextStyle, reducedMotion: Boolean) {
+    val rolled = animateFloatAsState(
+        targetValue = percent,
+        animationSpec = if (reducedMotion) snap() else tween(SCORE_ROLL_MILLIS, easing = FastOutSlowInEasing),
+        label = "score roll",
+    )
+    val shown by remember { derivedStateOf { StepManiaScoreKeeper.formatPercent(rolled.value) } }
+    Text(
+        text = shown,
+        style = style,
+        color = GlyphTheme.Paper,
+        modifier = Modifier.semantics {
+            contentDescription = "Score ${StepManiaScoreKeeper.formatPercent(percent)}"
+        },
+    )
 }
 
 private fun modifierSummary(modifiers: GlyphModifiers): String = buildList {

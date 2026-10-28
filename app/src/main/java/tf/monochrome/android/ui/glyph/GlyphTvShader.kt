@@ -144,8 +144,14 @@ fun Modifier.tvShader(shader: GlyphTvShader, clearRim: Boolean = false, tv: () -
     } else {
         this.composed {
             val royale = shader == GlyphTvShader.ROYALE
-            val runtime = remember(royale) { if (royale) compileRoyaleShader() else compileTvShader() }
-            val tube = remember { compileTubeShader() }
+            // The process's one copy of each program, compiled the first time
+            // any layer asks: every layer sets each of a program's uniforms
+            // before it makes its effect, and an effect keeps the values it
+            // was made with, so layers sharing a program never see each
+            // other's settings. A copy each was compiled on the main thread
+            // every time the game opened.
+            val runtime = if (royale) sharedRoyaleShader else sharedTvShader
+            val tube = sharedTubeShader
             val size = remember { mutableStateOf(IntSize.Zero) }
             val windowHeight = LocalWindowInfo.current.containerSize.height
             if (runtime == null || !LocalPerformanceProfile.current.allowHazeBlur) {
@@ -169,7 +175,10 @@ private fun Modifier.tvLayer(
 ): Modifier =
     graphicsLayer {
         // Read through state, so a rotation re-runs this with the new size,
-        // and a slider's move with the new value.
+        // and a slider's move with the new value. Every uniform of each
+        // program is set below before its effect is made: the programs are
+        // shared by every layer, so a uniform left unset here would be
+        // whatever another layer set last.
         val now = size.value
         val tuning = tv()
         renderEffect = if (now.width == 0 || now.height == 0) {
@@ -231,15 +240,21 @@ private fun Modifier.tvLayer(
 
 /**
  * Whether this phone draws the tube over [shader]: the look's program and the
- * tube's both compile on its GPU. Asked once each, apart from any layer's own
- * copies. Taps are bent only where the picture is, never over a flat one.
+ * tube's both compile on its GPU: the same compiled programs the layers draw
+ * with. Taps are bent only where the picture is, never over a flat one.
  */
 fun tubeDrawable(shader: GlyphTvShader): Boolean =
-    tubeCompiles && if (shader == GlyphTvShader.ROYALE) royaleCompiles else tvCompiles
+    sharedTubeShader != null && (if (shader == GlyphTvShader.ROYALE) sharedRoyaleShader else sharedTvShader) != null
 
-private val tvCompiles: Boolean by lazy { compileTvShader() != null }
-private val royaleCompiles: Boolean by lazy { compileRoyaleShader() != null }
-private val tubeCompiles: Boolean by lazy { compileTubeShader() != null }
+/**
+ * Each program, compiled once for the process; null where this phone's GPU
+ * will not compile it. Main thread only, as the layers that set their
+ * uniforms are: a layer sets every uniform its program has before making an
+ * effect from it, which is what lets them share one (see [tvLayer]).
+ */
+private val sharedTvShader: RuntimeShader? by lazy { compileTvShader() }
+private val sharedRoyaleShader: RuntimeShader? by lazy { compileRoyaleShader() }
+private val sharedTubeShader: RuntimeShader? by lazy { compileTubeShader() }
 
 /** The bowed tube's rim, softened over this much. */
 private const val TUBE_EDGE_DP = 1f
