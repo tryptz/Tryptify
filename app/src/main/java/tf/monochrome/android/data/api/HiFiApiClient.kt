@@ -13,17 +13,20 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.serializer
 import tf.monochrome.android.data.api.model.AlbumResponse
 import tf.monochrome.android.data.api.model.hasDolbyAtmos
 import tf.monochrome.android.data.api.model.AlbumTrackItem
@@ -204,6 +207,12 @@ class HiFiApiClient @Inject constructor(
 
     // --- Search ---
 
+    // The public catalogue calls from here on run on Dispatchers.Default, each a
+    // thin wrapper over the private fetch that does the work, as getPlaylist
+    // does. Their answers are parsed and mapped as they arrive, a page of them
+    // can be a megabyte of JSON, and the screens call them from view models,
+    // which run on the main thread.
+
     // Page size used for initial search + each loadMore call. Backends that
     // don't honour &offset=&limit= will respond with the same first-page
     // payload; the ViewModel detects "end" when fewer than `limit` items come
@@ -211,7 +220,10 @@ class HiFiApiClient @Inject constructor(
     private fun pagedQuery(key: String, query: String, offset: Int, limit: Int): String =
         "/search/?$key=${query.encodeUrl()}&offset=$offset&limit=$limit"
 
-    suspend fun searchTracks(query: String, offset: Int = 0, limit: Int = 50): List<Track> {
+    suspend fun searchTracks(query: String, offset: Int = 0, limit: Int = 50): List<Track> =
+        withContext(Dispatchers.Default) { fetchSearchTracks(query, offset, limit) }
+
+    private suspend fun fetchSearchTracks(query: String, offset: Int, limit: Int): List<Track> {
         val cacheKey = "search_tracks_${query}_${offset}_${limit}"
         cache.get(cacheKey)?.let { entry ->
             if (entry.isValid()) {
@@ -227,7 +239,10 @@ class HiFiApiClient @Inject constructor(
         return tracks
     }
 
-    suspend fun searchAlbums(query: String, offset: Int = 0, limit: Int = 50): List<Album> {
+    suspend fun searchAlbums(query: String, offset: Int = 0, limit: Int = 50): List<Album> =
+        withContext(Dispatchers.Default) { fetchSearchAlbums(query, offset, limit) }
+
+    private suspend fun fetchSearchAlbums(query: String, offset: Int, limit: Int): List<Album> {
         val cacheKey = "search_albums_${query}_${offset}_${limit}"
         cache.get(cacheKey)?.let { entry ->
             if (entry.isValid()) {
@@ -243,7 +258,10 @@ class HiFiApiClient @Inject constructor(
         return albums
     }
 
-    suspend fun searchArtists(query: String, offset: Int = 0, limit: Int = 50): List<Artist> {
+    suspend fun searchArtists(query: String, offset: Int = 0, limit: Int = 50): List<Artist> =
+        withContext(Dispatchers.Default) { fetchSearchArtists(query, offset, limit) }
+
+    private suspend fun fetchSearchArtists(query: String, offset: Int, limit: Int): List<Artist> {
         val cacheKey = "search_artists_${query}_${offset}_${limit}"
         cache.get(cacheKey)?.let { entry ->
             if (entry.isValid()) {
@@ -259,7 +277,10 @@ class HiFiApiClient @Inject constructor(
         return artists
     }
 
-    suspend fun searchPlaylists(query: String, offset: Int = 0, limit: Int = 50): List<Playlist> {
+    suspend fun searchPlaylists(query: String, offset: Int = 0, limit: Int = 50): List<Playlist> =
+        withContext(Dispatchers.Default) { fetchSearchPlaylists(query, offset, limit) }
+
+    private suspend fun fetchSearchPlaylists(query: String, offset: Int, limit: Int): List<Playlist> {
         val body = fetchWithRetry(pagedQuery("p", query, offset, limit))
         val response = parseSearchResponse(body, HifiPayload.Kind.PLAYLISTS)
         return response.items.map { it.toPlaylist() }
@@ -283,7 +304,10 @@ class HiFiApiClient @Inject constructor(
     // Returns an empty SearchResult when the instance isn't set, the request
     // times out, or the response can't be parsed, so the TIDAL search flow
     // is never blocked by Qobuz state.
-    suspend fun searchQobuz(query: String, offset: Int = 0): SearchResult {
+    suspend fun searchQobuz(query: String, offset: Int = 0): SearchResult =
+        withContext(Dispatchers.Default) { fetchQobuzSearch(query, offset) }
+
+    private suspend fun fetchQobuzSearch(query: String, offset: Int): SearchResult {
         val instance = instanceManager.qobuzInstanceOrNull() ?: return SearchResult()
         val base = instance.url.trimEnd('/')
 
@@ -322,7 +346,10 @@ class HiFiApiClient @Inject constructor(
     // The endpoint normalizes Apple responses into the same Qobuz-shaped envelope,
     // so parsing + mapping are identical to searchQobuz. Fails soft (empty result)
     // on any error so it never blocks the other catalogs.
-    suspend fun searchApple(query: String, offset: Int = 0): SearchResult {
+    suspend fun searchApple(query: String, offset: Int = 0): SearchResult =
+        withContext(Dispatchers.Default) { fetchAppleSearch(query, offset) }
+
+    private suspend fun fetchAppleSearch(query: String, offset: Int): SearchResult {
         val instance = instanceManager.appleInstanceOrNull() ?: return SearchResult()
         val base = instance.url.trimEnd('/')
 
@@ -405,7 +432,10 @@ class HiFiApiClient @Inject constructor(
      * only real differences: the id is numeric (Apple has no alphanumeric slug)
      * and every id in the response is registered as Apple, not Qobuz.
      */
-    suspend fun getAppleAlbum(albumId: Long): AlbumDetail? {
+    suspend fun getAppleAlbum(albumId: Long): AlbumDetail? =
+        withContext(Dispatchers.Default) { fetchAppleAlbum(albumId) }
+
+    private suspend fun fetchAppleAlbum(albumId: Long): AlbumDetail? {
         val instance = instanceManager.appleInstanceOrNull() ?: return null
         val base = instance.url.trimEnd('/')
 
@@ -434,7 +464,10 @@ class HiFiApiClient @Inject constructor(
      * Same envelope as [getQobuzArtist]; ids registered as Apple throughout so
      * clicking a top track or a release stays inside the Apple flow.
      */
-    suspend fun getAppleArtist(artistId: Long): ArtistDetail? {
+    suspend fun getAppleArtist(artistId: Long): ArtistDetail? =
+        withContext(Dispatchers.Default) { fetchAppleArtist(artistId) }
+
+    private suspend fun fetchAppleArtist(artistId: Long): ArtistDetail? {
         val instance = instanceManager.appleInstanceOrNull() ?: return null
         val base = instance.url.trimEnd('/')
 
@@ -503,14 +536,13 @@ class HiFiApiClient @Inject constructor(
     // whichever added API answers /api/deezer/*; every call fails soft so it
     // never blocks another catalog.
 
-    // ISRCs seen in Deezer payloads, so an ISRC lookup needs no extra request.
-    // Search results usually have none (Deezer's /search omits it); a pasted
-    // track URL and album tracks sometimes do.
-    private val deezerIsrcs = java.util.concurrent.ConcurrentHashMap<Long, String>()
-
     // Deezer ids whose catalogue item claimed hi-res. Only these are asked for
-    // the top quality codes; everything else tops out at CD FLAC.
-    private val deezerHiRes: MutableSet<Long> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+    // the top quality codes; everything else tops out at CD FLAC. The most
+    // recently seen [KNOWN_TRACKS_MAX] only: every listing a track appears in
+    // records it again, and an id forgotten from long ago is in the state
+    // every id is in after a restart.
+    private val deezerHiRes: MutableSet<Long> =
+        java.util.Collections.newSetFromMap(boundedLru<Long, Boolean>(KNOWN_TRACKS_MAX))
 
     private suspend fun deezerBaseOrNull(): String? =
         instanceManager.deezerInstanceOrNull()?.url?.trimEnd('/')
@@ -533,7 +565,6 @@ class HiFiApiClient @Inject constructor(
     private fun registerDeezerTrackItem(item: QobuzTrackItem) {
         val trackId = item.id ?: return
         qobuzIdRegistry.registerDeezerTrack(trackId)
-        item.isrc?.takeIf { it.isNotBlank() }?.let { deezerIsrcs[trackId] = it }
         if (item.hires) deezerHiRes.add(trackId)
         item.album?.qobuzId?.let { qobuzIdRegistry.registerDeezerAlbum(it) }
         item.performer?.id?.let { qobuzIdRegistry.registerDeezerArtist(it) }
@@ -547,7 +578,10 @@ class HiFiApiClient @Inject constructor(
     }
 
     /** Deezer catalog search — GET /api/deezer/get-music?q=<query>&offset=<n>. */
-    suspend fun searchDeezer(query: String, offset: Int = 0): SearchResult {
+    suspend fun searchDeezer(query: String, offset: Int = 0): SearchResult =
+        withContext(Dispatchers.Default) { fetchDeezerSearch(query, offset) }
+
+    private suspend fun fetchDeezerSearch(query: String, offset: Int): SearchResult {
         val base = deezerBaseOrNull() ?: return SearchResult()
         val envelope = withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
             runCatching {
@@ -572,7 +606,10 @@ class HiFiApiClient @Inject constructor(
     }
 
     /** Deezer album detail — GET /api/deezer/get-album?album_id=<n>. */
-    suspend fun getDeezerAlbum(albumId: Long): AlbumDetail? {
+    suspend fun getDeezerAlbum(albumId: Long): AlbumDetail? =
+        withContext(Dispatchers.Default) { fetchDeezerAlbum(albumId) }
+
+    private suspend fun fetchDeezerAlbum(albumId: Long): AlbumDetail? {
         val base = deezerBaseOrNull() ?: return null
         val envelope = withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
             runCatching {
@@ -597,7 +634,10 @@ class HiFiApiClient @Inject constructor(
      * The instance fetches the whole discography up front and buckets it by
      * record type, so there is no paging to do here.
      */
-    suspend fun getDeezerArtist(artistId: Long): ArtistDetail? {
+    suspend fun getDeezerArtist(artistId: Long): ArtistDetail? =
+        withContext(Dispatchers.Default) { fetchDeezerArtist(artistId) }
+
+    private suspend fun fetchDeezerArtist(artistId: Long): ArtistDetail? {
         val base = deezerBaseOrNull() ?: return null
         val envelope = withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
             runCatching {
@@ -711,7 +751,10 @@ class HiFiApiClient @Inject constructor(
      * the album's full track list. Returns null when the Qobuz instance
      * isn't configured, the request fails, or the body can't be parsed.
      */
-    suspend fun getQobuzAlbum(albumSlug: String): AlbumDetail? {
+    suspend fun getQobuzAlbum(albumSlug: String): AlbumDetail? =
+        withContext(Dispatchers.Default) { fetchQobuzAlbum(albumSlug) }
+
+    private suspend fun fetchQobuzAlbum(albumSlug: String): AlbumDetail? {
         val instance = instanceManager.qobuzInstanceOrNull() ?: return null
         if (albumSlug.isBlank()) return null
         val base = instance.url.trimEnd('/')
@@ -755,7 +798,10 @@ class HiFiApiClient @Inject constructor(
      * mapped ArtistDetail leaves albums/eps/singles empty and populates
      * topTracks + similarArtists.
      */
-    suspend fun getQobuzArtist(artistId: Long): ArtistDetail? {
+    suspend fun getQobuzArtist(artistId: Long): ArtistDetail? =
+        withContext(Dispatchers.Default) { fetchQobuzArtist(artistId) }
+
+    private suspend fun fetchQobuzArtist(artistId: Long): ArtistDetail? {
         val instance = instanceManager.qobuzInstanceOrNull() ?: return null
         val base = instance.url.trimEnd('/')
 
@@ -825,7 +871,7 @@ class HiFiApiClient @Inject constructor(
      */
     suspend fun getTidalIsrc(trackId: Long): String? = runCatching {
         val infoBody = fetchWithRetry("/info/?id=$trackId")
-        json.decodeFromString<TrackInfoResponse>(unwrapResponse(infoBody)).isrc?.takeIf { it.isNotBlank() }
+        decodeData<TrackInfoResponse>(infoBody).isrc?.takeIf { it.isNotBlank() }
     }.getOrNull()
 
     /**
@@ -836,7 +882,7 @@ class HiFiApiClient @Inject constructor(
      */
     suspend fun getTidalTrack(trackId: Long): Track? = runCatching {
         val infoBody = fetchWithRetry("/info/?id=$trackId")
-        val info = json.decodeFromString<TrackInfoResponse>(unwrapResponse(infoBody))
+        val info = decodeData<TrackInfoResponse>(infoBody)
         info.takeIf { it.title.isNotBlank() }?.let {
             Track(
                 id = trackId,
@@ -856,7 +902,10 @@ class HiFiApiClient @Inject constructor(
      * id so the playback fallback can bridge "Go to album/artist". Returns null
      * when Qobuz isn't configured or doesn't carry that ISRC.
      */
-    suspend fun findQobuzTrackByIsrc(isrc: String): QobuzTrackMatch? {
+    suspend fun findQobuzTrackByIsrc(isrc: String): QobuzTrackMatch? =
+        withContext(Dispatchers.Default) { fetchQobuzTrackByIsrc(isrc) }
+
+    private suspend fun fetchQobuzTrackByIsrc(isrc: String): QobuzTrackMatch? {
         if (isrc.isBlank()) return null
         val instance = instanceManager.qobuzInstanceOrNull() ?: return null
         val base = instance.url.trimEnd('/')
@@ -902,14 +951,17 @@ class HiFiApiClient @Inject constructor(
 
     // --- Album ---
 
-    suspend fun getAlbum(albumId: Long): AlbumDetail {
+    suspend fun getAlbum(albumId: Long): AlbumDetail =
+        withContext(Dispatchers.Default) { fetchAlbum(albumId) }
+
+    private suspend fun fetchAlbum(albumId: Long): AlbumDetail {
         val cacheKey = "album_$albumId"
         cache.get(cacheKey)?.let { entry ->
             if (entry.isValid()) return entry.data as AlbumDetail
         }
 
         val body = fetchWithRetry("/album/?id=$albumId")
-        val response = json.decodeFromString<AlbumResponse>(unwrapResponse(body))
+        val response = decodeData<AlbumResponse>(body)
 
         val album = Album(
             id = response.id,
@@ -935,7 +987,7 @@ class HiFiApiClient @Inject constructor(
             var offset = tracks.size
             while (offset < total) {
                 val pageBody = fetchWithRetry("/album/?id=$albumId&offset=$offset&limit=100")
-                val pageResponse = json.decodeFromString<AlbumResponse>(unwrapResponse(pageBody))
+                val pageResponse = decodeData<AlbumResponse>(pageBody)
                 val pageItems = pageResponse.tracks?.items ?: pageResponse.items ?: emptyList()
                 remaining.addAll(pageItems.map { it.toTrack(album) })
                 offset += pageItems.size
@@ -951,7 +1003,10 @@ class HiFiApiClient @Inject constructor(
 
     // --- Artist ---
 
-    suspend fun getArtist(artistId: Long): ArtistDetail {
+    suspend fun getArtist(artistId: Long): ArtistDetail =
+        withContext(Dispatchers.Default) { fetchArtist(artistId) }
+
+    private suspend fun fetchArtist(artistId: Long): ArtistDetail {
         val cacheKey = "artist_$artistId"
         cache.get(cacheKey)?.let { entry ->
             if (entry.isValid()) return entry.data as ArtistDetail
@@ -959,7 +1014,7 @@ class HiFiApiClient @Inject constructor(
 
         // Fetch artist info
         val infoBody = fetchWithRetry("/artist/?id=$artistId")
-        val artistResponse = json.decodeFromString<ArtistResponse>(HifiPayload.entity(json, infoBody, "artist"))
+        val artistResponse = decodeEntity<ArtistResponse>(infoBody, "artist")
         val artist = Artist(
             id = artistResponse.id,
             name = artistResponse.name,
@@ -969,7 +1024,7 @@ class HiFiApiClient @Inject constructor(
 
         // Fetch artist content (albums, tracks)
         val contentBody = fetchWithRetry("/artist/?f=$artistId&skip_tracks=true")
-        val contentResponse = json.decodeFromString<ArtistContentResponse>(unwrapResponse(contentBody))
+        val contentResponse = decodeData<ArtistContentResponse>(contentBody)
 
         val allAlbums = (contentResponse.albums?.items ?: contentResponse.items?.map { item ->
             tf.monochrome.android.data.api.model.ApiAlbum(
@@ -1005,7 +1060,7 @@ class HiFiApiClient @Inject constructor(
         // Fetch unreleased/community tracks (ArtistGrid)
         val unreleasedTracks = try {
             val unreleasedBody = fetchWithRetry("/artist/unreleased/?id=$artistId", minVersion = "2.5")
-            val items = json.decodeFromString<SearchResponse>(unwrapResponse(unreleasedBody))
+            val items = decodeData<SearchResponse>(unreleasedBody)
             items.items.map { it.toTrack() }
         } catch (_: Exception) {
             emptyList()
@@ -1039,7 +1094,7 @@ class HiFiApiClient @Inject constructor(
         // from TIDAL as parallel pages of 100). A server that caps lower just
         // sends fewer, and the page size below follows what it sent.
         val body = fetchWithRetry("/playlist/?id=$playlistId&limit=$PLAYLIST_PAGE_LIMIT")
-        val response = json.decodeFromString<PlaylistResponse>(HifiPayload.entity(json, body, "playlist"))
+        val response = decodeEntity<PlaylistResponse>(body, "playlist")
 
         val firstPage = response.items ?: response.tracks ?: emptyList()
         var tracks = firstPage.playlistTracks()
@@ -1057,7 +1112,7 @@ class HiFiApiClient @Inject constructor(
                     async {
                         gate.withPermit {
                             val pageBody = fetchWithRetry("/playlist/?id=$playlistId&offset=$offset&limit=$pageSize")
-                            val pageResponse = json.decodeFromString<PlaylistResponse>(HifiPayload.entity(json, pageBody, "playlist"))
+                            val pageResponse = decodeEntity<PlaylistResponse>(pageBody, "playlist")
                             (pageResponse.items ?: pageResponse.tracks ?: emptyList()).playlistTracks()
                         }
                     }
@@ -1198,7 +1253,7 @@ class HiFiApiClient @Inject constructor(
             "/track/?id=$trackId&quality=${quality.apiValue}",
             instanceType = InstanceType.STREAMING
         )
-        val streamResponse = json.decodeFromString<TrackStreamResponse>(unwrapResponse(body))
+        val streamResponse = decodeData<TrackStreamResponse>(body)
 
         val streamUrl = extractStreamUrlFromManifest(streamResponse.manifest)
         val isDash = streamUrl?.let(::isDashManifest) == true
@@ -1214,7 +1269,7 @@ class HiFiApiClient @Inject constructor(
         // Get track info for metadata
         val trackInfo = try {
             val infoBody = fetchWithRetry("/info/?id=$trackId")
-            json.decodeFromString<TrackInfoResponse>(unwrapResponse(infoBody))
+            decodeData<TrackInfoResponse>(infoBody)
         } catch (_: Exception) {
             null
         }
@@ -1330,7 +1385,10 @@ class HiFiApiClient @Inject constructor(
 
     // --- Recommendations ---
 
-    suspend fun getRecommendations(trackId: Long): List<Track> {
+    suspend fun getRecommendations(trackId: Long): List<Track> =
+        withContext(Dispatchers.Default) { fetchRecommendations(trackId) }
+
+    private suspend fun fetchRecommendations(trackId: Long): List<Track> {
         // TIDAL's /recommendations is keyed by TIDAL id; a Deezer id would seed
         // the radio from some other song entirely.
         if (qobuzIdRegistry.isDeezerTrack(trackId) && !qobuzIdRegistry.isQobuzTrack(trackId)) return emptyList()
@@ -1341,7 +1399,7 @@ class HiFiApiClient @Inject constructor(
             if (apiTrack.title.isBlank() && apiTrack.id != 0L) {
                 try {
                     val infoBody = fetchWithRetry("/info/?id=${apiTrack.id}")
-                    val info = json.decodeFromString<TrackInfoResponse>(unwrapResponse(infoBody))
+                    val info = decodeData<TrackInfoResponse>(infoBody)
                     Track(
                         id = apiTrack.id,
                         title = info.title,
@@ -1365,7 +1423,10 @@ class HiFiApiClient @Inject constructor(
 
     // --- Lyrics ---
 
-    suspend fun getLyrics(trackId: Long, convertToRomaji: Boolean = false): Lyrics? {
+    suspend fun getLyrics(trackId: Long, convertToRomaji: Boolean = false): Lyrics? =
+        withContext(Dispatchers.Default) { fetchLyrics(trackId, convertToRomaji) }
+
+    private suspend fun fetchLyrics(trackId: Long, convertToRomaji: Boolean): Lyrics? {
         // The /lyrics endpoint is keyed by TIDAL track id. Qobuz ids live in a
         // separate namespace, so querying TIDAL with one either 404s or — worse
         // — returns a *different* track's synced lyrics: right-looking text that
@@ -1375,7 +1436,7 @@ class HiFiApiClient @Inject constructor(
         return try {
             val body = fetchWithRetry("/lyrics/?id=$trackId")
             // hifi-api sends {version, lyrics: {lyrics, subtitles, ...}}.
-            val response = json.decodeFromString<LyricsResponse>(HifiPayload.entity(json, body, "lyrics"))
+            val response = decodeEntity<LyricsResponse>(body, "lyrics")
             parseLyrics(response, convertToRomaji)
         } catch (_: Exception) {
             null
@@ -1424,19 +1485,14 @@ class HiFiApiClient @Inject constructor(
         }
     }
 
-    private fun unwrapResponse(body: String): String {
-        // Some API responses wrap data in { data: ... }
-        return try {
-            val element = json.parseToJsonElement(body)
-            if (element is kotlinx.serialization.json.JsonObject && element.containsKey("data")) {
-                element["data"].toString()
-            } else {
-                body
-            }
-        } catch (_: Exception) {
-            body
-        }
-    }
+    // Some API responses wrap data in { data: ... }. Read off the parsed tree
+    // rather than printed back to text and parsed a second time; see
+    // HifiPayload.decodeData.
+    private inline fun <reified T> decodeData(body: String): T =
+        HifiPayload.decodeData(json, json.serializersModule.serializer<T>(), body)
+
+    private inline fun <reified T> decodeEntity(body: String, key: String): T =
+        HifiPayload.decodeEntity(json, json.serializersModule.serializer<T>(), body, key)
 
     // Track search is one flat page; artist, album and playlist search are
     // TIDAL top-hits answers, a page per type. See HifiPayload.
@@ -1571,7 +1627,7 @@ class HiFiApiClient @Inject constructor(
     /** The one file a HiFi API /track/ manifest names, for [resolveTidalDownloadUrl]. */
     private suspend fun tidalManifestFileUrl(trackId: Long, quality: AudioQuality): String {
         val body = fetchWithRetry("/track/?id=$trackId&quality=${quality.apiValue}", instanceType = InstanceType.STREAMING)
-        val manifest = json.decodeFromString<TrackStreamResponse>(unwrapResponse(body)).manifest
+        val manifest = decodeData<TrackStreamResponse>(body).manifest
         val url = extractStreamUrlFromManifest(manifest)
         return when {
             url == null && quality == AudioQuality.HI_RES -> tidalManifestFileUrl(trackId, AudioQuality.LOSSLESS)
@@ -1945,12 +2001,26 @@ private fun tf.monochrome.android.data.api.model.ApiAlbum.toDomain() = Album(
 )
 
 /**
- * TIDAL track id -> whether TIDAL lists a Dolby Atmos mix for it, for every
- * track seen with its audio modes. Lets getTrackStream skip the Atmos request
- * for a track TIDAL has already said has none. Track ids only: album ids live
- * in another namespace.
+ * TIDAL track id -> whether TIDAL lists a Dolby Atmos mix for it, for the most
+ * recently seen [KNOWN_TRACKS_MAX] tracks with their audio modes. Lets
+ * getTrackStream skip the Atmos request for a track TIDAL has already said has
+ * none. Track ids only: album ids live in another namespace.
+ *
+ * Bounded because it filled for the life of the process, an entry for every
+ * track any page listed. A forgotten track reads as unknown, which only means
+ * the server is asked, as it is for every track after a restart.
  */
-private val knownAtmos = java.util.concurrent.ConcurrentHashMap<Long, Boolean>()
+private val knownAtmos: MutableMap<Long, Boolean> = boundedLru<Long, Boolean>(KNOWN_TRACKS_MAX)
+
+/** How many tracks [knownAtmos] and the Deezer hi-res set remember. */
+private const val KNOWN_TRACKS_MAX = 5_000
+
+/** A map keeping the [max] entries most recently written or read, safe to share between threads. */
+private fun <K, V> boundedLru(max: Int): MutableMap<K, V> = java.util.Collections.synchronizedMap(
+    object : LinkedHashMap<K, V>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>?): Boolean = size > max
+    },
+)
 
 /** Records [atmos] for TIDAL track [id] when TIDAL said either way; true only for an Atmos mix. */
 private fun noteAtmos(id: Long, atmos: Boolean?): Boolean {

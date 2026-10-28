@@ -1,6 +1,7 @@
 package tf.monochrome.android.data.downloads
 
 import android.content.Context
+import android.util.Log
 import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
@@ -8,13 +9,16 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.Track
 import javax.inject.Inject
@@ -67,12 +71,54 @@ class DownloadManager @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     init {
-        // The queue persists itself through here rather than knowing about
-        // storage: a fifty-track queue has to outlive the process that made it.
-        queue.onChanged = { json -> scope.launch { preferences.setDownloadQueueJson(json) } }
+        // The queue is saved through here rather than knowing about storage:
+        // a fifty-track queue has to outlive the process that made it.
         scope.launch {
-            queue.restore(preferences.downloadQueueJson.first())
+            // An unreadable file must not stop this process's downloads from
+            // being saved, as it would if the read's failure ended this.
+            val saved = runCatching { preferences.downloadQueueJson.first() }
+                .onFailure { Log.w(TAG, "could not read the saved download queue", it) }
+                .getOrNull()
+            queue.restore(saved)
             if (queue.hasWork()) startWorker()
+            // Only after the restore: a save before it would write a queue
+            // without last session's tracks over the one that has them.
+            saveQueueChanges(alreadySaved = saved ?: "[]")
+        }
+    }
+
+    /**
+     * The one writer of the saved queue, for the life of the process.
+     *
+     * It writes the queue as it stands when it gets to it, one write at a
+     * time, so the last state is always the one on disk. Each change used to
+     * launch a write of its own, which could finish in any order, and a
+     * thousand-track batch wrote the whole list two thousand times into the
+     * main settings file, waking every settings flow each time.
+     *
+     * While downloads run it writes at most once per [SAVE_INTERVAL_MS], which
+     * folds a burst of completions into one write. Once nothing is left
+     * waiting or running it stops holding back, so the finished queue is on
+     * disk straight away rather than a second after the worker lets the
+     * process go.
+     */
+    private suspend fun saveQueueChanges(alreadySaved: String) {
+        var written = alreadySaved
+        queue.saveRevision.collect {
+            val json = queue.savedJson()
+            if (json != written) {
+                try {
+                    preferences.setDownloadQueueJson(json)
+                    written = json
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // The next change tries again; one failed write must not
+                    // end saving for the rest of the process.
+                    Log.w(TAG, "could not save the download queue", e)
+                }
+            }
+            withTimeoutOrNull(SAVE_INTERVAL_MS) { queue.awaitNoWork() }
         }
     }
 
@@ -135,12 +181,16 @@ class DownloadManager @Inject constructor(
         )
     }
 
+    /**
+     * One track's state. Distinct, so a watcher of one song is not woken by
+     * every other song's progress: the queue moves whenever any of them does.
+     */
     fun observeDownloadState(trackId: Long): Flow<TrackDownloadState> =
         queue.entries.map { entries ->
             val entry = entries.firstOrNull { it.item.trackId == trackId }
                 ?: return@map TrackDownloadState(DownloadStatus.IDLE, 0f)
             TrackDownloadState(entry.status, entry.progress)
-        }
+        }.distinctUntilChanged()
 
     fun observeAllActiveDownloads(): Flow<Map<Long, TrackDownloadState>> =
         queue.entries.map { entries ->
@@ -173,4 +223,11 @@ class DownloadManager @Inject constructor(
                         .thenByDescending { it.progress }
                 )
         }
+
+    private companion object {
+        const val TAG = "DownloadManager"
+
+        /** Least time between two saves of the queue while it is downloading. */
+        const val SAVE_INTERVAL_MS = 1_000L
+    }
 }

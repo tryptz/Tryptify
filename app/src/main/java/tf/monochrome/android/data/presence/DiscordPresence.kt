@@ -1,8 +1,10 @@
 package tf.monochrome.android.data.presence
 
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -209,22 +211,49 @@ object DiscordPresence {
         data object Ignored : Frame
     }
 
+    /**
+     * A frame's opcode, sequence and event name, and nothing else.
+     *
+     * Every dispatch a user account receives comes through [parseFrame]: READY
+     * runs to megabytes, and every message in every server the account is in
+     * arrives as one. None of their payloads is read, so `d` is not declared
+     * and the decoder steps over it rather than building it into a tree.
+     * Primitives rather than numbers and strings, so each field is read
+     * exactly as the tree was read before.
+     */
+    @Serializable
+    private class Head(
+        val op: JsonPrimitive? = null,
+        val s: JsonPrimitive? = null,
+        val t: JsonPrimitive? = null,
+    )
+
     fun parseFrame(text: String): Frame {
+        val head = runCatching { json.decodeFromString(Head.serializer(), text) }.getOrNull()
+            ?: return Frame.Ignored
+        val seq = head.s?.contentOrNull()?.toIntOrNull()
+        return when (head.op?.contentOrNull()?.toIntOrNull()) {
+            // The two whose payload matters are a few bytes long.
+            OP_HELLO, OP_INVALID_SESSION -> parseControl(text)
+            OP_HEARTBEAT -> Frame.HeartbeatRequest
+            OP_HEARTBEAT_ACK -> Frame.HeartbeatAck
+            OP_RECONNECT -> Frame.Reconnect
+            OP_DISPATCH -> Frame.Dispatch(head.t?.contentOrNull(), seq)
+            else -> Frame.Ignored
+        }
+    }
+
+    private fun parseControl(text: String): Frame {
         val root = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull()
             ?: return Frame.Ignored
-        val seq = root["s"]?.jsonPrimitive?.contentOrNull()?.toIntOrNull()
         return when (root["op"]?.jsonPrimitive?.contentOrNull()?.toIntOrNull()) {
             OP_HELLO -> {
                 val interval = root["d"]?.jsonObject
                     ?.get("heartbeat_interval")?.jsonPrimitive?.contentOrNull()?.toLongOrNull()
                 Frame.Hello(interval ?: DEFAULT_HEARTBEAT_MS)
             }
-            OP_HEARTBEAT -> Frame.HeartbeatRequest
-            OP_HEARTBEAT_ACK -> Frame.HeartbeatAck
-            OP_RECONNECT -> Frame.Reconnect
             OP_INVALID_SESSION ->
                 Frame.InvalidSession(root["d"]?.jsonPrimitive?.contentOrNull() == "true")
-            OP_DISPATCH -> Frame.Dispatch(root["t"]?.jsonPrimitive?.contentOrNull(), seq)
             else -> Frame.Ignored
         }
     }

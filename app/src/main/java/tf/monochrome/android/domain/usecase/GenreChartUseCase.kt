@@ -217,12 +217,19 @@ class GenreChartUseCase @Inject constructor(
      * process rather than expired: a chart row is a fixed pair of strings and
      * the catalogue's answer for it does not change while the app is open.
      *
+     * Up to as many as [DiscoveryCache] keeps, least recently used dropped
+     * first. Unbounded, this grew for as long as the process lived; a dropped
+     * answer is only asked for again.
+     *
      * Declared here, above every use, rather than beside [resolve] at the foot
      * of the class. Nothing constructs this use case and immediately resolves,
      * so the late declaration was harmless — but it is the same shape that took
      * DiscoverViewModel down, and the fix costs nothing.
      */
-    private val resolved = mutableMapOf<String, Stamped<UnifiedTrack?>>()
+    private val resolved = object : LinkedHashMap<String, Stamped<UnifiedTrack?>>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Stamped<UnifiedTrack?>>?): Boolean =
+            size > DiscoveryCache.MAX_TRACK_ENTRIES
+    }
     private val resolveMutex = Mutex()
 
     /**
@@ -233,8 +240,12 @@ class GenreChartUseCase @Inject constructor(
      * modern classical and film score share most of their names — so on a feed
      * building six shelves at once, most of this is already answered by the
      * time the third shelf asks.
+     *
+     * Bounded as [DiscoveryCache] bounds its copy, by lists and by the tracks
+     * in them, least recently used dropped first; see [rememberArtistTracks].
      */
-    private val artistTopTracks = mutableMapOf<String, Stamped<List<UnifiedTrack>>>()
+    private val artistTopTracks = LinkedHashMap<String, Stamped<List<UnifiedTrack>>>(16, 0.75f, true)
+    private var artistTopTrackCount = 0
     private val artistMutex = Mutex()
 
     /** See [RESOLVE_GATE]. Shared by every pool and every shelf in the process. */
@@ -286,7 +297,7 @@ class GenreChartUseCase @Inject constructor(
             }
             artistMutex.withLock {
                 snapshot.artistTopTracks.forEach { (key, held) ->
-                    if (key !in artistTopTracks) artistTopTracks[key] = Stamped(held.value, held.at)
+                    if (key !in artistTopTracks) rememberArtistTracks(key, Stamped(held.value, held.at))
                 }
             }
             restored = true
@@ -733,7 +744,7 @@ class GenreChartUseCase @Inject constructor(
             }
 
             val held = Stamped(tracks)
-            artistMutex.withLock { artistTopTracks[key] = held }
+            artistMutex.withLock { rememberArtistTracks(key, held) }
             // An empty answer stays in memory but off the disk. In this session
             // it is a real answer and worth not asking twice; carried into the
             // next one it would pin an artist the instance happened to be
@@ -745,6 +756,28 @@ class GenreChartUseCase @Inject constructor(
 
     private suspend fun memoisedArtistTracks(key: String): List<UnifiedTrack>? =
         artistMutex.withLock { artistTopTracks[key]?.takeIf { it.fresh(TTL_CATALOGUE_MS) }?.value }
+
+    /**
+     * Hold [held] as [key]'s top tracks, dropping the least recently used
+     * lists while there are more than [DiscoveryCache.MAX_TRACK_ENTRIES] or
+     * their tracks come to more than [DiscoveryCache.MAX_TOP_TRACKS]. Called
+     * with [artistMutex] held.
+     */
+    private fun rememberArtistTracks(key: String, held: Stamped<List<UnifiedTrack>>) {
+        artistTopTracks.put(key, held)?.let { artistTopTrackCount -= it.value.size }
+        artistTopTrackCount += held.value.size
+        // Least recently used first, so the list just put, the most recent,
+        // is the last one this could reach.
+        val eldest = artistTopTracks.entries.iterator()
+        while (
+            artistTopTracks.size > 1 &&
+            (artistTopTracks.size > DiscoveryCache.MAX_TRACK_ENTRIES ||
+                artistTopTrackCount > DiscoveryCache.MAX_TOP_TRACKS)
+        ) {
+            artistTopTrackCount -= eldest.next().value.value.size
+            eldest.remove()
+        }
+    }
 
     /**
      * Run [block], and treat any failure of its own as an empty answer.

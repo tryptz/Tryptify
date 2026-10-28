@@ -33,15 +33,21 @@ class ChartsRepository @Inject constructor(
 ) {
     private val mutex = Mutex()
     private val sitewide = mutableMapOf<ChartWindow, Cached<SitewideChart>>()
-    private val artistSets = mutableMapOf<String, Cached<Set<String>>>()
-    private val tagCharts = mutableMapOf<String, Cached<List<ChartEntry>>>()
+    // The artist sets, the tag charts and the artist facts below were checked
+    // for age on read and never let go of, so every genre and artist the map
+    // was walked through stayed for the life of the process. Now an expired
+    // answer goes as the next one of its kind is written, and past a ceiling
+    // the least recently used goes too; either way it is only fetched again
+    // if asked for.
+    private val artistSets = leastRecentlyUsed<Set<String>>(MAX_GENRE_ENTRIES)
+    private val tagCharts = leastRecentlyUsed<List<ChartEntry>>(MAX_GENRE_ENTRIES)
     private val artistTags = mutableMapOf<String, Cached<List<String>>>()
 
     private val sitewideFlight = SingleFlight<ChartWindow, SitewideChart>()
     private val artistSetFlight = SingleFlight<String, Set<String>>()
     private val tagChartFlight = SingleFlight<String, List<ChartEntry>>()
     private val artistTagFlight = SingleFlight<String, List<String>>()
-    private val artistFacts = mutableMapOf<String, Cached<ArtistFacts>>()
+    private val artistFacts = leastRecentlyUsed<ArtistFacts>(MAX_ARTIST_FACTS)
     private val artistFactFlight = SingleFlight<String, ArtistFacts?>()
 
     /** MusicBrainz asks for a request a second at most; the catalogue counts queue for it. */
@@ -68,10 +74,31 @@ class ChartsRepository @Inject constructor(
          * bounds a cold fetch to a few paced requests rather than dozens.
          */
         private const val MAX_ARTISTS_PER_NAME = 300
+
+        /**
+         * Most genres' tag charts, and most genres' artist sets, held at once:
+         * over half the genre map, which is a long session's exploring.
+         */
+        private const val MAX_GENRE_ENTRIES = 200
+
+        /** Most artists' facts held at once. */
+        private const val MAX_ARTIST_FACTS = 200
     }
 
     private class Cached<T>(val value: T, val at: Long = System.currentTimeMillis()) {
         fun fresh(ttlMs: Long) = System.currentTimeMillis() - at < ttlMs
+    }
+
+    /** Access-ordered, so used only under [mutex]: a read reorders it. */
+    private fun <T> leastRecentlyUsed(max: Int): LinkedHashMap<String, Cached<T>> =
+        object : LinkedHashMap<String, Cached<T>>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Cached<T>>?): Boolean =
+                size > max
+        }
+
+    /** Drops what [ttlMs] has expired. Under [mutex]. */
+    private fun <T> MutableMap<String, Cached<T>>.dropExpired(ttlMs: Long) {
+        values.removeAll { !it.fresh(ttlMs) }
     }
 
     /**
@@ -88,15 +115,19 @@ class ChartsRepository @Inject constructor(
         restoreMutex.withLock {
             if (restored) return
             val snapshot = disk.restore()
+            // Expired answers are left behind: every read would refuse them.
             mutex.withLock {
                 snapshot.tagCharts.forEach { (id, held) ->
-                    if (id !in tagCharts) tagCharts[id] = Cached(held.value, held.at)
+                    val cached = Cached(held.value, held.at)
+                    if (id !in tagCharts && cached.fresh(TTL_TAG_CHART_MS)) tagCharts[id] = cached
                 }
                 snapshot.artistSets.forEach { (id, held) ->
-                    if (id !in artistSets) artistSets[id] = Cached(held.value, held.at)
+                    val cached = Cached(held.value, held.at)
+                    if (id !in artistSets && cached.fresh(TTL_ARTIST_SET_MS)) artistSets[id] = cached
                 }
                 snapshot.artistTags.forEach { (key, held) ->
-                    if (key !in artistTags) artistTags[key] = Cached(held.value, held.at)
+                    val cached = Cached(held.value, held.at)
+                    if (key !in artistTags && cached.fresh(TTL_ARTIST_TAGS_MS)) artistTags[key] = cached
                 }
             }
             restored = true
@@ -168,7 +199,10 @@ class ChartsRepository @Inject constructor(
             }
             if (union.isNotEmpty()) {
                 val held = Cached(union.toSet())
-                mutex.withLock { artistSets[genreId] = held }
+                mutex.withLock {
+                    artistSets.dropExpired(TTL_ARTIST_SET_MS)
+                    artistSets[genreId] = held
+                }
                 disk.putArtistSet(genreId, held.value, held.at)
             }
             union
@@ -246,7 +280,10 @@ class ChartsRepository @Inject constructor(
             }
             val facts = ArtistFacts(bio = info.bio, releases = releases)
             if (facts.bio != null || facts.releases != null) {
-                mutex.withLock { artistFacts[key] = Cached(facts) }
+                mutex.withLock {
+                    artistFacts.dropExpired(TTL_ARTIST_TAGS_MS)
+                    artistFacts[key] = Cached(facts)
+                }
             }
             facts
         }
@@ -272,7 +309,10 @@ class ChartsRepository @Inject constructor(
             }
             if (best.isNotEmpty()) {
                 val held = Cached(best)
-                mutex.withLock { tagCharts[genreId] = held }
+                mutex.withLock {
+                    tagCharts.dropExpired(TTL_TAG_CHART_MS)
+                    tagCharts[genreId] = held
+                }
                 disk.putTagChart(genreId, held.value, held.at)
             }
             best
