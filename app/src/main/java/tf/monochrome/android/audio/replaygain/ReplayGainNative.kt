@@ -19,8 +19,8 @@ internal object ReplayGainNative {
     @JvmStatic external fun nativeDestroy(handle: Long)
     @JvmStatic external fun nativePrepare(handle: Long, sampleRate: Int, channels: Int)
 
-    /** The start of a stream, at [gain] at once. */
-    @JvmStatic external fun nativeReset(handle: Long, gain: Float)
+    /** The start of a stream, in the mode of the song it starts (as [nativeProcess] takes it). */
+    @JvmStatic external fun nativeReset(handle: Long, gain: Float, followLufs: Float, song: Int)
 
     /**
      * [frames] whole frames of [input] from byte [inputOffset] to the start of

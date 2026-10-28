@@ -24,6 +24,7 @@
 #include "../dsp_engine.h"
 #include "../oxford/oxford_dsp.h"
 #include "../replaygain/replay_gain.h"
+#include "../util/finite.h"
 
 using trypt::dsp::CompressorProcessor;
 using trypt::dsp::InflatorProcessor;
@@ -89,14 +90,24 @@ void theStage() {
         check(run16(s, {0, 0, 0, 0}) == std::vector<int16_t>({0, 0, 0, 0}), "silence stays silent at any gain");
     }
     {
+        // A boost starts a stream at unity and glides up (see reset()): past the glide first.
         Stage s(2.0f);
+        run16(s, std::vector<int16_t>(2 * 2410, 0));
         check(run16(s, {30000, -30000, 100, -100}) == std::vector<int16_t>({32767, -32768, 200, -200}),
               "a boost near full scale stops at full scale rather than wrapping");
     }
     {
         Stage s(2.0f);
+        runF(s, std::vector<float>(2 * 2410, 0.0f));
         check(runF(s, {0.75f, -0.75f}) == std::vector<float>({1.5f, -1.5f}),
               "float is not clipped here, headroom is the later stages' to keep");
+    }
+    {
+        Stage s(2.0f);
+        const auto out = runF(s, {0.5f, 0.5f});
+        // One glide step past unity on the first frame, no more.
+        check(out[0] <= 0.5f * 1.001f && s.current() < 1.001f,
+              "a stream with a boost starts at unity, not boosted, and glides up");
     }
     {
         // Rounds half up, as Java's Math.round: the Kotlin stage's results, exactly.
@@ -292,14 +303,125 @@ void following() {
         check(std::fabs(dbOf(a.current()) - dbOf(b.current())) < 0.1, "16-bit is measured and followed as float is");
     }
     {
-        // Silence has no loudness to go by: left where it is.
-        Stage s(1.0f);
+        // Silence has no loudness to go by: left where it is, here a cut.
+        Stage s(0.5f);
         std::vector<float> zero(kBlock * 2, 0.0f), o(kBlock * 2);
-        for (int b = 0; b < 100; b++) {
+        for (int b = 0; b < 200; b++) {
             s.follow(1, -14.0f);
             s.processFloat(zero.data(), o.data(), kBlock);
         }
-        check(s.current() == 1.0f, "silence leaves the gain where it is");
+        check(s.current() == 0.5f, "silence leaves a measured song's gain where it is");
+    }
+    {
+        // The call order the player uses (the JNI): the new song's mode, then
+        // the stream's start. A tagged song turned down, then a skip to a loud
+        // one with no tags: it starts at the level the last was left at.
+        auto s = std::make_unique<Stage>(0.35f);  // about -9 dB
+        std::vector<float> in(kBlock * 2), o(kBlock * 2);
+        fillSong(in, 0, loud);
+        s->processFloat(in.data(), o.data(), kBlock);
+        s->setGain(1.0f);
+        s->follow(5, songLufs - 6.0f);
+        s->reset();
+        s->processFloat(in.data(), o.data(), kBlock);
+        check(std::fabs(s->current() - 0.35f) < 0.01f, "a skip from a tagged song to a measured one starts at the last level");
+
+        // Back the other way: a measured song at unity, then a skip to a
+        // tagged one at -12 dB. It starts at its gain, not at the old level.
+        auto t = std::make_unique<Stage>(1.0f);
+        t->follow(1, songLufs + 6.0f);
+        t->processFloat(in.data(), o.data(), kBlock);
+        t->setGain(0.25f);
+        t->fixed();
+        t->reset();
+        std::vector<float> one{1.0f, 1.0f}, first(2);
+        t->processFloat(one.data(), first.data(), 1);
+        check(first[0] == 0.25f, "a skip from a measured song to a tagged one starts at the tagged gain");
+    }
+    {
+        // A gapless boundary comes before the player says what is next: the
+        // stage restarts in the old song's mode. Mid-glide, it must not jump.
+        auto s = std::make_unique<Stage>(1.0f);
+        long n = 0;
+        follow(*s, 1, songLufs - 6.0f, loud, 0.7, n);  // the glide is under way
+        const float before = s->current();
+        s->reset();
+        check(before < 0.99f && before > 0.55f && s->current() == before,
+              "a gapless boundary in a measured song leaves the level mid-glide where it is");
+
+        // A boost must not run on into the next song's start: past its own peak, it would clip.
+        auto b = std::make_unique<Stage>(2.0f);
+        std::vector<float> z(2 * 2410, 0.0f), zo(2 * 2410);
+        b->processFloat(z.data(), zo.data(), 2410);
+        b->reset();
+        check(b->current() == 1.0f, "a gapless boundary after a boosted song starts the next at unity");
+    }
+    {
+        // A soft intro after a song left at -6 dB: for its first seconds the
+        // gain may come down, never up, so the song proper does not burst in.
+        auto s = std::make_unique<Stage>(0.5f);
+        long n = 0;
+        std::vector<float> in(kBlock * 2), o(kBlock * 2);
+        float most = 0.0f;
+        for (int b = 0; b < static_cast<int>(4.5 * kRate / kBlock); b++, n += kBlock) {
+            fillSong(in, n, 0.02f);
+            s->follow(9, songLufs - 6.0f);
+            s->processFloat(in.data(), o.data(), kBlock);
+            most = std::max(most, s->current());
+        }
+        check(most <= 0.5f + 1e-6f, "a soft intro does not raise the gain in a song's first seconds");
+
+        // After them, a song quieter than the target rises back to unity, and is bit for bit again.
+        for (int b = 0; b < static_cast<int>(4.0 * kRate / kBlock); b++, n += kBlock) {
+            fillSong(in, n, 0.02f);
+            s->follow(9, songLufs - 6.0f);
+            s->processFloat(in.data(), o.data(), kBlock);
+        }
+        check(s->current() == 1.0f && in == o, "a quiet song rises back to exact unity and comes through bit for bit");
+    }
+    {
+        // A song right at the target: the gain settles once and stays, no flicker around unity.
+        auto s = std::make_unique<Stage>(1.0f);
+        std::vector<float> in(kBlock * 2), o(kBlock * 2);
+        float last = s->current();
+        int changes = 0;
+        long n = 0;
+        for (int b = 0; b < static_cast<int>(60.0 * kRate / kBlock); b++, n += kBlock) {
+            fillSong(in, n, loud);
+            s->follow(3, songLufs);
+            s->processFloat(in.data(), o.data(), kBlock);
+            if (s->current() != last && (s->current() == 1.0f || last == 1.0f)) changes++;
+            last = s->current();
+        }
+        std::printf("      at the target for a minute: %d moves to or from unity\n", changes);
+        check(changes <= 1, "a song at the target does not flicker around unity");
+    }
+    {
+        // A NaN from upstream must not freeze the measurement for the rest of the song.
+        tryptify::LoudnessMeter control, hit;
+        control.configure(kRate, 2);
+        hit.configure(kRate, 2);
+        std::vector<float> block(kBlock * 2);
+        long n = 0;
+        for (int b = 0; b < static_cast<int>(3.0 * kRate / kBlock); b++, n += kBlock) {
+            fillSong(block, n, loud);
+            control.process(block.data(), kBlock);
+            hit.process(block.data(), kBlock);
+        }
+        const float before = control.reading().integrated;
+        float bad[2] = {NAN, NAN};
+        hit.process(bad, 1);
+        // 6 dB quieter: inside the relative gate, so the reading has to move.
+        for (int b = 0; b < static_cast<int>(10.0 * kRate / kBlock); b++, n += kBlock) {
+            fillSong(block, n, loud * 0.5f);
+            control.process(block.data(), kBlock);
+            hit.process(block.data(), kBlock);
+        }
+        std::printf("      %.2f LUFS, then after a quieter part %.2f, and %.2f with a NaN before it\n",
+                    before, control.reading().integrated, hit.reading().integrated);
+        check(before - control.reading().integrated > 1.0f &&
+                  std::fabs(control.reading().integrated - hit.reading().integrated) < 0.3f,
+              "a NaN upstream does not freeze the loudness reading");
     }
 }
 
@@ -367,7 +489,9 @@ struct Chain {
             compressor.process(planes, kBlock);
             r.clippedFlag = engine.getAndResetClipped() || r.clippedFlag;
             for (int i = 0; i < kBlock; i++) {
-                r.finite = r.finite && std::isfinite(l[i]) && std::isfinite(rr[i]);
+                // dspIsFinite, not std::isfinite: built with -ffast-math, as on
+                // the phone, the compiler may fold the latter to true.
+                r.finite = r.finite && dspIsFinite(l[i]) && dspIsFinite(rr[i]);
                 if (b >= measureFrom) {
                     r.peak = std::max({r.peak, std::fabs(l[i]), std::fabs(rr[i])});
                     if (havePrev) r.maxStep = std::max(r.maxStep, std::fabs(l[i] - prev));

@@ -107,7 +107,15 @@ class ReplayGainProcessor @Inject constructor() : AudioProcessor {
     override fun configure(inputAudioFormat: AudioFormat): AudioFormat {
         val supported = inputAudioFormat.channelCount > 0 &&
             (inputAudioFormat.encoding == C.ENCODING_PCM_16BIT || inputAudioFormat.encoding == C.ENCODING_PCM_FLOAT)
-        pendingFormat = if (supported) inputAudioFormat else AudioFormat.NOT_SET
+        if (!supported) {
+            // Out of the pipeline: both cleared, or isActive() stays true and
+            // Media3's pipeline check (an active processor must not answer
+            // NOT_SET) fails, as MixBusProcessor's comment explains.
+            pendingFormat = AudioFormat.NOT_SET
+            inputFormat = AudioFormat.NOT_SET
+            return AudioFormat.NOT_SET
+        }
+        pendingFormat = inputAudioFormat
         return pendingFormat
     }
 
@@ -160,10 +168,15 @@ class ReplayGainProcessor @Inject constructor() : AudioProcessor {
         if (format == AudioFormat.NOT_SET) return
         if (native == 0L) native = ReplayGainNative.nativeCreate()
         ReplayGainNative.nativePrepare(native, format.sampleRate, format.channelCount)
-        // A new stream starts at its gain: a glide here would be a fade-in.
-        ReplayGainNative.nativeReset(native, target)
+        // The new stream starts in the mode of the song it is (ReplayGainStage::reset()).
+        ReplayGainNative.nativeReset(native, target, followLufs, song)
     }
 
+    /**
+     * The pipeline is torn down (a decoder change between songs, a stop).
+     * The native stage is kept: it holds the level the music is at and a
+     * measured song's reading, which the next stream carries on from.
+     */
     override fun reset() {
         pendingFormat = AudioFormat.NOT_SET
         inputFormat = AudioFormat.NOT_SET
@@ -171,6 +184,15 @@ class ReplayGainProcessor @Inject constructor() : AudioProcessor {
         outputBuffer = AudioProcessor.EMPTY_BUFFER
         directInput = AudioProcessor.EMPTY_BUFFER
         inputEnded = false
+    }
+
+    /**
+     * Frees the native stage, for a copy that will not play again (a blend's
+     * tail, DspChain.release). The injected singleton lives as long as the
+     * process and is never released.
+     */
+    fun release() {
+        reset()
         if (native != 0L) {
             ReplayGainNative.nativeDestroy(native)
             native = 0L

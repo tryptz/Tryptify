@@ -49,6 +49,15 @@ public:
     /** How long a following song's gain takes to move to a new reading: slow, so it is not heard working. */
     static constexpr float kFollowRampMs = 500.0f;
 
+    /**
+     * For a song's first seconds its gain may come down but not go up past
+     * where it started: a soft intro read on its own would raise the gain
+     * just before the song proper begins.
+     */
+    static constexpr float kFollowHoldMs = 5000.0f;
+
+    ReplayGainStage() { meter_.setTruePeak(false); }
+
     /** A new format. The gain reached so far carries on; a measurement starts again if the format changed. */
     void prepare(int sampleRate, int channels) {
         sampleRate_ = sampleRate > 0 ? sampleRate : 48000;
@@ -74,6 +83,8 @@ public:
         song_ = song;
         meter_.reset();
         followGoal_ = std::min(current_, 1.0f);
+        followStart_ = followGoal_;
+        followedFrames_ = 0;
     }
 
     /** Back to the gain setGain() gives: the song has tags. */
@@ -93,12 +104,20 @@ public:
     float current() const { return current_; }
 
     /**
-     * The start of a stream: at the gain at once, a glide here would be a
-     * fade-in. A following song (a seek inside it) stays at the level it was
-     * following.
+     * The start of a stream: a skip, a seek, or the boundary between two
+     * songs played gapless. Call follow() or fixed() for the new song first.
+     *
+     * - A fixed gain that cuts starts at once: a glide here would be a
+     *   fade-in. One that boosts starts at unity and glides up: a gapless
+     *   boundary comes before the player says which song is next, so this
+     *   may be the last song's boost on the next song's start, and a boost
+     *   past its own peak clips.
+     * - A following song keeps the level it is at, glide and all: a jump
+     *   here would land mid-music at a gapless boundary.
      */
     void reset() {
-        current_ = following_ ? followGoal_ : gain();
+        if (following_) return;
+        current_ = std::min(gain(), 1.0f);
         rampGoal_ = current_;
         rampStep_ = 0.0f;
     }
@@ -150,15 +169,23 @@ private:
         if (following_ && channels_ <= tryptify::LoudnessMeter::kMaxChannels) {
             // The song as it comes in, before any gain: what the gain is worked from.
             measure(in, frames);
+            followedFrames_ += frames;
             const float lufs = meter_.reading().integrated;
             if (lufs > kNoReading) {
-                const float want = std::min(1.0f, std::pow(10.0f, (targetLufs_ - lufs) / 20.0f));
+                float want = std::min(1.0f, std::pow(10.0f, (targetLufs_ - lufs) / 20.0f));
+                if (static_cast<float>(followedFrames_) < static_cast<float>(sampleRate_) * kFollowHoldMs / 1000.0f) {
+                    want = std::min(want, followStart_);
+                }
                 // The reading drifts a little with every 100 ms block. Each
                 // drift followed would start the glide over, and it would
                 // creep towards its goal without landing: only a move past
-                // kFollowStep is followed, and unity always is, exactly.
-                if (std::fabs(want / followGoal_ - 1.0f) > kFollowStep || ((want == 1.0f) != (followGoal_ == 1.0f))) {
+                // kFollowStep is followed. Inside that band, unity is landed
+                // on exactly, so a song that needs nothing is bit-perfect;
+                // and the band holds at unity too, so it does not flicker.
+                if (std::fabs(want / followGoal_ - 1.0f) > kFollowStep) {
                     followGoal_ = want;
+                } else if (want == 1.0f) {
+                    followGoal_ = 1.0f;
                 }
             }
             goal = followGoal_;
@@ -179,7 +206,10 @@ private:
         int i = 0;
         for (int frame = 0; frame < frames; frame++) {
             if (g != goal) {
-                g += rampStep_;
+                const float next = g + rampStep_;
+                // A step too small to move the float (near unity, on a long
+                // glide at a high rate) would never land: it lands now.
+                g = next == g ? goal : next;
                 if ((rampStep_ > 0.0f && g >= goal) || (rampStep_ < 0.0f && g <= goal) || rampStep_ == 0.0f) g = goal;
             }
             for (int c = 0; c < channels_; c++, i++) out[i] = apply(in[i], g);
@@ -196,6 +226,8 @@ private:
     uint32_t song_ = 0;
     float targetLufs_ = -14.0f;
     float followGoal_ = 1.0f;
+    float followStart_ = 1.0f;
+    int64_t followedFrames_ = 0;
 
     std::atomic<float> target_{1.0f};
     float current_ = 1.0f;

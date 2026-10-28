@@ -33,15 +33,29 @@ Java_tf_monochrome_android_audio_replaygain_ReplayGainNative_nativePrepare(
     if (h != 0) stage(h)->prepare(sampleRate, channels);
 }
 
-extern "C" JNIEXPORT void JNICALL
-Java_tf_monochrome_android_audio_replaygain_ReplayGainNative_nativeReset(JNIEnv*, jclass, jlong h, jfloat gain) {
-    if (h == 0) return;
-    stage(h)->setGain(gain);
-    stage(h)->reset();
-}
-
 /** Below this, [followLufs] means "not following": a sentinel, not NaN, as the library builds with -ffast-math. */
 constexpr float kFollowOff = -100.0f;
+
+namespace {
+/** The song's mode, before anything is worked from it. */
+void apply(ReplayGainStage* s, float gain, float followLufs, jint song) {
+    s->setGain(gain);
+    if (followLufs > kFollowOff) {
+        s->follow(static_cast<uint32_t>(song), followLufs);
+    } else {
+        s->fixed();
+    }
+}
+}  // namespace
+
+/** The start of a stream, in the mode of the song it starts: see ReplayGainStage::reset(). */
+extern "C" JNIEXPORT void JNICALL
+Java_tf_monochrome_android_audio_replaygain_ReplayGainNative_nativeReset(
+        JNIEnv*, jclass, jlong h, jfloat gain, jfloat followLufs, jint song) {
+    if (h == 0) return;
+    apply(stage(h), gain, followLufs, song);
+    stage(h)->reset();
+}
 
 /**
  * [frames] frames from [in] at byte [inOffset] to the start of [out]. With
@@ -61,12 +75,7 @@ Java_tf_monochrome_android_audio_replaygain_ReplayGainNative_nativeProcess(
     auto* dst = static_cast<uint8_t*>(env->GetDirectBufferAddress(out));
     if (src == nullptr || dst == nullptr) return -1.0f;
     src += inOffset;
-    s->setGain(gain);
-    if (followLufs > kFollowOff) {
-        s->follow(static_cast<uint32_t>(song), followLufs);
-    } else {
-        s->fixed();
-    }
+    apply(s, gain, followLufs, song);
     if (isFloat) {
         s->processFloat(reinterpret_cast<const float*>(src), reinterpret_cast<float*>(dst), frames);
     } else {
