@@ -218,6 +218,39 @@ class LibusbUacDriver @Inject constructor(
      */
     fun start(sampleRate: Int, bitsPerSample: Int, channels: Int): Boolean {
         val ok = nativeStart(sampleRate, bitsPerSample, channels)
+        publishStart(ok)
+        return ok
+    }
+
+    /**
+     * Parks the running stream: the iso transfers are cancelled and the
+     * streaming interface goes to alt 0, so a long pause costs the phone no
+     * wakeups and the DAC no streaming, while both interfaces stay claimed
+     * (letting go is what hands the DAC back to Android's kernel driver; see
+     * [flushRing]). [isStreaming] stays true: it is the same stream, and
+     * [resumePump] brings it back. False if nothing was running to park.
+     * Blocks for as long as the transfers take to come back, a few ms.
+     */
+    fun parkPump(): Boolean = nativeParkPump()
+
+    /** Whether [parkPump] has parked the stream and nothing has resumed or stopped it. */
+    fun isPumpParked(): Boolean = nativeIsPumpParked()
+
+    /**
+     * Brings a parked stream back the way [start] brings up its format: alt
+     * setting, rate and hardware volume again, a fresh pump, and played and
+     * written frames from zero. True if it streams (and when it was never
+     * parked). False if the DAC refused: the stream is then down, exactly as
+     * after a failed [start], and [isStreaming] says so.
+     */
+    fun resumePump(): Boolean {
+        if (!nativeIsPumpParked()) return true
+        val ok = nativeResumePump()
+        publishStart(ok)
+        return ok
+    }
+
+    private fun publishStart(ok: Boolean) {
         _isStreaming.value = ok
         // Always pull the rate inventory: native populates it during
         // start whether we succeeded or not (failure path's GET_RANGE
@@ -237,7 +270,6 @@ class LibusbUacDriver @Inject constructor(
             val detail = nativeLastErrorDetail().orEmpty()
             _lastStartError.value = StartFailure(code, detail)
         }
-        return ok
     }
 
     fun stop() {
@@ -264,16 +296,20 @@ class LibusbUacDriver @Inject constructor(
     fun isStreamingFormat(sampleRate: Int, bitsPerSample: Int, channels: Int): Boolean =
         nativeIsStreamingFormat(sampleRate, bitsPerSample, channels)
 
-    /** Cumulative frames the iso pump has dispatched to the DAC since [start].
+    /** Frames written since [start] or the last [flushRing] that the DAC has
+     *  been sent: those in iso transfers that have completed. Audio still
+     *  queued in transfers in flight (16-32 ms) is not counted yet, nor is the
+     *  silence that fills an underrun.
      *  Used by [LibusbAudioSink.getCurrentPositionUs] for accurate playhead
      *  reporting — `framesWritten` (which the renderer sees as "consumed")
      *  runs ahead of realtime because the renderer fills the ring much faster
      *  than the DAC drains it. */
     fun playedFrames(): Long = nativePlayedFrames()
 
-    /** Frames currently sitting in the ring waiting for the DAC to consume.
-     *  Used by [LibusbAudioSink.hasPendingData] / [isEnded] so Media3 knows
-     *  when the sink has actually finished playback vs. just queued it. */
+    /** Frames written and not yet sent to the DAC, in the ring or in
+     *  transfers in flight. Used by [LibusbAudioSink.hasPendingData] /
+     *  [isEnded] so Media3 knows when the sink has actually finished
+     *  playback vs. just queued it. */
     fun pendingFrames(): Long = nativePendingFrames()
 
     /** Pushes [frames] frames from [buffer] (direct, native-byte-order),
@@ -296,6 +332,9 @@ class LibusbUacDriver @Inject constructor(
     private external fun nativeIsOpen(): Boolean
     private external fun nativeStart(sampleRate: Int, bitsPerSample: Int, channels: Int): Boolean
     private external fun nativeStop()
+    private external fun nativeParkPump(): Boolean
+    private external fun nativeResumePump(): Boolean
+    private external fun nativeIsPumpParked(): Boolean
     private external fun nativeFlushRing()
     private external fun nativeIsStreamingFormat(sampleRate: Int, bitsPerSample: Int, channels: Int): Boolean
     private external fun nativeWrite(buffer: ByteBuffer, byteOffset: Int, frames: Int): Int

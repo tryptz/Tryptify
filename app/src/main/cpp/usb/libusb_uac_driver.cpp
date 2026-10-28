@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <new>
 
 #define TAG "LibusbUacDriver"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
@@ -65,10 +66,33 @@ constexpr uint8_t REQ_UAC1_GET_MAX     = 0x83;
 constexpr uint8_t REQ_SET_CUR              = 0x01;
 constexpr uint16_t CS_SAM_FREQ_CONTROL_SEL = 0x01;
 
-// Pump tuning. 4 transfers × 8 packets keeps the pipe primed without
-// hogging memory.
+// Pump tuning. Each data transfer carries about kTransferUs of audio,
+// and never fewer than kMinPacketsPerTransfer packets; kNumTransfers
+// are in flight. Every completion wakes the event thread, and transfers
+// of 8 packets meant 1,000 wakeups a second at high speed with a packet
+// per microframe, plus one per feedback packet. There it is now 32
+// packets (4 ms, ~16 ms queued) and 250 wakeups, about what Linux's
+// snd-usb-audio queues (up to 48 packets a URB at high speed). With
+// one packet a millisecond (full speed, or a high-speed alt with
+// bInterval 4) 4 ms would be 4 packets and twice the old wakeups, so
+// those keep their 8 packets: 8 ms each, ~32 ms queued, 125 a second.
+//
+// Lyrics, the scrubber and A/V sync read the played position, which
+// counts a transfer only once it completes (see onIso), so a deeper
+// queue does not put the position ahead of the DAC.
 constexpr int kNumTransfers = 4;
-constexpr int kPacketsPerTransfer = 8;
+constexpr int kTransferUs = 4000;
+constexpr int kMinPacketsPerTransfer = 8;
+constexpr int kMaxPacketsPerTransfer = 32;
+// Feedback: kFeedbackTransfers in flight of about kFeedbackTransferUs
+// each, 8 packets at the common 1 ms feedback interval. The value
+// moves at clock-drift speed, and onIso reads the newest one once per
+// data transfer, so a fresher reading would change nothing.
+constexpr int kFeedbackTransfers = 2;
+constexpr int kFeedbackTransferUs = 8000;
+constexpr int kMaxFeedbackPackets = 64;
+// Heartbeat once a minute.
+constexpr int kIsoLogSeconds = 60;
 // Ring sizing: the ring is resized at start() to ~250 ms of audio at
 // the negotiated format, rounded up to a page multiple. The old fixed
 // 1 MiB ring held ~5.9 s at 44.1k/16/2ch — a partial write at that
@@ -83,13 +107,23 @@ constexpr int kPacketsPerTransfer = 8;
 constexpr size_t kRingMinBytes = 1u << 15;   // 32 KiB floor (~186 ms @ 44.1k/16/2ch)
 constexpr size_t kRingQuantum = 4096;        // size rounding
 
-// Heartbeat: one LOGI per N iso completion callbacks. At HS /
-// bInterval=1 the event thread fires 8000 callbacks/sec / kPacketsPerTransfer
-// per transfer, so kNumTransfers transfers in flight × 8000pps gives
-// ~1000 onIso calls/sec → log once per second. Calibrated to be
-// noticeable in logcat without flooding it; flip to a smaller value
-// when actively diagnosing a wedge.
-constexpr uint32_t kIsoLogEvery = 1000;
+// Microseconds between packets of an endpoint with this bInterval,
+// with the same reading of bInterval as the rest of the pump.
+int packetPeriodUs(bool highSpeed, uint8_t bInterval) {
+    if (highSpeed) {
+        int exp = bInterval > 0 ? bInterval - 1 : 0;
+        if (exp > 15) exp = 15;
+        return 125 << exp;
+    }
+    return 1000 * (bInterval > 0 ? bInterval : 1);
+}
+
+// Packets that fill about [targetUs] at [periodUs] a packet, at least
+// [minPackets] and at most [maxPackets].
+int packetsFor(int targetUs, int periodUs, int minPackets, int maxPackets) {
+    int n = periodUs > 0 ? targetUs / periodUs : 1;
+    return std::max(minPackets, std::min(n, maxPackets));
+}
 
 bool isClassDescriptor(const uint8_t* p, size_t remaining,
                        uint8_t descType, uint8_t subtype) {
@@ -161,9 +195,9 @@ int audioFunctionSubclass(const libusb_config_descriptor* config,
 
 } // namespace
 
-LibusbUacDriver::LibusbUacDriver() {
-    ring_.resize(ringBytes_);
-}
+// The ring is left empty until a stream starts: this object is built at
+// app launch whether or not a DAC is ever plugged in.
+LibusbUacDriver::LibusbUacDriver() = default;
 
 LibusbUacDriver::~LibusbUacDriver() {
     stop();
@@ -1103,7 +1137,23 @@ void LibusbUacDriver::applyHardwareVolume() {
 
 bool LibusbUacDriver::start(int sampleRateHz, int bitsPerSample, int channels) {
     std::lock_guard<std::mutex> lock(mutex_);
+    return startLocked(sampleRateHz, bitsPerSample, channels);
+}
+
+bool LibusbUacDriver::startLocked(int sampleRateHz, int bitsPerSample, int channels) {
+    if (bringUpLocked(sampleRateHz, bitsPerSample, channels)) return true;
+    // A stream that did not come up has no use for audio memory, and no
+    // write should land in a ring that nothing drains. Every way out of
+    // bringUpLocked leaves no pump running, so this is safe.
+    releaseRing();
+    return false;
+}
+
+bool LibusbUacDriver::bringUpLocked(int sampleRateHz, int bitsPerSample, int channels) {
     ErrorSink err{&lastError_, &errorMutex_, &lastErrorDetail_};
+    // Whatever happens below, the stream is no longer parked: it is
+    // either running again or down.
+    parked_ = false;
     // Optimistic clear; failure sites overwrite. Successful return
     // also clears at the bottom.
     lastError_.store(StartError::Ok, std::memory_order_release);
@@ -1231,31 +1281,12 @@ bool LibusbUacDriver::start(int sampleRateHz, int bitsPerSample, int channels) {
 
     applyHardwareVolume();
 
-    // Resize the ring to ~250 ms of audio at the negotiated format
-    // (see kRingMinBytes above). Safe here: the iso pump is either
-    // never-started or was stopped above, so no consumer is touching
-    // the ring, and the cursors are reset right after, so the size
-    // change can't alias a live head/tail.
-    {
-        const size_t stride = static_cast<size_t>(fmt.channels) *
-                              fmt.bytesPerSample;
-        size_t want = (static_cast<size_t>(fmt.sampleRateHz) * stride) / 4;
-        want = ((want + kRingQuantum - 1) / kRingQuantum) * kRingQuantum;
-        if (want < kRingMinBytes) want = kRingMinBytes;
-        if (want != ringBytes_) {
-            ringBytes_ = want;
-            ring_.resize(want);
-            LOGI("ring resized to %zu bytes (~%zu ms) for %d Hz/%d-bit/%dch",
-                 want, want * 1000 / (fmt.sampleRateHz * stride),
-                 fmt.sampleRateHz, fmt.bitsPerSample, fmt.channels);
-        }
+    if (!prepareRing()) {
+        err(StartError::IsoPumpAllocFailed,
+            "could not allocate the " + std::to_string(sampleRateHz) +
+            " Hz ring buffer — out of memory");
+        return false;
     }
-
-    // Reset the ring before priming the pump.
-    ringHead_.store(0, std::memory_order_relaxed);
-    ringTail_.store(0, std::memory_order_relaxed);
-    writtenFrames_.store(0, std::memory_order_relaxed);
-    playedFrames_.store(0, std::memory_order_relaxed);
     stopRequested_.store(false, std::memory_order_relaxed);
 
     if (!startIsoPump()) {
@@ -1275,21 +1306,133 @@ bool LibusbUacDriver::start(int sampleRateHz, int bitsPerSample, int channels) {
 }
 
 void LibusbUacDriver::flushRing() {
-    // Lockless reset of the SPSC ring. Producer + consumer both
-    // observe head==tail meaning empty on the very next access.
-    // Ordering: store tail first, then head — between the two
-    // moments, drainRing sees fewer bytes than actually present
-    // (worst case: it pads with silence, which is what we want
-    // anyway). Other order (head, then tail) could briefly let
-    // drainRing think there are huge ring contents that are
-    // actually stale.
-    ringTail_.store(0, std::memory_order_release);
-    ringHead_.store(0, std::memory_order_release);
-    // Position counters reset too — flushRing is called between
-    // tracks (Media3 flush()), and stale frame counts would let
-    // getCurrentPositionUs report frames from the previous track.
-    writtenFrames_.store(0, std::memory_order_release);
-    playedFrames_.store(0, std::memory_order_release);
+    // Everything written so far is discarded: drainRing skips its tail
+    // up to this cursor on the next packet, so the DAC goes quiet after
+    // the transfers already in flight. Both position counters count
+    // from here too — flushRing is called between tracks (Media3
+    // flush()), and stale frame counts would let getCurrentPositionUs
+    // report frames from the previous track. Frames sent from before
+    // the flush end at or below this cursor, so they never count.
+    //
+    // The cursors themselves are never reset here. Storing 0 into the
+    // tail from this thread raced the iso thread's own store of it,
+    // which could leave the tail past the head: the ring then looked
+    // fuller than its size to both sides and played stale bytes.
+    std::lock_guard<std::mutex> lock(ringMutex_);
+    flushCursor_.store(ringHead_.load(std::memory_order_relaxed),
+                       std::memory_order_release);
+}
+
+int64_t LibusbUacDriver::playedFrames() const {
+    const int64_t stride = ringStride_.load(std::memory_order_acquire);
+    if (stride <= 0) return 0;
+    // The flush cursor first: whatever was sent before it is not ours.
+    const uint64_t base = flushCursor_.load(std::memory_order_acquire);
+    const uint64_t sent = sentCursor_.load(std::memory_order_acquire);
+    return sent > base ? static_cast<int64_t>(sent - base) / stride : 0;
+}
+
+int64_t LibusbUacDriver::writtenFrames() const {
+    const int64_t stride = ringStride_.load(std::memory_order_acquire);
+    if (stride <= 0) return 0;
+    // Base before head: the head only grows, and a flush sets the base
+    // to a head value, so the difference can't go negative.
+    const uint64_t base = flushCursor_.load(std::memory_order_acquire);
+    const uint64_t head = ringHead_.load(std::memory_order_acquire);
+    return head > base ? static_cast<int64_t>(head - base) / stride : 0;
+}
+
+size_t LibusbUacDriver::ringCapacityBytes() const {
+    std::lock_guard<std::mutex> lock(ringMutex_);
+    return ringBytes_;
+}
+
+bool LibusbUacDriver::prepareRing() {
+    // ~250 ms of audio at the negotiated format (see kRingMinBytes).
+    const size_t stride = static_cast<size_t>(format_.channels) *
+                          format_.bytesPerSample;
+    size_t want = (static_cast<size_t>(format_.sampleRateHz) * stride) / 4;
+    want = ((want + kRingQuantum - 1) / kRingQuantum) * kRingQuantum;
+    if (want < kRingMinBytes) want = kRingMinBytes;
+
+    std::lock_guard<std::mutex> lock(ringMutex_);
+    if (!ring_ || want != ringBytes_) {
+        // A new block rather than a resize, so a smaller ring really is
+        // smaller. The old one is freed before the new one is taken.
+        ring_.reset();
+        ringBytes_ = 0;
+        ringStride_.store(0, std::memory_order_release);
+        uint8_t* block = new (std::nothrow) uint8_t[want];
+        if (!block) {
+            LOGE("ring allocation of %zu bytes failed", want);
+            return false;
+        }
+        ring_.reset(block);
+        ringBytes_ = want;
+        LOGI("ring sized to %zu bytes (~%zu ms) for %d Hz/%d-bit/%dch",
+             want, want * 1000 / (format_.sampleRateHz * stride),
+             format_.sampleRateHz, format_.bitsPerSample, format_.channels);
+    }
+    // Safe: no pump runs (start() stopped it), and ringMutex_ keeps any
+    // write out until the cursors agree again.
+    ringHead_.store(0, std::memory_order_relaxed);
+    ringTail_.store(0, std::memory_order_relaxed);
+    flushCursor_.store(0, std::memory_order_relaxed);
+    sentCursor_.store(0, std::memory_order_relaxed);
+    ringStride_.store(static_cast<int>(stride), std::memory_order_release);
+    return true;
+}
+
+void LibusbUacDriver::releaseRing() {
+    std::lock_guard<std::mutex> lock(ringMutex_);
+    if (ring_) LOGI("ring released (%zu bytes)", ringBytes_);
+    ring_.reset();
+    ringBytes_ = 0;
+    ringStride_.store(0, std::memory_order_release);
+    ringHead_.store(0, std::memory_order_relaxed);
+    ringTail_.store(0, std::memory_order_relaxed);
+    flushCursor_.store(0, std::memory_order_relaxed);
+    sentCursor_.store(0, std::memory_order_relaxed);
+}
+
+bool LibusbUacDriver::parkPump() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!device_ || !streaming_.load(std::memory_order_acquire) || parked_) {
+        return false;
+    }
+    stopIsoPump();
+    // Alt 0 is the DAC's own idle: no bandwidth reserved, and most stop
+    // their clock recovery. The claims stay, so Android can't take the
+    // interface back meanwhile. A DAC that refuses (or has gone) is
+    // still parked: the pump is stopped either way, and resumePump()
+    // finds out whether it will stream again.
+    int rc = LIBUSB_SUCCESS;
+    if (format_.altSetting != 0) {
+        rc = libusb_set_interface_alt_setting(device_, format_.interfaceNumber, 0);
+    }
+    parked_ = true;
+    LOGI("pump parked: transfers cancelled, iface %u on alt 0 (rc=%d), "
+         "interfaces still claimed", format_.interfaceNumber, rc);
+    return true;
+}
+
+bool LibusbUacDriver::resumePump() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!parked_) return streaming_.load(std::memory_order_acquire);
+    LOGI("resuming parked stream: %d Hz / %d-bit / %d ch",
+         format_.sampleRateHz, format_.bitsPerSample, format_.channels);
+    // The same path as any start of this format, so a resumed stream is
+    // set up exactly like a fresh one, rate and volume included: a DAC
+    // may forget either on its way through alt 0.
+    const int rate = format_.sampleRateHz;
+    const int bits = format_.bitsPerSample;
+    const int channels = format_.channels;
+    return startLocked(rate, bits, channels);
+}
+
+bool LibusbUacDriver::isPumpParked() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return parked_;
 }
 
 bool LibusbUacDriver::isStreamingFormat(int sampleRate, int bitsPerSample, int channels) const {
@@ -1312,8 +1455,9 @@ void LibusbUacDriver::stopLocked() {
     // Full teardown: alt 0 then release. Caller is the toggle going
     // off, the queue clearing, or app pause — NOT a track-to-track
     // reconfigure, which goes through start() with the claim kept.
+    // A parked stream is on alt 0 already.
     if (device_ && interfaceClaimed_) {
-        if (format_.altSetting != 0) {
+        if (format_.altSetting != 0 && !parked_) {
             libusb_set_interface_alt_setting(
                 device_, format_.interfaceNumber, 0);
         }
@@ -1324,6 +1468,9 @@ void LibusbUacDriver::stopLocked() {
         libusb_release_interface(device_, claimedControlIface_);
         controlInterfaceClaimed_ = false;
     }
+    parked_ = false;
+    // The pump is gone, so nothing reads the ring any more.
+    releaseRing();
     LOGI("stopped streaming (full teardown)");
 }
 
@@ -1345,10 +1492,15 @@ bool LibusbUacDriver::startIsoPump() {
     microframesPerSec_ = hostPeriodHz / packetIntervalUframes;
     int baseFrames = format_.sampleRateHz / microframesPerSec_;
     int rateRemainder = format_.sampleRateHz % microframesPerSec_;
+    const int packetUs = packetPeriodUs(format_.isHighSpeed, format_.bInterval);
+    packetsPerTransfer_ = packetsFor(kTransferUs, packetUs, kMinPacketsPerTransfer,
+                                     kMaxPacketsPerTransfer);
     LOGI("iso pump: %d packets/sec (HS=%d, bInterval=%u), "
-         "%d frames/packet base + %d/%d frac",
+         "%d frames/packet base + %d/%d frac, %d packets/transfer "
+         "(%d us each, %d in flight)",
          microframesPerSec_, format_.isHighSpeed, format_.bInterval,
-         baseFrames, rateRemainder, microframesPerSec_);
+         baseFrames, rateRemainder, microframesPerSec_,
+         packetsPerTransfer_, packetsPerTransfer_ * packetUs, kNumTransfers);
     uint32_t seed_q16 =
         (static_cast<uint32_t>(baseFrames) << 16) +
         static_cast<uint32_t>(
@@ -1357,6 +1509,9 @@ bool LibusbUacDriver::startIsoPump() {
     framesPerUframe_q16_.store(seed_q16, std::memory_order_relaxed);
     fracAccumulator_q16_ = 0;
     isoCallbacks_ = 0;
+    paddedBytes_ = 0;
+    isoLogEvery_ = static_cast<uint32_t>(std::max(
+        1, kIsoLogSeconds * microframesPerSec_ / packetsPerTransfer_));
     // The open-loop pacer never sends more than ceil(rate / pps)
     // frames; that much has to fit. One more frame of headroom lets
     // an async device's feedback over-ask, but only when the endpoint
@@ -1387,6 +1542,8 @@ bool LibusbUacDriver::startIsoPump() {
 
     transfers_.reserve(kNumTransfers);
     transferBuffers_.reserve(kNumTransfers);
+    // The first transfers carry silence, none of the ring.
+    transferEndCursor_.assign(kNumTransfers, 0);
 
     auto setErr = [this](StartError c, const std::string& d) {
         lastError_.store(c, std::memory_order_release);
@@ -1395,7 +1552,7 @@ bool LibusbUacDriver::startIsoPump() {
     };
 
     for (int t = 0; t < kNumTransfers; ++t) {
-        libusb_transfer* xfr = libusb_alloc_transfer(kPacketsPerTransfer);
+        libusb_transfer* xfr = libusb_alloc_transfer(packetsPerTransfer_);
         if (!xfr) {
             LOGE("libusb_alloc_transfer failed at #%d", t);
             setErr(StartError::IsoPumpAllocFailed,
@@ -1406,10 +1563,10 @@ bool LibusbUacDriver::startIsoPump() {
         }
         // Worst-case sized buffer — every packet is the +1 size.
         // Per-packet `length` (set in onIso) trims to actual.
-        std::vector<uint8_t> buf(maxBytesPerPacket * kPacketsPerTransfer, 0);
+        std::vector<uint8_t> buf(maxBytesPerPacket * packetsPerTransfer_, 0);
         libusb_fill_iso_transfer(
             xfr, device_, format_.endpointAddress,
-            buf.data(), buf.size(), kPacketsPerTransfer,
+            buf.data(), buf.size(), packetsPerTransfer_,
             &LibusbUacDriver::onIsoTrampoline, this, /*timeout=*/0);
         // Initial packet lengths use the integer base frames so the
         // first transmission is silence at roughly the average rate.
@@ -1423,15 +1580,20 @@ bool LibusbUacDriver::startIsoPump() {
 
     // Optional feedback EP. UAC2 §5.2.2.4.1: feedback IN, 4 bytes
     // (16.16 fixed) on high-speed, 3 bytes (10.10 fixed shifted left
-    // by 4) on full-speed. We allocate one 1-packet transfer per
-    // feedback URB and keep two in flight so completions overlap
-    // with each other; the event thread already drives all iso
-    // completions on a single thread so no locking needed for the
-    // atomic store.
-    constexpr int kFeedbackTransfers = 2;
+    // by 4) on full-speed. Two transfers in flight, each a few ms of
+    // the endpoint's packets (see kFeedbackTransferUs): one packet a
+    // transfer woke the event thread for every reading, 1,000 times a
+    // second at the usual 1 ms interval. The event thread already
+    // drives all iso completions on a single thread so no locking
+    // needed for the atomic store.
+    feedbackPacketsPerTransfer_ = 0;
     if (format_.feedbackEndpointAddress != 0) {
+        feedbackPacketsPerTransfer_ = packetsFor(
+            kFeedbackTransferUs,
+            packetPeriodUs(format_.isHighSpeed, format_.feedbackInterval),
+            1, kMaxFeedbackPackets);
         for (int t = 0; t < kFeedbackTransfers; ++t) {
-            libusb_transfer* fxfr = libusb_alloc_transfer(/*iso pkts=*/1);
+            libusb_transfer* fxfr = libusb_alloc_transfer(feedbackPacketsPerTransfer_);
             if (!fxfr) {
                 LOGE("alloc feedback transfer %d failed", t);
                 setErr(StartError::IsoPumpAllocFailed,
@@ -1440,14 +1602,17 @@ bool LibusbUacDriver::startIsoPump() {
                 stopIsoPump();
                 return false;
             }
-            int fbBufSize = format_.feedbackMaxPacketSize > 0
-                ? format_.feedbackMaxPacketSize : 4;
-            std::vector<uint8_t> fbBuf(fbBufSize, 0);
+            // Each packet gets the endpoint's whole wMaxPacketSize;
+            // onFeedback finds packet i at i times that.
+            int fbPacketBytes = (format_.feedbackMaxPacketSize & 0x07FF) > 0
+                ? (format_.feedbackMaxPacketSize & 0x07FF) : 4;
+            std::vector<uint8_t> fbBuf(
+                static_cast<size_t>(fbPacketBytes) * feedbackPacketsPerTransfer_, 0);
             libusb_fill_iso_transfer(
                 fxfr, device_, format_.feedbackEndpointAddress,
-                fbBuf.data(), fbBuf.size(), /*num_iso_packets=*/1,
+                fbBuf.data(), fbBuf.size(), feedbackPacketsPerTransfer_,
                 &LibusbUacDriver::onFeedbackTrampoline, this, /*timeout=*/0);
-            libusb_set_iso_packet_lengths(fxfr, fbBufSize);
+            libusb_set_iso_packet_lengths(fxfr, fbPacketBytes);
             feedbackBuffers_.emplace_back(std::move(fbBuf));
             feedbackTransfers_.push_back(fxfr);
         }
@@ -1578,6 +1743,10 @@ void LibusbUacDriver::onFeedbackTrampoline(libusb_transfer* xfr) {
 // Out-of-range values (zero, or > maxFramesPerPacket_+1) are
 // ignored — better to keep the previous rate than chase a glitchy
 // reading that would overrun the iso buffer or starve the DAC.
+//
+// A transfer carries several readings, one per packet; the newest good
+// one wins. Packets that failed, came back short or out of range are
+// skipped, so a DAC that answers only some polls still steers the pump.
 void LibusbUacDriver::onFeedback(libusb_transfer* xfr) {
     if (xfr->status == LIBUSB_TRANSFER_CANCELLED ||
         xfr->status == LIBUSB_TRANSFER_NO_DEVICE) {
@@ -1588,30 +1757,33 @@ void LibusbUacDriver::onFeedback(libusb_transfer* xfr) {
         inflight_.fetch_sub(1, std::memory_order_acq_rel);
         return;
     }
-    if (xfr->status == LIBUSB_TRANSFER_COMPLETED &&
-        xfr->num_iso_packets > 0 &&
-        xfr->iso_packet_desc[0].status == LIBUSB_TRANSFER_COMPLETED) {
-        int actual = xfr->iso_packet_desc[0].actual_length;
-        const uint8_t* p = xfr->buffer;
-        uint32_t v_q16 = 0;
-        if (actual >= 4) {
-            v_q16 =  static_cast<uint32_t>(p[0])
-                  | (static_cast<uint32_t>(p[1]) << 8)
-                  | (static_cast<uint32_t>(p[2]) << 16)
-                  | (static_cast<uint32_t>(p[3]) << 24);
-        } else if (actual >= 3) {
-            uint32_t v_q14 =
-                  static_cast<uint32_t>(p[0])
-                | (static_cast<uint32_t>(p[1]) << 8)
-                | (static_cast<uint32_t>(p[2]) << 16);
-            v_q16 = v_q14 << 2;
-        }
-        if (v_q16 > 0) {
-            uint32_t maxAllowed_q16 =
-                static_cast<uint32_t>(maxFramesPerPacket_) << 16;
-            if (v_q16 <= maxAllowed_q16) {
-                framesPerUframe_q16_.store(v_q16, std::memory_order_release);
+    if (xfr->status == LIBUSB_TRANSFER_COMPLETED) {
+        const uint32_t maxAllowed_q16 =
+            static_cast<uint32_t>(maxFramesPerPacket_) << 16;
+        uint32_t newest_q16 = 0;
+        for (int i = 0; i < xfr->num_iso_packets; ++i) {
+            const libusb_iso_packet_descriptor& d = xfr->iso_packet_desc[i];
+            if (d.status != LIBUSB_TRANSFER_COMPLETED) continue;
+            const int actual = static_cast<int>(d.actual_length);
+            const uint8_t* p = libusb_get_iso_packet_buffer_simple(xfr, i);
+            if (!p) continue;
+            uint32_t v_q16 = 0;
+            if (actual >= 4) {
+                v_q16 =  static_cast<uint32_t>(p[0])
+                      | (static_cast<uint32_t>(p[1]) << 8)
+                      | (static_cast<uint32_t>(p[2]) << 16)
+                      | (static_cast<uint32_t>(p[3]) << 24);
+            } else if (actual >= 3) {
+                uint32_t v_q14 =
+                      static_cast<uint32_t>(p[0])
+                    | (static_cast<uint32_t>(p[1]) << 8)
+                    | (static_cast<uint32_t>(p[2]) << 16);
+                v_q16 = v_q14 << 2;
             }
+            if (v_q16 > 0 && v_q16 <= maxAllowed_q16) newest_q16 = v_q16;
+        }
+        if (newest_q16 != 0) {
+            framesPerUframe_q16_.store(newest_q16, std::memory_order_release);
         }
     }
     int rc = libusb_submit_transfer(xfr);
@@ -1633,6 +1805,24 @@ void LibusbUacDriver::onIso(libusb_transfer* xfr) {
     if (stopRequested_.load(std::memory_order_acquire)) {
         inflight_.fetch_sub(1, std::memory_order_acq_rel);
         return;
+    }
+
+    // This transfer's audio has now gone to the DAC: move the played
+    // position up to the end of what it carried. Counting at fill time,
+    // as this used to, put the position ahead of the DAC by everything
+    // still queued in the other transfers. A transfer that came back
+    // with an error counts too; its audio is gone from the ring either
+    // way, and leaving it out would keep the track from ever ending.
+    // A cursor, not a sum, so a transfer that dropped out of the
+    // rotation is covered by the next one to complete.
+    size_t slot = 0;
+    while (slot < transfers_.size() && transfers_[slot] != xfr) ++slot;
+    const bool tracked = slot < transfers_.size() && slot < transferEndCursor_.size();
+    if (tracked) {
+        const uint64_t sent = transferEndCursor_[slot];
+        if (sent > sentCursor_.load(std::memory_order_relaxed)) {
+            sentCursor_.store(sent, std::memory_order_release);
+        }
     }
 
     // Per-packet sizing from the 16.16 fixed-point rate the device
@@ -1658,21 +1848,26 @@ void LibusbUacDriver::onIso(libusb_transfer* xfr) {
         if (bytes > 0) drainRing(cursor, bytes);
         cursor += bytes;
     }
+    if (tracked) transferEndCursor_[slot] = ringTail_.load(std::memory_order_relaxed);
 
-    // Periodic heartbeat so a wedged or slow pump is visible in
-    // logcat. Without this, the only iso-side log lines are LOGW on
+    // Heartbeat once a minute, so a wedged or starved pump is visible
+    // in logcat. Without it, the only iso-side log lines are LOGW on
     // failure, so a pump that "completes" but never advances
     // playedFrames (because every drainRing pads with silence) looks
-    // identical to a pump that's perfectly healthy.
-    if ((++isoCallbacks_ % kIsoLogEvery) == 0) {
+    // identical to a pump that's perfectly healthy; the silence count
+    // tells the two apart.
+    if (++isoCallbacks_ >= isoLogEvery_) {
+        isoCallbacks_ = 0;
         uint64_t head = ringHead_.load(std::memory_order_acquire);
         uint64_t tail = ringTail_.load(std::memory_order_acquire);
-        LOGI("iso heartbeat: cb=%u played=%ld written=%ld ring=%llu inflight=%d",
-             isoCallbacks_,
-             playedFrames_.load(std::memory_order_relaxed),
-             writtenFrames_.load(std::memory_order_relaxed),
+        LOGI("iso heartbeat (1/min): played=%lld written=%lld ring=%llu "
+             "inflight=%d silence-padded=%llu bytes",
+             static_cast<long long>(playedFrames()),
+             static_cast<long long>(writtenFrames()),
              static_cast<unsigned long long>(head - tail),
-             inflight_.load(std::memory_order_relaxed));
+             inflight_.load(std::memory_order_relaxed),
+             static_cast<unsigned long long>(paddedBytes_));
+        paddedBytes_ = 0;
     }
 
     int rc = libusb_submit_transfer(xfr);
@@ -1685,65 +1880,75 @@ void LibusbUacDriver::onIso(libusb_transfer* xfr) {
 // --- Ring buffer ------------------------------------------------------
 
 int LibusbUacDriver::drainRing(uint8_t* dst, int bytes) {
-    uint64_t head = ringHead_.load(std::memory_order_acquire);
     uint64_t tail = ringTail_.load(std::memory_order_relaxed);
+    // A flush discards everything before its cursor. Read it before the
+    // head: it was a head value when stored, so the head read after it
+    // is at least as far on and the difference can't go negative.
+    const uint64_t flushed = flushCursor_.load(std::memory_order_acquire);
+    if (flushed > tail) tail = flushed;
+    const uint64_t head = ringHead_.load(std::memory_order_acquire);
     uint64_t available = head - tail;
     int n = static_cast<int>(std::min<uint64_t>(available, static_cast<uint64_t>(bytes)));
     if (n > 0) {
         size_t off = static_cast<size_t>(tail % ringBytes_);
         size_t first = std::min<size_t>(n, ringBytes_ - off);
-        std::memcpy(dst, ring_.data() + off, first);
+        std::memcpy(dst, ring_.get() + off, first);
         if (first < static_cast<size_t>(n)) {
-            std::memcpy(dst + first, ring_.data(), n - first);
+            std::memcpy(dst + first, ring_.get(), n - first);
         }
-        ringTail_.store(tail + n, std::memory_order_release);
+        tail += n;
     }
+    // Stored even when only the flush moved it, so the producer sees
+    // the discarded audio's room come free.
+    ringTail_.store(tail, std::memory_order_release);
     if (n < bytes) {
         // Underrun — pad with silence so the iso packet still ships.
         // The DAC hears a click rather than dropping the entire URB.
+        // Not counted as played: the position follows the song's own
+        // frames, which the silence only delays.
         std::memset(dst + n, 0, bytes - n);
-    }
-    // Frames "played" = frames the pump has dispatched, including the
-    // silence padding (since the device hears those samples too). Used
-    // for accurate position reporting back to ExoPlayer.
-    int frameStride = format_.channels * format_.bytesPerSample;
-    if (frameStride > 0) {
-        playedFrames_.fetch_add(bytes / frameStride, std::memory_order_acq_rel);
+        paddedBytes_ += static_cast<uint64_t>(bytes - n);
     }
     return n;
 }
 
 int LibusbUacDriver::writePcm(const uint8_t* data, int frames) {
-    if (frames <= 0 || format_.channels == 0) return 0;
-    int bytes = frames * format_.channels * format_.bytesPerSample;
+    // try_lock, never a wait: the lock is only ever held long by a
+    // start() or stop() replacing the ring, and a write that loses to
+    // one is refused like a write to a full ring, which the caller
+    // already retries.
+    std::unique_lock<std::mutex> lock(ringMutex_, std::try_to_lock);
+    if (!lock.owns_lock() || !ring_ || ringBytes_ == 0) return 0;
+    const int frameStride = ringStride_.load(std::memory_order_relaxed);
+    if (frames <= 0 || frameStride <= 0) return 0;
+    int bytes = frames * frameStride;
     uint64_t head = ringHead_.load(std::memory_order_relaxed);
     uint64_t tail = ringTail_.load(std::memory_order_acquire);
     uint64_t free = ringBytes_ - (head - tail);
     int writable = static_cast<int>(std::min<uint64_t>(free, static_cast<uint64_t>(bytes)));
     // Round down to whole frames to avoid splitting a frame across
     // calls — saves the consumer from having to track partial frames.
-    int frameStride = format_.channels * format_.bytesPerSample;
-    if (frameStride > 0) writable -= writable % frameStride;
+    writable -= writable % frameStride;
     if (writable <= 0) return 0;
 
     size_t off = static_cast<size_t>(head % ringBytes_);
     size_t first = std::min<size_t>(writable, ringBytes_ - off);
-    std::memcpy(ring_.data() + off, data, first);
+    std::memcpy(ring_.get() + off, data, first);
     if (first < static_cast<size_t>(writable)) {
-        std::memcpy(ring_.data(), data + first, writable - first);
+        std::memcpy(ring_.get(), data + first, writable - first);
     }
     ringHead_.store(head + writable, std::memory_order_release);
-    int framesPushed = writable / frameStride;
-    writtenFrames_.fetch_add(framesPushed, std::memory_order_acq_rel);
-    return framesPushed;
+    return writable / frameStride;
 }
 
 int LibusbUacDriver::writableFrames() const {
-    if (format_.channels == 0) return 0;
+    std::unique_lock<std::mutex> lock(ringMutex_, std::try_to_lock);
+    if (!lock.owns_lock() || ringBytes_ == 0) return 0;
+    const int frameStride = ringStride_.load(std::memory_order_relaxed);
+    if (frameStride <= 0) return 0;
     uint64_t head = ringHead_.load(std::memory_order_relaxed);
     uint64_t tail = ringTail_.load(std::memory_order_acquire);
     uint64_t free = ringBytes_ - (head - tail);
-    int frameStride = format_.channels * format_.bytesPerSample;
     return static_cast<int>(free / frameStride);
 }
 

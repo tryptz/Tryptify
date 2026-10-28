@@ -11,13 +11,16 @@
 //
 // The audio thread (Media3's playback worker, via JNI) calls write();
 // the iso completion callback drains from the same ring on the event
-// thread. Single producer, single consumer — no locks on the hot path.
+// thread. Single producer, single consumer. The iso thread takes no lock
+// at all; writePcm takes ringMutex_ only with try_lock, so a write never
+// waits either.
 
 #pragma once
 
 #include <atomic>
 #include <climits>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -160,12 +163,35 @@ public:
 
     // Cancels in-flight transfers, waits for the event thread to
     // drain, releases the streaming interface, and resets to alt 0.
-    // Safe to call from any thread, idempotent.
+    // Frees the ring as well, so a driver that is not streaming holds
+    // no audio memory. Safe to call from any thread, idempotent.
     void stop();
 
+    // True from a successful start() until stop(), parked or not: a
+    // parked stream is still this stream, with its format and claims,
+    // only not moving.
     bool isStreaming() const {
         return streaming_.load(std::memory_order_acquire);
     }
+
+    // Parks a stream that has gone quiet (playback paused for a while):
+    // cancels the iso transfers, stops the event thread and puts the
+    // streaming interface on alt 0, so neither the phone nor the DAC
+    // spends anything on silence. Both interfaces stay claimed — letting
+    // go of them is what lets Android's kernel driver take the DAC back
+    // (see flushRing). Returns false if there was no running pump to
+    // park. Never call it from the iso thread: it joins that thread.
+    bool parkPump();
+
+    // Brings a parked stream back exactly as start() would bring up the
+    // same format: alt setting, rate, volume, a fresh ring and pump, and
+    // position counters from zero. True if the stream is running
+    // afterwards (also when it was never parked); false if the DAC
+    // refused, in which case the stream is down as after a failed
+    // start() and the caller hands playback elsewhere.
+    bool resumePump();
+
+    bool isPumpParked() const;
 
     // Discards any PCM still in the ring without tearing down the iso
     // pump. Use between tracks (Media3 calls flush() on track end) so
@@ -175,6 +201,11 @@ public:
     // playback dies until the user re-plugs the DAC. The pump keeps
     // running, sending silence iso packets, until the next handleBuffer
     // resumes feeding the ring.
+    //
+    // Only producer-side state moves: the flush records where the
+    // producer stands, and the iso thread skips up to there on its next
+    // packet. Resetting the consumer's cursor from this thread raced its
+    // own store and could leave the two cursors a ring apart.
     void flushRing();
 
     // Returns true when the iso pump is already streaming a stream
@@ -194,21 +225,28 @@ public:
     // How many frames can be written right now without blocking.
     int writableFrames() const;
 
-    // Total PCM frames the iso pump has drained from the ring since
-    // [start] — i.e. the frames the device has actually been told to
-    // play. Used by LibusbAudioSink for getCurrentPositionUs / hasPendingData
+    // PCM frames written since the last start() or flushRing() that
+    // the DAC has been sent: frames in iso transfers that have
+    // completed. Frames still queued in transfers in flight are not
+    // counted, nor is the silence that pads an underrun, so the count
+    // stays on the DAC's clock however many transfers are queued.
+    // Used by LibusbAudioSink for getCurrentPositionUs / hasPendingData
     // / isEnded; reporting framesWritten there instead caused ExoPlayer
     // to think a track had finished within seconds (the renderer fills
     // the ring much faster than realtime), which manifested as 5-second
     // playbacks followed by an early skip to the next track.
-    long playedFrames() const {
-        return playedFrames_.load(std::memory_order_acquire);
-    }
+    //
+    // 64-bit: a long is 32 bits on armeabi-v7a, which wrapped after
+    // about 1.5 h of unflushed playback at 384 kHz.
+    int64_t playedFrames() const;
 
-    // Total PCM frames the host has pushed into the ring since [start].
-    long writtenFrames() const {
-        return writtenFrames_.load(std::memory_order_acquire);
-    }
+    // PCM frames the host has pushed into the ring since the last
+    // start() or flushRing().
+    int64_t writtenFrames() const;
+
+    // Bytes the ring holds right now: 0 until start() sizes it, and
+    // again after stop().
+    size_t ringCapacityBytes() const;
 
     const StreamFormat& currentFormat() const { return format_; }
 
@@ -255,10 +293,20 @@ private:
     // 48 / 88.2 / 96 / 176.4 / 192 kHz" beneath the active rate.
     void captureRangeForClock(uint8_t clockId);
 
+    // start()'s body, for a caller already holding mutex_.
+    bool startLocked(int sampleRateHz, int bitsPerSample, int channels);
+    // Every step of a start; startLocked frees the ring if one fails.
+    bool bringUpLocked(int sampleRateHz, int bitsPerSample, int channels);
     bool startIsoPump();
     void stopIsoPump();
     // stop()'s teardown, for a caller already holding mutex_.
     void stopLocked();
+
+    // Sizes the ring for the negotiated format and resets every cursor.
+    // Only while no pump runs. False if the memory was not there.
+    bool prepareRing();
+    // Gives the ring's memory back. Only while no pump runs.
+    void releaseRing();
 
     // libusb iso completion callback — static trampoline into onIso().
     static void LIBUSB_CALL onIsoTrampoline(libusb_transfer* xfr);
@@ -270,13 +318,31 @@ private:
     int drainRing(uint8_t* dst, int bytes);
 
     // SPSC ring buffer. Atomic head/tail, modulo indexing (head/tail
-    // are monotonic byte counters reset at start()/flush(), so
-    // `cursor % ringBytes_` is exact and the size doesn't need to be
-    // a power of two — start() sizes it to ~250 ms of audio at the
-    // negotiated format). Producer is the audio thread (writePcm);
+    // are monotonic byte counters reset only at start(), while no pump
+    // runs, so `cursor % ringBytes_` is exact and the size doesn't need
+    // to be a power of two — start() sizes it to ~250 ms of audio at
+    // the negotiated format). Producer is the audio thread (writePcm);
     // consumer is the event thread via onIso → drainRing.
-    std::vector<uint8_t> ring_;
-    size_t ringBytes_ = 1u << 20;  // resized at start() to ~250 ms of audio
+    //
+    // Empty until start() and again after stop(). It used to be a
+    // zero-filled 1 MiB vector from construction, which happens at app
+    // launch for every user, DAC or not, and shrinking a vector to the
+    // 32-384 KB a stream needs never gave that memory back. Left
+    // uninitialised: nothing reads a byte the producer has not written.
+    std::unique_ptr<uint8_t[]> ring_;
+    size_t ringBytes_ = 0;
+    // Bytes per frame of the audio in the ring, set with it. The write
+    // and position paths read this rather than format_, which start()
+    // rewrites under mutex_ while they run on other threads.
+    std::atomic<int> ringStride_{0};
+    // Guards ring_ and ringBytes_ against being replaced or freed under
+    // a write, and keeps the producer-side operations (writePcm,
+    // flushRing, the resets in start() and stop()) apart when they come
+    // from different threads: a DAC unplug stops the driver on the
+    // controller's IO thread while the playback thread may be writing.
+    // The iso thread never takes it; the ring only changes while no pump
+    // runs.
+    mutable std::mutex ringMutex_;
     // uint64_t, not size_t: with modulo indexing the cursors must not wrap at
     // a boundary that isn't a multiple of ringBytes_, or the producer and the
     // consumer map the same logical byte to different offsets until both have
@@ -288,6 +354,14 @@ private:
     // 64-bit counters restore that for free (~190,000 years at 384k).
     std::atomic<uint64_t> ringHead_{0};  // producer cursor (writePcm)
     std::atomic<uint64_t> ringTail_{0};  // consumer cursor (onIso)
+    // Producer: where the head stood at the last flushRing(). Everything
+    // before it is discarded (drainRing skips to it), and both position
+    // counters count from it.
+    std::atomic<uint64_t> flushCursor_{0};
+    // Consumer: the ring cursor up to which the DAC has been sent audio,
+    // i.e. the end of the newest completed data transfer. playedFrames()
+    // is this less flushCursor_.
+    std::atomic<uint64_t> sentCursor_{0};
 
     mutable std::mutex mutex_;          // guards open/start/stop only
     libusb_context* ctx_ = nullptr;
@@ -298,6 +372,9 @@ private:
     StreamFormat format_;
     std::atomic<bool> streaming_{false};
     std::atomic<bool> stopRequested_{false};
+    // The stream is up but parkPump() stopped its pump and put the
+    // interface on alt 0. Guarded by mutex_.
+    bool parked_ = false;
     // True iff we currently hold libusb_claim_interface on
     // format_.interfaceNumber. Tracked separately from streaming_
     // because we keep the claim alive across format changes (e.g.
@@ -318,8 +395,15 @@ private:
     // streaming_ is true.
     std::vector<libusb_transfer*> transfers_;
     std::vector<std::vector<uint8_t>> transferBuffers_;
+    // Ring cursor at the end of what each of transfers_ carries, set as
+    // it is filled. When the transfer completes, that much has been sent.
+    std::vector<uint64_t> transferEndCursor_;
     std::vector<libusb_transfer*> feedbackTransfers_;
     std::vector<std::vector<uint8_t>> feedbackBuffers_;
+    // Iso packets per data transfer and per feedback transfer, chosen
+    // at startIsoPump from the endpoints' intervals.
+    int packetsPerTransfer_ = 0;
+    int feedbackPacketsPerTransfer_ = 0;
     std::atomic<int> inflight_{0};     // active transfers (data + fb)
     // Transfers a stop gave up waiting for. libusb may still complete
     // into them, so they and their buffers stay alive until every
@@ -329,10 +413,6 @@ private:
     std::vector<libusb_transfer*> abandonedTransfers_;
     std::vector<std::vector<uint8_t>> abandonedBuffers_;
     void freeAbandonedTransfers();
-    // Cumulative frame counters used for honest position reporting
-    // (see playedFrames() / writtenFrames()). Reset on start().
-    std::atomic<long> writtenFrames_{0};
-    std::atomic<long> playedFrames_{0};
     std::thread eventThread_;
 
     // Per-packet frame count is computed from a 16.16 fixed-point
@@ -352,11 +432,16 @@ private:
     int maxFramesPerPacket_ = 0;
     uint32_t fracAccumulator_q16_ = 0;  // event-thread-only state
 
-    // Heartbeat counter for the iso completion log. Without this, a
-    // wedged or slow iso pump is invisible (onIso only logs failures).
-    // Touched only from the event thread; one LOGI per ~kIsoLogEvery
-    // callbacks (≈ once per second at HS / 8000 packets per sec).
+    // Heartbeat for the iso completion log. Without it, a wedged or
+    // starved pump is invisible (onIso only logs failures). Once a
+    // minute: isoLogEvery_ is a minute's worth of data callbacks at
+    // this pump's rate. It used to be once a second, 3,600 lines an
+    // hour of nothing happening. Touched only from the iso callbacks.
     uint32_t isoCallbacks_ = 0;
+    uint32_t isoLogEvery_ = 1;
+    // Silence bytes padded into packets since the last heartbeat, so
+    // the line says whether the DAC was being starved.
+    uint64_t paddedBytes_ = 0;
 
     static void LIBUSB_CALL onFeedbackTrampoline(libusb_transfer* xfr);
     void onFeedback(libusb_transfer* xfr);

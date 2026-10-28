@@ -15,6 +15,9 @@
 
 #include <libusb.h>
 
+#include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -49,6 +52,12 @@ bool gStallCancel = false;
 std::vector<libusb_transfer*> gStalled;
 int gClockSetCount = 0;
 int gLastAlt = -1;
+int gAltSets = 0;
+// A DAC that refuses every alt setting but 0 (gone, or wedged).
+bool gRefuseAlt = false;
+// Calls into the event loop: a running event thread makes ~1,000 a
+// second here, a stopped one none.
+std::atomic<long> gEventPolls{0};
 // Handles closed, and whether any was closed while the driver still had
 // transfers out on it or an interface claimed.
 int gCloseCount = 0;
@@ -102,7 +111,12 @@ int LIBUSB_CALL libusb_get_config_descriptor(libusb_device*, uint8_t, libusb_con
 void LIBUSB_CALL libusb_free_config_descriptor(libusb_config_descriptor*) {}
 int LIBUSB_CALL libusb_claim_interface(libusb_device_handle*, int) { ++gClaimed; return 0; }
 int LIBUSB_CALL libusb_release_interface(libusb_device_handle*, int) { --gClaimed; return 0; }
-int LIBUSB_CALL libusb_set_interface_alt_setting(libusb_device_handle*, int, int alt) { gLastAlt = alt; return 0; }
+int LIBUSB_CALL libusb_set_interface_alt_setting(libusb_device_handle*, int, int alt) {
+    ++gAltSets;
+    if (gRefuseAlt && alt != 0) return LIBUSB_ERROR_PIPE;
+    gLastAlt = alt;
+    return 0;
+}
 // Feature Unit requests go to gUnits. Any other SET (a clock's rate, a
 // UAC1 endpoint's rate) is accepted and any other GET stalls.
 int LIBUSB_CALL libusb_control_transfer(libusb_device_handle*, uint8_t type, uint8_t req,
@@ -162,11 +176,14 @@ int LIBUSB_CALL libusb_submit_transfer(libusb_transfer* t) { gPending.push_back(
 int LIBUSB_CALL libusb_cancel_transfer(libusb_transfer* t) {
     if (gStallCancel) { gStalled.push_back(t); return 0; }
     --gOutstanding;
+    // A cancelled transfer is no longer on the bus.
+    gPending.erase(std::remove(gPending.begin(), gPending.end(), t), gPending.end());
     t->status = LIBUSB_TRANSFER_CANCELLED;
     t->callback(t);
     return 0;
 }
 int LIBUSB_CALL libusb_handle_events_timeout(libusb_context*, struct timeval*) {
+    ++gEventPolls;
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
     return 0;
 }
@@ -320,14 +337,17 @@ libusb_config_descriptor* uac1Dac() {
     });
 }
 
-// A high-speed async UAC2 DAC with a feedback endpoint, one packet per
-// microframe: 48 kHz/24-bit/2ch is 6 frames (36 bytes) a packet.
-libusb_config_descriptor* asyncHs(uint16_t dataMps) {
+// A high-speed async UAC2 DAC with a feedback endpoint, by default one
+// packet per microframe (48 kHz/24-bit/2ch is 6 frames, 36 bytes, a
+// packet) and a feedback reading every millisecond.
+libusb_config_descriptor* asyncHs(uint16_t dataMps, uint8_t dataInterval = 1,
+                                  uint8_t feedbackInterval = 4) {
     return config(iad(0x00, 0x20), {
         {alt(0, 0, 1, 1, 0x20, uac2Control(), {})},
         {alt(1, 0, 1, 2, 0x20, {}, {}),
          alt(1, 1, 1, 2, 0x20, uac2Stream(3, 24),
-             {ep(0x01, kIsoAsyncOut, dataMps, 1), ep(0x81, kIsoFeedbackIn, 4, 4)})},
+             {ep(0x01, kIsoAsyncOut, dataMps, dataInterval),
+              ep(0x81, kIsoFeedbackIn, 4, feedbackInterval)})},
     });
 }
 
@@ -339,24 +359,32 @@ struct Pumped {
     int packets = 0;
 };
 
-// Completes [transfers] data transfers (8 packets each) in submission order.
-// Feedback transfers come back carrying [feedbackQ16], when it is non-zero.
-Pumped pump(int transfers, int stride, uint32_t feedbackQ16 = 0) {
+// Completes [transfers] data transfers in submission order and measures
+// what the driver refilled them with. Feedback transfers come back
+// carrying [feedbackQ16] in every packet when it is non-zero, or in the
+// last packet only with [lastPacketOnly] (a DAC that answers some polls
+// with nothing); with zero they are left waiting.
+Pumped pump(int transfers, int stride, uint32_t feedbackQ16 = 0, bool lastPacketOnly = false) {
     Pumped r;
     int done = 0;
-    while (done < transfers && !gPending.empty()) {
+    size_t idleFeedback = 0;
+    while (done < transfers && !gPending.empty() && idleFeedback <= gPending.size()) {
         libusb_transfer* t = gPending.front();
         gPending.pop_front();
         t->status = LIBUSB_TRANSFER_COMPLETED;
         if (t->endpoint & 0x80) {
-            if (feedbackQ16 == 0) { gPending.push_back(t); continue; }
-            std::memcpy(t->buffer, &feedbackQ16, 4);
-            t->iso_packet_desc[0].status = LIBUSB_TRANSFER_COMPLETED;
-            t->iso_packet_desc[0].actual_length = 4;
+            if (feedbackQ16 == 0) { gPending.push_back(t); ++idleFeedback; continue; }
+            for (int p = 0; p < t->num_iso_packets; ++p) {
+                const bool carries = !lastPacketOnly || p == t->num_iso_packets - 1;
+                std::memcpy(libusb_get_iso_packet_buffer_simple(t, p), &feedbackQ16, 4);
+                t->iso_packet_desc[p].status = LIBUSB_TRANSFER_COMPLETED;
+                t->iso_packet_desc[p].actual_length = carries ? 4 : 0;
+            }
             --gOutstanding;
             t->callback(t);
             continue;
         }
+        idleFeedback = 0;
         --gOutstanding;
         t->callback(t);
         for (int p = 0; p < t->num_iso_packets; ++p) {
@@ -374,7 +402,8 @@ struct Session {
     LibusbUacDriver driver;
     bool started = false;
 
-    Session(libusb_config_descriptor* cfg, int speed, int rate, int bits) {
+    // Writes [prefill] frames once started; -1 is 200 ms.
+    Session(libusb_config_descriptor* cfg, int speed, int rate, int bits, int prefill = -1) {
         gConfig = cfg;
         gSpeed = speed;
         gPending.clear();
@@ -382,13 +411,15 @@ struct Session {
         gLastAlt = -1;
         driver.open(3);
         started = driver.start(rate, bits, 2);
-        if (started) {
-            const auto& f = driver.currentFormat();
-            std::vector<uint8_t> pcm(rate / 5 * f.channels * f.bytesPerSample, 0x5A);
-            driver.writePcm(pcm.data(), rate / 5);
-        }
+        if (started) write(prefill < 0 ? rate / 5 : prefill);
     }
     ~Session() { driver.close(); }
+
+    int write(int frames) {
+        const auto& f = driver.currentFormat();
+        std::vector<uint8_t> pcm(static_cast<size_t>(frames) * f.channels * f.bytesPerSample, 0x5A);
+        return driver.writePcm(pcm.data(), frames);
+    }
 
     int stride() const {
         const auto& f = driver.currentFormat();
@@ -397,6 +428,38 @@ struct Session {
 };
 
 bool contains(const std::string& s, const char* what) { return s.find(what) != std::string::npos; }
+
+// Packets per transfer of the pending transfers going [in] or out.
+int pendingPackets(bool in, int* count = nullptr) {
+    int packets = 0, n = 0;
+    for (libusb_transfer* t : gPending) {
+        if (((t->endpoint & 0x80) != 0) != in) continue;
+        packets = t->num_iso_packets;
+        ++n;
+    }
+    if (count) *count = n;
+    return packets;
+}
+
+// Whether every pending data transfer carries only silence.
+bool pendingDataSilent() {
+    for (libusb_transfer* t : gPending) {
+        if (t->endpoint & 0x80) continue;
+        size_t bytes = 0;
+        for (int p = 0; p < t->num_iso_packets; ++p) bytes += t->iso_packet_desc[p].length;
+        for (size_t i = 0; i < bytes; ++i) {
+            if (t->buffer[i] != 0) return false;
+        }
+    }
+    return true;
+}
+
+// Event-loop calls over [ms] milliseconds.
+long eventPollsOver(int ms) {
+    long before = gEventPolls.load();
+    std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+    return gEventPolls.load() - before;
+}
 
 } // namespace
 
@@ -550,6 +613,243 @@ int main() {
         gPending.clear();
         check(s.driver.start(48000, 24, 2), "the new connection starts");
         pump(10, s.stride());
+    }
+
+    std::printf("-- transfer sizes: ~4 ms and at least 8 packets each, 4 in flight\n");
+    {
+        Session s(asyncHs(0x0100), LIBUSB_SPEED_HIGH, 48000, 24);
+        int data = 0, fb = 0;
+        check(pendingPackets(false, &data) == 32 && data == 4,
+              "high speed, a packet per microframe: 4 transfers of 32 packets (16 ms), "
+              "250 wakeups a second");
+        check(pendingPackets(true, &fb) == 8 && fb == 2,
+              "1 ms feedback: 2 transfers of 8 readings, 125 wakeups a second");
+        Pumped p = pump(250, s.stride());
+        check(p.frames == 48000, "a second of transfers carries 48,000 frames");
+        check(p.maxBytes <= 0x0100, "no packet passes wMaxPacketSize");
+    }
+    {
+        Session s(asyncHs(0x0100, 1, 1), LIBUSB_SPEED_HIGH, 48000, 24);
+        check(pendingPackets(true) == 64, "feedback every microframe: 64 readings (8 ms) a transfer");
+    }
+    {
+        Session s(asyncHs(0x0100, 2), LIBUSB_SPEED_HIGH, 48000, 24);
+        check(pendingPackets(false) == 16, "a packet every 2 microframes: 16 packets (4 ms)");
+        Pumped p = pump(250, s.stride());
+        check(p.frames == 48000, "48,000 frames a second");
+    }
+    {
+        Session s(asyncHs(0x0100, 3), LIBUSB_SPEED_HIGH, 48000, 24);
+        check(pendingPackets(false) == 8, "a packet every 4 microframes: 8 packets (4 ms)");
+    }
+    {
+        // One packet a millisecond at high speed (the Focal Bathys' alt):
+        // 4 ms would be 4 packets and twice the wakeups it always had.
+        Session s(asyncHs(0x0130, 4), LIBUSB_SPEED_HIGH, 48000, 24);
+        int data = 0;
+        check(pendingPackets(false, &data) == 8 && data == 4,
+              "high speed, a packet per ms: 4 transfers of 8 packets (8 ms), "
+              "125 wakeups a second as before");
+        Pumped p = pump(125, s.stride());
+        check(p.frames == 48000 && p.maxBytes == 48 * 6, "48 frames a packet, 48,000 a second");
+    }
+    {
+        Session s(appleUac2(), LIBUSB_SPEED_FULL, 48000, 24);
+        int data = 0;
+        check(pendingPackets(false, &data) == 8 && data == 4,
+              "full speed: 4 transfers of 8 packets (8 ms), 125 wakeups a second as before");
+        Pumped p = pump(125, s.stride());
+        check(p.frames == 48000 && p.maxBytes == 288, "48 frames a packet, never past 288 bytes");
+    }
+    {
+        // Played position at full speed, where ~32 ms is in flight: the
+        // first transfers are silence, then each counts once it completes.
+        // 48 frames a packet, 8 packets: 384 a transfer.
+        Session s(appleUac2(), LIBUSB_SPEED_FULL, 48000, 24);
+        pump(4, s.stride());
+        check(s.driver.playedFrames() == 0,
+              "full speed: 32 ms of the song in flight is not counted as played");
+        pump(1, s.stride());
+        check(s.driver.playedFrames() == 384, "and a transfer counts once it completes");
+    }
+    {
+        Session s(asyncHs(0x0100), LIBUSB_SPEED_HIGH, 44100, 24);
+        Pumped p = pump(250, s.stride());
+        check(p.frames >= 44099 && p.frames <= 44100,
+              "44.1 kHz at high speed: 44,100 frames a second, to within one");
+    }
+    {
+        const uint32_t overAsk = (6u << 16) | 0x8000u;
+        Session s(asyncHs(0x0100), LIBUSB_SPEED_HIGH, 48000, 24);
+        Pumped p = pump(200, s.stride(), overAsk, /*lastPacketOnly=*/true);
+        check(p.maxBytes == 7 * 6, "a reading in any packet of a feedback transfer steers the pump");
+    }
+
+    std::printf("-- the played position counts what the DAC was sent\n");
+    {
+        // 9,600 frames written; 32 packets of 6 frames is 192 a transfer.
+        Session s(asyncHs(0x0100), LIBUSB_SPEED_HIGH, 48000, 24);
+        const int st = s.stride();
+        check(s.driver.writtenFrames() == 9600 && s.driver.playedFrames() == 0,
+              "nothing played before a transfer completes");
+        pump(4, st);
+        check(s.driver.playedFrames() == 0, "the primed silence is not counted");
+        check(s.driver.writtenFrames() - s.driver.playedFrames() == 9600,
+              "16 ms of the song queued in flight is still pending, not played");
+        pump(1, st);
+        check(s.driver.playedFrames() == 192, "a transfer counts once it completes");
+        pump(3, st);
+        check(s.driver.playedFrames() == 768, "and each one after it");
+    }
+    {
+        Session s(asyncHs(0x0100), LIBUSB_SPEED_HIGH, 48000, 24, /*prefill=*/100);
+        pump(14, s.stride());
+        check(s.driver.playedFrames() == 100,
+              "an underrun's silence is not counted: played stops at what was written");
+        check(s.driver.writtenFrames() == s.driver.playedFrames(), "so the stream can end");
+    }
+    {
+        Session s(asyncHs(0x0100), LIBUSB_SPEED_HIGH, 48000, 24);
+        const int st = s.stride();
+        pump(6, st);
+        check(s.driver.playedFrames() == 384, "two transfers of the song played");
+        s.driver.flushRing();
+        check(s.driver.playedFrames() == 0 && s.driver.writtenFrames() == 0,
+              "a flush starts both counts again");
+        pump(4, st);
+        check(s.driver.playedFrames() == 0,
+              "audio queued before the flush is not counted after it");
+        check(pendingDataSilent(), "and the flushed audio is not sent: the refills are silence");
+        check(s.write(500) == 500, "the next song's frames are taken");
+        pump(8, st);
+        check(s.driver.playedFrames() == 500 && s.driver.writtenFrames() == 500,
+              "and counted from zero");
+    }
+
+    std::printf("-- parked while paused\n");
+    {
+        resetUnits({{2, 0}});
+        gClaimed = 0;
+        gOutstanding = 0;
+        Session s(asyncHs(0x0100), LIBUSB_SPEED_HIGH, 48000, 24);
+        const int st = s.stride();
+        check(s.started && gClaimed == 2, "starts, both interfaces claimed");
+        pump(8, st);
+        s.driver.flushRing();   // what pause() does first
+        check(eventPollsOver(30) > 5, "a running pump has its event thread polling");
+        check(s.driver.parkPump(), "parks");
+        check(gOutstanding == 0 && gPending.empty(), "every transfer cancelled and back");
+        check(gLastAlt == 0, "the interface is on alt 0");
+        check(gClaimed == 2, "both interfaces still claimed");
+        check(eventPollsOver(30) == 0, "no thread polls libusb while parked");
+        check(s.driver.isStreaming() && s.driver.isPumpParked(),
+              "still the same stream, parked");
+        check(s.driver.isStreamingFormat(48000, 24, 2),
+              "a track in the same format reuses it");
+        check(!s.driver.parkPump(), "parking twice does nothing");
+
+        const int clockSets = gClockSetCount;
+        check(s.driver.resumePump(), "resumes");
+        check(!s.driver.isPumpParked() && s.driver.isStreaming(), "streaming again");
+        check(gLastAlt == 1, "back on its streaming alt");
+        check(gClockSetCount > clockSets, "with the rate set again");
+        check(gUnits[2].volume.at(1) == 0 && gUnits[2].muted.at(0) == 0,
+              "and the DAC's volume at full scale, unmuted");
+        int data = 0, fb = 0;
+        pendingPackets(false, &data);
+        pendingPackets(true, &fb);
+        check(data == 4 && fb == 2, "a full set of transfers in flight");
+        check(s.driver.playedFrames() == 0 && s.driver.writtenFrames() == 0,
+              "position counts from zero");
+        check(s.write(9600) == 9600, "takes audio");
+        pump(6, st);
+        check(s.driver.playedFrames() == 384, "and the position follows the DAC again");
+
+        gLastAlt = -1;
+        const int altSets = gAltSets;
+        check(s.driver.resumePump() && gAltSets == altSets,
+              "resuming a stream that is not parked changes nothing");
+
+        check(s.driver.parkPump(), "parks again");
+        const int altSetsParked = gAltSets;
+        s.driver.stop();
+        check(gClaimed == 0, "stop() lets both interfaces go");
+        check(gAltSets == altSetsParked, "without setting alt 0 twice");
+        check(!s.driver.isStreaming() && !s.driver.isPumpParked(), "and the stream is gone");
+        check(!s.driver.resumePump(), "a stopped stream does not resume");
+    }
+    {
+        resetUnits({{2, 0}});
+        gClaimed = 0;
+        gOutstanding = 0;
+        Session s(asyncHs(0x0100), LIBUSB_SPEED_HIGH, 48000, 24);
+        pump(8, s.stride());
+        check(s.driver.parkPump(), "parks");
+        gRefuseAlt = true;   // unplugged meanwhile, or wedged
+        check(!s.driver.resumePump(), "a DAC that refuses its alt on resume: resume fails");
+        gRefuseAlt = false;
+        check(!s.driver.isStreaming() && !s.driver.isPumpParked(),
+              "the stream is down, so playback goes elsewhere");
+        check(s.driver.lastError() == StartError::SetAltFailed, "with the reason recorded");
+        check(gOutstanding == 0, "and nothing left in flight");
+        check(s.write(100) == 0, "writes are refused");
+        s.driver.stop();
+        check(gClaimed == 0, "stop() still lets the interfaces go");
+    }
+    {
+        resetUnits({{2, 0}});
+        Session s(appleUac2(), LIBUSB_SPEED_FULL, 48000, 24);
+        pump(8, s.stride());
+        check(s.driver.parkPump(), "a full-speed stream parks");
+        check(s.driver.start(48000, 16, 2), "another format starts from parked");
+        check(gLastAlt == 2 && !s.driver.isPumpParked(), "on its own alt, not parked");
+        Pumped p = pump(20, s.stride());
+        check(p.maxBytes == 192, "and streams");
+    }
+
+    std::printf("-- ring memory\n");
+    {
+        LibusbUacDriver idle;
+        check(idle.ringCapacityBytes() == 0, "a driver that never streamed holds no ring");
+    }
+    {
+        resetUnits({{2, 0}});
+        Session s(appleUac2(), LIBUSB_SPEED_FULL, 48000, 24);
+        check(s.driver.ringCapacityBytes() == 73728, "48 kHz/24-bit: 72 KiB, about 250 ms");
+        check(s.driver.start(48000, 16, 2), "16-bit starts");
+        check(s.driver.ringCapacityBytes() == 49152, "and its smaller ring really is smaller");
+        s.driver.stop();
+        check(s.driver.ringCapacityBytes() == 0, "stop() gives the ring back");
+        check(s.write(100) == 0, "a write after stop is refused, not written to freed memory");
+    }
+    {
+        Session s(asyncHs(0x0100), LIBUSB_SPEED_HIGH, 192000, 24);
+        check(s.started && s.driver.ringCapacityBytes() == 290816,
+              "192 kHz/24-bit: 284 KiB");
+    }
+    {
+        // A DAC unplugged mid-song: the controller stops the driver on its
+        // own thread while the playback thread keeps writing. Under
+        // AddressSanitizer, a write into a ring stop() had freed fails here.
+        resetUnits({{2, 0}});
+        Session s(appleUac2(), LIBUSB_SPEED_FULL, 48000, 24);
+        std::atomic<bool> done{false};
+        std::thread writer([&] {
+            std::vector<uint8_t> pcm(480 * 6, 0x5A);
+            while (!done.load()) {
+                s.driver.writePcm(pcm.data(), 480);
+                s.driver.flushRing();
+            }
+        });
+        bool allStarted = true;
+        for (int i = 0; i < 100; ++i) {
+            gPending.clear();
+            allStarted = s.driver.start(48000, (i & 1) ? 16 : 24, 2) && allStarted;
+            s.driver.stop();
+        }
+        done.store(true);
+        writer.join();
+        check(allStarted, "start and stop under a writer on another thread");
     }
 
     if (failures) {

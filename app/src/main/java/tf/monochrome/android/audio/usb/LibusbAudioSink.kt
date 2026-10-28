@@ -11,6 +11,10 @@ import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.ForwardingAudioSink
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import tf.monochrome.android.audio.resample.FloatSonicAudioProcessor
 import tf.monochrome.android.audio.resample.VariRateAudioProcessor
@@ -206,6 +210,20 @@ class LibusbAudioSink(
     private var paused = false
 
     /**
+     * The park armed by [pause] (see [armIdlePark]): after [PAUSE_IDLE_MS]
+     * paused, the DAC's stream is parked rather than fed silence. Playback
+     * thread only.
+     */
+    private var idlePark: ScheduledFuture<*>? = null
+
+    /**
+     * Bumped, under [writeLock], each time a park is armed or disarmed. A
+     * park that fires under an older value is stale and does nothing, which
+     * is what makes [play] safe against one already on its way.
+     */
+    private var parkGeneration = 0
+
+    /**
      * Output owned by the final AudioProcessor that has already consumed its
      * corresponding Media3 input but has not yet fully fitted in the USB ring.
      * We never call chain.process() again until this buffer is empty, so the
@@ -225,6 +243,8 @@ class LibusbAudioSink(
     private var partialWriteLogged = false
 
     private var gainScratch: ByteBuffer = AudioProcessor.EMPTY_BUFFER
+    // The per-sample loops behind applyGainPcmInt and packForUsb.
+    private val packer = UsbPcmPacker()
 
     // The gain the DAC is getting now, moved a frame at a time toward the
     // volume's target (see GainRamp). Zero whenever the DAC starts from
@@ -436,6 +456,9 @@ class LibusbAudioSink(
             )
             resetStreamAccounting()
             crossfadeMix?.setConsumer(dacOut.sampleRate, dacOut.channelCount)
+            // A track changed while paused may have started a new stream,
+            // which would otherwise run on silence until play.
+            if (paused) armIdlePark()
         }
     }
 
@@ -531,14 +554,24 @@ class LibusbAudioSink(
     ): Boolean {
         for (bits in depths) {
             val reused = driver.isStreamingFormat(rate, bits, channels)
-            if (reused) Log.i(TAG, "reused active stream ($rate/${bits}b/${channels}ch)")
-            if (!reused && !driver.start(rate, bits, channels)) {
+            // A stream parked during a pause still has this format but sends
+            // nothing until it is resumed. play() resumes it; a song that
+            // arrives while playing (after one the delegate played, say) has
+            // to, or it would be written into a ring nothing drains.
+            val unpark = reused && !paused && driver.isPumpParked()
+            if (reused && !unpark) Log.i(TAG, "reused active stream ($rate/${bits}b/${channels}ch)")
+            val up = when {
+                unpark -> driver.resumePump()
+                reused -> true
+                else -> driver.start(rate, bits, channels)
+            }
+            if (!up) {
                 refused?.put(bits, driver.supportedRates.value)
                 continue
             }
             // A stream the DAC starts from silence fades in from silence;
             // one it carries on with (gapless, same format) keeps its level.
-            if (!reused) appliedGain = 0f
+            if (!reused || unpark) appliedGain = 0f
             outSampleRate = rate
             adoptNegotiatedFormat(bits, channels, encoding)
             // Integer PCM reaches the DAC untouched, so its stride has to
@@ -1048,6 +1081,7 @@ class LibusbAudioSink(
             pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
             endOfStreamRequested = false
             resetStreamAccounting()
+            if (paused) armIdlePark()
             Log.i(
                 TAG,
                 "lazy-engaged bypass mid-stream (chain $rate/${encodingLabel(encoding)}/" +
@@ -1150,20 +1184,76 @@ class LibusbAudioSink(
             startTimeUs = C.TIME_UNSET
             positionPlayedBaseFrames = 0L
             endOfStreamRequested = false
+            armIdlePark()
         }
     }
 
     override fun play() {
         super.play()
+        // Before anything else, so a park on its way cannot land after the
+        // resume below.
+        disarmIdlePark()
         // Unconditional, for the same reason as pause(): the gate must come
         // down even if bypass happened to be off when the user hit play.
         paused = false
         advancingReported = false
         if (bypassActive) {
+            resumeParkedPump()
             resetWatchdog()
             startTimeUs = C.TIME_UNSET
             positionPlayedBaseFrames = 0L
             endOfStreamRequested = false
+        }
+    }
+
+    /**
+     * Parks the DAC's stream once playback has stayed paused for
+     * [PAUSE_IDLE_MS]. Until then the iso pump keeps sending silence, as it
+     * always has, so a short pause resumes exactly as before; after it, the
+     * pump's 125 to 375 wakeups a second stop and the DAC leaves its
+     * streaming alt. Not sooner, because some DACs click as the alt changes.
+     * Arming again replaces the previous one.
+     */
+    private fun armIdlePark() {
+        val generation = synchronized(writeLock) { ++parkGeneration }
+        idlePark?.cancel(false)
+        idlePark = idleScheduler.schedule({
+            synchronized(writeLock) {
+                // Stale if play(), reset() or another arm came since. A
+                // stream that went away meanwhile is not parked: parkPump
+                // finds nothing running.
+                if (generation == parkGeneration && driver.parkPump()) {
+                    Log.i(TAG, "paused ${PAUSE_IDLE_MS / 1000} s: DAC stream parked (alt 0, interface kept)")
+                }
+            }
+        }, PAUSE_IDLE_MS, TimeUnit.MILLISECONDS)
+    }
+
+    private fun disarmIdlePark() {
+        idlePark?.cancel(false)
+        idlePark = null
+        // Under the lock: a park already running finishes first, and one
+        // still to start sees the new generation and gives up.
+        synchronized(writeLock) { parkGeneration++ }
+    }
+
+    /**
+     * Restarts a stream [armIdlePark] parked. Position needs nothing more:
+     * the driver counts from zero again and [play] resets the base, so the
+     * first buffer after it starts the clock as after any pause. The DAC
+     * starts from silence, so the level fades in as for any fresh stream. If
+     * the DAC refuses, the driver reports it is no longer streaming and the
+     * next buffer hands playback to the delegate ([checkDriverStillOwned]).
+     */
+    private fun resumeParkedPump() {
+        synchronized(writeLock) {
+            if (!driver.isPumpParked()) return
+            if (driver.resumePump()) {
+                appliedGain = 0f
+                Log.i(TAG, "resumed the parked DAC stream")
+            } else {
+                Log.w(TAG, "the DAC refused the parked stream on resume — delegate takes over")
+            }
         }
     }
 
@@ -1332,6 +1422,7 @@ class LibusbAudioSink(
         requestedParams = PlaybackParameters.DEFAULT
         resetHalTiming()
         usbTimeline.clear()
+        disarmIdlePark()
         if (driver.isStreaming.value) driver.stop()
 
         bypassActive = false
@@ -1374,6 +1465,7 @@ class LibusbAudioSink(
         pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
         halPending = AudioProcessor.EMPTY_BUFFER
         super.release()
+        disarmIdlePark()
         if (driver.isStreaming.value) driver.stop()
     }
 
@@ -1410,41 +1502,11 @@ class LibusbAudioSink(
         rise: Float,
         fall: Float,
     ): ByteBuffer {
-        val bytesPerSample = usbBytesPerSample
-        val samples = frames * outChannels
-        val scratch = ensureGainScratch(samples * bytesPerSample)
-        val srcPos = src.position()
-        val bits = bytesPerSample * 8
-        val max = (1L shl (bits - 1)) - 1
-        val min = -(1L shl (bits - 1))
-
-        var gain = startGain.toDouble()
-        var channel = 0
-        var frame = 0
-        var o = 0
-        for (i in 0 until samples) {
-            val at = srcPos + o
-            var raw = 0L
-            for (b in 0 until bytesPerSample) {
-                raw = raw or ((src.get(at + b).toLong() and 0xFF) shl (8 * b))
-            }
-            // Sign-extend from the sample's width.
-            val sample = (raw shl (64 - bits)) shr (64 - bits)
-            val scaled = Math.round(sample * gain).coerceIn(min, max)
-            for (b in 0 until bytesPerSample) {
-                scratch.put(o + b, (scaled shr (8 * b)).toByte())
-            }
-            o += bytesPerSample
-            if (++channel == outChannels) {
-                channel = 0
-                frame++
-                gain = GainRamp.after(startGain, targetGain, frame, rise, fall).toDouble()
-            }
-        }
-
-        scratch.position(0)
-        scratch.limit(samples * bytesPerSample)
-        return scratch
+        val scratch = ensureGainScratch(frames * outChannels * usbBytesPerSample)
+        return packer.scaleInt(
+            src, frames, outChannels, usbBytesPerSample,
+            startGain, targetGain, rise, fall, scratch,
+        )
     }
 
     /**
@@ -1472,7 +1534,6 @@ class LibusbAudioSink(
         val bytesPerSample = usbBytesPerSample
         val samples = frames * outChannels
         val out = ensurePackScratch(samples * bytesPerSample)
-        val srcPos = src.position()
 
         // A crossfade's tail, if one is running: peeked, not taken, until the
         // DAC says how much of this it accepted (see writeProcessedBuffer).
@@ -1487,47 +1548,21 @@ class LibusbAudioSink(
             tailGain = mix.gain.coerceIn(0f, 1f) * volumeController.getDacGain()
         }
         val mixing = tailPeeked > 0
-        var notAudio = false
-
         val widen16 = sourceIs16Widened
-        var o = 0
-        var gain = startGain
-        var channel = 0
-        var frame = 0
-        for (i in 0 until samples) {
-            // Every sample is bounded before its level, not after: clamped
-            // after, a value far past full scale (a decoder's 16-bit samples
-            // read as float, a filter blowing up) came out at full scale
-            // whatever the volume, as a burst between songs. The tail ran
-            // through its own copy of the DSP chain, so it gets the same room
-            // for an EQ boost as the song coming in. See safeSourceSample.
-            val rawTail = if (mixing) tailScratch[i] else 0f
-            if (mixing && !looksLikeAudio(rawTail, SOURCE_HEADROOM)) notAudio = true
-            val tail = if (mixing) safeSourceSample(rawTail) * tailGain else 0f
-            val sample = if (widen16) {
-                // Little-endian by hand, like applyGainPcmInt: with no DSP
-                // running, src is the renderer's own buffer, whose ByteBuffer
-                // order is not promised to be native.
-                val at = srcPos + (i shl 1)
-                val s16 = (src.get(at).toInt() and 0xFF) or (src.get(at + 1).toInt() shl 8)
-                int16ToSubslotSample(s16, gain, tail, bytesPerSample)
-            } else {
-                val raw = src.getFloat(srcPos + (i shl 2))
-                if (!looksLikeAudio(raw, SOURCE_HEADROOM)) notAudio = true
-                floatToSubslotSample(safeSourceSample(raw) * gain + tail, bytesPerSample)
-            }
-            out.put(o, sample.toByte())
-            if (bytesPerSample > 1) out.put(o + 1, (sample shr 8).toByte())
-            if (bytesPerSample > 2) out.put(o + 2, (sample shr 16).toByte())
-            if (bytesPerSample > 3) out.put(o + 3, (sample shr 24).toByte())
-            o += bytesPerSample
-            // One gain per frame, so every channel of a frame moves together.
-            if (++channel == outChannels) {
-                channel = 0
-                frame++
-                gain = GainRamp.after(startGain, targetGain, frame, rise, fall)
-            }
-        }
+
+        // Every sample is bounded before its level, not after: clamped after,
+        // a value far past full scale (a decoder's 16-bit samples read as
+        // float, a filter blowing up) came out at full scale whatever the
+        // volume, as a burst between songs. The tail ran through its own copy
+        // of the DSP chain, so it gets the same room for an EQ boost as the
+        // song coming in. See safeSourceSample. 16-bit input is read
+        // little-endian by hand: with no DSP running, src is the renderer's
+        // own buffer, whose ByteBuffer order is not promised to be native.
+        val notAudio = packer.pack(
+            src, frames, outChannels, bytesPerSample, widen16,
+            startGain, targetGain, rise, fall,
+            if (mixing) tailScratch else null, tailGain, out,
+        )
 
         if (notAudio && !notAudioLogged) {
             notAudioLogged = true
@@ -1538,8 +1573,6 @@ class LibusbAudioSink(
                     "not played at full scale",
             )
         }
-        out.position(0)
-        out.limit(samples * bytesPerSample)
         return out
     }
 
@@ -1636,6 +1669,20 @@ class LibusbAudioSink(
         private const val SOURCE_GAP_US = 1_000L
         private const val kIsoWarmupNs = 400_000_000L
         private const val kIsoStallNs = 400_000_000L
+
+        /** Paused this long, the DAC's stream is parked (see [armIdlePark]). */
+        internal const val PAUSE_IDLE_MS = 10_000L
+
+        /**
+         * One daemon thread for every sink's park timer. A park blocks for
+         * as long as the DAC takes to hand its transfers back, a few ms,
+         * which must not be the main thread's time.
+         */
+        private val idleScheduler: ScheduledExecutorService by lazy {
+            Executors.newSingleThreadScheduledExecutor { r ->
+                Thread(r, "usb-idle-park").apply { isDaemon = true }
+            }
+        }
     }
 }
 
