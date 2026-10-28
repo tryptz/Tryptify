@@ -2,7 +2,16 @@
 
 ## [Unreleased]
 
+## [1.9.51]
+
 ### Added
+
+#### Continuous playback
+- **Continue into the next list** (Settings › Audio › Playback, on by default). When a playlist, album or phone folder ends, the next one on the screen it was opened from plays: an artist's albums, then EPs and singles; liked albums, search, Discover shelves and Release Radar; the Library's and your server's playlists; local albums and artists; and the folder tree, top to bottom, each folder before its subfolders. A folder's Play button goes on after its whole branch. After the last list, radio from its last song.
+- **Previous on a list's first song** plays the last song of the list before. Repeat All loops the list playing and Repeat One the song, as before; under shuffle the next list plays shuffled; songs added with Play next or Add to queue play first. The lists are saved with the queue, so it carries on after a restart.
+- **The queue keeps every list played**, so the queue sheet scrolls back through them and the player's count runs from the first song.
+- **Library › Playlists has a sort**: last edited (as before), name or date created. It is saved, and it is the order playback walks the playlists in.
+- Kept light: only the lists' ids are remembered, and a list's songs (at most 1,000) are loaded when playback reaches it.
 
 #### Your own music server, further
 - **Your server counts your plays.** It hears "now playing" when a song starts, and the play once you've heard enough of it (Last.fm's rule), so its play counts, Recently played and any Last.fm or ListenBrainz it passes plays on to see what you played here.

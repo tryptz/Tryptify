@@ -158,6 +158,84 @@ object WhatsNew {
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
         WhatsNewRelease(
+            versionCode = 196,
+            versionName = "1.9.51",
+            entries = listOf(
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYBACK,
+                    title = "Continue into the next list",
+                    body = "When a playlist, album or folder ends, the next one on the screen you opened it from plays, and after the last, radio from its last song. On by default, in Settings › Audio › Playback.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYBACK,
+                    title = "Previous goes back a list",
+                    body = "On a list's first song, Previous plays the last song of the list before. The queue keeps every list played. Repeat All still loops the list, and under shuffle the next one plays shuffled.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYBACK,
+                    title = "ReplayGain is back",
+                    body = "Settings › Audio › Audio processing › ReplayGain evens out loudness from your files' tags: Track, Album or Smart, with a pre-amp. Off by default. It never clips, and at 0 dB bit-perfect stays bit-perfect.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYLISTS,
+                    title = "Sort your playlists",
+                    body = "Library › Playlists has a sort button beside New playlist: last edited, name or date created. Playback walks your playlists in that order.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "Your server counts your plays",
+                    body = "Songs from your own music server count there: now playing as a song starts, the play once you've heard enough, so its counts, Recently played and scrobbles agree.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "Likes star songs on your server",
+                    body = "Liking one of your server's songs stars it there, and unliking unstars it, so your server's other apps agree.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "Playlists and Liked songs in My server",
+                    body = "Library › My server lists your server's playlists, to open, play or shuffle, and everything starred on it.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = CONNECTIONS,
+                    title = "Cellular streaming for your server",
+                    body = "Settings › Connections › Music server: keep the original file on mobile data, or ask your server for an MP3 of at most 320, 192 or 128 kbps. Wi-Fi always gets the original.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LYRICS,
+                    title = "Your files' own lyrics first",
+                    body = "The .lrc next to a song and lyrics in its tags come first, for library files and downloads, and show offline. Word-timed ones are used at once.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LYRICS,
+                    title = "Your server's lyrics first",
+                    body = "For your server's songs, its own lyrics: timed when it has them timed, as Navidrome does, plain otherwise.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = USB_DAC,
+                    title = "DACs with one clock stay exclusive",
+                    body = "A USB DAC that runs only 48 and 96 kHz, like the Nothing Ear (1), plays CD-rate songs in exclusive mode, resampled to its nearest rate. Rates it takes stay bit-perfect.",
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LYRICS,
+                    title = "LRC lyrics read right",
+                    body = "A file starting with a byte order mark keeps its first line, an end stamp is a time, an all-zero file shows as plain lyrics, and LRCLib's short stamps, offsets and word timing read as elsewhere.",
+                ),
+            ),
+        ),
+        WhatsNewRelease(
             versionCode = 195,
             versionName = "1.9.5",
             entries = listOf(
