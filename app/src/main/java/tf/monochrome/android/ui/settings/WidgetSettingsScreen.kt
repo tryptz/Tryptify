@@ -73,6 +73,7 @@ import tf.monochrome.android.widget.WidgetLook
 import tf.monochrome.android.widget.WidgetStyle
 import tf.monochrome.android.widget.WidgetStyleStore
 import tf.monochrome.android.widget.resolveWidgetLook
+import tf.monochrome.android.widget.wallpaperColors
 
 /**
  * Settings › Appearance › Home screen widget: the widget's look, with a
@@ -95,6 +96,8 @@ fun WidgetSettingsScreen(navController: NavController) {
         val art = snapshot.artworkUri?.let { loadArtwork(context, it) }
         value = PreviewSong(snapshot, art)
     }
+    // The wallpaper's colours, so the preview stands on what the widget does.
+    val wallpaper = remember { wallpaperColors(context) }
 
     fun save(style: WidgetStyle) {
         scope.launch {
@@ -124,7 +127,7 @@ fun WidgetSettingsScreen(navController: NavController) {
                 .padding(horizontal = 20.dp),
         ) {
             SettingsGroupHeader(stringResource(R.string.widget_style_preview))
-            WidgetPreview(shown, nowPlaying)
+            WidgetPreview(shown, nowPlaying, wallpaper)
             Spacer(Modifier.height(20.dp))
 
             SettingsGroupHeader(stringResource(R.string.widget_style_glass))
@@ -173,6 +176,27 @@ fun WidgetSettingsScreen(navController: NavController) {
                 onCheckedChange = { save(style.copy(showProgress = it)) },
             )
             Spacer(Modifier.height(12.dp))
+
+            SettingsGroupHeader(stringResource(R.string.widget_style_text))
+            Choice(
+                options = WidgetStyle.Text.entries,
+                selected = style.text,
+                label = {
+                    when (it) {
+                        WidgetStyle.Text.Auto -> stringResource(R.string.widget_style_text_auto)
+                        WidgetStyle.Text.White -> stringResource(R.string.widget_style_text_white)
+                        WidgetStyle.Text.Dark -> stringResource(R.string.widget_style_text_dark)
+                    }
+                },
+                onSelect = { save(style.copy(text = it)) },
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = stringResource(R.string.widget_style_text_summary),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(20.dp))
 
             SettingsGroupHeader(stringResource(R.string.widget_style_play))
             Choice(
@@ -223,16 +247,22 @@ private val PreviewCover = Color(0xFFE8875A)
 private class PreviewSong(val snapshot: NowPlayingSnapshot, val art: Bitmap?)
 
 /**
- * The medium widget over a stand-in wallpaper: a dim ground with two flat
- * shapes, so the glass's opacity shows. Drawn in Compose, not Glance, from
+ * The medium widget over the wallpaper's colours (or stand-ins): its main
+ * colour as the ground, two flat shapes in the others, so the glass's
+ * opacity shows. Drawn in Compose, not Glance, from
  * the same [WidgetLook].
  */
 @Composable
-private fun WidgetPreview(style: WidgetStyle, song: PreviewSong?) {
+private fun WidgetPreview(style: WidgetStyle, song: PreviewSong?, wallpaper: List<Color>?) {
     val art = song?.art
     val coverColor = remember(art) { art?.let { averageColor(it) } ?: PreviewCover.toArgb() }
     val cover = remember(art) { art?.asImageBitmap() }
-    val look = resolveWidgetLook(style, coverColor)
+    val ground = wallpaper?.firstOrNull() ?: GROUND
+    val look = resolveWidgetLook(style, coverColor, ground)
+    // The wallpaper's second and third colours as two shapes, so the glass's
+    // opacity shows; stand-ins when Android does not say.
+    val shapeA = if (wallpaper == null) Color(0xFFE5643A) else wallpaper.getOrNull(1)
+    val shapeB = if (wallpaper == null) Color(0xFF9C6ADE) else wallpaper.getOrNull(2)
     val title = song?.snapshot?.title?.takeIf { it.isNotBlank() }
     val artist = song?.snapshot?.artist?.takeIf { it.isNotBlank() }
     Box(
@@ -240,11 +270,11 @@ private fun WidgetPreview(style: WidgetStyle, song: PreviewSong?) {
             .fillMaxWidth()
             .height(200.dp)
             .clip(RoundedCornerShape(20.dp))
-            .background(GROUND),
+            .background(ground),
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.size(170.dp).offset(x = (-90).dp, y = 40.dp).background(Color(0xFFE5643A), CircleShape))
-        Box(Modifier.size(150.dp).offset(x = 100.dp, y = (-40).dp).background(Color(0xFF9C6ADE), CircleShape))
+        shapeA?.let { Box(Modifier.size(170.dp).offset(x = (-90).dp, y = 40.dp).background(it, CircleShape)) }
+        shapeB?.let { Box(Modifier.size(150.dp).offset(x = 100.dp, y = (-40).dp).background(it, CircleShape)) }
         val shape = RoundedCornerShape(24.dp)
         Column(
             modifier = Modifier

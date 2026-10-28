@@ -719,24 +719,36 @@ cover, a sheen or any gradient.
 **The look is the listener's**, under Settings › Appearance › Home screen
 widget (`WidgetSettingsScreen`, the owner asked for it): glass Light, Dark or
 Album colour (the cover's *average* colour, flat), opacity 0–85% (default
-Light at 18%), the edge, the cover, the progress line, and a Solid or Glass
-play disc. Kept in its own DataStore (`WidgetStyleStore`, `widget_style`),
+Light at 18%), the edge, the cover, the progress line, a Solid or Glass play
+disc, and the text: Auto, White or Dark. Kept in its own DataStore (`WidgetStyleStore`, `widget_style`),
 not synced: it is about this phone's home screen. Every option stays one
 flat colour at an opacity.
 
-**The text colour is not an option; it follows the glass**
-(`resolveWidgetLook`): the pane is judged over a dim wallpaper (`GROUND`), and
-past luminance 0.2, where white and near-black read equally, the ink turns
-dark, and the solid disc with it. White text on dense white glass is the
-failure. `WidgetStyleTest` sweeps every glass, cover and opacity for 4:1. The
-widget and the Settings preview both draw from `resolveWidgetLook`, so the
-preview cannot drift from the widget; the preview shows the song the widget
-is showing (`NowPlayingSnapshotStore`), so Album glass takes the real cover.
+**The text colour follows the glass over the wallpaper** (`resolveWidgetLook`,
+Text: Auto). The pane is judged over the wallpaper's main colour, which Android
+gives any app without a permission (`wallpaperGround`, `getWallpaperColors`;
+`GROUND`, a dim colour, only when it cannot say), and past luminance 0.2,
+where white and near-black read equally, the ink turns dark, and the solid disc
+with it. It used to be judged over the fixed dim colour, and on the owner's
+light wallpaper the widget drew faint white text on light glass (seen on
+device). Text: White and Dark override it, for a wallpaper whose main colour is
+not what sits behind the widget. `WidgetStyleTest` sweeps every glass, cover,
+opacity and a range of wallpapers for 4:1. The widget and the Settings preview
+both draw from `resolveWidgetLook`, and the preview stands on the wallpaper's
+colours and shows the song the widget is showing (`NowPlayingSnapshotStore`),
+so it cannot drift from the widget.
 
-**The pane and the disc are tinted white shapes** (`widget_glass_fill`,
-`widget_glass_edge`, `widget_glass_disc`), drawn as `Image`s, not a
-background colour: a RemoteViews background colour is square below Android 12,
-and a shape drawable cannot take a runtime colour. The style is collected in
+**A widget's tint drops its alpha. Translucency is a background colour.**
+Glance's `ColorFilter.tint` becomes `ImageView.setColorFilter`, which is
+SRC_ATOP: it keeps the drawable's own alpha and only mixes the colour in. The
+first version drew the pane as a white shape tinted "dark at 22%", and it came
+out solid light grey with no wallpaper through it; the glass play disc came out
+solid white with its white glyph lost in it (seen on device). So the pane and
+the clear play disc are `background(ColorProvider(...))` with a corner clip
+(round from Android 12, square below), the solid disc is a tinted shape
+(`widget_glass_disc`, opaque, round everywhere), and the edge keeps its 0.35
+alpha in the drawable (`widget_glass_edge`) and takes only its colour from the
+tint. Never tint anything with a translucent colour. The style is collected in
 the widget's composition, not read once, so a change in Settings redraws a
 widget whose session is still open.
 

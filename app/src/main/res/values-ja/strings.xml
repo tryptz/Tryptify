@@ -1771,6 +1771,11 @@
     <string name="widget_style_play">再生ボタン</string>
     <string name="widget_style_play_solid">塗りつぶし</string>
     <string name="widget_style_play_glass">ガラス</string>
+    <string name="widget_style_text">文字</string>
+    <string name="widget_style_text_auto">自動</string>
+    <string name="widget_style_text_white">白</string>
+    <string name="widget_style_text_dark">黒</string>
+    <string name="widget_style_text_summary">「自動」は壁紙のメインカラーから白か黒の文字を選びます。読みにくいときは自分で選んでください。</string>
     <string name="widget_style_preview">プレビュー</string>
     <string name="widget_style_hint">変更はすぐにホーム画面に反映されます。ウィジェットを追加するには、ホーム画面の空いている場所を長押しして「ウィジェット」を選びます。</string>
     <string name="notif_playback_channel">再生中</string>

@@ -1820,6 +1820,11 @@
     <string name="widget_style_play">Play button</string>
     <string name="widget_style_play_solid">Solid</string>
     <string name="widget_style_play_glass">Glass</string>
+    <string name="widget_style_text">Text</string>
+    <string name="widget_style_text_auto">Auto</string>
+    <string name="widget_style_text_white">White</string>
+    <string name="widget_style_text_dark">Dark</string>
+    <string name="widget_style_text_summary">Auto picks white or dark text from your wallpaper’s main colour. Choose one yourself if it is hard to read.</string>
     <string name="widget_style_preview">Preview</string>
     <string name="widget_style_hint">Changes show on your home screen right away. To add the widget, long-press an empty spot on your home screen and choose Widgets.</string>
     <string name="notif_playback_channel">Now Playing</string>

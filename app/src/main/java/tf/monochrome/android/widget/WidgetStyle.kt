@@ -1,7 +1,9 @@
 package tf.monochrome.android.widget
 
+import android.app.WallpaperManager
 import android.content.Context
 import android.graphics.Bitmap
+import android.os.Build
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.datastore.preferences.core.Preferences
@@ -27,9 +29,13 @@ data class WidgetStyle(
     val showCover: Boolean = true,
     val showProgress: Boolean = true,
     val play: PlayButton = PlayButton.Solid,
+    val text: Text = Text.Auto,
 ) {
     enum class Glass { Light, Dark, Album }
     enum class PlayButton { Solid, Glass }
+
+    /** Auto picks white or dark from the glass over the wallpaper's colour. */
+    enum class Text { Auto, White, Dark }
 
     companion object {
         val DEFAULT = WidgetStyle()
@@ -53,12 +59,15 @@ data class WidgetLook(
 )
 
 /**
- * The text colour follows the glass, not a setting: the pane is worked out
- * over [GROUND], a dim home screen like the owner's, and dark glass gets
- * white text, light glass dark text. A white pane at 70% with white text on
- * it is the failure this prevents.
+ * On [WidgetStyle.Text.Auto] the text colour follows the glass: the pane is
+ * worked out over [ground], the wallpaper's main colour ([wallpaperGround]),
+ * and dark glass gets white text, light glass dark text. White text on light
+ * glass over a light wallpaper is the failure this prevents; it happened
+ * when the ground was a fixed dim colour and the owner's wallpaper was light.
+ * White and Dark are the listener's override, for a wallpaper whose main
+ * colour is not what sits behind the widget.
  */
-fun resolveWidgetLook(style: WidgetStyle, coverColor: Int?): WidgetLook {
+fun resolveWidgetLook(style: WidgetStyle, coverColor: Int?, ground: Color = GROUND): WidgetLook {
     val base = when (style.glass) {
         WidgetStyle.Glass.Light -> Color.White
         WidgetStyle.Glass.Dark -> Color(0xFF0B0D10)
@@ -66,9 +75,13 @@ fun resolveWidgetLook(style: WidgetStyle, coverColor: Int?): WidgetLook {
     }
     val alpha = style.opacity.coerceIn(WidgetStyle.MIN_OPACITY, WidgetStyle.MAX_OPACITY) / 100f
     val pane = base.copy(alpha = alpha)
-    val seen = mix(GROUND, base, alpha)
-    // 0.2 is where white and near-black text read equally well (about 4.2:1 each).
-    val darkInk = seen.luminance() > 0.2f
+    val seen = mix(ground.copy(alpha = 1f), base, alpha)
+    val darkInk = when (style.text) {
+        // 0.2 is where white and near-black text read equally well (about 4.2:1 each).
+        WidgetStyle.Text.Auto -> seen.luminance() > 0.2f
+        WidgetStyle.Text.White -> false
+        WidgetStyle.Text.Dark -> true
+    }
     val ink = if (darkInk) Color(0xFF14161A) else Color.White
     val glassPlay = style.play == WidgetStyle.PlayButton.Glass
     return WidgetLook(
@@ -82,8 +95,28 @@ fun resolveWidgetLook(style: WidgetStyle, coverColor: Int?): WidgetLook {
     )
 }
 
-/** A dim wallpaper's colour; what the glass is judged against. */
+/** What the glass is judged against when the wallpaper's colour cannot be read. */
 internal val GROUND = Color(0xFF2A2840)
+
+/**
+ * The wallpaper's main colour, which Android hands any app without a
+ * permission (`WallpaperManager.getWallpaperColors`, API 27). Null when it
+ * cannot say (older Android, a live wallpaper that reports none, an OEM that
+ * refuses); callers fall back to [GROUND]. The widget reads it on every
+ * redraw, so a new wallpaper is picked up by the next song change.
+ */
+fun wallpaperGround(context: Context): Color? = wallpaperColors(context)?.firstOrNull()
+
+/** The wallpaper's main, second and third colours, as many as it reports. */
+fun wallpaperColors(context: Context): List<Color>? {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1) return null
+    return runCatching {
+        val colors = WallpaperManager.getInstance(context)
+            .getWallpaperColors(WallpaperManager.FLAG_SYSTEM) ?: return null
+        listOfNotNull(colors.primaryColor, colors.secondaryColor, colors.tertiaryColor)
+            .map { Color(it.toArgb()) }
+    }.getOrNull()
+}
 
 private fun mix(under: Color, over: Color, t: Float) = Color(
     red = under.red + (over.red - under.red) * t,
@@ -116,6 +149,7 @@ object WidgetStyleStore {
             p[COVER] = style.showCover
             p[PROGRESS] = style.showProgress
             p[PLAY] = style.play.name
+            p[TEXT] = style.text.name
         }
     }
 
@@ -128,6 +162,7 @@ object WidgetStyleStore {
             showCover = this[COVER] ?: d.showCover,
             showProgress = this[PROGRESS] ?: d.showProgress,
             play = this[PLAY]?.let { n -> WidgetStyle.PlayButton.entries.firstOrNull { it.name == n } } ?: d.play,
+            text = this[TEXT]?.let { n -> WidgetStyle.Text.entries.firstOrNull { it.name == n } } ?: d.text,
         )
     }
 
@@ -137,4 +172,5 @@ object WidgetStyleStore {
     private val COVER = booleanPreferencesKey("cover")
     private val PROGRESS = booleanPreferencesKey("progress")
     private val PLAY = stringPreferencesKey("play")
+    private val TEXT = stringPreferencesKey("text")
 }

@@ -1771,6 +1771,11 @@
     <string name="widget_style_play">播放按钮</string>
     <string name="widget_style_play_solid">实心</string>
     <string name="widget_style_play_glass">玻璃</string>
+    <string name="widget_style_text">文字</string>
+    <string name="widget_style_text_auto">自动</string>
+    <string name="widget_style_text_white">白色</string>
+    <string name="widget_style_text_dark">深色</string>
+    <string name="widget_style_text_summary">“自动”会根据壁纸的主色选择白色或深色文字。如果看不清，请自行选择。</string>
     <string name="widget_style_preview">预览</string>
     <string name="widget_style_hint">更改会立即显示在桌面上。要添加小部件，请长按桌面空白处并选择“小部件”。</string>
     <string name="notif_playback_channel">正在播放</string>

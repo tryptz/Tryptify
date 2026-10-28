@@ -21,18 +21,38 @@ class WidgetStyleTest {
         0xFFFFFFFF, 0xFF000000, 0xFFE8875A, 0xFFFFEB3B, 0xFF1A237E, 0xFF00E5FF, 0xFF808080, 0xFFFF1744,
     ).map { it.toInt() }
 
+    /** Wallpaper main colours, from black to white; the owner's is the light pink one. */
+    private val wallpapers = listOf(
+        0xFF000000, 0xFF2A2840, 0xFF1B5E20, 0xFF7E57C2, 0xFFE5643A, 0xFF9E9E9E, 0xFFE8DDE0, 0xFFFFFFFF,
+    ).map { Color(it.toInt()) }
+
     @Test
-    fun theTextReadsOnEveryGlassAtEveryOpacity() {
-        for (glass in WidgetStyle.Glass.entries) for (cover in covers) {
+    fun onAutoTheTextReadsOnEveryGlassOverEveryWallpaper() {
+        for (ground in wallpapers) for (glass in WidgetStyle.Glass.entries) for (cover in covers) {
             for (opacity in WidgetStyle.MIN_OPACITY..WidgetStyle.MAX_OPACITY step 5) {
-                val look = resolveWidgetLook(WidgetStyle(glass = glass, opacity = opacity), cover)
-                val seen = look.pane.compositeOver(GROUND)
+                val look = resolveWidgetLook(WidgetStyle(glass = glass, opacity = opacity), cover, ground)
+                val seen = look.pane.compositeOver(ground)
                 assertTrue(
-                    "$glass $opacity% over ${Integer.toHexString(cover)}",
+                    "$glass $opacity% cover ${Integer.toHexString(cover)} on ${Integer.toHexString(ground.toArgb())}",
                     contrast(look.ink, seen) >= 4.0f,
                 )
             }
         }
+    }
+
+    @Test
+    fun theOwnersCaseDarkGlassAtTwentyTwoOnALightWallpaperGetsDarkText() {
+        // Seen on device: faint white text on light glass, judged over a fixed dim colour.
+        val look = resolveWidgetLook(WidgetStyle(glass = WidgetStyle.Glass.Dark, opacity = 22), null, Color(0xFFE8DDE0))
+        assertTrue(look.ink.luminance() < 0.05f)
+    }
+
+    @Test
+    fun whiteAndDarkOverrideTheWallpaper() {
+        val light = Color(0xFFFFFFFF)
+        val dim = Color(0xFF101010)
+        assertEquals(Color.White, resolveWidgetLook(WidgetStyle(text = WidgetStyle.Text.White), null, light).ink)
+        assertTrue(resolveWidgetLook(WidgetStyle(text = WidgetStyle.Text.Dark), null, dim).ink.luminance() < 0.05f)
     }
 
     @Test

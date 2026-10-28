@@ -1867,6 +1867,11 @@
     <string name="widget_style_play">Botón de reproducir</string>
     <string name="widget_style_play_solid">Sólido</string>
     <string name="widget_style_play_glass">Cristal</string>
+    <string name="widget_style_text">Texto</string>
+    <string name="widget_style_text_auto">Automático</string>
+    <string name="widget_style_text_white">Blanco</string>
+    <string name="widget_style_text_dark">Oscuro</string>
+    <string name="widget_style_text_summary">Automático elige texto blanco u oscuro según el color principal de tu fondo de pantalla. Elige tú si cuesta leerlo.</string>
     <string name="widget_style_preview">Vista previa</string>
     <string name="widget_style_hint">Los cambios se ven al instante en la pantalla de inicio. Para añadir el widget, mantén pulsado un espacio vacío de la pantalla de inicio y elige Widgets.</string>
     <string name="notif_playback_channel">Reproduciendo</string>

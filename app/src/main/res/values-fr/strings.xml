@@ -1867,6 +1867,11 @@
     <string name="widget_style_play">Bouton lecture</string>
     <string name="widget_style_play_solid">Plein</string>
     <string name="widget_style_play_glass">Verre</string>
+    <string name="widget_style_text">Texte</string>
+    <string name="widget_style_text_auto">Auto</string>
+    <string name="widget_style_text_white">Blanc</string>
+    <string name="widget_style_text_dark">Foncé</string>
+    <string name="widget_style_text_summary">Auto choisit un texte blanc ou foncé selon la couleur principale de votre fond d’écran. Choisissez vous-même s’il est difficile à lire.</string>
     <string name="widget_style_preview">Aperçu</string>
     <string name="widget_style_hint">Les changements s’affichent tout de suite sur l’écran d’accueil. Pour ajouter le widget, appuyez longuement sur un espace vide de l’écran d’accueil et choisissez Widgets.</string>
     <string name="notif_playback_channel">En cours de lecture</string>

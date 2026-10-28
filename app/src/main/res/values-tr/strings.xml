@@ -1819,6 +1819,11 @@
     <string name="widget_style_play">Oynat düğmesi</string>
     <string name="widget_style_play_solid">Dolu</string>
     <string name="widget_style_play_glass">Cam</string>
+    <string name="widget_style_text">Metin</string>
+    <string name="widget_style_text_auto">Otomatik</string>
+    <string name="widget_style_text_white">Beyaz</string>
+    <string name="widget_style_text_dark">Koyu</string>
+    <string name="widget_style_text_summary">Otomatik, duvar kâğıdınızın ana rengine göre beyaz ya da koyu metin seçer. Okumak zorsa kendiniz seçin.</string>
     <string name="widget_style_preview">Önizleme</string>
     <string name="widget_style_hint">Değişiklikler ana ekranda hemen görünür. Widget’ı eklemek için ana ekranda boş bir yere uzun basıp Widget’lar’ı seçin.</string>
     <string name="notif_playback_channel">Şimdi çalıyor</string>

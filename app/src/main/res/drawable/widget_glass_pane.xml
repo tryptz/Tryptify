@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The default glass (WidgetStyle.DEFAULT) for the widget picker's
      previews: flat white at 0.18 with a hairline edge. The widget itself
-     tints widget_glass_fill to the listener's chosen look. -->
+     draws the listener's look as a background colour (NowPlayingWidget). -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
     <corners android:radius="@dimen/widget_glass_radius" />
     <solid android:color="#2EFFFFFF" />

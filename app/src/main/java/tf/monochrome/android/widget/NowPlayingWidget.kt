@@ -76,12 +76,13 @@ class NowPlayingWidget : GlanceAppWidget() {
         val art = snapshot.artworkUri?.let { loadArtwork(context, it) }
         val coverColor = art?.let { averageColor(it) }
         val saved = WidgetStyleStore.read(context)
+        val ground = wallpaperGround(context) ?: GROUND
         provideContent {
             // Collected, not read once: a change in Settings redraws a widget
             // whose session is still open.
             val style by WidgetStyleStore.flow(context).collectAsState(saved)
             val parts = WidgetParts(
-                look = resolveWidgetLook(style, coverColor),
+                look = resolveWidgetLook(style, coverColor, ground),
                 art = art,
                 showCover = style.showCover,
                 showProgress = style.showProgress,
@@ -101,26 +102,25 @@ private class WidgetParts(
 
 @Composable
 private fun GlassWidget(snapshot: NowPlayingSnapshot, parts: WidgetParts) {
+    // The pane is a background colour, the one way a widget takes a colour
+    // with its alpha. A tint drops it: Glance tints through ImageView's
+    // setColorFilter, which is SRC_ATOP and keeps the drawable's own alpha,
+    // so a white shape tinted "dark at 22%" came out solid light grey and
+    // the wallpaper never showed through (seen on device). The corner clip
+    // rounds it from Android 12; below that it is square.
     Box(
         modifier = GlanceModifier
             .fillMaxSize()
             .appWidgetBackground()
             .cornerRadius(R.dimen.widget_glass_radius)
+            .background(ColorProvider(parts.look.pane))
             .clickable(actionStartActivity<MainActivity>()),
     ) {
-        // The pane and its edge are tinted shapes rather than a background
-        // colour, so they round on every Android version.
-        Image(
-            provider = ImageProvider(R.drawable.widget_glass_fill),
-            colorFilter = ColorFilter.tint(ColorProvider(parts.look.pane)),
-            contentDescription = null,
-            contentScale = ContentScale.FillBounds,
-            modifier = GlanceModifier.fillMaxSize(),
-        )
         parts.look.edge?.let { edge ->
+            // The edge's alpha is in the drawable (0.35); the tint gives only its colour.
             Image(
                 provider = ImageProvider(R.drawable.widget_glass_edge),
-                colorFilter = ColorFilter.tint(ColorProvider(edge)),
+                colorFilter = ColorFilter.tint(ColorProvider(edge.copy(alpha = 1f))),
                 contentDescription = null,
                 contentScale = ContentScale.FillBounds,
                 modifier = GlanceModifier.fillMaxSize(),
@@ -304,7 +304,7 @@ private fun Cover(parts: WidgetParts, size: Dp) {
         } else {
             Image(
                 provider = ImageProvider(R.drawable.ic_glass_play),
-                colorFilter = ColorFilter.tint(ColorProvider(parts.look.inkSoft)),
+                colorFilter = ColorFilter.tint(ColorProvider(parts.look.ink)),
                 contentDescription = null,
                 modifier = GlanceModifier.size(size * 0.42f),
             )
@@ -328,23 +328,32 @@ private fun ControlGlyph(resId: Int, desc: String, look: WidgetLook, size: Dp, o
     }
 }
 
-/** Play/pause on a disc: solid ink with the glyph cut in the glass's colour, or clear glass. */
+/**
+ * Play/pause on a disc: solid ink with the glyph in the opposite colour, or
+ * clear glass. The solid disc is a tinted circle (round on every Android
+ * version); the clear one is a background colour, since a tint would make it
+ * solid (see [GlassWidget]).
+ */
 @Composable
 private fun PlayDisc(isPlaying: Boolean, look: WidgetLook, size: Dp) {
+    val solid = look.disc.alpha >= 1f
     Box(
         modifier = GlanceModifier
             .size(size)
             .cornerRadius(size / 2)
+            .then(if (solid) GlanceModifier else GlanceModifier.background(ColorProvider(look.disc)))
             .clickable(actionRunCallback<PlayPauseAction>()),
         contentAlignment = Alignment.Center,
     ) {
-        Image(
-            provider = ImageProvider(R.drawable.widget_glass_disc),
-            colorFilter = ColorFilter.tint(ColorProvider(look.disc)),
-            contentDescription = null,
-            contentScale = ContentScale.FillBounds,
-            modifier = GlanceModifier.fillMaxSize(),
-        )
+        if (solid) {
+            Image(
+                provider = ImageProvider(R.drawable.widget_glass_disc),
+                colorFilter = ColorFilter.tint(ColorProvider(look.disc)),
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+                modifier = GlanceModifier.fillMaxSize(),
+            )
+        }
         Image(
             provider = ImageProvider(if (isPlaying) R.drawable.ic_glass_pause else R.drawable.ic_glass_play),
             colorFilter = ColorFilter.tint(ColorProvider(look.onDisc)),

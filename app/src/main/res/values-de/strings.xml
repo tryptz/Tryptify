@@ -1819,6 +1819,11 @@
     <string name="widget_style_play">Wiedergabetaste</string>
     <string name="widget_style_play_solid">Gefüllt</string>
     <string name="widget_style_play_glass">Glas</string>
+    <string name="widget_style_text">Text</string>
+    <string name="widget_style_text_auto">Automatisch</string>
+    <string name="widget_style_text_white">Weiß</string>
+    <string name="widget_style_text_dark">Dunkel</string>
+    <string name="widget_style_text_summary">Automatisch wählt weißen oder dunklen Text nach der Hauptfarbe deines Hintergrundbilds. Wähle selbst, wenn er schwer zu lesen ist.</string>
     <string name="widget_style_preview">Vorschau</string>
     <string name="widget_style_hint">Änderungen erscheinen sofort auf dem Startbildschirm. Zum Hinzufügen lange auf eine freie Stelle des Startbildschirms drücken und Widgets wählen.</string>
     <string name="notif_playback_channel">Wird gespielt</string>

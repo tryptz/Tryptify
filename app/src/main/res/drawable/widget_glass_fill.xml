@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- The widget's pane, white so it can be tinted to the chosen glass colour
-     and opacity (WidgetStyle). An Image of it rounds the corners on every
-     Android version, where a background colour would not. -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <corners android:radius="@dimen/widget_glass_radius" />
-    <solid android:color="#FFFFFFFF" />
-</shape>
