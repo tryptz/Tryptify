@@ -545,7 +545,9 @@ class GlyphViewModel @Inject constructor(
                 _ui.value = _ui.value.copy(screen = GlyphScreen.THEMES)
             }
             GlyphEvent.CloseThemes -> _ui.value = _ui.value.copy(screen = GlyphScreen.MENU)
-            is GlyphEvent.ImportStyle -> importStyle(event.uri)
+            is GlyphEvent.ImportStyle -> importStyle { styleLibrary.import(event.uri) }
+            is GlyphEvent.ImportStyleUrl -> importStyle { styleLibrary.importUrl(event.url, event.name) }
+            is GlyphEvent.UseCharacter -> useCharacter(event.id)
             is GlyphEvent.UseTheme -> useTheme(event.id)
             is GlyphEvent.UseAnnouncer -> useAnnouncer(event.id)
             is GlyphEvent.RemoveStyle -> viewModelScope.launch {
@@ -553,6 +555,7 @@ class GlyphViewModel @Inject constructor(
                 val themes = _ui.value.themes
                 if (event.style.kind == tf.monochrome.android.glyph.style.StepManiaStyleScan.Kind.THEME && themes.themeId == event.style.id) useTheme(null)
                 if (event.style.kind == tf.monochrome.android.glyph.style.StepManiaStyleScan.Kind.ANNOUNCER && themes.announcerId == event.style.id) useAnnouncer(null)
+                if (event.style.kind == tf.monochrome.android.glyph.style.StepManiaStyleScan.Kind.CHARACTER && themes.characterId == event.style.id) useCharacter(null)
                 // A removed noteskin in use: the default, as for any skin the phone no longer has.
                 val skin = _ui.value.gameplay.modifiers.skin
                 if (skin.isFile && skin !in tf.monochrome.android.glyph.asset.GlyphSkin.all()) {
@@ -2391,6 +2394,7 @@ class GlyphViewModel @Inject constructor(
         val announcerId = prefs.getString(PREF_ANNOUNCER, null)
         applyTheme(themeId)
         applyAnnouncer(announcerId)
+        applyCharacter(prefs.getString(PREF_CHARACTER, null))
         viewModelScope.launch {
             styleLibrary.styles.collect { styles ->
                 _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(styles = styles))
@@ -2415,27 +2419,42 @@ class GlyphViewModel @Inject constructor(
         _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(themeId = style?.id))
     }
 
+    private fun useCharacter(id: String?) {
+        prefs.edit().apply { if (id == null) remove(PREF_CHARACTER) else putString(PREF_CHARACTER, id) }.apply()
+        applyCharacter(id)
+    }
+
+    private fun applyCharacter(id: String?) {
+        val style = styleLibrary.find(tf.monochrome.android.glyph.style.StepManiaStyleScan.Kind.CHARACTER, id)
+        _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(characterId = style?.id, characterDir = style?.dir))
+    }
+
+    /** A shared dance by file name, among the imported dances: for the dancer behind the field. */
+    fun sharedDance(fileName: String): java.io.File? = styleLibrary.sharedDance(fileName)
+
     private fun applyAnnouncer(id: String?) {
         val style = styleLibrary.find(tf.monochrome.android.glyph.style.StepManiaStyleScan.Kind.ANNOUNCER, id)
         styleSounds.useAnnouncer(style?.dir)
         _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(announcerId = style?.id))
     }
 
-    private fun importStyle(uri: android.net.Uri) {
+    private fun importStyle(run: suspend () -> tf.monochrome.android.glyph.style.GlyphStyleLibrary.ImportResult) {
         _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(importing = true, message = null))
         viewModelScope.launch {
             val message = try {
-                val result = styleLibrary.import(uri)
-                buildList {
-                    if (result.noteskins > 0) add("${result.noteskins} noteskin${if (result.noteskins == 1) "" else "s"}")
-                    if (result.themes > 0) add("${result.themes} theme${if (result.themes == 1) "" else "s"}")
-                    if (result.announcers > 0) add("${result.announcers} announcer${if (result.announcers == 1) "" else "s"}")
-                }.let { got ->
-                    when {
-                        got.isEmpty() -> "Nothing in that file could be used: " + result.skipped.joinToString().ifEmpty { "no arrows, judgements or voices were found" } + "."
-                        result.skipped.isEmpty() -> "Imported " + got.joinToString(" and ") + "."
-                        else -> "Imported " + got.joinToString(" and ") + ". Left out: " + result.skipped.joinToString() + "."
-                    }
+                val result = run()
+                fun count(n: Int, one: String, many: String) = if (n > 0) "$n ${if (n == 1) one else many}" else null
+                val got = listOfNotNull(
+                    count(result.noteskins, "noteskin", "noteskins"),
+                    count(result.themes, "theme", "themes"),
+                    count(result.announcers, "announcer", "announcers"),
+                    count(result.characters, "character", "characters"),
+                    count(result.dances, "set of dances", "sets of dances"),
+                )
+                when {
+                    got.isEmpty() -> "Nothing in that file could be used: " + result.skipped.joinToString().ifEmpty { "no arrows, judgements, voices or dancers were found" } + "."
+                    result.skipped.isEmpty() -> "Imported " + got.joinToString(" and ") + "."
+                    else -> "Imported " + got.joinToString(" and ") + ". Left out: " + result.skipped.joinToString() + "."
                 }
             } catch (failure: kotlinx.coroutines.CancellationException) {
                 throw failure
@@ -3425,6 +3444,7 @@ class GlyphViewModel @Inject constructor(
         const val PREF_SKIN = "skin"
         const val PREF_THEME = "style_theme"
         const val PREF_ANNOUNCER = "style_announcer"
+        const val PREF_CHARACTER = "style_character"
         const val PREF_SCROLL_FAMILY = "scroll_family"
         const val PREF_SCROLL_VALUE = "scroll_value"
         const val PREF_TURN = "turn"

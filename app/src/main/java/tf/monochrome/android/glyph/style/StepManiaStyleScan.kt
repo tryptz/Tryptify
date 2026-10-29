@@ -15,7 +15,8 @@ package tf.monochrome.android.glyph.style
  */
 object StepManiaStyleScan {
 
-    enum class Kind { NOTESKIN, THEME, ANNOUNCER }
+    /** A noteskin, a theme, an announcer, a dancing character, or a set of dances characters share. */
+    enum class Kind { NOTESKIN, THEME, ANNOUNCER, CHARACTER, DANCES }
 
     /** One thing found: its kind, its name (the folder's), and its folder, as a path in the archive. */
     data class Found(val kind: Kind, val name: String, val dir: String)
@@ -41,7 +42,16 @@ object StepManiaStyleScan {
                 themes.none { theme -> inside(dir, theme) && dir != theme && !"/$dir/".contains("/noteskins/", ignoreCase = true) }
         }.toSet()
 
+        // A character: its MilkShape model. Dances: a folder of the .bones.txt
+        // files characters point at (the archive's "Animation + Helper Bones").
+        val characters = dirs.filter { dir -> filesIn[dir].orEmpty().any { nameOf(it).equals("model.txt", ignoreCase = true) } }.toSet()
+        val dances = dirs.filter { dir -> filesIn[dir].orEmpty().count { nameOf(it).endsWith(".bones.txt", ignoreCase = true) } >= MIN_DANCES }
+            .filter { it !in characters && characters.none { c -> inside(it, c) } }
+            .toSet()
+
         return (themes.map { Found(Kind.THEME, nameOf(it).ifEmpty { "Theme" }, it) } +
+            characters.filter { c -> themes.none { inside(c, it) } }.map { Found(Kind.CHARACTER, nameOf(it).ifEmpty { "Character" }, it) } +
+            dances.map { Found(Kind.DANCES, nameOf(it).ifEmpty { "Dances" }, it) } +
             announcers.filter { a -> themes.none { inside(a, it) } }
                 .map { Found(Kind.ANNOUNCER, nameOf(it).ifEmpty { "Announcer" }, it) } +
             noteskins.map { Found(Kind.NOTESKIN, nameOf(it).ifEmpty { "Noteskin" }, it) })
@@ -75,6 +85,7 @@ object StepManiaStyleScan {
         return (1 until parts.size).map { parts.subList(0, it).joinToString("/") }
     }
 
+    private const val MIN_DANCES = 3
     private val THEME_FOLDERS = setOf("bganimations", "fonts", "sounds", "languages", "scripts")
     private val TAP_NOTE_QUANT = Regex(".*tap note (4th|8th|12th|16th|24th|32nd|48th|64th|192nd)")
 }

@@ -3388,7 +3388,7 @@
     <string name="whats_new_1951_chart_lyrics_title">Letras sincronizadas en un servidor</string>
     <string name="whats_new_1951_chart_lyrics_body">Las letras ya no se sincronizan en un servidor de charts. Las sincronizadas antes, y las que sincronizas en el editor de letras, se quedan.</string>
     <string name="tm_themes_title">Temas</string>
-    <string name="tm_themes_menu_subtitle">Skins de notas, temas y locutores de StepMania</string>
+    <string name="tm_themes_menu_subtitle">Skins de notas, temas, locutores y personajes de StepMania</string>
     <string name="tm_themes_import_title">Importar</string>
     <string name="tm_themes_import_desc">Un skin de notas, tema o locutor de StepMania Archive o de cualquier sitio: ZIP, .smzip o 7z. Trypt Mania toma las flechas, los juicios, el combo, las fuentes, un fondo y los sonidos; sus menús no cambian.</string>
     <string name="tm_themes_import_button">Importar un archivo</string>
@@ -3409,4 +3409,15 @@
     <string name="tm_themes_remove_title">¿Quitar %1$s?</string>
     <string name="tm_themes_remove_desc">Sus imágenes y sonidos se borran de la app. Tus puntuaciones se quedan.</string>
     <string name="tm_themes_rights">Las imágenes y sonidos importados pertenecen a sus autores. Cada uno guarda una nota de su origen.</string>
+    <string name="tm_themes_browse_archive">Explorar StepMania Archive</string>
+    <string name="tm_themes_archive_title">StepMania Archive</string>
+    <string name="tm_themes_archive_hint">Toca una descarga: se importa en Trypt Mania en segundo plano.</string>
+    <string name="tm_themes_archive_queued">Importando %1$s. Sigue explorando.</string>
+    <string name="tm_themes_archive_rar">Es un RAR, que no se puede importar. Descomprímelo en un ordenador, comprime la carpeta en ZIP e importa el ZIP.</string>
+    <string name="tm_themes_characters">Personajes</string>
+    <string name="tm_themes_characters_desc">Un personaje de StepMania que baila detrás del campo al tempo de la canción.</string>
+    <string name="tm_themes_no_character">Ninguno</string>
+    <string name="tm_themes_dances_missing">La mayoría de los personajes bailan los pasos que comparte el archivo: importa «Animation + Helper Bones» desde su página Characters.</string>
+    <string name="tm_themes_dances">Bailes</string>
+    <string name="tm_themes_dances_desc">Los pasos que comparten los personajes, buscados por su nombre cuando uno baila.</string>
 </resources>

@@ -3388,7 +3388,7 @@
     <string name="whats_new_1951_chart_lyrics_title">Paroles synchronisées sur un serveur</string>
     <string name="whats_new_1951_chart_lyrics_body">Les paroles ne sont plus synchronisées sur un serveur de charts. Celles synchronisées avant, et celles que vous synchronisez dans l\'éditeur de paroles, restent.</string>
     <string name="tm_themes_title">Thèmes</string>
-    <string name="tm_themes_menu_subtitle">Skins de notes, thèmes et annonceurs StepMania</string>
+    <string name="tm_themes_menu_subtitle">Skins de notes, thèmes, annonceurs et personnages StepMania</string>
     <string name="tm_themes_import_title">Importer</string>
     <string name="tm_themes_import_desc">Un skin de notes, un thème ou un annonceur de la StepMania Archive ou d\'ailleurs : ZIP, .smzip ou 7z. Trypt Mania prend les flèches, les jugements, le combo, les polices, un fond et les sons ; ses menus restent tels quels.</string>
     <string name="tm_themes_import_button">Importer un fichier</string>
@@ -3409,4 +3409,15 @@
     <string name="tm_themes_remove_title">Supprimer %1$s ?</string>
     <string name="tm_themes_remove_desc">Ses images et ses sons sont supprimés de l\'app. Vos scores restent.</string>
     <string name="tm_themes_rights">Les images et les sons importés appartiennent à leurs auteurs. Chacun garde une note de sa provenance.</string>
+    <string name="tm_themes_browse_archive">Parcourir la StepMania Archive</string>
+    <string name="tm_themes_archive_title">StepMania Archive</string>
+    <string name="tm_themes_archive_hint">Touchez un téléchargement : il s\'importe dans Trypt Mania en arrière-plan.</string>
+    <string name="tm_themes_archive_queued">Importation de %1$s. Continuez à parcourir.</string>
+    <string name="tm_themes_archive_rar">C\'est un RAR, qui ne peut pas être importé. Décompressez-le sur un ordinateur, zippez le dossier et importez le ZIP.</string>
+    <string name="tm_themes_characters">Personnages</string>
+    <string name="tm_themes_characters_desc">Un personnage StepMania qui danse derrière le terrain au tempo du morceau.</string>
+    <string name="tm_themes_no_character">Aucun</string>
+    <string name="tm_themes_dances_missing">La plupart des personnages dansent les pas que l\'archive partage : importez « Animation + Helper Bones » depuis sa page Characters.</string>
+    <string name="tm_themes_dances">Danses</string>
+    <string name="tm_themes_dances_desc">Les pas que partagent les personnages, trouvés par leur nom quand l\'un danse.</string>
 </resources>

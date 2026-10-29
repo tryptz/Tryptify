@@ -41,6 +41,8 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
@@ -100,6 +102,8 @@ fun GlyphGameplayScreen(
     explosionProvider: () -> LaneFlashes = { NO_FLASHES },
     comboBurstProvider: () -> Long = { 0L },
     comboProvider: () -> Int = { 0 },
+    /** A shared dance by file name, for an imported character dancing behind the field. */
+    sharedDance: (String) -> java.io.File? = { null },
 ) {
     val fontFamily = rememberStepTechFontFamily()
     val typography = GlyphTypography(fontFamily)
@@ -203,6 +207,17 @@ fun GlyphGameplayScreen(
                         coverUri = gameplayCoverUri(state.selectedSong),
                         albumColored = backdropLook.albumColored,
                         colorTransitionMs = backdropLook.colorTransitionMs,
+                    )
+                }
+
+                // An imported StepMania character dancing behind the field, drawn
+                // off the field's frame (GlyphCharacterRenderer): one picture here.
+                state.themes.characterDir?.let { dir ->
+                    GlyphDancer(
+                        characterDir = dir,
+                        sharedDance = sharedDance,
+                        tempo = { state.gameplay.bpm },
+                        playing = { state.gameplay.isPlaying && !state.gameplay.isPaused },
                     )
                 }
 
@@ -751,3 +766,51 @@ private const val BOARD_ROWS_LANDSCAPE = 8
 
 /** How far an imported theme's gameplay background is darkened under the field. */
 private const val THEME_BACKGROUND_DIM = 0.45f
+
+/**
+ * The character behind the field: its renderer's latest picture, drawn once
+ * a frame, scaled up smooth, in the lower middle of the screen as StepMania's
+ * dancers stand. The renderer runs while this is on screen and stops with it.
+ */
+@Composable
+private fun GlyphDancer(
+    characterDir: java.io.File,
+    sharedDance: (String) -> java.io.File?,
+    tempo: () -> Float,
+    playing: () -> Boolean,
+) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val currentTempo by androidx.compose.runtime.rememberUpdatedState(tempo)
+    val currentPlaying by androidx.compose.runtime.rememberUpdatedState(playing)
+    val renderer = remember(characterDir) {
+        tf.monochrome.android.glyph.style.GlyphCharacterRenderer(
+            characterDir = characterDir,
+            sharedDance = sharedDance,
+            scope = scope,
+            tempo = { currentTempo() },
+            playing = { currentPlaying() },
+        )
+    }
+    androidx.compose.runtime.DisposableEffect(renderer) {
+        renderer.start()
+        onDispose { renderer.stop() }
+    }
+    val frame by renderer.frame.collectAsState()
+    val picture = frame ?: return
+    androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+        val height = size.height * DANCER_HEIGHT_SHARE
+        val width = height * picture.width / picture.height
+        drawImage(
+            image = picture.asImageBitmap(),
+            dstOffset = androidx.compose.ui.unit.IntOffset(((size.width - width) / 2).toInt(), (size.height * DANCER_TOP_SHARE).toInt()),
+            dstSize = androidx.compose.ui.unit.IntSize(width.toInt(), height.toInt()),
+            alpha = DANCER_ALPHA,
+            filterQuality = androidx.compose.ui.graphics.FilterQuality.Low,
+        )
+    }
+}
+
+/** How much of the screen's height the dancer stands, from where, and how strongly it shows under the notes. */
+private const val DANCER_HEIGHT_SHARE = 0.62f
+private const val DANCER_TOP_SHARE = 0.3f
+private const val DANCER_ALPHA = 0.85f

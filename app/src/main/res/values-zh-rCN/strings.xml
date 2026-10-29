@@ -3232,7 +3232,7 @@
     <string name="whats_new_1951_chart_lyrics_title">服务器计时歌词</string>
     <string name="whats_new_1951_chart_lyrics_body">不再在谱面服务器上为歌词计时。之前已计时的歌词，以及你在歌词编辑器中计时的歌词都会保留。</string>
     <string name="tm_themes_title">主题</string>
-    <string name="tm_themes_menu_subtitle">StepMania 音符皮肤、主题和播报员</string>
+    <string name="tm_themes_menu_subtitle">StepMania 音符皮肤、主题、播报员和角色</string>
     <string name="tm_themes_import_title">导入</string>
     <string name="tm_themes_import_desc">来自 StepMania Archive 或其他地方的音符皮肤、主题或播报员：ZIP、.smzip 或 7z。Trypt Mania 会使用箭头、判定、连击、字体、背景和声音；菜单保持不变。</string>
     <string name="tm_themes_import_button">导入文件</string>
@@ -3253,4 +3253,15 @@
     <string name="tm_themes_remove_title">移除 %1$s？</string>
     <string name="tm_themes_remove_desc">它的图像和声音会从应用中删除。你的成绩会保留。</string>
     <string name="tm_themes_rights">导入的图像和声音归其作者所有。每一项都会记下它的来源。</string>
+    <string name="tm_themes_browse_archive">浏览 StepMania Archive</string>
+    <string name="tm_themes_archive_title">StepMania Archive</string>
+    <string name="tm_themes_archive_hint">点按下载：它会在后台导入 Trypt Mania。</string>
+    <string name="tm_themes_archive_queued">正在导入 %1$s。可以继续浏览。</string>
+    <string name="tm_themes_archive_rar">这是 RAR 文件，无法导入。请在电脑上解压，将文件夹压缩为 ZIP 后再导入。</string>
+    <string name="tm_themes_characters">角色</string>
+    <string name="tm_themes_characters_desc">一个 StepMania 角色在谱面后方随歌曲节奏起舞。</string>
+    <string name="tm_themes_no_character">无</string>
+    <string name="tm_themes_dances_missing">大多数角色使用档案共享的舞步：请从其角色页面导入“Animation + Helper Bones”。</string>
+    <string name="tm_themes_dances">舞步</string>
+    <string name="tm_themes_dances_desc">角色共享的舞步，在角色跳舞时按名称查找。</string>
 </resources>

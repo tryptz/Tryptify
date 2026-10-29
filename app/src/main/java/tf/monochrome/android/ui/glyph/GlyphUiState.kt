@@ -145,6 +145,10 @@ data class GlyphThemesUi(
     val themeId: String? = null,
     /** The imported announcer who speaks, by id; null is none. */
     val announcerId: String? = null,
+    /** The imported character who dances behind the field, by id; null is none. */
+    val characterId: String? = null,
+    /** That character's folder, for the playfield's dancer; null with none. */
+    val characterDir: java.io.File? = null,
     val importing: Boolean = false,
     val message: String? = null,
 )

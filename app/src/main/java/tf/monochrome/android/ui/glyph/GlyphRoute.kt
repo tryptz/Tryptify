@@ -281,6 +281,7 @@ fun GlyphRoute(
                 explosionProvider = explosionProvider,
                 comboBurstProvider = comboBurstProvider,
                 comboProvider = comboProvider,
+                sharedDance = viewModel::sharedDance,
                 modifier = Modifier.fillMaxSize(),
             )
 

@@ -2376,6 +2376,27 @@ screens stay the app's. Theme and announcer sounds are game sounds
 exclusive USB DAC. Every baked folder keeps a `LICENSE.txt` naming its
 source: the art is its authors'.
 
+**The StepMania Archive is browsed in the app, a tab per section.** Themes'
+Browse button opens josevarela.net's archive (`StepManiaArchiveBrowser`, a
+full-screen dialog like Packs' StepMania Online one, no JavaScript, only the
+archive's pages) with a `GlyphChipRow` of its Themes, NoteSkins, Announcers
+and Characters; a ZIP, `.smzip` or 7z link tapped is downloaded (https only,
+a few redirects, `GlyphStyleLibrary.importUrl`) and imported in the
+background, and a RAR link says it cannot be.
+
+**A character dances off the field's frame.** An imported StepMania character
+(MilkShape's text model, read by `Milkshape`, posed by `CharacterPose`: rigid
+skinning, a dance's keys on the rest pose by bone name) is drawn by
+`GlyphCharacterRenderer` on a background thread, 30 times a second, into a
+240×320 picture of its own (three, taken in turn); the playfield draws only
+that picture, behind the field and over the background, so a character
+never costs the field's frame. Most characters point at the archive's shared
+dances ("Animation + Helper Bones"), imported once as Dances and found by
+file name; without them the Characters panel says what to import. A dance is
+picked at random and played through, faster or slower with the song's
+tempo, and holds while the run is paused. Characters face MilkShape's −Z, so
+they are turned round to face the player.
+
 **The options' preview is the game's playfield, not a picture of one.**
 `GlyphPreviewField` draws a real engine played by `GlyphAutoplay` with the
 player's modifiers, following the song preview's own clock when it plays, and

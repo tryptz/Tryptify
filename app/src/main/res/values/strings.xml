@@ -3313,7 +3313,7 @@
     <string name="whats_new_1951_chart_lyrics_title">Lyrics timed on a server</string>
     <string name="whats_new_1951_chart_lyrics_body">Lyrics are no longer timed on a chart server. The ones timed before, and those you time in the lyrics editor, stay.</string>
     <string name="tm_themes_title">Themes</string>
-    <string name="tm_themes_menu_subtitle">StepMania noteskins, themes and announcers</string>
+    <string name="tm_themes_menu_subtitle">StepMania noteskins, themes, announcers and characters</string>
     <string name="tm_themes_import_title">Import</string>
     <string name="tm_themes_import_desc">A noteskin, theme or announcer from the StepMania Archive or anywhere else: a ZIP, .smzip or 7z. Trypt Mania takes the arrows, the judgements, the combo, the fonts, a background and the sounds; its menus stay as they are.</string>
     <string name="tm_themes_import_button">Import a file</string>
@@ -3334,4 +3334,15 @@
     <string name="tm_themes_remove_title">Remove %1$s?</string>
     <string name="tm_themes_remove_desc">Its art and sounds are deleted from the app. Your scores stay.</string>
     <string name="tm_themes_rights">Imported art and sounds belong to their authors. Each keeps a note of where it came from.</string>
+    <string name="tm_themes_browse_archive">Browse the StepMania Archive</string>
+    <string name="tm_themes_archive_title">StepMania Archive</string>
+    <string name="tm_themes_archive_hint">Tap a download: it imports into Trypt Mania in the background.</string>
+    <string name="tm_themes_archive_queued">Importing %1$s. Carry on browsing.</string>
+    <string name="tm_themes_archive_rar">That one is a RAR, which can\'t be imported. Unpack it on a computer, zip the folder and import the ZIP.</string>
+    <string name="tm_themes_characters">Characters</string>
+    <string name="tm_themes_characters_desc">A StepMania character dancing behind the field to the song\'s tempo.</string>
+    <string name="tm_themes_no_character">None</string>
+    <string name="tm_themes_dances_missing">Most characters dance the moves the archive shares: import \"Animation + Helper Bones\" from its Characters page.</string>
+    <string name="tm_themes_dances">Dances</string>
+    <string name="tm_themes_dances_desc">The moves characters share, found by name when one dances.</string>
 </resources>

@@ -3310,7 +3310,7 @@
     <string name="whats_new_1951_chart_lyrics_title">Sunucuda zamanlanan şarkı sözleri</string>
     <string name="whats_new_1951_chart_lyrics_body">Şarkı sözleri artık bir harita sunucusunda zamanlanmıyor. Daha önce zamanlananlar ve sözler düzenleyicisinde zamanladıkların kalır.</string>
     <string name="tm_themes_title">Temalar</string>
-    <string name="tm_themes_menu_subtitle">StepMania nota görünümleri, temalar ve anonsçular</string>
+    <string name="tm_themes_menu_subtitle">StepMania nota görünümleri, temalar, anonsçular ve karakterler</string>
     <string name="tm_themes_import_title">İçe aktar</string>
     <string name="tm_themes_import_desc">StepMania Archive\'den ya da başka bir yerden bir nota görünümü, tema veya anonsçu: ZIP, .smzip veya 7z. Trypt Mania okları, değerlendirmeleri, komboyu, yazı tiplerini, bir arka planı ve sesleri alır; menüleri olduğu gibi kalır.</string>
     <string name="tm_themes_import_button">Bir dosya içe aktar</string>
@@ -3331,4 +3331,15 @@
     <string name="tm_themes_remove_title">%1$s kaldırılsın mı?</string>
     <string name="tm_themes_remove_desc">Görselleri ve sesleri uygulamadan silinir. Skorların kalır.</string>
     <string name="tm_themes_rights">İçe aktarılan görseller ve sesler yaratıcılarına aittir. Her biri nereden geldiğinin bir notunu saklar.</string>
+    <string name="tm_themes_browse_archive">StepMania Archive\'e göz at</string>
+    <string name="tm_themes_archive_title">StepMania Archive</string>
+    <string name="tm_themes_archive_hint">Bir indirmeye dokun: arka planda Trypt Mania\'ya aktarılır.</string>
+    <string name="tm_themes_archive_queued">%1$s içe aktarılıyor. Göz atmaya devam et.</string>
+    <string name="tm_themes_archive_rar">Bu bir RAR, içe aktarılamaz. Bir bilgisayarda aç, klasörü ZIP\'le ve ZIP\'i içe aktar.</string>
+    <string name="tm_themes_characters">Karakterler</string>
+    <string name="tm_themes_characters_desc">Alanın arkasında şarkının temposunda dans eden bir StepMania karakteri.</string>
+    <string name="tm_themes_no_character">Yok</string>
+    <string name="tm_themes_dances_missing">Çoğu karakter arşivin paylaştığı hareketlerle dans eder: Characters sayfasından \"Animation + Helper Bones\"u içe aktar.</string>
+    <string name="tm_themes_dances">Danslar</string>
+    <string name="tm_themes_dances_desc">Karakterlerin paylaştığı hareketler; biri dans ederken adıyla bulunur.</string>
 </resources>

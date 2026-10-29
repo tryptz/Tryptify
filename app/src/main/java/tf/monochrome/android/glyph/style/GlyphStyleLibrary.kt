@@ -22,10 +22,10 @@ import tf.monochrome.android.glyph.asset.GlyphSkin
 import tf.monochrome.android.glyph.pack.StepManiaPack
 
 /**
- * The StepMania noteskins, themes and announcers imported on this phone, as
+ * The StepMania noteskins, themes, announcers, characters and dances imported on this phone, as
  * Trypt Mania's Themes screen lists them, each baked at import into the
  * game's own layout ([StepManiaStyleBaker]) under
- * `files/glyph/styles/<noteskins|themes|announcers>/<name>/`.
+ * `files/glyph/styles/<kind>/<name>/`.
  *
  * Imported noteskins are handed to [GlyphSkin.imported], so every noteskin
  * picker lists them beside the app's; read here, at construction, before the
@@ -41,11 +41,21 @@ class GlyphStyleLibrary @Inject constructor(
         val noteskins: List<Style> = emptyList(),
         val themes: List<Style> = emptyList(),
         val announcers: List<Style> = emptyList(),
+        val characters: List<Style> = emptyList(),
+        /** The dances characters share (the archive's "Animation + Helper Bones"), found by file name. */
+        val dances: List<Style> = emptyList(),
     )
 
     /** What an import brought in, by kind, and what in it could not be used. */
-    data class ImportResult(val noteskins: Int, val themes: Int, val announcers: Int, val skipped: List<String>) {
-        val total: Int get() = noteskins + themes + announcers
+    data class ImportResult(
+        val noteskins: Int,
+        val themes: Int,
+        val announcers: Int,
+        val characters: Int,
+        val dances: Int,
+        val skipped: List<String>,
+    ) {
+        val total: Int get() = noteskins + themes + announcers + characters + dances
     }
 
     val root: File = File(context.filesDir, "glyph/styles")
@@ -65,7 +75,17 @@ class GlyphStyleLibrary @Inject constructor(
             StepManiaStyleScan.Kind.NOTESKIN -> all.noteskins
             StepManiaStyleScan.Kind.THEME -> all.themes
             StepManiaStyleScan.Kind.ANNOUNCER -> all.announcers
+            StepManiaStyleScan.Kind.CHARACTER -> all.characters
+            StepManiaStyleScan.Kind.DANCES -> all.dances
         }.firstOrNull { it.id == id }
+    }
+
+    /** A shared dance by its file name, from any set of dances imported; null when none has it. */
+    fun sharedDance(fileName: String): File? {
+        for (set in _styles.value.dances) {
+            set.dir.listFiles().orEmpty().firstOrNull { it.name.equals(fileName, ignoreCase = true) }?.let { return it }
+        }
+        return null
     }
 
     /**
@@ -73,28 +93,83 @@ class GlyphStyleLibrary @Inject constructor(
      * replacing an earlier import of the same name. Throws
      * [StyleArchive.StyleImportException] with a reason a person can act on.
      */
-    suspend fun import(uri: Uri): ImportResult = withContext(Dispatchers.IO) {
+    suspend fun import(uri: Uri): ImportResult = importInto(displayName(uri) ?: "Imported") { archive ->
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            archive.outputStream().use { input.copyTo(it) }
+        } ?: throw StyleArchive.StyleImportException("That file could not be opened.")
+    }
+
+    /**
+     * Downloads [url] (https only, a few redirects at most, as the StepMania
+     * Archive's links go through its file host and GitHub) and imports it, as
+     * [import] does a picked file. [nameHint] names it when the link does not.
+     */
+    suspend fun importUrl(url: String, nameHint: String): ImportResult {
+        val name = nameHint.ifBlank { Uri.decode(url.substringAfterLast('/').substringBefore('?')) }.ifBlank { "Imported" }
+        return importInto(name) { archive -> download(url, archive) }
+    }
+
+    private fun download(url: String, into: File) {
+        var address = url
+        repeat(MAX_REDIRECTS) {
+            val target = java.net.URL(address)
+            if (target.protocol != "https") throw StyleArchive.StyleImportException("Only https downloads are imported.")
+            val connection = (target.openConnection() as java.net.HttpURLConnection).apply {
+                instanceFollowRedirects = false
+                connectTimeout = 20_000
+                readTimeout = 60_000
+                setRequestProperty("User-Agent", "Tryptify")
+            }
+            try {
+                when (val code = connection.responseCode) {
+                    in 300..399 -> {
+                        address = java.net.URL(target, connection.getHeaderField("Location") ?: throw StyleArchive.StyleImportException("The download went nowhere.")).toString()
+                        return@repeat
+                    }
+                    in 200..299 -> {
+                        var total = 0L
+                        connection.inputStream.use { input ->
+                            into.outputStream().use { out ->
+                                val buffer = ByteArray(64 * 1024)
+                                while (true) {
+                                    val read = input.read(buffer)
+                                    if (read < 0) break
+                                    total += read
+                                    if (total > MAX_DOWNLOAD_BYTES) throw StyleArchive.StyleImportException("That download is too large to import.")
+                                    out.write(buffer, 0, read)
+                                }
+                            }
+                        }
+                        return
+                    }
+                    else -> throw StyleArchive.StyleImportException("The download failed (HTTP $code).")
+                }
+            } finally {
+                connection.disconnect()
+            }
+        }
+        throw StyleArchive.StyleImportException("The download redirected too many times.")
+    }
+
+    private suspend fun importInto(name: String, fetch: (File) -> Unit): ImportResult = withContext(Dispatchers.IO) {
         lock.withLock {
-            val name = displayName(uri) ?: "Imported"
             val work = File(context.cacheDir, "glyph-style-${System.nanoTime()}")
             try {
                 work.mkdirs()
                 val archive = File(work, "archive")
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    archive.outputStream().use { input.copyTo(it) }
-                } ?: throw StyleArchive.StyleImportException("That file could not be opened.")
+                fetch(archive)
                 val source = File(work, "src")
                 val files = StyleArchive().extract(archive, source)
                 archive.delete()
                 val found = StepManiaStyleScan.scan(files)
                 if (found.isEmpty()) {
                     throw StyleArchive.StyleImportException(
-                        "No StepMania noteskin, theme or announcer was found in that file.",
+                        "No StepMania noteskin, theme, announcer or character was found in that file.",
                     )
                 }
                 val baker = StepManiaStyleBaker(source, name)
                 val staged = File(root, ".staging-${System.nanoTime()}")
-                val counts = IntArray(3)
+                val counts = IntArray(StepManiaStyleScan.Kind.entries.size)
                 val skipped = ArrayList<String>()
                 try {
                     for (item in found) {
@@ -106,6 +181,8 @@ class GlyphStyleLibrary @Inject constructor(
                                 StepManiaStyleScan.Kind.NOTESKIN -> baker.bakeNoteSkin(files, item.copy(name = label), out)
                                 StepManiaStyleScan.Kind.THEME -> baker.bakeTheme(files, item.copy(name = label), out)
                                 StepManiaStyleScan.Kind.ANNOUNCER -> baker.bakeAnnouncer(files, item.copy(name = label), out)
+                                StepManiaStyleScan.Kind.CHARACTER -> baker.bakeCharacter(files, item.copy(name = label), out)
+                                StepManiaStyleScan.Kind.DANCES -> baker.bakeDances(files, item.copy(name = label), out)
                             }
                         }.onFailure { Log.w(TAG, "could not bake $label: ${it.message}") }.getOrDefault(false)
                         if (ok) counts[item.kind.ordinal] += 1 else skipped += label
@@ -126,7 +203,7 @@ class GlyphStyleLibrary @Inject constructor(
                     staged.deleteRecursively()
                 }
                 refresh()
-                ImportResult(counts[0], counts[1], counts[2], skipped)
+                ImportResult(counts[0], counts[1], counts[2], counts[3], counts[4], skipped)
             } finally {
                 work.deleteRecursively()
             }
@@ -175,6 +252,8 @@ class GlyphStyleLibrary @Inject constructor(
             noteskins = list(StepManiaStyleScan.Kind.NOTESKIN),
             themes = list(StepManiaStyleScan.Kind.THEME),
             announcers = list(StepManiaStyleScan.Kind.ANNOUNCER),
+            characters = list(StepManiaStyleScan.Kind.CHARACTER),
+            dances = list(StepManiaStyleScan.Kind.DANCES),
         )
     }
 
@@ -186,10 +265,14 @@ class GlyphStyleLibrary @Inject constructor(
 
     companion object {
         private const val TAG = "GlyphStyleLibrary"
+        private const val MAX_REDIRECTS = 6
+        private const val MAX_DOWNLOAD_BYTES = 1024L * 1024 * 1024
         fun folderOf(kind: StepManiaStyleScan.Kind) = when (kind) {
             StepManiaStyleScan.Kind.NOTESKIN -> "noteskins"
             StepManiaStyleScan.Kind.THEME -> "themes"
             StepManiaStyleScan.Kind.ANNOUNCER -> "announcers"
+            StepManiaStyleScan.Kind.CHARACTER -> "characters"
+            StepManiaStyleScan.Kind.DANCES -> "dances"
         }
     }
 }

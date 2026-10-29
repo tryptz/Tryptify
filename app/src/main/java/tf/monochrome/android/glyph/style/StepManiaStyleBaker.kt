@@ -197,6 +197,80 @@ class StepManiaStyleBaker(private val source: File, private val archiveName: Str
         return true
     }
 
+    // ── characters ──────────────────────────────────────────────────────
+
+    /**
+     * A dancing character: its MilkShape model and the textures its materials
+     * name, and its moves. A move it carries is copied; one it points at (most
+     * point at the archive's shared "Animation + Helper Bones") is kept by
+     * file name, found among the imported dances when it plays. False when
+     * the model does not read.
+     */
+    fun bakeCharacter(files: List<String>, found: StepManiaStyleScan.Found, out: File): Boolean {
+        val prefix = if (found.dir.isEmpty()) "" else "${found.dir}/"
+        val modelPath = files.firstOrNull { it.startsWith(prefix) && it.removePrefix(prefix).equals("model.txt", ignoreCase = true) } ?: return false
+        val text = readLarge(modelPath) ?: return false
+        val model = runCatching { Milkshape.parse(text) }.getOrNull() ?: return false
+        if (model.meshes.isEmpty()) return false
+        out.mkdirs()
+        File(out, MODEL).writeText(text)
+        // The textures, by the names the materials give, wherever their case.
+        val inDir = files.filter { it.startsWith(prefix) && '/' !in it.removePrefix(prefix) }
+        for (material in model.materials) {
+            val name = material.texture.substringAfterLast('/')
+            if (name.isEmpty()) continue
+            val source = inDir.firstOrNull { it.substringAfterLast('/').equals(name, ignoreCase = true) } ?: continue
+            decode(source)?.let { image -> savePng(File(out, "${TEXTURES}/${pngName(name)}").also { it.parentFile?.mkdirs() }, fit(image, TEXTURE_MAX)) }
+        }
+        // The moves: StepMania's Dance, Rest and WarmUp folders.
+        val moves = LinkedHashMap<String, MutableList<String>>()
+        for (path in files) {
+            if (!path.startsWith(prefix)) continue
+            val inside = path.removePrefix(prefix)
+            val folder = inside.substringBefore('/', missingDelimiterValue = "").lowercase()
+            if (folder !in MOVE_FOLDERS || inside.count { it == '/' } != 1) continue
+            val fileName = inside.substringAfter('/')
+            val entry = when {
+                fileName.endsWith(".bones.txt", ignoreCase = true) -> {
+                    File(out, "$MOVES/$folder").mkdirs()
+                    File(source, path).copyTo(File(out, "$MOVES/$folder/$fileName"), overwrite = true)
+                    "$OWN_PREFIX$folder/$fileName"
+                }
+                fileName.endsWith(".redir", ignoreCase = true) -> readText(path)?.lineSequence()?.firstOrNull { it.isNotBlank() }
+                    ?.trim()?.replace('\\', '/')?.substringAfterLast('/')?.takeIf { it.endsWith(".bones.txt", ignoreCase = true) }
+                else -> null
+            } ?: continue
+            moves.getOrPut(folder) { ArrayList() } += entry
+        }
+        File(out, MOVES_INFO).writeText(json.encodeToString(CharacterMoves(moves.mapValues { it.value.sorted() })))
+        writeStyle(out, StyleInfo(StepManiaStyleScan.Kind.CHARACTER.name, found.name, archiveName))
+        writeLicence(out, found)
+        return true
+    }
+
+    /** A set of dances characters share: every .bones.txt in it, copied as they are. */
+    fun bakeDances(files: List<String>, found: StepManiaStyleScan.Found, out: File): Boolean {
+        val prefix = if (found.dir.isEmpty()) "" else "${found.dir}/"
+        var kept = 0
+        for (path in files) {
+            if (!path.startsWith(prefix) || '/' in path.removePrefix(prefix)) continue
+            if (!path.endsWith(".bones.txt", ignoreCase = true)) continue
+            out.mkdirs()
+            File(source, path).copyTo(File(out, path.substringAfterLast('/')), overwrite = true)
+            kept += 1
+        }
+        if (kept == 0) return false
+        writeStyle(out, StyleInfo(StepManiaStyleScan.Kind.DANCES.name, found.name, archiveName))
+        writeLicence(out, found)
+        return true
+    }
+
+    private fun pngName(name: String) = name.substringBeforeLast('.') + ".png"
+
+    private fun readLarge(path: String): String? = runCatching {
+        File(source, path).takeIf { it.isFile && it.length() <= 32L * 1024 * 1024 }?.readText()
+    }.getOrNull()
+
     // ── images ──────────────────────────────────────────────────────────
 
     private fun decode(path: String): Bitmap? = runCatching {
@@ -303,6 +377,10 @@ class StepManiaStyleBaker(private val source: File, private val archiveName: Str
     @Serializable
     data class StyleInfo(val kind: String, val name: String, val source: String)
 
+    /** A character's moves by StepMania's folder (dance, rest, warmup): its own ("own:…") or a shared dance's file name. */
+    @Serializable
+    data class CharacterMoves(val moves: Map<String, List<String>>)
+
     @Serializable
     data class ComboDigits(val cols: Int, val rows: Int, val cells: Map<String, Int>)
 
@@ -319,6 +397,13 @@ class StepManiaStyleBaker(private val source: File, private val archiveName: Str
         private const val TRIM_ALPHA = 8
 
         const val STYLE_FILE = "style.json"
+        const val MODEL = "model.txt"
+        const val TEXTURES = "textures"
+        const val MOVES = "moves"
+        const val MOVES_INFO = "moves.json"
+        const val OWN_PREFIX = "own:"
+        private val MOVE_FOLDERS = setOf("dance", "rest", "warmup")
+        private const val TEXTURE_MAX = 512
         const val COMBO_DIGITS = "combo_digits.png"
         const val COMBO_DIGITS_INFO = "combo_digits.json"
         const val COMBO_LABEL = "combo_label.png"

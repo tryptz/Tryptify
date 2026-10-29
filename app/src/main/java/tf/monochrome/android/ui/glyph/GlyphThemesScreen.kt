@@ -64,6 +64,7 @@ fun GlyphThemesScreen(
     val themes = state.themes
     val styles = themes.styles
     var removing by remember { mutableStateOf<GlyphStyleLibrary.Style?>(null) }
+    var browsing by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) onEvent(GlyphEvent.ImportStyle(uri))
     }
@@ -108,6 +109,13 @@ fun GlyphThemesScreen(
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(MonoDimens.spacingSm))
                 }
+                GlyphButton(
+                    text = stringResource(R.string.tm_themes_browse_archive),
+                    onClick = { browsing = true },
+                    height = 44.dp,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(MonoDimens.spacingSm))
                 GlyphButton(
                     text = stringResource(R.string.tm_themes_import_button),
                     onClick = {
@@ -183,6 +191,58 @@ fun GlyphThemesScreen(
                     )
                 }
             }
+            // ── characters ──────────────────────────────────────────────
+            GlyphPanel(modifier = Modifier.fillMaxWidth()) {
+                SectionTitle(stringResource(R.string.tm_themes_characters))
+                Text(stringResource(R.string.tm_themes_characters_desc), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                StyleRow(
+                    name = stringResource(R.string.tm_themes_no_character),
+                    detail = null,
+                    inUse = themes.characterId == null,
+                    onUse = { onEvent(GlyphEvent.UseCharacter(null)) },
+                    onRemove = null,
+                )
+                for (style in styles.characters) {
+                    StyleRow(
+                        name = style.name,
+                        detail = style.source,
+                        inUse = themes.characterId == style.id,
+                        onUse = { onEvent(GlyphEvent.UseCharacter(style.id)) },
+                        onRemove = { removing = style },
+                    )
+                }
+                if (styles.characters.isNotEmpty() && styles.dances.isEmpty()) {
+                    Text(
+                        stringResource(R.string.tm_themes_dances_missing),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.error,
+                    )
+                }
+            }
+
+            // ── dances characters share ────────────────────────────────
+            if (styles.dances.isNotEmpty()) {
+                GlyphPanel(modifier = Modifier.fillMaxWidth()) {
+                    SectionTitle(stringResource(R.string.tm_themes_dances))
+                    Text(stringResource(R.string.tm_themes_dances_desc), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                    for (style in styles.dances) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = MonoDimens.spacingXs),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm),
+                        ) {
+                            Text(style.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            GlyphButton(
+                                text = stringResource(R.string.tm_themes_remove),
+                                onClick = { removing = style },
+                                onClickLabel = stringResource(R.string.tm_themes_remove_title, style.name),
+                                height = 40.dp,
+                            )
+                        }
+                    }
+                }
+            }
+
             Text(
                 stringResource(R.string.tm_themes_rights),
                 style = MaterialTheme.typography.bodySmall,
@@ -190,6 +250,13 @@ fun GlyphThemesScreen(
             )
             Spacer(Modifier.height(LocalBottomChromeInset.current + MonoDimens.spacingLg))
         }
+    }
+
+    if (browsing) {
+        StepManiaArchiveBrowser(
+            onDismiss = { browsing = false },
+            onDownload = { url, name -> onEvent(GlyphEvent.ImportStyleUrl(url, name)) },
+        )
     }
 
     removing?.let { style ->

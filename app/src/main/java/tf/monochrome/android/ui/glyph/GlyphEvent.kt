@@ -170,6 +170,10 @@ sealed interface GlyphEvent {
     data object OpenThemes : GlyphEvent
     data object CloseThemes : GlyphEvent
     data class ImportStyle(val uri: android.net.Uri) : GlyphEvent
+    /** A download from the StepMania Archive's pages, imported as a picked file is. */
+    data class ImportStyleUrl(val url: String, val name: String) : GlyphEvent
+    /** The character to dance behind the field, by id; null for none. */
+    data class UseCharacter(val id: String?) : GlyphEvent
     /** The theme to wear, by id; null for Tryptify's own. */
     data class UseTheme(val id: String?) : GlyphEvent
     /** The announcer to hear, by id; null for none. */
