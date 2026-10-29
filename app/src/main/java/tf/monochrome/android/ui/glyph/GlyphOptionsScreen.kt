@@ -180,6 +180,9 @@ fun GlyphOptionsScreen(
                     loop = loop,
                     receptorInset = PREVIEW_RECEPTOR_INSET,
                     noteScale = PREVIEW_NOTE_SCALE,
+                    // The speed picked here, as a run shows it: C600 crosses
+                    // as fast as it will in the game, at the arrows' scale.
+                    gameScale = true,
                     reducedMotion = modifiers.reducedMotion,
                     musicPosition = previewPosition,
                     modifier = Modifier.fillMaxSize(),

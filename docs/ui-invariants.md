@@ -1853,6 +1853,13 @@ column, with nothing to jump between.
   song starts its preview again. The delayed choice is cancelled when the
   screen or the app is left: run out behind the app, it started a looping
   preview there.
+* The preview loops on through Trypt Mania's menus: the main menu, the
+  options, the leaderboard, Settings, Packs, Generate charts, and queueing a
+  chart. It stops only for a run or the map editor (which play the song
+  themselves), previews switched off, the main player taking the DAC back,
+  and leaving the mode: the route's `ON_PAUSE` (`onBackground`), which is also
+  what leaving Trypt Mania for any other screen of the app sends. Each menu
+  used to stop it on the way in, so the music cut out between screens.
 * A preview fades in over 120 ms, and the player is built when the song list
   opens, not on the first song. A song's first preview waits 700 ms for its
   drop (`DropFinder` reads the whole song's loudness), then starts a third of
@@ -2338,7 +2345,12 @@ player's modifiers, following the song preview's own clock when it plays, and
 (it can share the screen with the game for a cross-fade), draws nothing rather
 than a fallback square for art that is not warm, and closes its engine on
 dispose. The menu's backdrop is the same field on `GlyphDemoChart`, whose loop
-is seamless, faded out before the buttons.
+is seamless, faded out before the buttons. It scrolls at the game's scale (`GlyphPlayfield(gameScale = true)`): the
+distance a note travels in a run on this screen, shrunk like its notes, so a
+C600 note crosses the preview as fast and as far apart as in the run and the
+field is a cut of the real one. Fitted to its own 220 dp, the speed picked
+was divided by how much shorter the preview is than the screen, and C600
+crawled like a C150.
 
 **Keyboards play through `glyphKeyboard`.** The play and training screens hold
 focus themselves so a hardware keyboard needs nothing to tab to; a key is

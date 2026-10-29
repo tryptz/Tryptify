@@ -402,8 +402,9 @@ class GlyphViewModel @Inject constructor(
                 _ui.value = _ui.value.copy(screen = GlyphScreen.HOME, songListMode = event.mode)
             }
             GlyphEvent.BackToMenu -> {
+                // The preview loops on through the menus; it stops for a run,
+                // the editor, or leaving the mode (onBackground).
                 wheelFocusJob?.cancel()
-                stopPreview()
                 // The song list opened from a room goes back to the room.
                 val back = if (_ui.value.songListMode == GlyphSongListMode.ROOM) GlyphScreen.MULTIPLAYER else GlyphScreen.MENU
                 _ui.value = _ui.value.copy(screen = back)
@@ -465,7 +466,6 @@ class GlyphViewModel @Inject constructor(
             }
             GlyphEvent.OpenLeaderboard -> {
                 wheelFocusJob?.cancel()
-                stopPreview()
                 leaderboardFrom = _ui.value.screen
                 openLeaderboard()
             }
@@ -530,7 +530,6 @@ class GlyphViewModel @Inject constructor(
 
             GlyphEvent.OpenPacks -> {
                 wheelFocusJob?.cancel()
-                stopPreview()
                 _ui.value = _ui.value.copy(screen = GlyphScreen.PACKS)
                 refreshOwnCount()
             }
@@ -538,7 +537,6 @@ class GlyphViewModel @Inject constructor(
 
             GlyphEvent.OpenCharting -> {
                 wheelFocusJob?.cancel()
-                stopPreview()
                 _ui.value = _ui.value.copy(screen = GlyphScreen.CHARTING)
                 viewModelScope.launch { chartingAccount.refresh() }
             }
@@ -1052,7 +1050,6 @@ class GlyphViewModel @Inject constructor(
      * song, unchanged.
      */
     private fun generate(source: Uri, displayName: String, song: GlyphSong?) {
-        stopPreview()
         // A picked file is only readable while the picker's grant lasts; the
         // job may outlive this process, so it keeps the grant until it is done.
         if (source.scheme == "content") {
@@ -1177,7 +1174,6 @@ class GlyphViewModel @Inject constructor(
                 mode = offer.mode,
             )
         }
-        stopPreview()
         queueCharts(jobs)
     }
 
@@ -2240,7 +2236,6 @@ class GlyphViewModel @Inject constructor(
     // ── settings ────────────────────────────────────────────────────────
 
     private fun openSettings() {
-        stopPreview()
         _ui.value = _ui.value.copy(screen = GlyphScreen.SETTINGS)
         viewModelScope.launch {
             val late = GlyphCalibration.lateByMs(attempts.recentRuns())

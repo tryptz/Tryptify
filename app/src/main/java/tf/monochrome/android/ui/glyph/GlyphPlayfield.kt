@@ -111,6 +111,15 @@ fun GlyphPlayfield(
     /** Notes this much of their usual size, for a small field. */
     noteScale: Float = 1f,
     /**
+     * Scroll as the game does on this screen, shrunk by [noteScale] like the
+     * notes, rather than fitting a whole field's travel into this one: a
+     * small field is then a cut of the real one (its bottom, or its top
+     * reversed) where a note crosses at the speed and spacing a run shows.
+     * Fitted, a field a quarter of the screen's height scrolled at a quarter
+     * of the speed, so a C600 preview crawled like a C150.
+     */
+    gameScale: Boolean = false,
+    /**
      * Whether the song is moving: false while a run is paused. Its frames stop
      * once the last flash and burst have faded, and start again with it. A
      * room's run is moving under its pause panel, so it passes true then.
@@ -135,8 +144,16 @@ fun GlyphPlayfield(
         } else {
             heightPx - with(density) { (receptorInset ?: RECEPTOR_INSET).toPx() } - noteSizePx / 2f
         }
-        // How far a note travels on screen, for the appearance mods.
-        val fieldLengthPx = (if (look.reverse) heightPx - receptorYPx else receptorYPx).coerceAtLeast(1f)
+        // How far a note travels on screen, for the scroll and the appearance
+        // mods: this field's own, or a run's on this screen at this scale.
+        val windowHeightPx = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height.toFloat()
+        val fieldLengthPx = if (gameScale && windowHeightPx > heightPx) {
+            val gameNotePx = laneWidthPx * NOTE_SCALE
+            val gameInsetPx = with(density) { (if (look.reverse) RECEPTOR_TOP_INSET else RECEPTOR_INSET).toPx() }
+            ((windowHeightPx - gameInsetPx - gameNotePx / 2f) * noteScale).coerceAtLeast(1f)
+        } else {
+            (if (look.reverse) heightPx - receptorYPx else receptorYPx).coerceAtLeast(1f)
+        }
         // Upward distance on screen is subtracted; reversed, it is added.
         val direction = if (look.reverse) -1f else 1f
 

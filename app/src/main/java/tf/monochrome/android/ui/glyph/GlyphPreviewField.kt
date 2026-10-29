@@ -49,6 +49,8 @@ fun GlyphPreviewField(
     receptorInset: Dp,
     modifier: Modifier = Modifier,
     noteScale: Float = 1f,
+    /** Scroll at the game's scale on this screen (see [GlyphPlayfield]'s `gameScale`). */
+    gameScale: Boolean = false,
     reducedMotion: Boolean = false,
     /** Fade at the loop's ends; off for a loop written to wrap seamlessly. */
     fadeLoop: Boolean = true,
@@ -105,6 +107,7 @@ fun GlyphPreviewField(
         preview = true,
         receptorInset = receptorInset,
         noteScale = noteScale,
+        gameScale = gameScale,
         modifier = modifier.graphicsLayer {
             @Suppress("UNUSED_EXPRESSION") frame.longValue
             if (reducedMotion || !fadeLoop) return@graphicsLayer
