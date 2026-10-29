@@ -3286,4 +3286,5 @@
     <string name="tm_audio_shared">The app\'s own settings: the main player follows them too, and the game plays through the same engine.</string>
     <string name="tm_charting_open_song">Open in the song list</string>
     <string name="tm_charting_song_gone">That song is no longer on this phone.</string>
+    <string name="replaygain_detail">Every song at one loudness. Hold to configure</string>
 </resources>

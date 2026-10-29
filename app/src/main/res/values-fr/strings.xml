@@ -3361,4 +3361,5 @@
     <string name="tm_audio_shared">Les réglages de l\'app : le lecteur principal les suit aussi, et le jeu joue par le même moteur.</string>
     <string name="tm_charting_open_song">Ouvrir dans la liste des morceaux</string>
     <string name="tm_charting_song_gone">Ce morceau n\'est plus sur ce téléphone.</string>
+    <string name="replaygain_detail">Chaque morceau à la même sonie. Maintenez pour configurer</string>
 </resources>

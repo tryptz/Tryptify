@@ -3205,4 +3205,5 @@
     <string name="tm_audio_shared">这些是应用的设置：主播放器也会跟随，游戏使用同一引擎播放。</string>
     <string name="tm_charting_open_song">在歌曲列表中打开</string>
     <string name="tm_charting_song_gone">这首歌已不在此手机上。</string>
+    <string name="replaygain_detail">每首歌曲响度一致。长按可设置</string>
 </resources>

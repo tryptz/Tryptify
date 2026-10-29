@@ -161,6 +161,7 @@ fun MainPlayerRoute(
     val trackBpm by playerViewModel.trackBpm.collectAsStateWithLifecycle()
     val compressorEnabled by playerViewModel.compressorEnabled.collectAsStateWithLifecycle()
     val inflatorEnabled by playerViewModel.inflatorEnabled.collectAsStateWithLifecycle()
+    val replayGainEnabled by playerViewModel.replayGainEnabled.collectAsStateWithLifecycle()
     val crossfeedEnabled by playerViewModel.crossfeedEnabled.collectAsStateWithLifecycle()
     val autoEqEnabled by playerViewModel.autoEqEnabled.collectAsStateWithLifecycle()
     val systemWideAutoEqEnabled by playerViewModel.systemWideAutoEqEnabled.collectAsStateWithLifecycle()
@@ -561,6 +562,7 @@ fun MainPlayerRoute(
         compressorEnabled = compressorEnabled,
         inflatorEnabled = inflatorEnabled,
         crossfeedEnabled = crossfeedEnabled,
+        replayGainEnabled = replayGainEnabled,
         autoEqEnabled = autoEqEnabled,
         systemWideAutoEqEnabled = systemWideAutoEqEnabled,
         toneControls = toneControls,
@@ -1182,6 +1184,13 @@ fun MainPlayerRoute(
                 onCompressorOpen = { navController.navigateTool(Screen.Oxford, Screen.Oxford.createRoute(tab = 0)) },
                 onInflatorOpen = { navController.navigateTool(Screen.Oxford, Screen.Oxford.createRoute(tab = 1)) },
                 onCrossfeedOpen = { navController.navigateTool(Screen.Crossfeed) },
+                onReplayGainToggle = playerViewModel::setReplayGainEnabled,
+                onReplayGainOpen = {
+                    navController.navigateTool(
+                        Screen.Settings,
+                        Screen.Settings.createRoute(tf.monochrome.android.ui.settings.SETTINGS_TAB_AUDIO),
+                    )
+                },
                 onAutoEqToggle = playerViewModel::setAutoEqEnabled,
                 onSystemWideAutoEqToggle = playerViewModel::setSystemWideAutoEq,
                 onToneControlsChange = playerViewModel::setToneControls,

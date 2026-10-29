@@ -258,6 +258,9 @@ internal val settingsPageIds: List<String> get() = settingsPages
  */
 val SETTINGS_TAB_ABOUT: Int = settingsTabIndex("About")
 
+/** Index of the Audio tab, where ReplayGain's mode and target live; derived like [SETTINGS_TAB_ABOUT]. */
+val SETTINGS_TAB_AUDIO: Int = settingsTabIndex("Audio")
+
 /** One selectable step in the Appearance › Font Size picker. */
 private data class FontScalePreset(@StringRes val label: Int, val scale: Float)
 

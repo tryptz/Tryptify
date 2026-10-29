@@ -804,6 +804,14 @@ corner. Those two stayed on the old frosted tint after the cards moved,
 and read as dark outlined tiles beside real glass. Their "on" is the accent
 and a ring, not a stronger tint: glass has none to switch to.
 
+**The sheet's switch rows end with ReplayGain.** Under the buttons sit
+Compressor, Inflator and Crossfeed, each a `ToggleRow` whose long-press opens
+its page, and ReplayGain last: on is the smart mode, as Settings › Audio's
+own switch sets it, and its long-press opens that tab
+(`SETTINGS_TAB_AUDIO`, derived from the tab list, never a number), where
+its other modes and the target are. The same setting as Trypt Mania's Audio
+tab and Settings › Audio: one value, three places to flip it.
+
 **A press's swell is animated into `GlassPress.amount` by the animation
 itself** (`animate { press.amount = value }`). It must never be copied across
 in a `SideEffect`. The copy only runs on recomposition, and an animation read

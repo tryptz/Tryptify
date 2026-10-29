@@ -432,6 +432,25 @@ class PlayerViewModel @Inject constructor(
 
     fun setInflatorEnabled(on: Boolean) = inflatorEffect.setEffectIn(on)
 
+    /** ReplayGain in any mode, for the quick audio panel's switch. */
+    val replayGainEnabled: StateFlow<Boolean> = preferences.replayGainSettings
+        .map { it.mode != tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    /**
+     * On is the smart mode, as Settings › Audio's own switch sets it (each
+     * song's gain, an album's own in an album); its other modes and the
+     * target stay there.
+     */
+    fun setReplayGainEnabled(on: Boolean) {
+        viewModelScope.launch {
+            preferences.setReplayGainMode(
+                if (on) tf.monochrome.android.audio.replaygain.ReplayGainMode.SMART
+                else tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF,
+            )
+        }
+    }
+
     // --- Crossfeed (headphone speaker simulation) ---
     val crossfeedEnabled: StateFlow<Boolean> = crossfeedEffect.state
         .map { it.enabled }

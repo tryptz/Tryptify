@@ -3283,4 +3283,5 @@
     <string name="tm_audio_shared">Die Einstellungen der App: Der Hauptplayer folgt ihnen auch, und das Spiel spielt über dieselbe Engine.</string>
     <string name="tm_charting_open_song">In der Songliste öffnen</string>
     <string name="tm_charting_song_gone">Dieser Song ist nicht mehr auf diesem Handy.</string>
+    <string name="replaygain_detail">Jeder Song gleich laut. Gedrückt halten zum Einrichten</string>
 </resources>

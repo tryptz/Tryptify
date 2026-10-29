@@ -3205,4 +3205,5 @@
     <string name="tm_audio_shared">アプリ本体の設定です。メインプレーヤーも同じ設定に従い、ゲームも同じエンジンで再生します。</string>
     <string name="tm_charting_open_song">曲リストで開く</string>
     <string name="tm_charting_song_gone">その曲はもうこのスマートフォンにありません。</string>
+    <string name="replaygain_detail">すべての曲を同じ音量に。長押しで設定</string>
 </resources>

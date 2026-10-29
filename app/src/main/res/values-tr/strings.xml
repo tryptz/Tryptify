@@ -3283,4 +3283,5 @@
     <string name="tm_audio_shared">Uygulamanın kendi ayarları: ana oynatıcı da bunlara uyar ve oyun aynı motorla çalar.</string>
     <string name="tm_charting_open_song">Şarkı listesinde aç</string>
     <string name="tm_charting_song_gone">Bu şarkı artık bu telefonda değil.</string>
+    <string name="replaygain_detail">Her şarkı aynı ses yüksekliğinde. Ayarlamak için basılı tutun</string>
 </resources>

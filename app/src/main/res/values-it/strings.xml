@@ -3361,4 +3361,5 @@
     <string name="tm_audio_shared">Le impostazioni dell\'app: anche il lettore principale le segue, e il gioco suona con lo stesso motore.</string>
     <string name="tm_charting_open_song">Apri nell\'elenco dei brani</string>
     <string name="tm_charting_song_gone">Quel brano non è più su questo telefono.</string>
+    <string name="replaygain_detail">Ogni brano alla stessa loudness. Tieni premuto per configurare</string>
 </resources>

@@ -145,6 +145,7 @@ data class MainPlayerUiState(
     val compressorEnabled: Boolean,
     val inflatorEnabled: Boolean,
     val crossfeedEnabled: Boolean = false,
+    val replayGainEnabled: Boolean = false,
     val autoEqEnabled: Boolean = false,
     val systemWideAutoEqEnabled: Boolean = false,
     val toneControls: tf.monochrome.android.domain.model.ToneControls =
@@ -199,6 +200,8 @@ fun MainPlayerScreen(
     onCompressorOpen: () -> Unit,
     onInflatorOpen: () -> Unit,
     onCrossfeedOpen: () -> Unit,
+    onReplayGainToggle: (Boolean) -> Unit = {},
+    onReplayGainOpen: () -> Unit = {},
     onAutoEqToggle: (Boolean) -> Unit,
     onSystemWideAutoEqToggle: (Boolean) -> Unit,
     onToneControlsChange: (tf.monochrome.android.domain.model.ToneControls) -> Unit,
@@ -756,6 +759,7 @@ fun MainPlayerScreen(
                 compressorEnabled = state.compressorEnabled,
                 inflatorEnabled = state.inflatorEnabled,
                 crossfeedEnabled = state.crossfeedEnabled,
+                replayGainEnabled = state.replayGainEnabled,
                 autoEqEnabled = state.autoEqEnabled,
                 systemWideAutoEqEnabled = state.systemWideAutoEqEnabled,
                 toneControls = state.toneControls,
@@ -771,6 +775,8 @@ fun MainPlayerScreen(
                 onCompressorOpen = onCompressorOpen,
                 onInflatorOpen = onInflatorOpen,
                 onCrossfeedOpen = onCrossfeedOpen,
+                onReplayGainToggle = onReplayGainToggle,
+                onReplayGainOpen = onReplayGainOpen,
                 onAutoEqToggle = onAutoEqToggle,
                 onSystemWideAutoEqToggle = onSystemWideAutoEqToggle,
                 onToneControlsChange = onToneControlsChange,
@@ -895,6 +901,7 @@ private fun StatusOverlayPanel(
     compressorEnabled: Boolean,
     inflatorEnabled: Boolean,
     crossfeedEnabled: Boolean,
+    replayGainEnabled: Boolean,
     autoEqEnabled: Boolean,
     systemWideAutoEqEnabled: Boolean,
     toneControls: tf.monochrome.android.domain.model.ToneControls,
@@ -910,6 +917,8 @@ private fun StatusOverlayPanel(
     onCompressorOpen: () -> Unit,
     onInflatorOpen: () -> Unit,
     onCrossfeedOpen: () -> Unit,
+    onReplayGainToggle: (Boolean) -> Unit,
+    onReplayGainOpen: () -> Unit,
     onAutoEqToggle: (Boolean) -> Unit,
     onSystemWideAutoEqToggle: (Boolean) -> Unit,
     onToneControlsChange: (tf.monochrome.android.domain.model.ToneControls) -> Unit,
@@ -1076,6 +1085,10 @@ private fun StatusOverlayPanel(
                 onInflatorToggle, onLongPress = onInflatorOpen)
             ToggleRow(stringResource(R.string.crossfeed), stringResource(R.string.crossfeed_detail), crossfeedEnabled, accent,
                 onCrossfeedToggle, onLongPress = onCrossfeedOpen)
+            // Not an effect but a level: every song at one loudness. Long-press
+            // opens Settings › Audio, where its mode and target are.
+            ToggleRow(stringResource(R.string.settings_replaygain), stringResource(R.string.replaygain_detail), replayGainEnabled, accent,
+                onReplayGainToggle, onLongPress = onReplayGainOpen)
         }
             }
     }
