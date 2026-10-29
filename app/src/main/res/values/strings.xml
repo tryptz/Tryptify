@@ -3339,9 +3339,10 @@
     <string name="tm_themes_archive_hint">Tap a download: it imports into Trypt Mania in the background.</string>
     <string name="tm_themes_archive_queued">Importing %1$s. Carry on browsing.</string>
     <string name="tm_themes_characters">Characters</string>
-    <string name="tm_themes_characters_desc">A StepMania character dancing behind the field to the song\'s tempo.</string>
+    <string name="tm_themes_characters_desc">A StepMania character dancing behind the field, on the song\'s beat.</string>
     <string name="tm_themes_no_character">None</string>
-    <string name="tm_themes_dances_missing">Most characters dance the moves the archive shares: import \"Animation + Helper Bones\" from its Characters page.</string>
+    <string name="tm_themes_dances_missing">These characters dance the moves the StepMania Archive shares, which this phone does not have yet.</string>
+    <string name="tm_themes_get_dances">Get the dances</string>
     <string name="tm_themes_dances">Dances</string>
     <string name="tm_themes_dances_desc">The moves characters share, found by name when one dances.</string>
 </resources>

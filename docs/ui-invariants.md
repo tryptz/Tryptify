@@ -2398,12 +2398,28 @@ skinning, a dance's keys on the rest pose by bone name) is drawn by
 `GlyphCharacterRenderer` on a background thread, 30 times a second, into a
 240×320 picture of its own (three, taken in turn); the playfield draws only
 that picture, behind the field and over the background, so a character
-never costs the field's frame. Most characters point at the archive's shared
-dances ("Animation + Helper Bones"), imported once as Dances and found by
-file name; without them the Characters panel says what to import. A dance is
-picked at random and played through, faster or slower with the song's
-tempo, and holds while the run is paused. Characters face MilkShape's −Z, so
-they are turned round to face the player.
+never costs the field's frame. Characters carry no moves of their own: each
+points at the archive's shared DDR PC moves ("Animation + Helper Bones") by
+file name. Importing a character fetches them when the phone has none, and
+the Characters panel offers them with a button otherwise. They are a
+megabyte or two of text each, so `StyleArchive` takes `.bones.txt` up to
+8 MB (at 1 MB, four of the seventeen dances were dropped), and the renderer
+reads only the few moves it is about to dance.
+
+**The dancer dances on the beat, as DDR's do.** `DancerChoreography` locks
+every move to the song's beat, which the screen reads from the field's clock
+(`GlyphTiming.secondsToBeat`) once a frame. The DDR PC moves are cut in
+measures of 61 frames, so a beat is 15.25 frames, a step lands on the beat,
+and every move lasts whole measures: frame = beats into the move × 15.25.
+StepMania instead only speeds its dancers up or down with the tempo (0.75× at
+60 BPM to 1.5× at 300), and that drifts off the music. The dancer warms up
+until the measure of the chart's first note, then dances. Each move plays
+through, and the next, picked at random, starts on the following measure,
+blended in over half a beat. Once the run fails it rests, and a pause holds
+it. The camera works like StepMania's DancingCharacters: every two measures
+it cuts, two times in six to a sweep (from ±45°, round by up to 60° more),
+otherwise to a still angle (0 or ±35°), and it spins at 40°/s through a stop.
+Characters face MilkShape's −Z, so they are turned round to face the player.
 
 **The options' preview is the game's playfield, not a picture of one.**
 `GlyphPreviewField` draws a real engine played by `GlyphAutoplay` with the

@@ -3336,9 +3336,10 @@
     <string name="tm_themes_archive_hint">Bir indirmeye dokun: arka planda Trypt Mania\'ya aktarılır.</string>
     <string name="tm_themes_archive_queued">%1$s içe aktarılıyor. Göz atmaya devam et.</string>
     <string name="tm_themes_characters">Karakterler</string>
-    <string name="tm_themes_characters_desc">Alanın arkasında şarkının temposunda dans eden bir StepMania karakteri.</string>
+    <string name="tm_themes_characters_desc">Alanın arkasında şarkının vuruşuna göre dans eden bir StepMania karakteri.</string>
     <string name="tm_themes_no_character">Yok</string>
-    <string name="tm_themes_dances_missing">Çoğu karakter arşivin paylaştığı hareketlerle dans eder: Characters sayfasından \"Animation + Helper Bones\"u içe aktar.</string>
+    <string name="tm_themes_dances_missing">Bu karakterler StepMania Archive\'in paylaştığı hareketlerle dans eder; bu telefonda henüz yoklar.</string>
+    <string name="tm_themes_get_dances">Hareketleri al</string>
     <string name="tm_themes_dances">Danslar</string>
     <string name="tm_themes_dances_desc">Karakterlerin paylaştığı hareketler; biri dans ederken adıyla bulunur.</string>
 </resources>

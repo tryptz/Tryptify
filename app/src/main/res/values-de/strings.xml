@@ -3336,9 +3336,10 @@
     <string name="tm_themes_archive_hint">Tippe auf einen Download: Er wird im Hintergrund in Trypt Mania importiert.</string>
     <string name="tm_themes_archive_queued">%1$s wird importiert. Stöbere ruhig weiter.</string>
     <string name="tm_themes_characters">Figuren</string>
-    <string name="tm_themes_characters_desc">Eine StepMania-Figur, die hinter dem Feld im Tempo des Songs tanzt.</string>
+    <string name="tm_themes_characters_desc">Eine StepMania-Figur, die hinter dem Feld im Takt des Songs tanzt.</string>
     <string name="tm_themes_no_character">Keine</string>
-    <string name="tm_themes_dances_missing">Die meisten Figuren tanzen die Schritte, die das Archiv teilt: Importiere „Animation + Helper Bones“ von seiner Characters-Seite.</string>
+    <string name="tm_themes_dances_missing">Diese Figuren tanzen die Schritte, die das StepMania Archive teilt, und die hat dieses Telefon noch nicht.</string>
+    <string name="tm_themes_get_dances">Schritte holen</string>
     <string name="tm_themes_dances">Tänze</string>
     <string name="tm_themes_dances_desc">Die Schritte, die Figuren teilen, beim Tanzen über ihren Namen gefunden.</string>
 </resources>

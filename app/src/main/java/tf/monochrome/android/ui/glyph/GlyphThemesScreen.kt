@@ -220,6 +220,13 @@ fun GlyphThemesScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = scheme.error,
                     )
+                    Spacer(Modifier.height(MonoDimens.spacingSm))
+                    GlyphButton(
+                        text = stringResource(R.string.tm_themes_get_dances),
+                        onClick = { if (!themes.importing) onEvent(GlyphEvent.ImportDances) },
+                        height = 44.dp,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
 

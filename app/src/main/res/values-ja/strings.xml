@@ -3258,9 +3258,10 @@
     <string name="tm_themes_archive_hint">ダウンロードをタップすると、バックグラウンドで Trypt Mania に読み込まれます。</string>
     <string name="tm_themes_archive_queued">%1$s を読み込み中です。そのまま閲覧を続けられます。</string>
     <string name="tm_themes_characters">キャラクター</string>
-    <string name="tm_themes_characters_desc">StepMania のキャラクターがフィールドの後ろで曲のテンポに合わせて踊ります。</string>
+    <string name="tm_themes_characters_desc">StepMania のキャラクターがフィールドの後ろで曲のビートに合わせて踊ります。</string>
     <string name="tm_themes_no_character">なし</string>
-    <string name="tm_themes_dances_missing">ほとんどのキャラクターはアーカイブ共通の振り付けで踊ります。キャラクターのページから「Animation + Helper Bones」を読み込んでください。</string>
+    <string name="tm_themes_dances_missing">これらのキャラクターは StepMania Archive 共通の振り付けで踊りますが、この端末にはまだありません。</string>
+    <string name="tm_themes_get_dances">振り付けを入手</string>
     <string name="tm_themes_dances">振り付け</string>
     <string name="tm_themes_dances_desc">キャラクター共通の振り付け。踊るときに名前で探されます。</string>
 </resources>

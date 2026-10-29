@@ -213,11 +213,14 @@ fun GlyphGameplayScreen(
                 // An imported StepMania character dancing behind the field, drawn
                 // off the field's frame (GlyphCharacterRenderer): one picture here.
                 state.themes.characterDir?.let { dir ->
+                    val firstNoteBeat = remember(state.chart) { state.chart?.notes?.minOfOrNull { it.beat } ?: 0f }
                     GlyphDancer(
                         characterDir = dir,
                         sharedDance = sharedDance,
-                        tempo = { state.gameplay.bpm },
-                        playing = { state.gameplay.isPlaying && !state.gameplay.isPaused },
+                        songBeat = { timing.secondsToBeat(positionProvider()) },
+                        firstNoteBeat = firstNoteBeat,
+                        failed = { state.gameplay.failedAtMs > 0L },
+                        paused = { state.gameplay.isPaused },
                     )
                 }
 
@@ -771,24 +774,39 @@ private const val THEME_BACKGROUND_DIM = 0.45f
  * The character behind the field: its renderer's latest picture, drawn once
  * a frame, scaled up smooth, in the lower middle of the screen as StepMania's
  * dancers stand. The renderer runs while this is on screen and stops with it.
+ * The song's beat is read here, on the main thread with the field, once a
+ * frame, and handed to the renderer's thread.
  */
 @Composable
 private fun GlyphDancer(
     characterDir: java.io.File,
     sharedDance: (String) -> java.io.File?,
-    tempo: () -> Float,
-    playing: () -> Boolean,
+    songBeat: () -> Float,
+    firstNoteBeat: Float,
+    failed: () -> Boolean,
+    paused: () -> Boolean,
 ) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    val currentTempo by androidx.compose.runtime.rememberUpdatedState(tempo)
-    val currentPlaying by androidx.compose.runtime.rememberUpdatedState(playing)
+    val beatNow = remember { java.util.concurrent.atomic.AtomicReference(0f) }
+    val currentSongBeat by androidx.compose.runtime.rememberUpdatedState(songBeat)
+    val currentFirstNote by androidx.compose.runtime.rememberUpdatedState(firstNoteBeat)
+    val currentFailed by androidx.compose.runtime.rememberUpdatedState(failed)
+    val currentPaused by androidx.compose.runtime.rememberUpdatedState(paused)
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) {
+            androidx.compose.runtime.withFrameNanos { }
+            beatNow.set(currentSongBeat())
+        }
+    }
     val renderer = remember(characterDir) {
         tf.monochrome.android.glyph.style.GlyphCharacterRenderer(
             characterDir = characterDir,
             sharedDance = sharedDance,
             scope = scope,
-            tempo = { currentTempo() },
-            playing = { currentPlaying() },
+            beat = { beatNow.get() },
+            firstNoteBeat = { currentFirstNote },
+            failed = { currentFailed() },
+            paused = { currentPaused() },
         )
     }
     androidx.compose.runtime.DisposableEffect(renderer) {

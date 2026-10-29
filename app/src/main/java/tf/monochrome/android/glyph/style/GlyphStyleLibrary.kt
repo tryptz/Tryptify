@@ -266,6 +266,11 @@ class GlyphStyleLibrary @Inject constructor(
     companion object {
         private const val TAG = "GlyphStyleLibrary"
         private const val MAX_REDIRECTS = 6
+        /**
+         * The StepMania Archive's "Animation + Helper Bones": the DDR PC moves
+         * its characters point at by file name, shared rather than in each.
+         */
+        const val DANCE_PACK_URL = "https://s3.us-east-005.dream.io/smcharacters/Animation%20%2B%20Helper%20Bones.7z"
         private const val MAX_DOWNLOAD_BYTES = 1024L * 1024 * 1024
         fun folderOf(kind: StepManiaStyleScan.Kind) = when (kind) {
             StepManiaStyleScan.Kind.NOTESKIN -> "noteskins"

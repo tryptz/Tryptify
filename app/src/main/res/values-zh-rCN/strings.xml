@@ -3258,9 +3258,10 @@
     <string name="tm_themes_archive_hint">点按下载：它会在后台导入 Trypt Mania。</string>
     <string name="tm_themes_archive_queued">正在导入 %1$s。可以继续浏览。</string>
     <string name="tm_themes_characters">角色</string>
-    <string name="tm_themes_characters_desc">一个 StepMania 角色在谱面后方随歌曲节奏起舞。</string>
+    <string name="tm_themes_characters_desc">一个 StepMania 角色在谱面后方踩着歌曲的节拍起舞。</string>
     <string name="tm_themes_no_character">无</string>
-    <string name="tm_themes_dances_missing">大多数角色使用档案共享的舞步：请从其角色页面导入“Animation + Helper Bones”。</string>
+    <string name="tm_themes_dances_missing">这些角色使用 StepMania Archive 共享的舞步，这台手机还没有这些舞步。</string>
+    <string name="tm_themes_get_dances">获取舞步</string>
     <string name="tm_themes_dances">舞步</string>
     <string name="tm_themes_dances_desc">角色共享的舞步，在角色跳舞时按名称查找。</string>
 </resources>

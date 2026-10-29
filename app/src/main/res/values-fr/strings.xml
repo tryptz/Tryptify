@@ -3414,9 +3414,10 @@
     <string name="tm_themes_archive_hint">Touchez un téléchargement : il s\'importe dans Trypt Mania en arrière-plan.</string>
     <string name="tm_themes_archive_queued">Importation de %1$s. Continuez à parcourir.</string>
     <string name="tm_themes_characters">Personnages</string>
-    <string name="tm_themes_characters_desc">Un personnage StepMania qui danse derrière le terrain au tempo du morceau.</string>
+    <string name="tm_themes_characters_desc">Un personnage StepMania qui danse derrière le terrain, sur le temps du morceau.</string>
     <string name="tm_themes_no_character">Aucun</string>
-    <string name="tm_themes_dances_missing">La plupart des personnages dansent les pas que l\'archive partage : importez « Animation + Helper Bones » depuis sa page Characters.</string>
+    <string name="tm_themes_dances_missing">Ces personnages dansent les pas que partage la StepMania Archive, que ce téléphone n\'a pas encore.</string>
+    <string name="tm_themes_get_dances">Obtenir les pas</string>
     <string name="tm_themes_dances">Danses</string>
     <string name="tm_themes_dances_desc">Les pas que partagent les personnages, trouvés par leur nom quand l\'un danse.</string>
 </resources>

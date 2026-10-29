@@ -166,7 +166,14 @@ class StyleArchive(
         private const val MB = 1024L * 1024
 
         /** What is kept, and how big each may be; null for what is skipped. */
-        fun limitFor(fileName: String): Long? = when (fileName.substringAfterLast('.', "").lowercase()) {
+        fun limitFor(fileName: String): Long? = when {
+            // A character's model and moves are MilkShape text, keyed every frame:
+            // DDR PC's longest dance is two megabytes of it.
+            fileName.endsWith(".bones.txt", ignoreCase = true) || fileName.equals("model.txt", ignoreCase = true) -> 8 * MB
+            else -> limitByExtension(fileName)
+        }
+
+        private fun limitByExtension(fileName: String): Long? = when (fileName.substringAfterLast('.', "").lowercase()) {
             "png", "jpg", "jpeg", "gif", "bmp" -> 32 * MB
             "ogg", "mp3", "wav" -> 32 * MB
             "ttf", "otf" -> 16 * MB

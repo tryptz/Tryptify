@@ -172,6 +172,8 @@ sealed interface GlyphEvent {
     data class ImportStyle(val uri: android.net.Uri) : GlyphEvent
     /** A download from the StepMania Archive's pages, imported as a picked file is. */
     data class ImportStyleUrl(val url: String, val name: String) : GlyphEvent
+    /** The archive's shared dances, for characters imported without them. */
+    data object ImportDances : GlyphEvent
     /** The character to dance behind the field, by id; null for none. */
     data class UseCharacter(val id: String?) : GlyphEvent
     /** The theme to wear, by id; null for Tryptify's own. */

@@ -547,6 +547,13 @@ class GlyphViewModel @Inject constructor(
             GlyphEvent.CloseThemes -> _ui.value = _ui.value.copy(screen = GlyphScreen.MENU)
             is GlyphEvent.ImportStyle -> importStyle { styleLibrary.import(event.uri) }
             is GlyphEvent.ImportStyleUrl -> importStyle { styleLibrary.importUrl(event.url, event.name) }
+            GlyphEvent.ImportDances -> {
+                _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(importing = true, message = null))
+                viewModelScope.launch {
+                    val message = importDances()
+                    _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(importing = false, message = message))
+                }
+            }
             is GlyphEvent.UseCharacter -> useCharacter(event.id)
             is GlyphEvent.UseTheme -> useTheme(event.id)
             is GlyphEvent.UseAnnouncer -> useAnnouncer(event.id)
@@ -2438,6 +2445,16 @@ class GlyphViewModel @Inject constructor(
         _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(announcerId = style?.id))
     }
 
+    /** The StepMania Archive's shared dances, imported; what happened, in a sentence. */
+    private suspend fun importDances(): String = try {
+        val dances = styleLibrary.importUrl(tf.monochrome.android.glyph.style.GlyphStyleLibrary.DANCE_PACK_URL, DANCE_PACK_NAME)
+        if (dances.dances > 0) "The dances characters share came with it." else "The shared dances could not be found in the archive's download."
+    } catch (failure: kotlinx.coroutines.CancellationException) {
+        throw failure
+    } catch (failure: Exception) {
+        "The shared dances could not be downloaded (" + (failure.message ?: "no reason given") + ")."
+    }
+
     private fun importStyle(run: suspend () -> tf.monochrome.android.glyph.style.GlyphStyleLibrary.ImportResult) {
         _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(importing = true, message = null))
         viewModelScope.launch {
@@ -2451,11 +2468,13 @@ class GlyphViewModel @Inject constructor(
                     count(result.characters, "character", "characters"),
                     count(result.dances, "set of dances", "sets of dances"),
                 )
-                when {
+                val said = when {
                     got.isEmpty() -> "Nothing in that file could be used: " + result.skipped.joinToString().ifEmpty { "no arrows, judgements, voices or dancers were found" } + "."
                     result.skipped.isEmpty() -> "Imported " + got.joinToString(" and ") + "."
                     else -> "Imported " + got.joinToString(" and ") + ". Left out: " + result.skipped.joinToString() + "."
                 }
+                // A character dances the moves the archive shares: fetched with it when the phone has none.
+                if (result.characters > 0 && styleLibrary.styles.value.dances.isEmpty()) "$said " + importDances() else said
             } catch (failure: kotlinx.coroutines.CancellationException) {
                 throw failure
             } catch (failure: Exception) {
@@ -3445,6 +3464,7 @@ class GlyphViewModel @Inject constructor(
         const val PREF_THEME = "style_theme"
         const val PREF_ANNOUNCER = "style_announcer"
         const val PREF_CHARACTER = "style_character"
+        private const val DANCE_PACK_NAME = "Animation + Helper Bones"
         const val PREF_SCROLL_FAMILY = "scroll_family"
         const val PREF_SCROLL_VALUE = "scroll_value"
         const val PREF_TURN = "turn"
